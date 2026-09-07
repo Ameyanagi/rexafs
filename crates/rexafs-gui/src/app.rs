@@ -43,8 +43,7 @@ use crate::fitting::{
 };
 use crate::params::{
     AUTOBK_SOLVERS, DerivedSpectrum, DetectionMode, FT_WINDOWS, ImportPreview, PipelineParams,
-    StreamingAverage, load_raw, parse_cols, preview_import, process_arrays, process_file,
-    resample_chik,
+    load_group_raw, parse_cols, preview_import, process_arrays, process_file, resample_chik,
 };
 use crate::plotting::{
     K_AXIS, QuadTrace, R_AXIS, SeriesSource, ViewOptions, build_fit_k, build_fit_q, build_fit_r,
@@ -57,6 +56,7 @@ use crate::widgets::numeric_field::{FieldEvent, FieldKind, NumericField};
 use crate::widgets::text_input::{InputEvent, TextInput};
 
 mod importing;
+mod merge;
 mod shell;
 use shell::{Stage, StageView, handles::HandleState, thumbnails::ThumbData, tools::ToolState};
 
@@ -3310,10 +3310,7 @@ impl StudioApp {
                     process_arrays(raw.0.clone(), raw.1.clone(), &params).map(|sp| (sp, None))
                 }
                 None => {
-                    let (energy, mu) = match derived {
-                        Some(group) => group.raw(&params)?,
-                        None => load_raw(&path, &params)?,
-                    };
+                    let (energy, mu) = load_group_raw(&path, &params, derived.as_ref())?;
                     let sp = process_arrays(energy.clone(), mu.clone(), &params)?;
                     Ok((sp, Some(Arc::new((energy, mu)))))
                 }
@@ -4816,109 +4813,6 @@ impl StudioApp {
         self.ensure_compare_loaded(cx);
         self.sync_param_fields(cx);
         cx.notify();
-    }
-
-    /// Average the selected catalog spectra into a derived spectrum.
-    fn merge_selection(&mut self, cx: &mut Context<Self>) {
-        let files: Vec<usize> = self
-            .selection
-            .iter()
-            .copied()
-            .filter(|&ix| ix < DERIVED_BASE)
-            .collect();
-        if files.len() < 2 {
-            self.status = "select at least 2 spectra to merge".into();
-            cx.notify();
-            return;
-        }
-        let trim = |name: &str| name.trim_end_matches(".dat").to_string();
-        let label = format!(
-            "avg{} {}..{}",
-            files.len(),
-            trim(self.catalog.name(files[0])),
-            trim(self.catalog.name(*files.last().unwrap()))
-        );
-        // Each input loads under its own effective params (per-file import
-        // config / alignment overrides apply to the merge too).
-        let sources: Vec<(PathBuf, PipelineParams)> = files
-            .iter()
-            .map(|&ix| (self.catalog.path(ix), self.effective_params(ix).clone()))
-            .collect();
-        let catalog_gen = self.catalog_gen;
-        if let Some(cancel) = self.merge_cancel.take() {
-            cancel.store(true, Ordering::Relaxed);
-        }
-        self.merge_gen += 1;
-        let generation = self.merge_gen;
-        let cancel = Arc::new(AtomicBool::new(false));
-        self.merge_cancel = Some(cancel.clone());
-        self.merge_running = true;
-        self.status = format!("merging {} spectra ...", files.len()).into();
-        cx.notify();
-        let job_cancel = cancel.clone();
-        let job = cx.background_executor().spawn(async move {
-            // Stream a running sum: memory stays bounded at one input plus
-            // the accumulator no matter how many spectra are merged.
-            let mut iter = sources.iter();
-            let (first_path, first_params) = iter
-                .next()
-                .ok_or_else(|| "need at least 2 spectra to merge".to_string())?;
-            let (energy, mu) = load_raw(first_path, first_params)?;
-            let mut acc = StreamingAverage::new(energy, mu);
-            for (path, params) in iter {
-                if job_cancel.load(Ordering::Relaxed) {
-                    return Err("merge cancelled".to_string());
-                }
-                let (energy, mu) = load_raw(path, params)?;
-                acc.add(&energy, &mu);
-            }
-            acc.finish()
-        });
-        cx.spawn(async move |this, cx| {
-            let result = job.await;
-            this.update(cx, |app, cx| {
-                if app.catalog_gen != catalog_gen || app.merge_gen != generation {
-                    return;
-                }
-                app.merge_running = false;
-                app.merge_cancel = None;
-                match result {
-                    Ok((energy, mu)) => {
-                        let merged = DerivedSpectrum {
-                            label: label.clone(),
-                            energy,
-                            mu,
-                            id: app.next_group_id(),
-                            params: Some(app.params.clone()),
-                            ..Default::default()
-                        };
-                        app.record(
-                            format!("merge → {}", merged.label),
-                            Some(shell::journal::UndoOp::DerivedAdd {
-                                index: app.derived.len(),
-                                spectrum: merged.clone(),
-                            }),
-                        );
-                        app.derived.push(merged);
-                        let ix = DERIVED_BASE + app.derived.len() - 1;
-                        app.status = format!("merged → {label}").into();
-                        app.selection.clear();
-                        app.select_entry(ix, cx);
-                    }
-                    Err(e) => {
-                        if cancel.load(Ordering::Relaxed) {
-                            app.status = "merge cancelled".into();
-                        } else {
-                            app.status = format!("merge failed: {e}").into();
-                            app.record_job_error(format!("merge: {label}"), e);
-                        }
-                    }
-                }
-                cx.notify();
-            })
-            .ok();
-        })
-        .detach();
     }
 
     fn remove_derived(&mut self, i: usize, cx: &mut Context<Self>) {

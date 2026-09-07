@@ -2,7 +2,7 @@
 //! every tool reads the current group and produces a *derived* group, so
 //! the source is never mutated and nothing needs undo.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 
 use gpui::{
     ClickEvent, Context, Entity, IntoElement, ParentElement, SharedString, Styled, div, prelude::*,
@@ -19,6 +19,14 @@ use crate::app::{DERIVED_BASE, NO_ENTRY, StudioApp, filter_match_lower};
 use crate::params::{DerivedSpectrum, Operation, OperationInput, PipelineParams, Quantity};
 use crate::widgets::numeric_field::{FieldEvent, FieldKind, NumericField};
 use crate::widgets::text_input::{InputEvent, TextInput};
+
+/// Match the group panel's stable order: additional groups, then files.
+pub(crate) fn marked_group_indices(marks: &BTreeSet<usize>) -> impl Iterator<Item = usize> + '_ {
+    marks
+        .range(DERIVED_BASE..NO_ENTRY)
+        .chain(marks.range(..DERIVED_BASE))
+        .copied()
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tool {
@@ -219,7 +227,7 @@ pub(crate) struct ToolTarget {
 }
 
 impl ToolTarget {
-    fn operation_input(&self) -> OperationInput {
+    pub(crate) fn operation_input(&self) -> OperationInput {
         OperationInput {
             label: self.label.clone(),
             path: self.path.clone(),
@@ -768,10 +776,7 @@ impl StudioApp {
 
     /// Match the group panel's stable order: additional groups, then files.
     fn tool_groups(&self) -> impl Iterator<Item = ToolTarget> + '_ {
-        self.selection
-            .range(DERIVED_BASE..NO_ENTRY)
-            .chain(self.selection.range(..DERIVED_BASE))
-            .filter_map(|&ix| self.tool_target(ix))
+        marked_group_indices(&self.selection).filter_map(|ix| self.tool_target(ix))
     }
 
     fn choose_tool_standard(&mut self, standard: Option<ToolTarget>, cx: &mut Context<Self>) {

@@ -605,7 +605,7 @@ fn invalid_channel_ids_are_rejected_and_legacy_groups_get_stable_ids() {
 }
 
 #[test]
-fn typed_outputs_difference_and_calibration_roundtrip_linked_and_embedded() {
+fn typed_outputs_difference_calibration_and_merge_roundtrip_linked_and_embedded() {
     use crate::params::{Operation, OperationInput, Quantity, process_file};
     use crate::publication::{SpectrumInput, figures};
     let temp = Temp::new();
@@ -675,12 +675,38 @@ fn typed_outputs_difference_and_calibration_roundtrip_linked_and_embedded() {
         ..Default::default()
     };
     project.derived = vec![baseline, diff.clone(), calibrated.clone()];
+    let mut merged = calibrated.clone();
+    merged.id = 4;
+    merged.label = "calibrated Cu · merge 2".into();
+    merged.operation = Some(Operation {
+        tool: "merge".into(),
+        parameters: json!({"template": "calibrated Cu", "count": 2}),
+        inputs: [2, 0]
+            .map(|i| OperationInput {
+                label: project.derived[i].label.clone(),
+                path: PathBuf::new(),
+                derived_id: Some(project.derived[i].id),
+                fingerprint: project.derived[i].fingerprint(&params),
+                size: None,
+            })
+            .to_vec(),
+        applied_energy_shift_ev: 0.0,
+    });
+    project.derived.push(merged.clone());
     project.active_derived = Some(2);
     for mode in [DataStorage::Paths, DataStorage::Embedded] {
         let saved = temp.join(&format!("typed-{mode:?}.rxs"));
         save_with_storage(&saved, &project, mode).unwrap();
         let loaded = load(&saved).unwrap();
         assert_eq!(state(&project), state(&loaded));
+        let mean = &loaded.derived[3];
+        assert_eq!(mean.quantity, Quantity::RawMu);
+        assert_eq!(mean.operation, merged.operation);
+        assert_eq!(mean.params.as_ref().unwrap().e0, Some(8982.25));
+        assert_eq!(
+            mean.raw(mean.params.as_ref().unwrap()).unwrap(),
+            (merged.energy.clone(), merged.mu.clone())
+        );
         let result = &loaded.derived[1];
         assert_eq!(result.quantity, Quantity::NormalizedDifference);
         assert!(!result.quantity_unconfirmed);

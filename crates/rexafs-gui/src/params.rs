@@ -868,6 +868,19 @@ pub fn load_raw(
     Ok((energy, mu))
 }
 
+/// Shared uncached access for a bound group: derived channels retain their
+/// own mapping, while materialized results return their already corrected arrays.
+pub(crate) fn load_group_raw(
+    path: &std::path::Path,
+    params: &PipelineParams,
+    derived: Option<&DerivedSpectrum>,
+) -> Result<(Vec<f64>, Vec<f64>), String> {
+    match derived {
+        Some(group) => group.raw(params),
+        None => load_raw(path, params),
+    }
+}
+
 /// An additional spectrum: an in-memory result or an independently processed
 /// channel of a source file. File channels remain lazy; no raw arrays need to
 /// be retained until the group is viewed or analyzed.
