@@ -38,6 +38,15 @@ pub(crate) struct PathFitDetails {
     pub sigma2: Option<Estimate>,
     pub s02: Option<Estimate>,
     pub e0: Option<Estimate>,
+    /// N·S₀², the amplitude the fit actually resolves.
+    #[serde(default)]
+    pub n_s02: Option<Estimate>,
+    #[serde(default)]
+    pub ei: Option<Estimate>,
+    #[serde(default)]
+    pub third: Option<Estimate>,
+    #[serde(default)]
+    pub fourth: Option<Estimate>,
 }
 
 fn evaluate(expr: &str, reff: Option<f64>, degen: Option<f64>, vars: &FitVariables) -> Option<f64> {
@@ -137,6 +146,21 @@ fn estimate(
     })
 }
 
+/// Cumulant / lifetime cells are optional: an empty cell is the core default
+/// of zero and is left out of reports rather than shown as a fitted value.
+fn optional(
+    expr: &str,
+    reff: Option<f64>,
+    degen: Option<f64>,
+    result: &FeffFitResult,
+) -> Option<Estimate> {
+    if expr.trim().is_empty() {
+        None
+    } else {
+        estimate(expr, reff, degen, result)
+    }
+}
+
 pub(crate) fn snapshot(paths: &[FitPathSpec], result: &FeffFitResult) -> Vec<PathFitDetails> {
     paths
         .iter()
@@ -178,6 +202,27 @@ pub(crate) fn snapshot(paths: &[FitPathSpec], result: &FeffFitResult) -> Vec<Pat
                     result,
                 ),
                 e0: estimate(&p.e0, reff, degen, result),
+                n_s02: estimate(
+                    &format!(
+                        "({}) * ({})",
+                        if p.degen.trim().is_empty() {
+                            "degen"
+                        } else {
+                            p.degen.trim()
+                        },
+                        if p.s02.trim().is_empty() {
+                            "1"
+                        } else {
+                            p.s02.trim()
+                        }
+                    ),
+                    reff,
+                    degen,
+                    result,
+                ),
+                ei: optional(&p.ei, reff, degen, result),
+                third: optional(&p.third, reff, degen, result),
+                fourth: optional(&p.fourth, reff, degen, result),
             }
         })
         .collect()

@@ -9,6 +9,7 @@ mod codex_client;
 mod debug_stats;
 mod feffgen;
 mod fit_details;
+mod fit_report;
 mod fitting;
 mod joint_fitting;
 mod params;

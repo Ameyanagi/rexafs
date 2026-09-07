@@ -1148,6 +1148,15 @@ impl StudioApp {
             .gap_2()
             .child(section_label(&t, "Result"))
             .child(div().flex_1())
+            .when_some(self.fit_history_selected, |head, id| {
+                head.child(
+                    button(&t, "copy-fit-report", "Copy as Markdown", false).on_click(cx.listener(
+                        move |this, _: &ClickEvent, _, cx| {
+                            this.copy_fit_report(id, cx);
+                        },
+                    )),
+                )
+            })
             .child(
                 div()
                     .font_family(MONO)
@@ -1168,6 +1177,20 @@ impl StudioApp {
             .child(head)
             .children(rows)
             .into_any_element()
+    }
+
+    /// Copies the Larch-style report of one archived fit to the clipboard.
+    pub(crate) fn copy_fit_report(&mut self, id: usize, cx: &mut Context<Self>) {
+        let Some(entry) = self.fit_history.iter().find(|e| e.id == id) else {
+            self.status = "No fit result to copy.".into();
+            cx.notify();
+            return;
+        };
+        let result = self.fit_history_results.get(&id).map(|r| r.as_ref());
+        let report = crate::fit_report::markdown(entry, result);
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(report));
+        self.status = format!("Fit {id} report copied as Markdown").into();
+        cx.notify();
     }
 
     fn fit_path_details(
@@ -1350,6 +1373,25 @@ impl StudioApp {
                     );
                 }
                 rows.push(self.fit_path_details(entry).into_any_element());
+                rows.push(
+                    div()
+                        .mx_3()
+                        .py_1()
+                        .child(
+                            button(
+                                &t,
+                                ("copy-fit-history-report", id),
+                                "Copy as Markdown",
+                                false,
+                            )
+                            .on_click(cx.listener(
+                                move |this, _: &ClickEvent, _, cx| {
+                                    this.copy_fit_report(id, cx);
+                                },
+                            )),
+                        )
+                        .into_any_element(),
+                );
             }
         }
         self.section("History", None, rows, cx)
