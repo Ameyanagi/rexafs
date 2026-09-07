@@ -99,8 +99,8 @@ the `.wasm` files and license notices; no compiler is required on the consumer s
 Desktop (run on the target platform):
 
 ```bash
-cargo test --locked --release -p rexafs-gui --no-default-features --features refeff-runner
-cargo build --locked --release -p rexafs-gui --no-default-features --features refeff-runner
+cargo test --locked --release -p rexafs-gui --no-default-features --features refeff-runner,feff10-runner
+cargo build --locked --release -p rexafs-gui --no-default-features --features refeff-runner,feff10-runner
 python scripts/test-release-archive.py
 python scripts/package-desktop.py
 ```
@@ -108,11 +108,13 @@ python scripts/package-desktop.py
 Use Python 3.12+ for the release scripts. `package-macos.sh` remains a macOS build
 convenience wrapper. Archives go to `target/distributions/` with version and Rust
 host triple in the filename: macOS `.app` ZIP, Linux `.tar.gz`, Windows ZIP.
-Each contains ReFEFF, an example, license files, a dependency inventory and build
+Mac archives contain both ReFEFF and FEFF10, an example, license files, a dependency inventory and build
 metadata, with an adjacent SHA-256 checksum. The script extracts the archive into
 a fresh directory and runs its executable's `--version` and `--self-check`.
 The latter processes the packaged example without relying on the source checkout.
-It does not test GPU rendering or replace an interactive launch check.
+The additional `--self-check-feff` runs each compiled engine on fcc Cu and checks
+first-shell geometry and amplitudes, including the FEFF10 worker process route.
+Neither check tests GPU rendering or replaces an interactive launch check.
 Windows ZIP packaging clamps upstream file dates to ZIP's supported range
 (1980–2107), preserving file contents and leaving source timestamps untouched.
 

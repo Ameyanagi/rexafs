@@ -81,9 +81,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: cargo test --locked --release -p rexafs-gui --no-default-features --features refeff-runner
+      - run: cargo test --locked --release -p rexafs-gui --no-default-features --features refeff-runner,feff10-runner
+      - run: cargo test --locked --release -p rexafs --features refeff-runner,feff10-runner --test refeff_runner --test feff10_s02k_parity
       - run: python scripts/test-release-archive.py
-      - run: cargo build --locked --release -p rexafs-gui --no-default-features --features refeff-runner
+      - run: cargo build --locked --release -p rexafs-gui --no-default-features --features refeff-runner,feff10-runner
       - run: python scripts/package-desktop.py
       - uses: actions/upload-artifact@v4
         with:

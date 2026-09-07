@@ -37,7 +37,11 @@ evidence for review, not proof that every listed crate is linked into the binary
 Inspect notices and applicable source requirements for every advertised platform.
 The inventory is a collection aid, not a change to upstream distribution terms.
 
-The desktop archive uses ReFEFF and excludes the optional FEFF10 runner. Imported
+Mac releases from 0.1.3 include ReFEFF and the FEFF10 runner. The native FEFF10
+license and marking, plus GCC runtime license/exception texts, are retained in
+`assets/licenses/feff10-native/` with exact notice provenance, and copied into the
+package notices. Cargo license metadata describes the Rust wrapper; these
+additional notices describe its native components. Imported
 XrayLarch examples retain their upstream commit and measurement provenance in
 `resources/examples/PROVENANCE.md` (or the macOS app's Resources directory).
 Source packages retain their existing fixture provenance. Qualify the fixture

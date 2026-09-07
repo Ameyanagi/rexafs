@@ -29,6 +29,10 @@ use gpui::{App, AppContext, Bounds, Size, WindowBounds, WindowOptions, px};
 use crate::app::StudioApp;
 
 fn main() {
+    // Handle re-executed FEFF stage workers before argument or GUI setup.
+    #[cfg(feature = "feff10-runner")]
+    feff10::worker::init();
+
     match std::env::args().nth(1).as_deref() {
         Some("--version") => {
             println!("rexafs {}", updates::installed_label());
@@ -48,12 +52,15 @@ fn main() {
             }
             return;
         }
+        Some("--self-check-feff") => {
+            if let Err(error) = feffgen::check_package_backends() {
+                eprintln!("rexafs FEFF package check failed: {error}");
+                std::process::exit(1);
+            }
+            return;
+        }
         _ => {}
     }
-    // FEFFRS uses re-executed worker processes for its bundled FEFF stages.
-    // This is compiled only when that optional backend is included.
-    #[cfg(feature = "feff10-runner")]
-    feff10::worker::init();
 
     // Optional positional arg: a spectrum, folder or .rxs to open. Enables
     // "open with", scripted launches, and screenshot testing without driving

@@ -1,0 +1,17 @@
+Based on or developed using Distribution: FEFF10.0 Copyright (c) 2020 FEFF Project, University of Washington and SLAC National Accelerator Laboratory. All rights reserved.
+
+rexafs includes the FEFF10 native archive distributed with feff10-rs v0.2.3:
+https://github.com/Ameyanagi/feff10-rs/releases/tag/v0.2.3
+The upstream FEFF10 source revision is 0a4fbd797cf72938f64dda034a438ce009ec6eb7.
+Its copyright notices, conditions and disclaimer are in FEFF10-LICENSE.
+
+The macOS prebuilt archives include GCC Fortran and arithmetic runtime objects.
+GCC runtime terms and the GCC Runtime Library Exception are included here;
+libquadmath uses the GNU Lesser General Public License. Preserve these notices
+alongside the Rust wrapper's separate MIT/Apache license files.
+Source and build instructions for rebuilding/relinking the native archive:
+https://github.com/Ameyanagi/feff10-rs/tree/v0.2.3
+https://gcc.gnu.org/git/?p=gcc.git
+rexafs source: https://github.com/Ameyanagi/rexafs
+
+PROVENANCE.json identifies the exact sources and SHA-256 values of these notices.

@@ -316,12 +316,37 @@ fn run_refeff_pipeline(request: &FeffRunRequest) -> Result<FeffRunResult, Fittin
     // Refeff executes in-process and does not bundle or spawn FEFF executables.
     // Its memory facade uses a private temporary compatibility workspace; only
     // the path files needed by rexafs are materialized for the caller.
-    // Its current facade has no cancellable timeout boundary, so timeout_sec is
-    // retained for request compatibility but is not enforced by this backend.
-    let result = refeff::Runner::new()
+    // ReFEFF 0.3 checks a cooperative deadline throughout the calculation.
+    let mut runner = refeff::Runner::new();
+    if let Some(seconds) = request.timeout_sec {
+        let deadline = Instant::now()
+            .checked_add(Duration::from_secs(seconds))
+            .ok_or_else(|| FittingError::RefeffPipelineFailed {
+                reason: "timeout exceeds the platform's monotonic clock range".into(),
+            })?;
+        runner = runner.with_deadline(deadline);
+    }
+    let result = runner
         .run_in_memory(refeff::MemoryRunRequest::new(prepared_input.into_bytes()))
-        .map_err(|error| FittingError::RefeffPipelineFailed {
-            reason: error.to_string(),
+        .map_err(|error| {
+            if let (
+                Some(timeout_sec),
+                refeff::Error::Pipeline {
+                    code: "interrupted",
+                    module,
+                    ..
+                },
+            ) = (request.timeout_sec, &error)
+            {
+                FittingError::ProcessTimedOut {
+                    module: module.clone().unwrap_or_else(|| "refeff".into()),
+                    timeout_sec,
+                }
+            } else {
+                FittingError::RefeffPipelineFailed {
+                    reason: error.to_string(),
+                }
+            }
         })?;
 
     let resolved = FeffResolvedCommands {

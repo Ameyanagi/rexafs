@@ -1,0 +1,226 @@
+[
+  {
+    "element": "Cu",
+    "data": "cu_150k.xmu",
+    "backend": "refeff",
+    "cluster_radius_angstrom": 8.0,
+    "cluster_atoms": 177,
+    "generated_paths": 62,
+    "selected_paths": 1,
+    "ranges": {
+      "follow_transform": true,
+      "kmin": 2.0,
+      "kmax": 12.0,
+      "rmin": 1.0,
+      "rmax": 3.0,
+      "kweight": 2.0,
+      "kweights": [
+        1.0,
+        2.0,
+        3.0
+      ],
+      "fitspace": "R",
+      "noise": false
+    },
+    "r_factor": 0.008073988458716588,
+    "solver": {
+      "method": "TrustRegionDogLeg",
+      "converged": true,
+      "termination": "Cost tolerance reached",
+      "iterations": 8,
+      "evaluations": null,
+      "initial_cost": 1.6672763645214108,
+      "final_cost": 0.02206500823353958
+    },
+    "parameters": [
+      {
+        "name": "dr_1",
+        "value": -0.0068040932868931574,
+        "stderr": 0.0037857647942689753
+      },
+      {
+        "name": "e0",
+        "value": 6.072589118546111,
+        "stderr": 0.5817473292151046
+      },
+      {
+        "name": "s02",
+        "value": 0.8729434837377716,
+        "stderr": 0.06497155611178829
+      },
+      {
+        "name": "ss_1",
+        "value": 0.005156805015382497,
+        "stderr": 0.0006303093972797932
+      }
+    ]
+  },
+  {
+    "element": "Cu",
+    "data": "cu_150k.xmu",
+    "backend": "feffrs",
+    "cluster_radius_angstrom": 8.0,
+    "cluster_atoms": 177,
+    "generated_paths": 62,
+    "selected_paths": 1,
+    "ranges": {
+      "follow_transform": true,
+      "kmin": 2.0,
+      "kmax": 12.0,
+      "rmin": 1.0,
+      "rmax": 3.0,
+      "kweight": 2.0,
+      "kweights": [
+        1.0,
+        2.0,
+        3.0
+      ],
+      "fitspace": "R",
+      "noise": false
+    },
+    "r_factor": 0.008074666820109325,
+    "solver": {
+      "method": "TrustRegionDogLeg",
+      "converged": true,
+      "termination": "Cost tolerance reached",
+      "iterations": 8,
+      "evaluations": null,
+      "initial_cost": 1.6673097906257657,
+      "final_cost": 0.02206686209421731
+    },
+    "parameters": [
+      {
+        "name": "dr_1",
+        "value": -0.006803501467356456,
+        "stderr": 0.003785956069744469
+      },
+      {
+        "name": "e0",
+        "value": 6.072760601936731,
+        "stderr": 0.5817822344826836
+      },
+      {
+        "name": "s02",
+        "value": 0.8729329660714226,
+        "stderr": 0.06497316586539928
+      },
+      {
+        "name": "ss_1",
+        "value": 0.005156720811345835,
+        "stderr": 0.0006303326202791167
+      }
+    ]
+  },
+  {
+    "element": "Ni",
+    "data": "ni_metal_rt.xdi",
+    "backend": "refeff",
+    "cluster_radius_angstrom": 8.0,
+    "cluster_atoms": 201,
+    "generated_paths": 65,
+    "selected_paths": 1,
+    "ranges": {
+      "follow_transform": true,
+      "kmin": 2.0,
+      "kmax": 12.0,
+      "rmin": 1.0,
+      "rmax": 3.0,
+      "kweight": 2.0,
+      "kweights": [
+        1.0,
+        2.0,
+        3.0
+      ],
+      "fitspace": "R",
+      "noise": false
+    },
+    "r_factor": 0.003079418766297067,
+    "solver": {
+      "method": "TrustRegionDogLeg",
+      "converged": true,
+      "termination": "Cost tolerance reached",
+      "iterations": 9,
+      "evaluations": null,
+      "initial_cost": 4.0619274655954625,
+      "final_cost": 0.007145227004213663
+    },
+    "parameters": [
+      {
+        "name": "dr_1",
+        "value": -0.02580189789877012,
+        "stderr": 0.0027188748263196234
+      },
+      {
+        "name": "e0",
+        "value": 7.648810368028006,
+        "stderr": 0.4165586731980103
+      },
+      {
+        "name": "s02",
+        "value": 0.7968125524816417,
+        "stderr": 0.03681098657940474
+      },
+      {
+        "name": "ss_1",
+        "value": 0.006047463574169827,
+        "stderr": 0.0004197874471885546
+      }
+    ]
+  },
+  {
+    "element": "Ni",
+    "data": "ni_metal_rt.xdi",
+    "backend": "feffrs",
+    "cluster_radius_angstrom": 8.0,
+    "cluster_atoms": 201,
+    "generated_paths": 65,
+    "selected_paths": 1,
+    "ranges": {
+      "follow_transform": true,
+      "kmin": 2.0,
+      "kmax": 12.0,
+      "rmin": 1.0,
+      "rmax": 3.0,
+      "kweight": 2.0,
+      "kweights": [
+        1.0,
+        2.0,
+        3.0
+      ],
+      "fitspace": "R",
+      "noise": false
+    },
+    "r_factor": 0.003079418766297067,
+    "solver": {
+      "method": "TrustRegionDogLeg",
+      "converged": true,
+      "termination": "Cost tolerance reached",
+      "iterations": 9,
+      "evaluations": null,
+      "initial_cost": 4.0619274655954625,
+      "final_cost": 0.007145227004213663
+    },
+    "parameters": [
+      {
+        "name": "dr_1",
+        "value": -0.02580189789877012,
+        "stderr": 0.0027188748263196234
+      },
+      {
+        "name": "e0",
+        "value": 7.648810368028006,
+        "stderr": 0.4165586731980103
+      },
+      {
+        "name": "s02",
+        "value": 0.7968125524816417,
+        "stderr": 0.03681098657940474
+      },
+      {
+        "name": "ss_1",
+        "value": 0.006047463574169827,
+        "stderr": 0.0004197874471885546
+      }
+    ]
+  }
+]

@@ -153,6 +153,10 @@ def verify_installation(image, metadata, verify_app=None):
             subprocess.run(["lipo", str(executable), "-verify_arch",
                             "arm64" if metadata["target"] == "aarch64-apple-darwin" else "x86_64"], check=True)
             subprocess.run([str(executable), "--self-check"], cwd=temporary, check=True)
+            if "feff10-runner" in metadata.get("features", []):
+                if actual.get("features") != metadata["features"]:
+                    raise ValueError("Installed binary has incorrect calculation engines")
+                subprocess.run([str(executable), "--self-check-feff"], cwd=temporary, check=True, timeout=600)
             return sha256(executable)
 
 

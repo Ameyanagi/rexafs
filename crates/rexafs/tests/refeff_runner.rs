@@ -4,7 +4,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rexafs::prelude::{feffpath, run_feff, FeffExecutionMode, FeffFlavor, FeffRunRequest};
+use rexafs::prelude::{
+    feffpath, run_feff, FeffExecutionMode, FeffFlavor, FeffRunRequest, FittingError,
+};
 
 struct TestWorkspace(PathBuf);
 
@@ -72,6 +74,28 @@ fn refeff_in_memory_generates_only_loadable_path_files_by_default() {
         FeffFlavor::Feff85L,
     )
     .expect("ReFEFF path output must load in the existing fitting parser");
+}
+
+#[test]
+fn refeff_expired_deadline_leaves_no_partial_path_outputs() {
+    let workspace = TestWorkspace::new();
+    let request = FeffRunRequest {
+        executable_path: PathBuf::new(),
+        workspace_dir: workspace.0.clone(),
+        feffinp: Some(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/testfiles/xraylarch_d867/feffit/Feff_ZnSe/feff.inp"),
+        ),
+        mode: FeffExecutionMode::RefeffPipeline,
+        timeout_sec: Some(0),
+        use_sfconv: false,
+        keep_all_outputs: true,
+    };
+    assert!(matches!(
+        run_feff(&request),
+        Err(FittingError::ProcessTimedOut { timeout_sec: 0, .. })
+    ));
+    assert_eq!(fs::read_dir(&workspace.0).unwrap().count(), 0);
 }
 
 #[test]
