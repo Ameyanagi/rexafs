@@ -134,4 +134,4 @@ jobs:
           fi
           test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
           gh release upload "$RELEASE_TAG" artifacts/release-manifest/SHA256SUMS --clobber
-          find artifacts -type f \( -name '*.zip' -o -name '*.sha256' -o -name '*.crate' -o -name '*.whl' -o -name '*.tar.gz' -o -name '*.tgz' \) -exec gh release upload "$RELEASE_TAG" {} +
+          find artifacts -type f \( -name '*.zip' -o -name '*.sha256' -o -name '*.crate' -o -name '*.whl' -o -name '*.tar.gz' -o -name '*.tgz' -o -name '*-setup.exe' -o -name '*-setup.build.json' -o -name '*-setup.exe.qualification.json' \) -exec gh release upload "$RELEASE_TAG" {} +
