@@ -18,6 +18,13 @@ pub const PLOT_CHIK: usize = 2;
 pub const PLOT_CHIR: usize = 3;
 pub const PLOT_CHIQ: usize = 4;
 
+fn current_label(
+    selected: Option<usize>,
+    entry_label: impl FnOnce(usize) -> String,
+) -> SharedString {
+    entry_label(selected.unwrap_or(crate::app::NO_ENTRY)).into()
+}
+
 impl StudioApp {
     pub(crate) fn stage_center(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
@@ -485,10 +492,7 @@ impl StudioApp {
     }
 
     pub(crate) fn current_group_label(&self) -> SharedString {
-        match self.selected {
-            Some(ix) if ix != crate::app::NO_ENTRY => self.entry_label(ix).into(),
-            _ => self.spectrum_label.clone(),
-        }
+        current_label(self.selected, |ix| self.entry_label(ix))
     }
 
     /// Clicking a thumbnail opens exactly its current-data quantity.
@@ -629,6 +633,32 @@ pub(crate) fn stage_plot_selection(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn current_header_resolves_standalone_and_catalog_display_labels() {
+        use crate::app::NO_ENTRY;
+        use crate::group_identity::{GroupId, GroupState};
+        let standalone = GroupId::new_result();
+        let catalog = GroupId::new_result();
+        let mut state = GroupState::default();
+        state.labels.insert(standalone.clone(), "Cu foil".into());
+        state.labels.insert(catalog.clone(), "Cu standard".into());
+        for (selected, expected) in [
+            (None, "Cu foil"),
+            (Some(NO_ENTRY), "Cu foil"),
+            (Some(0), "Cu standard"),
+        ] {
+            let label = super::current_label(selected, |ix| {
+                let id = if ix == NO_ENTRY {
+                    &standalone
+                } else {
+                    &catalog
+                };
+                state.display_label(Some(id), || "load-time label".into())
+            });
+            assert_eq!(label.as_ref(), expected);
+        }
+    }
+
     use super::*;
     use crate::app::shell::StageView;
 

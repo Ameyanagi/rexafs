@@ -495,14 +495,9 @@ pub fn build_rows_revealing(
     rows
 }
 
-/// Preserve defaults unless an overlay collides, then use compare positions.
+/// Group colours remain stable even when traces share a swatch.
 pub fn overlay_colors(defaults: &[usize]) -> Vec<usize> {
-    let unique: BTreeSet<_> = defaults.iter().copied().collect();
-    if unique.len() == defaults.len() {
-        defaults.to_vec()
-    } else {
-        (0..defaults.len()).map(|i| i % 8).collect()
-    }
+    defaults.to_vec()
 }
 
 /// Compact visible kind; operation names use the persisted tool vocabulary.
@@ -1397,11 +1392,11 @@ mod tests {
     }
 
     #[test]
-    fn overlay_collisions_use_distinct_compare_positions_up_to_palette_size() {
+    fn overlay_collisions_preserve_group_colors() {
         assert_eq!(overlay_colors(&[3, 6, 1]), vec![3, 6, 1]);
-        assert_eq!(overlay_colors(&[3, 3]), vec![0, 1]);
-        assert_eq!(overlay_colors(&[7; 8]), (0..8).collect::<Vec<_>>());
-        assert_eq!(overlay_colors(&[7; 9]), vec![0, 1, 2, 3, 4, 5, 6, 7, 0]);
+        assert_eq!(overlay_colors(&[3, 3]), vec![3, 3]);
+        assert_eq!(overlay_colors(&[7; 8]), vec![7; 8]);
+        assert_eq!(overlay_colors(&[7; 9]), vec![7; 9]);
         assert!(overlay_colors(&[]).is_empty());
     }
 

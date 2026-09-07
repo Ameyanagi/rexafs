@@ -427,6 +427,9 @@ actions!(
         ExpandFocusedStack,
         LeaveFilter,
         EscapeFilter,
+        RenameGroup,
+        CommitGroupRename,
+        DismissGroupEditor,
         FramePrev,
         FrameNext,
         FrameJumpBack,
@@ -470,6 +473,15 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
             AssistantPreviousControl,
             Some("Assistant && !TextInput"),
         ),
+        KeyBinding::new("f2", RenameGroup, Some("DataPanel && !TextInput")),
+        KeyBinding::new("enter", RenameGroup, Some("DataPanel && !TextInput")),
+        KeyBinding::new("enter", CommitGroupRename, Some("GroupRename > TextInput")),
+        KeyBinding::new(
+            "escape",
+            DismissGroupEditor,
+            Some("GroupRename > TextInput"),
+        ),
+        KeyBinding::new("escape", DismissGroupEditor, Some("GroupMenu")),
         KeyBinding::new("up", NavUp, Some("DataPanel && !TextInput")),
         KeyBinding::new("down", NavDown, Some("DataPanel && !TextInput")),
         KeyBinding::new("shift-up", NavExtendUp, Some("DataPanel && !TextInput")),
@@ -1022,6 +1034,8 @@ pub struct StudioApp {
     selected: Option<usize>,
     /// Keyboard row focus and stable range anchor, independent of current.
     focus_group: Option<usize>,
+    group_menu: Option<shell::group_menu::GroupMenu>,
+    group_rename: Option<shell::group_menu::RenameState>,
     mark_anchor: Option<usize>,
     /// Marks are project-wide; visibility and navigation never remove them.
     selection: BTreeSet<usize>,
@@ -2097,6 +2111,28 @@ mod keybinding_tests {
     }
 
     #[test]
+    fn group_rename_keys_belong_only_to_the_inline_editor() {
+        let bindings = studio_keybindings();
+        let list = KeyContext::parse("DataPanel").unwrap();
+        let rename = KeyContext::parse("GroupRename").unwrap();
+        let input = KeyContext::parse("TextInput").unwrap();
+        let start = binding::<super::RenameGroup>(&bindings)
+            .predicate()
+            .unwrap();
+        assert!(start.depth_of(std::slice::from_ref(&list)).is_some());
+        assert!(
+            start
+                .depth_of(&[list.clone(), rename.clone(), input.clone()])
+                .is_none()
+        );
+        let commit = binding::<super::CommitGroupRename>(&bindings)
+            .predicate()
+            .unwrap();
+        assert!(commit.depth_of(&[list, rename, input.clone()]).is_some());
+        assert!(commit.depth_of(&[input]).is_none());
+    }
+
+    #[test]
     fn filter_exit_keys_only_match_the_filter_editor() {
         let bindings = studio_keybindings();
         let filter = KeyContext::parse("GroupFilter").unwrap();
@@ -2442,6 +2478,8 @@ impl StudioApp {
             selected: None,
             selection: BTreeSet::new(),
             focus_group: None,
+            group_menu: None,
+            group_rename: None,
             mark_anchor: None,
             derived: Vec::new(),
             next_derived_id: 1,
@@ -3068,6 +3106,11 @@ impl StudioApp {
             } else if self.group_registry.index(id).is_none() {
                 state.marked.remove(id);
             }
+            state.capture_standalone_lock(
+                &self.group_registry,
+                id,
+                self.frozen.contains(&NO_ENTRY),
+            );
             if self.current_group_index() == Some(NO_ENTRY) {
                 state.current = Some(id.clone());
             }
@@ -3109,9 +3152,11 @@ impl StudioApp {
             .standalone_source
             .as_ref()
             .filter(|_| self.catalog.is_empty())
-            && self.group_state.marked.contains(id)
         {
-            self.selection.insert(NO_ENTRY);
+            if self.group_state.marked.contains(id) {
+                self.selection.insert(NO_ENTRY);
+            }
+            shell::groups_panel::restore_standalone_lock(&mut self.frozen, &self.group_state, id);
         }
         self.migrate_catalog_standalone();
     }
@@ -3124,6 +3169,14 @@ impl StudioApp {
         for group in &mut self.derived {
             self.group_registry
                 .assign_group(group, &self.project_source_origins);
+        }
+        for group in &self.derived {
+            if let Some(id) = &group.group_id {
+                self.group_state
+                    .colors
+                    .entry(id.clone())
+                    .or_insert_with(|| group_rows::color_index(id) as u8);
+            }
         }
         if self.group_registry.replace_derived(&self.derived) {
             self.invalidate_index_bindings(IndexChange::DerivedOnly);
@@ -3194,6 +3247,7 @@ impl StudioApp {
         if let Some((_, _, id)) = &self.standalone_source
             && let Some(ix) = self.group_registry.index(id)
         {
+            shell::groups_panel::migrate_standalone_lock(&mut self.frozen, ix);
             group_rows::migrate_standalone(
                 &mut self.selection,
                 &mut self.focus_group,
@@ -3496,11 +3550,8 @@ impl StudioApp {
 
     /// Shared lock gate for parameter editors; restore rejected field text too.
     fn refuse_frozen_edit(&mut self, cx: &mut Context<Self>) -> bool {
-        if self
-            .override_target()
-            .is_some_and(|ix| self.frozen.contains(&ix))
-        {
-            self.status = "This group is frozen — thaw it to edit its parameters.".into();
+        if shell::groups_panel::processing_locked(self.current_group_index(), &self.frozen) {
+            self.status = "Processing is locked — unlock it to edit its parameters.".into();
             self.restore_param_field_text(cx);
             cx.notify();
             return true;
@@ -4127,6 +4178,7 @@ impl StudioApp {
                 }
             }
             let id = self.standalone_group_id(&path);
+            shell::groups_panel::restore_standalone_lock(&mut self.frozen, &self.group_state, &id);
             self.standalone_source = Some((path.clone(), label.clone(), id));
         } else {
             self.group_id(ix);
@@ -4296,6 +4348,7 @@ impl StudioApp {
     ) {
         if ix == NO_ENTRY {
             let id = self.standalone_group_id(&path);
+            shell::groups_panel::restore_standalone_lock(&mut self.frozen, &self.group_state, &id);
             self.standalone_source = Some((path.clone(), label.clone(), id));
             self.cache.put((ix, fingerprint), sp.clone());
         }
@@ -5176,9 +5229,21 @@ impl StudioApp {
                     .spectrum_group
                     .as_ref()
                     .and_then(|t| t.group_id.as_ref())
-                    .map(group_rows::color_index)
+                    .map(|id| {
+                        self.group_state
+                            .colors
+                            .get(id)
+                            .map(|c| usize::from(*c % 8))
+                            .unwrap_or_else(|| group_rows::color_index(id))
+                    })
                     .unwrap_or(0),
-                label: self.spectrum_label.to_string(),
+                label: self
+                    .spectrum_group
+                    .as_ref()
+                    .and_then(|t| t.group_id.as_ref())
+                    .and_then(|id| self.group_state.labels.get(id))
+                    .cloned()
+                    .unwrap_or_else(|| self.spectrum_label.to_string()),
                 sp: sp.clone(),
                 active: true,
             });
@@ -5835,6 +5900,13 @@ impl StudioApp {
     }
 
     fn entry_label(&self, ix: usize) -> String {
+        self.group_state
+            .display_label(self.peek_group_id(ix).as_ref(), || {
+                self.default_entry_label(ix)
+            })
+    }
+
+    fn default_entry_label(&self, ix: usize) -> String {
         if ix == NO_ENTRY {
             return self
                 .standalone_source
@@ -7804,6 +7876,9 @@ impl StudioApp {
         self.pending_overrides.clear();
         self.selected = None;
         self.focus_group = None;
+        self.group_menu = None;
+        self.group_rename = None;
+        self.tools.alignment_standard = None;
         self.mark_anchor = None;
         self.filter_reveal = None;
         self.reveal_current = None;

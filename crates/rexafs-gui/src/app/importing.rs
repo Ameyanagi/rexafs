@@ -127,7 +127,7 @@ impl StudioApp {
     ) {
         let target = self.override_target();
         if target.is_some_and(|ix| self.frozen.contains(&ix)) {
-            self.status = "This group is frozen — thaw it to edit its parameters.".into();
+            self.status = "Processing is locked — unlock it to edit its parameters.".into();
             cx.notify();
             return;
         }
@@ -265,14 +265,27 @@ impl StudioApp {
     }
 
     pub(super) fn add_import_channel(&mut self, mode: DetectionMode, cx: &mut Context<Self>) {
-        let path = self
-            .current_path
-            .canonicalize()
-            .unwrap_or_else(|_| self.current_path.clone());
+        let Some(ix) = self.current_group_index() else {
+            return;
+        };
+        self.add_import_channel_for(ix, mode, true, cx);
+    }
+
+    pub(crate) fn add_import_channel_for(
+        &mut self,
+        ix: usize,
+        mode: DetectionMode,
+        activate: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(target) = self.tool_target(ix) else {
+            return;
+        };
+        let path = target.path.canonicalize().unwrap_or(target.path);
         if path.as_os_str().is_empty() {
             return;
         }
-        let mut params = self.ui_params().clone();
+        let mut params = self.effective_params(ix).clone();
         params.import.mode = mode;
         params.e0 = None;
         params.edge_step = None;
@@ -282,7 +295,9 @@ impl StudioApp {
             d.source.as_ref() == Some(&path)
                 && d.params.as_ref().is_some_and(|p| p.import == params.import)
         }) {
-            self.select_entry(DERIVED_BASE + i, cx);
+            if activate {
+                self.select_entry(DERIVED_BASE + i, cx);
+            }
             return;
         }
         let mut group = DerivedSpectrum {
@@ -298,9 +313,15 @@ impl StudioApp {
         };
         self.group_registry
             .assign_group(&mut group, &self.project_source_origins);
+        if let Some(id) = &group.group_id {
+            self.group_state
+                .colors
+                .entry(id.clone())
+                .or_insert_with(|| group_rows::color_index(id) as u8);
+        }
         let index = self.derived.len();
         self.derived.push(group);
-        self.rekey_after_catalog_change();
+        self.group_registry.append_derived(&self.derived, index);
         self.record(
             format!("Add {} channel", mode.label()),
             Some(shell::journal::UndoOp::DerivedAdd {
@@ -308,7 +329,10 @@ impl StudioApp {
                 spectrum: self.derived[index].clone(),
             }),
         );
-        self.select_entry(DERIVED_BASE + index, cx);
+        if activate {
+            self.select_entry(DERIVED_BASE + index, cx);
+        }
+        cx.notify();
     }
 }
 

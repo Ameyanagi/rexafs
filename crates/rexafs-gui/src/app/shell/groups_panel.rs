@@ -70,7 +70,66 @@ impl gpui::Render for SidebarResize {
     }
 }
 
+pub(crate) fn processing_locked(
+    current: Option<usize>,
+    frozen: &std::collections::BTreeSet<usize>,
+) -> bool {
+    current.is_some_and(|ix| frozen.contains(&ix))
+}
+
+pub(crate) fn restore_standalone_lock(
+    frozen: &mut std::collections::BTreeSet<usize>,
+    state: &crate::group_identity::GroupState,
+    id: &crate::group_identity::GroupId,
+) {
+    if state.frozen.contains(id) {
+        frozen.insert(crate::app::NO_ENTRY);
+    } else {
+        frozen.remove(&crate::app::NO_ENTRY);
+    }
+}
+
+pub(crate) fn migrate_standalone_lock(
+    frozen: &mut std::collections::BTreeSet<usize>,
+    index: usize,
+) {
+    if frozen.remove(&crate::app::NO_ENTRY) {
+        frozen.insert(index);
+    }
+}
+
 impl StudioApp {
+    pub(crate) fn group_row_mode(&self, ix: usize) -> crate::params::DetectionMode {
+        let mode = self.effective_params(ix).import.mode;
+        if mode == crate::params::DetectionMode::Auto && self.current_group_index() == Some(ix) {
+            self.import_preview
+                .as_ref()
+                .map_or(mode, |p| p.resolved.mode)
+        } else {
+            mode
+        }
+    }
+
+    pub(crate) fn default_group_row_label(&self, row: Row) -> String {
+        let ix = row.group().unwrap_or(crate::app::NO_ENTRY);
+        if matches!(row, Row::Child { .. }) {
+            self.group_row_mode(ix).label().to_string()
+        } else {
+            ix.checked_sub(DERIVED_BASE)
+                .and_then(|i| self.derived.get(i))
+                .map(|d| d.display_label())
+                .unwrap_or_else(|| self.default_entry_label(ix))
+        }
+    }
+
+    pub(crate) fn group_row_label(&self, row: Row) -> String {
+        let ix = row.group().unwrap_or(crate::app::NO_ENTRY);
+        self.group_state
+            .display_label(self.peek_group_id(ix).as_ref(), || {
+                self.default_group_row_label(row)
+            })
+    }
+
     pub(crate) fn invert_group_marks(&mut self, cx: &mut Context<Self>) {
         self.interaction_rows().invert_shown(&mut self.selection);
         self.ensure_compare_loaded(cx);
@@ -78,20 +137,24 @@ impl StudioApp {
         cx.notify();
     }
 
-    /// Freeze / thaw the current group.
+    /// Lock / unlock processing for the current group.
     pub(crate) fn toggle_frozen(&mut self, cx: &mut Context<Self>) {
-        let Some(ix) = self.selected else {
+        let Some(ix) = self.current_group_index() else {
             return;
         };
-        if ix == crate::app::NO_ENTRY {
-            return;
-        }
+        self.toggle_group_lock(ix, cx);
+    }
+
+    pub(crate) fn toggle_group_lock(&mut self, ix: usize, cx: &mut Context<Self>) {
+        let Some(id) = self.group_id(ix) else { return };
         let label = self.entry_label(ix);
         if !self.frozen.remove(&ix) {
             self.frozen.insert(ix);
-            self.record(format!("freeze {label}"), None);
+            self.group_state.frozen.insert(id);
+            self.record(format!("lock processing {label}"), None);
         } else {
-            self.record(format!("thaw {label}"), None);
+            self.group_state.frozen.remove(&id);
+            self.record(format!("unlock processing {label}"), None);
         }
         cx.notify();
     }
@@ -99,7 +162,13 @@ impl StudioApp {
     pub(crate) fn group_color_index(&self, ix: usize) -> usize {
         self.peek_group_id(ix)
             .as_ref()
-            .map(group_rows::color_index)
+            .map(|id| {
+                self.group_state
+                    .colors
+                    .get(id)
+                    .map(|c| usize::from(*c % 8))
+                    .unwrap_or_else(|| group_rows::color_index(id))
+            })
             .unwrap_or(0)
     }
 
@@ -278,6 +347,21 @@ impl StudioApp {
             .id("groups-panel")
             .key_context("DataPanel")
             .track_focus(&self.data_focus)
+            .on_action(
+                cx.listener(|this, _: &crate::app::RenameGroup, window, cx| {
+                    if let Some(ix) = this
+                        .focus_group
+                        .filter(|&ix| this.interaction_rows().row_index(ix).is_some())
+                    {
+                        this.start_group_rename(ix, window, cx);
+                    } else if this.data_tab == DataTab::Scans
+                        && let Some(scan) = this.active_scan
+                    {
+                        this.expanded_scan = (this.expanded_scan != Some(scan)).then_some(scan);
+                        cx.notify();
+                    }
+                }),
+            )
             .on_action(
                 cx.listener(|this: &mut Self, _: &crate::app::MarkAllGroups, _, cx| {
                     this.mark_all(true, cx)
@@ -571,12 +655,12 @@ impl StudioApp {
                     ))
                     .child(cmd(
                         "sel-freeze",
-                        if self.selected.is_some_and(|ix| self.frozen.contains(&ix)) {
-                            "thaw"
+                        if processing_locked(self.current_group_index(), &self.frozen) {
+                            "Unlock processing"
                         } else {
-                            "freeze"
+                            "Lock processing"
                         },
-                        self.selected.is_some_and(|ix| ix != crate::app::NO_ENTRY),
+                        self.current_group_index().is_some(),
                         |this, cx| this.toggle_frozen(cx),
                     ))
                     .child(div().flex_1())
@@ -684,13 +768,7 @@ impl StudioApp {
                     .then(|| self.standalone_path().map(ToOwned::to_owned))
                     .flatten()
             });
-        let mut mode = self.effective_params(ix).import.mode;
-        if mode == crate::params::DetectionMode::Auto
-            && active
-            && let Some(preview) = &self.import_preview
-        {
-            mode = preview.resolved.mode;
-        }
+        let mode = self.group_row_mode(ix);
         let tag = group_rows::kind(
             mode,
             if matches!(row, Row::Result { .. }) {
@@ -699,21 +777,8 @@ impl StudioApp {
                 None
             },
         );
-        let full_label = if real {
-            self.entry_label(ix)
-        } else {
-            self.standalone_source
-                .as_ref()
-                .map(|(_, label, _)| label.to_string())
-                .unwrap_or_else(|| self.spectrum_label.to_string())
-        };
-        let label = if child {
-            mode.label().to_string()
-        } else {
-            derived
-                .map(|d| d.display_label())
-                .unwrap_or_else(|| full_label.clone())
-        };
+        let full_label = self.entry_label(ix);
+        let label = self.group_row_label(row);
         let path_label = path
             .as_ref()
             .map(|p| p.display().to_string())
@@ -803,6 +868,13 @@ impl StudioApp {
             })
             .when(!active, |d| d.hover(|d| d.bg(t.raised)))
             .tooltip(move |_, cx| cx.new(|_| tip.clone()).into())
+            .on_mouse_down(
+                gpui::MouseButton::Right,
+                cx.listener(move |this, ev: &gpui::MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    this.open_group_menu(ix, ev.position, window, cx);
+                }),
+            )
             .on_click(cx.listener(move |this, ev: &ClickEvent, window, cx| {
                 window.focus(&this.data_focus, cx);
                 this.click_group(ix, ev.modifiers(), cx);
@@ -841,16 +913,7 @@ impl StudioApp {
                     .child(checkbox(&t, self.selection.contains(&ix))),
             )
             .child(swatch(trace_rgba(&t, self.group_color_index(ix))))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .font_family(MONO)
-                    .text_size(px(12.))
-                    .child(label),
-            )
+            .child(self.group_label_editor(ix, label, cx))
             .child(
                 div()
                     .flex_none()
@@ -878,18 +941,18 @@ impl StudioApp {
             })
             .child(
                 div()
-                    .id("remove")
+                    .id("group-more")
                     .w(px(12.))
                     .flex_none()
-                    .text_color(t.text_muted)
-                    .when(derived.is_some(), |d| {
-                        d.hover(|d| d.text_color(t.error))
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                cx.stop_propagation();
-                                this.remove_derived(ix - DERIVED_BASE, cx);
-                            }))
-                            .child("✕")
-                    }),
+                    .child("⋯")
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(move |this, ev: &gpui::MouseDownEvent, window, cx| {
+                            cx.stop_propagation();
+                            this.open_group_menu(ix, ev.position, window, cx);
+                        }),
+                    )
+                    .on_click(|_, _, cx| cx.stop_propagation()),
             )
     }
 
@@ -897,7 +960,6 @@ impl StudioApp {
         let t = self.theme;
         let entity = cx.entity();
         let active = self.active_scan;
-        let selected = self.selected;
         let expanded_scan = self.expanded_scan;
         let members = self.interaction_rows();
         let expanded = expanded_scan.and_then(|scan_ix| {
@@ -946,10 +1008,12 @@ impl StudioApp {
                                 })
                                 .when(!is_active, |d| d.hover(|d| d.bg(t.raised)))
                                 .cursor_pointer()
-                                .on_click(move |ev: &ClickEvent, _window, app| {
+                                .on_click(move |ev: &ClickEvent, window, app| {
                                     let modifiers = ev.modifiers();
                                     let double = ev.click_count() >= 2;
                                     row_entity.update(app, |this, cx| {
+                                        window.focus(&this.data_focus, cx);
+                                        this.focus_group = None;
                                         if modifiers.shift || modifiers.platform {
                                             this.select_scan_range(scan_ix, cx);
                                         } else if double {
@@ -1004,55 +1068,16 @@ impl StudioApp {
                                             });
                                         })
                                         .child("open"),
-                                ),
+                                )
+                                .into_any_element(),
                         );
                     }
-                    ScanListRow::Member { scan, offset } => {
-                        let Some(catalog_ix) = members.row_at(offset).and_then(Row::group) else {
-                            continue;
-                        };
-                        let label: SharedString =
-                            entity.read(app).catalog.name(catalog_ix).to_string().into();
-                        let is_active = selected == Some(catalog_ix);
-                        let member_entity = entity.clone();
-                        rows.push(
-                            div()
-                                .id(("scan-member", catalog_ix))
-                                .h(px(27.))
-                                .ml_5()
-                                .mr_1p5()
-                                .px_1p5()
-                                .flex()
-                                .items_center()
-                                .rounded_md()
-                                .overflow_hidden()
-                                .when(is_active, |d| {
-                                    d.bg(gpui::Rgba {
-                                        a: 0.16,
-                                        ..t.accent
-                                    })
-                                })
-                                .when(!is_active, |d| d.hover(|d| d.bg(t.raised)))
-                                .cursor_pointer()
-                                .on_click(move |ev: &ClickEvent, window, app| {
-                                    let modifiers = ev.modifiers();
-                                    let focus = member_entity.read(app).data_focus.clone();
-                                    window.focus(&focus, app);
-                                    member_entity.update(app, |this, cx| {
-                                        this.active_scan = Some(scan);
-                                        this.click_group(catalog_ix, modifiers, cx);
-                                    });
-                                })
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .overflow_hidden()
-                                        .whitespace_nowrap()
-                                        .text_ellipsis()
-                                        .child(label),
-                                ),
-                        );
+                    ScanListRow::Member { offset, .. } => {
+                        if let Some(row) = members.row_at(offset) {
+                            rows.push(entity.update(app, |this, cx| {
+                                this.group_row(row, cx).into_any_element()
+                            }));
+                        }
                     }
                 }
             }
@@ -1099,6 +1124,71 @@ mod tests {
     use crate::group_identity::{GroupId, GroupRegistry};
     use crate::params::DetectionMode;
     use std::{collections::BTreeMap, path::PathBuf};
+
+    #[test]
+    fn standalone_lock_survives_capture_restore_migration_and_unlock() {
+        use crate::app::NO_ENTRY;
+        use crate::group_identity::GroupState;
+        use std::collections::BTreeSet;
+        let registry = GroupRegistry::default();
+        let id = registry.register_source(
+            None,
+            "/standalone.dat".into(),
+            DetectionMode::Auto,
+            &BTreeMap::new(),
+        );
+        let mut state = GroupState::default();
+        let mut frozen = BTreeSet::from([NO_ENTRY]);
+        assert!(processing_locked(Some(NO_ENTRY), &frozen));
+        assert!(!processing_locked(None, &frozen));
+        state.capture(&registry, &BTreeSet::new(), &frozen, &BTreeMap::new(), None);
+        state.capture_standalone_lock(&registry, &id, frozen.contains(&NO_ENTRY));
+        let mut restored: GroupState =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert!(restored.frozen.contains(&id));
+        frozen.clear();
+        restore_standalone_lock(&mut frozen, &restored, &id);
+        assert!(processing_locked(Some(NO_ENTRY), &frozen));
+        restore_standalone_lock(&mut frozen, &restored, &GroupId::new_result());
+        assert!(!processing_locked(Some(NO_ENTRY), &frozen));
+        restore_standalone_lock(&mut frozen, &restored, &id);
+        // An unlock must remove the otherwise retained unresolved identity.
+        restored.capture_standalone_lock(&registry, &id, false);
+        assert!(restored.frozen.is_empty());
+        registry.register_source(
+            Some(3),
+            "/standalone.dat".into(),
+            DetectionMode::Auto,
+            &BTreeMap::new(),
+        );
+        migrate_standalone_lock(&mut frozen, 3);
+        assert_eq!(frozen, BTreeSet::from([3]));
+        assert!(processing_locked(Some(3), &frozen));
+        assert_eq!(registry.indices(&state.frozen), frozen);
+        state.capture(&registry, &BTreeSet::new(), &frozen, &BTreeMap::new(), None);
+        state.capture_standalone_lock(&registry, &id, false);
+        assert!(
+            state.frozen.contains(&id),
+            "catalog lock survives retiring standalone adapter"
+        );
+    }
+
+    #[test]
+    fn standalone_and_child_labels_use_durable_display_metadata() {
+        let id = GroupId::source(std::path::Path::new("/standalone.dat"), DetectionMode::Auto);
+        let mut state = crate::group_identity::GroupState::default();
+        for default in ["standalone.dat", "Fluorescence"] {
+            assert_eq!(state.display_label(Some(&id), || default.into()), default);
+        }
+        state.labels.insert(id.clone(), "Cu foil".into());
+        for default in ["standalone.dat", "Fluorescence", "Fluorescence · file.dat"] {
+            assert_eq!(state.display_label(Some(&id), || default.into()), "Cu foil");
+        }
+        assert_eq!(
+            state.display_label(Some(&GroupId::new_result()), || "other".into()),
+            "other"
+        );
+    }
 
     #[test]
     fn standalone_swatch_matches_the_plotted_durable_identity() {

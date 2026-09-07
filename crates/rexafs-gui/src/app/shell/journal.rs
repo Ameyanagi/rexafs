@@ -13,6 +13,16 @@ use crate::params::{DerivedSpectrum, PipelineParams, Quantity};
 /// Inverse of a recorded change.
 #[allow(clippy::large_enum_variant)]
 pub enum UndoOp {
+    Label {
+        id: GroupId,
+        before: Option<String>,
+        after: Option<String>,
+    },
+    Color {
+        id: GroupId,
+        before: Option<u8>,
+        after: Option<u8>,
+    },
     FitModel {
         before: super::assistant_actions::ModelSettings,
         after: super::assistant_actions::ModelSettings,
@@ -45,6 +55,29 @@ pub enum UndoOp {
 }
 
 impl UndoOp {
+    fn apply_metadata(&self, state: &mut crate::group_identity::GroupState, forward: bool) {
+        fn set<T: Clone>(
+            map: &mut std::collections::BTreeMap<GroupId, T>,
+            id: &GroupId,
+            value: &Option<T>,
+        ) {
+            if let Some(value) = value {
+                map.insert(id.clone(), value.clone());
+            } else {
+                map.remove(id);
+            }
+        }
+        match self {
+            Self::Label { id, before, after } => {
+                set(&mut state.labels, id, if forward { after } else { before })
+            }
+            Self::Color { id, before, after } => {
+                set(&mut state.colors, id, if forward { after } else { before })
+            }
+            _ => {}
+        }
+    }
+
     fn apply_quantity(&self, derived: &mut [DerivedSpectrum], forward: bool) {
         if let Self::DerivedQuantity {
             id, before, after, ..
@@ -219,7 +252,12 @@ impl StudioApp {
         let index = index.min(self.derived.len());
         self.derived.insert(index, spectrum);
         self.rekey_after_catalog_change();
-        self.select_entry(DERIVED_BASE + index, cx);
+        if let Some(ix) = self.selected {
+            let (focus, anchor) = (self.focus_group, self.mark_anchor);
+            self.select_entry(ix, cx);
+            (self.focus_group, self.mark_anchor) = (focus, anchor);
+        }
+        self.ensure_compare_loaded(cx);
         self.sync_param_fields(cx);
     }
 
@@ -300,6 +338,11 @@ impl StudioApp {
             self.after_param_undo(cx);
         }
         let inverse = match op {
+            op @ (UndoOp::Label { .. } | UndoOp::Color { .. }) => {
+                op.apply_metadata(&mut self.group_state, false);
+                self.invalidate_explore_plots(cx);
+                op
+            }
             op @ UndoOp::DerivedQuantity { .. } => {
                 op.apply_quantity(&mut self.derived, false);
                 self.after_param_undo(cx);
@@ -360,6 +403,11 @@ impl StudioApp {
             self.after_param_undo(cx);
         }
         let forward = match op {
+            op @ (UndoOp::Label { .. } | UndoOp::Color { .. }) => {
+                op.apply_metadata(&mut self.group_state, true);
+                self.invalidate_explore_plots(cx);
+                op
+            }
             op @ UndoOp::DerivedQuantity { .. } => {
                 op.apply_quantity(&mut self.derived, true);
                 self.after_param_undo(cx);
@@ -483,6 +531,50 @@ impl StudioApp {
 mod tests {
     use super::*;
     use crate::params::DetectionMode;
+
+    #[test]
+    fn metadata_undo_redo_is_identity_based_and_preserves_current_marks() {
+        use crate::group_identity::GroupState;
+        let id = GroupId::legacy_result(5);
+        let mut state = GroupState {
+            current: Some(id.clone()),
+            marked: [id.clone()].into(),
+            ..Default::default()
+        };
+        let mut journal = JournalState::default();
+        for op in [
+            UndoOp::Label {
+                id: id.clone(),
+                before: None,
+                after: Some("Cu foil".into()),
+            },
+            UndoOp::Color {
+                id: id.clone(),
+                before: None,
+                after: Some(7),
+            },
+        ] {
+            op.apply_metadata(&mut state, true);
+            journal.record("metadata", Some(op));
+        }
+        assert_eq!(state.labels[&id], "Cu foil");
+        assert_eq!(state.colors[&id], 7);
+        for _ in 0..2 {
+            let op = journal.undo.pop().unwrap();
+            op.apply_metadata(&mut state, false);
+            journal.redo.push(op);
+        }
+        assert!(state.labels.is_empty() && state.colors.is_empty());
+        for _ in 0..2 {
+            let op = journal.redo.pop().unwrap();
+            op.apply_metadata(&mut state, true);
+            journal.undo.push(op);
+        }
+        assert_eq!(state.labels[&id], "Cu foil");
+        assert_eq!(state.colors[&id], 7);
+        assert_eq!(state.current, Some(id.clone()));
+        assert_eq!(state.marked, [id].into());
+    }
 
     #[test]
     fn quantity_confirmation_undo_redo_and_reconfirmation_follow_identity() {

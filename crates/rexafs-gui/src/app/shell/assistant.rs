@@ -2487,7 +2487,7 @@ impl AssistantWindow {
                         if app.selected.is_some_and(|ix| {
                             ix >= crate::app::DERIVED_BASE || app.frozen.contains(&ix)
                         }) {
-                            return Err("Select an unfrozen source spectrum".into());
+                            return Err("Choose a source spectrum with processing unlocked".into());
                         }
                         let next = proposed_processing(app.ui_params(), &args["changes"])?;
                         Ok((

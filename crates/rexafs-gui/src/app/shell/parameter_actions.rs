@@ -597,7 +597,7 @@ impl StudioApp {
                                     self.entry_label(ix),
                                     if current { " · current" } else { "" },
                                     if self.frozen.contains(&ix) {
-                                        " · frozen"
+                                        " · Processing locked"
                                     } else {
                                         ""
                                     }

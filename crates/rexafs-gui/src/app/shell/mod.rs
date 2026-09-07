@@ -17,6 +17,7 @@ mod depth_controls;
 pub mod fit;
 pub(crate) mod fit_preview;
 pub mod fit_workspace;
+pub(crate) mod group_menu;
 pub mod groups_panel;
 pub mod handles;
 pub mod inspector;
@@ -410,6 +411,7 @@ impl StudioApp {
                     .then(|| self.journal_panel(cx).into_any_element()),
             )
             .child(self.status_bar(cx))
+            .children(self.group_menu_overlay(cx))
             .children(self.palette_overlay(cx))
             .children(self.parameter_menu_overlay(cx))
             .children(self.parameter_context_overlay(cx))

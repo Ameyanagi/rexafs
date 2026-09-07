@@ -1005,6 +1005,14 @@ fn group_identity_roundtrip_relocation_channels_results_and_three_more_imports()
             &BTreeMap::from([(source_ix, custom.clone())]),
             Some(DERIVED_BASE),
         );
+        for ix in &marked {
+            let id = registry.id(*ix).unwrap();
+            project
+                .group_state
+                .labels
+                .insert(id.clone(), format!("Renamed {ix}"));
+            project.group_state.colors.insert(id, (*ix % 8) as u8);
+        }
         let inputs: Vec<_> = marked
             .iter()
             .filter(|&&ix| ix != DERIVED_BASE + 1)
@@ -1096,5 +1104,32 @@ fn group_identity_roundtrip_relocation_channels_results_and_three_more_imports()
         let again = moved.join("again.rxs");
         save_with_storage(&again, &reopened, mode).unwrap();
         assert_eq!(state(&reopened), state(&load(&again).unwrap()));
+    }
+}
+
+#[test]
+fn standalone_processing_lock_roundtrip_linked_and_embedded() {
+    use crate::group_identity::GroupRegistry;
+    use std::collections::BTreeMap;
+    let temp = Temp::new();
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let dir = temp.join(&format!("standalone-lock-{mode:?}"));
+        let mut project = specimen(&dir);
+        let registry = GroupRegistry::default();
+        let source = storage::resolved_location(project.spectrum_file.as_ref().unwrap());
+        let id =
+            registry.register_source(None, source, project.params.import.mode, &BTreeMap::new());
+        project
+            .group_state
+            .capture_standalone_lock(&registry, &id, true);
+        let path = dir.join("locked.rxs");
+        save_with_storage(&path, &project, mode).unwrap();
+        let mut reopened = load(&path).unwrap();
+        assert!(reopened.group_state.frozen.contains(&id));
+        reopened
+            .group_state
+            .capture_standalone_lock(&registry, &id, false);
+        save_with_storage(&path, &reopened, mode).unwrap();
+        assert!(!load(&path).unwrap().group_state.frozen.contains(&id));
     }
 }

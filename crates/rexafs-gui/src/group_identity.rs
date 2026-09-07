@@ -342,6 +342,8 @@ fn available_id(issued: &BTreeSet<GroupId>, base: GroupId) -> GroupId {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GroupState {
+    pub labels: BTreeMap<GroupId, String>,
+    pub colors: BTreeMap<GroupId, u8>,
     pub marked: BTreeSet<GroupId>,
     pub frozen: BTreeSet<GroupId>,
     pub overrides: Vec<(GroupId, PipelineParams)>,
@@ -349,6 +351,30 @@ pub struct GroupState {
 }
 
 impl GroupState {
+    pub(crate) fn display_label(
+        &self,
+        id: Option<&GroupId>,
+        default: impl FnOnce() -> String,
+    ) -> String {
+        id.and_then(|id| self.labels.get(id))
+            .cloned()
+            .unwrap_or_else(default)
+    }
+
+    /// Standalone rows have a durable identity but no registry index yet.
+    pub(crate) fn capture_standalone_lock(
+        &mut self,
+        registry: &GroupRegistry,
+        id: &GroupId,
+        locked: bool,
+    ) {
+        if locked {
+            self.frozen.insert(id.clone());
+        } else if registry.index(id).is_none() {
+            self.frozen.remove(id);
+        }
+    }
+
     pub fn resolved_overrides(&self, registry: &GroupRegistry) -> BTreeMap<usize, PipelineParams> {
         self.overrides
             .iter()
@@ -571,6 +597,9 @@ mod tests {
             &BTreeMap::from([(1, params.clone())]),
             Some(1),
         );
+        let color_id = old.id(1).unwrap();
+        state.colors.insert(color_id.clone(), 6);
+        state.labels.insert(color_id.clone(), "Cu foil".into());
         let saved = serde_json::to_value(&state).unwrap();
         let missing = build(&["/a.dat", "/b.dat"], &mut sources);
         assert!(old.indices_changed(&missing));
@@ -588,6 +617,9 @@ mod tests {
         assert_eq!(restored.indices(&state.frozen), BTreeSet::from([1]));
         assert!(state.resolved_overrides(&restored)[&2] == params);
         assert_eq!(restored.index(state.current.as_ref().unwrap()), Some(2));
+        assert_eq!(restored.id(2), Some(color_id.clone()));
+        assert_eq!(state.colors[&color_id], 6);
+        assert_eq!(state.labels[&color_id], "Cu foil");
         // Explicitly unmarking/resetting a present source must not resurrect it.
         state.capture(
             &restored,
