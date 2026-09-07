@@ -38,6 +38,20 @@ pub enum UndoOp {
     },
 }
 
+impl UndoOp {
+    fn param_snapshot(&self, forward: bool) -> Option<(Option<usize>, PipelineParams)> {
+        match self {
+            Self::Param {
+                target,
+                before,
+                after,
+                ..
+            } => Some((*target, if forward { after } else { before }.clone())),
+            _ => None,
+        }
+    }
+}
+
 pub struct JournalEntry {
     pub text: String,
 }
@@ -52,17 +66,17 @@ pub struct JournalState {
 
 const JOURNAL_CAPACITY: usize = 500;
 
-impl StudioApp {
+impl JournalState {
     /// Append a journal line, optionally with its inverse.
     pub(crate) fn record(&mut self, text: impl Into<String>, op: Option<UndoOp>) {
         let text = text.into();
-        self.journal.entries.push(JournalEntry { text });
-        if self.journal.entries.len() > JOURNAL_CAPACITY {
-            self.journal.entries.remove(0);
+        self.entries.push(JournalEntry { text });
+        if self.entries.len() > JOURNAL_CAPACITY {
+            self.entries.remove(0);
         }
         if let Some(op) = op {
-            self.journal.undo.push(op);
-            self.journal.redo.clear();
+            self.undo.push(op);
+            self.redo.clear();
         }
     }
 
@@ -84,16 +98,16 @@ impl StudioApp {
             key: k,
             after: a,
             ..
-        }) = self.journal.undo.last_mut()
+        }) = self.undo.last_mut()
             && *t == target
             && key.is_some()
             && *k == key
         {
             *a = after;
-            if let Some(last) = self.journal.entries.last_mut() {
+            if let Some(last) = self.entries.last_mut() {
                 last.text = text;
             }
-            self.journal.redo.clear();
+            self.redo.clear();
             return;
         }
         self.record(
@@ -106,8 +120,26 @@ impl StudioApp {
             }),
         );
     }
+}
 
-    fn apply_params_to(&mut self, target: Option<usize>, params: PipelineParams) {
+impl StudioApp {
+    pub(crate) fn record(&mut self, text: impl Into<String>, op: Option<UndoOp>) {
+        self.journal.record(text, op);
+    }
+
+    pub(crate) fn record_param_edit(
+        &mut self,
+        target: Option<usize>,
+        key: Option<ParamKey>,
+        before: PipelineParams,
+        after: PipelineParams,
+        text: String,
+    ) {
+        self.journal
+            .record_param_edit(target, key, before, after, text);
+    }
+
+    pub(crate) fn apply_params_to(&mut self, target: Option<usize>, params: PipelineParams) {
         match target {
             Some(ix) => {
                 self.set_custom_params(ix, (params != self.params).then_some(params));
@@ -190,26 +222,16 @@ impl StudioApp {
             cx.notify();
             return;
         };
+        if let Some((target, params)) = op.param_snapshot(false) {
+            self.apply_params_to(target, params);
+            self.after_param_undo(cx);
+        }
         let inverse = match op {
             UndoOp::FitModel { before, after } => {
                 self.restore_model_settings(&before, cx);
                 UndoOp::FitModel { before, after }
             }
-            UndoOp::Param {
-                target,
-                key,
-                before,
-                after,
-            } => {
-                self.apply_params_to(target, before.clone());
-                self.after_param_undo(cx);
-                UndoOp::Param {
-                    target,
-                    key,
-                    before,
-                    after,
-                }
-            }
+            op @ UndoOp::Param { .. } => op,
             UndoOp::Params { changes } => {
                 for (ix, before, _) in &changes {
                     self.set_custom_params(*ix, before.clone());
@@ -240,26 +262,16 @@ impl StudioApp {
             cx.notify();
             return;
         };
+        if let Some((target, params)) = op.param_snapshot(true) {
+            self.apply_params_to(target, params);
+            self.after_param_undo(cx);
+        }
         let forward = match op {
             UndoOp::FitModel { before, after } => {
                 self.restore_model_settings(&after, cx);
                 UndoOp::FitModel { before, after }
             }
-            UndoOp::Param {
-                target,
-                key,
-                before,
-                after,
-            } => {
-                self.apply_params_to(target, after.clone());
-                self.after_param_undo(cx);
-                UndoOp::Param {
-                    target,
-                    key,
-                    before,
-                    after,
-                }
-            }
+            op @ UndoOp::Param { .. } => op,
             UndoOp::Params { changes } => {
                 for (ix, _, before) in &changes {
                     self.set_custom_params(*ix, before.clone());
@@ -358,5 +370,105 @@ impl StudioApp {
                     ),
             )
             .child(list)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::params::DetectionMode;
+
+    #[test]
+    fn mapping_column_steps_coalesce_and_alignment_round_trips() {
+        for target in [Some(0), Some(DERIVED_BASE), None] {
+            let mut journal = JournalState::default();
+            let mut initial = PipelineParams::default();
+            initial.import.i0_col = Some(1);
+            let mut before = initial.clone();
+            for column in 2..=6 {
+                let mut after = before.clone();
+                after.import.i0_col = Some(column);
+                journal.record_param_edit(
+                    target,
+                    Some(ParamKey::ImpI0Col),
+                    before,
+                    after.clone(),
+                    format!("I0 = {column}"),
+                );
+                before = after;
+            }
+            assert_eq!(journal.entries.len(), 1);
+            assert_eq!(journal.entries[0].text, "I0 = 6");
+            assert_eq!(journal.undo.len(), 1);
+            let op = journal.undo.last().unwrap();
+            assert!(op.param_snapshot(false).unwrap().1 == initial);
+            assert!(op.param_snapshot(true).unwrap().1 == before);
+            let after = crate::app::prepare_parameter_edit(&before, |p| {
+                p.align_to_ref = !p.align_to_ref;
+                Ok(())
+            })
+            .unwrap()
+            .unwrap();
+            journal.record_param_edit(
+                target,
+                None,
+                before.clone(),
+                after.clone(),
+                "Toggle reference alignment".into(),
+            );
+            assert_eq!(journal.undo.len(), 2);
+            let op = journal.undo.last().unwrap();
+            assert!(op.param_snapshot(false).unwrap().1 == before);
+            assert!(op.param_snapshot(true).unwrap().1 == after);
+        }
+    }
+
+    #[test]
+    fn mapping_journal_round_trip_keeps_catalog_channel_and_global_targets() {
+        for target in [Some(0), Some(DERIVED_BASE), None] {
+            let mut journal = JournalState::default();
+            let mut before = PipelineParams::default();
+            before.import.mode = DetectionMode::Reference;
+            let mut after = before.clone();
+            after.import.ir_col = Some(7);
+            journal.record_param_edit(
+                target,
+                None,
+                before.clone(),
+                after.clone(),
+                "Reference mapping".into(),
+            );
+            assert_eq!(journal.entries[0].text, "Reference mapping");
+            let op = journal.undo.pop().unwrap();
+            let (restored_target, restored) = op.param_snapshot(false).unwrap();
+            assert_eq!(restored_target, target);
+            assert!(restored == before);
+            journal.redo.push(op);
+            let op = journal.redo.pop().unwrap();
+            let (restored_target, restored) = op.param_snapshot(true).unwrap();
+            assert_eq!(restored_target, target);
+            assert!(restored == after);
+            journal.undo.push(op);
+            // Separate mapping commands do not coalesce; a new edit retires redo.
+            journal.record_param_edit(
+                target,
+                None,
+                after.clone(),
+                before.clone(),
+                "Reset mapping".into(),
+            );
+            assert_eq!(journal.undo.len(), 2);
+            journal.redo.push(journal.undo.pop().unwrap());
+            journal.record_param_edit(
+                target,
+                None,
+                after.clone(),
+                after.clone(),
+                "No change".into(),
+            );
+            assert_eq!(journal.redo.len(), 1);
+            journal.record_param_edit(target, None, after, before, "New mapping".into());
+            assert!(journal.redo.is_empty());
+        }
     }
 }

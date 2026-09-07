@@ -183,24 +183,9 @@ impl StudioApp {
         }
     }
 
-    /// Drop the current group's override (or reset the globals to defaults).
+    /// Restore the displayed stage from project defaults for every group kind.
     pub(crate) fn reset_params(&mut self, cx: &mut Context<Self>) {
-        let target = self.override_target();
-        let before = self.ui_params().clone();
-        match target {
-            Some(ix) => {
-                self.overrides.remove(&ix);
-            }
-            None => {
-                self.params = crate::params::PipelineParams::default();
-            }
-        }
-        let after = self.ui_params().clone();
-        self.record_param_edit(target, None, before, after, "reset parameters".into());
-        self.sync_param_fields(cx);
-        self.schedule_recompute(cx);
-        self.sync_handles(cx);
-        cx.notify();
+        self.reset_scope(ParamScope::Stage(self.stage), cx);
     }
 
     pub(crate) fn field(&self, key: ParamKey, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {

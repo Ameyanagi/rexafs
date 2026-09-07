@@ -66,6 +66,15 @@ fn fuzzy(query: &str, text: &str) -> bool {
     next.is_none()
 }
 
+fn reset_params_item(stage: Stage) -> Option<PaletteItem> {
+    stage.is_processing().then(|| PaletteItem {
+        label: "Reset parameters of the current group".into(),
+        category: "params",
+        keys: "",
+        cmd: PaletteCmd::ResetParams,
+    })
+}
+
 impl StudioApp {
     fn palette_items(&self) -> Vec<PaletteItem> {
         let mut items = Vec::new();
@@ -93,7 +102,8 @@ impl StudioApp {
                 cmd: PaletteCmd::ApplyToMarked,
             });
         }
-        let simple: [(&str, &'static str, &'static str, PaletteCmd); 14] = [
+        items.extend(reset_params_item(self.stage));
+        let simple: [(&str, &'static str, &'static str, PaletteCmd); 13] = [
             ("Mark all groups", "groups", "", PaletteCmd::MarkAll),
             ("Unmark all groups", "groups", "", PaletteCmd::MarkNone),
             (
@@ -107,12 +117,6 @@ impl StudioApp {
                 "params",
                 "",
                 PaletteCmd::CopyMappingToMarked,
-            ),
-            (
-                "Reset parameters of the current group",
-                "params",
-                "",
-                PaletteCmd::ResetParams,
             ),
             ("Fit the current group", "fit", "", PaletteCmd::Fit),
             (
@@ -454,5 +458,28 @@ impl StudioApp {
         self.ensure_compare_loaded(cx);
         self.sync_param_fields(cx);
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reset_palette_entry_only_exists_for_processing_stages() {
+        for stage in [
+            Stage::Data,
+            Stage::Normalize,
+            Stage::Background,
+            Stage::Transform,
+        ] {
+            assert_eq!(
+                reset_params_item(stage).unwrap().cmd,
+                PaletteCmd::ResetParams
+            );
+        }
+        for stage in [Stage::Fit, Stage::Series, Stage::Publish] {
+            assert!(reset_params_item(stage).is_none());
+        }
     }
 }

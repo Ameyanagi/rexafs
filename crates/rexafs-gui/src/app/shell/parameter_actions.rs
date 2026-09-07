@@ -239,6 +239,25 @@ pub(crate) fn copy_scope(dst: &mut PipelineParams, src: &PipelineParams, scope: 
         }
     }
 }
+/// Source-backed channels retain their detection mode as part of their identity.
+fn reset_to_defaults(
+    params: &mut PipelineParams,
+    defaults: &PipelineParams,
+    scope: ParamScope,
+    preserve_mode: bool,
+) {
+    let mode = params.import.mode;
+    let scope = if scope == ParamScope::Mapping {
+        ParamScope::Field("import")
+    } else {
+        scope
+    };
+    copy_scope(params, defaults, scope);
+    if preserve_mode {
+        params.import.mode = mode;
+    }
+}
+
 fn shown(v: &Value) -> String {
     match v {
         Value::Null => "Auto".into(),
@@ -417,29 +436,23 @@ impl StudioApp {
         self.invalidate_explore_plots(cx);
         cx.notify();
     }
-    fn reset_scope(&mut self, scope: ParamScope, cx: &mut Context<Self>) {
-        let target = self.override_target();
-        if target.is_some_and(|ix| self.frozen.contains(&ix)) {
-            self.status = "Thaw this spectrum to edit it".into();
-            cx.notify();
-            return;
-        }
-        let before = self.ui_params().clone();
-        copy_scope(self.edit_params(), &PipelineParams::default(), scope);
-        let after = self.ui_params().clone();
-        self.record_param_edit(
-            target,
-            None,
-            before,
-            after,
-            format!("{} → default", scope.label()),
-        );
+    pub(crate) fn reset_scope(&mut self, scope: ParamScope, cx: &mut Context<Self>) {
+        let defaults = if self.override_target().is_some() {
+            self.params.clone()
+        } else {
+            PipelineParams::default()
+        };
+        let preserve_mode = self.override_target().is_some_and(|ix| {
+            ix.checked_sub(crate::app::DERIVED_BASE)
+                .and_then(|i| self.derived.get(i))
+                .is_some_and(|group| group.source.is_some())
+        });
         self.param_menu = None;
         self.param_context_menu = None;
-        self.sync_param_fields(cx);
-        self.schedule_recompute(cx);
-        self.sync_handles(cx);
-        cx.notify();
+        self.edit_parameters(format!("{} → default", scope.label()), cx, |params| {
+            reset_to_defaults(params, &defaults, scope, preserve_mode);
+            Ok(())
+        });
     }
     pub(crate) fn parameter_context_overlay(
         &self,
@@ -700,6 +713,76 @@ impl StudioApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mapping_reset_restores_project_stage_defaults_in_both_group_stores() {
+        use crate::app::{DERIVED_BASE, store_custom_params};
+        use crate::params::{DerivedSpectrum, DetectionMode};
+        use std::collections::BTreeMap;
+        let defaults = populated_params(DetectionMode::Transmission);
+        for scope in [
+            ParamScope::Stage(Stage::Data),
+            ParamScope::Stage(Stage::Normalize),
+            ParamScope::Stage(Stage::Background),
+            ParamScope::Stage(Stage::Transform),
+            ParamScope::Section("Import"),
+            ParamScope::Field("e0"),
+            ParamScope::Mapping,
+        ] {
+            let mut before = PipelineParams::default();
+            before.import.mode = DetectionMode::Reference;
+            let mut after = before.clone();
+            reset_to_defaults(&mut after, &defaults, scope, false);
+            let old = serde_json::to_value(&before).unwrap();
+            let new = serde_json::to_value(&after).unwrap();
+            let project = serde_json::to_value(&defaults).unwrap();
+            for setting in SETTINGS {
+                assert_eq!(
+                    new[setting.key],
+                    if scope.contains(setting) {
+                        &project[setting.key]
+                    } else {
+                        &old[setting.key]
+                    }
+                    .clone(),
+                    "{scope:?}: {}",
+                    setting.key
+                );
+            }
+            let mut channel = DerivedSpectrum {
+                source: Some("Ru_QAS.dat".into()),
+                params: Some(before.clone()),
+                ..Default::default()
+            };
+            let channel_params = channel.params.as_mut().unwrap();
+            reset_to_defaults(channel_params, &defaults, scope, channel.source.is_some());
+            let mut expected_channel = after.clone();
+            expected_channel.import.mode = DetectionMode::Reference;
+            assert!(
+                channel.params.as_ref() == Some(&expected_channel),
+                "{scope:?}"
+            );
+            assert_eq!(
+                channel.params.as_ref().unwrap().import.mode,
+                DetectionMode::Reference
+            );
+            for ix in [0, DERIVED_BASE] {
+                let mut overrides = BTreeMap::new();
+                let mut derived = vec![DerivedSpectrum::default()];
+                store_custom_params(1, &mut overrides, &mut derived, ix, Some(after.clone()));
+                let stored = if ix == 0 {
+                    overrides.get(&ix)
+                } else {
+                    derived[0].params.as_ref()
+                };
+                assert!(stored == Some(&after));
+                // Returning fully to project defaults clears either custom store.
+                store_custom_params(1, &mut overrides, &mut derived, ix, None);
+                assert!(overrides.is_empty());
+                assert!(derived[0].params.is_none());
+            }
+        }
+    }
+
     #[test]
     fn scoped_copy_preserves_independent_ranges_and_weights() {
         let src = PipelineParams {

@@ -166,6 +166,64 @@ pub(crate) enum ParamSection {
     Fft,
 }
 
+/// The two group kinds share the same override semantics.
+fn store_custom_params(
+    catalog_len: usize,
+    overrides: &mut BTreeMap<usize, PipelineParams>,
+    derived: &mut [DerivedSpectrum],
+    ix: usize,
+    params: Option<PipelineParams>,
+) {
+    if ix >= DERIVED_BASE {
+        if let Some(group) = derived.get_mut(ix - DERIVED_BASE) {
+            group.params = params;
+        }
+    } else if ix < catalog_len {
+        match params {
+            Some(params) => {
+                overrides.insert(ix, params);
+            }
+            None => {
+                overrides.remove(&ix);
+            }
+        }
+    }
+}
+
+/// Prepare on a clone: only an actual change may invalidate the preview or enter history.
+fn prepare_parameter_edit(
+    before: &PipelineParams,
+    edit: impl FnOnce(&mut PipelineParams) -> anyhow::Result<()>,
+) -> anyhow::Result<Option<PipelineParams>> {
+    let mut after = before.clone();
+    edit(&mut after)?;
+    Ok((*before != after).then_some(after))
+}
+
+/// Apply only the selected source's latest preview, preserving read-error details.
+fn finish_import_preview(
+    current: (&std::path::Path, u64),
+    requested: (&std::path::Path, u64),
+    result: Result<ImportPreview, String>,
+    preview: &mut Option<ImportPreview>,
+    error: &mut SharedString,
+) -> bool {
+    if current != requested {
+        return false;
+    }
+    match result {
+        Ok(value) => {
+            *preview = Some(value);
+            *error = "".into();
+        }
+        Err(message) => {
+            *preview = None;
+            *error = message.into();
+        }
+    }
+    true
+}
+
 /// Stepper / ↑↓ increment per parameter: energies in whole eV, k in half
 /// wave-numbers, R and dk in tenths, counts in ones.
 fn param_step(key: ParamKey) -> f64 {
@@ -1386,6 +1444,91 @@ mod override_tests {
     use crate::params::PipelineParams;
 
     #[test]
+    fn mapping_edit_preparation_skips_noops_and_rejects_partial_edits() {
+        let before = PipelineParams::default();
+        assert!(
+            super::prepare_parameter_edit(&before, |_| Ok(()))
+                .unwrap()
+                .is_none()
+        );
+        let rejected = super::prepare_parameter_edit(&before, |p| {
+            p.import.i0_col = Some(7);
+            anyhow::bail!("invalid ROI columns")
+        });
+        assert_eq!(rejected.err().unwrap().to_string(), "invalid ROI columns");
+        assert_eq!(before.import.i0_col, None);
+        let after = super::prepare_parameter_edit(&before, |p| {
+            p.align_to_ref = !p.align_to_ref;
+            Ok(())
+        })
+        .unwrap()
+        .unwrap();
+        assert_ne!(after.align_to_ref, before.align_to_ref);
+    }
+
+    #[test]
+    fn mapping_preview_completion_rejects_superseded_results_and_surfaces_errors() {
+        use super::finish_import_preview;
+        use std::path::Path;
+        let source = Path::new("Ru_QAS.dat");
+        let other = Path::new("other.dat");
+        let resolved = crate::params::ResolvedImport {
+            mode: crate::params::DetectionMode::Reference,
+            energy_col: 0,
+            i0_col: 1,
+            it_col: 2,
+            ir_col: 3,
+            fluor_cols: vec![4, 5],
+            mu_col: None,
+        };
+        let reference = crate::params::ImportPreview {
+            column_count: 6,
+            names: None,
+            rows: vec![],
+            detected: resolved.clone(),
+            auto_mode: resolved.mode,
+            resolved,
+            xdi: None,
+        };
+        let mut preview = Some(reference.clone());
+        let mut error = gpui::SharedString::from("current error");
+        // A different selected file, a new channel/mode on the same source,
+        // or selection of a source-less group supersedes the old request.
+        for current in [(other, 2), (source, 3), (Path::new(""), 3)] {
+            for result in [Ok(reference.clone()), Err("stale error".into())] {
+                assert!(!finish_import_preview(
+                    current,
+                    (source, 2),
+                    result,
+                    &mut preview,
+                    &mut error
+                ));
+                assert_eq!(preview, Some(reference.clone()));
+                assert_eq!(error.as_ref(), "current error");
+            }
+        }
+        let message = "Ru_QAS.dat: permission denied";
+        assert!(finish_import_preview(
+            (source, 3),
+            (source, 3),
+            Err(message.into()),
+            &mut preview,
+            &mut error
+        ));
+        assert!(preview.is_none());
+        assert_eq!(error.as_ref(), message);
+        assert!(finish_import_preview(
+            (source, 3),
+            (source, 3),
+            Ok(reference.clone()),
+            &mut preview,
+            &mut error
+        ));
+        assert_eq!(preview, Some(reference));
+        assert!(error.is_empty());
+    }
+
+    #[test]
     fn section_differs_is_per_section_and_reset_restores_global() {
         let global = PipelineParams::default();
         let mut ov = global.clone();
@@ -1861,45 +2004,21 @@ impl StudioApp {
         .detach();
         app.filter_input = Some(filter_input);
         let roi_input = cx.new(|cx| TextInput::new("e.g. 4 or 4-7", "", theme, cx));
-        cx.subscribe(&roi_input, |this: &mut Self, input, event, cx| {
+        cx.subscribe(&roi_input, |this: &mut Self, _input, event, cx| {
             let InputEvent::Committed(text) = event else {
                 return;
             };
             let trimmed = text.trim();
-            if trimmed.is_empty() {
-                if this.ui_params().import.fluor_cols.is_some() {
-                    this.edit_params().import.fluor_cols = None;
-                    this.schedule_recompute(cx);
-                    this.update_import_preview(cx);
-                }
-                cx.notify();
-                return;
-            }
-            match parse_cols(trimmed) {
-                Some(cols) => {
-                    if this.ui_params().import.fluor_cols.as_ref() != Some(&cols) {
-                        this.edit_params().import.fluor_cols = Some(cols);
-                        this.schedule_recompute(cx);
-                        this.update_import_preview(cx);
-                    }
-                }
-                None => {
-                    // revert to current value, with a visible rejection cue
-                    this.status =
-                        format!("invalid ROI columns: '{trimmed}' — expected e.g. 4 or 4-7").into();
-                    let text = this
-                        .ui_params()
-                        .import
-                        .fluor_cols
-                        .as_deref()
-                        .unwrap_or_default()
-                        .iter()
-                        .map(|c| c.to_string())
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    input.update(cx, |i, cx| i.set_text(text, cx));
-                }
-            }
+            this.edit_parameters("Set fluorescence ROI columns".into(), cx, |params| {
+                params.import.fluor_cols = if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(parse_cols(trimmed).ok_or_else(|| {
+                        anyhow::anyhow!("invalid ROI columns: '{trimmed}' — expected e.g. 4 or 4-7")
+                    })?)
+                };
+                Ok(())
+            });
             cx.notify();
         })
         .detach();
@@ -1996,20 +2115,13 @@ impl StudioApp {
     }
 
     fn set_custom_params(&mut self, ix: usize, params: Option<PipelineParams>) {
-        if ix >= DERIVED_BASE {
-            if let Some(group) = self.derived.get_mut(ix - DERIVED_BASE) {
-                group.params = params;
-            }
-        } else if ix < self.catalog.len() {
-            match params {
-                Some(params) => {
-                    self.overrides.insert(ix, params);
-                }
-                None => {
-                    self.overrides.remove(&ix);
-                }
-            }
-        }
+        store_custom_params(
+            self.catalog.len(),
+            &mut self.overrides,
+            &mut self.derived,
+            ix,
+            params,
+        );
     }
 
     fn active_group_id(&self) -> Option<u64> {
@@ -2076,24 +2188,25 @@ impl StudioApp {
     /// Chip action: copy the global section back over the override,
     /// dropping the override entirely once nothing diverges anymore.
     fn reset_section_override(&mut self, section: ParamSection, cx: &mut Context<Self>) {
-        let Some(ix) = self.override_target() else {
-            return;
-        };
-        let global = self.params.clone();
-        let Some(mut ov) = self.custom_params(ix).cloned() else {
-            return;
-        };
-        copy_section(&mut ov, &global, section);
-        self.set_custom_params(ix, (ov != global).then_some(ov));
-        self.sync_param_fields(cx);
-        self.schedule_recompute(cx);
-        cx.notify();
+        let scope = shell::parameter_actions::ParamScope::Stage(match section {
+            ParamSection::Import => Stage::Data,
+            ParamSection::Norm => Stage::Normalize,
+            ParamSection::Bkg => Stage::Background,
+            ParamSection::Fft => Stage::Transform,
+        });
+        self.reset_scope(scope, cx);
     }
 
     /// Push the displayed param set into the context-panel fields (never
     /// emits change events). Called whenever the edit target may have
     /// changed: selection moves, multi-select edits, resets, project load.
     fn sync_param_fields(&mut self, cx: &mut Context<Self>) {
+        self.restore_param_field_text(cx);
+        self.update_import_preview(cx);
+    }
+
+    /// Restore canonical input text without discarding the live column preview.
+    fn restore_param_field_text(&mut self, cx: &mut Context<Self>) {
         let params = self.ui_params().clone();
         for (key, field) in &self.param_fields {
             let value = param_field_value(*key, &params);
@@ -2111,7 +2224,6 @@ impl StudioApp {
                 .join(",");
             roi.update(cx, |i, cx| i.set_text(text, cx));
         }
-        self.update_import_preview(cx);
     }
 
     /// Attach path-keyed overrides from a loaded project to the freshly
@@ -2477,25 +2589,92 @@ impl StudioApp {
             .collect()
     }
 
-    fn apply_param(&mut self, key: ParamKey, value: Option<f64>, cx: &mut Context<Self>) {
-        let target = self.override_target();
-        if let Some(ix) = target
-            && self.frozen.contains(&ix)
+    /// Shared lock gate for parameter editors; restore rejected field text too.
+    fn refuse_frozen_edit(&mut self, cx: &mut Context<Self>) -> bool {
+        if self
+            .override_target()
+            .is_some_and(|ix| self.frozen.contains(&ix))
         {
-            self.status = "this group is frozen — thaw it to edit its parameters".into();
-            self.sync_param_fields(cx);
+            self.status = "This group is frozen — thaw it to edit its parameters.".into();
+            self.restore_param_field_text(cx);
             cx.notify();
+            return true;
+        }
+        false
+    }
+
+    /// Commit one mapping edit or reset against the current effective settings.
+    fn edit_parameters(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+        edit: impl FnOnce(&mut PipelineParams) -> anyhow::Result<()>,
+    ) {
+        self.edit_parameters_keyed(None, text, cx, edit);
+    }
+
+    fn edit_parameters_keyed(
+        &mut self,
+        key: Option<ParamKey>,
+        text: String,
+        cx: &mut Context<Self>,
+        edit: impl FnOnce(&mut PipelineParams) -> anyhow::Result<()>,
+    ) {
+        if self.refuse_frozen_edit(cx) {
             return;
         }
+        let target = self.override_target();
+        let before = self.ui_params().clone();
+        match prepare_parameter_edit(&before, edit) {
+            Ok(Some(after)) => {
+                self.apply_params_to(target, after.clone());
+                self.record_param_edit(target, key, before, after, text);
+                self.schedule_recompute(cx);
+                self.sync_handles(cx);
+                self.invalidate_explore_plots(cx);
+                self.sync_param_fields(cx);
+            }
+            result => {
+                if let Err(error) = result {
+                    self.status = error.to_string().into();
+                }
+                self.restore_param_field_text(cx);
+            }
+        }
+        cx.notify();
+    }
+
+    fn apply_param(&mut self, key: ParamKey, value: Option<f64>, cx: &mut Context<Self>) {
+        let role = match key {
+            ParamKey::ImpEnergyCol => Some(ImportRole::Energy),
+            ParamKey::ImpI0Col => Some(ImportRole::I0),
+            ParamKey::ImpItCol => Some(ImportRole::It),
+            ParamKey::ImpIrCol => Some(ImportRole::Ir),
+            _ => None,
+        };
+        if let Some(role) = role {
+            self.set_import_role_column(
+                role,
+                value.map(|v| v.round().max(0.0) as usize),
+                Some(key),
+                cx,
+            );
+            return;
+        }
+        if self.refuse_frozen_edit(cx) {
+            return;
+        }
+        let target = self.override_target();
         let before = self.ui_params().clone();
         let p = self.edit_params();
         let int = value.map(|v| v.round() as i32);
-        let col = value.map(|v| v.round().max(0.0) as usize);
         match key {
-            ParamKey::ImpEnergyCol => p.import.energy_col = col,
-            ParamKey::ImpI0Col => p.import.i0_col = col,
-            ParamKey::ImpItCol => p.import.it_col = col,
-            ParamKey::ImpIrCol => p.import.ir_col = col,
+            ParamKey::ImpEnergyCol
+            | ParamKey::ImpI0Col
+            | ParamKey::ImpItCol
+            | ParamKey::ImpIrCol => {
+                unreachable!("mapping fields use edit_parameters above")
+            }
             ParamKey::AlignTarget => p.align_target = value,
             ParamKey::E0 => p.e0 = value,
             ParamKey::EdgeStep => p.edge_step = value,
@@ -2617,21 +2796,24 @@ impl StudioApp {
     /// Apply a selection from the option list (0 = auto).
     fn set_enum_param(&mut self, which: EnumParam, index: usize, cx: &mut Context<Self>) {
         let variant = index.checked_sub(1);
-        let target = self.override_target();
-        if target.is_some_and(|ix| self.frozen.contains(&ix)) {
-            self.status = "This group is frozen — thaw it to edit its parameters.".into();
-            self.open_enum = None;
-            cx.notify();
+        self.open_enum = None;
+        if which == EnumParam::ImportMode {
+            self.edit_parameters(format!("{which:?} = option {index}"), cx, |params| {
+                params.import.mode = variant
+                    .and_then(|i| DETECTION_MODES.get(i).copied())
+                    .unwrap_or(DetectionMode::Auto);
+                Ok(())
+            });
             return;
         }
+        if self.refuse_frozen_edit(cx) {
+            return;
+        }
+        let target = self.override_target();
         let before = self.ui_params().clone();
         let p = self.edit_params();
         match which {
-            EnumParam::ImportMode => {
-                p.import.mode = variant
-                    .and_then(|i| DETECTION_MODES.get(i).copied())
-                    .unwrap_or(DetectionMode::Auto);
-            }
+            EnumParam::ImportMode => unreachable!("mapping mode uses edit_parameters above"),
             EnumParam::BkgWindow => {
                 p.bkg_window = variant.map(|i| FT_WINDOWS[i]);
             }
@@ -2686,9 +2868,6 @@ impl StudioApp {
             format!("{which:?} = option {index}"),
         );
         self.schedule_recompute(cx);
-        if which == EnumParam::ImportMode {
-            self.update_import_preview(cx);
-        }
         cx.notify();
     }
 
@@ -2844,45 +3023,44 @@ impl StudioApp {
         &mut self,
         role: ImportRole,
         column: Option<usize>,
+        key: Option<ParamKey>,
         cx: &mut Context<Self>,
     ) {
-        let import = &mut self.edit_params().import;
-        match role {
-            ImportRole::Energy => import.energy_col = column,
-            ImportRole::I0 => import.i0_col = column,
-            ImportRole::It => import.it_col = column,
-            ImportRole::Ir => import.ir_col = column,
-            ImportRole::Mu => import.mu_col = column,
-            ImportRole::Fluor => return,
-        }
         self.open_import_role = None;
-        self.schedule_recompute(cx);
-        self.update_import_preview(cx);
-        cx.notify();
+        self.edit_parameters_keyed(
+            key,
+            format!("Set {} column = {column:?}", Self::import_role_label(role)),
+            cx,
+            |params| {
+                let import = &mut params.import;
+                match role {
+                    ImportRole::Energy => import.energy_col = column,
+                    ImportRole::I0 => import.i0_col = column,
+                    ImportRole::It => import.it_col = column,
+                    ImportRole::Ir => import.ir_col = column,
+                    ImportRole::Mu => import.mu_col = column,
+                    ImportRole::Fluor => {}
+                }
+                Ok(())
+            },
+        );
     }
 
     fn toggle_import_fluor(&mut self, column: Option<usize>, cx: &mut Context<Self>) {
-        match column {
-            None => self.edit_params().import.fluor_cols = None,
-            Some(column) => {
-                let mut columns = self
-                    .ui_params()
+        let auto = self
+            .import_preview
+            .as_ref()
+            .map(|p| p.resolved.fluor_cols.clone());
+        self.edit_parameters(
+            format!("Toggle fluorescence ROI = {column:?}"),
+            cx,
+            |params| {
+                params
                     .import
-                    .fluor_cols
-                    .clone()
-                    .unwrap_or_default();
-                if let Some(index) = columns.iter().position(|&current| current == column) {
-                    columns.remove(index);
-                } else {
-                    columns.push(column);
-                    columns.sort_unstable();
-                }
-                self.edit_params().import.fluor_cols = Some(columns);
-            }
-        }
-        self.schedule_recompute(cx);
-        self.update_import_preview(cx);
-        cx.notify();
+                    .toggle_fluor(column, auto.as_deref())
+                    .map_err(anyhow::Error::msg)
+            },
+        );
     }
 
     /// Debounced (~200 ms) recompute of the current spectrum after parameter
@@ -4764,6 +4942,7 @@ impl StudioApp {
                 .source
                 .clone()
                 .unwrap_or_default();
+            // Field synchronization refreshes the preview for this channel/source too.
             self.sync_param_fields(cx);
             self.load_spectrum(ix, self.current_path.clone(), label, cx);
             return;
@@ -4776,7 +4955,6 @@ impl StudioApp {
         let label: SharedString = self.catalog.name(ix).to_string().into();
         let path = self.catalog.path(ix);
         self.current_path = path.clone();
-        self.update_import_preview(cx);
         // The panel must show this spectrum's effective (override or
         // global) params.
         self.sync_param_fields(cx);
@@ -4790,12 +4968,13 @@ impl StudioApp {
         // Metadata must never describe the previously selected file while the
         // next preview is loading (the structure library follows this hint).
         self.import_preview = None;
+        self.import_preview_error = "".into();
+        self.import_preview_gen += 1;
         if path.as_os_str().is_empty() {
-            self.import_preview = None;
-            self.import_preview_error = "no preview".into();
+            self.import_preview_error =
+                "This group has no source file for a column preview.".into();
             return;
         }
-        self.import_preview_gen += 1;
         let generation = self.import_preview_gen;
         let import = self.ui_params().import.clone();
         let job = cx.background_executor().spawn({
@@ -4805,20 +4984,15 @@ impl StudioApp {
         cx.spawn(async move |this, cx| {
             let result = job.await;
             this.update(cx, |app, cx| {
-                if app.current_path != path || app.import_preview_gen != generation {
-                    return; // a newer selection superseded this preview
+                if finish_import_preview(
+                    (&app.current_path, app.import_preview_gen),
+                    (&path, generation),
+                    result,
+                    &mut app.import_preview,
+                    &mut app.import_preview_error,
+                ) {
+                    cx.notify();
                 }
-                match result {
-                    Ok(preview) => {
-                        app.import_preview = Some(preview);
-                        app.import_preview_error = "".into();
-                    }
-                    Err(_) => {
-                        app.import_preview = None;
-                        app.import_preview_error = "no preview".into();
-                    }
-                }
-                cx.notify();
             })
             .ok();
         })
@@ -7569,7 +7743,7 @@ impl StudioApp {
                                         this.toggle_import_fluor(None, cx);
                                         this.open_import_role = None;
                                     } else {
-                                        this.set_import_role_column(role, None, cx);
+                                        this.set_import_role_column(role, None, None, cx);
                                     }
                                 }))
                                 .child(self.import_role_auto_label(role)),
@@ -7581,7 +7755,11 @@ impl StudioApp {
                             .unwrap_or(0);
                         for column in 0..column_count {
                             let is_selected = if role == ImportRole::Fluor {
-                                fluor.is_some_and(|columns| columns.contains(&column))
+                                fluor
+                                    .or_else(|| {
+                                        self.import_preview.as_ref().map(|p| &p.resolved.fluor_cols)
+                                    })
+                                    .is_some_and(|columns| columns.contains(&column))
                             } else {
                                 manual == Some(column)
                             };
@@ -7606,7 +7784,12 @@ impl StudioApp {
                                             if role == ImportRole::Fluor {
                                                 this.toggle_import_fluor(Some(column), cx);
                                             } else {
-                                                this.set_import_role_column(role, Some(column), cx);
+                                                this.set_import_role_column(
+                                                    role,
+                                                    Some(column),
+                                                    None,
+                                                    cx,
+                                                );
                                             }
                                         },
                                     ))
@@ -7652,10 +7835,14 @@ impl StudioApp {
                                 .text_color(if align_on { t.accent } else { t.text_muted })
                                 .hover(|d| d.bg(t.raised))
                                 .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                    let on = this.ui_params().align_to_ref;
-                                    this.edit_params().align_to_ref = !on;
-                                    this.schedule_recompute(cx);
-                                    cx.notify();
+                                    this.edit_parameters(
+                                        "Toggle reference alignment".into(),
+                                        cx,
+                                        |p| {
+                                            p.align_to_ref = !p.align_to_ref;
+                                            Ok(())
+                                        },
+                                    );
                                 }))
                                 .child(if align_on {
                                     "✓ align to ref"

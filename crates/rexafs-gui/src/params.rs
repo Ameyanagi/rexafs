@@ -68,6 +68,39 @@ impl Default for ImportConfig {
     }
 }
 
+/// ROI columns are a set; canonical order also keeps persisted edits stable.
+fn unique_columns(mut columns: Vec<usize>) -> Vec<usize> {
+    columns.sort_unstable();
+    columns.dedup();
+    columns
+}
+
+impl ImportConfig {
+    /// None selects Auto. A first manual click edits the resolved automatic set.
+    pub(crate) fn toggle_fluor(
+        &mut self,
+        column: Option<usize>,
+        auto: Option<&[usize]>,
+    ) -> Result<(), String> {
+        self.fluor_cols = match column {
+            None => None,
+            Some(column) => {
+                let seed = self.fluor_cols.as_deref().or(auto).ok_or_else(|| {
+                    "ROI columns are not available yet; wait for the source preview or type a column list.".to_string()
+                })?;
+                let mut columns = unique_columns(seed.to_vec());
+                if columns.contains(&column) {
+                    columns.retain(|&c| c != column);
+                } else {
+                    columns.push(column);
+                }
+                Some(unique_columns(columns))
+            }
+        };
+        Ok(())
+    }
+}
+
 /// File-derived import assignments after applying any manual overrides.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResolvedImport {
@@ -345,7 +378,7 @@ fn resolve_import(data: &ParsedData, import: &ImportConfig) -> ResolvedImport {
         i0_col: import.i0_col.unwrap_or(detected.i0_col),
         it_col: import.it_col.unwrap_or(detected.it_col),
         ir_col: import.ir_col.unwrap_or(detected.ir_col),
-        fluor_cols: import.fluor_cols.clone().unwrap_or(detected.fluor_cols),
+        fluor_cols: unique_columns(import.fluor_cols.clone().unwrap_or(detected.fluor_cols)),
         mu_col: import.mu_col.or(detected.mu_col),
     }
 }
@@ -368,7 +401,7 @@ pub fn parse_cols(text: &str) -> Option<Vec<usize>> {
             None => out.push(token.trim().parse::<usize>().ok()?),
         }
     }
-    (!out.is_empty()).then_some(out)
+    (!out.is_empty()).then(|| unique_columns(out))
 }
 
 /// Bytes read for the import preview: enough to reach the first numeric
@@ -1139,6 +1172,60 @@ pub fn resample_chik(sp: &XASSpectrum, grid: &[f64]) -> Option<Vec<f64>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mapping_roi_parse_deduplicates_overlapping_ranges() {
+        assert_eq!(parse_cols("8, 4-6 5,8,4"), Some(vec![4, 5, 6, 8]));
+        assert_eq!(parse_cols("0,0"), Some(vec![0]));
+        for invalid in ["", "  ", "6-4", "4,x", "-1", "4-", "1-2-3"] {
+            assert_eq!(parse_cols(invalid), None, "{invalid}");
+        }
+    }
+
+    #[test]
+    fn mapping_roi_toggle_seeds_auto_and_preserves_manual_empty() {
+        let mut import = ImportConfig::default();
+        import.toggle_fluor(Some(5), Some(&[4, 5, 6, 6])).unwrap();
+        assert_eq!(import.fluor_cols, Some(vec![4, 6]));
+        import.toggle_fluor(Some(7), None).unwrap();
+        assert_eq!(import.fluor_cols, Some(vec![4, 6, 7]));
+        import.fluor_cols = Some(vec![4, 4]);
+        import.toggle_fluor(Some(4), Some(&[4, 5])).unwrap();
+        assert_eq!(import.fluor_cols, Some(vec![]));
+        import.toggle_fluor(Some(7), Some(&[4, 5])).unwrap();
+        assert_eq!(import.fluor_cols, Some(vec![7]));
+        import.toggle_fluor(None, None).unwrap();
+        assert_eq!(import.fluor_cols, None);
+        assert!(import.toggle_fluor(Some(4), None).is_err());
+        assert_eq!(import.fluor_cols, None);
+        import.toggle_fluor(Some(7), Some(&[4, 5])).unwrap();
+        assert_eq!(import.fluor_cols, Some(vec![4, 5, 7]));
+    }
+
+    #[test]
+    fn mapping_roi_loaded_duplicates_are_previewed_and_summed_once() {
+        let path =
+            std::env::temp_dir().join(format!("rexafs-mapping-roi-{}.dat", std::process::id()));
+        std::fs::write(&path, "# energy i0 roi1 roi2\n100 10 2 3\n101 10 4 5\n").unwrap();
+        let mut import = ImportConfig {
+            mode: DetectionMode::Fluorescence,
+            energy_col: Some(0),
+            i0_col: Some(1),
+            fluor_cols: Some(vec![3, 2, 3, 2]),
+            ..Default::default()
+        };
+        let preview = preview_import(&path, &import).unwrap();
+        assert_eq!(preview.resolved.fluor_cols, vec![2, 3]);
+        assert_eq!(load_mu(&path, &import).unwrap().1, vec![0.5, 0.9]);
+        import.fluor_cols = None;
+        let auto = preview_import(&path, &import).unwrap();
+        import
+            .toggle_fluor(Some(2), Some(&auto.resolved.fluor_cols))
+            .unwrap();
+        assert_eq!(import.fluor_cols, Some(vec![3]));
+        assert_eq!(load_mu(&path, &import).unwrap().1, vec![0.3, 0.5]);
+        std::fs::remove_file(path).unwrap();
+    }
 
     #[test]
     fn advanced_processing_preserves_standard_and_controls_actual_transforms() {
