@@ -246,8 +246,7 @@ impl Catalog {
         PathBuf::from(&*self.dirs[entry.dir as usize]).join(self.name(ix))
     }
 
-    #[cfg(test)]
-    fn entry_size(&self, ix: usize) -> u64 {
+    pub(crate) fn entry_size(&self, ix: usize) -> u64 {
         self.entries[ix].size
     }
 

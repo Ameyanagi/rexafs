@@ -2,9 +2,11 @@
 //! every tool reads the current group and produces a *derived* group, so
 //! the source is never mutated and nothing needs undo.
 
+use std::{path::PathBuf, sync::Arc};
+
 use gpui::{
     ClickEvent, Context, Entity, IntoElement, ParentElement, SharedString, Styled, div, prelude::*,
-    px,
+    px, uniform_list,
 };
 use rexafs::prelude::XASSpectrum;
 use rexafs::xafs::tools::{EdgeFeature, RebinConfig};
@@ -13,9 +15,10 @@ use rexafs::xafs::xafsutils::ConvolveForm;
 use rexafs::prelude::{AnalysisSpace, LcfConfig, PcaConfig};
 
 use super::button;
-use crate::app::{DERIVED_BASE, StudioApp};
+use crate::app::{DERIVED_BASE, NO_ENTRY, StudioApp, filter_match_lower};
 use crate::params::DerivedSpectrum;
 use crate::widgets::numeric_field::{FieldEvent, FieldKind, NumericField};
+use crate::widgets::text_input::{InputEvent, TextInput};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tool {
@@ -49,6 +52,10 @@ impl Tool {
         matches!(self, Tool::Lcf | Tool::Pca)
     }
 
+    fn needs_standard(self) -> bool {
+        matches!(self, Tool::Align | Tool::Calibrate | Tool::Difference)
+    }
+
     pub fn name(self) -> &'static str {
         match self {
             Tool::Align => "Align to reference",
@@ -65,13 +72,13 @@ impl Tool {
 
     pub fn hint(self) -> &'static str {
         match self {
-            Tool::Align => "shift onto the first other marked group",
-            Tool::Calibrate => "put the derivative maximum at a target eV",
+            Tool::Align => "shift onto a named alignment standard",
+            Tool::Calibrate => "apply the named standard’s measured energy shift",
             Tool::Deglitch => "remove the points inside an energy range",
             Tool::Truncate => "keep the points between two energies",
             Tool::Rebin => "Athena grid: 10 eV · 0.5 eV · 0.05 Å⁻¹",
             Tool::Smooth => "Gaussian convolution of μ(E)",
-            Tool::Difference => "current − first other marked group",
+            Tool::Difference => "target − named baseline (normalized μ)",
             Tool::Lcf => "current as a mix of the marked standards",
             Tool::Pca => "components of the marked groups",
         }
@@ -178,6 +185,15 @@ pub struct ToolState {
     pub open: Option<Tool>,
     pub fields: Vec<(ToolField, Entity<NumericField>)>,
     pub message: SharedString,
+    target: Option<ToolTarget>,
+    standard: Option<ToolTarget>,
+    standard_load: StandardLoad,
+    standard_request: u64,
+    standard_picker_open: bool,
+    generation: u64,
+    standard_filter: Option<Entity<TextInput>>,
+    standard_filter_request: u64,
+    standard_matches: Option<Arc<Vec<usize>>>,
     /// LCF / PCA options (shared by the Data-stage tools and the Series
     /// LCF trend).
     pub lcf_space: LcfSpaceChoice,
@@ -186,6 +202,162 @@ pub struct ToolState {
     pub lcf_all_combinations: bool,
     pub lcf_range: Option<(f64, f64)>,
     pub pca_components: usize,
+}
+
+/// Session-local identity: indices alone can be reused after a catalog walk
+/// or a derived-group removal. Keep source/name and derived id as well.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ToolTarget {
+    pub ix: usize,
+    pub fingerprint: u64,
+    pub label: String,
+    pub path: PathBuf,
+    pub derived_id: Option<u64>,
+    pub project_generation: u64,
+    pub catalog_generation: u64,
+    pub size: Option<u64>,
+}
+
+impl ToolTarget {
+    pub(crate) fn standalone(
+        path: PathBuf,
+        label: String,
+        fingerprint: u64,
+        project_generation: u64,
+        catalog_generation: u64,
+    ) -> Self {
+        Self {
+            ix: NO_ENTRY,
+            path,
+            label,
+            fingerprint,
+            derived_id: None,
+            project_generation,
+            catalog_generation,
+            size: None,
+        }
+    }
+}
+
+#[derive(Default)]
+enum StandardLoad {
+    #[default]
+    Loading,
+    Ready(Arc<XASSpectrum>),
+    Failed(String),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReadinessReason {
+    NoTarget,
+    CurrentFailed,
+    TargetChanged,
+    CurrentLoading,
+    LoadedMismatch,
+    NoStandard,
+    StandardChanged,
+    StandardLoading,
+    StandardFailed,
+}
+
+impl ReadinessReason {
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoTarget => "No target group; select a group and reopen the tool",
+            Self::CurrentFailed => "Current group failed to load",
+            Self::TargetChanged => "Target group or parameters changed; reopen the tool",
+            Self::CurrentLoading => "Current group not loaded yet",
+            Self::LoadedMismatch => "Loaded spectrum does not match the target group/revision",
+            Self::NoStandard => "Choose a standard",
+            Self::StandardChanged => "Standard group or parameters changed; choose it again",
+            Self::StandardLoading => "Standard not loaded yet",
+            Self::StandardFailed => "Standard failed to load; choose it again to retry",
+        }
+    }
+}
+
+/// Shared by the card and Apply, including analysis tools' current input.
+/// An optional standard result means this tool requires an explicit operand.
+fn readiness(
+    target: Option<&ToolTarget>,
+    current: Option<&ToolTarget>,
+    loaded: Option<&ToolTarget>,
+    failed: bool,
+    loading: bool,
+    standard: Option<Result<(), ReadinessReason>>,
+) -> Result<(), ReadinessReason> {
+    let target = target.ok_or(ReadinessReason::NoTarget)?;
+    if loading {
+        return Err(ReadinessReason::CurrentLoading);
+    }
+    if failed {
+        return Err(ReadinessReason::CurrentFailed);
+    }
+    if current != Some(target) {
+        return Err(ReadinessReason::TargetChanged);
+    }
+    if loaded != Some(target) {
+        return Err(ReadinessReason::LoadedMismatch);
+    }
+    standard.unwrap_or(Ok(()))
+}
+
+fn default_standard(
+    tool: Tool,
+    target: Option<&ToolTarget>,
+    groups: impl IntoIterator<Item = ToolTarget>,
+    marked: &std::collections::BTreeSet<usize>,
+) -> Option<ToolTarget> {
+    groups
+        .into_iter()
+        .find(|group| Some(group.ix) != target.map(|t| t.ix) && marked.contains(&group.ix))
+        .or_else(|| target.filter(|_| tool == Tool::Calibrate).cloned())
+}
+
+fn standard_readiness(
+    chosen: Option<&ToolTarget>,
+    current: Option<&ToolTarget>,
+    load: &StandardLoad,
+) -> Result<(), ReadinessReason> {
+    let chosen = chosen.ok_or(ReadinessReason::NoStandard)?;
+    if current != Some(chosen) {
+        return Err(ReadinessReason::StandardChanged);
+    }
+    match load {
+        StandardLoad::Loading => Err(ReadinessReason::StandardLoading),
+        StandardLoad::Failed(_) => Err(ReadinessReason::StandardFailed),
+        StandardLoad::Ready(_) => Ok(()),
+    }
+}
+
+fn standard_row_index(
+    matches: Option<&[usize]>,
+    row: usize,
+    derived: usize,
+    files: usize,
+) -> Option<usize> {
+    match matches {
+        Some(matches) => matches
+            .get(row)
+            .copied()
+            .filter(|&ix| ix < files || (ix >= DERIVED_BASE && ix - DERIVED_BASE < derived)),
+        None if row < derived => Some(DERIVED_BASE + row),
+        None if row - derived < files => Some(row - derived),
+        None => None,
+    }
+}
+
+fn calibrate_from_standard(
+    target: &mut XASSpectrum,
+    standard: &XASSpectrum,
+    expected: f64,
+) -> Result<f64, String> {
+    let measured = standard
+        .edge_feature_energy(EdgeFeature::DerivativeMax)
+        .map_err(|e| e.to_string())?;
+    let shift = expected - measured;
+    target.shift_energy(shift);
+    Ok(shift)
 }
 
 /// Space an LCF / PCA runs in (the χ variant uses the plot k-weight).
@@ -226,6 +398,31 @@ impl LcfSpaceChoice {
 }
 
 impl ToolState {
+    pub(crate) fn invalidate_bindings(&mut self) {
+        self.generation += 1;
+        self.standard_request += 1;
+        self.standard_filter_request += 1;
+        self.target = None;
+        self.standard = None;
+        self.standard_load = StandardLoad::Loading;
+        self.standard_picker_open = false;
+        self.standard_filter = None;
+        self.standard_matches = None;
+        self.open = None;
+    }
+
+    fn accepts_standard_result(
+        &self,
+        request: u64,
+        requested: &ToolTarget,
+        current: Option<&ToolTarget>,
+    ) -> bool {
+        self.open.is_some()
+            && self.standard_request == request
+            && self.standard.as_ref() == Some(requested)
+            && current == Some(requested)
+    }
+
     pub fn lcf_space_label(&self) -> &'static str {
         self.lcf_space.label()
     }
@@ -303,6 +500,30 @@ impl StudioApp {
         }
         self.tools.open = Some(tool);
         self.tools.message = SharedString::default();
+        self.tools.target = self.tool_target(self.selected.unwrap_or(NO_ENTRY));
+        self.tools.standard_picker_open = false;
+        self.tools.standard_filter_request += 1;
+        self.tools.standard_matches = None;
+        let input = cx.new(|cx| TextInput::new("filter standards… (* glob)", "", self.theme, cx));
+        cx.subscribe(&input, |this, _, event, cx| {
+            if let InputEvent::Edited(text) = event {
+                this.filter_tool_standards(text, cx);
+            }
+        })
+        .detach();
+        self.tools.standard_filter = Some(input);
+        let standard = tool
+            .needs_standard()
+            .then(|| {
+                default_standard(
+                    tool,
+                    self.tools.target.as_ref(),
+                    self.tool_groups(),
+                    &self.selection,
+                )
+            })
+            .flatten();
+        self.choose_tool_standard(standard, cx);
         if tool.is_analysis() {
             self.analysis.shown = Some(tool);
             // The analysis section sits at the bottom of the Data inspector;
@@ -464,26 +685,154 @@ impl StudioApp {
             .and_then(|(_, e)| e.read(cx).value())
     }
 
-    /// The first marked group other than the current one, if its processed
-    /// spectrum is cached (reference for align / difference).
-    fn reference_spectrum(&self) -> Option<(String, std::sync::Arc<XASSpectrum>)> {
-        let current = self.selected;
-        for &ix in &self.selection {
-            if Some(ix) == current || ix == crate::app::NO_ENTRY {
-                continue;
-            }
-            let fp = self.effective_fingerprint(ix);
-            if let Some(sp) = self.cache.peek(&(ix, fp)) {
-                return Some((self.entry_label(ix), sp.clone()));
-            }
+    pub(crate) fn tool_target(&self, ix: usize) -> Option<ToolTarget> {
+        if ix == NO_ENTRY {
+            return (!self.current_path.as_os_str().is_empty()).then(|| {
+                ToolTarget::standalone(
+                    self.current_path.clone(),
+                    self.spectrum_label.to_string(),
+                    self.params.fingerprint(),
+                    self.project_generation,
+                    self.tools.generation,
+                )
+            });
         }
-        None
+        if !self.valid_group_index(ix) {
+            return None;
+        }
+        let derived = ix
+            .checked_sub(DERIVED_BASE)
+            .and_then(|i| self.derived.get(i));
+        Some(ToolTarget {
+            ix,
+            fingerprint: self.effective_fingerprint(ix),
+            label: self.entry_label(ix),
+            path: match derived {
+                Some(d) => d.source.clone().unwrap_or_default(),
+                None => self.catalog.path(ix),
+            },
+            derived_id: derived.map(|d| d.id),
+            project_generation: self.project_generation,
+            catalog_generation: self.tools.generation,
+            size: (ix < self.catalog.len()).then(|| self.catalog.entry_size(ix)),
+        })
+    }
+
+    /// Match the group panel's stable order: additional groups, then files.
+    fn tool_groups(&self) -> impl Iterator<Item = ToolTarget> + '_ {
+        self.selection
+            .range(DERIVED_BASE..NO_ENTRY)
+            .chain(self.selection.range(..DERIVED_BASE))
+            .filter_map(|&ix| self.tool_target(ix))
+    }
+
+    fn choose_tool_standard(&mut self, standard: Option<ToolTarget>, cx: &mut Context<Self>) {
+        self.tools.standard_request += 1;
+        let request = self.tools.standard_request;
+        self.tools.standard = standard.clone();
+        self.tools.standard_load = StandardLoad::Loading;
+        self.tools.standard_picker_open = false;
+        self.tools.message = SharedString::default();
+        cx.notify();
+        let Some(standard) = standard else { return };
+        if self.tool_target(standard.ix).as_ref() != Some(&standard) {
+            return;
+        }
+        if standard.ix == NO_ENTRY {
+            // A standalone input may be the bundled example. Pin its actual
+            // loaded data; NO_ENTRY cache keys do not identify a source path.
+            if self.spectrum_group.as_ref() == Some(&standard)
+                && let Some(sp) = &self.spectrum
+            {
+                self.tools.standard_load = StandardLoad::Ready(sp.clone());
+            }
+            return;
+        }
+        let key = (standard.ix, standard.fingerprint);
+        if let Some(sp) = self.cache.get(&key) {
+            self.tools.standard_load = StandardLoad::Ready(sp.clone());
+            return;
+        }
+        let raw_key = (
+            standard.ix,
+            self.effective_params(standard.ix).raw_fingerprint(),
+        );
+        let job = self.process_group_job(standard.ix, standard.path.clone(), cx);
+        cx.spawn(async move |this, cx| {
+            let result = job.await;
+            this.update(cx, |app, cx| {
+                // A closed/reopened card, new choice, edit, or reordered group
+                // must not receive this old job's result or cache entry.
+                if !app.tools.accepts_standard_result(
+                    request,
+                    &standard,
+                    app.tool_target(standard.ix).as_ref(),
+                ) {
+                    return;
+                }
+                match result {
+                    Ok((sp, raw)) => {
+                        if let Some(raw) = raw {
+                            app.raw_cache.put(raw_key, raw);
+                        }
+                        let sp = Arc::new(sp);
+                        app.cache.put(key, sp.clone());
+                        // Pin this one operand for the card's lifetime, even
+                        // if subsequent browsing evicts its shared cache entry.
+                        app.tools.standard_load = StandardLoad::Ready(sp);
+                    }
+                    Err(error) => {
+                        app.record_job_error(standard.label.clone(), error.clone());
+                        app.tools.standard_load = StandardLoad::Failed(error);
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn tool_readiness(&self, tool: Tool) -> Result<(), ReadinessReason> {
+        let current = self.tool_target(self.selected.unwrap_or(NO_ENTRY));
+        let standard = tool.needs_standard().then(|| {
+            let current = self
+                .tools
+                .standard
+                .as_ref()
+                .and_then(|s| self.tool_target(s.ix));
+            standard_readiness(
+                self.tools.standard.as_ref(),
+                current.as_ref(),
+                &self.tools.standard_load,
+            )
+        });
+        readiness(
+            self.tools.target.as_ref(),
+            current.as_ref(),
+            self.spectrum.as_ref().and(self.spectrum_group.as_ref()),
+            self.stale_plots.is_some(),
+            self.load_running,
+            standard,
+        )
+    }
+
+    fn tool_standard(&self) -> Result<(&str, &XASSpectrum), String> {
+        match (&self.tools.standard, &self.tools.standard_load) {
+            (Some(identity), StandardLoad::Ready(sp)) => Ok((&identity.label, sp)),
+            _ => Err(ReadinessReason::StandardLoading.message().into()),
+        }
     }
 
     pub(crate) fn apply_tool(&mut self, cx: &mut Context<Self>) {
         let Some(tool) = self.tools.open else {
             return;
         };
+        if let Err(reason) = self.tool_readiness(tool) {
+            self.tools.message = reason.message().into();
+            cx.notify();
+            return;
+        }
         if tool.is_analysis() {
             self.run_analysis_tool(tool, cx);
             return;
@@ -498,13 +847,11 @@ impl StudioApp {
         let result: Result<String, String> = (|| {
             let label = match tool {
                 Tool::Align => {
-                    let (ref_name, reference) = self
-                        .reference_spectrum()
-                        .ok_or("mark a reference group (its spectrum must be loaded)")?;
+                    let (ref_name, reference) = self.tool_standard()?;
                     let lo = self.tool_value(ToolField::WinLo, cx).unwrap_or(-50.0);
                     let hi = self.tool_value(ToolField::WinHi, cx).unwrap_or(100.0);
                     let shift = sp
-                        .align_to(&reference, (lo, hi))
+                        .align_to(reference, (lo, hi))
                         .map_err(|e| e.to_string())?;
                     format!("align: {name} → {ref_name} ({shift:+.2} eV)")
                 }
@@ -512,10 +859,9 @@ impl StudioApp {
                     let target = self
                         .tool_value(ToolField::Target, cx)
                         .ok_or("enter the target E₀")?;
-                    let shift = sp
-                        .calibrate(EdgeFeature::DerivativeMax, target)
-                        .map_err(|e| e.to_string())?;
-                    format!("calibrate: {name} → {target:.1} eV ({shift:+.2})")
+                    let (ref_name, reference) = self.tool_standard()?;
+                    let shift = calibrate_from_standard(&mut sp, reference, target)?;
+                    format!("calibrate: {name} via {ref_name} → {target:.1} eV ({shift:+.2})")
                 }
                 Tool::Deglitch => {
                     let lo = self.tool_value(ToolField::ELo, cx).ok_or("enter a range")?;
@@ -547,12 +893,10 @@ impl StudioApp {
                 }
                 Tool::Lcf | Tool::Pca => unreachable!("analysis tools run above"),
                 Tool::Difference => {
-                    let (ref_name, reference) = self
-                        .reference_spectrum()
-                        .ok_or("mark a second group (its spectrum must be loaded)")?;
+                    let (ref_name, reference) = self.tool_standard()?;
                     sp = rexafs::xafs::tools::difference(
                         &sp,
-                        &reference,
+                        reference,
                         rexafs::xafs::tools::DiffSpace::Norm,
                     )
                     .map_err(|e| e.to_string())?;
@@ -654,6 +998,7 @@ impl StudioApp {
                     ),
             );
             if open {
+                let readiness = self.tool_readiness(tool);
                 let mut form = div()
                     .mx_1()
                     .mb_1()
@@ -664,6 +1009,17 @@ impl StudioApp {
                     .bg(t.bg)
                     .flex()
                     .flex_col();
+                form = form.child(div().px_3().py_1().text_size(px(11.)).child(format!(
+                        "Target: {}",
+                        self.tools
+                            .target
+                            .as_ref()
+                            .map(|t| t.label.as_str())
+                            .unwrap_or("none")
+                    )));
+                if tool.needs_standard() {
+                    form = form.child(self.standard_picker(tool, cx));
+                }
                 if tool.is_analysis() {
                     form = form.child(self.analysis_options(tool, cx));
                 }
@@ -680,9 +1036,15 @@ impl StudioApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(button(&t, "tool-apply", tool.apply_label(), true).on_click(
-                                cx.listener(|this, _: &ClickEvent, _w, cx| this.apply_tool(cx)),
-                            ))
+                            .child(
+                                button(&t, "tool-apply", tool.apply_label(), readiness.is_ok())
+                                    .when(readiness.is_err(), |d| d.opacity(0.45).cursor_default())
+                                    .when(readiness.is_ok(), |d| {
+                                        d.on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
+                                            this.apply_tool(cx)
+                                        }))
+                                    }),
+                            )
                             .child(button(&t, "tool-cancel", "Close", false).on_click(
                                 cx.listener(|this, _: &ClickEvent, _w, cx| {
                                     this.tools.open = None;
@@ -690,6 +1052,28 @@ impl StudioApp {
                                 }),
                             )),
                     );
+                if let Err(reason) = readiness {
+                    form = form.child(
+                        div()
+                            .px_3()
+                            .pb_1()
+                            .text_size(px(11.))
+                            .text_color(t.warn)
+                            .child(reason.message()),
+                    );
+                }
+                if tool.needs_standard()
+                    && let StandardLoad::Failed(error) = &self.tools.standard_load
+                {
+                    form = form.child(
+                        div()
+                            .px_3()
+                            .pb_1()
+                            .text_size(px(11.))
+                            .text_color(t.text_muted)
+                            .child(error.clone()),
+                    );
+                }
                 if !self.tools.message.is_empty() {
                     form = form.child(
                         div()
@@ -707,6 +1091,151 @@ impl StudioApp {
             }
         }
         list
+    }
+
+    /// Name matching runs only on edits, off the UI thread. Results contain
+    /// indices, never parameter fingerprints or full operand identities.
+    fn filter_tool_standards(&mut self, text: &str, cx: &mut Context<Self>) {
+        self.tools.standard_filter_request += 1;
+        let request = self.tools.standard_filter_request;
+        self.tools.standard_matches = None;
+        let pattern = text.trim().to_ascii_lowercase();
+        if pattern.is_empty() {
+            cx.notify();
+            return;
+        }
+        self.tools.standard_matches = Some(Arc::new(Vec::new()));
+        let names = self.catalog.names_snapshot();
+        let derived: Vec<_> = self.derived.iter().map(|d| d.label.clone()).collect();
+        let job = cx.background_executor().spawn(async move {
+            derived
+                .iter()
+                .map(String::as_str)
+                .enumerate()
+                .map(|(i, name)| (DERIVED_BASE + i, name))
+                .chain(names.iter().enumerate())
+                .filter(|(_, name)| filter_match_lower(&name.to_ascii_lowercase(), &pattern))
+                .map(|(ix, _)| ix)
+                .collect::<Vec<_>>()
+        });
+        cx.spawn(async move |this, cx| {
+            let matches = job.await;
+            this.update(cx, |app, cx| {
+                if app.tools.standard_filter_request == request {
+                    app.tools.standard_matches = Some(Arc::new(matches));
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn standard_picker(&self, tool: Tool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let t = self.theme;
+        let title = if tool == Tool::Difference {
+            "Standard / baseline"
+        } else {
+            "Standard"
+        };
+        let name = self
+            .tools
+            .standard
+            .as_ref()
+            .map(|s| s.label.as_str())
+            .unwrap_or("none");
+        let mut picker = div()
+            .px_3()
+            .py_1()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(div().text_size(px(11.)).child(format!("{title}: {name}")))
+            .child(
+                button(&t, "tool-standard-picker", "Choose standard…", false).on_click(
+                    cx.listener(|this, _: &ClickEvent, _w, cx| {
+                        this.tools.standard_picker_open = !this.tools.standard_picker_open;
+                        cx.notify();
+                    }),
+                ),
+            );
+        if self.tools.standard_picker_open {
+            let entity = cx.entity();
+            let matches = self.tools.standard_matches.clone();
+            let count = matches
+                .as_ref()
+                .map_or(self.derived.len() + self.catalog.len(), |m| m.len());
+            picker = picker
+                .children(self.tools.standard_filter.clone())
+                .child(
+                    super::chip(
+                        &t,
+                        "tool-standard-none",
+                        "None",
+                        self.tools.standard.is_none(),
+                    )
+                    .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
+                        this.choose_tool_standard(None, cx)
+                    })),
+                )
+                .child(
+                    uniform_list("tool-standard-choices", count, move |range, _, app| {
+                        entity.update(app, |this, cx| {
+                            range
+                                .filter_map(|row| {
+                                    let ix = standard_row_index(
+                                        matches.as_deref().map(Vec::as_slice),
+                                        row,
+                                        this.derived.len(),
+                                        this.catalog.len(),
+                                    )?;
+                                    let selected =
+                                        this.tools.standard.as_ref().is_some_and(|s| s.ix == ix);
+                                    let eligible = tool == Tool::Calibrate
+                                        || Some(ix) != this.tools.target.as_ref().map(|t| t.ix);
+                                    let label = if ix >= DERIVED_BASE {
+                                        let d = this.derived.get(ix - DERIVED_BASE)?;
+                                        format!("{} · result #{}", d.label, d.id)
+                                    } else {
+                                        format!(
+                                            "{} · {}",
+                                            this.catalog.name(ix),
+                                            this.catalog.path(ix).display()
+                                        )
+                                    };
+                                    Some(
+                                        super::chip(
+                                            &this.theme,
+                                            SharedString::from(format!("tool-standard-{ix}")),
+                                            label,
+                                            selected,
+                                        )
+                                        .h(px(27.))
+                                        .overflow_hidden()
+                                        .text_ellipsis()
+                                        .when(!eligible, |d| d.opacity(0.45).cursor_default())
+                                        .when(eligible, |d| {
+                                            d.on_click(cx.listener(
+                                                move |this, _: &ClickEvent, _, cx| {
+                                                    let standard = this.tool_target(ix);
+                                                    this.choose_tool_standard(standard, cx);
+                                                },
+                                            ))
+                                        })
+                                        .into_any_element(),
+                                    )
+                                })
+                                .collect()
+                        })
+                    })
+                    .w_full()
+                    .min_w_0()
+                    .h(px(180.))
+                    .flex_none(),
+                );
+        }
+        picker
     }
 
     /// Space segment + option chips shared by LCF and PCA.
@@ -874,5 +1403,503 @@ fn relabel(result: &mut rexafs::prelude::LcfResult, names: &[String]) {
         if let Some(n) = names.get(c.index) {
             c.name = n.clone();
         }
+    }
+}
+
+#[cfg(test)]
+mod tool_readiness_tests {
+    use super::*;
+    use std::{collections::BTreeSet, num::NonZeroUsize};
+
+    fn group(ix: usize) -> ToolTarget {
+        ToolTarget {
+            ix,
+            fingerprint: 42,
+            label: format!("group {ix}"),
+            path: PathBuf::from(format!("/data/{ix}.dat")),
+            derived_id: ix.checked_sub(DERIVED_BASE).map(|id| id as u64),
+            project_generation: 1,
+            catalog_generation: 2,
+            size: Some(100),
+        }
+    }
+
+    #[test]
+    fn matching_catalog_and_derived_revisions_are_ready() {
+        for target in [group(0), group(DERIVED_BASE)] {
+            assert_eq!(
+                readiness(
+                    Some(&target),
+                    Some(&target),
+                    Some(&target),
+                    false,
+                    false,
+                    None
+                ),
+                Ok(())
+            );
+        }
+    }
+
+    #[test]
+    fn unreadable_selection_cannot_use_previous_spectrum() {
+        let old = group(0);
+        let unreadable = group(1);
+        for opened in [&old, &unreadable] {
+            let result = readiness(
+                Some(opened),
+                Some(&unreadable),
+                Some(&old),
+                true,
+                false,
+                None,
+            );
+            assert_eq!(result, Err(ReadinessReason::CurrentFailed));
+            assert_eq!(
+                result.unwrap_err().message(),
+                "Current group failed to load"
+            );
+        }
+    }
+
+    #[test]
+    fn missing_and_pending_data_are_rejected_even_on_same_group() {
+        let t = group(0);
+        assert_eq!(
+            readiness(None, None, None, false, false, None),
+            Err(ReadinessReason::NoTarget)
+        );
+        assert_eq!(
+            readiness(Some(&t), Some(&t), None, false, false, None),
+            Err(ReadinessReason::LoadedMismatch)
+        );
+        assert_eq!(
+            readiness(Some(&t), Some(&t), Some(&t), true, true, None),
+            Err(ReadinessReason::CurrentLoading)
+        );
+        assert_eq!(
+            readiness(Some(&t), None, Some(&t), false, false, None),
+            Err(ReadinessReason::TargetChanged)
+        );
+    }
+
+    #[test]
+    fn every_identity_component_is_checked_for_current_and_loaded_data() {
+        let target = group(DERIVED_BASE);
+        let mut mutations = vec![target.clone(); 8];
+        mutations[0].ix += 1;
+        mutations[1].fingerprint += 1;
+        mutations[2].label = "renamed".into();
+        mutations[3].path = "/different/same-name.dat".into();
+        mutations[4].derived_id = Some(999);
+        mutations[5].project_generation += 1;
+        mutations[6].catalog_generation += 1;
+        mutations[7].size = Some(200);
+        for changed in mutations {
+            let ready = StandardLoad::Ready(Arc::new(XASSpectrum::new()));
+            assert_eq!(
+                standard_readiness(Some(&target), Some(&changed), &ready),
+                Err(ReadinessReason::StandardChanged)
+            );
+            let state = ToolState {
+                open: Some(Tool::Difference),
+                standard: Some(target.clone()),
+                ..ToolState::new()
+            };
+            assert!(!state.accepts_standard_result(0, &target, Some(&changed)));
+            assert_eq!(
+                readiness(
+                    Some(&target),
+                    Some(&changed),
+                    Some(&target),
+                    false,
+                    false,
+                    None
+                ),
+                Err(ReadinessReason::TargetChanged)
+            );
+            assert_eq!(
+                readiness(
+                    Some(&target),
+                    Some(&target),
+                    Some(&changed),
+                    false,
+                    false,
+                    None
+                ),
+                Err(ReadinessReason::LoadedMismatch)
+            );
+        }
+    }
+
+    #[test]
+    fn default_standard_uses_list_order_even_when_only_later_group_is_cached() {
+        let target = group(0);
+        let first = group(DERIVED_BASE);
+        let later = group(1);
+        let marked = BTreeSet::from([target.ix, first.ix, later.ix, crate::app::NO_ENTRY]);
+        let mut cache = lru::LruCache::new(NonZeroUsize::new(1).unwrap());
+        cache.put((later.ix, later.fingerprint), Arc::new(XASSpectrum::new()));
+        for tool in [Tool::Calibrate, Tool::Align, Tool::Difference] {
+            let chosen = default_standard(
+                tool,
+                Some(&target),
+                [first.clone(), target.clone(), later.clone()],
+                &marked,
+            )
+            .unwrap();
+            assert_eq!(chosen, first);
+            assert!(!cache.contains(&(chosen.ix, chosen.fingerprint)));
+            assert_eq!(
+                standard_readiness(Some(&chosen), Some(&chosen), &StandardLoad::Loading),
+                Err(ReadinessReason::StandardLoading)
+            );
+        }
+    }
+
+    #[test]
+    fn no_other_valid_marked_group_means_no_default() {
+        let target = group(0);
+        let marked = BTreeSet::from([0, crate::app::NO_ENTRY]);
+        for tool in [Tool::Align, Tool::Difference] {
+            assert_eq!(
+                default_standard(tool, Some(&target), [target.clone(), group(1)], &marked),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn calibrate_defaults_to_target_without_other_marked_groups() {
+        for target in [group(0), group(DERIVED_BASE)] {
+            for marked in [
+                BTreeSet::new(),
+                BTreeSet::from([target.ix, crate::app::NO_ENTRY]),
+            ] {
+                for groups in [vec![target.clone()], vec![target.clone(), group(1)]] {
+                    assert_eq!(
+                        default_standard(Tool::Calibrate, Some(&target), groups, &marked),
+                        Some(target.clone())
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            default_standard(Tool::Calibrate, None, [], &BTreeSet::new()),
+            None
+        );
+    }
+
+    #[test]
+    fn standard_readiness_reports_missing_failure_revision_and_removal() {
+        let chosen = group(1);
+        let mut changed = chosen.clone();
+        changed.fingerprint += 1;
+        let ready = StandardLoad::Ready(Arc::new(XASSpectrum::new()));
+        assert_eq!(
+            standard_readiness(None, None, &ready),
+            Err(ReadinessReason::NoStandard)
+        );
+        assert_eq!(
+            standard_readiness(Some(&chosen), Some(&changed), &ready),
+            Err(ReadinessReason::StandardChanged)
+        );
+        assert_eq!(
+            standard_readiness(Some(&chosen), None, &ready),
+            Err(ReadinessReason::StandardChanged)
+        );
+        assert_eq!(
+            standard_readiness(
+                Some(&chosen),
+                Some(&chosen),
+                &StandardLoad::Failed("unreadable".into())
+            ),
+            Err(ReadinessReason::StandardFailed)
+        );
+        assert_eq!(
+            standard_readiness(Some(&chosen), Some(&chosen), &ready),
+            Ok(())
+        );
+        let target = group(0);
+        for reason in [
+            ReadinessReason::NoStandard,
+            ReadinessReason::StandardChanged,
+            ReadinessReason::StandardLoading,
+            ReadinessReason::StandardFailed,
+        ] {
+            assert_eq!(
+                readiness(
+                    Some(&target),
+                    Some(&target),
+                    Some(&target),
+                    false,
+                    false,
+                    Some(Err(reason))
+                ),
+                Err(reason)
+            );
+        }
+    }
+
+    #[test]
+    fn late_standard_jobs_cannot_replace_a_new_choice_or_revision() {
+        let chosen = group(1);
+        let mut state = ToolState {
+            open: Some(Tool::Align),
+            standard: Some(chosen.clone()),
+            standard_request: 2,
+            ..ToolState::new()
+        };
+        assert!(state.accepts_standard_result(2, &chosen, Some(&chosen)));
+        assert!(!state.accepts_standard_result(1, &chosen, Some(&chosen)));
+        assert!(!state.accepts_standard_result(2, &chosen, Some(&group(2))));
+        assert!(!state.accepts_standard_result(2, &chosen, None));
+        state.standard = Some(group(2));
+        assert!(!state.accepts_standard_result(2, &chosen, Some(&chosen)));
+        state.standard = Some(chosen.clone());
+        state.open = None;
+        assert!(!state.accepts_standard_result(2, &chosen, Some(&chosen)));
+    }
+
+    #[test]
+    fn invalidation_drops_pinned_data_bindings_and_pending_requests() {
+        let chosen = group(DERIVED_BASE);
+        let pinned = Arc::new(XASSpectrum::new());
+        let mut state = ToolState {
+            open: Some(Tool::Difference),
+            target: Some(group(0)),
+            standard: Some(chosen.clone()),
+            standard_load: StandardLoad::Ready(pinned.clone()),
+            standard_picker_open: true,
+            standard_matches: Some(Arc::new(vec![0])),
+            ..ToolState::new()
+        };
+        for _ in 0..2 {
+            let generation = state.generation;
+            let request = state.standard_request;
+            let filter_request = state.standard_filter_request;
+            state.invalidate_bindings();
+            assert_eq!(state.generation, generation + 1);
+            assert!(state.standard_filter_request > filter_request);
+            assert!(state.open.is_none() && state.target.is_none() && state.standard.is_none());
+            assert!(matches!(state.standard_load, StandardLoad::Loading));
+            assert!(!state.standard_picker_open && state.standard_matches.is_none());
+            assert_eq!(Arc::strong_count(&pinned), 1);
+            // Even reopening with an identical-looking group cannot accept the old job.
+            state.open = Some(Tool::Difference);
+            state.standard = Some(chosen.clone());
+            assert!(!state.accepts_standard_result(request, &chosen, Some(&chosen)));
+        }
+    }
+
+    #[test]
+    fn standalone_readiness_checks_path_parameters_and_load_state() {
+        let target = ToolTarget::standalone(
+            "/outside/project.dat".into(),
+            "project.dat".into(),
+            42,
+            1,
+            2,
+        );
+        assert_eq!(target.ix, NO_ENTRY);
+        assert_eq!(
+            readiness(
+                Some(&target),
+                Some(&target),
+                Some(&target),
+                false,
+                false,
+                None
+            ),
+            Ok(())
+        );
+        for changed in [
+            ToolTarget {
+                path: "/other/project.dat".into(),
+                ..target.clone()
+            },
+            ToolTarget {
+                fingerprint: 43,
+                ..target.clone()
+            },
+            ToolTarget {
+                catalog_generation: 3,
+                ..target.clone()
+            },
+        ] {
+            assert_eq!(
+                readiness(
+                    Some(&target),
+                    Some(&changed),
+                    Some(&target),
+                    false,
+                    false,
+                    None
+                ),
+                Err(ReadinessReason::TargetChanged)
+            );
+        }
+        assert_eq!(
+            readiness(Some(&target), Some(&target), None, false, false, None),
+            Err(ReadinessReason::LoadedMismatch)
+        );
+        assert_eq!(
+            readiness(
+                Some(&target),
+                Some(&target),
+                Some(&target),
+                true,
+                false,
+                None
+            ),
+            Err(ReadinessReason::CurrentFailed)
+        );
+        let chosen =
+            default_standard(Tool::Calibrate, Some(&target), [], &BTreeSet::new()).unwrap();
+        assert_eq!(
+            standard_readiness(
+                Some(&chosen),
+                Some(&target),
+                &StandardLoad::Ready(Arc::new(edge(100.)))
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn picker_maps_only_requested_rows_in_stable_order() {
+        assert_eq!(
+            standard_row_index(None, 0, 2, 1_000_000),
+            Some(DERIVED_BASE)
+        );
+        assert_eq!(
+            standard_row_index(None, 1, 2, 1_000_000),
+            Some(DERIVED_BASE + 1)
+        );
+        assert_eq!(standard_row_index(None, 2, 2, 1_000_000), Some(0));
+        assert_eq!(
+            standard_row_index(None, 1_000_001, 2, 1_000_000),
+            Some(999_999)
+        );
+        assert_eq!(standard_row_index(None, 1_000_002, 2, 1_000_000), None);
+        assert_eq!(standard_row_index(None, 0, 0, 0), None);
+        let matches = [DERIVED_BASE + 1, 20, NO_ENTRY, 1_000_000];
+        assert_eq!(
+            standard_row_index(Some(&matches), 0, 2, 1_000_000),
+            Some(DERIVED_BASE + 1)
+        );
+        assert_eq!(
+            standard_row_index(Some(&matches), 1, 2, 1_000_000),
+            Some(20)
+        );
+        for row in 2..5 {
+            assert_eq!(standard_row_index(Some(&matches), row, 2, 1_000_000), None);
+        }
+    }
+
+    fn edge(center: f64) -> XASSpectrum {
+        let energy: Vec<f64> = (0..201).map(|i| center - 10.0 + i as f64 * 0.1).collect();
+        let mu: Vec<f64> = energy.iter().map(|e| ((e - center) / 0.8).tanh()).collect();
+        let mut sp = XASSpectrum::new();
+        sp.set_spectrum(energy, mu);
+        sp
+    }
+
+    #[test]
+    fn self_calibration_is_ready_and_matches_single_group_calibration() {
+        for target in [group(0), group(DERIVED_BASE)] {
+            let source = Arc::new(edge(100.0));
+            let mut cache = lru::LruCache::new(NonZeroUsize::new(1).unwrap());
+            cache.put((target.ix, target.fingerprint), source.clone());
+            let chosen = default_standard(
+                Tool::Calibrate,
+                Some(&target),
+                [target.clone()],
+                &BTreeSet::new(),
+            )
+            .unwrap();
+            // The standard loader uses the same key as the current-group load.
+            let standard = cache.get(&(chosen.ix, chosen.fingerprint)).unwrap().clone();
+            assert!(Arc::ptr_eq(&standard, &source));
+            let load = StandardLoad::Ready(standard.clone());
+            assert_eq!(
+                readiness(
+                    Some(&target),
+                    Some(&target),
+                    Some(&target),
+                    false,
+                    false,
+                    Some(standard_readiness(Some(&chosen), Some(&target), &load)),
+                ),
+                Ok(())
+            );
+
+            let expected = 103.0;
+            let measured = source
+                .edge_feature_energy(EdgeFeature::DerivativeMax)
+                .unwrap();
+            let mut calibrated = (*source).clone();
+            let shift = calibrate_from_standard(&mut calibrated, &standard, expected).unwrap();
+            assert!((shift - (expected - measured)).abs() < 1e-10);
+            let mut previous_behavior = (*source).clone();
+            previous_behavior
+                .calibrate(EdgeFeature::DerivativeMax, expected)
+                .unwrap();
+            assert_eq!(calibrated.energy, previous_behavior.energy);
+            assert!(
+                (calibrated
+                    .edge_feature_energy(EdgeFeature::DerivativeMax)
+                    .unwrap()
+                    - expected)
+                    .abs()
+                    < 0.11
+            );
+            assert_eq!(source.energy, edge(100.0).energy);
+        }
+    }
+
+    #[test]
+    fn calibration_measures_standard_and_preserves_targets_edge_offset() {
+        let standard = edge(100.0);
+        let mut target = edge(110.0);
+        let before = target.energy.clone().unwrap();
+        // The core finder smooths and samples the derivative; use its measured
+        // feature rather than assuming the analytic tanh midpoint.
+        let measured = standard
+            .edge_feature_energy(EdgeFeature::DerivativeMax)
+            .unwrap();
+        let target_feature = target
+            .edge_feature_energy(EdgeFeature::DerivativeMax)
+            .unwrap();
+        let shift = calibrate_from_standard(&mut target, &standard, measured + 3.0).unwrap();
+        assert!((shift - 3.0).abs() < 0.01);
+        for (before, after) in before.iter().zip(target.energy.as_ref().unwrap().iter()) {
+            assert!((after - before - shift).abs() < 1e-10);
+        }
+        assert!(
+            (target
+                .edge_feature_energy(EdgeFeature::DerivativeMax)
+                .unwrap()
+                - target_feature
+                - 3.0)
+                .abs()
+                < 0.11
+        );
+        assert!(
+            (standard
+                .edge_feature_energy(EdgeFeature::DerivativeMax)
+                .unwrap()
+                - measured)
+                .abs()
+                < 0.01
+        );
+    }
+
+    #[test]
+    fn invalid_calibration_standard_leaves_target_untouched() {
+        let mut target = edge(110.0);
+        let before = target.energy.clone();
+        assert!(calibrate_from_standard(&mut target, &XASSpectrum::new(), 103.0).is_err());
+        assert_eq!(target.energy, before);
     }
 }

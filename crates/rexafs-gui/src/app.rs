@@ -918,6 +918,8 @@ pub struct StudioApp {
     current_path: PathBuf,
     spectrum_path: PathBuf,
     spectrum_fingerprint: u64,
+    /// Identity of the data retained in `spectrum`, independent of selection.
+    spectrum_group: Option<shell::tools::ToolTarget>,
     spectrum: Option<Arc<XASSpectrum>>,
     spectrum_label: SharedString,
     /// Set when the newest selection failed to load. The plots still show the
@@ -1733,6 +1735,7 @@ impl StudioApp {
             current_path: path.clone(),
             spectrum_path: path.clone(),
             spectrum_fingerprint: 0,
+            spectrum_group: None,
             spectrum: None,
             spectrum_label: label.clone(),
             stale_plots: None,
@@ -2237,6 +2240,7 @@ impl StudioApp {
     /// folder starts streaming. Generation bumps also make old async arrivals
     /// harmless while their receivers/workers wind down.
     fn reset_catalog_state(&mut self, cx: &mut Context<Self>) {
+        self.tools.invalidate_bindings();
         self.catalog_gen += 1;
         self.generation += 1;
         self.compare_gen += 1;
@@ -2279,6 +2283,7 @@ impl StudioApp {
         self.current_path = PathBuf::new();
         self.spectrum_path = PathBuf::new();
         self.spectrum_fingerprint = 0;
+        self.spectrum_group = None;
         self.spectrum = None;
         self.spectrum_label = "no spectrum".into();
         self.import_preview = None;
@@ -3028,7 +3033,10 @@ impl StudioApp {
         self.recompute_last = Some(Instant::now());
         self.recompute_dirty = false;
 
-        if let Some(sp) = self.cache.get(&key) {
+        // NO_ENTRY has no path component in the shared cache key.
+        if ix != NO_ENTRY
+            && let Some(sp) = self.cache.get(&key)
+        {
             self.load_running = false;
             let sp = sp.clone();
             self.set_processed(ix, label, path, key.1, sp, cx);
@@ -3039,28 +3047,9 @@ impl StudioApp {
         self.status = format!("processing {label} ...").into();
         self.load_running = true;
         cx.notify();
-        let params = self.effective_params(ix).clone();
-        let derived = (ix >= DERIVED_BASE)
-            .then(|| self.derived.get(ix - DERIVED_BASE).cloned())
-            .flatten();
-        let raw_key = (ix, params.raw_fingerprint());
-        let raw = self.raw_cache.get(&raw_key).cloned();
+        let raw_key = (ix, self.effective_params(ix).raw_fingerprint());
         let processed_path = path.clone();
-        let load = cx.background_executor().spawn(async move {
-            match raw {
-                Some(raw) => {
-                    process_arrays(raw.0.clone(), raw.1.clone(), &params).map(|sp| (sp, None))
-                }
-                None => {
-                    let (energy, mu) = match derived {
-                        Some(group) => group.raw(&params)?,
-                        None => load_raw(&path, &params)?,
-                    };
-                    let sp = process_arrays(energy.clone(), mu.clone(), &params)?;
-                    Ok((sp, Some(Arc::new((energy, mu)))))
-                }
-            }
-        });
+        let load = self.process_group_job(ix, path, cx);
         cx.spawn(async move |this, cx| {
             let result = load.await;
             this.update(cx, |app, cx| {
@@ -3070,11 +3059,15 @@ impl StudioApp {
                 app.load_running = false;
                 match result {
                     Ok((sp, raw)) => {
-                        if let Some(raw) = raw {
+                        if ix != NO_ENTRY
+                            && let Some(raw) = raw
+                        {
                             app.raw_cache.put(raw_key, raw);
                         }
                         let sp = Arc::new(sp);
-                        app.cache.put(key, sp.clone());
+                        if ix != NO_ENTRY {
+                            app.cache.put(key, sp.clone());
+                        }
                         app.set_processed(ix, label, processed_path, key.1, sp, cx);
                         // A drag tick landed while this job ran: follow it.
                         if app.recompute_dirty {
@@ -3085,9 +3078,8 @@ impl StudioApp {
                     Err(e) => {
                         app.status = format!("failed to process {label}: {e}").into();
                         app.record_job_error(label.to_string(), e.to_string());
-                        // The plots keep the previous spectrum; flag the
-                        // mismatch so the canvas can't be misread as the
-                        // selected entry.
+                        // Retain the plot and its identity. Tool readiness rejects
+                        // this failed selection even if the old data is present.
                         app.stale_plots = Some(StalePlots {
                             requested: label.clone(),
                             message: e.to_string().into(),
@@ -3101,6 +3093,39 @@ impl StudioApp {
         .detach();
     }
 
+    /// Snapshot inputs for either the current group or a tool operand. The
+    /// caller decides where the result lands; this job never changes selection.
+    fn process_group_job(
+        &mut self,
+        ix: usize,
+        path: PathBuf,
+        cx: &Context<Self>,
+    ) -> gpui::Task<Result<(XASSpectrum, Option<RawArrays>), String>> {
+        let params = self.effective_params(ix).clone();
+        let derived = (ix >= DERIVED_BASE)
+            .then(|| self.derived.get(ix - DERIVED_BASE).cloned())
+            .flatten();
+        let raw_key = (ix, params.raw_fingerprint());
+        let raw = (ix != NO_ENTRY)
+            .then(|| self.raw_cache.get(&raw_key).cloned())
+            .flatten();
+        cx.background_executor().spawn(async move {
+            match raw {
+                Some(raw) => {
+                    process_arrays(raw.0.clone(), raw.1.clone(), &params).map(|sp| (sp, None))
+                }
+                None => {
+                    let (energy, mu) = match derived {
+                        Some(group) => group.raw(&params)?,
+                        None => load_raw(&path, &params)?,
+                    };
+                    let sp = process_arrays(energy.clone(), mu.clone(), &params)?;
+                    Ok((sp, Some(Arc::new((energy, mu)))))
+                }
+            }
+        })
+    }
+
     fn set_processed(
         &mut self,
         ix: usize,
@@ -3111,6 +3136,12 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) {
         self.status = spectrum_status(&label, &sp);
+        self.spectrum_group = self.tool_target(ix).map(|mut identity| {
+            identity.fingerprint = fingerprint;
+            identity.label = label.to_string();
+            identity.path = path.clone();
+            identity
+        });
         self.spectrum_label = label;
         self.spectrum_path = path;
         self.spectrum_fingerprint = fingerprint;
@@ -4103,6 +4134,7 @@ impl StudioApp {
                 match result {
                     Ok(catalog) => {
                         let total = catalog.len();
+                        app.tools.invalidate_bindings();
                         app.catalog = catalog;
                         app.resolve_pending_overrides(cx);
                         app.restore_project_selection(cx);
@@ -4204,6 +4236,7 @@ impl StudioApp {
     /// keyed by catalog indices is invalidated; the active spectrum is
     /// re-located by path so the plots keep their subject when it survived.
     fn install_refreshed_catalog(&mut self, catalog: Catalog, cx: &mut Context<Self>) {
+        self.tools.invalidate_bindings();
         let remap = |indices: &BTreeSet<usize>| -> BTreeSet<usize> {
             indices
                 .iter()
@@ -6595,6 +6628,7 @@ impl StudioApp {
     fn apply_project(&mut self, mut project: ProjectFile, cx: &mut Context<Self>) {
         self.next_derived_id = project.assign_group_ids();
         self.project_generation += 1;
+        self.tools.invalidate_bindings();
         self.journal = Default::default();
         self.project_path = project.origin.clone();
         self.project_storage = project
