@@ -194,7 +194,13 @@ def signed_runtime(path: Path) -> dict[str, str]:
     """
     result = json.loads(
         subprocess.check_output(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
+            [
+                shutil.which("pwsh") or "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                command,
+            ],
             text=True,
             env={**os.environ, "REXAFS_RUNTIME_TO_VERIFY": str(path)},
         )
