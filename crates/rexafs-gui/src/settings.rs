@@ -30,6 +30,8 @@ pub fn home_dir() -> Option<PathBuf> {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UserSettings {
+    /// Width of the Groups sidebar in logical pixels. None uses 280 px.
+    pub groups_panel_width: Option<f32>,
     /// Folder scanned for `*.cif` files (the "CIF library" structure source).
     pub cif_library: Option<PathBuf>,
     /// Local copy of the AMCSD SQLite database.
@@ -153,7 +155,19 @@ pub fn default_amcsd_path() -> Option<PathBuf> {
     })
 }
 
+pub fn clamp_groups_panel_width(width: f32) -> f32 {
+    if width.is_finite() {
+        width.clamp(240., 400.)
+    } else {
+        280.
+    }
+}
+
 impl UserSettings {
+    pub fn groups_panel_width(&self) -> f32 {
+        clamp_groups_panel_width(self.groups_panel_width.unwrap_or(280.))
+    }
+
     pub fn load() -> Self {
         settings_path()
             .and_then(|p| {
@@ -303,6 +317,27 @@ mod tests {
     }
 
     #[test]
+    fn groups_panel_width_defaults_and_bounds() {
+        for (input, expected) in [
+            (None, 280.),
+            (Some(10.), 240.),
+            (Some(500.), 400.),
+            (Some(320.), 320.),
+            (Some(f32::NAN), 280.),
+            (Some(f32::INFINITY), 280.),
+        ] {
+            assert_eq!(
+                UserSettings {
+                    groups_panel_width: input,
+                    ..Default::default()
+                }
+                .groups_panel_width(),
+                expected
+            );
+        }
+    }
+
+    #[test]
     fn settings_round_trip_and_defaults() {
         let dir = std::env::temp_dir().join(format!("xts-settings-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -320,9 +355,14 @@ mod tests {
             assistant_docked: false,
             assistant_panel_width: 512.,
             assistant_history_limit: 3,
+            groups_panel_width: Some(347.),
         };
         s.save_to(&path).unwrap();
         assert_eq!(UserSettings::load_from(&path).unwrap(), s);
+        assert_eq!(
+            UserSettings::load_from(&path).unwrap().groups_panel_width(),
+            347.
+        );
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

@@ -184,6 +184,29 @@ pub(crate) fn turn_params(
     }
     params
 }
+pub(crate) const INSTALL_URL: &str = "https://learn.chatgpt.com/docs/codex/cli#getting-started";
+
+#[derive(Debug)]
+pub(crate) enum StartError {
+    NotInstalled,
+    Failed(String),
+}
+
+impl std::fmt::Display for StartError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotInstalled => f.write_str("Codex CLI was not found on this computer."),
+            Self::Failed(message) => f.write_str(message),
+        }
+    }
+}
+
+impl From<String> for StartError {
+    fn from(message: String) -> Self {
+        Self::Failed(message)
+    }
+}
+
 pub(crate) struct Client {
     child: Child,
     tx: mpsc::Sender<Value>,
@@ -318,9 +341,7 @@ impl Drop for Client {
 }
 impl Client {
     pub fn start(web_search: bool, extended: bool) -> Result<Self, String> {
-        let executable = executable().ok_or(
-            "Codex CLI not found. Install Codex, or set REXAFS_CODEX to its executable path.",
-        )?;
+        let executable = executable().map_err(|e| e.to_string())?;
         let directory = std::env::temp_dir().join(format!(
             "rexafs-assistant-{}-{}",
             std::process::id(),
@@ -336,7 +357,13 @@ impl Client {
             builder.mode(0o700);
         }
         builder.create(&directory).map_err(|e| e.to_string())?;
-        let mut child = Command::new(executable)
+        let mut command = Command::new(executable);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        let mut child = command
             .args(client_flags(web_search, extended))
             .current_dir(&directory)
             .stdin(Stdio::piped())
@@ -393,25 +420,112 @@ impl Client {
         self.rx.try_iter().take(200).collect()
     }
 }
-fn executable() -> Option<PathBuf> {
-    if let Some(path) = crate::settings::env_var_os("CODEX") {
-        return Path::new(&path).is_file().then(|| path.into());
-    }
-    let mut paths: Vec<_> = std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p).map(|p| p.join("codex")).collect())
+/// Discovery only: no subprocess, login, credential access or network request.
+pub(crate) fn executable() -> Result<PathBuf, StartError> {
+    let path = std::env::var_os("PATH")
+        .map(|p| std::env::split_paths(&p).collect())
         .unwrap_or_default();
-    if let Some(home) = crate::settings::home_dir() {
-        paths.extend([
-            home.join(".bun/bin/codex"),
-            home.join(".local/bin/codex"),
-            home.join(".npm-global/bin/codex"),
+    let candidates = executable_candidates(
+        cfg!(windows),
+        path,
+        crate::settings::home_dir().as_deref(),
+        std::env::var_os("LOCALAPPDATA").as_deref().map(Path::new),
+        std::env::var_os("APPDATA").as_deref().map(Path::new),
+        std::env::var_os("CODEX_INSTALL_DIR")
+            .as_deref()
+            .map(Path::new),
+    );
+    find_executable(
+        crate::settings::env_var_os("CODEX").map(PathBuf::from),
+        candidates,
+    )
+}
+
+fn executable_candidates(
+    windows: bool,
+    mut directories: Vec<PathBuf>,
+    home: Option<&Path>,
+    local_app_data: Option<&Path>,
+    app_data: Option<&Path>,
+    install_dir: Option<&Path>,
+) -> Vec<PathBuf> {
+    if let Some(path) = install_dir.filter(|p| !p.as_os_str().is_empty()) {
+        directories.insert(0, path.to_owned());
+    }
+    if windows {
+        if let Some(local) = local_app_data {
+            directories.push(local.join("Programs/OpenAI/Codex/bin"));
+        } else if let Some(home) = home {
+            directories.push(home.join("AppData/Local/Programs/OpenAI/Codex/bin"));
+        }
+        if let Some(roaming) = app_data {
+            directories.push(roaming.join("npm"));
+        } else if let Some(home) = home {
+            directories.push(home.join("AppData/Roaming/npm"));
+        }
+    }
+    if let Some(home) = home {
+        directories.extend([
+            home.join(".bun/bin"),
+            home.join(".local/bin"),
+            home.join(".npm-global/bin"),
         ]);
     }
-    paths.extend([
-        PathBuf::from("/opt/homebrew/bin/codex"),
-        PathBuf::from("/usr/local/bin/codex"),
-    ]);
-    paths.into_iter().find(|p| p.is_file())
+    if !windows {
+        directories.extend([
+            PathBuf::from("/opt/homebrew/bin"),
+            PathBuf::from("/usr/local/bin"),
+        ]);
+    }
+    let names: &[&str] = if windows {
+        &["codex.exe", "codex.cmd"]
+    } else {
+        &["codex"]
+    };
+    directories
+        .into_iter()
+        // A desktop launched from an arbitrary working directory should not search '.'.
+        .filter(|p| p.is_absolute())
+        .flat_map(|directory| names.iter().map(move |name| directory.join(name)))
+        .collect()
+}
+
+fn usable_executable(path: &Path) -> bool {
+    let Ok(metadata) = path.metadata() else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+fn find_executable(
+    override_path: Option<PathBuf>,
+    candidates: Vec<PathBuf>,
+) -> Result<PathBuf, StartError> {
+    if let Some(path) = override_path {
+        if !usable_executable(&path) {
+            return Err(StartError::Failed(format!(
+                "REXAFS_CODEX (or XTS_CODEX) points to an unavailable executable: {}. Update or remove this override and restart rexafs.",
+                path.display()
+            )));
+        }
+        // Resolve overrides before the child changes into its private working directory.
+        return std::fs::canonicalize(path).map_err(|e| e.to_string().into());
+    }
+    candidates
+        .into_iter()
+        .find(|p| usable_executable(p))
+        .ok_or(StartError::NotInstalled)
 }
 pub(crate) fn initialize(id: u64) -> Value {
     json!({"id":id,"method":"initialize","params":{"clientInfo":{"name":"rexafs","title":"rexafs","version":env!("CARGO_PKG_VERSION")},"capabilities":{"experimentalApi":true}}})
@@ -437,6 +551,112 @@ pub(crate) fn dynamic_tools() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    struct Fixture(PathBuf);
+    impl Fixture {
+        fn new() -> Self {
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "rexafs-codex-discovery-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            ));
+            std::fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+        fn executable(&self, relative: &str) -> PathBuf {
+            let path = self.0.join(relative);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, "test executable fixture").unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+            }
+            path
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn discovery_finds_windows_standalone_and_npm_without_updated_path() {
+        let f = Fixture::new();
+        let local = f.0.join("Local App Data");
+        let roaming = f.0.join("Roaming");
+        let candidates =
+            executable_candidates(true, vec![], Some(&f.0), Some(&local), Some(&roaming), None);
+        assert!(matches!(
+            find_executable(None, candidates.clone()),
+            Err(StartError::NotInstalled)
+        ));
+        let npm = f.executable("Roaming/npm/codex.cmd");
+        assert_eq!(find_executable(None, candidates.clone()).unwrap(), npm);
+        let native = f.executable("Local App Data/Programs/OpenAI/Codex/bin/codex.exe");
+        assert_eq!(find_executable(None, candidates).unwrap(), native);
+        // The extensionless npm shim is a shell script, not a Windows executable.
+        f.executable("path/codex");
+        let path_native = f.executable("path/codex.exe");
+        let path = executable_candidates(true, vec![f.0.join("path")], None, None, None, None);
+        assert_eq!(find_executable(None, path).unwrap(), path_native);
+    }
+
+    #[test]
+    fn explicit_override_wins_and_invalid_override_is_actionable() {
+        let f = Fixture::new();
+        let first = f.executable("path/codex");
+        let custom = f.executable("Custom Install/codex");
+        assert_eq!(
+            find_executable(Some(custom.clone()), vec![first.clone()]).unwrap(),
+            std::fs::canonicalize(custom).unwrap()
+        );
+        let error = find_executable(Some(f.0.join("missing")), vec![first]).unwrap_err();
+        assert!(matches!(error, StartError::Failed(_)));
+        assert!(error.to_string().contains("REXAFS_CODEX"));
+    }
+
+    #[test]
+    fn discovery_respects_path_and_custom_install_directory() {
+        let f = Fixture::new();
+        let fallback = f.executable(".local/bin/codex");
+        let path = f.executable("path/codex");
+        let custom = f.executable("custom/codex");
+        let candidates = executable_candidates(
+            false,
+            vec![f.0.join("path")],
+            Some(&f.0),
+            None,
+            None,
+            Some(&f.0.join("custom")),
+        );
+        assert_eq!(find_executable(None, candidates).unwrap(), custom);
+        let candidates =
+            executable_candidates(false, vec![f.0.join("path")], Some(&f.0), None, None, None);
+        assert_eq!(find_executable(None, candidates).unwrap(), path);
+        let candidates = executable_candidates(
+            false,
+            vec![PathBuf::new(), PathBuf::from(".")],
+            Some(&f.0),
+            None,
+            None,
+            None,
+        );
+        assert_eq!(find_executable(None, candidates).unwrap(), fallback);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn discovery_skips_directories_and_non_executable_files() {
+        let f = Fixture::new();
+        let not_executable = f.0.join("codex");
+        std::fs::write(&not_executable, "not executable").unwrap();
+        assert!(matches!(
+            find_executable(None, vec![f.0.clone(), not_executable]),
+            Err(StartError::NotInstalled)
+        ));
+    }
 
     #[test]
     fn assistant_resume_preserves_current_access_policy_without_start_only_fields() {

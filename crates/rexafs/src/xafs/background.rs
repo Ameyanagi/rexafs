@@ -210,6 +210,7 @@ pub struct AUTOBK {
     /// when the `trust-region` feature is enabled, LegacyLm otherwise.
     pub linear_fallback_solver: Option<AUTOBKSolver>,
     /// If true, cache direct-solver design matrices for compatible workloads.
+    /// FixedPenalty also reuses the column scaling and SVD factorization.
     pub linear_workspace_cache: Option<bool>,
     /// Background of mu(E)
     pub bkg: Option<DVector<f64>>,

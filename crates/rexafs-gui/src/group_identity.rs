@@ -79,6 +79,24 @@ impl GroupRegistry {
         self.inner.borrow().sources.values().cloned().collect()
     }
 
+    /// Resolve the would-be source identity without growing the registry.
+    pub fn peek_source(
+        &self,
+        path: &Path,
+        channel: DetectionMode,
+        origins: &BTreeMap<PathBuf, PathBuf>,
+    ) -> GroupId {
+        let data = self.inner.borrow();
+        if let Some(source) = data.sources.get(path) {
+            return source.id.clone();
+        }
+        let base = GroupId::source(
+            origins.get(path).map(PathBuf::as_path).unwrap_or(path),
+            channel,
+        );
+        available_id(&data.issued, base)
+    }
+
     /// Allocate only when a source is referenced, not for every scanned file.
     /// A standalone source has a locator but no catalog index yet.
     pub fn register_source(
@@ -304,9 +322,15 @@ impl PreparedCatalog {
 }
 
 fn reserve_id(issued: &mut BTreeSet<GroupId>, base: GroupId) -> GroupId {
+    let id = available_id(issued, base);
+    issued.insert(id.clone());
+    id
+}
+
+fn available_id(issued: &BTreeSet<GroupId>, base: GroupId) -> GroupId {
     let mut id = base.clone();
     let mut variant = 0;
-    while !issued.insert(id.clone()) {
+    while issued.contains(&id) {
         variant += 1;
         id = GroupId(format!("{}:variant:{variant}", base.0));
     }
@@ -365,6 +389,57 @@ impl GroupState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn group_identity_colour_peek_is_lazy_and_agrees_with_registration() {
+        let registry = GroupRegistry::default();
+        let source = PathBuf::from("/original/scan.dat");
+        let cached = PathBuf::from("/cache/scan.dat");
+        let origins = BTreeMap::from([(cached.clone(), source.clone())]);
+        for i in 0..1000 {
+            let path = PathBuf::from(format!("/scan/{i}.dat"));
+            assert_eq!(
+                registry.peek_source(&path, DetectionMode::Auto, &origins),
+                GroupId::source(&path, DetectionMode::Auto)
+            );
+        }
+        assert!(registry.sources().is_empty());
+        assert!(registry.inner.borrow().issued.is_empty());
+        assert!(registry.inner.borrow().by_index.is_empty());
+        let expected = registry.peek_source(&cached, DetectionMode::Reference, &origins);
+        assert_eq!(expected, GroupId::source(&source, DetectionMode::Reference));
+        assert_eq!(
+            registry.register_source(Some(42), cached.clone(), DetectionMode::Reference, &origins),
+            expected
+        );
+        // The saved identity wins even after the current import mode changes.
+        assert_eq!(
+            registry.peek_source(&cached, DetectionMode::Transmission, &origins),
+            expected
+        );
+        assert_eq!(registry.sources().len(), 1);
+        let saved = GroupRegistry::from_sources(registry.sources());
+        assert_eq!(
+            saved.peek_source(&cached, DetectionMode::Auto, &origins),
+            expected
+        );
+        // Reserved derived identities produce the same variant with and without insertion.
+        let mut derived = DerivedSpectrum {
+            source: Some("/variant.dat".into()),
+            ..Default::default()
+        };
+        registry.assign_group(&mut derived, &origins);
+        let variant = registry.peek_source(
+            std::path::Path::new("/variant.dat"),
+            DetectionMode::Auto,
+            &origins,
+        );
+        assert_ne!(Some(&variant), derived.group_id.as_ref());
+        assert_eq!(
+            registry.register_source(None, "/variant.dat".into(), DetectionMode::Auto, &origins),
+            variant
+        );
+    }
 
     #[test]
     fn group_identity_removed_channel_reserves_id_through_import_and_redo() {

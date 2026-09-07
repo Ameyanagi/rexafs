@@ -1,7 +1,7 @@
 //! Groups panel (Athena's group list, modernized): every catalog file,
 //! scan, and derived spectrum is a *group*. The current group (highlighted)
 //! fills the inspector; marked groups (checkbox) are what overlays and bulk
-//! actions act on. The catalog/scan/filter machinery is unchanged.
+//! actions act on. Source stacks and Results share one virtualized list.
 
 use gpui::{
     ClickEvent, Context, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, px,
@@ -9,21 +9,21 @@ use gpui::{
 };
 
 use super::{MONO, PlotScope, button};
+use crate::app::group_rows::{self, Row};
 use crate::app::{
     DERIVED_BASE, DataTab, NavDown, NavExtendDown, NavExtendUp, NavUp, ScanListRow, StudioApp,
-    catalog_row_index, scan_list_row,
+    scan_list_row,
 };
-use crate::plotting::trace_rgba;
+use crate::plotting::{middle_truncate, trace_rgba};
 
-/// Colour swatch: the trace colour when the group is plotted, a hollow
-/// square otherwise, so the list doubles as the legend.
-fn swatch(t: &crate::theme::Theme, color: Option<gpui::Rgba>) -> impl IntoElement {
-    let mut d = div().w(px(10.)).h(px(10.)).rounded_xs().flex_none();
-    d = match color {
-        Some(c) => d.bg(c),
-        None => d.border_1().border_color(t.border),
-    };
-    d
+/// Stable group colour, also used by its plot trace and legend.
+fn swatch(color: gpui::Rgba) -> impl IntoElement {
+    div()
+        .w(px(10.))
+        .h(px(10.))
+        .rounded_xs()
+        .flex_none()
+        .bg(color)
 }
 
 /// Mark checkbox.
@@ -47,18 +47,27 @@ fn checkbox(t: &crate::theme::Theme, on: bool) -> impl IntoElement {
         )
 }
 
-/// "frozen" marker: bulk operations skip this group (Athena's Alt+F).
-fn frozen_badge(t: &crate::theme::Theme) -> impl IntoElement {
-    div()
-        .flex_none()
-        .px_1()
-        .rounded_sm()
-        .border_1()
-        .border_color(t.border)
-        .font_family(MONO)
-        .text_size(px(9.5))
-        .text_color(t.text_muted)
-        .child("frozen")
+#[derive(Clone)]
+struct RowTooltip {
+    text: String,
+    theme: crate::theme::Theme,
+}
+impl gpui::Render for RowTooltip {
+    fn render(&mut self, _: &mut gpui::Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .max_w(px(500.))
+            .p_2()
+            .bg(self.theme.raised)
+            .text_color(self.theme.text)
+            .text_size(px(12.))
+            .child(self.text.clone())
+    }
+}
+struct SidebarResize;
+impl gpui::Render for SidebarResize {
+    fn render(&mut self, _: &mut gpui::Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
 }
 
 impl StudioApp {
@@ -89,15 +98,80 @@ impl StudioApp {
         cx.notify();
     }
 
-    /// Colour index per plotted group (position in the compare set), so the
-    /// list swatch matches the overlay trace.
-    fn plotted_color_index(&self) -> Vec<(usize, usize)> {
-        let (indices, _) = self.compare_indices();
-        indices
-            .into_iter()
-            .enumerate()
-            .map(|(color, ix)| (ix, color))
-            .collect()
+    pub(crate) fn group_color_index(&self, ix: usize) -> usize {
+        self.peek_group_id(ix)
+            .as_ref()
+            .map(group_rows::color_index)
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn group_rows(&self) -> group_rows::Rows {
+        let mut expanded = self
+            .expanded_sources
+            .iter()
+            .filter_map(|id| self.group_registry.index(id))
+            .collect::<std::collections::BTreeSet<_>>();
+        if let Some((_, _, id)) = &self.standalone_source
+            && self.expanded_sources.contains(id)
+        {
+            expanded.insert(crate::app::NO_ENTRY);
+        }
+        group_rows::build_rows(
+            &self.catalog,
+            &self.derived,
+            &expanded,
+            self.filtered.clone(),
+            &self.filter_text,
+            self.standalone_path(),
+        )
+    }
+
+    pub(crate) fn reveal_group_row(&mut self, ix: usize) {
+        if let Some(path) = ix
+            .checked_sub(DERIVED_BASE)
+            .and_then(|i| self.derived.get(i))
+            .and_then(|d| d.source.as_ref())
+        {
+            let parent = self
+                .standalone_path()
+                .filter(|p| *p == path)
+                .map(|_| crate::app::NO_ENTRY)
+                .or_else(|| self.catalog.find_by_canonical_path(path))
+                .or_else(|| {
+                    self.derived
+                        .iter()
+                        .position(|d| d.source.as_ref() == Some(path))
+                        .map(|i| DERIVED_BASE + i)
+                });
+            if let Some(parent) = parent.filter(|&p| p != ix)
+                && let Some(id) = self.group_id(parent)
+            {
+                self.expanded_sources.insert(id);
+            }
+        }
+        if self.data_tab == DataTab::Scans {
+            if let Some(scan_ix) = self.expanded_scan
+                && let Some(scan) = self.catalog.scans.get(scan_ix)
+                && let Some(offset) = crate::app::scan_entry_offset(scan.start, scan.len, ix)
+            {
+                self.scan_scroll
+                    .scroll_to_item(scan_ix + 1 + offset, gpui::ScrollStrategy::Nearest);
+            }
+            return;
+        }
+        if let Some(row) = self.group_rows().row_index(ix) {
+            self.file_scroll
+                .scroll_to_item(row, gpui::ScrollStrategy::Nearest);
+        }
+    }
+
+    fn finish_groups_resize(&mut self, cx: &mut Context<Self>) {
+        if self.groups_resize.take().is_some() {
+            if let Err(error) = self.structure.settings.save() {
+                self.record_job_error("sidebar width", error);
+            }
+            cx.notify();
+        }
     }
 
     /// Plain click = make current (marks untouched); ⌘-click = toggle mark;
@@ -181,7 +255,8 @@ impl StudioApp {
                     this.clear_selection(cx);
                 },
             ))
-            .w(px(248.))
+            .relative()
+            .w(px(self.structure.settings.groups_panel_width()))
             .h_full()
             .min_h_0()
             .min_w_0()
@@ -205,7 +280,12 @@ impl StudioApp {
                             .font_family(MONO)
                             .text_size(px(11.))
                             .text_color(t.text_muted)
-                            .child(format!("{}", self.catalog.len() + self.derived.len())),
+                            .child(format!(
+                                "{}",
+                                self.catalog.len()
+                                    + self.derived.len()
+                                    + usize::from(self.standalone_path().is_some())
+                            )),
                     )
                     .child(div().flex_1())
                     .child(
@@ -260,48 +340,9 @@ impl StudioApp {
                     .child(self.data_tab_button("tab-files", "Files", DataTab::Files, cx))
                     .child(self.data_tab_button("tab-scans", "Scans", DataTab::Scans, cx)),
             )
-            .child(if self.catalog.is_empty() {
-                let is_active =
-                    self.selected.is_none() || self.selected == Some(crate::app::NO_ENTRY);
-                let color = trace_rgba(&t, 0);
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .flex_col()
-                    .py_1()
-                    .child(
-                        self.group_row(
-                            "single-file".into(),
-                            crate::app::NO_ENTRY,
-                            self.spectrum_label.clone(),
-                            self.spectrum
-                                .as_ref()
-                                .and_then(|s| s.energy.as_ref())
-                                .map(|e| format!("{} pts", e.len()))
-                                .unwrap_or_default(),
-                            is_active,
-                            true,
-                            Some(color),
-                            false,
-                            cx,
-                        ),
-                    )
-                    .child(self.derived_list(cx))
-                    .into_any_element()
-            } else {
-                let list = match self.data_tab {
-                    DataTab::Files => self.file_list(cx).into_any_element(),
-                    DataTab::Scans => self.scan_list(cx).into_any_element(),
-                };
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .flex_col()
-                    .child(self.derived_list(cx))
-                    .child(list)
-                    .into_any_element()
+            .child(match self.data_tab {
+                DataTab::Files => self.file_list(cx).into_any_element(),
+                DataTab::Scans => self.scan_list(cx).into_any_element(),
             })
             .child(
                 div()
@@ -421,102 +462,243 @@ impl StudioApp {
                     .border_color(t.border)
                     .child(format!("{footer} · {marked} marked")),
             )
+            .child(
+                div()
+                    .id("groups-width-handle")
+                    .absolute()
+                    .right_0()
+                    .top_0()
+                    .bottom_0()
+                    .w(px(5.))
+                    .cursor(gpui::CursorStyle::ResizeLeftRight)
+                    .hover(|d| d.bg(t.accent))
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, ev: &gpui::MouseDownEvent, _, cx| {
+                            this.groups_resize =
+                                Some((ev.position.x, this.structure.settings.groups_panel_width()));
+                            cx.stop_propagation();
+                        }),
+                    )
+                    .on_drag(SidebarResize, |_, _, _, cx| cx.new(|_| SidebarResize))
+                    .on_drag_move::<SidebarResize>(cx.listener(
+                        |this, ev: &gpui::DragMoveEvent<SidebarResize>, _, cx| {
+                            if let Some((start, width)) = this.groups_resize {
+                                this.structure.settings.groups_panel_width =
+                                    Some(crate::settings::clamp_groups_panel_width(
+                                        width + f32::from(ev.event.position.x - start),
+                                    ));
+                                cx.notify();
+                            }
+                        },
+                    ))
+                    .on_mouse_up(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, _, _, cx| this.finish_groups_resize(cx)),
+                    )
+                    .on_mouse_up_out(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, _, _, cx| this.finish_groups_resize(cx)),
+                    ),
+            )
     }
 
-    /// Derived (merged / tool output) groups, indented under their sources.
-    fn derived_list(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    /// One virtualized scroll surface for every source, channel and result.
+    pub(crate) fn file_list(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let entity = cx.entity();
-        uniform_list(
-            "additional-groups",
-            self.derived.len(),
-            move |range, _, app| entity.update(app, |this, cx| this.derived_rows(range, cx)),
-        )
-        .track_scroll(&self.derived_scroll)
-        .w_full()
-        .min_w_0()
-        .h(px(self.derived.len().min(6) as f32 * 27.))
-        .flex_none()
-    }
-
-    fn derived_rows(
-        &self,
-        range: std::ops::Range<usize>,
-        cx: &mut Context<Self>,
-    ) -> Vec<gpui::AnyElement> {
-        let t = self.theme;
-        let colors = self.plotted_color_index();
-        range
-            .filter_map(|i| self.derived.get(i).map(|d| (i, d)))
-            .map(|(i, d)| {
-                let ix = DERIVED_BASE + i;
-                let is_active = self.selected == Some(ix);
-                let marked = self.selection.contains(&ix);
-                let color = colors
-                    .iter()
-                    .find(|(k, _)| *k == ix)
-                    .map(|(_, c)| trace_rgba(&t, *c));
-                let label: SharedString = format!("↳ {}", self.entry_label(ix)).into();
-                let meta = if d.source.is_some() {
-                    String::new()
-                } else {
-                    format!("{} pts", d.energy.len())
-                };
-                self.group_row(
-                    ("derived", i).into(),
-                    ix,
-                    label,
-                    meta,
-                    is_active,
-                    marked,
-                    color,
-                    true,
-                    cx,
-                )
-                .into_any_element()
+        let rows = self.group_rows();
+        uniform_list("catalog-groups", rows.row_count(), move |range, _, app| {
+            entity.update(app, |this, cx| {
+                range
+                    .filter_map(|i| rows.row_at(i))
+                    .map(|row| {
+                        if let Row::Header(_) = row {
+                            div()
+                                .h(px(27.))
+                                .px_3()
+                                .flex()
+                                .items_center()
+                                .text_color(this.theme.text_muted)
+                                .child("Results")
+                                .into_any_element()
+                        } else {
+                            this.group_row(row, cx).into_any_element()
+                        }
+                    })
+                    .collect()
             })
-            .collect()
+        })
+        .track_scroll(&self.file_scroll)
+        .flex_1()
+        .min_h_0()
     }
 
-    /// One group row: [mark] [swatch] name … meta [✕ for derived].
-    #[allow(clippy::too_many_arguments)]
-    fn group_row(
-        &self,
-        id: gpui::ElementId,
-        ix: usize,
-        label: SharedString,
-        meta: String,
-        is_active: bool,
-        marked: bool,
-        color: Option<gpui::Rgba>,
-        removable: bool,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement + use<> {
+    fn group_row(&self, row: Row, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
+        let ix = row.group().unwrap_or(crate::app::NO_ENTRY);
         let real = ix != crate::app::NO_ENTRY;
+        let active = self.selected == Some(ix) || (!real && self.selected.is_none());
+        let child = matches!(row, Row::Child { .. });
+        let (expanded, extra) = match row {
+            Row::Primary {
+                expanded,
+                extra_channels,
+                ..
+            } => (expanded, extra_channels),
+            _ => (false, 0),
+        };
+        let derived = ix
+            .checked_sub(DERIVED_BASE)
+            .and_then(|i| self.derived.get(i));
+        let path = derived
+            .and_then(|d| d.source.clone())
+            .or_else(|| (ix < self.catalog.len()).then(|| self.catalog.path(ix)))
+            .or_else(|| {
+                (!real)
+                    .then(|| self.standalone_path().map(ToOwned::to_owned))
+                    .flatten()
+            });
+        let mut mode = self.effective_params(ix).import.mode;
+        if mode == crate::params::DetectionMode::Auto
+            && active
+            && let Some(preview) = &self.import_preview
+        {
+            mode = preview.resolved.mode;
+        }
+        let tag = group_rows::kind(
+            mode,
+            if matches!(row, Row::Result { .. }) {
+                derived
+            } else {
+                None
+            },
+        );
+        let full_label = if real {
+            self.entry_label(ix)
+        } else {
+            self.standalone_source
+                .as_ref()
+                .map(|(_, label, _)| label.to_string())
+                .unwrap_or_else(|| self.spectrum_label.to_string())
+        };
+        let label = if child {
+            mode.label().to_string()
+        } else {
+            derived
+                .map(|d| d.display_label())
+                .unwrap_or_else(|| full_label.clone())
+        };
+        let path_label = path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        let id = self.peek_group_id(ix);
+        let problems = id
+            .as_ref()
+            .map(|id| {
+                self.group_diagnostics
+                    .get(id, self.effective_fingerprint(ix))
+            })
+            .unwrap_or_default();
+        let error = problems
+            .iter()
+            .any(|p| p.severity == crate::app::ProblemSeverity::Error);
+        let locked = self.frozen.contains(&ix);
+        let mut detail = format!("{full_label}\n{path_label}\n{}", mode.label());
+        for problem in problems {
+            detail.push_str(&format!("\n{}", problem.message));
+        }
+        if locked {
+            detail.push_str("\nProcessing locked");
+        }
+        if let Some(op) = derived.and_then(|d| d.operation.as_ref()) {
+            detail.push_str(&format!("\n{} inputs", op.inputs.len()));
+        }
+        let tip = RowTooltip {
+            text: detail,
+            theme: t,
+        };
+        let tag = if child { "" } else { tag };
+        let marked_children = if extra > 0 && !expanded {
+            self.derived
+                .iter()
+                .enumerate()
+                .filter(|(i, d)| {
+                    DERIVED_BASE + i != ix
+                        && d.source.is_some()
+                        && d.source == path
+                        && self.selection.contains(&(DERIVED_BASE + i))
+                })
+                .count()
+        } else {
+            0
+        };
+        let suffix = if marked_children > 0 {
+            format!("+{extra} · {marked_children}✓")
+        } else if extra > 0 && !expanded {
+            format!("+{extra}")
+        } else {
+            String::new()
+        };
+        // Monospace labels let us budget for the fixed slots and ASCII tags and
+        // middle-truncate names while retaining their identifying suffix.
+        let reserved = 100.
+            + if child { 12. } else { 0. }
+            + (tag.chars().count() + suffix.chars().count()) as f32 * 6.5
+            + if problems.is_empty() { 0. } else { 16. }
+            + if locked { 16. } else { 0. };
+        let label = middle_truncate(
+            &label,
+            ((self.structure.settings.groups_panel_width() - reserved) / 7.2).max(2.) as usize,
+        );
         div()
-            .id(id)
+            .id(("group", ix))
             .h(px(27.))
             .w_full()
             .min_w_0()
             .px_1p5()
+            .when(child, |d| d.pl(px(18.)))
             .flex()
             .items_center()
-            .gap_2()
+            .gap_1()
             .rounded_md()
             .cursor_pointer()
-            .when(is_active, |d| {
+            .when(active, |d| {
                 d.bg(gpui::Rgba {
                     a: 0.16,
                     ..t.accent
                 })
             })
-            .when(!is_active, |d| d.hover(|d| d.bg(t.raised)))
+            .when(!active, |d| d.hover(|d| d.bg(t.raised)))
+            .tooltip(move |_, cx| cx.new(|_| tip.clone()).into())
             .on_click(cx.listener(move |this, ev: &ClickEvent, window, cx| {
                 window.focus(&this.data_focus, cx);
-                if real {
-                    this.click_group(ix, ev.modifiers(), cx);
-                }
+                this.click_group(ix, ev.modifiers(), cx);
             }))
+            .child(
+                div()
+                    .id("disclosure")
+                    .w(px(12.))
+                    .flex_none()
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        cx.stop_propagation();
+                        if extra > 0
+                            && let Some(id) = this.group_id(ix)
+                        {
+                            if !this.expanded_sources.remove(&id) {
+                                this.expanded_sources.insert(id);
+                            }
+                            cx.notify();
+                        }
+                    }))
+                    .child(if extra == 0 {
+                        ""
+                    } else if expanded {
+                        "▾"
+                    } else {
+                        "▸"
+                    }),
+            )
             .child(
                 div()
                     .id("mark")
@@ -528,135 +710,59 @@ impl StudioApp {
                             this.toggle_mark(ix, cx);
                         }
                     }))
-                    .child(checkbox(&t, marked)),
+                    .child(checkbox(&t, self.selection.contains(&ix))),
             )
-            .child(swatch(&t, color))
+            .child(swatch(trace_rgba(&t, self.group_color_index(ix))))
             .child(
                 div()
                     .flex_1()
                     .min_w_0()
                     .overflow_hidden()
                     .whitespace_nowrap()
-                    .text_ellipsis()
-                    .when(is_active, |d| d.font_weight(gpui::FontWeight::MEDIUM))
+                    .font_family(MONO)
+                    .text_size(px(12.))
                     .child(label),
             )
-            .children(self.frozen.contains(&ix).then(|| frozen_badge(&t)))
             .child(
                 div()
                     .flex_none()
-                    .font_family(MONO)
                     .text_size(px(10.5))
                     .text_color(t.text_muted)
-                    .child(meta),
+                    .child(suffix),
             )
-            .when(removable, |row| {
-                row.child(
+            .child(
+                div()
+                    .flex_none()
+                    .text_size(px(10.5))
+                    .text_color(t.text_muted)
+                    .child(tag),
+            )
+            .when(!problems.is_empty(), |d| {
+                d.child(
                     div()
-                        .id("remove")
-                        .px_1()
-                        .text_size(px(11.))
-                        .text_color(t.text_muted)
-                        .cursor_pointer()
-                        .hover(|d| d.text_color(t.error))
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                            cx.stop_propagation();
-                            this.remove_derived(ix - DERIVED_BASE, cx);
-                        }))
-                        .child("✕"),
+                        .flex_none()
+                        .text_color(if error { t.error } else { t.warn })
+                        .child(if error { "!" } else { "⚠" }),
                 )
             })
-    }
-
-    pub(crate) fn file_list(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let t = self.theme;
-        let entity = cx.entity();
-        let active = self.selected;
-        let selection = self.selection.clone();
-        let filtered = self.filtered.clone();
-        let frozen = self.frozen.clone();
-        let colors = self.plotted_color_index();
-        let count = filtered
-            .as_ref()
-            .map(|f| f.len())
-            .unwrap_or(self.catalog.len());
-        uniform_list("catalog-files", count, move |range, _window, app| {
-            let mut rows = Vec::with_capacity(range.len());
-            for row in range {
-                let (ix, name) = {
-                    let state = entity.read(app);
-                    let Some(ix) = catalog_row_index(
-                        filtered.as_deref().map(Vec::as_slice),
-                        row,
-                        state.catalog.len(),
-                    ) else {
-                        continue;
-                    };
-                    let name: SharedString = state.catalog.name(ix).to_string().into();
-                    (ix, name)
-                };
-                let is_active = active == Some(ix);
-                let marked = selection.contains(&ix);
-                let is_frozen = frozen.contains(&ix);
-                let color = colors
-                    .iter()
-                    .find(|(k, _)| *k == ix)
-                    .map(|(_, c)| trace_rgba(&t, *c));
-                let row_entity = entity.clone();
-                let mark_entity = entity.clone();
-                rows.push(
-                    div()
-                        .id(ix)
-                        .h(px(27.))
-                        .mx_1p5()
-                        .px_1p5()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .rounded_md()
-                        .cursor_pointer()
-                        .when(is_active, |d| {
-                            d.bg(gpui::Rgba {
-                                a: 0.16,
-                                ..t.accent
-                            })
-                        })
-                        .when(!is_active, |d| d.hover(|d| d.bg(t.raised)))
-                        .on_click(move |ev: &ClickEvent, window, app| {
-                            let modifiers = ev.modifiers();
-                            let focus = row_entity.read(app).data_focus.clone();
-                            window.focus(&focus, app);
-                            row_entity.update(app, |this, cx| this.click_group(ix, modifiers, cx));
-                        })
-                        .child(
-                            div()
-                                .id("mark")
-                                .flex_none()
-                                .on_click(move |_: &ClickEvent, _window, app| {
-                                    app.stop_propagation();
-                                    mark_entity.update(app, |this, cx| this.toggle_mark(ix, cx));
-                                })
-                                .child(checkbox(&t, marked)),
-                        )
-                        .child(swatch(&t, color))
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .text_ellipsis()
-                                .when(is_active, |d| d.font_weight(gpui::FontWeight::MEDIUM))
-                                .child(name),
-                        )
-                        .children(is_frozen.then(|| frozen_badge(&t))),
-                );
-            }
-            rows
-        })
-        .track_scroll(&self.file_scroll)
-        .flex_1()
-        .min_h_0()
+            .when(locked, |d| {
+                d.child(div().flex_none().text_size(px(11.)).child("🔒"))
+            })
+            .child(
+                div()
+                    .id("remove")
+                    .w(px(12.))
+                    .flex_none()
+                    .text_color(t.text_muted)
+                    .when(derived.is_some(), |d| {
+                        d.hover(|d| d.text_color(t.error))
+                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                cx.stop_propagation();
+                                this.remove_derived(ix - DERIVED_BASE, cx);
+                            }))
+                            .child("✕")
+                    }),
+            )
     }
 
     pub(crate) fn scan_list(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -685,7 +791,7 @@ impl StudioApp {
                             let scan = &entity.read(app).catalog.scans[scan_ix];
                             (
                                 scan.label.clone().into(),
-                                format!("{} frames", scan.len).into(),
+                                format!("folder run · {} files", scan.len).into(),
                             )
                         };
                         let is_active = active == Some(scan_ix);
@@ -768,7 +874,7 @@ impl StudioApp {
                                                 this.open_scan(scan_ix, cx)
                                             });
                                         })
-                                        .child("series"),
+                                        .child("open"),
                                 ),
                         );
                     }
@@ -856,5 +962,39 @@ impl StudioApp {
                 cx.notify();
             }))
             .child(label)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::group_identity::{GroupId, GroupRegistry};
+    use crate::params::DetectionMode;
+    use std::{collections::BTreeMap, path::PathBuf};
+
+    #[test]
+    fn standalone_swatch_matches_the_plotted_durable_identity() {
+        let registry = GroupRegistry::default();
+        let origins = BTreeMap::new();
+        let path = (0..100)
+            .map(|i| PathBuf::from(format!("/standalone/{i}.dat")))
+            .find(|path| group_rows::color_index(&GroupId::source(path, DetectionMode::Auto)) != 0)
+            .expect("fixture must exercise a nonzero swatch");
+        let plot_id = registry.register_source(None, path.clone(), DetectionMode::Auto, &origins);
+        assert!(
+            registry.id(crate::app::NO_ENTRY).is_none(),
+            "standalone has no catalog adapter index"
+        );
+        let row_id = registry.peek_source(&path, DetectionMode::Auto, &origins);
+        assert_eq!(
+            group_rows::color_index(&row_id),
+            group_rows::color_index(&plot_id)
+        );
+        assert_ne!(group_rows::color_index(&row_id), 0);
+        // Editing the mode must keep the original durable colour.
+        assert_eq!(
+            registry.peek_source(&path, DetectionMode::Reference, &origins),
+            plot_id
+        );
     }
 }

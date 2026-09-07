@@ -22,6 +22,7 @@ fn vecs(v: &nalgebra::DVector<f64>) -> Vec<f64> {
 
 /// One spectrum in a comparison overlay.
 pub struct QuadTrace {
+    pub color_index: usize,
     pub label: String,
     pub sp: std::sync::Arc<XASSpectrum>,
     pub active: bool,
@@ -410,7 +411,7 @@ fn build_multi(
             x,
             y,
             width: if trace.active && n > 1 { 2.2 } else { 1.4 },
-            color: trace_color(theme, i),
+            color: trace_color(theme, trace.color_index),
             dashed: false,
             label: with_legend.then(|| middle_truncate(&trace.label, 24)),
         })
@@ -546,6 +547,7 @@ pub fn build_quadrant_specs(
                 label: ft_trace_label(trace),
                 sp: trace.sp.clone(),
                 active: trace.active,
+                color_index: trace.color_index,
             })
             .collect()
     } else {
@@ -1235,6 +1237,7 @@ mod tests {
                     label: format!("same spectrum {i}"),
                     sp: sp.clone(),
                     active: i == active,
+                    color_index: i + 4,
                 })
                 .collect();
             let specs =
@@ -1254,11 +1257,13 @@ mod tests {
                     .map(|(k, chi)| chi * k.powf(weight))
                     .collect();
                 assert_eq!(plotted.y, expected);
+                assert_eq!(plotted.color, trace_color(&Theme::dark(), index + 4));
                 let fourier = specs[3]
                     .series
                     .iter()
                     .find(|s| s.key == SeriesKey::Trace(index))
                     .unwrap();
+                assert_eq!(fourier.color, trace_color(&Theme::dark(), index + 4));
                 assert_eq!(
                     fourier.y,
                     original_r[index].iter().copied().collect::<Vec<_>>()

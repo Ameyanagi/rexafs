@@ -632,6 +632,7 @@ mod tests {
             assert!(spectrum.norm().is_none() && spectrum.flat().is_none());
             let specs = quantity_quadrant_specs(
                 &[QuadTrace {
+                    color_index: 0,
                     label: group.display_label(),
                     sp: spectrum,
                     active: true,

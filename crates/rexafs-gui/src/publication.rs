@@ -194,6 +194,7 @@ pub(crate) fn spectrum_plots(
         ..Default::default()
     };
     let traces = [plotting::QuadTrace {
+        color_index: 0,
         label: label.into(),
         sp,
         active: true,

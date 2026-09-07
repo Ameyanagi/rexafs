@@ -56,6 +56,7 @@ use crate::theme::Theme;
 use crate::widgets::numeric_field::{FieldEvent, FieldKind, NumericField};
 use crate::widgets::text_input::{InputEvent, TextInput};
 
+mod group_rows;
 mod importing;
 mod merge;
 mod shell;
@@ -1080,6 +1081,7 @@ pub struct StudioApp {
     spectrum_fingerprint: u64,
     /// Identity of the data retained in `spectrum`, independent of selection.
     spectrum_group: Option<shell::tools::ToolTarget>,
+    standalone_source: Option<(PathBuf, SharedString, crate::group_identity::GroupId)>,
     /// Scientific quantity captured with the loaded data, including stale plots.
     spectrum_quantity: crate::params::Quantity,
     spectrum: Option<Arc<XASSpectrum>>,
@@ -1102,7 +1104,8 @@ pub struct StudioApp {
     maximized: Option<usize>,
     data_tab: DataTab,
     file_scroll: UniformListScrollHandle,
-    derived_scroll: UniformListScrollHandle,
+    expanded_sources: BTreeSet<crate::group_identity::GroupId>,
+    groups_resize: Option<(gpui::Pixels, f32)>,
     scan_scroll: UniformListScrollHandle,
     /// At most one scan is expanded, keeping row-to-member mapping O(1)
     /// even when that scan has a million members.
@@ -1181,6 +1184,7 @@ pub struct StudioApp {
     merge_cancel: Option<Arc<AtomicBool>>,
     status: SharedString,
     job_errors: Vec<JobError>,
+    group_diagnostics: group_rows::Diagnostics,
     problems_open: bool,
     /// Measured plot-container sizes (logical px) keyed by plot id, so a
     /// figure is built with the aspect of the card it fills.
@@ -2351,6 +2355,7 @@ impl StudioApp {
             spectrum_path: path.clone(),
             spectrum_fingerprint: 0,
             spectrum_group: None,
+            standalone_source: None,
             spectrum_quantity: crate::params::Quantity::RawMu,
             spectrum: None,
             spectrum_label: label.clone(),
@@ -2363,7 +2368,8 @@ impl StudioApp {
             maximized: None,
             data_tab: DataTab::Files,
             file_scroll: UniformListScrollHandle::new(),
-            derived_scroll: UniformListScrollHandle::new(),
+            expanded_sources: BTreeSet::new(),
+            groups_resize: None,
             scan_scroll: UniformListScrollHandle::new(),
             expanded_scan: None,
             active_scan: None,
@@ -2429,6 +2435,7 @@ impl StudioApp {
             merge_cancel: None,
             status: "loading...".into(),
             job_errors: Vec::new(),
+            group_diagnostics: Default::default(),
             problems_open: false,
             card_px: BTreeMap::new(),
             viewport_w: 1440.0,
@@ -2851,8 +2858,33 @@ impl StudioApp {
             .is_some_and(|batch| batch.model_fingerprint != self.fit_model_fingerprint())
     }
 
+    fn standalone_path(&self) -> Option<&std::path::Path> {
+        self.standalone_source
+            .as_ref()
+            .filter(|_| self.catalog.is_empty())
+            .map(|(path, _, _)| path.as_path())
+    }
+
+    fn peek_group_id(&self, ix: usize) -> Option<crate::group_identity::GroupId> {
+        if ix == NO_ENTRY {
+            return self.standalone_source.as_ref().map(|(_, _, id)| id.clone());
+        }
+        self.group_registry.id(ix).or_else(|| {
+            (ix < self.catalog.len()).then(|| {
+                self.group_registry.peek_source(
+                    &self.catalog.path(ix),
+                    self.effective_params(ix).import.mode,
+                    &self.project_source_origins,
+                )
+            })
+        })
+    }
+
     /// Materialize a durable source identity only when a caller references it.
     fn group_id(&self, ix: usize) -> Option<crate::group_identity::GroupId> {
+        if ix == NO_ENTRY {
+            return self.peek_group_id(ix);
+        }
         self.group_registry.id(ix).or_else(|| {
             (ix < self.catalog.len()).then(|| {
                 self.group_registry.register_source(
@@ -3050,6 +3082,8 @@ impl StudioApp {
         self.spectrum_fingerprint = 0;
         self.spectrum_group = None;
         self.spectrum = None;
+        self.standalone_source = None;
+        self.group_diagnostics = Default::default();
         self.spectrum_label = "no spectrum".into();
         self.import_preview = None;
         self.import_preview_error = "".into();
@@ -3059,7 +3093,7 @@ impl StudioApp {
         self.quad_bindings.clear();
         self.maximized = None;
         self.file_scroll = UniformListScrollHandle::new();
-        self.derived_scroll = UniformListScrollHandle::new();
+        self.expanded_sources.clear();
         self.scan_scroll = UniformListScrollHandle::new();
         self.expanded_scan = None;
         self.active_scan = None;
@@ -3859,13 +3893,17 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) {
         if ix == NO_ENTRY {
-            self.standalone_group_id(&path);
+            let id = self.standalone_group_id(&path);
+            self.standalone_source = Some((path.clone(), label.clone(), id));
         } else {
             self.group_id(ix);
         }
         self.generation += 1;
         let generation = self.generation;
         let key = (ix, self.effective_fingerprint(ix));
+        let diagnostics = self
+            .group_id(ix)
+            .map(|id| self.group_diagnostics.begin(id, key.1));
         self.recompute_last = Some(Instant::now());
         self.recompute_dirty = false;
 
@@ -3875,6 +3913,20 @@ impl StudioApp {
         {
             self.load_running = false;
             let sp = sp.clone();
+            let warnings = self
+                .raw_cache
+                .peek(&(ix, self.effective_params(ix).raw_fingerprint()))
+                .map(|raw| {
+                    raw.diagnostics
+                        .warnings()
+                        .into_iter()
+                        .map(|message| JobError::warning(&path, message))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if let Some(ticket) = &diagnostics {
+                self.group_diagnostics.finish(ticket, warnings);
+            }
             self.set_processed(ix, label, path, key.1, sp, cx);
             cx.notify();
             return;
@@ -3895,6 +3947,19 @@ impl StudioApp {
                 app.load_running = false;
                 match result {
                     Ok((sp, raw)) => {
+                        if let Some(ticket) = &diagnostics {
+                            let warnings = raw
+                                .as_ref()
+                                .map(|raw| {
+                                    raw.diagnostics
+                                        .warnings()
+                                        .into_iter()
+                                        .map(|message| JobError::warning(&processed_path, message))
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+                            app.group_diagnostics.finish(ticket, warnings);
+                        }
                         if let Some(raw) = raw {
                             app.record_source_warnings(&processed_path, &raw.diagnostics);
                             if ix != NO_ENTRY {
@@ -3915,6 +3980,16 @@ impl StudioApp {
                     Err(e) => {
                         app.status = format!("failed to process {label}: {e}").into();
                         app.record_job_error(label.to_string(), e.to_string());
+                        if let Some(ticket) = &diagnostics {
+                            app.group_diagnostics.finish(
+                                ticket,
+                                vec![JobError {
+                                    severity: ProblemSeverity::Error,
+                                    label: label.to_string(),
+                                    message: e.to_string(),
+                                }],
+                            );
+                        }
                         // Retain the plot and its identity. Tool readiness rejects
                         // this failed selection even if the old data is present.
                         app.stale_plots = Some(StalePlots {
@@ -3975,6 +4050,10 @@ impl StudioApp {
         sp: Arc<XASSpectrum>,
         cx: &mut Context<Self>,
     ) {
+        if ix == NO_ENTRY {
+            let id = self.standalone_group_id(&path);
+            self.standalone_source = Some((path.clone(), label.clone(), id));
+        }
         self.status = spectrum_status(&label, &sp);
         if ix >= DERIVED_BASE
             && let Some(reason) = self
@@ -4090,6 +4169,18 @@ impl StudioApp {
         )
         .into();
 
+        let mut diagnostics: BTreeMap<_, _> = frames
+            .iter()
+            .filter_map(|(ix, _, _)| {
+                self.peek_group_id(*ix).map(|id| {
+                    (
+                        *ix,
+                        self.group_diagnostics
+                            .begin(id, self.effective_fingerprint(*ix)),
+                    )
+                })
+            })
+            .collect();
         let job_grid = grid.clone();
         let job_cancel = cancel.clone();
         let job = cx.background_executor().spawn(async move {
@@ -4103,7 +4194,7 @@ impl StudioApp {
                     let result = process_file(path, params)
                         .map_err(|error| error.to_string())
                         .and_then(|sp| frame_sample(&sp, &job_grid));
-                    Some((label.clone(), result))
+                    Some((*ix, label.clone(), result))
                 })
                 .collect::<Vec<_>>()
         });
@@ -4123,7 +4214,21 @@ impl StudioApp {
                 let samples: Vec<Result<FrameSample, String>> = rows
                     .into_iter()
                     .flatten()
-                    .map(|(label, result)| {
+                    .map(|(ix, label, result)| {
+                        if let Some(ticket) = diagnostics.remove(&ix) {
+                            let problems = result
+                                .as_ref()
+                                .err()
+                                .map(|error| {
+                                    vec![JobError {
+                                        severity: ProblemSeverity::Error,
+                                        label: label.clone(),
+                                        message: error.to_string(),
+                                    }]
+                                })
+                                .unwrap_or_default();
+                            app.group_diagnostics.finish(&ticket, problems);
+                        }
                         result.inspect_err(|error| {
                             app.record_job_error(label, error.clone());
                         })
@@ -4567,10 +4672,7 @@ impl StudioApp {
     fn reveal_time_selection(&mut self, scan_ix: usize, offset: usize, ix: usize) {
         match self.data_tab {
             DataTab::Files => {
-                let visible_row = match &self.filtered {
-                    Some(filtered) => filtered.binary_search(&ix).ok(),
-                    None => Some(ix),
-                };
+                let visible_row = self.group_rows().row_index(ix);
                 if let Some(row) = visible_row {
                     self.file_scroll
                         .scroll_to_item(row, ScrollStrategy::Nearest);
@@ -4663,6 +4765,13 @@ impl StudioApp {
         self.compare_running = true;
         self.status = format!("processing {} spectra for overlay ...", missing.len()).into();
         cx.notify();
+        let mut diagnostics: BTreeMap<_, _> = missing
+            .iter()
+            .filter_map(|load| {
+                self.group_id(load.ix)
+                    .map(|id| (load.ix, self.group_diagnostics.begin(id, load.fingerprint)))
+            })
+            .collect();
         let job = cx.background_executor().spawn(async move {
             missing
                 .par_iter()
@@ -4678,6 +4787,20 @@ impl StudioApp {
                 app.compare_running = false;
                 let mut failed = 0usize;
                 for (ix, fingerprint, result) in results {
+                    if let Some(ticket) = diagnostics.remove(&ix) {
+                        let problems = result
+                            .as_ref()
+                            .err()
+                            .map(|error| {
+                                vec![JobError {
+                                    severity: ProblemSeverity::Error,
+                                    label: app.entry_label(ix),
+                                    message: error.to_string(),
+                                }]
+                            })
+                            .unwrap_or_default();
+                        app.group_diagnostics.finish(&ticket, problems);
+                    }
                     match result {
                         Ok(sp) => {
                             app.cache.put((ix, fingerprint), Arc::new(sp));
@@ -4727,8 +4850,10 @@ impl StudioApp {
             }
             let label = self.entry_label(ix);
             let fingerprint = self.effective_fingerprint(ix);
+            let color_index = self.group_color_index(ix);
             if let Some(sp) = self.cache.get(&(ix, fingerprint)) {
                 traces.push(QuadTrace {
+                    color_index,
                     label,
                     sp: sp.clone(),
                     active: Some(ix) == self.selected,
@@ -4742,6 +4867,12 @@ impl StudioApp {
                 return;
             };
             traces.push(QuadTrace {
+                color_index: self
+                    .spectrum_group
+                    .as_ref()
+                    .and_then(|t| t.group_id.as_ref())
+                    .map(group_rows::color_index)
+                    .unwrap_or(0),
                 label: self.spectrum_label.to_string(),
                 sp: sp.clone(),
                 active: true,
@@ -4751,6 +4882,11 @@ impl StudioApp {
             && traces.iter().any(|t| t.active)
         {
             traces.retain(|t| t.active);
+        }
+        let colors =
+            group_rows::overlay_colors(&traces.iter().map(|t| t.color_index).collect::<Vec<_>>());
+        for (trace, color) in traces.iter_mut().zip(colors) {
+            trace.color_index = color;
         }
         if total > MAX_OVERLAY && self.stage_view.scope == shell::PlotScope::Marked {
             self.status = format!(
@@ -4773,8 +4909,7 @@ impl StudioApp {
         self.legend_entries = if traces.len() > 1 {
             traces
                 .iter()
-                .enumerate()
-                .map(|(i, trace)| {
+                .map(|trace| {
                     (
                         SharedString::from(middle_truncate(
                             &if self.mixed_overlay_weight.is_some() {
@@ -4784,7 +4919,7 @@ impl StudioApp {
                             },
                             36,
                         )),
-                        trace_rgba(&self.theme, i),
+                        trace_rgba(&self.theme, trace.color_index),
                     )
                 })
                 .collect()
@@ -5254,28 +5389,27 @@ impl StudioApp {
     /// Modifier-aware list click: plain = activate (clears compare set),
     /// shift = extend range from the active row, cmd = toggle membership.
     fn click_entry(&mut self, ix: usize, modifiers: gpui::Modifiers, cx: &mut Context<Self>) {
-        if modifiers.shift
-            && let Some(anchor) = self.selected
-            && anchor < DERIVED_BASE
-            && ix < DERIVED_BASE
-        {
-            match &self.filtered {
-                None => {
-                    let (lo, hi) = (anchor.min(ix), anchor.max(ix));
-                    self.selection.extend(lo..=hi);
-                }
-                Some(filtered) => {
-                    // range over the *visible* rows
-                    if let (Ok(a), Ok(b)) =
-                        (filtered.binary_search(&anchor), filtered.binary_search(&ix))
-                    {
-                        let (lo, hi) = (a.min(b), a.max(b));
-                        self.selection.extend(filtered[lo..=hi].iter().copied());
-                    } else {
-                        self.selection.insert(ix);
-                    }
-                }
-            }
+        if modifiers.shift {
+            let range = if self.data_tab == DataTab::Scans {
+                self.expanded_scan
+                    .and_then(|i| self.catalog.scans.get(i))
+                    .map(|scan| {
+                        let anchor = self
+                            .selected
+                            .filter(|&a| scan_entry_offset(scan.start, scan.len, a).is_some())
+                            .unwrap_or(ix);
+                        (anchor.min(ix)..=anchor.max(ix)).collect()
+                    })
+                    .unwrap_or_default()
+            } else {
+                self.group_rows().range(
+                    self.selected
+                        .or_else(|| self.standalone_path().map(|_| NO_ENTRY)),
+                    ix,
+                )
+            };
+            self.selection
+                .extend(range.into_iter().filter(|&g| g != NO_ENTRY));
             self.ensure_compare_loaded(cx);
         } else if modifiers.platform {
             if !self.selection.remove(&ix) {
@@ -5294,17 +5428,23 @@ impl StudioApp {
 
     /// Neighbor of the active row within the visible (filtered) list.
     fn visible_neighbor(&self, delta: isize) -> Option<usize> {
-        let active = self.selected?;
-        match &self.filtered {
-            None => {
-                let next = active as isize + delta;
-                (next >= 0 && (next as usize) < self.catalog.len()).then_some(next as usize)
-            }
-            Some(filtered) => {
-                let pos = filtered.binary_search(&active).ok()? as isize + delta;
-                (pos >= 0).then(|| filtered.get(pos as usize).copied())?
-            }
+        if self.data_tab == DataTab::Scans {
+            let scan = self.expanded_scan.and_then(|i| self.catalog.scans.get(i))?;
+            let active = self
+                .selected
+                .filter(|&ix| scan_entry_offset(scan.start, scan.len, ix).is_some());
+            return match active {
+                Some(ix) => ix
+                    .checked_add_signed(delta)
+                    .filter(|&ix| scan_entry_offset(scan.start, scan.len, ix).is_some()),
+                None => (scan.len > 0).then_some(scan.start),
+            };
         }
+        self.group_rows().neighbor(
+            self.selected
+                .or_else(|| self.standalone_path().map(|_| NO_ENTRY)),
+            delta,
+        )
     }
 
     fn nav_move(&mut self, delta: isize, extend: bool, cx: &mut Context<Self>) {
@@ -5315,9 +5455,9 @@ impl StudioApp {
             if let Some(active) = self.selected {
                 self.selection.insert(active);
             }
-            self.selection.insert(next);
-        } else {
-            self.selection.clear();
+            if next != NO_ENTRY {
+                self.selection.insert(next);
+            }
         }
         self.select_entry(next, cx);
         if extend {
@@ -5458,13 +5598,22 @@ impl StudioApp {
     fn select_entry(&mut self, ix: usize, cx: &mut Context<Self>) {
         self.pending_project_spectrum = None;
         self.pending_derived = None;
+        if ix == NO_ENTRY {
+            if let Some((path, label, _)) = self.standalone_source.clone() {
+                self.selected = None;
+                self.current_path = path.clone();
+                self.reveal_group_row(ix);
+                self.sync_param_fields(cx);
+                self.load_spectrum(ix, path, label, cx);
+            }
+            return;
+        }
         if ix >= DERIVED_BASE {
             if ix - DERIVED_BASE >= self.derived.len() {
                 return;
             }
             self.selected = Some(ix);
-            self.derived_scroll
-                .scroll_to_item(ix - DERIVED_BASE, ScrollStrategy::Nearest);
+            self.reveal_group_row(ix);
             let label: SharedString = self.entry_label(ix).into();
             self.current_path = self.derived[ix - DERIVED_BASE]
                 .source
@@ -5478,6 +5627,7 @@ impl StudioApp {
         if ix >= self.catalog.len() {
             return;
         }
+        self.reveal_group_row(ix);
         self.selected = Some(ix);
         self.sync_operando_cursor_to_entry(ix, cx);
         let label: SharedString = self.catalog.name(ix).to_string().into();
@@ -5522,6 +5672,18 @@ impl StudioApp {
                     if let Some(preview) = &app.import_preview {
                         let diagnostics = preview.diagnostics.clone();
                         app.record_source_warnings(&path, &diagnostics);
+                        if let Some(id) = app.peek_group_id(app.selected.unwrap_or(NO_ENTRY)) {
+                            let warnings = diagnostics
+                                .warnings()
+                                .into_iter()
+                                .map(|message| JobError::warning(&path, message))
+                                .collect();
+                            app.group_diagnostics.set_warnings(
+                                id,
+                                app.active_fingerprint(),
+                                warnings,
+                            );
+                        }
                     }
                     cx.notify();
                 }
