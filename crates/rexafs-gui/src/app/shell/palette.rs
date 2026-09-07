@@ -6,8 +6,8 @@ use gpui::{
     Window, div, prelude::*, px,
 };
 
-use super::tools::Tool;
 use super::{MONO, Stage};
+use super::{parameter_actions::ParamScope, tools::Tool};
 use crate::app::{DERIVED_BASE, NO_ENTRY, PaletteClose, StudioApp};
 use crate::widgets::text_input::{InputEvent, TextInput};
 
@@ -17,6 +17,8 @@ pub enum PaletteCmd {
     MarkAll,
     MarkNone,
     ApplyToMarked,
+    ApplyAllProcessingToMarked,
+    CopyMappingToMarked,
     ResetParams,
     Tool(Tool),
     Fit,
@@ -83,14 +85,28 @@ impl StudioApp {
                 cmd: PaletteCmd::Stage(stage),
             });
         }
-        let simple: [(&str, &'static str, &'static str, PaletteCmd); 13] = [
+        if ParamScope::default_for_stage(self.stage).is_some() {
+            items.push(PaletteItem {
+                label: format!("Apply {} settings to marked groups", self.stage.name()),
+                category: "params",
+                keys: "",
+                cmd: PaletteCmd::ApplyToMarked,
+            });
+        }
+        let simple: [(&str, &'static str, &'static str, PaletteCmd); 14] = [
             ("Mark all groups", "groups", "", PaletteCmd::MarkAll),
             ("Unmark all groups", "groups", "", PaletteCmd::MarkNone),
             (
-                "Apply parameters to marked groups",
+                "Apply all processing settings to marked groups",
                 "params",
                 "",
-                PaletteCmd::ApplyToMarked,
+                PaletteCmd::ApplyAllProcessingToMarked,
+            ),
+            (
+                "Copy column mapping to marked groups (same detection mode only)",
+                "params",
+                "",
+                PaletteCmd::CopyMappingToMarked,
             ),
             (
                 "Reset parameters of the current group",
@@ -253,6 +269,10 @@ impl StudioApp {
             PaletteCmd::MarkAll => self.mark_all(true, cx),
             PaletteCmd::MarkNone => self.mark_all(false, cx),
             PaletteCmd::ApplyToMarked => self.apply_params_to_marked(cx),
+            PaletteCmd::ApplyAllProcessingToMarked => {
+                self.apply_scope_to_marked(ParamScope::All, cx)
+            }
+            PaletteCmd::CopyMappingToMarked => self.apply_scope_to_marked(ParamScope::Mapping, cx),
             PaletteCmd::ResetParams => self.reset_params(cx),
             PaletteCmd::Tool(tool) => self.open_tool(tool, cx),
             PaletteCmd::Fit => {

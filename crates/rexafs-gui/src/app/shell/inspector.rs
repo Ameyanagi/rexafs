@@ -6,8 +6,18 @@ use gpui::{
     ClickEvent, Context, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, px,
 };
 
-use super::{MONO, Stage, button, section_label};
+use super::{MONO, Stage, button, parameter_actions::ParamScope, section_label};
 use crate::app::{EnumParam, ParamKey, ParamSection, StudioApp};
+
+fn apply_hint(marked: usize, locked: usize) -> Option<String> {
+    if marked == 0 && locked == 0 {
+        None
+    } else if locked == 0 {
+        Some("excludes current".into())
+    } else {
+        Some(format!("excludes current · {locked} locked"))
+    }
+}
 
 impl StudioApp {
     pub(crate) fn inspector(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -53,11 +63,10 @@ impl StudioApp {
         }
         let t = self.theme;
         let label = self.current_group_label();
-        let marked = self
-            .selection
-            .iter()
-            .filter(|&&ix| self.valid_group_index(ix) && Some(ix) != self.selected)
-            .count();
+        let copy_scope = ParamScope::default_for_stage(self.stage);
+        let targets = self.copy_targets(ParamScope::Stage(self.stage));
+        let marked = targets.indices.len();
+        let hint = copy_scope.and_then(|_| apply_hint(marked, targets.locked));
         let mut header = div()
             .flex_none()
             .px_3()
@@ -87,17 +96,21 @@ impl StudioApp {
             );
         if self.stage.is_processing() {
             header = header
-                .child(
-                    button(
-                        &t,
-                        "apply-marked",
-                        format!("Apply to marked ({marked})"),
-                        false,
+                .when(copy_scope.is_some() && marked > 0, |header| {
+                    header.child(
+                        button(
+                            &t,
+                            "apply-marked",
+                            format!("Apply {} to {marked}", self.stage.name()),
+                            false,
+                        )
+                        .on_click(cx.listener(
+                            |this, _: &ClickEvent, _w, cx| {
+                                this.apply_params_to_marked(cx);
+                            },
+                        )),
                     )
-                    .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
-                        this.apply_params_to_marked(cx);
-                    })),
-                )
+                })
                 .child(
                     div()
                         .id("reset-params")
@@ -123,6 +136,16 @@ impl StudioApp {
             .flex()
             .flex_col()
             .child(header)
+            .when_some(hint, |d, hint| {
+                d.child(
+                    div()
+                        .px_3()
+                        .py_1()
+                        .text_size(px(10.))
+                        .text_color(t.text_muted)
+                        .child(hint),
+                )
+            })
             .when(
                 self.stage_view.scope == super::PlotScope::Marked && count > 0,
                 |d| {
@@ -153,9 +176,11 @@ impl StudioApp {
             .into_any_element()
     }
 
-    /// Copy the displayed parameter set onto every marked catalog group.
+    /// Copy only the current processing stage to eligible marked groups.
     pub(crate) fn apply_params_to_marked(&mut self, cx: &mut Context<Self>) {
-        self.apply_scope_to_marked(super::parameter_actions::ParamScope::All, cx);
+        if let Some(scope) = ParamScope::default_for_stage(self.stage) {
+            self.apply_scope_to_marked(scope, cx);
+        }
     }
 
     /// Drop the current group's override (or reset the globals to defaults).
@@ -623,5 +648,36 @@ impl StudioApp {
                 ],
                 cx,
             ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_hint;
+
+    #[test]
+    fn apply_hint_is_hidden_without_recipients_or_locks() {
+        assert_eq!(apply_hint(0, 0), None);
+    }
+
+    #[test]
+    fn apply_hint_omits_zero_locks() {
+        assert_eq!(apply_hint(2, 0).as_deref(), Some("excludes current"));
+    }
+
+    #[test]
+    fn apply_hint_explains_locked_recipients() {
+        assert_eq!(
+            apply_hint(2, 3).as_deref(),
+            Some("excludes current · 3 locked")
+        );
+    }
+
+    #[test]
+    fn apply_hint_explains_locks_without_eligible_recipients() {
+        assert_eq!(
+            apply_hint(0, 1).as_deref(),
+            Some("excludes current · 1 locked")
+        );
     }
 }

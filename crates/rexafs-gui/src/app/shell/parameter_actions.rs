@@ -79,7 +79,9 @@ settings![
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ParamScope {
+    /// Every processing stage, excluding raw-input interpretation and calibration.
     All,
+    Mapping,
     Stage(Stage),
     Section(&'static str),
     Field(&'static str),
@@ -87,7 +89,8 @@ pub(crate) enum ParamScope {
 impl ParamScope {
     fn contains(self, s: &Setting) -> bool {
         match self {
-            Self::All => true,
+            Self::All => s.section != "Import",
+            Self::Mapping => s.key == "import",
             Self::Field(key) => s.key == key,
             Self::Section(section) => s.section == section,
             Self::Stage(Stage::Data) => s.section == "Import",
@@ -104,9 +107,35 @@ impl ParamScope {
             Self::Stage(_) => false,
         }
     }
+    /// Import comparisons/resets retain their scope, but bulk copying mapping
+    /// always uses the explicit guarded action, never its calibration settings.
+    fn copy_action(self) -> Self {
+        match self {
+            Self::Stage(Stage::Data) | Self::Section("Import") | Self::Field("import") => {
+                Self::Mapping
+            }
+            _ => self,
+        }
+    }
+
+    pub(crate) fn default_for_stage(stage: Stage) -> Option<Self> {
+        match stage {
+            Stage::Normalize | Stage::Background | Stage::Transform => Some(Self::Stage(stage)),
+            _ => None,
+        }
+    }
+
+    fn apply_label(self, count: usize) -> String {
+        match self.copy_action() {
+            Self::Mapping => format!("Copy column mapping to {count} (same detection mode only)"),
+            scope => format!("Apply {} to {count}", scope.label()),
+        }
+    }
+
     fn label(self) -> &'static str {
         match self {
             Self::All => "All processing settings",
+            Self::Mapping => "Column mapping (same detection mode only)",
             Self::Stage(s) => s.name(),
             Self::Section(s) => s,
             Self::Field(k) => SETTINGS
@@ -183,6 +212,9 @@ impl EnumParam {
 
 /// Values come from typed PipelineParams; only registered fields may be copied.
 pub(crate) fn copy_scope(dst: &mut PipelineParams, src: &PipelineParams, scope: ParamScope) {
+    if scope == ParamScope::Mapping && dst.import.mode != src.import.mode {
+        return;
+    }
     let mut out = serde_json::to_value(&*dst).expect("serializable processing settings");
     let source = serde_json::to_value(src).expect("serializable processing settings");
     for setting in SETTINGS.iter().filter(|s| scope.contains(s)) {
@@ -222,7 +254,67 @@ fn shown(v: &Value) -> String {
     }
 }
 
+/// Shared recipient selection for action counts and execution. Skip reasons
+/// are disjoint: a locked incompatible group is reported as locked.
+#[derive(Default)]
+pub(crate) struct CopyTargets {
+    pub indices: Vec<usize>,
+    pub locked: usize,
+    incompatible: usize,
+}
+
+fn collect_copy_targets(
+    marked: impl IntoIterator<Item = usize>,
+    current: Option<usize>,
+    valid: impl Fn(usize) -> bool,
+    locked: impl Fn(usize) -> bool,
+    compatible: impl Fn(usize) -> bool,
+) -> CopyTargets {
+    let mut targets = CopyTargets::default();
+    for ix in marked {
+        if Some(ix) == current || !valid(ix) {
+            continue;
+        }
+        if locked(ix) {
+            targets.locked += 1;
+        } else if !compatible(ix) {
+            targets.incompatible += 1;
+        } else {
+            targets.indices.push(ix);
+        }
+    }
+    targets
+}
+
+impl CopyTargets {
+    fn status(&self, scope: ParamScope, updated: usize) -> String {
+        let mut status = format!("{} · {updated} updated", scope.label());
+        if self.locked > 0 {
+            status.push_str(&format!(" · {} locked skipped", self.locked));
+        }
+        if self.incompatible > 0 {
+            status.push_str(&format!(
+                " · {} different detection mode skipped",
+                self.incompatible
+            ));
+        }
+        status
+    }
+}
+
 impl StudioApp {
+    pub(crate) fn copy_targets(&self, scope: ParamScope) -> CopyTargets {
+        let mapping = scope.copy_action() == ParamScope::Mapping;
+        let mode = self.ui_params().import.mode;
+        collect_copy_targets(
+            self.selection.iter().copied(),
+            self.selected,
+            |ix| self.valid_group_index(ix),
+            |ix| self.frozen.contains(&ix),
+            |ix| !mapping || self.effective_params(ix).import.mode == mode,
+        )
+    }
+
     fn comparison_indices(&self) -> Vec<usize> {
         let mut indices = self.selection.clone();
         indices.extend(self.selected);
@@ -294,24 +386,11 @@ impl StudioApp {
             .into_any_element()
     }
     pub(crate) fn apply_scope_to_marked(&mut self, scope: ParamScope, cx: &mut Context<Self>) {
+        let scope = scope.copy_action();
         let source = self.ui_params().clone();
-        let targets: Vec<_> = self
-            .selection
-            .iter()
-            .copied()
-            .filter(|&ix| {
-                self.valid_group_index(ix)
-                    && Some(ix) != self.selected
-                    && !self.frozen.contains(&ix)
-            })
-            .collect();
-        let skipped = self
-            .selection
-            .iter()
-            .filter(|ix| self.frozen.contains(ix) && Some(**ix) != self.selected)
-            .count();
+        let targets = self.copy_targets(scope);
         let mut changes = Vec::new();
-        for ix in targets {
+        for &ix in &targets.indices {
             let before = self.custom_params(ix).cloned();
             let mut next = self.effective_params(ix).clone();
             copy_scope(&mut next, &source, scope);
@@ -329,16 +408,7 @@ impl StudioApp {
                 Some(UndoOp::Params { changes }),
             );
         }
-        self.status = format!(
-            "{} · {n} updated{}",
-            scope.label(),
-            if skipped > 0 {
-                format!(" · {skipped} frozen skipped")
-            } else {
-                String::new()
-            }
-        )
-        .into();
+        self.status = targets.status(scope, n).into();
         self.param_menu = None;
         self.param_context_menu = None;
         self.sync_param_fields(cx);
@@ -377,15 +447,7 @@ impl StudioApp {
     ) -> Option<gpui::AnyElement> {
         let (scope, position) = self.param_context_menu?;
         let t = self.theme;
-        let marked = self
-            .selection
-            .iter()
-            .filter(|&&ix| {
-                self.valid_group_index(ix)
-                    && Some(ix) != self.selected
-                    && !self.frozen.contains(&ix)
-            })
-            .count();
+        let marked = self.copy_targets(scope).indices.len();
         let row = |id: &'static str, label: String| {
             div()
                 .id(id)
@@ -423,7 +485,11 @@ impl StudioApp {
                     gpui::anchored().position(position).snap_to_window().child(
                         div()
                             .id("parameter-context-popup")
-                            .w(px(210.))
+                            .w(px(if scope.copy_action() == ParamScope::Mapping {
+                                360.
+                            } else {
+                                240.
+                            }))
                             .p_1()
                             .rounded_md()
                             .bg(t.surface)
@@ -438,12 +504,11 @@ impl StudioApp {
                                     cx.stop_propagation()
                                 }),
                             )
-                            .child(
-                                row("context-apply", format!("Apply to marked ({marked})"))
-                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                        this.apply_scope_to_marked(scope, cx)
-                                    })),
-                            )
+                            .child(row("context-apply", scope.apply_label(marked)).on_click(
+                                cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                    this.apply_scope_to_marked(scope, cx)
+                                }),
+                            ))
                             .child(row("context-reset", "Reset to default".into()).on_click(
                                 cx.listener(move |this, _: &ClickEvent, _, cx| {
                                     this.reset_scope(scope, cx)
@@ -532,15 +597,7 @@ impl StudioApp {
                 );
             }
         }
-        let marked = self
-            .selection
-            .iter()
-            .filter(|&&ix| {
-                self.valid_group_index(ix)
-                    && Some(ix) != self.selected
-                    && !self.frozen.contains(&ix)
-            })
-            .count();
+        let marked = self.copy_targets(scope).indices.len();
         Some(
             div()
                 .id("parameter-menu-overlay")
@@ -610,12 +667,13 @@ impl StudioApp {
                                 .px_3()
                                 .py_3()
                                 .flex()
+                                .when(scope.copy_action() == ParamScope::Mapping, |d| d.flex_col())
                                 .gap_2()
                                 .child(
                                     button(
                                         &t,
                                         "apply-parameter-scope",
-                                        format!("Apply current to marked ({marked})"),
+                                        scope.apply_label(marked),
                                         true,
                                     )
                                     .on_click(cx.listener(
@@ -701,6 +759,287 @@ mod tests {
         copy_scope(&mut current, &source, ParamScope::Field("bkg_clamp_lambda"));
         assert_eq!(current.bkg_clamp_lambda, Some(0.02));
     }
+    fn populated_params(mode: crate::params::DetectionMode) -> PipelineParams {
+        use rexafs::prelude::{AUTOBKClampScalePolicy, AUTOBKSolver, FTWindow};
+        PipelineParams {
+            import: crate::params::ImportConfig {
+                mode,
+                energy_col: Some(1),
+                i0_col: Some(2),
+                it_col: Some(3),
+                ir_col: Some(4),
+                fluor_cols: Some(vec![5, 6]),
+                mu_col: Some(7),
+            },
+            align_to_ref: true,
+            align_target: Some(9000.),
+            e0: Some(8979.),
+            edge_step: Some(1.2),
+            pre_edge_start: Some(-150.),
+            pre_edge_end: Some(-20.),
+            n_victoreen: Some(1),
+            norm_start: Some(100.),
+            norm_end: Some(600.),
+            norm_polyorder: Some(2),
+            rbkg: Some(1.1),
+            bkg_kmin: Some(1.),
+            bkg_kmax: Some(12.),
+            bkg_kweight: Some(2),
+            bkg_nknots: Some(7),
+            bkg_clamp_lo: Some(1),
+            bkg_clamp_hi: Some(2),
+            bkg_nclamp: Some(4),
+            bkg_clamp_lambda: Some(0.02),
+            bkg_clamp_policy: AUTOBKClampScalePolicy::Fixed,
+            bkg_window: Some(FTWindow::Hanning),
+            bkg_dk: Some(1.),
+            bkg_solver: Some(AUTOBKSolver::LinearDirect),
+            bkg_kstep: Some(0.05),
+            bkg_nfft: Some(2048),
+            bkg_ek0: Some(8980.),
+            bkg_linear_regularization: Some(0.01),
+            bkg_linear_condition_limit: Some(1e8),
+            bkg_linear_residual_ratio_limit: Some(1.1),
+            bkg_linear_fallback_to_lm: Some(false),
+            bkg_linear_workspace_cache: Some(true),
+            bkg_linear_fallback_solver: Some(AUTOBKSolver::LegacyLm),
+            bkg_standard: Some(crate::params::ChiStandard {
+                label: "standard".into(),
+                k: vec![0., 1., 2.],
+                chi: vec![0., 0.1, 0.],
+            }),
+            fft_kmin: Some(2.),
+            fft_kmax: Some(11.),
+            fft_dk: Some(1.),
+            fft_window: Some(FTWindow::Hanning),
+            fft_kweight: Some(2.),
+            fft_rmax: Some(6.),
+            fft_dk2: Some(1.),
+            fft_kstep: Some(0.05),
+            fft_nfft: Some(2048),
+            bft_rmin: Some(1.),
+            bft_rmax: Some(3.),
+            bft_dr: Some(0.5),
+            bft_window: Some(FTWindow::Hanning),
+            bft_qmax: Some(12.),
+            bft_dr2: Some(0.5),
+            bft_rweight: Some(1.),
+            bft_kstep: Some(0.05),
+            bft_nfft: Some(2048),
+        }
+    }
+
+    #[test]
+    fn all_processing_preserves_mapping_and_calibration_for_every_mode() {
+        use crate::params::DetectionMode::*;
+        let src = populated_params(Transmission);
+        for mode in [Auto, Transmission, Fluorescence, Reference, MuColumn] {
+            let mut dst = PipelineParams::default();
+            dst.import.mode = mode;
+            dst.import.fluor_cols = Some(vec![8, 9]);
+            dst.align_target = Some(7112.);
+            let before = serde_json::to_value(&dst).unwrap();
+            let raw_before = dst.raw_fingerprint();
+            copy_scope(&mut dst, &src, ParamScope::All);
+            let after = serde_json::to_value(&dst).unwrap();
+            let source = serde_json::to_value(&src).unwrap();
+            for (key, value) in after.as_object().unwrap() {
+                let expected = if matches!(key.as_str(), "import" | "align_to_ref" | "align_target")
+                {
+                    &before[key]
+                } else {
+                    &source[key]
+                };
+                assert_eq!(value, expected, "{mode:?}: {key}");
+            }
+            assert_eq!(dst.raw_fingerprint(), raw_before);
+        }
+    }
+
+    #[test]
+    fn stage_copies_change_exactly_their_processing_keys() {
+        use crate::params::DetectionMode::*;
+        let stages: &[(Stage, &[&str])] = &[
+            (
+                Stage::Normalize,
+                &[
+                    "e0",
+                    "edge_step",
+                    "pre_edge_start",
+                    "pre_edge_end",
+                    "n_victoreen",
+                    "norm_start",
+                    "norm_end",
+                    "norm_polyorder",
+                ],
+            ),
+            (
+                Stage::Background,
+                &[
+                    "rbkg",
+                    "bkg_kmin",
+                    "bkg_kmax",
+                    "bkg_kweight",
+                    "bkg_nknots",
+                    "bkg_clamp_lo",
+                    "bkg_clamp_hi",
+                    "bkg_nclamp",
+                    "bkg_clamp_lambda",
+                    "bkg_clamp_policy",
+                    "bkg_window",
+                    "bkg_dk",
+                    "bkg_solver",
+                    "bkg_kstep",
+                    "bkg_nfft",
+                    "bkg_ek0",
+                    "bkg_linear_regularization",
+                    "bkg_linear_condition_limit",
+                    "bkg_linear_residual_ratio_limit",
+                    "bkg_linear_fallback_to_lm",
+                    "bkg_linear_workspace_cache",
+                    "bkg_linear_fallback_solver",
+                    "bkg_standard",
+                ],
+            ),
+            (
+                Stage::Transform,
+                &[
+                    "fft_kmin",
+                    "fft_kmax",
+                    "fft_dk",
+                    "fft_window",
+                    "fft_kweight",
+                    "fft_rmax",
+                    "fft_dk2",
+                    "fft_kstep",
+                    "fft_nfft",
+                    "bft_rmin",
+                    "bft_rmax",
+                    "bft_dr",
+                    "bft_window",
+                    "bft_qmax",
+                    "bft_dr2",
+                    "bft_rweight",
+                    "bft_kstep",
+                    "bft_nfft",
+                ],
+            ),
+        ];
+        let populated = populated_params(Transmission);
+        // Exercise both setting values and clearing back to Auto/defaults.
+        for (src, initial) in [
+            (populated.clone(), PipelineParams::default()),
+            (PipelineParams::default(), populated),
+        ] {
+            for mode in [Transmission, Reference, Fluorescence] {
+                for &(stage, keys) in stages {
+                    let mut dst = initial.clone();
+                    dst.import.mode = mode;
+                    let before = serde_json::to_value(&dst).unwrap();
+                    let source = serde_json::to_value(&src).unwrap();
+                    let raw_before = dst.raw_fingerprint();
+                    copy_scope(&mut dst, &src, ParamScope::Stage(stage));
+                    let after = serde_json::to_value(&dst).unwrap();
+                    for (key, value) in after.as_object().unwrap() {
+                        let expected = if keys.contains(&key.as_str()) {
+                            assert_ne!(before[key], source[key], "fixture must exercise {key}");
+                            &source[key]
+                        } else {
+                            &before[key]
+                        };
+                        assert_eq!(value, expected, "{stage:?} / {mode:?}: {key}");
+                    }
+                    assert_eq!(dst.raw_fingerprint(), raw_before);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn mapping_copy_requires_equal_modes_and_copies_no_processing_or_calibration() {
+        use crate::params::DetectionMode::*;
+        for source_mode in [Auto, Transmission, Reference, Fluorescence, MuColumn] {
+            let src = populated_params(source_mode);
+            for target_mode in [Auto, Transmission, Reference, Fluorescence, MuColumn] {
+                let mut dst = PipelineParams::default();
+                dst.import.mode = target_mode;
+                let mut expected = dst.clone();
+                if source_mode == target_mode {
+                    expected.import = src.import.clone();
+                }
+                copy_scope(&mut dst, &src, ParamScope::Mapping);
+                assert_eq!(
+                    serde_json::to_value(dst).unwrap(),
+                    serde_json::to_value(expected).unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn import_menu_copies_use_the_explicit_mapping_action() {
+        for scope in [
+            ParamScope::Stage(Stage::Data),
+            ParamScope::Section("Import"),
+            ParamScope::Field("import"),
+            ParamScope::Mapping,
+        ] {
+            assert_eq!(scope.copy_action(), ParamScope::Mapping);
+            assert_eq!(
+                scope.apply_label(2),
+                "Copy column mapping to 2 (same detection mode only)"
+            );
+        }
+        for stage in Stage::ALL {
+            let expected = match stage {
+                Stage::Normalize | Stage::Background | Stage::Transform => {
+                    Some(ParamScope::Stage(stage))
+                }
+                _ => None,
+            };
+            assert_eq!(ParamScope::default_for_stage(stage), expected);
+        }
+        assert_eq!(
+            ParamScope::Stage(Stage::Normalize).apply_label(3),
+            "Apply Normalize to 3"
+        );
+        assert_eq!(ParamScope::All.copy_action(), ParamScope::All);
+    }
+
+    #[test]
+    fn recipients_exclude_current_invalid_locked_and_incompatible_groups() {
+        use crate::app::DERIVED_BASE;
+        let marked = [
+            0,
+            1,
+            2,
+            3,
+            99,
+            DERIVED_BASE,
+            DERIVED_BASE + 1,
+            DERIVED_BASE + 2,
+        ];
+        let valid = |ix| ix < 4 || (DERIVED_BASE..DERIVED_BASE + 2).contains(&ix);
+        let locked = |ix| [0, 2, 99, DERIVED_BASE + 2].contains(&ix);
+        let compatible = |ix| ix != 3;
+        let targets = collect_copy_targets(marked, Some(0), valid, locked, compatible);
+        assert_eq!(targets.indices, [1, DERIVED_BASE, DERIVED_BASE + 1]);
+        assert_eq!(targets.locked, 1);
+        assert_eq!(targets.incompatible, 1);
+        assert_eq!(
+            targets.status(ParamScope::Mapping, 2),
+            "Column mapping (same detection mode only) · 2 updated · 1 locked skipped · 1 different detection mode skipped"
+        );
+        let processing = collect_copy_targets(marked, Some(0), valid, locked, |_| true);
+        assert_eq!(processing.indices, [1, 3, DERIVED_BASE, DERIVED_BASE + 1]);
+        let empty = collect_copy_targets([0, 2, 99], Some(0), valid, locked, compatible);
+        assert!(empty.indices.is_empty());
+        assert_eq!(
+            empty.status(ParamScope::All, 0),
+            "All processing settings · 0 updated · 1 locked skipped"
+        );
+    }
+
     #[test]
     fn settings_registry_covers_every_persisted_parameter_once() {
         let value = serde_json::to_value(PipelineParams::default()).unwrap();
