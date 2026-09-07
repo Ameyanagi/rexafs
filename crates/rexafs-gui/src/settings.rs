@@ -30,6 +30,8 @@ pub fn home_dir() -> Option<PathBuf> {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UserSettings {
+    pub recent_projects: Vec<PathBuf>,
+    pub recent_import_folders: Vec<PathBuf>,
     /// Width of the Groups sidebar in logical pixels. None uses 280 px.
     pub groups_panel_width: Option<f32>,
     /// Folder scanned for `*.cif` files (the "CIF library" structure source).
@@ -161,6 +163,17 @@ pub fn clamp_groups_panel_width(width: f32) -> f32 {
     } else {
         280.
     }
+}
+
+/// Most recent first, without duplicate paths. Callers resolve paths before recording.
+pub fn push_recent(list: &mut Vec<PathBuf>, path: PathBuf, cap: usize) {
+    list.retain(|entry| entry != &path);
+    list.insert(0, path);
+    list.truncate(cap);
+}
+
+pub fn remove_recent(list: &mut Vec<PathBuf>, path: &Path) {
+    list.retain(|entry| entry != path);
 }
 
 impl UserSettings {
@@ -317,6 +330,50 @@ mod tests {
     }
 
     #[test]
+    fn recent_locations_dedupe_order_and_cap() {
+        let mut list = Vec::new();
+        for n in 0..10 {
+            push_recent(&mut list, PathBuf::from(format!("/{n}")), 8);
+        }
+        assert_eq!(
+            list,
+            (2..10)
+                .rev()
+                .map(|n| PathBuf::from(format!("/{n}")))
+                .collect::<Vec<_>>()
+        );
+        push_recent(&mut list, "/5".into(), 8);
+        assert_eq!(list[0], PathBuf::from("/5"));
+        assert_eq!(list.len(), 8);
+        assert_eq!(
+            list.iter()
+                .filter(|p| p.as_path() == Path::new("/5"))
+                .count(),
+            1
+        );
+        push_recent(&mut list, "/empty".into(), 0);
+        assert!(list.is_empty());
+    }
+
+    #[test]
+    fn recent_project_load_failure_prunes_duplicates_and_preserves_other_entries() {
+        let mut list = vec![
+            "/good.rxs".into(),
+            "/bad.rxs".into(),
+            "/other.rxs".into(),
+            "/bad.rxs".into(),
+        ];
+        remove_recent(&mut list, Path::new("/bad.rxs"));
+        assert_eq!(
+            list,
+            vec![PathBuf::from("/good.rxs"), PathBuf::from("/other.rxs")]
+        );
+        let remaining = list.clone();
+        remove_recent(&mut list, Path::new("/missing.rxs"));
+        assert_eq!(list, remaining);
+    }
+
+    #[test]
     fn groups_panel_width_defaults_and_bounds() {
         for (input, expected) in [
             (None, 280.),
@@ -356,6 +413,8 @@ mod tests {
             assistant_panel_width: 512.,
             assistant_history_limit: 3,
             groups_panel_width: Some(347.),
+            recent_projects: vec!["/tmp/project.rxs".into()],
+            recent_import_folders: vec!["/tmp/data".into()],
         };
         s.save_to(&path).unwrap();
         assert_eq!(UserSettings::load_from(&path).unwrap(), s);

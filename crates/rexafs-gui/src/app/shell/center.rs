@@ -40,6 +40,9 @@ impl StudioApp {
             column = column.child(div().px_3().py_1().text_size(px(11.5)).text_color(t.warn)
                 .child(format!("Mixed FT weights: χ(k) uses k^{weight} for all curves. R/q curves retain each group's weight (shown in the legend).")));
         }
+        if !ready && self.current_path.as_os_str().is_empty() && !self.catalog.scanning {
+            return column.child(self.empty_drop_target(cx));
+        }
         if !ready {
             return column.child(
                 div()

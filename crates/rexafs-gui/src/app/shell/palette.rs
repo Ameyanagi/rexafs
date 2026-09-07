@@ -36,6 +36,8 @@ pub enum PaletteCmd {
     SaveProject,
     OpenProject,
     OpenFolder,
+    RecentProject(std::path::PathBuf),
+    RecentFolder(std::path::PathBuf),
     Theme,
     Updates,
     Undo,
@@ -83,6 +85,62 @@ fn reset_params_item(stage: Stage) -> Option<PaletteItem> {
         keys: "",
         cmd: PaletteCmd::ResetParams,
     })
+}
+
+fn recent_items(settings: &crate::settings::UserSettings) -> Vec<PaletteItem> {
+    settings
+        .recent_projects
+        .iter()
+        .map(|path| PaletteItem {
+            label: format!("Open recent project ▸ {}", path.display()),
+            category: "file",
+            keys: "",
+            cmd: PaletteCmd::RecentProject(path.clone()),
+        })
+        .chain(
+            settings
+                .recent_import_folders
+                .iter()
+                .map(|path| PaletteItem {
+                    label: format!("Import from recent folder ▸ {}", path.display()),
+                    category: "file",
+                    keys: "",
+                    cmd: PaletteCmd::RecentFolder(path.clone()),
+                }),
+        )
+        .collect()
+}
+
+fn validate_recent_project(
+    projects: &mut Vec<std::path::PathBuf>,
+    path: &std::path::Path,
+    is_file: impl FnOnce(&std::path::Path) -> bool,
+) -> Result<(), String> {
+    if is_file(path) {
+        Ok(())
+    } else {
+        crate::settings::remove_recent(projects, path);
+        Err(format!(
+            "Recent project no longer exists: {}",
+            path.display()
+        ))
+    }
+}
+
+fn validate_recent_folder(
+    folders: &mut Vec<std::path::PathBuf>,
+    path: &std::path::Path,
+    is_dir: impl FnOnce(&std::path::Path) -> bool,
+) -> Result<(), String> {
+    if is_dir(path) {
+        Ok(())
+    } else {
+        folders.retain(|folder| folder != path);
+        Err(format!(
+            "Recent folder no longer exists: {}",
+            path.display()
+        ))
+    }
 }
 
 impl StudioApp {
@@ -136,8 +194,8 @@ impl StudioApp {
                 PaletteCmd::ExportBatchCsv,
             ),
             ("Save project…", "file", "", PaletteCmd::SaveProject),
-            ("Open project…", "file", "", PaletteCmd::OpenProject),
-            ("Import…", "file", "", PaletteCmd::OpenFolder),
+            ("Open project…", "file", "⌘O", PaletteCmd::OpenProject),
+            ("Import…", "file", "⇧⌘O", PaletteCmd::OpenFolder),
             ("Toggle theme", "view", "", PaletteCmd::Theme),
             (
                 "Check for updates · Stable / Nightly",
@@ -156,6 +214,7 @@ impl StudioApp {
                 cmd,
             });
         }
+        items.extend(recent_items(&self.structure.settings));
         items.push(PaletteItem {
             label: "Show journal".into(),
             category: "view",
@@ -297,6 +356,32 @@ impl StudioApp {
             PaletteCmd::SaveProject => self.save_project(cx),
             PaletteCmd::OpenProject => self.open_project(cx),
             PaletteCmd::OpenFolder => self.open_folder(cx),
+            PaletteCmd::RecentProject(path) => {
+                match validate_recent_project(
+                    &mut self.structure.settings.recent_projects,
+                    &path,
+                    std::path::Path::is_file,
+                ) {
+                    Ok(()) => self.load_project_path(path, cx),
+                    Err(message) => {
+                        self.status = message.into();
+                        self.persist_recent_locations();
+                    }
+                }
+            }
+            PaletteCmd::RecentFolder(path) => {
+                match validate_recent_folder(
+                    &mut self.structure.settings.recent_import_folders,
+                    &path,
+                    std::path::Path::is_dir,
+                ) {
+                    Ok(()) => self.route_paths(vec![path], true, cx),
+                    Err(message) => {
+                        self.status = message.into();
+                        self.persist_recent_locations();
+                    }
+                }
+            }
             PaletteCmd::Theme => self.toggle_theme(cx),
             PaletteCmd::Updates => self.open_updates(cx),
             PaletteCmd::Undo => self.undo(cx),
@@ -472,6 +557,93 @@ impl StudioApp {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn recent_project_validation_keeps_files_and_prunes_missing_or_directory_entries() {
+        let valid = std::path::PathBuf::from("/project.rxs");
+        let stale = std::path::PathBuf::from("/moved.rxs");
+        let directory = std::path::PathBuf::from("/directory.rxs");
+        let mut projects = vec![
+            valid.clone(),
+            stale.clone(),
+            directory.clone(),
+            stale.clone(),
+        ];
+        let original = projects.clone();
+        let is_file = |p: &std::path::Path| p == valid;
+        assert_eq!(
+            validate_recent_project(&mut projects, &valid, is_file),
+            Ok(())
+        );
+        assert_eq!(projects, original);
+        for path in [&stale, &directory] {
+            assert_eq!(
+                validate_recent_project(&mut projects, path, is_file),
+                Err(format!(
+                    "Recent project no longer exists: {}",
+                    path.display()
+                ))
+            );
+        }
+        assert_eq!(projects, vec![valid]);
+    }
+
+    #[test]
+    fn recent_palette_entries_carry_exact_paths_and_separate_actions() {
+        let settings = crate::settings::UserSettings {
+            recent_projects: vec!["/one/same.rxs".into(), "/two/same.rxs".into()],
+            recent_import_folders: vec!["/data/run".into()],
+            ..Default::default()
+        };
+        let items = recent_items(&settings);
+        assert_eq!(items.len(), 3);
+        assert_ne!(items[0].label, items[1].label);
+        assert_eq!(
+            items[0].cmd,
+            PaletteCmd::RecentProject(settings.recent_projects[0].clone())
+        );
+        assert_eq!(
+            items[2].cmd,
+            PaletteCmd::RecentFolder(settings.recent_import_folders[0].clone())
+        );
+        assert_eq!(items[2].label, "Import from recent folder ▸ /data/run");
+        assert!(recent_items(&Default::default()).is_empty());
+    }
+
+    #[test]
+    fn recent_folder_validation_keeps_directories_and_prunes_stale_entries() {
+        let root = std::env::temp_dir().join(format!(
+            "rexafs-recent-folder-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let missing = root.join("missing");
+        let file = root.join("file");
+        std::fs::write(&file, "data").unwrap();
+        let mut folders = vec![missing.clone(), root.clone(), file.clone(), missing.clone()];
+        let original = folders.clone();
+        assert_eq!(
+            validate_recent_folder(&mut folders, &root, std::path::Path::is_dir),
+            Ok(())
+        );
+        assert_eq!(folders, original);
+        for stale in [&missing, &file] {
+            assert_eq!(
+                validate_recent_folder(&mut folders, stale, std::path::Path::is_dir),
+                Err(format!(
+                    "Recent folder no longer exists: {}",
+                    stale.display()
+                ))
+            );
+            assert!(!folders.contains(stale));
+        }
+        assert_eq!(folders, vec![root.clone()]);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn palette_catalog_items_skip_removed_groups_before_the_cap() {

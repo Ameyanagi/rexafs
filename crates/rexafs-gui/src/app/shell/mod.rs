@@ -30,6 +30,7 @@ pub mod palette;
 pub(crate) mod parameter_actions;
 mod path_diagnostics;
 pub mod path_picker;
+pub(crate) mod path_routing;
 pub(crate) mod publish;
 pub mod series;
 pub mod stage_strip;
@@ -433,6 +434,7 @@ impl StudioApp {
                         ),
                 )
             })
+            .children(self.path_route_overlay(cx))
     }
 
     /// Brand · project · actions (open folder / project, theme).

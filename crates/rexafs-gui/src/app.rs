@@ -6,7 +6,7 @@
 //! results are dropped) with an LRU cache of processed spectra. The Explore
 //! center is the 2x2 quadrant grid from M0.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -16,9 +16,9 @@ use std::time::{Duration, Instant};
 
 use futures::StreamExt;
 use gpui::{
-    ClickEvent, Context, Entity, FocusHandle, Focusable, IntoElement, KeyBinding, ParentElement,
-    PathPromptOptions, Render, ScrollStrategy, SharedString, Styled, UniformListScrollHandle,
-    Window, actions, div, prelude::*, px, uniform_list,
+    ClickEvent, Context, Entity, ExternalPaths, FocusHandle, Focusable, IntoElement, KeyBinding,
+    ParentElement, PathPromptOptions, Render, ScrollStrategy, SharedString, Styled,
+    UniformListScrollHandle, Window, actions, div, prelude::*, px, uniform_list,
 };
 use lru::LruCache;
 use rexafs::prelude::XASSpectrum;
@@ -453,6 +453,9 @@ actions!(
         ToggleContextPanel,
         FocusFilter,
         ExploreEscape,
+        OpenProject,
+        ImportPaths,
+        DismissPathRoute,
         PaletteOpen,
         PaletteClose,
         Undo,
@@ -480,6 +483,9 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
             AssistantPreviousControl,
             Some("Assistant && !TextInput"),
         ),
+        KeyBinding::new("cmd-o", OpenProject, Some("Studio")),
+        KeyBinding::new("cmd-shift-o", ImportPaths, Some("Studio")),
+        KeyBinding::new("escape", DismissPathRoute, Some("PathRoute")),
         KeyBinding::new("f2", RenameGroup, Some("DataPanel && !TextInput")),
         KeyBinding::new("enter", RenameGroup, Some("DataPanel && !TextInput")),
         KeyBinding::new("enter", CommitGroupRename, Some("GroupRename > TextInput")),
@@ -1029,6 +1035,8 @@ pub struct StudioApp {
     analysis: shell::tools::AnalysisState,
     journal: shell::journal::JournalState,
     palette: Option<shell::palette::PaletteState>,
+    path_route: Option<shell::path_routing::RoutingCard>,
+    pending_routed_import: VecDeque<shell::path_routing::RoutedImport>,
     /// Inspector scroll position (tools reveal their form on open).
     inspector_scroll: gpui::ScrollHandle,
     /// Durable identities backing the compact index-based UI.
@@ -2388,6 +2396,50 @@ mod keybinding_tests {
     }
 
     #[test]
+    fn project_and_import_shortcuts_are_distinct_and_yield_to_routing_card() {
+        let bindings = studio_keybindings();
+        let open = binding::<super::OpenProject>(&bindings);
+        let import = binding::<super::ImportPaths>(&bindings);
+        assert_eq!(
+            open.keystrokes(),
+            KeyBinding::new("cmd-o", super::OpenProject, None).keystrokes()
+        );
+        assert_eq!(
+            import.keystrokes(),
+            KeyBinding::new("cmd-shift-o", super::ImportPaths, None).keystrokes()
+        );
+        let text_bindings = crate::widgets::text_input::text_input_keybindings();
+        for target in [open, import] {
+            assert_eq!(
+                bindings
+                    .iter()
+                    .chain(text_bindings.iter())
+                    .filter(|b| b.keystrokes() == target.keystrokes())
+                    .count(),
+                1
+            );
+            let predicate = target.predicate().unwrap();
+            assert!(
+                predicate
+                    .depth_of(&[KeyContext::parse("Studio Explore").unwrap()])
+                    .is_some()
+            );
+            assert!(
+                predicate
+                    .depth_of(&[KeyContext::parse("PathRoute").unwrap()])
+                    .is_none()
+            );
+        }
+        assert!(
+            binding::<super::DismissPathRoute>(&bindings)
+                .predicate()
+                .unwrap()
+                .depth_of(&[KeyContext::parse("PathRoute").unwrap()])
+                .is_some()
+        );
+    }
+
+    #[test]
     fn list_keys_yield_to_text_editing_and_escape_preserves_marks() {
         use super::{
             ClearCompare, CollapseFocusedStack, ExpandFocusedStack, InvertGroupMarks,
@@ -2796,15 +2848,10 @@ impl StudioApp {
             }
             true
         });
-        let initial_project = initial_open
-            .as_ref()
-            .filter(|path| crate::project::is_project(path))
-            .cloned();
-        let initial_dir = initial_open.as_ref().filter(|p| p.is_dir()).cloned();
-        let path = if initial_dir.is_some() || initial_project.is_some() {
-            default_data_file()
+        let path = if initial_open.is_some() {
+            PathBuf::new()
         } else {
-            initial_open.unwrap_or_else(default_data_file)
+            default_data_file()
         };
         let label: SharedString = path
             .file_name()
@@ -2842,6 +2889,8 @@ impl StudioApp {
             analysis: shell::tools::AnalysisState::default(),
             journal: shell::journal::JournalState::default(),
             palette: None,
+            path_route: None,
+            pending_routed_import: VecDeque::new(),
             inspector_scroll: gpui::ScrollHandle::new(),
             group_registry: Default::default(),
             group_state: Default::default(),
@@ -3061,7 +3110,9 @@ impl StudioApp {
         })
         .detach();
         app.roi_input = Some(roi_input);
-        app.update_import_preview(cx);
+        if initial_open.is_none() {
+            app.update_import_preview(cx);
+        }
         // Scripted launches: REXAFS_STRUCTURE_SOURCE=builtin|cif|mp|amcsd|cod,
         // REXAFS_IMPORT_CIF=<file>, REXAFS_SETTINGS=<settings.json>.
         if let Ok(src) = crate::settings::env_var("STRUCTURE_SOURCE") {
@@ -3086,8 +3137,8 @@ impl StudioApp {
         if let Ok(file) = crate::settings::env_var("IMPORT_CIF") {
             app.structure_import_cif_path(PathBuf::from(file), cx);
         }
-        if let Some(path) = initial_project {
-            app.load_project_path(path, cx);
+        if let Some(path) = initial_open {
+            app.route_paths(vec![path], false, cx);
             return app;
         }
         match process_file(&path, &app.params) {
@@ -3099,9 +3150,6 @@ impl StudioApp {
                 app.status = format!("failed to load {}: {e}", path.display()).into();
                 app.record_job_error(path.display().to_string(), e.to_string());
             }
-        }
-        if let Some(dir) = initial_dir {
-            app.scan_folder(dir, false, cx);
         }
         app
     }
@@ -3764,6 +3812,7 @@ impl StudioApp {
     }
 
     fn cancel_long_jobs(&mut self, cx: &mut Context<Self>) {
+        self.pending_routed_import.clear();
         let mut cancelled = false;
         if self.catalog.scanning || self.verify_running {
             self.catalog_gen += 1;
@@ -5858,19 +5907,13 @@ impl StudioApp {
     // ---- catalog -----------------------------------------------------------
 
     fn open_folder(&mut self, cx: &mut Context<Self>) {
-        let rx = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: true,
-            multiple: true,
-            prompt: Some("Import files or folders".into()),
-        });
-        cx.spawn(async move |this, cx| {
-            if let Ok(Ok(Some(paths))) = rx.await {
-                this.update(cx, |app, cx| app.append_import(paths, false, cx))
-                    .ok();
-            }
-        })
-        .detach();
+        let folder = self
+            .structure
+            .settings
+            .recent_import_folders
+            .first()
+            .cloned();
+        self.open_import_picker(folder, cx);
     }
 
     /// Open a folder: restore the persisted index instantly when one exists
@@ -5892,6 +5935,7 @@ impl StudioApp {
         }
         self.reset_catalog_state(cx);
         self.source_dir = Some(root.clone());
+        self.catalog.scanning = true;
         self.status = format!("checking catalog index for {} ...", root.display()).into();
         let catalog_gen = self.catalog_gen;
         let probe_root = root.clone();
@@ -6005,6 +6049,7 @@ impl StudioApp {
                         this.update(cx, |app, cx| {
                             app.verify_running = false;
                             app.record_job_error("index freshness check", e);
+                            app.finish_routed_import(cx);
                             cx.notify();
                         })
                         .ok();
@@ -6045,6 +6090,7 @@ impl StudioApp {
                     .into();
                     app.persist_catalog_index(cx);
                 }
+                app.finish_routed_import(cx);
                 cx.notify();
             })
             .ok();
@@ -6204,6 +6250,9 @@ impl StudioApp {
                             app.status = format!("scan failed: {e}").into();
                             app.record_job_error("catalog scan", e);
                         }
+                    }
+                    if done {
+                        app.finish_routed_import(cx);
                     }
                     cx.notify();
                     done
@@ -8295,6 +8344,7 @@ impl StudioApp {
                                 }
                             }
                             app.status = format!("Saved {}", path.display()).into();
+                            app.remember_project(path.clone());
                         }
                         Err(error) => {
                             app.status = format!("Save failed: {error}").into();
@@ -8321,7 +8371,7 @@ impl StudioApp {
             files: true,
             directories: false,
             multiple: false,
-            prompt: None,
+            prompt: Some("Open project (.rxs)".into()),
         });
         cx.spawn(async move |this, cx| {
             if let Ok(Ok(Some(paths))) = rx.await
@@ -8335,9 +8385,26 @@ impl StudioApp {
     }
 
     fn load_project_path(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        self.load_project_then_import(path, None, cx);
+    }
+
+    fn load_project_then_import(
+        &mut self,
+        path: PathBuf,
+        data: Option<shell::path_routing::RoutedImport>,
+        cx: &mut Context<Self>,
+    ) {
+        if !crate::project::is_project(&path) || path.is_dir() {
+            self.status =
+                "Choose a .rxs project file; use Import… for data files or folders.".into();
+            cx.notify();
+            return;
+        }
+        self.pending_routed_import.clear();
         self.project_load_generation += 1;
         let generation = self.project_load_generation;
         self.status = "Opening project…".into();
+        let recent_path = path.clone();
         let job = cx.background_executor().spawn(async move {
             crate::project::load(&path).map(|mut project| {
                 let next = project.assign_group_ids();
@@ -8354,10 +8421,22 @@ impl StudioApp {
                     return;
                 }
                 match result {
-                    Ok((project, next, registry)) => app.apply_project(project, next, registry, cx),
+                    Ok((project, next, registry)) => {
+                        app.apply_project(project, next, registry, cx);
+                        app.remember_project(recent_path);
+                        app.pending_routed_import.extend(data);
+                        app.finish_routed_import(cx);
+                    }
                     Err(error) => {
                         app.status = format!("Open failed: {error}").into();
                         app.record_job_error("open project", error);
+                        crate::settings::remove_recent(
+                            &mut app.structure.settings.recent_projects,
+                            &recent_path,
+                        );
+                        app.persist_recent_locations();
+                        app.path_route =
+                            shell::path_routing::RoutingCard::after_failed_project(data);
                     }
                 }
                 cx.notify();
@@ -9823,7 +9902,9 @@ impl Render for StudioApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.viewport_w = f32::from(window.viewport_size().width);
         self.fit_assistant_layout();
-        let key_context = if self.updates.open {
+        let key_context = if self.path_route.is_some() {
+            "PathRoute"
+        } else if self.updates.open {
             "UpdateDialog"
         } else if self.palette.is_some() {
             "Palette"
@@ -9838,6 +9919,20 @@ impl Render for StudioApp {
             .id("root")
             .track_focus(&self.root_focus)
             .key_context(key_context)
+            .border_2()
+            .border_color(self.theme.bg)
+            .drag_over::<ExternalPaths>({
+                let accent = self.theme.accent;
+                move |style, _, _, _| style.border_color(accent)
+            })
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
+                this.route_paths(paths.paths().to_vec(), false, cx);
+            }))
+            .on_action(cx.listener(|this, _: &OpenProject, _, cx| this.open_project(cx)))
+            .on_action(cx.listener(|this, _: &ImportPaths, _, cx| this.open_folder(cx)))
+            .on_action(cx.listener(|this, _: &DismissPathRoute, window, cx| {
+                this.dismiss_path_route(window, cx);
+            }))
             .on_action(cx.listener(|this: &mut Self, _: &StageData, _window, cx| {
                 this.set_stage(Stage::Data, cx);
             }))

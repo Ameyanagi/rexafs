@@ -11,6 +11,7 @@ struct ImportFile {
 enum ImportEvent {
     Batch(Vec<ImportFile>),
     Error(String),
+    SkippedProject(PathBuf),
     Done,
 }
 
@@ -60,6 +61,15 @@ fn start_import(
                         continue;
                     }
                 };
+                if entry.file_type().is_file() && crate::project::is_project(entry.path()) {
+                    if !send(
+                        &mut tx,
+                        ImportEvent::SkippedProject(entry.path().to_path_buf()),
+                    ) {
+                        return;
+                    }
+                    continue;
+                }
                 if !entry.file_type().is_file()
                     || (!explicit_file
                         && !entry.path().extension().is_some_and(|ext| {
@@ -186,8 +196,18 @@ impl StudioApp {
 
     pub(super) fn append_import(
         &mut self,
+        paths: Vec<PathBuf>,
+        restore: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.append_import_with_recents(paths, restore, Vec::new(), cx);
+    }
+
+    pub(super) fn append_import_with_recents(
+        &mut self,
         mut paths: Vec<PathBuf>,
         restore: bool,
+        recent_folders: Vec<PathBuf>,
         cx: &mut Context<Self>,
     ) {
         if self.catalog.scanning {
@@ -219,6 +239,8 @@ impl StudioApp {
         cx.spawn(async move |this, cx| {
             let (mut added, mut channels, mut notices) = (0, 0, 0);
             let mut reimported = false;
+            let mut skipped_projects = 0;
+            let mut imported_folders = BTreeSet::new();
             while let Some(event) = rx.next().await {
                 let done = matches!(event, ImportEvent::Done);
                 let current = this.update(cx, |app, cx| {
@@ -229,6 +251,9 @@ impl StudioApp {
                             let derived_start = app.derived.len();
                             for file in batch {
                                 let path = PathBuf::from(file.meta.dir.as_ref()).join(file.meta.name.as_ref());
+                                for folder in &recent_folders {
+                                    if path.starts_with(folder) { imported_folders.insert(folder.clone()); }
+                                }
                                 let existing = app.catalog.find_by_canonical_path(&path);
                                 if skip_existing_import(existing, restore, &app.group_registry) { continue; }
                                 let mut restored_ids = BTreeSet::new();
@@ -266,6 +291,10 @@ impl StudioApp {
                             app.status = format!("Importing · {added} files · {channels} reference channels").into();
                         }
                         ImportEvent::Error(e) => { notices += 1; app.record_job_error("import", e); }
+                        ImportEvent::SkippedProject(path) => {
+                            skipped_projects += 1;
+                            push_problem(&mut app.job_errors, JobError::warning(&path, "Project file skipped during data import; use Open project… to open it.".into()));
+                        }
                         ImportEvent::Done => {
                             app.catalog.scanning = false;
                             app.resolve_pending_overrides(cx);
@@ -273,7 +302,15 @@ impl StudioApp {
                             if reimported && app.workspace == Workspace::Operando { app.ensure_operando(cx); }
                             if !app.filter_text.is_empty() { app.apply_filter(cx); }
                             app.status = format!("Imported {added} files + {channels} reference channels · {notices} notices").into();
+                            if skipped_projects > 0 {
+                                app.status = format!("{} · {skipped_projects} project files skipped", app.status).into();
+                            }
                             app.record(app.status.to_string(), None);
+                            for folder in recent_folders.iter().rev().filter(|folder| imported_folders.contains(*folder)) {
+                                crate::settings::push_recent(&mut app.structure.settings.recent_import_folders, folder.clone(), 8);
+                            }
+                            if !imported_folders.is_empty() { app.persist_recent_locations(); }
+                            app.finish_routed_import(cx);
                         }
                     }
                     cx.notify();
@@ -361,6 +398,43 @@ impl StudioApp {
 mod tests {
 
     #[test]
+    fn route_directory_projects_are_skipped_and_reported_by_intake() {
+        let root = std::env::temp_dir().join(format!("rexafs-drop-walk-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("nested.RXS"), "not spectrum data").unwrap();
+        std::fs::write(root.join("mu.dat"), "100 1\n101 2\n").unwrap();
+        assert_eq!(
+            super::shell::path_routing::route_paths(vec![root.clone()], std::path::Path::is_dir),
+            super::shell::path_routing::DropRoute::ImportFolder(root.clone())
+        );
+        let events = futures::executor::block_on(
+            start_import(vec![root.clone()], ImportConfig::default(), false).collect::<Vec<_>>(),
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(
+                    |e| matches!(e, ImportEvent::SkippedProject(p) if p.ends_with("nested.RXS"))
+                )
+                .count(),
+            1
+        );
+        let files: Vec<_> = events
+            .iter()
+            .filter_map(|e| match e {
+                ImportEvent::Batch(files) => Some(files),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].meta.name.as_ref(), "mu.dat");
+        assert!(matches!(events.last(), Some(ImportEvent::Done)));
+        assert!(!events.iter().any(|e| matches!(e, ImportEvent::Error(_))));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn explicit_import_accepts_excluded_catalog_entries_but_restore_keeps_them_hidden() {
         let registry = crate::group_identity::GroupRegistry::default();
         let id = registry.register_source(
@@ -415,6 +489,9 @@ mod tests {
                         }
                     }
                     ImportEvent::Error(error) => errors.push(error),
+                    ImportEvent::SkippedProject(path) => {
+                        panic!("unexpected project: {}", path.display())
+                    }
                     ImportEvent::Done => {}
                 }
             }
@@ -460,6 +537,9 @@ mod tests {
                     ImportEvent::Error(error) => {
                         panic!("incomplete prefix caused an error: {error}")
                     }
+                    ImportEvent::SkippedProject(path) => {
+                        panic!("unexpected project: {}", path.display())
+                    }
                     ImportEvent::Done => {}
                 }
             }
@@ -490,6 +570,9 @@ mod tests {
                 ImportEvent::Error(error) => {
                     errors += 1;
                     assert!(error.contains("UTF-8"));
+                }
+                ImportEvent::SkippedProject(path) => {
+                    panic!("unexpected project: {}", path.display())
                 }
                 ImportEvent::Done => {}
             }
@@ -615,6 +698,9 @@ mod tests {
                     assert!(files.iter().all(|f| !f.reference));
                 }
                 ImportEvent::Error(error) => panic!("restore previewed a source: {error}"),
+                ImportEvent::SkippedProject(path) => {
+                    panic!("unexpected project: {}", path.display())
+                }
                 ImportEvent::Done => {}
             }
         }
