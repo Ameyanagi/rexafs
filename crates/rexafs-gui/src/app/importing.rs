@@ -1,4 +1,4 @@
-//! Append-only import. Read bounded headers off the UI thread; retain lazy sources.
+//! Append-only import. Collect source diagnostics off the UI thread; retain lazy sources.
 use super::*;
 use crate::catalog::FileMeta;
 use crate::params::ImportConfig;
@@ -7,6 +7,7 @@ use futures::{SinkExt, channel::mpsc};
 struct ImportFile {
     meta: FileMeta,
     reference: bool,
+    warnings: Vec<String>,
 }
 enum ImportEvent {
     Batch(Vec<ImportFile>),
@@ -62,24 +63,34 @@ fn start_import(
                 {
                     continue;
                 }
-                let reference = if detect_channels {
+                let (reference, warnings) = if detect_channels {
                     match preview_import(entry.path(), &import) {
                         Ok(preview) => {
-                            preview.resolved.mode != DetectionMode::Reference
-                                && preview
-                                    .available_channels()
-                                    .contains(&DetectionMode::Reference)
-                        }
-                        Err(e) => {
-                            if !send(&mut tx, ImportEvent::Error(e)) {
+                            if let Some(error) = &preview.signal_error
+                                && !send(&mut tx, ImportEvent::Error(error.clone()))
+                            {
                                 return;
                             }
-                            // Keep the source visible so manual column assignment can repair it.
-                            false
+                            (
+                                preview.resolved.mode != DetectionMode::Reference
+                                    && preview
+                                        .available_channels()
+                                        .contains(&DetectionMode::Reference),
+                                preview.diagnostics.warnings(),
+                            )
+                        }
+                        Err(error) => {
+                            if !send(&mut tx, ImportEvent::Error(error)) {
+                                return;
+                            }
+                            // Retain sources that need manual mapping.
+                            (false, Vec::new())
                         }
                     }
                 } else {
-                    false
+                    // Restore stays lazy. load_spectrum diagnoses each source with
+                    // its effective mapping after resolve_pending_overrides.
+                    (false, Vec::new())
                 };
                 let meta = FileMeta {
                     dir: Arc::from(entry.path().parent().unwrap().to_string_lossy().as_ref()),
@@ -90,7 +101,11 @@ fn start_import(
                         .into_boxed_str(),
                     size: entry.metadata().map(|m| m.len()).unwrap_or(0),
                 };
-                batch.push(ImportFile { meta, reference });
+                batch.push(ImportFile {
+                    meta,
+                    reference,
+                    warnings,
+                });
                 if batch.len() == 128
                     && !send(&mut tx, ImportEvent::Batch(std::mem::take(&mut batch)))
                 {
@@ -199,7 +214,7 @@ impl StudioApp {
         let mut rx = start_import(paths, params.import.clone(), !restore);
         self.status = "Importing files and detecting reference channels…".into();
         cx.spawn(async move |this, cx| {
-            let (mut added, mut channels, mut notices) = (0, 0, 0);
+            let (mut added, mut channels, mut notices, mut warnings) = (0, 0, 0, 0);
             while let Some(event) = rx.next().await {
                 let done = matches!(event, ImportEvent::Done);
                 let current = this.update(cx, |app, cx| {
@@ -209,6 +224,10 @@ impl StudioApp {
                             for file in batch {
                                 let path = PathBuf::from(file.meta.dir.as_ref()).join(file.meta.name.as_ref());
                                 if app.catalog.find_by_canonical_path(&path).is_some() { continue; }
+                                warnings += file.warnings.len();
+                                for message in file.warnings {
+                                    push_problem(&mut app.job_errors, JobError::warning(&path, message));
+                                }
                                 app.catalog.extend(vec![file.meta]);
                                 added += 1;
                                 if file.reference && !existing_references.contains(&path) {
@@ -237,7 +256,7 @@ impl StudioApp {
                             app.resolve_pending_overrides(cx);
                             app.restore_project_selection(cx);
                             if !app.filter_text.is_empty() { app.apply_filter(cx); }
-                            app.status = format!("Imported {added} files + {channels} reference channels · {notices} notices").into();
+                            app.status = format!("Imported {added} files + {channels} reference channels · {notices} notices · {warnings} warnings").into();
                             app.record(app.status.to_string(), None);
                         }
                     }
@@ -295,6 +314,172 @@ impl StudioApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn import_warnings_keep_source_and_severity_without_duplicate_records() {
+        let path = std::env::temp_dir().join("rexafs-import-diagnostics.dat");
+        std::fs::write(
+            &path,
+            "# energy i0 it\n100 10 5\n101 bad 5\n102 10\n103 10 5 9\n104 10 0\n105 10 2\n",
+        )
+        .unwrap();
+        let events = futures::executor::block_on(
+            start_import(vec![path.clone()], ImportConfig::default(), true).collect::<Vec<_>>(),
+        );
+        let mut problems = Vec::new();
+        let mut warnings = 0;
+        for event in events {
+            if let ImportEvent::Batch(files) = event {
+                for file in files {
+                    let source =
+                        PathBuf::from(file.meta.dir.as_ref()).join(file.meta.name.as_ref());
+                    assert_eq!(source, path.canonicalize().unwrap());
+                    warnings += file.warnings.len();
+                    for message in file.warnings {
+                        assert!(message.contains("example lines:"));
+                        let warning = JobError::warning(&source, message);
+                        assert_eq!(warning.severity, ProblemSeverity::Warning);
+                        assert!(warning.label.contains("rexafs-import-diagnostics.dat"));
+                        push_problem(&mut problems, warning.clone());
+                        push_problem(&mut problems, warning);
+                    }
+                }
+            }
+        }
+        assert_eq!(warnings, 4);
+        assert_eq!(problem_counts(&problems), (0, 4));
+        let error = JobError {
+            severity: ProblemSeverity::Error,
+            label: "error".into(),
+            message: "failure".into(),
+        };
+        for _ in 0..JOB_ERROR_CAPACITY {
+            push_problem(&mut problems, error.clone());
+        }
+        assert_eq!(problem_counts(&problems), (JOB_ERROR_CAPACITY, 0));
+        let warning = JobError::warning(&path, "new warning".into());
+        let full_errors = problems.clone();
+        push_problem(&mut problems, warning.clone());
+        assert_eq!(problems, full_errors);
+        // Even an error older than every warning must survive a new warning.
+        problems[1] = warning.clone();
+        let newer_warning = JobError::warning(&path, "newer warning".into());
+        push_problem(&mut problems, newer_warning.clone());
+        assert_eq!(problems[0], error);
+        assert!(!problems.contains(&warning));
+        assert_eq!(problems.last(), Some(&newer_warning));
+        assert_eq!(problem_counts(&problems), (JOB_ERROR_CAPACITY - 1, 1));
+        push_problem(&mut problems, error.clone());
+        assert_eq!(problem_counts(&problems), (JOB_ERROR_CAPACITY, 0));
+        let newest_error = JobError {
+            message: "new failure".into(),
+            ..error
+        };
+        push_problem(&mut problems, newest_error.clone());
+        assert_eq!(problems.len(), JOB_ERROR_CAPACITY);
+        assert_eq!(problems.last(), Some(&newest_error));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn restore_defers_diagnostics_until_saved_mappings_are_available() {
+        use crate::project::{ParamOverride, ProjectFile, load, save};
+        let dir = std::env::temp_dir().join("rexafs-restore-diagnostics");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mu_path = dir.join("mu.dat");
+        let roi_path = dir.join("roi.dat");
+        let unreadable = dir.join("invalid-utf8.dat");
+        std::fs::write(&mu_path, "100 1\n101 2\n").unwrap();
+        std::fs::write(&roi_path, "100 1 0 10\n101 NaN 0 10\n102 3 0 10\n").unwrap();
+        std::fs::write(&unreadable, [0xff]).unwrap();
+        let overrides = [
+            (
+                mu_path,
+                ImportConfig {
+                    mode: DetectionMode::MuColumn,
+                    mu_col: Some(1),
+                    ..Default::default()
+                },
+            ),
+            (
+                roi_path,
+                ImportConfig {
+                    mode: DetectionMode::Fluorescence,
+                    i0_col: Some(3),
+                    fluor_cols: Some(vec![1]),
+                    ..Default::default()
+                },
+            ),
+        ]
+        .into_iter()
+        .map(|(path, import)| ParamOverride {
+            path,
+            params: PipelineParams {
+                import,
+                ..Default::default()
+            },
+        })
+        .collect();
+        let project_path = dir.join("restore.rxs");
+        save(
+            &project_path,
+            &ProjectFile {
+                overrides,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let restored = load(&project_path).unwrap();
+        let mut paths: Vec<_> = restored.overrides.iter().map(|o| o.path.clone()).collect();
+        paths.push(unreadable);
+        let events = futures::executor::block_on(
+            start_import(paths, restored.params.import.clone(), false).collect::<Vec<_>>(),
+        );
+        let mut sources = 0;
+        for event in &events {
+            match event {
+                ImportEvent::Batch(files) => {
+                    sources += files.len();
+                    assert!(files.iter().all(|f| !f.reference && f.warnings.is_empty()));
+                }
+                ImportEvent::Error(error) => panic!("restore previewed a source: {error}"),
+                ImportEvent::Done => {}
+            }
+        }
+        assert_eq!(sources, 3);
+        assert!(matches!(events.last(), Some(ImportEvent::Done)));
+        for (index, saved) in restored.overrides.iter().enumerate() {
+            assert!(crate::params::load_mu(&saved.path, &restored.params.import).is_err());
+            let raw = load_group_raw_with_diagnostics(&saved.path, &saved.params, None).unwrap();
+            assert_eq!(raw.diagnostics.valid_points, 2);
+            assert_eq!(raw.diagnostics.excluded_signal_points.count, index);
+            if index == 1 {
+                assert_eq!(raw.diagnostics.excluded_signal_points.examples, vec![2]);
+                assert_eq!(raw.mu, vec![0.1, 0.3]);
+            } else {
+                assert!(raw.diagnostics.warnings().is_empty());
+                assert_eq!(raw.mu, vec![1., 2.]);
+            }
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn raw_cache_retains_arrays_and_diagnostics() {
+        let path = std::env::temp_dir().join("rexafs-cache-diagnostics.dat");
+        std::fs::write(&path, "# energy i0 it\n100 10 5\n101 bad 5\n102 10 2\n").unwrap();
+        let raw = Arc::new(
+            crate::params::load_raw_with_diagnostics(&path, &PipelineParams::default()).unwrap(),
+        );
+        let mut cache: LruCache<(usize, u64), RawArrays> =
+            LruCache::new(NonZeroUsize::new(2).unwrap());
+        cache.put((0, 42), raw.clone());
+        let cached = cache.get(&(0, 42)).unwrap().clone();
+        assert_eq!(cached, raw);
+        assert_eq!(cached.diagnostics.malformed_rows.examples, vec![3]);
+        assert_eq!(cached.diagnostics.summary(), "2 points · 1 rows skipped");
+        std::fs::remove_file(path).unwrap();
+    }
+
     #[test]
     fn qas_import_detects_reference_but_project_restore_preserves_saved_groups() {
         let source =

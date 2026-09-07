@@ -826,6 +826,7 @@ impl StudioApp {
                 match result {
                     Ok((sp, raw)) => {
                         if let Some(raw) = raw {
+                            app.record_source_warnings(&standard.path, &raw.diagnostics);
                             app.raw_cache.put(raw_key, raw);
                         }
                         let sp = Arc::new(sp);

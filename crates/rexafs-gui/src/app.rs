@@ -43,7 +43,8 @@ use crate::fitting::{
 };
 use crate::params::{
     AUTOBK_SOLVERS, DerivedSpectrum, DetectionMode, FT_WINDOWS, ImportPreview, PipelineParams,
-    load_group_raw, parse_cols, preview_import, process_arrays, process_file, resample_chik,
+    load_group_raw_with_diagnostics, parse_cols, preview_import, process_arrays, process_file,
+    resample_chik,
 };
 use crate::plotting::{
     K_AXIS, QuadTrace, R_AXIS, SeriesSource, ViewOptions, build_fit_k, build_fit_q, build_fit_r,
@@ -67,7 +68,7 @@ const JOB_ERROR_CAPACITY: usize = 200;
 /// Raw arrays are small (two Vec<f64> per file); keep plenty around.
 const RAW_CACHE_CAPACITY: usize = 256;
 /// Raw (energy, mu) of one file after import math.
-type RawArrays = Arc<(Vec<f64>, Vec<f64>)>;
+type RawArrays = Arc<crate::params::RawData>;
 /// Live-follow recompute cadence while dragging a plot handle.
 const DRAG_RECOMPUTE_TICK: Duration = Duration::from_millis(50);
 /// Import-preview column width. Wide enough for a 4-decimal energy value
@@ -650,10 +651,55 @@ struct FitProvenance {
     model_fingerprint: u64,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProblemSeverity {
+    Error,
+    Warning,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 struct JobError {
+    severity: ProblemSeverity,
     label: String,
     message: String,
+}
+
+impl JobError {
+    fn warning(path: &std::path::Path, message: String) -> Self {
+        Self {
+            severity: ProblemSeverity::Warning,
+            label: path.display().to_string(),
+            message,
+        }
+    }
+}
+
+fn push_problem(problems: &mut Vec<JobError>, problem: JobError) {
+    // Browsing/reprocessing a cached source should not flood recent problems.
+    if problem.severity == ProblemSeverity::Warning && problems.contains(&problem) {
+        return;
+    }
+    if problems.len() == JOB_ERROR_CAPACITY {
+        if let Some(index) = problems
+            .iter()
+            .position(|p| p.severity == ProblemSeverity::Warning)
+        {
+            problems.remove(index);
+        } else if problem.severity == ProblemSeverity::Warning {
+            return;
+        } else {
+            problems.remove(0);
+        }
+    }
+    problems.push(problem);
+}
+
+fn problem_counts(problems: &[JobError]) -> (usize, usize) {
+    let warnings = problems
+        .iter()
+        .filter(|p| p.severity == ProblemSeverity::Warning)
+        .count();
+    (problems.len() - warnings, warnings)
 }
 
 /// A selection that failed to load while earlier results are still on screen.
@@ -1491,6 +1537,8 @@ mod override_tests {
             auto_mode: resolved.mode,
             resolved,
             xdi: None,
+            diagnostics: Default::default(),
+            signal_error: None,
         };
         let mut preview = Some(reference.clone());
         let mut error = gpui::SharedString::from("current error");
@@ -2076,13 +2124,24 @@ impl StudioApp {
         label: impl Into<String>,
         message: impl Into<String>,
     ) {
-        if self.job_errors.len() == JOB_ERROR_CAPACITY {
-            self.job_errors.remove(0);
+        push_problem(
+            &mut self.job_errors,
+            JobError {
+                severity: ProblemSeverity::Error,
+                label: label.into(),
+                message: message.into(),
+            },
+        );
+    }
+
+    fn record_source_warnings(
+        &mut self,
+        path: &std::path::Path,
+        diagnostics: &crate::params::ParserDiagnostics,
+    ) {
+        for message in diagnostics.warnings() {
+            push_problem(&mut self.job_errors, JobError::warning(path, message));
         }
-        self.job_errors.push(JobError {
-            label: label.into(),
-            message: message.into(),
-        });
     }
 
     fn running_job_count(&self) -> usize {
@@ -3247,10 +3306,11 @@ impl StudioApp {
                 app.load_running = false;
                 match result {
                     Ok((sp, raw)) => {
-                        if ix != NO_ENTRY
-                            && let Some(raw) = raw
-                        {
-                            app.raw_cache.put(raw_key, raw);
+                        if let Some(raw) = raw {
+                            app.record_source_warnings(&processed_path, &raw.diagnostics);
+                            if ix != NO_ENTRY {
+                                app.raw_cache.put(raw_key, raw);
+                            }
                         }
                         let sp = Arc::new(sp);
                         if ix != NO_ENTRY {
@@ -3306,13 +3366,12 @@ impl StudioApp {
                 return group.for_display(&params).map(|sp| (sp, None));
             }
             match raw {
-                Some(raw) => {
-                    process_arrays(raw.0.clone(), raw.1.clone(), &params).map(|sp| (sp, None))
-                }
+                Some(raw) => process_arrays(raw.energy.clone(), raw.mu.clone(), &params)
+                    .map(|sp| (sp, Some(raw))),
                 None => {
-                    let (energy, mu) = load_group_raw(&path, &params, derived.as_ref())?;
-                    let sp = process_arrays(energy.clone(), mu.clone(), &params)?;
-                    Ok((sp, Some(Arc::new((energy, mu)))))
+                    let raw = load_group_raw_with_diagnostics(&path, &params, derived.as_ref())?;
+                    let sp = process_arrays(raw.energy.clone(), raw.mu.clone(), &params)?;
+                    Ok((sp, Some(Arc::new(raw))))
                 }
             }
         })
@@ -4891,7 +4950,7 @@ impl StudioApp {
         self.load_spectrum(ix, path, label, cx);
     }
 
-    /// Bounded-read preview of the current file on the background executor;
+    /// Full-source diagnostics and column preview on the background executor;
     /// the result is dropped if the selection moved on before it arrived.
     fn update_import_preview(&mut self, cx: &mut Context<Self>) {
         let path = self.current_path.clone();
@@ -4921,6 +4980,10 @@ impl StudioApp {
                     &mut app.import_preview,
                     &mut app.import_preview_error,
                 ) {
+                    if let Some(preview) = &app.import_preview {
+                        let diagnostics = preview.diagnostics.clone();
+                        app.record_source_warnings(&path, &diagnostics);
+                    }
                     cx.notify();
                 }
             })
@@ -7437,6 +7500,14 @@ impl StudioApp {
                         }
                     }
                 }
+                let diagnostics = self
+                    .selected
+                    .and_then(|ix| {
+                        self.raw_cache
+                            .peek(&(ix, self.effective_params(ix).raw_fingerprint()))
+                    })
+                    .map(|raw| &raw.diagnostics)
+                    .unwrap_or(&preview.diagnostics);
                 let table_width = px(preview.column_count as f32 * IMPORT_COL_W);
                 let header_status = if preview.names.is_some() {
                     "header names found"
@@ -7450,10 +7521,22 @@ impl StudioApp {
                         .text_xs()
                         .text_color(t.text_muted)
                         .child(format!(
-                            "detected: {} columns · {header_status} · auto: {:?}",
-                            preview.column_count, preview.auto_mode
+                            "{} · detected: {} columns · {header_status} · auto: {:?}",
+                            diagnostics.summary(),
+                            preview.column_count,
+                            preview.auto_mode
                         )),
                 );
+                if let Some(error) = &preview.signal_error {
+                    sections = sections.child(
+                        div()
+                            .px_3()
+                            .pb_1()
+                            .text_xs()
+                            .text_color(t.error)
+                            .child(error.clone()),
+                    );
+                }
                 // The column table is a diagnostic, not a parameter — behind
                 // the disclosure it stops permanently occupying the top of the
                 // panel and pushing the actual parameters down. The one-line
@@ -7897,6 +7980,7 @@ impl StudioApp {
 
     fn problems_panel(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
+        let (errors, warnings) = problem_counts(&self.job_errors);
         let mut list = div()
             .id("recent-problems-list")
             .flex_1()
@@ -7913,8 +7997,20 @@ impl StudioApp {
                     .text_xs()
                     .child(
                         div()
-                            .text_color(t.error)
-                            .child(SharedString::from(error.label.clone())),
+                            .text_color(if error.severity == ProblemSeverity::Error {
+                                t.error
+                            } else {
+                                t.text_muted
+                            })
+                            .child(SharedString::from(format!(
+                                "{}: {}",
+                                if error.severity == ProblemSeverity::Error {
+                                    "Error"
+                                } else {
+                                    "Warning"
+                                },
+                                error.label
+                            ))),
                     )
                     .child(
                         div()
@@ -7945,7 +8041,7 @@ impl StudioApp {
                     .text_xs()
                     .text_color(t.text)
                     .child(div().flex_1().child(format!(
-                        "Recent problems ({}/{JOB_ERROR_CAPACITY})",
+                        "Recent problems · {errors} errors · {warnings} warnings ({}/{JOB_ERROR_CAPACITY})",
                         self.job_errors.len()
                     )))
                     .child(
@@ -8028,7 +8124,7 @@ impl StudioApp {
     fn status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
         let jobs = self.running_job_count();
-        let errors = self.job_errors.len();
+        let (errors, warnings) = problem_counts(&self.job_errors);
         let mut bar = div()
             .h(px(28.))
             .w_full()
@@ -8071,7 +8167,7 @@ impl StudioApp {
                         this.problems_open = !this.problems_open;
                         cx.notify();
                     }))
-                    .child(format!("errors:{errors}")),
+                    .child(format!("{errors} errors · {warnings} warnings")),
             );
         if self.catalog.scanning
             || self.verify_running
