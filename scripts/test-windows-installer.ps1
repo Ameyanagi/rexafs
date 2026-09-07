@@ -41,8 +41,11 @@ function Install-Checked([string]$LogName) {
     $shell = New-Object -ComObject WScript.Shell
     foreach ($link in @($startLink, $desktopLink)) {
         if (!(Test-Path $link)) { throw "Missing shortcut: $link" }
-        if ($shell.CreateShortcut($link).TargetPath -ne (Join-Path $installed 'rexafs.exe')) {
-            throw 'Shortcut points to the wrong executable'
+        $shortcut = $shell.CreateShortcut($link)
+        $expected = Join-Path $installed 'rexafs.exe'
+        Copy-Item -LiteralPath $link -Destination (Join-Path $logs ((Split-Path $link -Leaf) + '-' + (Split-Path (Split-Path $link -Parent) -Leaf) + '.lnk'))
+        if ($shortcut.TargetPath -ne $expected) {
+            throw "Shortcut $link points to '$($shortcut.TargetPath)', expected '$expected'"
         }
     }
 }
