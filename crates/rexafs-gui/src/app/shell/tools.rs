@@ -804,6 +804,7 @@ impl StudioApp {
 
     pub(crate) fn tool_target(&self, ix: usize) -> Option<ToolTarget> {
         if ix == NO_ENTRY {
+            self.group_id(ix)?;
             let (path, label, id) = self.standalone_source.as_ref()?;
             return Some(ToolTarget::standalone(
                 Some(id.clone()),

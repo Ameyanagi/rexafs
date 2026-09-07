@@ -172,6 +172,39 @@ impl StudioApp {
             .unwrap_or(0)
     }
 
+    fn stack_id(&self, ix: usize) -> Option<crate::group_identity::GroupId> {
+        let path = if ix < self.catalog.len() {
+            Some(self.catalog.path(ix))
+        } else {
+            ix.checked_sub(DERIVED_BASE)
+                .and_then(|i| self.derived.get(i))
+                .and_then(|d| d.source.clone())
+        };
+        if let Some(path) = path {
+            if let Some(primary) = self.catalog.find_by_canonical_path(&path) {
+                return Some(self.group_registry.register_source(
+                    Some(primary),
+                    path,
+                    self.effective_params(primary).import.mode,
+                    &self.project_source_origins,
+                ));
+            }
+            if let Some((_, _, id)) = self
+                .standalone_source
+                .as_ref()
+                .filter(|(p, _, _)| p == &path)
+            {
+                return Some(id.clone());
+            }
+            // Orphan stacks also retain their disclosure when their first channel changes.
+            return Some(crate::group_identity::GroupId::source(
+                &path,
+                crate::params::DetectionMode::Auto,
+            ));
+        }
+        self.group_id(ix)
+    }
+
     pub(crate) fn interaction_rows(&self) -> group_rows::Rows {
         if self.data_tab == DataTab::Scans {
             let scan = self.expanded_scan.and_then(|i| self.catalog.scans.get(i));
@@ -192,27 +225,18 @@ impl StudioApp {
             marks.clone_from(&self.selection);
             marks.extend(self.reveal_current);
         }
-        if self.expanded_sources.is_empty() && !reveal {
-            return group_rows::build_rows(
-                &self.catalog,
-                &self.derived,
-                &marks,
-                self.filtered.clone(),
-                &self.filter_text,
-                self.standalone_path(),
-            );
-        }
-        group_rows::build_rows_revealing(
+        group_rows::build_rows_active(
             &self.catalog,
             &self.derived,
             |g| {
-                self.peek_group_id(g)
+                self.stack_id(g)
                     .and_then(|id| self.expanded_sources.get(&id).copied())
             },
             self.filtered.clone(),
             &self.filter_text,
             self.standalone_path(),
             &marks,
+            &self.group_registry.excluded_indices(),
         )
     }
 
@@ -251,7 +275,7 @@ impl StudioApp {
                 extra_channels,
                 ..
             } if extra_channels > 0 => {
-                if let Some(id) = self.group_id(group) {
+                if let Some(id) = self.stack_id(group) {
                     self.expanded_sources.insert(id, expand);
                 }
             }
@@ -291,7 +315,7 @@ impl StudioApp {
                         .map(|i| DERIVED_BASE + i)
                 });
             if let Some(parent) = parent.filter(|&p| p != ix)
-                && let Some(id) = self.group_id(parent)
+                && let Some(id) = self.stack_id(parent)
             {
                 self.expanded_sources.insert(id, true);
             }
@@ -441,6 +465,12 @@ impl StudioApp {
                             .child(format!(
                                 "{}",
                                 self.catalog.len()
+                                    - self
+                                        .group_registry
+                                        .excluded_indices()
+                                        .iter()
+                                        .filter(|&&g| g < DERIVED_BASE)
+                                        .count()
                                     + self.derived.len()
                                     + usize::from(self.standalone_path().is_some())
                             )),
@@ -791,6 +821,9 @@ impl StudioApp {
                     .get(id, self.effective_fingerprint(ix))
             })
             .unwrap_or_default();
+        let missing = derived
+            .and_then(|d| group_rows::input_missing(d, |id| self.group_registry.is_excluded(id)));
+        let has_problems = !problems.is_empty() || missing.is_some();
         let error = problems
             .iter()
             .any(|p| p.severity == crate::app::ProblemSeverity::Error);
@@ -798,6 +831,9 @@ impl StudioApp {
         let mut detail = format!("{full_label}\n{path_label}\n{}", mode.label());
         for problem in problems {
             detail.push_str(&format!("\n{}", problem.message));
+        }
+        if let Some(missing) = &missing {
+            detail.push_str(&format!("\n{missing}"));
         }
         if locked {
             detail.push_str("\nProcessing locked");
@@ -836,7 +872,7 @@ impl StudioApp {
         let reserved = 100.
             + if child { 12. } else { 0. }
             + (tag.chars().count() + suffix.chars().count()) as f32 * 6.5
-            + if problems.is_empty() { 0. } else { 16. }
+            + if has_problems { 16. } else { 0. }
             + if locked { 16. } else { 0. };
         let label = middle_truncate(
             &label,
@@ -887,7 +923,7 @@ impl StudioApp {
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         cx.stop_propagation();
                         if extra > 0
-                            && let Some(id) = this.group_id(ix)
+                            && let Some(id) = this.stack_id(ix)
                         {
                             this.expanded_sources.insert(id, !expanded);
                             cx.notify();
@@ -928,7 +964,7 @@ impl StudioApp {
                     .text_color(t.text_muted)
                     .child(tag),
             )
-            .when(!problems.is_empty(), |d| {
+            .when(has_problems, |d| {
                 d.child(
                     div()
                         .flex_none()

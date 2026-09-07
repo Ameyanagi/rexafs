@@ -1133,3 +1133,96 @@ fn standalone_processing_lock_roundtrip_linked_and_embedded() {
         assert!(!load(&path).unwrap().group_state.frozen.contains(&id));
     }
 }
+
+#[test]
+fn removal_exclusions_roundtrip_linked_and_embedded_without_resurrection() {
+    use crate::group_identity::{GroupId, GroupRegistry};
+    use crate::params::{DetectionMode, Operation, OperationInput};
+    use std::collections::BTreeSet;
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let temp = Temp::new();
+        let source = temp.join("input.dat");
+        std::fs::write(&source, "1 2\n2 3\n").unwrap();
+        let mut project = ProjectFile {
+            version: 1,
+            raw_files: vec![source.clone()],
+            spectrum_file: Some(source.clone()),
+            ..Default::default()
+        };
+        project.assign_group_ids();
+        let id = project.source_groups[0].id.clone();
+        project.group_state.excluded.insert(id.clone());
+        let retired_channel = GroupId::source(&source, DetectionMode::Reference);
+        project.group_state.excluded.insert(retired_channel.clone());
+        project.derived.push(DerivedSpectrum {
+            group_id: Some(GroupId::new_result()),
+            id: 1,
+            operation: Some(Operation {
+                tool: "merge".into(),
+                inputs: vec![OperationInput {
+                    group_id: Some(id.clone()),
+                    label: "Input".into(),
+                    path: source.clone(),
+                    derived_id: None,
+                    fingerprint: 0,
+                    size: None,
+                }],
+                parameters: Value::Null,
+                applied_energy_shift_ev: 0.,
+            }),
+            ..Default::default()
+        });
+        let path = temp.join("excluded.rxs");
+        save_with_storage(&path, &project, mode).unwrap();
+        let mut loaded = load(&path).unwrap();
+        loaded.assign_group_ids();
+        assert_eq!(
+            loaded.group_state.excluded,
+            BTreeSet::from([id.clone(), retired_channel.clone()])
+        );
+        let registry = GroupRegistry::from_sources(loaded.source_groups.clone());
+        registry.set_excluded(&loaded.group_state.excluded);
+        let location = loaded.source_groups[0].path.clone();
+        registry.register_source(
+            Some(0),
+            location,
+            DetectionMode::Auto,
+            &loaded.source_origins,
+        );
+        assert_eq!(registry.id(0), None);
+        assert_eq!(registry.index(&id), None);
+        let mut replacement = DerivedSpectrum {
+            source: Some(source.clone()),
+            params: Some(PipelineParams::default()),
+            ..Default::default()
+        };
+        replacement.params.as_mut().unwrap().import.mode = DetectionMode::Reference;
+        registry.assign_group(&mut replacement, &Default::default());
+        assert_ne!(replacement.group_id, Some(retired_channel));
+        assert_eq!(
+            loaded.derived[0].operation.as_ref().unwrap().inputs[0].group_id,
+            Some(id.clone())
+        );
+        let location = registry.sources()[0].path.clone();
+        let fresh = registry.reimport_source(&location, Some(0)).unwrap();
+        loaded.source_groups = registry.sources();
+        save_with_storage(&path, &loaded, mode).unwrap();
+        let mut reimported = load(&path).unwrap();
+        reimported.assign_group_ids();
+        let reopened = GroupRegistry::from_sources(reimported.source_groups.clone());
+        reopened.set_excluded(&reimported.group_state.excluded);
+        reopened.register_source(
+            Some(0),
+            reimported.source_groups[0].path.clone(),
+            DetectionMode::Auto,
+            &reimported.source_origins,
+        );
+        assert_eq!(reopened.id(0), Some(fresh));
+        assert!(reopened.is_excluded(&id));
+        assert_eq!(
+            reimported.derived[0].operation.as_ref().unwrap().inputs[0].group_id,
+            Some(id)
+        );
+        assert!(source.is_file());
+    }
+}

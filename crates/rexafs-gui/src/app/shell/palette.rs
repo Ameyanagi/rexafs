@@ -11,6 +11,16 @@ use super::{parameter_actions::ParamScope, tools::Tool};
 use crate::app::{DERIVED_BASE, NO_ENTRY, PaletteClose, StudioApp};
 use crate::widgets::text_input::{InputEvent, TextInput};
 
+fn catalog_items(
+    len: usize,
+    registry: &crate::group_identity::GroupRegistry,
+    cap: usize,
+) -> impl Iterator<Item = usize> + '_ {
+    (0..len)
+        .filter(|&ix| !registry.index_excluded(ix))
+        .take(cap)
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum PaletteCmd {
     Stage(Stage),
@@ -166,7 +176,7 @@ impl StudioApp {
         }
         // Groups: the visible catalog (capped) plus derived groups.
         let cap = 400;
-        for ix in 0..self.catalog.len().min(cap) {
+        for ix in catalog_items(self.catalog.len(), &self.group_registry, cap) {
             items.push(PaletteItem {
                 label: self.catalog.name(ix).to_string(),
                 category: "group",
@@ -462,6 +472,24 @@ impl StudioApp {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn palette_catalog_items_skip_removed_groups_before_the_cap() {
+        let registry = crate::group_identity::GroupRegistry::default();
+        let id = registry.register_source(
+            Some(0),
+            "/data/a.dat".into(),
+            Default::default(),
+            &Default::default(),
+        );
+        registry.set_excluded(&std::collections::BTreeSet::from([id]));
+        assert_eq!(
+            catalog_items(500, &registry, 2).collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        assert_eq!(registry.sources().len(), 1);
+    }
+
     use super::*;
 
     #[test]

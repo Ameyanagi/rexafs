@@ -7,8 +7,9 @@ use gpui::{ClickEvent, Context, IntoElement, ParentElement, Styled, div, prelude
 
 use super::MONO;
 use crate::app::{DERIVED_BASE, ParamKey, StudioApp};
-use crate::group_identity::GroupId;
+use crate::group_identity::{GroupId, GroupRegistry, GroupState};
 use crate::params::{DerivedSpectrum, PipelineParams, Quantity};
+use std::collections::BTreeSet;
 
 /// Inverse of a recorded change.
 #[allow(clippy::large_enum_variant)]
@@ -47,11 +48,120 @@ pub enum UndoOp {
         index: usize,
         spectrum: DerivedSpectrum,
     },
-    /// A derived group was removed from `index`.
-    DerivedRemove {
-        index: usize,
-        spectrum: DerivedSpectrum,
+    GroupRemove {
+        snapshot: RemovalSnapshot,
+        /// Undoing a creation uses the same transaction, with its direction reversed.
+        restore_on_redo: bool,
     },
+}
+
+/// Restorable transaction, including source exclusions and independent UI identities.
+pub struct RemovalSnapshot {
+    ids: BTreeSet<GroupId>,
+    derived: Vec<(usize, DerivedSpectrum)>,
+    state: GroupState,
+    sources: Vec<crate::group_identity::SourceGroup>,
+    interaction: crate::app::group_rows::InteractionIds,
+}
+
+impl RemovalSnapshot {
+    pub(crate) fn take(
+        ids: BTreeSet<GroupId>,
+        registry: &GroupRegistry,
+        derived: &mut Vec<DerivedSpectrum>,
+        state: &mut GroupState,
+        interaction: crate::app::group_rows::InteractionIds,
+    ) -> Self {
+        let mut saved = state.clone();
+        saved.labels.retain(|id, _| ids.contains(id));
+        saved.colors.retain(|id, _| ids.contains(id));
+        saved.marked.retain(|id| ids.contains(id));
+        saved.frozen.retain(|id| ids.contains(id));
+        saved.overrides.retain(|(id, _)| ids.contains(id));
+        saved.excluded.clear();
+        saved.current = saved.current.filter(|id| ids.contains(id));
+        let sources = registry
+            .sources()
+            .into_iter()
+            .filter(|s| ids.contains(&s.id))
+            .collect();
+        let removed = derived
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.group_id.as_ref().is_some_and(|id| ids.contains(id)))
+            .map(|(i, d)| (i, d.clone()))
+            .collect();
+        derived.retain(|d| d.group_id.as_ref().is_none_or(|id| !ids.contains(id)));
+        state.labels.retain(|id, _| !ids.contains(id));
+        state.colors.retain(|id, _| !ids.contains(id));
+        state.marked.retain(|id| !ids.contains(id));
+        state.frozen.retain(|id| !ids.contains(id));
+        state.overrides.retain(|(id, _)| !ids.contains(id));
+        if state.current.as_ref().is_some_and(|id| ids.contains(id)) {
+            state.current = None;
+        }
+        state.excluded.extend(ids.clone());
+        registry.set_excluded(&state.excluded);
+        registry.replace_derived(derived);
+        Self {
+            ids,
+            derived: removed,
+            state: saved,
+            sources,
+            interaction,
+        }
+    }
+
+    fn restore_sources(&self, registry: &GroupRegistry, catalog: &mut crate::catalog::Catalog) {
+        for source in &self.sources {
+            let ix = catalog
+                .find_by_canonical_path(&source.path)
+                .unwrap_or_else(|| {
+                    let ix = catalog.len();
+                    catalog.extend(vec![crate::catalog::FileMeta {
+                        dir: source
+                            .path
+                            .parent()
+                            .unwrap_or(std::path::Path::new(""))
+                            .to_string_lossy()
+                            .as_ref()
+                            .into(),
+                        name: source
+                            .path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .as_ref()
+                            .into(),
+                        size: 0,
+                    }]);
+                    ix
+                });
+            registry.restore_source(source.clone(), ix);
+        }
+    }
+
+    fn restore(
+        &self,
+        registry: &GroupRegistry,
+        derived: &mut Vec<DerivedSpectrum>,
+        state: &mut GroupState,
+    ) {
+        for (index, group) in &self.derived {
+            derived.insert((*index).min(derived.len()), group.clone());
+        }
+        state.excluded.retain(|id| !self.ids.contains(id));
+        state.labels.extend(self.state.labels.clone());
+        state.colors.extend(self.state.colors.clone());
+        state.marked.extend(self.state.marked.clone());
+        state.frozen.extend(self.state.frozen.clone());
+        state.overrides.extend(self.state.overrides.clone());
+        if let Some(current) = &self.state.current {
+            state.current = Some(current.clone());
+        }
+        registry.set_excluded(&state.excluded);
+        registry.replace_derived(derived);
+    }
 }
 
 impl UndoOp {
@@ -248,43 +358,204 @@ impl StudioApp {
         }
     }
 
-    fn insert_derived(&mut self, index: usize, spectrum: DerivedSpectrum, cx: &mut Context<Self>) {
-        let index = index.min(self.derived.len());
-        self.derived.insert(index, spectrum);
-        self.rekey_after_catalog_change();
-        if let Some(ix) = self.selected {
-            let (focus, anchor) = (self.focus_group, self.mark_anchor);
-            self.select_entry(ix, cx);
-            (self.focus_group, self.mark_anchor) = (focus, anchor);
+    pub(crate) fn remove_groups(
+        &mut self,
+        ids: BTreeSet<GroupId>,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(snapshot) = self.take_groups(ids, cx) {
+            self.record(
+                text,
+                Some(UndoOp::GroupRemove {
+                    snapshot,
+                    restore_on_redo: false,
+                }),
+            );
+            cx.notify();
         }
-        self.ensure_compare_loaded(cx);
-        self.sync_param_fields(cx);
     }
 
-    pub(crate) fn take_derived(
+    fn take_groups(
         &mut self,
-        index: usize,
+        ids: BTreeSet<GroupId>,
         cx: &mut Context<Self>,
-    ) -> Option<DerivedSpectrum> {
-        if index >= self.derived.len() {
+    ) -> Option<RemovalSnapshot> {
+        let ids: BTreeSet<_> = ids
+            .into_iter()
+            .filter(|id| self.menu_index(id).is_some())
+            .collect();
+        if ids.is_empty() {
             return None;
         }
-        let removed = DERIVED_BASE + index;
-        let was_active = self.selected == Some(removed);
-        // Locate even a filtered-out current in the full presentation order.
-        // Survivors are checked against the actual displayed rows below.
-        let before = crate::app::group_rows::build_rows_revealing(
+        let before = crate::app::group_rows::build_rows_active(
             &self.catalog,
             &self.derived,
             |_| Some(true),
             None,
             "",
             self.standalone_path(),
-            &Default::default(),
+            &BTreeSet::new(),
+            &self.group_registry.excluded_indices(),
         );
-        let spectrum = self.derived.remove(index);
-        self.rekey_after_catalog_change();
-        if was_active {
+        let current = self.current_group_index();
+        let was_current =
+            current.is_some_and(|g| self.group_id(g).is_some_and(|id| ids.contains(&id)));
+        self.bind_joint_sources();
+        let interaction = self.capture_groups();
+        let removed_indices: BTreeSet<_> =
+            ids.iter().filter_map(|id| self.menu_index(id)).collect();
+        let previous_registry = self.group_registry.clone();
+        let snapshot = RemovalSnapshot::take(
+            ids,
+            &self.group_registry,
+            &mut self.derived,
+            &mut self.group_state,
+            interaction.clone(),
+        );
+        self.invalidate_removal_jobs(
+            &snapshot.ids,
+            &removed_indices,
+            !snapshot.derived.is_empty(),
+        );
+        self.resolve_group_state();
+        self.resolve_interaction(interaction);
+        if was_current {
+            let after = self.interaction_rows();
+            self.selected = current.and_then(|g| {
+                crate::app::group_rows::removal_survivor(
+                    &before,
+                    &after,
+                    g,
+                    &previous_registry,
+                    &self.group_registry,
+                    self.standalone_path().is_some(),
+                )
+            });
+            if self.focus_group.is_none() {
+                self.focus_group = self.selected;
+            }
+        }
+        self.refresh_removed_groups(cx);
+        Some(snapshot)
+    }
+
+    fn invalidate_removal_jobs(
+        &mut self,
+        ids: &BTreeSet<GroupId>,
+        indices: &BTreeSet<usize>,
+        derived_changed: bool,
+    ) {
+        use crate::app::retire_job;
+        self.tools.invalidate_bindings();
+        // Catalog slots do not shift. Only these cache keys became unavailable.
+        crate::app::evict_group_keys(&mut self.cache, indices, false);
+        crate::app::evict_group_keys(&mut self.raw_cache, indices, false);
+        if derived_changed {
+            self.invalidate_index_bindings(crate::app::IndexChange::DerivedOnly);
+        } else {
+            self.generation += 1;
+            self.compare_gen += 1;
+            self.load_running = false;
+            self.compare_running = false;
+        }
+        let interrupted = crate::app::CatalogBindings {
+            generations: [
+                &mut self.operando_gen,
+                &mut self.batch_gen,
+                &mut self.merge_gen,
+                &mut self.fit_gen,
+                &mut self.lcf_gen,
+                &mut self.filter_gen,
+            ],
+            running: [
+                &mut self.operando_running,
+                &mut self.batch_running,
+                &mut self.merge_running,
+                &mut self.fit_running,
+                &mut self.lcf_running,
+            ],
+            cancellations: [
+                &mut self.operando_cancel,
+                &mut self.batch_cancel,
+                &mut self.merge_cancel,
+                &mut self.lcf_cancel,
+            ],
+            filtered: &mut self.filtered,
+        }
+        .remove(&self.job_inputs, ids);
+        crate::app::finish_interrupted_results(
+            self.batch_fit.as_mut(),
+            self.series_lcf.as_mut(),
+            interrupted,
+        );
+        // A removed unsampled frame also changes sampling and cursor geometry.
+        let overview_affected = self.operando.as_ref().is_some_and(|data| {
+            self.catalog.scans.get(data.scan).is_some_and(|scan| {
+                indices
+                    .range(scan.start..scan.start.saturating_add(scan.len))
+                    .next()
+                    .is_some()
+            })
+        }) || self
+            .active_scan
+            .and_then(|i| self.catalog.scans.get(i))
+            .is_some_and(|scan| {
+                indices
+                    .range(scan.start..scan.start.saturating_add(scan.len))
+                    .next()
+                    .is_some()
+            });
+        if overview_affected {
+            if self.job_inputs[0].is_disjoint(ids) {
+                retire_job(
+                    &mut self.operando_gen,
+                    &mut self.operando_running,
+                    Some(&mut self.operando_cancel),
+                );
+            }
+            self.operando = None;
+            self.operando_plots = None;
+        }
+        self.import_preview_gen += 1;
+    }
+
+    /// Journal the fresh identity introduced by an explicit re-import.
+    pub(crate) fn record_reimport(&mut self, ids: BTreeSet<GroupId>) {
+        let snapshot = RemovalSnapshot::take(
+            ids,
+            &self.group_registry,
+            &mut self.derived,
+            &mut self.group_state,
+            crate::app::group_rows::InteractionIds::capture([None; 3], |_| None),
+        );
+        snapshot.restore(
+            &self.group_registry,
+            &mut self.derived,
+            &mut self.group_state,
+        );
+        self.record(
+            "Re-import removed file groups",
+            Some(UndoOp::GroupRemove {
+                snapshot,
+                restore_on_redo: true,
+            }),
+        );
+    }
+
+    fn refresh_removed_groups(&mut self, cx: &mut Context<Self>) {
+        if let Some(ix) = self.selected.or_else(|| {
+            self.group_state
+                .current
+                .as_ref()
+                .and_then(|id| self.menu_index(id))
+        }) {
+            let (focus, anchor, reveal) = (self.focus_group, self.mark_anchor, self.reveal_current);
+            let expanded = self.expanded_sources.clone();
+            self.select_entry(ix, cx);
+            self.expanded_sources = expanded;
+            (self.focus_group, self.mark_anchor, self.reveal_current) = (focus, anchor, reveal);
+        } else {
             self.current_path.clear();
             self.spectrum_path.clear();
             self.spectrum = None;
@@ -293,31 +564,40 @@ impl StudioApp {
             self.quadrants.clear();
             self.quad_bindings.clear();
             self.import_preview = None;
-            self.import_preview_gen += 1;
         }
-        if was_active {
-            let after = self.interaction_rows();
-            let next = before.after_removal(removed, |ix| {
-                let ix = if ix > removed && ix != crate::app::NO_ENTRY {
-                    ix - 1
-                } else {
-                    ix
-                };
-                after.row_index(ix).map(|_| ix)
-            });
-            if let Some(ix) = next {
-                self.select_entry(ix, cx);
-            }
-        } else if let Some(ix) = self.selected {
-            // Reload after cache rekeying without changing keyboard focus or anchor.
-            let (focus, anchor) = (self.focus_group, self.mark_anchor);
-            self.select_entry(ix, cx);
-            (self.focus_group, self.mark_anchor) = (focus, anchor);
-        }
+        self.group_state.current = self.current_group_index().and_then(|g| self.group_id(g));
         self.ensure_compare_loaded(cx);
         self.invalidate_explore_plots(cx);
         self.sync_param_fields(cx);
-        Some(spectrum)
+        if self.workspace == crate::app::Workspace::Operando {
+            self.ensure_operando(cx);
+        }
+    }
+
+    fn replay_removal(
+        &mut self,
+        snapshot: RemovalSnapshot,
+        remove: bool,
+        cx: &mut Context<Self>,
+    ) -> RemovalSnapshot {
+        if remove {
+            return self
+                .take_groups(snapshot.ids.clone(), cx)
+                .unwrap_or(snapshot);
+        }
+        self.capture_groups();
+        snapshot.restore_sources(&self.group_registry, &mut self.catalog);
+        snapshot.restore(
+            &self.group_registry,
+            &mut self.derived,
+            &mut self.group_state,
+        );
+        let indices = self.group_registry.indices(&snapshot.ids);
+        self.invalidate_removal_jobs(&snapshot.ids, &indices, !snapshot.derived.is_empty());
+        self.resolve_group_state();
+        self.resolve_interaction(snapshot.interaction.clone());
+        self.refresh_removed_groups(cx);
+        snapshot
     }
 
     pub(crate) fn undo(&mut self, cx: &mut Context<Self>) {
@@ -363,18 +643,28 @@ impl StudioApp {
                 UndoOp::Params { changes }
             }
             UndoOp::DerivedAdd { index, spectrum } => {
-                let spectrum = spectrum
+                if let Some(snapshot) = spectrum
                     .group_id
                     .as_ref()
-                    .and_then(|id| self.group_registry.index(id))
-                    .and_then(|ix| ix.checked_sub(DERIVED_BASE))
-                    .and_then(|i| self.take_derived(i, cx))
-                    .unwrap_or(spectrum);
-                UndoOp::DerivedAdd { index, spectrum }
+                    .and_then(|id| self.take_groups(BTreeSet::from([id.clone()]), cx))
+                {
+                    UndoOp::GroupRemove {
+                        snapshot,
+                        restore_on_redo: true,
+                    }
+                } else {
+                    UndoOp::DerivedAdd { index, spectrum }
+                }
             }
-            UndoOp::DerivedRemove { index, spectrum } => {
-                self.insert_derived(index, spectrum.clone(), cx);
-                UndoOp::DerivedRemove { index, spectrum }
+            UndoOp::GroupRemove {
+                snapshot,
+                restore_on_redo,
+            } => {
+                let snapshot = self.replay_removal(snapshot, restore_on_redo, cx);
+                UndoOp::GroupRemove {
+                    snapshot,
+                    restore_on_redo,
+                }
             }
         };
         self.journal.redo.push(inverse);
@@ -427,19 +717,16 @@ impl StudioApp {
                 self.after_param_undo(cx);
                 UndoOp::Params { changes }
             }
-            UndoOp::DerivedAdd { index, spectrum } => {
-                self.insert_derived(index, spectrum.clone(), cx);
-                UndoOp::DerivedAdd { index, spectrum }
-            }
-            UndoOp::DerivedRemove { index, spectrum } => {
-                let spectrum = spectrum
-                    .group_id
-                    .as_ref()
-                    .and_then(|id| self.group_registry.index(id))
-                    .and_then(|ix| ix.checked_sub(DERIVED_BASE))
-                    .and_then(|i| self.take_derived(i, cx))
-                    .unwrap_or(spectrum);
-                UndoOp::DerivedRemove { index, spectrum }
+            op @ UndoOp::DerivedAdd { .. } => op,
+            UndoOp::GroupRemove {
+                snapshot,
+                restore_on_redo,
+            } => {
+                let snapshot = self.replay_removal(snapshot, !restore_on_redo, cx);
+                UndoOp::GroupRemove {
+                    snapshot,
+                    restore_on_redo,
+                }
             }
         };
         self.journal.undo.push(forward);
@@ -529,8 +816,455 @@ impl StudioApp {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn removal_standalone_undo_restores_membership_marks_and_only_removed_current() {
+        use crate::app::group_rows::{InteractionIds, build_rows_active};
+        for was_current in [false, true] {
+            let registry = GroupRegistry::default();
+            let a = registry.register_source(
+                None,
+                "/data/a.dat".into(),
+                DetectionMode::Auto,
+                &Default::default(),
+            );
+            let mut state = GroupState::default();
+            state.marked.insert(a.clone());
+            state.frozen.insert(a.clone());
+            state.current = was_current.then_some(a.clone());
+            let mut derived = vec![];
+            let snapshot = RemovalSnapshot::take(
+                BTreeSet::from([a.clone()]),
+                &registry,
+                &mut derived,
+                &mut state,
+                InteractionIds::capture([None; 3], |_| None),
+            );
+            let mut catalog = crate::catalog::Catalog::default();
+            catalog.extend(vec![crate::catalog::FileMeta {
+                dir: "/data".into(),
+                name: "b.dat".into(),
+                size: 0,
+            }]);
+            let b = registry.register_source(
+                Some(0),
+                catalog.path(0),
+                DetectionMode::Auto,
+                &Default::default(),
+            );
+            state.current = Some(b.clone());
+            snapshot.restore_sources(&registry, &mut catalog);
+            snapshot.restore(&registry, &mut derived, &mut state);
+            assert_eq!(registry.index(&a), Some(1));
+            assert_eq!(registry.indices(&state.marked), BTreeSet::from([1]));
+            assert_eq!(registry.indices(&state.frozen), BTreeSet::from([1]));
+            assert_eq!(state.current, Some(if was_current { a } else { b }));
+            let rows = build_rows_active(
+                &catalog,
+                &derived,
+                |_| None,
+                None,
+                "",
+                None,
+                &BTreeSet::new(),
+                &registry.excluded_indices(),
+            );
+            assert_eq!(rows.shown().collect::<Vec<_>>(), vec![0, 1]);
+        }
+    }
+
+    #[test]
+    fn removal_undo_preserves_a_new_current_when_removing_another_group() {
+        let registry = GroupRegistry::default();
+        let ids: Vec<_> = (0..3)
+            .map(|ix| {
+                registry.register_source(
+                    Some(ix),
+                    format!("/data/{ix}.dat").into(),
+                    DetectionMode::Auto,
+                    &Default::default(),
+                )
+            })
+            .collect();
+        let mut state = GroupState {
+            current: Some(ids[1].clone()),
+            ..Default::default()
+        };
+        let mut derived = vec![];
+        let snapshot = RemovalSnapshot::take(
+            BTreeSet::from([ids[0].clone()]),
+            &registry,
+            &mut derived,
+            &mut state,
+            crate::app::group_rows::InteractionIds::capture([None; 3], |_| None),
+        );
+        state.current = Some(ids[2].clone());
+        snapshot.restore(&registry, &mut derived, &mut state);
+        assert_eq!(state.current, Some(ids[2].clone()));
+    }
+
+    #[test]
+    fn removal_reimport_creation_is_undoable_without_restoring_historical_input() {
+        let registry = GroupRegistry::default();
+        let path = std::path::PathBuf::from("/data/a.dat");
+        let old = registry.register_source(
+            Some(0),
+            path.clone(),
+            DetectionMode::Auto,
+            &Default::default(),
+        );
+        let mut state = GroupState::default();
+        let mut derived = vec![];
+        let interaction = || crate::app::group_rows::InteractionIds::capture([None; 3], |_| None);
+        let removal = RemovalSnapshot::take(
+            BTreeSet::from([old.clone()]),
+            &registry,
+            &mut derived,
+            &mut state,
+            interaction(),
+        );
+        let fresh = registry.reimport_source(&path, Some(0)).unwrap();
+        let reference = GroupId::new_result();
+        derived.push(DerivedSpectrum {
+            group_id: Some(reference.clone()),
+            source: Some(path),
+            ..Default::default()
+        });
+        let fresh_ids = BTreeSet::from([fresh.clone(), reference]);
+        let creation = RemovalSnapshot::take(
+            fresh_ids.clone(),
+            &registry,
+            &mut derived,
+            &mut state,
+            interaction(),
+        );
+        creation.restore(&registry, &mut derived, &mut state);
+        assert_eq!(registry.id(0), Some(fresh.clone()));
+        assert!(registry.is_excluded(&old));
+        let undo_creation = RemovalSnapshot::take(
+            fresh_ids.clone(),
+            &registry,
+            &mut derived,
+            &mut state,
+            interaction(),
+        );
+        assert_eq!(registry.id(0), None);
+        assert!(derived.is_empty());
+        undo_creation.restore(&registry, &mut derived, &mut state);
+        assert_eq!(derived.len(), 1);
+        assert_eq!(registry.id(0), Some(fresh.clone()));
+        RemovalSnapshot::take(
+            fresh_ids,
+            &registry,
+            &mut derived,
+            &mut state,
+            interaction(),
+        );
+        let mut catalog = crate::catalog::Catalog::default();
+        removal.restore_sources(&registry, &mut catalog);
+        removal.restore(&registry, &mut derived, &mut state);
+        assert_eq!(registry.id(0), Some(old));
+    }
+
     use super::*;
     use crate::params::DetectionMode;
+
+    #[test]
+    fn removal_derived_input_keeps_operation_when_its_slot_is_reused() {
+        use crate::app::group_rows::{InteractionIds, input_missing};
+        use crate::params::{Operation, OperationInput};
+        let input = GroupId::new_result();
+        let result = GroupId::new_result();
+        let operation = Operation {
+            tool: "merge".into(),
+            parameters: serde_json::Value::Null,
+            inputs: vec![OperationInput {
+                group_id: Some(input.clone()),
+                label: "Aligned Cu".into(),
+                path: Default::default(),
+                derived_id: Some(1),
+                fingerprint: 0,
+                size: None,
+            }],
+            applied_energy_shift_ev: 0.,
+        };
+        let mut derived = vec![
+            DerivedSpectrum {
+                group_id: Some(input.clone()),
+                id: 1,
+                ..Default::default()
+            },
+            DerivedSpectrum {
+                group_id: Some(result.clone()),
+                operation: Some(operation.clone()),
+                ..Default::default()
+            },
+        ];
+        let registry = GroupRegistry::default();
+        registry.replace_derived(&derived);
+        let mut state = GroupState::default();
+        state.labels.insert(input.clone(), "renamed copy".into());
+        state.colors.insert(input.clone(), 6);
+        state.marked.insert(input.clone());
+        state.frozen.insert(input.clone());
+        let snapshot = RemovalSnapshot::take(
+            BTreeSet::from([input.clone()]),
+            &registry,
+            &mut derived,
+            &mut state,
+            InteractionIds::capture([Some(DERIVED_BASE); 3], |i| registry.id(i)),
+        );
+        assert_eq!(registry.id(DERIVED_BASE), Some(result));
+        assert_eq!(registry.index(&input), None);
+        assert_eq!(
+            input_missing(&derived[0], |id| registry.is_excluded(id)).as_deref(),
+            Some("input missing: Aligned Cu")
+        );
+        assert_eq!(derived[0].operation, Some(operation.clone()));
+        snapshot.restore(&registry, &mut derived, &mut state);
+        assert_eq!(state.labels[&input], "renamed copy");
+        assert_eq!(state.colors[&input], 6);
+        assert!(state.marked.contains(&input) && state.frozen.contains(&input));
+        assert_eq!(registry.id(DERIVED_BASE), Some(input));
+        assert_eq!(derived[1].operation, Some(operation));
+        assert!(input_missing(&derived[1], |id| registry.is_excluded(id)).is_none());
+    }
+
+    #[test]
+    fn removal_promotes_marked_siblings_and_restores_metadata_and_identity() {
+        use crate::app::group_rows::{InteractionIds, Row, build_rows_active, input_missing};
+        use crate::params::{DetectionMode, Operation, OperationInput};
+        use std::collections::BTreeMap;
+        let mut catalog = crate::catalog::Catalog::default();
+        catalog.extend(
+            ["a.dat", "b.dat"]
+                .map(|name| crate::catalog::FileMeta {
+                    dir: "/data".into(),
+                    name: name.into(),
+                    size: 1,
+                })
+                .into(),
+        );
+        let mut derived: Vec<_> = [DetectionMode::Fluorescence, DetectionMode::Reference]
+            .into_iter()
+            .map(|mode| {
+                let mut params = PipelineParams::default();
+                params.import.mode = mode;
+                DerivedSpectrum {
+                    label: mode.label().into(),
+                    source: Some(catalog.path(0)),
+                    params: Some(params),
+                    ..Default::default()
+                }
+            })
+            .collect();
+        let registry = GroupRegistry::rebuild(
+            (0..2).map(|i| (i, catalog.path(i), DetectionMode::Auto)),
+            &mut derived,
+            &mut vec![],
+            &BTreeMap::new(),
+        );
+        let primary = registry.id(0).unwrap();
+        let fluo = registry.id(DERIVED_BASE).unwrap();
+        let reference = registry.id(DERIVED_BASE + 1).unwrap();
+        let params = PipelineParams {
+            e0: Some(8979.),
+            ..Default::default()
+        };
+        let mut state = GroupState {
+            labels: BTreeMap::from([(primary.clone(), "Cu foil".into())]),
+            colors: BTreeMap::from([(primary.clone(), 7)]),
+            marked: BTreeSet::from([primary.clone(), fluo.clone(), reference.clone()]),
+            frozen: BTreeSet::from([primary.clone()]),
+            overrides: vec![(primary.clone(), params.clone())],
+            current: Some(primary.clone()),
+            ..Default::default()
+        };
+        let operation = Operation {
+            tool: "merge".into(),
+            parameters: serde_json::Value::Null,
+            inputs: vec![OperationInput {
+                group_id: Some(primary.clone()),
+                label: "Cu foil".into(),
+                path: catalog.path(0),
+                derived_id: None,
+                fingerprint: 10,
+                size: Some(1),
+            }],
+            applied_energy_shift_ev: 0.,
+        };
+        derived.push(DerivedSpectrum {
+            group_id: Some(GroupId::new_result()),
+            operation: Some(operation.clone()),
+            energy: vec![1., 2.],
+            mu: vec![3., 4.],
+            ..Default::default()
+        });
+        registry.replace_derived(&derived);
+        for ids in [
+            BTreeSet::from([primary.clone()]),
+            BTreeSet::from([primary.clone(), fluo.clone(), reference.clone()]),
+        ] {
+            let interaction = InteractionIds::capture(
+                [Some(0), Some(DERIVED_BASE + 1), Some(DERIVED_BASE)],
+                |i| registry.id(i),
+            );
+            let snapshot = RemovalSnapshot::take(
+                ids.clone(),
+                &registry,
+                &mut derived,
+                &mut state,
+                interaction,
+            );
+            assert_eq!(state.excluded, ids);
+            assert!(registry.id(0).is_none());
+            assert!(registry.index(&primary).is_none());
+            assert!(
+                state.labels.is_empty()
+                    && state.colors.is_empty()
+                    && state.frozen.is_empty()
+                    && state.overrides.is_empty()
+            );
+            let rows = build_rows_active(
+                &catalog,
+                &derived,
+                |_| Some(true),
+                None,
+                "",
+                None,
+                &BTreeSet::new(),
+                &registry.excluded_indices(),
+            );
+            if ids.len() == 1 {
+                assert_eq!(
+                    rows.row_at(0),
+                    Some(Row::Primary {
+                        group: DERIVED_BASE,
+                        expanded: true,
+                        extra_channels: 1
+                    })
+                );
+                assert_eq!(
+                    rows.row_at(1),
+                    Some(Row::Child {
+                        group: DERIVED_BASE + 1,
+                        parent: DERIVED_BASE
+                    })
+                );
+                assert_eq!(
+                    registry.indices(&state.marked),
+                    BTreeSet::from([DERIVED_BASE, DERIVED_BASE + 1])
+                );
+                assert_eq!(registry.id(DERIVED_BASE + 1), Some(reference.clone()));
+            } else {
+                assert_eq!(rows.shown().collect::<Vec<_>>(), vec![1, DERIVED_BASE]);
+                assert!(state.marked.is_empty());
+                assert_eq!(
+                    registry.index(&reference),
+                    None,
+                    "a shifted result cannot become the removed input"
+                );
+            }
+            let result = derived.last().unwrap();
+            assert_eq!(
+                input_missing(result, |id| registry.is_excluded(id)).as_deref(),
+                Some("input missing: Cu foil")
+            );
+            assert_eq!(result.operation, Some(operation.clone()));
+            assert_eq!(result.mu, vec![3., 4.]);
+            snapshot.restore(&registry, &mut derived, &mut state);
+            assert_eq!(
+                registry.indices(&state.marked),
+                BTreeSet::from([0, DERIVED_BASE, DERIVED_BASE + 1])
+            );
+            assert_eq!(state.labels[&primary], "Cu foil");
+            assert_eq!(state.colors[&primary], 7);
+            assert_eq!(state.frozen, BTreeSet::from([primary.clone()]));
+            assert!(state.resolved_overrides(&registry)[&0] == params);
+            assert_eq!(state.current, Some(primary.clone()));
+            assert_eq!(
+                snapshot.interaction.resolve(|id| registry.index(id)),
+                [Some(0), Some(DERIVED_BASE + 1), Some(DERIVED_BASE)]
+            );
+            assert!(
+                input_missing(derived.last().unwrap(), |id| registry.is_excluded(id)).is_none()
+            );
+            let rows = build_rows_active(
+                &catalog,
+                &derived,
+                |_| Some(true),
+                None,
+                "",
+                None,
+                &BTreeSet::new(),
+                &registry.excluded_indices(),
+            );
+            assert_eq!(
+                rows.row_at(0),
+                Some(Row::Primary {
+                    group: 0,
+                    expanded: true,
+                    extra_channels: 2
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn removal_catalog_rescan_cannot_resurrect_an_exclusion_or_retarget_history() {
+        use crate::params::DetectionMode;
+        use std::collections::BTreeMap;
+        let mut catalog = crate::catalog::Catalog::default();
+        catalog.extend(vec![crate::catalog::FileMeta {
+            dir: "/data".into(),
+            name: "a.dat".into(),
+            size: 0,
+        }]);
+        let registry = GroupRegistry::rebuild(
+            [(0, catalog.path(0), DetectionMode::Auto)],
+            &mut [],
+            &mut vec![],
+            &BTreeMap::new(),
+        );
+        let id = registry.id(0).unwrap();
+        let prepared = GroupRegistry::prepare_catalog(&catalog, &registry.sources());
+        let mut state = GroupState::default();
+        let mut derived = vec![];
+        let snapshot = RemovalSnapshot::take(
+            BTreeSet::from([id.clone()]),
+            &registry,
+            &mut derived,
+            &mut state,
+            crate::app::group_rows::InteractionIds::capture([None; 3], |_| None),
+        );
+        registry.replace_catalog(prepared); // prepared before removal, delivered afterwards
+        registry.append_catalog(&catalog, 0);
+        registry.register_source(
+            Some(0),
+            catalog.path(0),
+            DetectionMode::Auto,
+            &BTreeMap::new(),
+        );
+        assert!(registry.id(0).is_none());
+        assert_eq!(registry.excluded_indices(), BTreeSet::from([0]));
+        let mut changed = crate::catalog::Catalog::default();
+        changed.extend(
+            ["0.dat", "a.dat"]
+                .map(|name| crate::catalog::FileMeta {
+                    dir: "/data".into(),
+                    name: name.into(),
+                    size: 0,
+                })
+                .into(),
+        );
+        registry.replace_catalog(GroupRegistry::prepare_catalog(
+            &changed,
+            &registry.sources(),
+        ));
+        snapshot.restore(&registry, &mut derived, &mut state);
+        assert_eq!(registry.index(&id), Some(1));
+        assert!(registry.id(0).is_none());
+    }
 
     #[test]
     fn metadata_undo_redo_is_identity_based_and_preserves_current_marks() {

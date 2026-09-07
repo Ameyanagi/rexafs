@@ -42,6 +42,7 @@ impl Row {
 /// virtual, including filtered catalogs (the filter's Arc is shared).
 pub struct Rows {
     catalog_len: usize,
+    excluded: BTreeSet<usize>,
     scan_scope: Option<Box<Rows>>,
     collapsed: BTreeSet<usize>,
     /// Visible ancestors supplied only as context for a matching child.
@@ -59,6 +60,7 @@ impl Rows {
     pub fn catalog_range(catalog_len: usize, start: usize, len: usize) -> Self {
         Self {
             catalog_len,
+            excluded: BTreeSet::new(),
             scan_scope: None,
             base_start: start.min(catalog_len),
             base_len: len.min(catalog_len.saturating_sub(start)),
@@ -81,6 +83,12 @@ impl Rows {
                 filtered.partition_point(|&g| g < start.saturating_add(len)) - rows.base_start;
             rows.filtered = Some(filtered.clone());
         }
+        rows.excluded = self
+            .excluded
+            .range(start..start.saturating_add(len))
+            .copied()
+            .collect();
+        rows.base_len = rows.base_len.saturating_sub(rows.excluded.len());
         rows.scan_scope = Some(Box::new(self));
         rows
     }
@@ -108,9 +116,19 @@ impl Rows {
         {
             return Some(value);
         }
+        let mut ordinal = row - before + self.base_start;
+        for &skip in &self.excluded {
+            let skip = self
+                .filtered
+                .as_ref()
+                .map_or(skip, |f| f.partition_point(|&g| g < skip));
+            if skip <= ordinal {
+                ordinal += 1;
+            }
+        }
         let group = catalog_row_index(
             self.filtered.as_deref().map(Vec::as_slice),
-            row - before + self.base_start,
+            ordinal,
             self.catalog_len,
         )?;
         Some(self.primaries.get(&group).copied().unwrap_or(Row::Primary {
@@ -124,19 +142,17 @@ impl Rows {
         if let Some(&row) = self.inserted_groups.get(&group) {
             return Some(row);
         }
-        if group >= self.catalog_len {
+        if group >= self.catalog_len || self.excluded.contains(&group) {
             return None;
         }
         let base = match &self.filtered {
-            Some(f) => f
-                .binary_search(&group)
-                .ok()?
-                .checked_sub(self.base_start)
-                .filter(|&i| i < self.base_len)?,
-            None => group
-                .checked_sub(self.base_start)
-                .filter(|&i| i < self.base_len)?,
+            Some(f) => f.binary_search(&group).ok()?.checked_sub(self.base_start)?,
+            None => group.checked_sub(self.base_start)?,
         };
+        let base = base - self.excluded.range(..group).count();
+        if base >= self.base_len {
+            return None;
+        }
         // Insertion anchors are recoverable by subtracting the sparse ordinal.
         let mut lo = 0;
         let mut hi = self.inserted.len();
@@ -230,7 +246,27 @@ impl Rows {
     }
 }
 
+/// Remap removal candidates without registering undisplayed catalog sources.
+pub fn removal_survivor(
+    before: &Rows,
+    after: &Rows,
+    current: usize,
+    previous: &crate::group_identity::GroupRegistry,
+    registry: &crate::group_identity::GroupRegistry,
+    standalone: bool,
+) -> Option<usize> {
+    before.after_removal(current, |old| {
+        let ix = if old < DERIVED_BASE || old == super::NO_ENTRY {
+            (!registry.index_excluded(old) && (old != super::NO_ENTRY || standalone)).then_some(old)
+        } else {
+            previous.id(old).and_then(|id| registry.index(&id))
+        }?;
+        after.row_index(ix).map(|_| ix)
+    })
+}
+
 /// Transient interaction state follows durable identities across replacements.
+#[derive(Clone)]
 pub struct InteractionIds([Option<crate::group_identity::GroupId>; 3]);
 
 impl InteractionIds {
@@ -341,6 +377,29 @@ pub fn build_rows_revealing(
     standalone: Option<&std::path::Path>,
     reveal: &BTreeSet<usize>,
 ) -> Rows {
+    build_rows_active(
+        catalog,
+        derived,
+        disclosure,
+        filtered,
+        query,
+        standalone,
+        reveal,
+        &BTreeSet::new(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_rows_active(
+    catalog: &Catalog,
+    derived: &[DerivedSpectrum],
+    disclosure: impl Fn(usize) -> Option<bool>,
+    filtered: Option<std::sync::Arc<Vec<usize>>>,
+    query: &str,
+    standalone: Option<&std::path::Path>,
+    reveal: &BTreeSet<usize>,
+    excluded: &BTreeSet<usize>,
+) -> Rows {
     let filtered = filtered.map(|f| {
         if reveal.is_empty() {
             return f;
@@ -358,7 +417,19 @@ pub fn build_rows_revealing(
     let base_len = filtered.as_ref().map_or(catalog.len(), |f| {
         f.partition_point(|&ix| ix < catalog.len())
     });
+    let skipped: BTreeSet<_> = excluded
+        .iter()
+        .copied()
+        .filter(|&g| {
+            g < catalog.len()
+                && filtered
+                    .as_ref()
+                    .is_none_or(|f| f.binary_search(&g).is_ok())
+        })
+        .collect();
+    let base_len = base_len - skipped.len();
     let mut rows = Rows {
+        excluded: skipped,
         scan_scope: None,
         catalog_len: catalog.len(),
         collapsed: BTreeSet::new(),
@@ -383,12 +454,15 @@ pub fn build_rows_revealing(
             let primary = if standalone == Some(path.as_path()) {
                 super::NO_ENTRY
             } else {
-                catalog.find_by_canonical_path(path).unwrap_or_else(|| {
-                    *orphan_sources.entry(path).or_insert_with(|| {
-                        orphans.push(group);
-                        group
+                catalog
+                    .find_by_canonical_path(path)
+                    .filter(|g| !excluded.contains(g))
+                    .unwrap_or_else(|| {
+                        *orphan_sources.entry(path).or_insert_with(|| {
+                            orphans.push(group);
+                            group
+                        })
                     })
-                })
             };
             if primary != group {
                 children.entry(primary).or_default().push(group);
@@ -452,7 +526,8 @@ pub fn build_rows_revealing(
             let base = rows
                 .filtered
                 .as_ref()
-                .map_or(group, |f| f.partition_point(|&g| g < group));
+                .map_or(group, |f| f.partition_point(|&g| g < group))
+                - rows.excluded.range(..group).count();
             if source_matches {
                 rows.primaries.insert(group, primary);
                 base + 1
@@ -461,8 +536,20 @@ pub fn build_rows_revealing(
                 base
             }
         } else {
-            inserts.entry(base_len).or_default().push(primary);
-            base_len
+            let anchor = group
+                .checked_sub(DERIVED_BASE)
+                .and_then(|i| derived.get(i))
+                .and_then(|d| d.source.as_ref())
+                .and_then(|p| catalog.find_by_canonical_path(p))
+                .map(|g| {
+                    rows.filtered
+                        .as_ref()
+                        .map_or(g, |f| f.partition_point(|&i| i < g))
+                        - rows.excluded.range(..g).count()
+                })
+                .unwrap_or(base_len);
+            inserts.entry(anchor).or_default().push(primary);
+            anchor
         };
         if !expanded {
             rows.collapsed.extend(matching.iter().copied());
@@ -493,6 +580,22 @@ pub fn build_rows_revealing(
         }
     }
     rows
+}
+
+/// Provenance is historical; missing inputs never resolve by a reused slot/path.
+pub fn input_missing(
+    group: &DerivedSpectrum,
+    missing: impl Fn(&crate::group_identity::GroupId) -> bool,
+) -> Option<String> {
+    let labels: Vec<_> = group
+        .operation
+        .as_ref()?
+        .inputs
+        .iter()
+        .filter(|i| i.group_id.as_ref().is_some_and(&missing))
+        .map(|i| i.label.as_str())
+        .collect();
+    (!labels.is_empty()).then(|| format!("input missing: {}", labels.join(", ")))
 }
 
 /// Group colours remain stable even when traces share a swatch.
@@ -605,6 +708,34 @@ impl Diagnostics {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn removal_survivor_does_not_register_hidden_catalog_candidates() {
+        use crate::group_identity::GroupRegistry;
+        use crate::params::DetectionMode;
+        let registry = GroupRegistry::default();
+        let removed = registry.register_source(
+            Some(1),
+            "/data/1.dat".into(),
+            DetectionMode::Auto,
+            &Default::default(),
+        );
+        let previous = registry.clone();
+        registry.set_excluded(&BTreeSet::from([removed]));
+        let before = Rows::catalog_range(100_000, 0, 100_000);
+        let after = Rows::catalog_range(100_000, 0, 1);
+        let survivor = removal_survivor(&before, &after, 1, &previous, &registry, false);
+        assert_eq!(survivor, Some(0));
+        assert_eq!(registry.sources().len(), 1);
+        registry.register_source(
+            survivor,
+            "/data/0.dat".into(),
+            DetectionMode::Auto,
+            &Default::default(),
+        );
+        assert_eq!(registry.sources().len(), 2);
+    }
+
     use super::*;
     use crate::{
         catalog::FileMeta,
@@ -670,6 +801,90 @@ mod tests {
             })
             .collect()
     }
+    #[test]
+    fn removal_rows_remain_sparse_filtered_and_promote_in_source_order() {
+        let c = catalog();
+        let d = channels();
+        for excluded in [
+            BTreeSet::from([0]),
+            BTreeSet::from([1]),
+            BTreeSet::from([0, 1]),
+        ] {
+            for filtered in [
+                None,
+                Some(std::sync::Arc::new(vec![0])),
+                Some(std::sync::Arc::new(vec![1])),
+                Some(std::sync::Arc::new(vec![])),
+            ] {
+                for query in ["", "reference", "absent"] {
+                    for expand in [false, true] {
+                        let rows = build_rows_active(
+                            &c,
+                            &d,
+                            |_| Some(expand),
+                            filtered.clone(),
+                            query,
+                            None,
+                            &BTreeSet::new(),
+                            &excluded,
+                        );
+                        for (i, g) in (0..rows.row_count())
+                            .filter_map(|i| rows.row_at(i)?.group().map(|g| (i, g)))
+                        {
+                            assert!(!excluded.contains(&g));
+                            assert_eq!(rows.row_index(g), Some(i));
+                        }
+                        assert_eq!(rows.row_at(rows.row_count()), None);
+                        if let Some(f) = &filtered {
+                            assert!(std::sync::Arc::ptr_eq(rows.filtered.as_ref().unwrap(), f));
+                        }
+                    }
+                }
+            }
+        }
+        let before = super::build_rows(&c, &d, &BTreeSet::from([0, 1]), None, "", None);
+        let after = build_rows_active(
+            &c,
+            &d,
+            |_| Some(false),
+            None,
+            "",
+            None,
+            &BTreeSet::new(),
+            &BTreeSet::from([0]),
+        );
+        assert_eq!(
+            before.after_removal(0, |g| after.row_index(g).map(|_| g)),
+            Some(DERIVED_BASE)
+        );
+        assert_eq!(
+            after.row_at(0),
+            Some(Row::Primary {
+                group: DERIVED_BASE,
+                expanded: false,
+                extra_channels: 1
+            })
+        );
+        assert_eq!(
+            after.mark_counts(&BTreeSet::from([DERIVED_BASE, DERIVED_BASE + 1])),
+            (2, 0, 1)
+        );
+        let filtered = build_rows_active(
+            &c,
+            &[],
+            |_| None,
+            Some(std::sync::Arc::new(vec![0])),
+            "a.dat",
+            None,
+            &BTreeSet::new(),
+            &BTreeSet::from([0]),
+        );
+        assert_eq!(
+            before.after_removal(0, |g| filtered.row_index(g).map(|_| g)),
+            None
+        );
+    }
+
     #[test]
     fn scan_filter_drives_render_navigation_space_marks_counts_and_scroll() {
         let rows = super::build_rows(

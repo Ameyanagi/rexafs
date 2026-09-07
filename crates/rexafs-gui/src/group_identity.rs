@@ -60,6 +60,7 @@ struct RegistryData {
     sources: BTreeMap<PathBuf, SourceGroup>,
     // Includes removed groups: undo/redo owns identities even while absent.
     issued: BTreeSet<GroupId>,
+    excluded: BTreeSet<GroupId>,
     #[cfg(test)]
     append_visits: usize,
 }
@@ -77,6 +78,39 @@ impl GroupRegistry {
 
     pub fn sources(&self) -> Vec<SourceGroup> {
         self.inner.borrow().sources.values().cloned().collect()
+    }
+
+    pub fn source(&self, path: &Path) -> Option<SourceGroup> {
+        self.inner.borrow().sources.get(path).cloned()
+    }
+
+    /// An explicit import creates a new group, leaving historical inputs missing.
+    pub fn reimport_source(&self, path: &Path, ix: Option<usize>) -> Option<GroupId> {
+        let mut data = self.inner.borrow_mut();
+        let mut source = data.sources.get(path)?.clone();
+        if !data.excluded.contains(&source.id) {
+            return None;
+        }
+        data.by_id.remove(&source.id);
+        source.id = reserve_id(&mut data.issued, GroupId::source(path, source.channel));
+        let id = source.id.clone();
+        data.sources.insert(path.to_path_buf(), source);
+        if let Some(ix) = ix {
+            data.by_index.insert(ix, id.clone());
+            data.by_id.insert(id.clone(), ix);
+        }
+        Some(id)
+    }
+
+    /// Undo may need to reintroduce a standalone source after a catalog import.
+    pub fn restore_source(&self, source: SourceGroup, ix: usize) {
+        let mut data = self.inner.borrow_mut();
+        if let Some(old) = data.by_index.insert(ix, source.id.clone()) {
+            data.by_id.remove(&old);
+        }
+        data.by_id.insert(source.id.clone(), ix);
+        data.issued.insert(source.id.clone());
+        data.sources.insert(source.path.clone(), source);
     }
 
     /// Resolve the would-be source identity without growing the registry.
@@ -272,11 +306,42 @@ impl GroupRegistry {
         changed
     }
 
+    pub fn set_excluded(&self, excluded: &BTreeSet<GroupId>) {
+        let mut data = self.inner.borrow_mut();
+        data.excluded.clone_from(excluded);
+        data.issued.extend(excluded.iter().cloned());
+    }
+
+    pub fn is_excluded(&self, id: &GroupId) -> bool {
+        self.inner.borrow().excluded.contains(id)
+    }
+
+    pub fn excluded_indices(&self) -> BTreeSet<usize> {
+        let data = self.inner.borrow();
+        data.excluded
+            .iter()
+            .filter_map(|id| data.by_id.get(id).copied())
+            .collect()
+    }
+
+    pub fn index_excluded(&self, ix: usize) -> bool {
+        let data = self.inner.borrow();
+        data.by_index
+            .get(&ix)
+            .is_some_and(|id| data.excluded.contains(id))
+    }
+
     pub fn id(&self, ix: usize) -> Option<GroupId> {
-        self.inner.borrow().by_index.get(&ix).cloned()
+        let data = self.inner.borrow();
+        data.by_index
+            .get(&ix)
+            .filter(|id| !data.excluded.contains(*id))
+            .cloned()
     }
     pub fn index(&self, id: &GroupId) -> Option<usize> {
-        self.inner.borrow().by_id.get(id).copied()
+        (!self.is_excluded(id))
+            .then(|| self.inner.borrow().by_id.get(id).copied())
+            .flatten()
     }
     #[cfg(test)]
     pub fn indices_changed(&self, next: &Self) -> bool {
@@ -305,17 +370,16 @@ impl PreparedCatalog {
     /// Only sources referenced while preparation was in flight need resolving.
     pub fn include_recent(&mut self, catalog: &crate::catalog::Catalog, registry: &GroupRegistry) {
         let data = registry.inner.borrow();
-        if self.known.len() == data.sources.len() {
-            return;
-        }
         for source in data
             .sources
             .values()
             .filter(|s| !self.known.contains(&s.id))
         {
             if let Some(ix) = catalog.find_by_canonical_path(&source.path) {
+                if let Some(old) = self.by_index.insert(ix, source.id.clone()) {
+                    self.by_id.remove(&old);
+                }
                 self.by_id.insert(source.id.clone(), ix);
-                self.by_index.insert(ix, source.id.clone());
             }
         }
     }
@@ -342,6 +406,9 @@ fn available_id(issued: &BTreeSet<GroupId>, base: GroupId) -> GroupId {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GroupState {
+    /// Project exclusions survive rescans without deleting source files.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub excluded: BTreeSet<GroupId>,
     pub labels: BTreeMap<GroupId, String>,
     pub colors: BTreeMap<GroupId, u8>,
     pub marked: BTreeSet<GroupId>,
@@ -414,6 +481,43 @@ impl GroupState {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn explicit_reimport_preserves_exclusion_and_replaces_stale_prepared_binding() {
+        let mut catalog = crate::catalog::Catalog::default();
+        catalog.extend(vec![crate::catalog::FileMeta {
+            dir: "/data".into(),
+            name: "a.dat".into(),
+            size: 0,
+        }]);
+        let path = catalog.path(0);
+        let registry = GroupRegistry::default();
+        let old = registry.register_source(
+            Some(0),
+            path.clone(),
+            DetectionMode::Auto,
+            &Default::default(),
+        );
+        let excluded = BTreeSet::from([old.clone()]);
+        registry.set_excluded(&excluded);
+        let mut pending = GroupRegistry::prepare_catalog(&catalog, &registry.sources());
+        let fresh = registry.reimport_source(&path, Some(0)).unwrap();
+        assert_ne!(fresh, old);
+        pending.include_recent(&catalog, &registry);
+        registry.replace_catalog(pending);
+        assert_eq!(registry.id(0), Some(fresh.clone()));
+        assert_eq!(registry.index(&old), None);
+        assert!(registry.is_excluded(&old));
+        assert!(registry.reimport_source(&path, Some(0)).is_none());
+        let reopened = GroupRegistry::from_sources(
+            serde_json::from_value(serde_json::to_value(registry.sources()).unwrap()).unwrap(),
+        );
+        reopened.set_excluded(&excluded);
+        reopened.append_catalog(&catalog, 0);
+        assert_eq!(reopened.id(0), Some(fresh));
+        assert!(reopened.is_excluded(&old));
+    }
+
     use super::*;
 
     #[test]

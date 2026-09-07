@@ -287,6 +287,10 @@ impl StudioApp {
         let generation = self.merge_gen;
         let cancel = Arc::new(AtomicBool::new(false));
         self.merge_cancel = Some(cancel.clone());
+        self.job_inputs[2] = inputs
+            .iter()
+            .filter_map(|input| input.target.group_id.clone())
+            .collect();
         self.merge_running = true;
         self.status = format!(
             "merging {} spectra · Grid and settings from {:?}",

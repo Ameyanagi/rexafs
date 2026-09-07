@@ -336,6 +336,7 @@ fn section_differs(a: &PipelineParams, b: &PipelineParams, section: ParamSection
 fn scan_fingerprint(
     global: &PipelineParams,
     overrides: &BTreeMap<usize, PipelineParams>,
+    registry: &crate::group_identity::GroupRegistry,
     start: usize,
     len: usize,
 ) -> u64 {
@@ -344,6 +345,12 @@ fn scan_fingerprint(
     for (ix, params) in overrides.range(start..start.saturating_add(len)) {
         ix.hash(&mut hasher);
         params.fingerprint().hash(&mut hasher);
+    }
+    for ix in registry
+        .excluded_indices()
+        .range(start..start.saturating_add(len))
+    {
+        ix.hash(&mut hasher);
     }
     hasher.finish()
 }
@@ -574,6 +581,7 @@ const K_GRID_MAX: f64 = 15.0;
 pub(crate) struct OperandoData {
     pub(crate) scan: usize,
     pub(crate) scan_len: usize,
+    sample_frames: Vec<usize>,
     pub(crate) fingerprint: u64,
     /// k grid and k-weighted χ(k) rows (sampled frames × grid).
     pub(crate) grid: Vec<f64>,
@@ -591,6 +599,14 @@ pub(crate) struct OperandoData {
 }
 
 impl OperandoData {
+    fn sample_pos(&self, frame: usize) -> usize {
+        self.sample_frames
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, p)| p.abs_diff(frame))
+            .map_or(0, |(i, _)| i)
+    }
+
     /// Grid and matrix of a series space.
     pub(crate) fn space(&self, space: SeriesSpace) -> (&[f64], &[Vec<f64>]) {
         match space {
@@ -1148,6 +1164,8 @@ pub struct StudioApp {
     operando_gen: u64,
     operando_running: bool,
     operando_cancel: Option<Arc<AtomicBool>>,
+    // Operando, batch, merge, fit, LCF operands captured when each job starts.
+    job_inputs: [BTreeSet<crate::group_identity::GroupId>; 5],
     /// Trend plotted against frame in the Series stage.
     series_trend: TrendSource,
     series_lcf: Option<SeriesLcf>,
@@ -1245,13 +1263,104 @@ fn thin_even(all: &[usize], cap: usize, keep: Option<usize>) -> Vec<usize> {
 }
 
 fn sample_scan_indices(start: usize, len: usize, cap: usize) -> Vec<usize> {
-    if len <= cap {
+    if cap == 0 {
+        Vec::new()
+    } else if cap == 1 {
+        (len > 0).then_some(start).into_iter().collect()
+    } else if len <= cap {
         (start..start + len).collect()
     } else {
         (0..cap)
             .map(|i| start + i * (len - 1) / (cap - 1))
             .collect()
     }
+}
+
+/// Sample surviving frames, retaining original catalog coordinates.
+fn active_scan_indices(
+    registry: &crate::group_identity::GroupRegistry,
+    start: usize,
+    len: usize,
+    cap: usize,
+) -> Vec<usize> {
+    let excluded = registry.excluded_indices();
+    let excluded: Vec<_> = excluded
+        .range(start..start.saturating_add(len))
+        .copied()
+        .collect();
+    let ordinals = sample_scan_indices(0, len.saturating_sub(excluded.len()), cap);
+    let mut skipped = 0;
+    ordinals
+        .into_iter()
+        .map(|ordinal| {
+            let mut ix = start + ordinal + skipped;
+            while excluded.get(skipped).is_some_and(|&skip| skip <= ix) {
+                skipped += 1;
+                ix += 1;
+            }
+            ix
+        })
+        .collect()
+}
+
+/// Heatmaps need a regular frame grid; removed positions remain blank while
+/// cursor spectra and trends use the surviving samples' exact coordinates.
+fn overview_heatmap_rows(
+    matrix: &[Vec<f64>],
+    sample_frames: &[usize],
+    registry: &crate::group_identity::GroupRegistry,
+    start: usize,
+    len: usize,
+) -> Vec<Vec<f64>> {
+    sample_scan_indices(0, len, MAX_FRAMES)
+        .into_iter()
+        .map(|frame| {
+            let row = sample_frames
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, p)| p.abs_diff(frame))
+                .and_then(|(i, _)| matrix.get(i));
+            match row.filter(|_| !registry.index_excluded(start + frame)) {
+                Some(row) => row.clone(),
+                None => vec![f64::NAN; matrix.first().map_or(0, Vec::len)],
+            }
+        })
+        .collect()
+}
+
+fn surviving_frame(
+    registry: &crate::group_identity::GroupRegistry,
+    start: usize,
+    len: usize,
+    pos: usize,
+    backwards: bool,
+) -> Option<usize> {
+    let pos = pos.min(len.saturating_sub(1));
+    let before = || {
+        (0..=pos)
+            .rev()
+            .find(|&p| p < len && !registry.index_excluded(start + p))
+    };
+    let after = || (pos..len).find(|&p| !registry.index_excluded(start + p));
+    if backwards {
+        before().or_else(after)
+    } else {
+        after().or_else(before)
+    }
+}
+
+/// Signal workers before retiring their callbacks. Retained results use this
+/// return value to distinguish interrupted computations from completed ones.
+fn retire_job(
+    generation: &mut u64,
+    running: &mut bool,
+    cancellation: Option<&mut Option<Arc<AtomicBool>>>,
+) -> bool {
+    if let Some(Some(cancel)) = cancellation.map(Option::take) {
+        cancel.store(true, Ordering::Relaxed);
+    }
+    *generation += 1;
+    std::mem::replace(running, false)
 }
 
 fn short_duration(duration: Duration) -> String {
@@ -1581,6 +1690,195 @@ mod thin_tests {
 
 #[cfg(test)]
 mod override_tests {
+
+    #[test]
+    fn removal_scan_operands_fingerprint_and_cursor_follow_survivors() {
+        use super::*;
+        let registry = crate::group_identity::GroupRegistry::default();
+        let ids: Vec<_> = (100..106)
+            .map(|ix| {
+                registry.register_source(
+                    Some(ix),
+                    format!("/data/{ix}.dat").into(),
+                    DetectionMode::Auto,
+                    &Default::default(),
+                )
+            })
+            .collect();
+        let params = PipelineParams::default();
+        let stamp = || scan_fingerprint(&params, &BTreeMap::new(), &registry, 100, 6);
+        let original = stamp();
+        let outside = registry.register_source(
+            Some(99),
+            "/data/99.dat".into(),
+            DetectionMode::Auto,
+            &Default::default(),
+        );
+        registry.set_excluded(&BTreeSet::from([outside.clone()]));
+        assert_eq!(stamp(), original);
+        registry.set_excluded(&BTreeSet::from([
+            outside,
+            ids[0].clone(),
+            ids[2].clone(),
+            ids[5].clone(),
+        ]));
+        assert_ne!(stamp(), original);
+        assert_eq!(
+            active_scan_indices(&registry, 100, 6, usize::MAX),
+            vec![101, 103, 104]
+        );
+        assert_eq!(active_scan_indices(&registry, 100, 6, 2), vec![101, 104]);
+        assert_eq!(active_scan_indices(&registry, 100, 6, 1), vec![101]);
+        assert_eq!(surviving_frame(&registry, 100, 6, 0, false), Some(1));
+        assert_eq!(surviving_frame(&registry, 100, 6, 2, false), Some(3));
+        assert_eq!(surviving_frame(&registry, 100, 6, 2, true), Some(1));
+        assert_eq!(surviving_frame(&registry, 100, 6, 5, false), Some(4));
+        let heatmap = overview_heatmap_rows(
+            &[vec![1.], vec![3.], vec![4.]],
+            &[1, 3, 4],
+            &registry,
+            100,
+            6,
+        );
+        assert_eq!(heatmap.len(), 6);
+        assert!(heatmap[0][0].is_nan() && heatmap[2][0].is_nan() && heatmap[5][0].is_nan());
+        assert_eq!(heatmap[3], vec![3.]);
+        registry.set_excluded(&ids.into_iter().collect());
+        assert!(active_scan_indices(&registry, 100, 6, MAX_FRAMES).is_empty());
+        assert_eq!(surviving_frame(&registry, 100, 6, 0, false), None);
+        registry.set_excluded(&BTreeSet::new());
+        assert_eq!(stamp(), original);
+        assert_eq!(
+            active_scan_indices(&registry, 100, 6, usize::MAX),
+            (100..106).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn removal_jobs_cancel_only_bound_inputs_and_finalize_partial_results() {
+        use super::*;
+        use crate::group_identity::GroupId;
+        let source = GroupId::source(std::path::Path::new("/data/a.dat"), DetectionMode::Auto);
+        let unrelated = GroupId::new_result();
+        let inputs = [
+            BTreeSet::new(),
+            BTreeSet::from([source.clone()]),
+            BTreeSet::new(),
+            BTreeSet::from([source.clone()]),
+            BTreeSet::from([source.clone()]),
+        ];
+        let mut generations = [10; 6];
+        let mut running = [true; 5];
+        let tokens = std::array::from_fn::<_, 4, _>(|_| Arc::new(AtomicBool::new(false)));
+        let mut cancellations = tokens.clone().map(Some);
+        let mut filtered = Some(Arc::new(vec![0, 1]));
+        let unrelated_result = CatalogBindings {
+            generations: generations.each_mut(),
+            running: running.each_mut(),
+            cancellations: cancellations.each_mut(),
+            filtered: &mut filtered,
+        }
+        .remove(&inputs, &BTreeSet::from([unrelated]));
+        assert_eq!(unrelated_result, [false; 5]);
+        assert_eq!(generations, [10; 6]);
+        assert_eq!(running, [true; 5]);
+        assert!(tokens.iter().all(|t| !t.load(Ordering::Relaxed)));
+        let interrupted = CatalogBindings {
+            generations: generations.each_mut(),
+            running: running.each_mut(),
+            cancellations: cancellations.each_mut(),
+            filtered: &mut filtered,
+        }
+        .remove(&inputs, &BTreeSet::from([source]));
+        assert_eq!(interrupted, [false, true, false, true, true]);
+        assert_eq!(generations, [10, 11, 10, 11, 11, 10]);
+        assert_eq!(running, [true, false, true, false, false]);
+        assert_eq!(
+            tokens.map(|t| t.load(Ordering::Relaxed)),
+            [false, true, false, true]
+        );
+        assert_eq!(filtered.as_deref(), Some(&vec![0, 1]));
+        let mut batch = BatchFitData {
+            scan: 0,
+            fingerprint: 0,
+            model_fingerprint: 0,
+            rows: [3, 0]
+                .map(|frame| BatchFitRow {
+                    frame,
+                    entry_ix: frame,
+                    r_factor: 0.1,
+                    reduced_chi_square: 1.,
+                    values: vec![],
+                    solver_report: None,
+                })
+                .into(),
+            frame_labels: BTreeMap::new(),
+            problems: vec![BatchFitProblem {
+                frame: 1,
+                label: "a".into(),
+                error: "bad scan".into(),
+            }],
+            problems_open: false,
+            preview: false,
+            total: 500,
+            cancelled: false,
+            varying_names: vec![],
+            trend_param: 0,
+        };
+        let mut lcf = SeriesLcf {
+            scan: 0,
+            fingerprint: 0,
+            names: vec!["standard".into()],
+            rows: BTreeMap::from([(1, vec![0.5])]),
+            total: 500,
+            cancelled: false,
+        };
+        finish_interrupted_results(Some(&mut batch), Some(&mut lcf), interrupted);
+        assert!(batch.cancelled && lcf.cancelled);
+        assert_eq!(batch.problems.len(), 1);
+        assert_eq!(
+            batch.rows.iter().map(|r| r.frame).collect::<Vec<_>>(),
+            vec![0, 3]
+        );
+        assert_eq!(lcf.rows[&1], vec![0.5]);
+        assert_eq!((batch.total, lcf.total), (500, 500));
+    }
+
+    #[test]
+    fn removal_lcf_bindings_include_only_loaded_standards() {
+        use super::*;
+        let mut cache = LruCache::new(NonZeroUsize::new(8).unwrap());
+        let spectrum = Arc::new(XASSpectrum::default());
+        cache.put((1, 10), spectrum.clone());
+        cache.put((2, 9), spectrum.clone()); // outdated processing
+        cache.put((NO_ENTRY, 10), spectrum);
+        let marked = BTreeSet::from([0, 1, 2, NO_ENTRY]);
+        assert_eq!(
+            cached_marked_indices(&marked, &cache, |_| 10).collect::<Vec<_>>(),
+            vec![1]
+        );
+        assert_eq!(
+            cached_marked_spectra(&marked, &cache, |_| 10, |ix| ix.to_string()).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn removal_cache_eviction_keeps_unrelated_catalog_entries() {
+        use super::*;
+        let mut cache = LruCache::new(NonZeroUsize::new(8).unwrap());
+        for key in [(0, 1), (0, 2), (1, 1), (DERIVED_BASE, 1)] {
+            cache.put(key, key.0);
+        }
+        evict_group_keys(&mut cache, &BTreeSet::from([0]), false);
+        assert_eq!(cache.len(), 2);
+        assert_eq!(cache.peek(&(1, 1)), Some(&1));
+        assert!(cache.contains(&(DERIVED_BASE, 1)));
+        evict_group_keys(&mut cache, &BTreeSet::new(), true);
+        assert_eq!(cache.len(), 1);
+        assert_eq!(cache.peek(&(1, 1)), Some(&1));
+    }
+
     use std::collections::BTreeMap;
 
     use super::{ParamSection, copy_section, scan_fingerprint, section_differs};
@@ -1652,6 +1950,7 @@ mod override_tests {
             Some(Arc::new(AtomicBool::new(false))),
             Some(batch.clone()),
             None,
+            Some(Arc::new(AtomicBool::new(false))),
         ];
         let matches = Arc::new(vec![2, 5, 8]);
         let mut filtered = Some(matches.clone());
@@ -1973,21 +2272,33 @@ mod override_tests {
     fn scan_fingerprint_tracks_overrides_inside_the_range_only() {
         let global = PipelineParams::default();
         let mut overrides = BTreeMap::new();
-        let base = scan_fingerprint(&global, &overrides, 100, 50);
-        assert_eq!(base, scan_fingerprint(&global, &overrides, 100, 50));
+        let base = scan_fingerprint(&global, &overrides, &Default::default(), 100, 50);
+        assert_eq!(
+            base,
+            scan_fingerprint(&global, &overrides, &Default::default(), 100, 50)
+        );
 
         let ov = PipelineParams {
             rbkg: Some(1.3),
             ..Default::default()
         };
         overrides.insert(10, ov.clone()); // outside [100, 150)
-        assert_eq!(base, scan_fingerprint(&global, &overrides, 100, 50));
+        assert_eq!(
+            base,
+            scan_fingerprint(&global, &overrides, &Default::default(), 100, 50)
+        );
 
         overrides.insert(120, ov); // inside
-        assert_ne!(base, scan_fingerprint(&global, &overrides, 100, 50));
+        assert_ne!(
+            base,
+            scan_fingerprint(&global, &overrides, &Default::default(), 100, 50)
+        );
 
         overrides.remove(&120);
-        assert_eq!(base, scan_fingerprint(&global, &overrides, 100, 50));
+        assert_eq!(
+            base,
+            scan_fingerprint(&global, &overrides, &Default::default(), 100, 50)
+        );
     }
 }
 
@@ -2282,17 +2593,43 @@ enum IndexChange {
 struct CatalogBindings<'a> {
     generations: [&'a mut u64; 6],
     running: [&'a mut bool; 5],
-    cancellations: [&'a mut Option<Arc<AtomicBool>>; 3],
+    cancellations: [&'a mut Option<Arc<AtomicBool>>; 4],
     filtered: &'a mut Option<Arc<Vec<usize>>>,
 }
 
 impl CatalogBindings<'_> {
+    fn remove(
+        self,
+        inputs: &[BTreeSet<crate::group_identity::GroupId>; 5],
+        removed: &BTreeSet<crate::group_identity::GroupId>,
+    ) -> [bool; 5] {
+        let [operando, batch, merge, fit, lcf, _] = self.generations;
+        let [oc, bc, mc, lc] = self.cancellations;
+        let mut interrupted = [false; 5];
+        for (i, ((generation, running), cancel)) in [operando, batch, merge, fit, lcf]
+            .into_iter()
+            .zip(self.running)
+            .zip([Some(oc), Some(bc), Some(mc), None, Some(lc)])
+            .enumerate()
+        {
+            if !inputs[i].is_disjoint(removed) {
+                interrupted[i] = retire_job(generation, running, cancel);
+            }
+        }
+        interrupted
+    }
+
     fn invalidate(self, change: IndexChange) {
         if change == IndexChange::DerivedOnly {
             return;
         }
-        for generation in self.generations {
+        let [operando, batch, merge, fit, lcf, filter] = self.generations;
+        for generation in [operando, batch, merge, fit, lcf] {
             *generation += 1;
+        }
+        if change == IndexChange::Catalog {
+            *filter += 1;
+            *self.filtered = None;
         }
         for running in self.running {
             *running = false;
@@ -2302,7 +2639,39 @@ impl CatalogBindings<'_> {
                 cancel.store(true, Ordering::Relaxed);
             }
         }
-        *self.filtered = None;
+    }
+}
+
+fn evict_group_keys<T>(
+    cache: &mut LruCache<(usize, u64), T>,
+    removed: &BTreeSet<usize>,
+    derived_changed: bool,
+) {
+    let keys: Vec<_> = cache
+        .iter()
+        .filter(|(key, _)| removed.contains(&key.0) || (derived_changed && key.0 >= DERIVED_BASE))
+        .map(|(key, _)| *key)
+        .collect();
+    for key in keys {
+        cache.pop(&key);
+    }
+}
+
+fn finish_interrupted_results(
+    batch: Option<&mut BatchFitData>,
+    lcf: Option<&mut SeriesLcf>,
+    interrupted: [bool; 5],
+) {
+    if interrupted[1]
+        && let Some(batch) = batch
+    {
+        batch.cancelled = true;
+        batch.rows.sort_by_key(|row| row.frame);
+    }
+    if interrupted[4]
+        && let Some(lcf) = lcf
+    {
+        lcf.cancelled = true;
     }
 }
 
@@ -2338,16 +2707,25 @@ fn exclude_pending_current(loads: &mut Vec<CompareLoad>, pending: Option<usize>)
     loads.retain(|load| Some(load.ix) != pending);
 }
 
+fn cached_marked_indices<'a>(
+    selection: &'a BTreeSet<usize>,
+    cache: &'a LruCache<(usize, u64), Arc<XASSpectrum>>,
+    fingerprint: impl Fn(usize) -> u64 + 'a,
+) -> impl Iterator<Item = usize> + 'a {
+    selection
+        .iter()
+        .copied()
+        .filter(move |&ix| ix != NO_ENTRY && cache.contains(&(ix, fingerprint(ix))))
+}
+
 fn cached_marked_spectra(
     selection: &BTreeSet<usize>,
     cache: &LruCache<(usize, u64), Arc<XASSpectrum>>,
     fingerprint: impl Fn(usize) -> u64,
     label: impl Fn(usize) -> String,
 ) -> Vec<(String, Arc<XASSpectrum>)> {
-    selection
-        .iter()
-        .filter(|&&ix| ix != NO_ENTRY)
-        .filter_map(|&ix| {
+    cached_marked_indices(selection, cache, &fingerprint)
+        .filter_map(|ix| {
             cache
                 .peek(&(ix, fingerprint(ix)))
                 .map(|sp| (label(ix), sp.clone()))
@@ -2554,6 +2932,7 @@ impl StudioApp {
             operando_gen: 0,
             operando_running: false,
             operando_cancel: None,
+            job_inputs: Default::default(),
             series_trend: TrendSource::E0,
             series_lcf: None,
             lcf_running: false,
@@ -2722,7 +3101,7 @@ impl StudioApp {
             }
         }
         if let Some(dir) = initial_dir {
-            app.scan_folder(dir, cx);
+            app.scan_folder(dir, false, cx);
         }
         app
     }
@@ -2773,7 +3152,9 @@ impl StudioApp {
     }
 
     fn valid_group_index(&self, ix: usize) -> bool {
-        ix < self.catalog.len() || (ix >= DERIVED_BASE && ix - DERIVED_BASE < self.derived.len())
+        !self.group_registry.index_excluded(ix)
+            && (ix < self.catalog.len()
+                || (ix >= DERIVED_BASE && ix - DERIVED_BASE < self.derived.len()))
     }
 
     fn custom_params(&self, ix: usize) -> Option<&PipelineParams> {
@@ -3037,13 +3418,20 @@ impl StudioApp {
     fn standalone_path(&self) -> Option<&std::path::Path> {
         self.standalone_source
             .as_ref()
-            .filter(|_| self.catalog.is_empty())
+            .filter(|(_, _, id)| self.catalog.is_empty() && !self.group_registry.is_excluded(id))
             .map(|(path, _, _)| path.as_path())
     }
 
     fn peek_group_id(&self, ix: usize) -> Option<crate::group_identity::GroupId> {
+        if self.group_registry.index_excluded(ix) {
+            return None;
+        }
         if ix == NO_ENTRY {
-            return self.standalone_source.as_ref().map(|(_, _, id)| id.clone());
+            return self
+                .standalone_source
+                .as_ref()
+                .filter(|(_, _, id)| !self.group_registry.is_excluded(id))
+                .map(|(_, _, id)| id.clone());
         }
         self.group_registry.id(ix).or_else(|| {
             (ix < self.catalog.len()).then(|| {
@@ -3058,6 +3446,9 @@ impl StudioApp {
 
     /// Materialize a durable source identity only when a caller references it.
     fn group_id(&self, ix: usize) -> Option<crate::group_identity::GroupId> {
+        if self.group_registry.index_excluded(ix) {
+            return None;
+        }
         if ix == NO_ENTRY {
             return self.peek_group_id(ix);
         }
@@ -3151,7 +3542,7 @@ impl StudioApp {
         if let Some((_, _, id)) = self
             .standalone_source
             .as_ref()
-            .filter(|_| self.catalog.is_empty())
+            .filter(|(_, _, id)| self.catalog.is_empty() && !self.group_registry.is_excluded(id))
         {
             if self.group_state.marked.contains(id) {
                 self.selection.insert(NO_ENTRY);
@@ -3191,6 +3582,13 @@ impl StudioApp {
         self.compare_gen += 1;
         self.load_running = false;
         self.compare_running = false;
+        if change == IndexChange::Catalog {
+            finish_interrupted_results(
+                self.batch_fit.as_mut(),
+                self.series_lcf.as_mut(),
+                [false, self.batch_running, false, false, self.lcf_running],
+            );
+        }
         CatalogBindings {
             generations: [
                 &mut self.operando_gen,
@@ -3211,6 +3609,7 @@ impl StudioApp {
                 &mut self.operando_cancel,
                 &mut self.batch_cancel,
                 &mut self.merge_cancel,
+                &mut self.lcf_cancel,
             ],
             filtered: &mut self.filtered,
         }
@@ -3221,24 +3620,8 @@ impl StudioApp {
             self.thumbs = None;
         } else {
             // Only shifted derived slots can now refer to another group.
-            let keys: Vec<_> = self
-                .cache
-                .iter()
-                .filter(|(key, _)| key.0 >= DERIVED_BASE)
-                .map(|(key, _)| *key)
-                .collect();
-            for key in keys {
-                self.cache.pop(&key);
-            }
-            let keys: Vec<_> = self
-                .raw_cache
-                .iter()
-                .filter(|(key, _)| key.0 >= DERIVED_BASE)
-                .map(|(key, _)| *key)
-                .collect();
-            for key in keys {
-                self.raw_cache.pop(&key);
-            }
+            evict_group_keys(&mut self.cache, &BTreeSet::new(), true);
+            evict_group_keys(&mut self.raw_cache, &BTreeSet::new(), true);
         }
     }
 
@@ -4138,7 +4521,9 @@ impl StudioApp {
     }
 
     fn reprocess_current(&mut self, cx: &mut Context<Self>) {
-        let ix = self.selected.unwrap_or(NO_ENTRY);
+        let Some(ix) = self.current_group_index() else {
+            return;
+        };
         let label: SharedString = self
             .selected
             .map(|selected| self.entry_label(selected).into())
@@ -4161,6 +4546,17 @@ impl StudioApp {
         label: SharedString,
         cx: &mut Context<Self>,
     ) {
+        if ix != NO_ENTRY && !self.valid_group_index(ix) {
+            return;
+        }
+        if ix == NO_ENTRY
+            && (path.as_os_str().is_empty()
+                || self
+                    .group_registry
+                    .is_excluded(&self.standalone_group_id(&path)))
+        {
+            return;
+        }
         if ix == NO_ENTRY {
             if self
                 .standalone_source
@@ -4424,7 +4820,18 @@ impl StudioApp {
         };
         let scan_start = scan.start;
         let scan_len = scan.len;
-        let fingerprint = scan_fingerprint(&self.params, &self.overrides, scan_start, scan_len);
+        let fingerprint = scan_fingerprint(
+            &self.params,
+            &self.overrides,
+            &self.group_registry,
+            scan_start,
+            scan_len,
+        );
+        if active_scan_indices(&self.group_registry, scan_start, scan_len, 1).is_empty() {
+            self.operando = None;
+            self.operando_plots = None;
+            return;
+        }
         if scan_len == 0
             || self.operando.as_ref().is_some_and(|o| {
                 o.scan == scan_ix && o.scan_len == scan_len && o.fingerprint == fingerprint
@@ -4443,7 +4850,12 @@ impl StudioApp {
         self.operando_cancel = Some(cancel.clone());
         self.operando_running = true;
         // Even sampling across the scan; first and last frames included.
-        let sample_ixs = sample_scan_indices(scan_start, scan_len, MAX_FRAMES);
+        let sample_ixs =
+            active_scan_indices(&self.group_registry, scan_start, scan_len, MAX_FRAMES);
+        self.job_inputs[0] = sample_ixs
+            .iter()
+            .filter_map(|&ix| self.group_id(ix))
+            .collect();
         let frames: Vec<(usize, PathBuf, String)> = sample_ixs
             .iter()
             .map(|&ix| (ix, self.catalog.path(ix), self.catalog.name(ix).to_string()))
@@ -4579,6 +4991,7 @@ impl StudioApp {
                 app.operando = Some(OperandoData {
                     scan: scan_ix,
                     scan_len,
+                    sample_frames: sample_ixs.iter().map(|ix| ix - scan_start).collect(),
                     fingerprint,
                     grid,
                     matrix,
@@ -4603,6 +5016,14 @@ impl StudioApp {
                             0
                         }
                     });
+                app.time_pos = surviving_frame(
+                    &app.group_registry,
+                    scan_start,
+                    scan_len,
+                    app.time_pos,
+                    false,
+                )
+                .unwrap_or(0);
                 app.rebuild_operando_plots(cx);
                 app.status = if failed == 0 {
                     "scan overview ready".into()
@@ -4626,7 +5047,7 @@ impl StudioApp {
         };
         let scan_ix = data.scan;
         let scan_len = data.scan_len.min(scan.len);
-        let sample_pos = nearest_sample_pos(self.time_pos, scan_len, data.matrix.len());
+        let sample_pos = data.sample_pos(self.time_pos);
         let cursor_ix = scan.start + self.time_pos.min(scan_len.saturating_sub(1));
         let cursor_fingerprint = self.effective_fingerprint(cursor_ix);
         let exact_row = self
@@ -4658,8 +5079,15 @@ impl StudioApp {
             SeriesSpace::K => (K_AXIS.into(), chik_label(data.kweight)),
             SeriesSpace::R => (R_AXIS.into(), chir_label(data.kweight)),
         };
-        let heatmap =
-            build_heatmap(matrix, grid, data.scan_len, &xlabel, &self.theme).size_px(700, 900);
+        let heatmap_rows = overview_heatmap_rows(
+            matrix,
+            &data.sample_frames,
+            &self.group_registry,
+            scan.start,
+            data.scan_len,
+        );
+        let heatmap = build_heatmap(&heatmap_rows, grid, data.scan_len, &xlabel, &self.theme)
+            .size_px(700, 900);
         let chik = match space {
             SeriesSpace::K => build_frame_chik_source(
                 &data.grid,
@@ -4878,13 +5306,19 @@ impl StudioApp {
         let scan_ix = data.scan;
         let scan_start = scan.start;
         let scan_len = data.scan_len.min(scan.len);
-        let pos = pos.min(scan_len.saturating_sub(1));
+        let pos = surviving_frame(
+            &self.group_registry,
+            scan_start,
+            scan_len,
+            pos,
+            pos < self.time_pos,
+        )?;
         let ix = scan_start + pos;
         if pos == self.time_pos {
             return Some((scan_ix, ix));
         }
         self.time_pos = pos;
-        let sample_pos = nearest_sample_pos(pos, scan_len, data.matrix.len());
+        let sample_pos = data.sample_pos(pos);
         let fingerprint = self.effective_fingerprint(ix);
         let current_key = self
             .operando_plots
@@ -4960,7 +5394,16 @@ impl StudioApp {
             .filter(|data| data.scan == scan_ix)
             .map(|data| data.scan_len.min(scan.len))
             .unwrap_or(scan.len);
-        let offset = self.time_pos.min(scan_len.saturating_sub(1));
+        let Some(offset) = surviving_frame(
+            &self.group_registry,
+            scan.start,
+            scan_len,
+            self.time_pos,
+            false,
+        ) else {
+            return;
+        };
+        self.time_pos = offset;
         let ix = scan.start + offset;
         self.reveal_time_selection(scan_ix, offset, ix);
         self.selection.clear();
@@ -5006,7 +5449,14 @@ impl StudioApp {
         let Some(scan) = self.catalog.scans.get(data.scan) else {
             return;
         };
-        if data.fingerprint != scan_fingerprint(&self.params, &self.overrides, scan.start, scan.len)
+        if data.fingerprint
+            != scan_fingerprint(
+                &self.params,
+                &self.overrides,
+                &self.group_registry,
+                scan.start,
+                scan.len,
+            )
             || ix != scan.start + self.time_pos.min(scan.len.saturating_sub(1))
         {
             return;
@@ -5427,7 +5877,19 @@ impl StudioApp {
     /// (doc: "reopening a million-file project is < 1 s"), falling back to a
     /// streaming walk. Either way the tree is (re)walked in the background —
     /// as the primary scan or as the freshness re-check.
-    fn scan_folder(&mut self, root: PathBuf, cx: &mut Context<Self>) {
+    fn scan_folder(&mut self, root: PathBuf, restore: bool, cx: &mut Context<Self>) {
+        if !restore {
+            self.bind_joint_sources();
+            let root = root.canonicalize().unwrap_or(root.clone());
+            for source in self.group_registry.sources() {
+                if source.path.starts_with(&root)
+                    && source.path.is_file()
+                    && let Some(id) = self.group_registry.reimport_source(&source.path, None)
+                {
+                    self.record_reimport(BTreeSet::from([id]));
+                }
+            }
+        }
         self.reset_catalog_state(cx);
         self.source_dir = Some(root.clone());
         self.status = format!("checking catalog index for {} ...", root.display()).into();
@@ -5720,6 +6182,7 @@ impl StudioApp {
                                         scan_fingerprint(
                                             &app.params,
                                             &app.overrides,
+                                            &app.group_registry,
                                             scan.start,
                                             scan.len,
                                         ) ^ 1
@@ -5798,7 +6261,10 @@ impl StudioApp {
     /// Add a whole scan to the compare set (shift/cmd-click on a scan row).
     fn select_scan_range(&mut self, scan_ix: usize, cx: &mut Context<Self>) {
         if let Some(scan) = self.catalog.scans.get(scan_ix) {
-            self.selection.extend(scan.start..scan.start + scan.len);
+            self.selection.extend(
+                (scan.start..scan.start + scan.len)
+                    .filter(|&ix| !self.group_registry.index_excluded(ix)),
+            );
             self.ensure_compare_loaded(cx);
             self.sync_param_fields(cx);
             cx.notify();
@@ -5884,14 +6350,13 @@ impl StudioApp {
     }
 
     fn remove_derived(&mut self, i: usize, cx: &mut Context<Self>) {
-        let Some(spectrum) = self.take_derived(i, cx) else {
-            return;
-        };
-        self.record(
-            format!("remove {}", spectrum.label),
-            Some(shell::journal::UndoOp::DerivedRemove { index: i, spectrum }),
-        );
-        cx.notify();
+        if let Some(id) = self.group_id(DERIVED_BASE + i) {
+            self.remove_groups(
+                BTreeSet::from([id]),
+                format!("remove {}", self.entry_label(DERIVED_BASE + i)),
+                cx,
+            );
+        }
     }
 
     /// Same displayed scope as the toolbar and keyboard command.
@@ -5935,6 +6400,9 @@ impl StudioApp {
     }
 
     fn select_entry(&mut self, ix: usize, cx: &mut Context<Self>) {
+        if self.group_id(ix).is_none() {
+            return;
+        }
         self.focus_group = Some(ix);
         self.mark_anchor = Some(ix);
         self.pending_project_spectrum = None;
@@ -6457,6 +6925,11 @@ impl StudioApp {
             model_fingerprint: self.fit_model_fingerprint(),
         };
         self.fit_error = None;
+        self.job_inputs[3] = self
+            .current_group_index()
+            .and_then(|ix| self.group_id(ix))
+            .into_iter()
+            .collect();
         self.fit_running = true;
         self.status = format!("fitting {} ...", provenance.label).into();
         cx.notify();
@@ -6768,11 +7241,17 @@ impl StudioApp {
         let Some(scan) = self.catalog.scans.get(scan_ix) else {
             return "selected scan is unavailable".into();
         };
-        let count = if self.batch_preview {
-            scan.len.min(MAX_FRAMES)
-        } else {
-            scan.len
-        };
+        let count = active_scan_indices(
+            &self.group_registry,
+            scan.start,
+            scan.len,
+            if self.batch_preview {
+                MAX_FRAMES
+            } else {
+                usize::MAX
+            },
+        )
+        .len();
         let threads = rayon::current_num_threads().max(1);
         let waves = count.div_ceil(threads);
         let (per_fit, basis) = self
@@ -6831,14 +7310,21 @@ impl StudioApp {
         };
         let scan_start = scan.start;
         let scan_len = scan.len;
-        let fingerprint = scan_fingerprint(&self.params, &self.overrides, scan_start, scan_len);
+        let fingerprint = scan_fingerprint(
+            &self.params,
+            &self.overrides,
+            &self.group_registry,
+            scan_start,
+            scan_len,
+        );
         let model_fingerprint = self.fit_model_fingerprint();
         let preview = self.batch_preview;
         let indices = if preview {
-            sample_scan_indices(scan_start, scan_len, MAX_FRAMES)
+            active_scan_indices(&self.group_registry, scan_start, scan_len, MAX_FRAMES)
         } else {
-            (scan_start..scan_start + scan_len).collect()
+            active_scan_indices(&self.group_registry, scan_start, scan_len, usize::MAX)
         };
+        self.job_inputs[1] = indices.iter().filter_map(|&ix| self.group_id(ix)).collect();
         let frames: Vec<(usize, usize, PathBuf, String)> = indices
             .into_iter()
             .map(|ix| {
@@ -7096,12 +7582,26 @@ impl StudioApp {
         };
         let scan_start = scan.start;
         let scan_len = scan.len;
-        let fingerprint = scan_fingerprint(&self.params, &self.overrides, scan_start, scan_len);
+        let fingerprint = scan_fingerprint(
+            &self.params,
+            &self.overrides,
+            &self.group_registry,
+            scan_start,
+            scan_len,
+        );
         let indices: Vec<usize> = if self.batch_preview {
-            sample_scan_indices(scan_start, scan_len, MAX_FRAMES)
+            active_scan_indices(&self.group_registry, scan_start, scan_len, MAX_FRAMES)
         } else {
-            (scan_start..scan_start + scan_len).collect()
+            active_scan_indices(&self.group_registry, scan_start, scan_len, usize::MAX)
         };
+        self.job_inputs[4] = indices
+            .iter()
+            .copied()
+            .chain(cached_marked_indices(&self.selection, &self.cache, |ix| {
+                self.effective_fingerprint(ix)
+            }))
+            .filter_map(|ix| self.group_id(ix))
+            .collect();
         let frames: Vec<(usize, usize, PathBuf, String)> = indices
             .into_iter()
             .map(|ix| {
@@ -7329,7 +7829,11 @@ impl StudioApp {
                     .map(|data| data.whitelines.clone())
                     .unwrap_or_default();
                 return TrendSnapshot {
-                    frames: trend_frames(TrendDomain::Sampled, values.len(), scan_len),
+                    frames: self
+                        .operando
+                        .as_ref()
+                        .map(|data| data.sample_frames.iter().map(|&p| p as f64).collect())
+                        .unwrap_or_default(),
                     values,
                     name: "white line (norm. μ)".to_string(),
                     domain: TrendDomain::Sampled,
@@ -7343,7 +7847,11 @@ impl StudioApp {
             .map(|data| data.e0s.clone())
             .unwrap_or_default();
         TrendSnapshot {
-            frames: trend_frames(TrendDomain::Sampled, values.len(), scan_len),
+            frames: self
+                .operando
+                .as_ref()
+                .map(|data| data.sample_frames.iter().map(|&p| p as f64).collect())
+                .unwrap_or_default(),
             values,
             name: "E₀ (eV)".to_string(),
             domain: TrendDomain::Sampled,
@@ -7391,7 +7899,7 @@ impl StudioApp {
                 }
             }
         }
-        let sample_pos = nearest_sample_pos(self.time_pos, data.scan_len, matrix.len());
+        let sample_pos = data.sample_pos(self.time_pos);
         matrix.get(sample_pos).cloned().unwrap_or_default()
     }
 
@@ -7870,6 +8378,8 @@ impl StudioApp {
         self.next_derived_id = next_derived_id;
         self.group_state = Default::default();
         self.group_registry = registry;
+        self.group_registry
+            .set_excluded(&project.group_state.excluded);
         self.selection.clear();
         self.frozen.clear();
         self.overrides.clear();
@@ -7968,7 +8478,7 @@ impl StudioApp {
         // until the (re)scanned catalog can resolve them to indices; with
         // no source there is no catalog for them to attach to.
         if let Some(dir) = project.source_dir.clone() {
-            self.scan_folder(dir, cx);
+            self.scan_folder(dir, true, cx);
             self.pending_overrides = project.overrides;
             self.pending_project_spectrum = project.spectrum_file;
         } else {

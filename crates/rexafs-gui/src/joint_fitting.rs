@@ -26,6 +26,9 @@ pub(crate) struct JointDataset {
     pub file: PathBuf,
     /// Additional channel or in-memory group; absent means the primary file.
     pub group_id: Option<u64>,
+    /// Durable operand identity; older projects bind their legacy locator on use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_id: Option<crate::group_identity::GroupId>,
     pub label: String,
     /// Stable file identity, never an index into the path table.
     pub paths: Vec<PathBuf>,

@@ -26,6 +26,9 @@ pub(crate) enum Item {
     Reveal,
     Export,
     Remove,
+    RemoveAll,
+    ConfirmRemove,
+    Cancel,
     Merge,
     Align,
     Compare,
@@ -34,7 +37,7 @@ pub(crate) enum Item {
 pub(crate) struct MenuContext {
     spectrum: bool,
     file: bool,
-    derived: bool,
+    members: usize,
     operation: bool,
     locked: bool,
     marked: bool,
@@ -55,6 +58,7 @@ pub(crate) struct MenuItem {
 pub(crate) fn menu_items(c: &MenuContext) -> Vec<MenuItem> {
     use Item::*;
     let merge = format!("Merge {} marked…", c.marks);
+    let remove_all = format!("Remove all {} groups from this file…", c.members);
     [
         (Current, "Make current"),
         (Mark, if c.marked { "Unmark" } else { "Mark" }),
@@ -76,6 +80,7 @@ pub(crate) fn menu_items(c: &MenuContext) -> Vec<MenuItem> {
         (Reveal, "Reveal source in Finder"),
         (Export, "Export…"),
         (Remove, "Remove group"),
+        (RemoveAll, remove_all.as_str()),
         (Merge, merge.as_str()),
         (Align, "Align marked…"),
         (Compare, "Compare current and marked"),
@@ -88,7 +93,8 @@ pub(crate) fn menu_items(c: &MenuContext) -> Vec<MenuItem> {
             Standard if !c.absorption => Some("Requires an absorption spectrum"),
             Inputs if !c.operation => Some("No recorded inputs"),
             Reveal if !c.source_exists => Some("Source is not a local file"),
-            Remove if !c.derived => Some("Source group removal is not available yet"),
+            Remove if !c.spectrum => Some("Requires a group"),
+            RemoveAll if !c.file || c.members < 2 => Some("Requires a file with multiple groups"),
             Merge if c.incompatible_marks => Some("Marked quantities are incompatible"),
             Merge if c.marks < 2 => Some("Mark at least two spectra"),
             Align if c.marked_absorption == 0 => Some("Mark an absorption spectrum"),
@@ -188,6 +194,7 @@ pub(crate) struct GroupMenu {
     focus: FocusHandle,
     context: MenuContext,
     submenu: Option<Item>,
+    removal: Vec<(GroupId, String)>,
 }
 pub(crate) struct RenameState {
     target: GroupId,
@@ -216,7 +223,10 @@ fn duplicate(
 }
 
 impl StudioApp {
-    fn menu_index(&self, id: &GroupId) -> Option<usize> {
+    pub(crate) fn menu_index(&self, id: &GroupId) -> Option<usize> {
+        if self.group_registry.is_excluded(id) {
+            return None;
+        }
         self.group_registry.index(id).or_else(|| {
             self.standalone_source
                 .as_ref()
@@ -224,6 +234,33 @@ impl StudioApp {
                 .map(|_| crate::app::NO_ENTRY)
         })
     }
+    fn file_members(&self, ix: usize) -> Vec<(GroupId, String)> {
+        let Some(target) = self
+            .tool_target(ix)
+            .filter(|t| !t.path.as_os_str().is_empty())
+        else {
+            return vec![];
+        };
+        let path = target.path;
+        self.catalog
+            .find_by_canonical_path(&path)
+            .into_iter()
+            .chain(
+                self.standalone_path()
+                    .filter(|p| *p == path)
+                    .map(|_| crate::app::NO_ENTRY),
+            )
+            .chain(
+                self.derived
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, d)| d.source.as_ref() == Some(&path))
+                    .map(|(i, _)| DERIVED_BASE + i),
+            )
+            .filter_map(|g| self.group_id(g).map(|id| (id, self.entry_label(g))))
+            .collect()
+    }
+
     fn group_absorption(&self, ix: usize) -> bool {
         ix.checked_sub(DERIVED_BASE)
             .and_then(|i| self.derived.get(i))
@@ -254,7 +291,7 @@ impl StudioApp {
         let mut context = MenuContext {
             spectrum: true,
             file,
-            derived: derived.is_some(),
+            members: self.file_members(ix).len(),
             operation: derived.is_some_and(|d| d.operation.is_some()),
             locked: self.frozen.contains(&ix),
             marked: self.selection.contains(&ix),
@@ -283,6 +320,7 @@ impl StudioApp {
             focus,
             context: context.clone(),
             submenu: None,
+            removal: vec![],
         });
         if file {
             let params = self.effective_params(ix).clone();
@@ -296,6 +334,7 @@ impl StudioApp {
             let primary = self
                 .catalog
                 .find_by_canonical_path(&path)
+                .filter(|&i| self.valid_group_index(i))
                 .map(|i| self.effective_params(i).import.clone())
                 .or_else(|| {
                     self.standalone_path()
@@ -443,6 +482,18 @@ impl StudioApp {
             return;
         };
         let id = menu.target.clone();
+        if item == Item::RemoveAll {
+            let removal = self.file_members(ix);
+            if removal.len() > 1
+                && let Some(menu) = &mut self.group_menu
+            {
+                menu.removal = removal;
+                menu.submenu = Some(Item::RemoveAll);
+            }
+            cx.notify();
+            return;
+        }
+        let removal = menu.removal.clone();
         if matches!(item, Item::Colors | Item::Channels) {
             if let Some(menu) = &mut self.group_menu {
                 menu.submenu = if menu.submenu == Some(item) {
@@ -553,10 +604,30 @@ impl StudioApp {
             }
             Item::Export => self.export_group_csv(ix, cx),
             Item::Remove => {
-                if let Some(index) = ix.checked_sub(DERIVED_BASE) {
+                if ix != crate::app::NO_ENTRY
+                    && let Some(index) = ix.checked_sub(DERIVED_BASE)
+                {
                     self.remove_derived(index, cx);
+                } else {
+                    self.remove_groups(
+                        std::collections::BTreeSet::from([id]),
+                        format!("remove {}", self.entry_label(ix)),
+                        cx,
+                    );
                 }
             }
+            Item::ConfirmRemove => {
+                let file = self
+                    .tool_target(ix)
+                    .map(|t| t.path.display().to_string())
+                    .unwrap_or_default();
+                self.remove_groups(
+                    removal.iter().map(|(id, _)| id.clone()).collect(),
+                    format!("remove {} groups from {file}", removal.len()),
+                    cx,
+                );
+            }
+            Item::RemoveAll | Item::Cancel => {}
             Item::Merge => self.merge_selection(cx),
             Item::Align => self.open_tool(Tool::Align, cx),
             Item::Compare => {
@@ -659,6 +730,22 @@ impl StudioApp {
                 })
                 .collect();
         }
+        if menu.submenu == Some(Item::RemoveAll) {
+            items = vec![
+                MenuItem {
+                    item: Item::ConfirmRemove,
+                    enabled: true,
+                    reason: None,
+                    label: format!("Remove {} groups", menu.removal.len()),
+                },
+                MenuItem {
+                    item: Item::Cancel,
+                    enabled: true,
+                    reason: None,
+                    label: "Cancel".into(),
+                },
+            ];
+        }
         let mut list = div()
             .id("group-menu-list")
             .w(px(310.))
@@ -672,6 +759,16 @@ impl StudioApp {
             .shadow_lg()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation());
+        if menu.submenu == Some(Item::RemoveAll) {
+            list = list.child(
+                div()
+                    .p_2()
+                    .child("Remove these groups? Source file is kept."),
+            );
+            for (_, label) in &menu.removal {
+                list = list.child(div().px_2().py_1().text_size(px(12.)).child(label.clone()));
+            }
+        }
         if items.is_empty() {
             list = list.child("All detected channels already exist");
         }
@@ -757,6 +854,31 @@ impl StudioApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn removal_menu_requires_multiple_groups_of_the_target_file() {
+        for (file, members, enabled) in [(true, 1, false), (true, 3, true), (false, 3, false)] {
+            let items = menu_items(&MenuContext {
+                spectrum: true,
+                file,
+                members,
+                ..Default::default()
+            });
+            let remove = items.iter().find(|i| i.item == Item::RemoveAll).unwrap();
+            assert_eq!(remove.enabled, enabled);
+            assert_eq!(
+                remove.label,
+                format!("Remove all {members} groups from this file…")
+            );
+            assert!(
+                items
+                    .iter()
+                    .find(|i| i.item == Item::Remove)
+                    .unwrap()
+                    .enabled
+            );
+        }
+    }
+
     #[test]
     fn missing_channel_rules_resolve_auto_independently_of_the_menu_target() {
         use DetectionMode::*;
@@ -882,6 +1004,7 @@ mod tests {
             Item::Channels,
             Item::Standard,
             Item::Export,
+            Item::Remove,
             Item::Merge,
             Item::Align,
         ] {
@@ -890,7 +1013,7 @@ mod tests {
                 "{item:?}"
             );
         }
-        for item in [Item::Inputs, Item::Reveal, Item::Remove, Item::Compare] {
+        for item in [Item::Inputs, Item::Reveal, Item::RemoveAll, Item::Compare] {
             let entry = items.iter().find(|i| i.item == item).unwrap();
             assert!(!entry.enabled);
             assert!(entry.reason.is_some());
@@ -903,7 +1026,7 @@ mod tests {
         context.marked_absorption = 0;
         context.absorption = false;
         context.file = false;
-        context.derived = true;
+        context.members = 2;
         context.operation = true;
         context.marked = true;
         context.source_exists = true;

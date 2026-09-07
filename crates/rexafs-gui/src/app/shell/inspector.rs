@@ -87,6 +87,17 @@ impl StudioApp {
             .border_l_1()
             .border_color(t.border)
             .child(self.inspector_header(cx))
+            .children(
+                self.selected
+                    .and_then(|g| g.checked_sub(crate::app::DERIVED_BASE))
+                    .and_then(|i| self.derived.get(i))
+                    .and_then(|d| {
+                        crate::app::group_rows::input_missing(d, |id| {
+                            self.group_registry.is_excluded(id)
+                        })
+                    })
+                    .map(|message| div().p_3().text_size(px(12.)).child(message)),
+            )
             .child(
                 div()
                     .id("inspector-scroll")

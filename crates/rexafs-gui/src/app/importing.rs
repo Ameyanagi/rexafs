@@ -14,6 +14,14 @@ enum ImportEvent {
     Done,
 }
 
+fn skip_existing_import(
+    existing: Option<usize>,
+    restore: bool,
+    registry: &crate::group_identity::GroupRegistry,
+) -> bool {
+    existing.is_some_and(|ix| restore || !registry.index_excluded(ix))
+}
+
 fn start_import(
     paths: Vec<PathBuf>,
     import: ImportConfig,
@@ -210,6 +218,7 @@ impl StudioApp {
         self.status = "Importing files and detecting reference channels…".into();
         cx.spawn(async move |this, cx| {
             let (mut added, mut channels, mut notices) = (0, 0, 0);
+            let mut reimported = false;
             while let Some(event) = rx.next().await {
                 let done = matches!(event, ImportEvent::Done);
                 let current = this.update(cx, |app, cx| {
@@ -220,8 +229,17 @@ impl StudioApp {
                             let derived_start = app.derived.len();
                             for file in batch {
                                 let path = PathBuf::from(file.meta.dir.as_ref()).join(file.meta.name.as_ref());
-                                if app.catalog.find_by_canonical_path(&path).is_some() { continue; }
-                                app.catalog.extend(vec![file.meta]);
+                                let existing = app.catalog.find_by_canonical_path(&path);
+                                if skip_existing_import(existing, restore, &app.group_registry) { continue; }
+                                let mut restored_ids = BTreeSet::new();
+                                if !restore {
+                                    app.bind_joint_sources();
+                                    if let Some(id) = app.group_registry.reimport_source(&path, existing) {
+                                        restored_ids.insert(id);
+                                        reimported = true;
+                                    }
+                                }
+                                if existing.is_none() { app.catalog.extend(vec![file.meta]); }
                                 added += 1;
                                 if file.reference && !existing_references.contains(&path) {
                                     let mut reference_params = params.clone();
@@ -237,9 +255,11 @@ impl StudioApp {
                                         source: Some(path), params: Some(reference_params), ..Default::default()
                                     };
                                     app.group_registry.assign_group(&mut group, &app.project_source_origins);
+                                    if !restored_ids.is_empty() { restored_ids.extend(group.group_id.clone()); }
                                     app.derived.push(group);
                                     channels += 1;
                                 }
+                                if !restored_ids.is_empty() { app.record_reimport(restored_ids); }
                             }
                             app.register_appended_groups(catalog_start, derived_start);
                             if app.selected.is_none() && app.pending_project_spectrum.is_none() && app.pending_derived.is_none() && !app.catalog.is_empty() { app.select_entry(0, cx); }
@@ -250,6 +270,7 @@ impl StudioApp {
                             app.catalog.scanning = false;
                             app.resolve_pending_overrides(cx);
                             app.restore_project_selection(cx);
+                            if reimported && app.workspace == Workspace::Operando { app.ensure_operando(cx); }
                             if !app.filter_text.is_empty() { app.apply_filter(cx); }
                             app.status = format!("Imported {added} files + {channels} reference channels · {notices} notices").into();
                             app.record(app.status.to_string(), None);
@@ -338,6 +359,23 @@ impl StudioApp {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn explicit_import_accepts_excluded_catalog_entries_but_restore_keeps_them_hidden() {
+        let registry = crate::group_identity::GroupRegistry::default();
+        let id = registry.register_source(
+            Some(0),
+            "/data/a.dat".into(),
+            DetectionMode::Auto,
+            &Default::default(),
+        );
+        assert!(skip_existing_import(Some(0), false, &registry));
+        registry.set_excluded(&BTreeSet::from([id]));
+        assert!(!skip_existing_import(Some(0), false, &registry));
+        assert!(skip_existing_import(Some(0), true, &registry));
+        assert!(!skip_existing_import(None, true, &registry));
+    }
+
     use super::*;
     #[test]
     fn import_thread_uses_bounded_detection_and_defers_full_source_diagnostics() {
