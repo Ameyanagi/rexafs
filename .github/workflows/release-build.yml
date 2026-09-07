@@ -138,7 +138,7 @@ jobs:
             features: refeff-runner,feff10-runner
           - os: ubuntu-24.04
             features: refeff-runner,feff10-runner
-          # The unpublished Windows preview uses MSVC; the FEFF10 prebuilt
+          # The Windows build uses MSVC; the FEFF10 prebuilt
           # currently targets MinGW and is not compatible with that toolchain.
           - os: windows-2025
             features: refeff-runner
@@ -163,6 +163,19 @@ jobs:
         run: python scripts/test-release-archive.py
       - run: cargo build --locked --release -p rexafs-gui --no-default-features --features ${{ matrix.features }}
       - run: python scripts/package-desktop.py
+      - uses: astral-sh/setup-uv@v6
+        if: runner.os == 'Windows'
+        with:
+          version: '0.12.3'
+          python-version: '3.12'
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: |
+          uv run --no-project python scripts/test-windows-installer.py
+          uv run --no-project python scripts/windows_installer.py target/distributions --bundle "target/distributions/rexafs-*-pc-windows-msvc"
+      - name: Install, reinstall and uninstall Windows package
+        if: runner.os == 'Windows'
+        run: ./scripts/test-windows-installer.ps1 -Directory target/distributions
       - name: Build and smoke-test unsigned Mac installer preview
         if: runner.os == 'macOS'
         run: |
@@ -181,6 +194,9 @@ jobs:
             target/distributions/*.zip
             target/distributions/*.tar.gz
             target/distributions/*.sha256
+            target/distributions/*-setup.exe
+            target/distributions/*-setup.build.json
+            target/distributions/*-setup.exe.qualification.json
           if-no-files-found: error
 
   manifest:

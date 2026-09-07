@@ -22,6 +22,10 @@ prepared; the commands below build from this checkout. The repository is now
 [release plan](doc/rebranding-plan.md),
 [migration guide](doc/migration.md) and [release runbook](doc/releasing.md).
 
+For Windows, use the setup EXE from the
+[GitHub releases](https://github.com/Ameyanagi/rexafs/releases), or the portable ZIP.
+See [Windows installation](doc/windows-installers.md) for setup, updates and uninstall.
+
 ## What is available
 
 | Surface | Implemented scope |

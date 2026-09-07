@@ -1,0 +1,59 @@
+name: Windows installer
+
+on:
+  push:
+    paths:
+      - '.github/workflows/windows-installer.yml'
+      - 'scripts/windows_installer.py'
+      - 'scripts/windows-installer.iss'
+      - 'scripts/test-windows-installer*'
+  pull_request:
+    paths:
+      - '.github/workflows/windows-installer.yml'
+      - 'scripts/windows_installer.py'
+      - 'scripts/windows-installer.iss'
+      - 'scripts/test-windows-installer*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release with a qualified Windows ZIP to wrap
+        type: string
+        default: v0.1.3
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-installer-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installer:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.3'
+          python-version: '3.12'
+      - name: Python checks
+        run: |
+          uvx ruff@0.16.6 check scripts/windows_installer.py scripts/test-windows-installer.py
+          uvx ruff@0.16.6 format --check scripts/windows_installer.py scripts/test-windows-installer.py
+          uvx ty@0.0.78 check scripts/windows_installer.py scripts/test-windows-installer.py
+          uv run --no-project python scripts/test-windows-installer.py
+      - name: Build installer from the existing release ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || 'v0.1.3' }}
+        run: uv run --no-project python scripts/windows_installer.py windows-installer --release $env:RELEASE_TAG
+      - name: Install, reinstall and uninstall the complete payload
+        run: ./scripts/test-windows-installer.ps1 -Directory windows-installer
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-installer
+          path: windows-installer/
+          if-no-files-found: error

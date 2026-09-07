@@ -14,6 +14,7 @@ Start with the [project README](../README.md), [API guide](api.md),
 
 ## Desktop workflows
 
+- [Windows installation and packaging](windows-installers.md)
 - [XDI import](xdi-import.md)
 - [Multiple spectra and independent fitting](joint-fitting.md)
 - [Structure slices and depth cues](structure-depth-view.md)
