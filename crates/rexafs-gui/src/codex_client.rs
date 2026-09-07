@@ -78,28 +78,107 @@ pub(crate) fn selected_model<'a>(
         .or_else(|| models.first())
 }
 
-pub(crate) fn selected_effort<'a>(model: Option<&'a Model>, preferred: Option<&'a str>) -> &'a str {
+pub(crate) fn selected_effort<'a>(
+    model: Option<&'a Model>,
+    preferred: Option<&'a str>,
+) -> Option<&'a str> {
     preferred
         .filter(|effort| {
             !effort.is_empty()
                 && model.is_none_or(|m| {
-                    m.supported_reasoning_efforts.is_empty()
-                        || m.supported_reasoning_efforts
-                            .iter()
-                            .any(|e| e.reasoning_effort == *effort)
+                    m.supported_reasoning_efforts
+                        .iter()
+                        .any(|e| e.reasoning_effort == *effort)
                 })
         })
         .or_else(|| model.and_then(|m| m.default_reasoning_effort.as_deref()))
-        .unwrap_or("high")
+}
+
+/// Describe the same catalog fallback used for turn submission, retaining a
+/// warning when a saved preference no longer names an available model.
+pub(crate) fn resolved_model_label(
+    models: &[Model],
+    preferred: Option<&str>,
+) -> (String, Option<String>) {
+    let resolved = selected_model(models, preferred)
+        .map(|m| m.display_name.as_str())
+        .unwrap_or("Codex default");
+    let warning = preferred
+        .filter(|name| !models.iter().any(|m| m.model == *name))
+        .map(|name| format!("Saved model {name} unavailable · using {resolved}"));
+    let label = if preferred.is_none() {
+        format!("Automatic · {resolved}")
+    } else {
+        resolved.to_owned()
+    };
+    (label, warning)
+}
+
+fn effort_label(value: &str) -> String {
+    match value {
+        "xhigh" => "Extra high".into(),
+        _ => {
+            let mut chars = value.chars();
+            chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().collect::<String>() + chars.as_str()
+            })
+        }
+    }
+}
+
+/// Model-default first, followed by supported levels in increasing effort order
+/// (unknown levels retain catalog order). None or an unsupported preference
+/// selects only model-default; explicit preferences select only their own level.
+/// Without a catalog model, retain a non-empty preference as the selected level
+/// sent with the turn; otherwise select model-default and omit the effort.
+pub(crate) fn effort_choices(
+    model: Option<&Model>,
+    preferred: Option<&str>,
+) -> Vec<(Option<String>, String, bool)> {
+    let mut levels: Vec<&str> = Vec::new();
+    if let Some(model) = model {
+        for option in &model.supported_reasoning_efforts {
+            let value = option.reasoning_effort.as_str();
+            if !value.is_empty() && !levels.contains(&value) {
+                levels.push(value);
+            }
+        }
+    } else if let Some(value) = preferred.filter(|value| !value.is_empty()) {
+        levels.push(value);
+    }
+    levels.sort_by_key(|value| {
+        ["low", "medium", "high", "xhigh"]
+            .iter()
+            .position(|known| known == value)
+            .unwrap_or(4)
+    });
+    let preferred = preferred.filter(|value| levels.contains(value));
+    let default_label = model
+        .and_then(|m| m.default_reasoning_effort.as_deref())
+        .filter(|value| !value.is_empty())
+        .map(|value| format!("Model default ({})", effort_label(value)))
+        .unwrap_or_else(|| "Model default".into());
+    let mut choices = vec![(None, default_label, preferred.is_none())];
+    choices.extend(levels.into_iter().map(|value| {
+        (
+            Some(value.to_owned()),
+            effort_label(value),
+            preferred == Some(value),
+        )
+    }));
+    choices
 }
 
 pub(crate) fn turn_params(
     thread: &str,
     input: Vec<Value>,
     model: Option<&str>,
-    effort: &str,
+    effort: Option<&str>,
 ) -> Value {
-    let mut params = json!({"threadId":thread,"input":input,"effort":effort,"summary":"detailed"});
+    let mut params = json!({"threadId":thread,"input":input,"summary":"detailed"});
+    if let Some(effort) = effort {
+        params["effort"] = json!(effort);
+    }
     if let Some(model) = model {
         params["model"] = json!(model);
     }
@@ -251,6 +330,162 @@ pub(crate) fn dynamic_tools() -> Value {
 mod tests {
     use super::*;
     #[test]
+    fn assistant_resolved_model_labels() {
+        assert_eq!(
+            resolved_model_label(&[], None),
+            ("Automatic · Codex default".into(), None)
+        );
+        let models = vec![Model {
+            model: "available".into(),
+            display_name: "Available Model".into(),
+            default_reasoning_effort: None,
+            supported_reasoning_efforts: vec![],
+            hidden: false,
+        }];
+        assert_eq!(
+            resolved_model_label(&models, None),
+            ("Automatic · Available Model".into(), None)
+        );
+        assert_eq!(
+            resolved_model_label(&models, Some("available")),
+            ("Available Model".into(), None)
+        );
+        assert_eq!(
+            resolved_model_label(&models, Some("missing")),
+            (
+                "Available Model".into(),
+                Some("Saved model missing unavailable · using Available Model".into())
+            )
+        );
+        assert_eq!(
+            resolved_model_label(&[], Some("missing")),
+            (
+                "Codex default".into(),
+                Some("Saved model missing unavailable · using Codex default".into())
+            )
+        );
+    }
+
+    #[test]
+    fn assistant_effort_choices_have_exactly_one_selection() {
+        let mut model = Model {
+            model: "example".into(),
+            display_name: "Example".into(),
+            default_reasoning_effort: Some("medium".into()),
+            supported_reasoning_efforts: ["high", "low", "xhigh", "medium", "high", ""]
+                .into_iter()
+                .map(|value| EffortOption {
+                    reasoning_effort: value.into(),
+                })
+                .collect(),
+            hidden: false,
+        };
+        let defaults = effort_choices(Some(&model), None);
+        assert_eq!(
+            defaults,
+            vec![
+                (None, "Model default (Medium)".into(), true),
+                (Some("low".into()), "Low".into(), false),
+                (Some("medium".into()), "Medium".into(), false),
+                (Some("high".into()), "High".into(), false),
+                (Some("xhigh".into()), "Extra high".into(), false),
+            ]
+        );
+        for preference in [
+            None,
+            Some("low"),
+            Some("medium"),
+            Some("high"),
+            Some("xhigh"),
+            Some("unknown"),
+            Some(""),
+        ] {
+            let choices = effort_choices(Some(&model), preference);
+            assert_eq!(choices.iter().filter(|choice| choice.2).count(), 1);
+        }
+        let explicit_default = effort_choices(Some(&model), Some("medium"));
+        assert!(!explicit_default[0].2);
+        assert!(explicit_default[2].2);
+        assert!(effort_choices(Some(&model), Some("xhigh"))[4].2);
+        model
+            .supported_reasoning_efforts
+            .retain(|e| e.reasoning_effort != "xhigh");
+        let changed = effort_choices(Some(&model), Some("xhigh"));
+        assert_eq!(changed, defaults[..4]);
+        assert_eq!(selected_effort(Some(&model), Some("xhigh")), Some("medium"));
+        model.default_reasoning_effort = None;
+        assert_eq!(effort_choices(Some(&model), None)[0].1, "Model default");
+        assert_eq!(selected_effort(Some(&model), None), None);
+        model.supported_reasoning_efforts.clear();
+        assert_eq!(
+            effort_choices(Some(&model), Some("xhigh")),
+            vec![(None, "Model default".into(), true)]
+        );
+        assert_eq!(selected_effort(Some(&model), Some("xhigh")), None);
+    }
+
+    #[test]
+    fn assistant_effort_without_catalog_matches_turn() {
+        assert_eq!(
+            effort_choices(None, None),
+            vec![(None, "Model default".into(), true)]
+        );
+        assert_eq!(
+            effort_choices(None, Some("low")),
+            vec![
+                (None, "Model default".into(), false),
+                (Some("low".into()), "Low".into(), true),
+            ]
+        );
+        assert_eq!(selected_effort(None, Some("low")), Some("low"));
+        assert_eq!(selected_effort(None, None), None);
+        assert_eq!(selected_effort(None, Some("")), None);
+        for preference in [None, Some(""), Some("low"), Some("customLevel")] {
+            let choices = effort_choices(None, preference);
+            let selected: Vec<_> = choices.iter().filter(|choice| choice.2).collect();
+            assert_eq!(selected.len(), 1);
+            let effort = selected_effort(None, preference);
+            assert_eq!(selected[0].0.as_deref(), effort);
+            let params = turn_params("thread", vec![], None, effort);
+            assert_eq!(
+                params.get("effort"),
+                effort.map(|value| json!(value)).as_ref()
+            );
+        }
+    }
+
+    #[test]
+    fn assistant_effort_labels_preserve_unknown_values() {
+        for (value, label) in [
+            ("low", "Low"),
+            ("medium", "Medium"),
+            ("high", "High"),
+            ("xhigh", "Extra high"),
+            ("customLevel", "CustomLevel"),
+            ("élevé", "Élevé"),
+            ("", ""),
+        ] {
+            assert_eq!(effort_label(value), label);
+        }
+        let model = Model {
+            model: "example".into(),
+            display_name: "Example".into(),
+            default_reasoning_effort: Some("customLevel".into()),
+            supported_reasoning_efforts: vec![EffortOption {
+                reasoning_effort: "customLevel".into(),
+            }],
+            hidden: false,
+        };
+        assert_eq!(
+            effort_choices(Some(&model), Some("customLevel")),
+            vec![
+                (None, "Model default (CustomLevel)".into(), false),
+                (Some("customLevel".into()), "CustomLevel".into(), true),
+            ]
+        );
+    }
+
+    #[test]
     fn assistant_account_protocol() -> Result<(), String> {
         assert_eq!(
             account_label(&json!({"account":null,"requiresOpenaiAuth":true}))?,
@@ -308,18 +543,18 @@ mod tests {
             selected_model(&ordered.data, Some("saved-model")).map(|m| m.model.as_str()),
             Some("saved-model")
         );
-        assert_eq!(selected_effort(Some(model), None), "medium");
-        assert_eq!(selected_effort(Some(model), Some("high")), "high");
-        assert_eq!(selected_effort(Some(model), Some("xhigh")), "medium");
+        assert_eq!(selected_effort(Some(model), None), Some("medium"));
+        assert_eq!(selected_effort(Some(model), Some("high")), Some("high"));
+        assert_eq!(selected_effort(Some(model), Some("xhigh")), Some("medium"));
         assert_eq!(
             selected_model(&page.data, Some("removed-model")).map(|m| m.model.as_str()),
             Some("latest-model")
         );
-        let params = turn_params("thread", vec![], Some(&model.model), "high");
+        let params = turn_params("thread", vec![], Some(&model.model), Some("high"));
         assert_eq!(params["model"], "latest-model");
         assert_eq!(params["effort"], "high");
         assert_eq!(params["summary"], "detailed");
-        let changed = turn_params("thread", vec![], Some("another-model"), "low");
+        let changed = turn_params("thread", vec![], Some("another-model"), Some("low"));
         assert_eq!(changed["model"], "another-model");
         assert_eq!(changed["effort"], "low");
         assert_eq!(changed["threadId"], params["threadId"]);
@@ -328,16 +563,15 @@ mod tests {
         assert!(model_page(&hidden)?.data.is_empty());
         let empty = model_page(&json!({"data":[],"nextCursor":null}))?;
         assert!(selected_model(&empty.data, Some("saved-model")).is_none());
-        assert_eq!(selected_effort(None, None), "high");
+        assert_eq!(selected_effort(None, None), None);
         let mut without_default = fixture.clone();
         without_default["data"][0]["defaultReasoningEffort"] = Value::Null;
         let without_default = model_page(&without_default)?;
-        assert_eq!(selected_effort(without_default.data.first(), None), "high");
-        assert!(
-            turn_params("thread", vec![], None, "high")
-                .get("model")
-                .is_none()
-        );
+        assert_eq!(selected_effort(without_default.data.first(), None), None);
+        let omitted = turn_params("thread", vec![], None, None);
+        assert!(omitted.get("model").is_none());
+        assert!(omitted.get("effort").is_none());
+        assert_eq!(omitted["summary"], "detailed");
         assert!(model_page(&json!({"data":[{"id":"incomplete"}]})).is_err());
         assert!(model_page(&json!({})).is_err());
         Ok(())

@@ -12,20 +12,58 @@ use crate::{
     widgets::text_input::{InputEvent, InputStyle, TextInput},
 };
 use gpui::{
-    AppContext, ClickEvent, Context, Entity, IntoElement, ParentElement, Render, Styled,
+    AppContext, ClickEvent, Context, Entity, Focusable, IntoElement, ParentElement, Render, Styled,
     WeakEntity, Window, div, prelude::*, px,
 };
 use serde_json::{Value, json};
 use std::{
+    cell::Cell,
     collections::BTreeMap,
+    rc::Rc,
     time::{Duration, Instant},
 };
+
+const MODEL_ROW_HEIGHT: f32 = 32.;
+
+/// Thumb height and top offset in pixels for seven visible rows. GPUI scroll
+/// offsets are negative; clamp overscroll and handle an empty list explicitly.
+fn model_scrollbar(rows: usize, offset: f32) -> (f32, f32) {
+    let viewport = rows.min(7) as f32 * MODEL_ROW_HEIGHT;
+    let content = rows as f32 * MODEL_ROW_HEIGHT;
+    if rows <= 7 {
+        return (viewport, 0.);
+    }
+    let thumb = (viewport * viewport / content).max(12.);
+    let progress = (-offset / (content - viewport)).clamp(0., 1.);
+    (thumb, progress * (viewport - thumb))
+}
 
 fn pending_blocks_run(pending: &BTreeMap<u64, String>) -> bool {
     // Model discovery (including pagination) may finish after a turn starts.
     pending
         .values()
         .any(|method| matches!(method.as_str(), "thread/start" | "turn/start"))
+}
+
+fn catalog_settled(account: bool, models_requested: bool, pending: &BTreeMap<u64, String>) -> bool {
+    account && models_requested && !pending.values().any(|method| method == "model/list")
+}
+
+struct ModelControlsBusyTip(Theme);
+impl Render for ModelControlsBusyTip {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .bg(self.0.raised)
+            .border_1()
+            .border_color(self.0.border)
+            .shadow_md()
+            .text_size(px(11.))
+            .text_color(self.0.text)
+            .child("Available after this response")
+    }
 }
 
 pub(crate) struct AssistantWindow {
@@ -46,6 +84,11 @@ pub(crate) struct AssistantWindow {
     preferred_model: Option<String>,
     preferred_effort: Option<String>,
     model_picker_open: bool,
+    model_picker_focus: gpui::FocusHandle,
+    model_trigger_bounds: Rc<Cell<gpui::Bounds<gpui::Pixels>>>,
+    model_scroll: gpui::ScrollHandle,
+    model_scroll_pending: Rc<Cell<bool>>,
+    model_highlight: usize,
     login: Option<Value>,
     thread: Option<String>,
     transcript: Transcript,
@@ -154,6 +197,11 @@ impl AssistantWindow {
             preferred_model: settings.assistant_model,
             preferred_effort: settings.assistant_effort,
             model_picker_open: false,
+            model_picker_focus: cx.focus_handle().tab_index(0).tab_stop(true),
+            model_trigger_bounds: Rc::default(),
+            model_scroll: gpui::ScrollHandle::new(),
+            model_scroll_pending: Rc::default(),
+            model_highlight: 0,
             login: None,
             thread: None,
             transcript: Transcript::default(),
@@ -176,7 +224,7 @@ impl AssistantWindow {
     fn model(&self) -> Option<&Model> {
         codex_client::selected_model(&self.models, self.preferred_model.as_deref())
     }
-    fn effort(&self) -> &str {
+    fn effort(&self) -> Option<&str> {
         codex_client::selected_effort(self.model(), self.preferred_effort.as_deref())
     }
     fn save_preferences(
@@ -206,50 +254,149 @@ impl AssistantWindow {
         }
         cx.notify();
     }
-    fn model_controls(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let t = self.theme;
-        let current = self
-            .model()
-            .map(|m| m.display_name.as_str())
-            .unwrap_or("Default (latest)");
-        let mut controls = div().flex().flex_col().gap_1();
-        let mut efforts = super::segmented(&t);
-        let selected_effort = self.effort();
-        // Keep the requested four levels visible, but do not offer levels the
-        // selected model explicitly does not support.
-        let mut levels = vec!["low", "medium", "high", "xhigh"];
-        if !levels.contains(&selected_effort) {
-            levels.push(selected_effort);
+    fn close_model_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.model_picker_open = false;
+        self.input.read(cx).focus_handle(cx).focus(window, cx);
+        cx.notify();
+    }
+    fn scroll_model_highlight(&self, cx: &mut Context<Self>) {
+        self.model_scroll.scroll_to_item(self.model_highlight);
+        // Repeat after layout: on first open GPUI has no viewport bounds yet.
+        self.model_scroll_pending.set(true);
+        cx.notify();
+    }
+    fn open_model_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.transcript.busy {
+            return;
         }
-        for (i, effort) in levels.into_iter().enumerate() {
-            let supported = self.model().is_none_or(|m| {
-                m.supported_reasoning_efforts.is_empty()
-                    || m.supported_reasoning_efforts
-                        .iter()
-                        .any(|e| e.reasoning_effort == effort)
-            });
-            let effort = effort.to_owned();
+        self.model_highlight = self
+            .models
+            .iter()
+            .position(|m| Some(m.model.as_str()) == self.preferred_model.as_deref())
+            .map_or(0, |index| index + 1);
+        self.model_picker_open = true;
+        self.model_picker_focus.focus(window, cx);
+        self.scroll_model_highlight(cx);
+    }
+    fn choose_model(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if self.transcript.busy || index > self.models.len() {
+            return;
+        }
+        let model = index
+            .checked_sub(1)
+            .and_then(|index| self.models.get(index))
+            .map(|m| m.model.clone());
+        self.save_preferences(model, self.preferred_effort.clone(), cx);
+        self.close_model_picker(window, cx);
+    }
+    fn model_picker_key(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let key = event.keystroke.key.as_str();
+        if !matches!(key, "enter" | "space" | "up" | "down" | "escape") {
+            return;
+        }
+        window.prevent_default();
+        cx.stop_propagation();
+        if self.transcript.busy {
+            return;
+        }
+        match key {
+            "escape" => self.close_model_picker(window, cx),
+            "enter" if self.model_picker_open => {
+                self.choose_model(self.model_highlight, window, cx);
+            }
+            "enter" | "space" if !self.model_picker_open => {
+                self.open_model_picker(window, cx);
+            }
+            "up" | "down" => {
+                if !self.model_picker_open {
+                    self.open_model_picker(window, cx);
+                }
+                self.model_highlight = if key == "up" {
+                    self.model_highlight.saturating_sub(1)
+                } else {
+                    (self.model_highlight + 1).min(self.models.len())
+                };
+                self.scroll_model_highlight(cx);
+            }
+            _ => {}
+        }
+    }
+    fn model_controls(&self, catalog_settled: bool, cx: &mut Context<Self>) -> gpui::Div {
+        let t = self.theme;
+        let busy = self.transcript.busy;
+        let (current, warning) =
+            codex_client::resolved_model_label(&self.models, self.preferred_model.as_deref());
+        let mut efforts = super::segmented(&t);
+        for (i, (value, label, selected)) in
+            codex_client::effort_choices(self.model(), self.preferred_effort.as_deref())
+                .into_iter()
+                .enumerate()
+        {
             efforts = efforts.child(
-                super::segment(
-                    &t,
-                    ("assistant-effort", i),
-                    effort.clone(),
-                    selected_effort == effort,
-                    i == 0,
-                )
-                .when(!supported, |d| d.opacity(0.4))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    if !this.transcript.busy && supported {
-                        this.save_preferences(
-                            this.preferred_model.clone(),
-                            Some(effort.clone()),
-                            cx,
-                        );
-                    }
-                })),
+                super::segment(&t, ("assistant-effort", i), label, selected, i == 0).on_click(
+                    cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        if !this.transcript.busy {
+                            this.save_preferences(this.preferred_model.clone(), value.clone(), cx);
+                        }
+                    }),
+                ),
             );
         }
-        controls = controls.child(
+        let bounds = self.model_trigger_bounds.clone();
+        let model_picker_open = self.model_picker_open;
+        let entity = cx.entity().downgrade();
+        let trigger = button(&t, "assistant-model", current, false)
+            .track_focus(&self.model_picker_focus)
+            .on_key_down(cx.listener(Self::model_picker_key))
+            .when(busy, |d| {
+                d.opacity(0.5)
+                    .tooltip(move |_, cx| cx.new(|_| ModelControlsBusyTip(t)).into())
+            })
+            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                if this.transcript.busy {
+                    return;
+                }
+                if this.model_picker_open {
+                    this.close_model_picker(window, cx);
+                } else {
+                    this.open_model_picker(window, cx);
+                }
+            }))
+            .child(
+                gpui::canvas(
+                    |_, _, _| (),
+                    move |bounds, _, window, _| {
+                        let mut chevron = gpui::PathBuilder::stroke(px(1.5));
+                        chevron.move_to(bounds.origin + gpui::point(px(2.), px(4.)));
+                        chevron.line_to(bounds.origin + gpui::point(px(6.), px(8.)));
+                        chevron.line_to(bounds.origin + gpui::point(px(10.), px(4.)));
+                        if let Ok(path) = chevron.build() {
+                            window.paint_path(path, t.text);
+                        }
+                    },
+                )
+                .size(px(12.))
+                .flex_shrink_0(),
+            );
+        let trigger = div()
+            .child(trigger)
+            .on_children_prepainted(move |children, window, _| {
+                if let Some(trigger) = children.first() {
+                    let previous = bounds.replace(*trigger);
+                    if model_picker_open && previous != *trigger {
+                        let entity = entity.clone();
+                        window.on_next_frame(move |_, cx| {
+                            entity.update(cx, |_, cx| cx.notify()).ok();
+                        });
+                    }
+                }
+            });
+        let mut controls = div().flex().flex_col().gap_1().child(
             div()
                 .flex()
                 .flex_wrap()
@@ -261,79 +408,162 @@ impl AssistantWindow {
                         .text_color(t.text_muted)
                         .child("Model"),
                 )
-                .child(
-                    button(&t, "assistant-model", format!("{current} ▾"), false).on_click(
-                        cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.model_picker_open = !this.model_picker_open;
-                            cx.notify();
-                        }),
-                    ),
-                )
+                .child(trigger)
                 .child(
                     div()
                         .text_size(px(11.))
                         .text_color(t.text_muted)
                         .child("Reasoning"),
                 )
-                .child(efforts)
-                .child(
-                    button(
-                        &t,
-                        "assistant-effort-default",
-                        "Auto",
-                        self.preferred_effort.is_none(),
-                    )
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        if !this.transcript.busy {
-                            this.save_preferences(this.preferred_model.clone(), None, cx);
-                        }
-                    })),
-                ),
+                .child(efforts.id("assistant-efforts").when(busy, |d| {
+                    d.opacity(0.5)
+                        .tooltip(move |_, cx| cx.new(|_| ModelControlsBusyTip(t)).into())
+                })),
         );
-        if self.model_picker_open {
-            let mut list = div()
-                .id("assistant-model-options")
-                .max_h(px(150.))
-                .overflow_y_scroll()
-                .rounded_sm()
-                .border_1()
-                .border_color(t.border)
-                .bg(t.bg)
-                .flex()
-                .flex_col();
-            let options = std::iter::once((None, "Default (latest)".to_owned())).chain(
-                self.models
-                    .iter()
-                    .map(|m| (Some(m.model.clone()), m.display_name.clone())),
+        if let Some(warning) = warning.filter(|_| catalog_settled) {
+            controls = controls.child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.warn)
+                    .whitespace_nowrap()
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .child(warning),
             );
-            for (i, (model, label)) in options.enumerate() {
-                let selected = self.preferred_model == model;
-                list = list.child(
-                    div()
-                        .id(("assistant-model-option", i))
-                        .px_2()
-                        .py_1()
-                        .text_xs()
-                        .cursor_pointer()
-                        .when(selected, |d| d.bg(t.raised).text_color(t.accent))
-                        .hover(|d| d.bg(t.raised))
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                            if !this.transcript.busy {
-                                this.save_preferences(
-                                    model.clone(),
-                                    this.preferred_effort.clone(),
-                                    cx,
-                                );
-                                this.model_picker_open = false;
-                            }
-                            cx.notify();
-                        }))
-                        .child(label),
-                );
-            }
-            controls = controls.child(list);
         }
         controls
+    }
+    fn model_picker_overlay(&self, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+        if !self.model_picker_open || self.transcript.busy {
+            return None;
+        }
+        let t = self.theme;
+        let count = self.models.len() + 1;
+        let height = count.min(7) as f32 * MODEL_ROW_HEIGHT;
+        let rendered_offset = self.model_scroll.offset().y;
+        let (thumb_height, thumb_offset) = model_scrollbar(count, f32::from(rendered_offset));
+        let scroll = self.model_scroll.clone();
+        let pending = self.model_scroll_pending.clone();
+        let highlight = self.model_highlight;
+        let entity = cx.entity().downgrade();
+        let mut list = div()
+            .id("assistant-model-options")
+            .h(px(height))
+            .flex_1()
+            .min_w_0()
+            .overflow_y_scroll()
+            .track_scroll(&self.model_scroll)
+            .on_scroll_wheel(cx.listener(|_, _: &gpui::ScrollWheelEvent, _, cx| {
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .flex()
+            .flex_col();
+        let options = std::iter::once((
+            None,
+            codex_client::resolved_model_label(&self.models, None).0,
+        ))
+        .chain(
+            self.models
+                .iter()
+                .map(|m| (Some(m.model.clone()), m.display_name.clone())),
+        );
+        for (i, (model, label)) in options.enumerate() {
+            list = list.child(
+                div()
+                    .id(("assistant-model-option", i))
+                    .h(px(MODEL_ROW_HEIGHT))
+                    .flex_shrink_0()
+                    .px_2()
+                    .flex()
+                    .items_center()
+                    .text_xs()
+                    .cursor_pointer()
+                    .when(i == self.model_highlight, |d| d.bg(t.raised))
+                    .when(self.preferred_model == model, |d| d.text_color(t.accent))
+                    .hover(|d| d.bg(t.raised))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                        this.choose_model(i, window, cx);
+                    }))
+                    .child(
+                        div()
+                            .whitespace_nowrap()
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .child(label),
+                    ),
+            );
+        }
+        let popup = div()
+            .on_children_prepainted(move |_, window, _| {
+                let retry = pending.replace(false);
+                if retry {
+                    scroll.scroll_to_item(highlight);
+                }
+                // Build the thumb from the offset actually applied by prepaint.
+                // Only request another frame if scrolling or initialization needs it.
+                if retry || scroll.offset().y != rendered_offset {
+                    let entity = entity.clone();
+                    window.on_next_frame(move |_, cx| {
+                        entity.update(cx, |_, cx| cx.notify()).ok();
+                    });
+                }
+            })
+            .id("assistant-model-popup")
+            .w(px(280.))
+            .p(px(4.))
+            .rounded_md()
+            .bg(t.surface)
+            .border_1()
+            .border_color(t.border)
+            .shadow_lg()
+            .flex()
+            .gap(px(4.))
+            .on_any_mouse_down(|_, window, cx| {
+                window.prevent_default();
+                cx.stop_propagation();
+            })
+            .child(list)
+            .when(count > 7, |d| {
+                d.child(
+                    div()
+                        .relative()
+                        .w(px(6.))
+                        .h(px(height))
+                        .flex_shrink_0()
+                        .rounded_full()
+                        .bg(t.raised)
+                        .child(
+                            div()
+                                .absolute()
+                                .top(px(thumb_offset))
+                                .w(px(6.))
+                                .h(px(thumb_height))
+                                .rounded_full()
+                                .bg(t.text_muted),
+                        ),
+                )
+            });
+        Some(
+            div()
+                .id("assistant-model-dismiss")
+                .absolute()
+                .inset_0()
+                .occlude()
+                .on_any_mouse_down(cx.listener(|this, _: &gpui::MouseDownEvent, window, cx| {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    this.close_model_picker(window, cx);
+                }))
+                .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                .child(
+                    gpui::anchored()
+                        .position(self.model_trigger_bounds.get().bottom_left())
+                        .snap_to_window()
+                        .child(popup),
+                )
+                .into_any_element(),
+        )
     }
     fn disconnected(&mut self, error: String) {
         self.error = Some(error);
@@ -724,6 +954,7 @@ impl AssistantWindow {
         let Some(directory) = self.client.as_ref().map(|c| c.directory.clone()) else {
             return;
         };
+        self.model_picker_open = false;
         self.transcript
             .apply(Event::Send(prompt.clone()), Instant::now());
         self.error = None;
@@ -1563,6 +1794,7 @@ impl Render for AssistantWindow {
                 )
             });
         let mut root = div()
+            .relative()
             .size_full()
             .min_h_0()
             .p_4()
@@ -1644,8 +1876,9 @@ impl Render for AssistantWindow {
                     .child(error.clone()),
             );
         }
+        let catalog_settled = catalog_settled(self.account, self.models_requested, &self.pending);
         root = root
-            .child(self.model_controls(cx))
+            .child(self.model_controls(catalog_settled, cx))
             .child(
                 div()
                     .flex()
@@ -1706,12 +1939,28 @@ impl Render for AssistantWindow {
             .child(div().text_size(px(10.5)).text_color(t.text_muted).child(
                 "Send shares this analysis state and enabled plots through your Codex account.",
             ));
+        if let Some(picker) = self.model_picker_overlay(cx) {
+            root = root.child(picker);
+        }
         root
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn assistant_model_scrollbar_geometry() {
+        assert_eq!(model_scrollbar(0, 0.), (0., 0.));
+        assert_eq!(model_scrollbar(1, -32.), (32., 0.));
+        assert_eq!(model_scrollbar(7, 100.), (224., 0.));
+        assert_eq!(model_scrollbar(14, 0.), (112., 0.));
+        assert_eq!(model_scrollbar(14, -112.), (112., 56.));
+        assert_eq!(model_scrollbar(14, -224.), (112., 112.));
+        assert_eq!(model_scrollbar(14, -1000.), (112., 112.));
+        assert_eq!(model_scrollbar(14, 1000.), (112., 0.));
+        assert_eq!(model_scrollbar(1000, -32000.), (12., 212.));
+    }
+
     #[test]
     fn assistant_pending_models_do_not_block_run() {
         let mut pending = BTreeMap::new();
@@ -1730,6 +1979,27 @@ mod tests {
             pending.remove(&3);
             assert!(!pending_blocks_run(&pending));
         }
+    }
+
+    #[test]
+    fn assistant_catalog_warning_waits_for_signed_in_settled_catalog() {
+        let mut pending = BTreeMap::new();
+        assert!(!catalog_settled(false, false, &pending));
+        assert!(!catalog_settled(false, true, &pending));
+        assert!(!catalog_settled(true, false, &pending));
+        assert!(catalog_settled(true, true, &pending));
+
+        pending.insert(1, "model/list".into());
+        assert!(!catalog_settled(true, true, &pending));
+        pending.remove(&1);
+        // A later cursor page also keeps the warning hidden.
+        pending.insert(2, "model/list".into());
+        assert!(!catalog_settled(true, true, &pending));
+        pending.remove(&2);
+        // Completion (including failure) settles the catalog; other requests do not block it.
+        pending.insert(3, "turn/start".into());
+        assert!(catalog_settled(true, true, &pending));
+        assert!(!catalog_settled(false, true, &pending));
     }
 
     #[test]
