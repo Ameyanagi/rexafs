@@ -106,6 +106,7 @@ impl NumericField {
                 align_right: true,
                 mono: true,
                 placeholder_accent: true,
+                ..Default::default()
             })
         });
         cx.subscribe(&input, |this: &mut Self, input, event, cx| {

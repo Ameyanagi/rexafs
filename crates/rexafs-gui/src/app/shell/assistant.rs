@@ -1,6 +1,11 @@
 //! Optional separate assistant window; app actions use the same pipeline as manual edits.
 use super::button;
-use crate::{app::StudioApp, codex_client::Client, theme::Theme, widgets::text_input::TextInput};
+use crate::{
+    app::StudioApp,
+    codex_client::Client,
+    theme::Theme,
+    widgets::text_input::{InputEvent, InputStyle, TextInput},
+};
 use gpui::{
     AppContext, ClickEvent, Context, Entity, IntoElement, ParentElement, Render, Styled,
     WeakEntity, Window, div, prelude::*, px,
@@ -84,7 +89,19 @@ impl StudioApp {
 }
 impl AssistantWindow {
     fn new(studio: WeakEntity<StudioApp>, theme: Theme, cx: &mut Context<Self>) -> Self {
-        let input = cx.new(|cx| TextInput::new("Ask about this analysis…", "", theme, cx));
+        let input = cx.new(|cx| {
+            TextInput::new("Ask about this analysis…", "", theme, cx).with_style(InputStyle {
+                multiline: true,
+                max_lines: 8,
+                ..Default::default()
+            })
+        });
+        cx.subscribe(&input, |this, _, event, cx| {
+            if let InputEvent::Committed(_) = event {
+                this.run(cx);
+            }
+        })
+        .detach();
         if let Some(app) = studio.upgrade() {
             cx.observe(&app, |_, _, cx| cx.notify()).detach();
         }
@@ -1218,8 +1235,8 @@ impl Render for AssistantWindow {
                 div()
                     .flex()
                     .gap_2()
-                    .items_center()
-                    .child(div().flex_1().child(self.input.clone()))
+                    .items_end()
+                    .child(div().flex_1().min_w_0().child(self.input.clone()))
                     .child(if self.busy {
                         button(&t, "assistant-stop", "Stop", false)
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.stop(cx)))
