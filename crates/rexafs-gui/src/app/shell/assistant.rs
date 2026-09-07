@@ -1,5 +1,10 @@
 //! Optional separate assistant window; app actions use the same pipeline as manual edits.
-use super::button;
+use super::{
+    assistant_state::{
+        ActivityState, Entry, Event, ItemKind, Status, Transcript, Update, follow_after_scroll,
+    },
+    button,
+};
 use crate::{
     app::StudioApp,
     codex_client::{self, Client, Model},
@@ -11,7 +16,10 @@ use gpui::{
     WeakEntity, Window, div, prelude::*, px,
 };
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, time::Duration};
+use std::{
+    collections::BTreeMap,
+    time::{Duration, Instant},
+};
 
 fn pending_blocks_run(pending: &BTreeMap<u64, String>) -> bool {
     // Model discovery (including pagination) may finish after a turn starts.
@@ -40,14 +48,14 @@ pub(crate) struct AssistantWindow {
     model_picker_open: bool,
     login: Option<Value>,
     thread: Option<String>,
-    turn: Option<String>,
-    busy: bool,
+    transcript: Transcript,
+    tool_calls: BTreeMap<String, (String, String)>,
+    scroll: gpui::ScrollHandle,
+    follow: bool,
+    last_rendered_revision: u64,
+    copied: BTreeMap<usize, Instant>,
     allow_changes: bool,
     include_plots: bool,
-    messages: Vec<(String, String)>,
-    answer: String,
-    /// Streaming reasoning summary of the current turn.
-    thinking: String,
     /// Transcript indices of "Thinking" entries the user unfolded.
     unfolded: std::collections::BTreeSet<usize>,
     prepared: Option<Vec<Value>>,
@@ -148,14 +156,15 @@ impl AssistantWindow {
             model_picker_open: false,
             login: None,
             thread: None,
-            turn: None,
-            busy: false,
+            transcript: Transcript::default(),
+            tool_calls: BTreeMap::new(),
+            scroll: gpui::ScrollHandle::new(),
+            follow: true,
+            last_rendered_revision: 0,
+            copied: BTreeMap::new(),
             allow_changes: false,
             include_plots: true,
-            messages: vec![],
-            thinking: String::new(),
             unfolded: std::collections::BTreeSet::new(),
-            answer: String::new(),
             prepared: None,
             run_generation: 0,
             processing_checks: Vec::new(),
@@ -230,7 +239,7 @@ impl AssistantWindow {
                 )
                 .when(!supported, |d| d.opacity(0.4))
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    if !this.busy && supported {
+                    if !this.transcript.busy && supported {
                         this.save_preferences(
                             this.preferred_model.clone(),
                             Some(effort.clone()),
@@ -275,7 +284,7 @@ impl AssistantWindow {
                         self.preferred_effort.is_none(),
                     )
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        if !this.busy {
+                        if !this.transcript.busy {
                             this.save_preferences(this.preferred_model.clone(), None, cx);
                         }
                     })),
@@ -309,7 +318,7 @@ impl AssistantWindow {
                         .when(selected, |d| d.bg(t.raised).text_color(t.accent))
                         .hover(|d| d.bg(t.raised))
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                            if !this.busy {
+                            if !this.transcript.busy {
                                 this.save_preferences(
                                     model.clone(),
                                     this.preferred_effort.clone(),
@@ -328,13 +337,17 @@ impl AssistantWindow {
     }
     fn disconnected(&mut self, error: String) {
         self.error = Some(error);
+        // A spawned client is not established until account/read succeeds.
+        // Initial setup failures must not mark the transcript as disconnected.
+        if self.client.is_some() && !self.connecting {
+            self.transcript.apply(Event::Disconnected, Instant::now());
+        }
         self.connecting = false;
-        self.busy = false;
+        self.tool_calls.clear();
         self.account = false;
         self.account_label = None;
         self.client = None;
         self.thread = None;
-        self.turn = None;
         self.login = None;
         self.prepared = None;
         self.run_generation += 1;
@@ -441,6 +454,13 @@ impl AssistantWindow {
         }
         if let Some(method) = v["method"].as_str() {
             let p = &v["params"];
+            if method != "item/tool/call"
+                && p["turnId"]
+                    .as_str()
+                    .is_some_and(|id| self.transcript.turn.as_deref() != Some(id))
+            {
+                return;
+            }
             match method {
                 "error" => {
                     self.error = Some(
@@ -452,11 +472,14 @@ impl AssistantWindow {
                     self.status = if p["willRetry"] == true {
                         "Reconnecting…"
                     } else {
-                        "Error"
+                        "Failed"
                     }
                     .into();
                     if p["willRetry"] != true {
-                        self.busy = false;
+                        self.transcript.apply(
+                            Event::Failed(self.error.clone().unwrap_or_default()),
+                            Instant::now(),
+                        );
                     }
                 }
                 "account/login/completed" => {
@@ -475,63 +498,70 @@ impl AssistantWindow {
                 "account/updated" => {
                     let _ = self.request("account/read", json!({"refreshToken":false}));
                 }
-                "item/agentMessage/delta" => {
-                    if self.busy {
-                        if let Some(delta) = p["delta"].as_str() {
-                            self.answer.push_str(delta);
-                        }
-                    }
-                }
-                "item/completed" => {
-                    let item = &p["item"];
-                    if item["type"] == "agentMessage" {
-                        if let Some(text) = item["text"].as_str() {
-                            if !text.is_empty() {
-                                self.answer = text.into();
-                            }
-                        }
-                    } else if item["type"] == "reasoning" {
-                        // The summary of a reasoning item replaces whatever
-                        // streamed in; the transcript keeps it as a step.
-                        let summary = item["summary"]
-                            .as_array()
-                            .map(|parts| {
-                                parts
-                                    .iter()
-                                    .filter_map(|s| s.as_str().or_else(|| s["text"].as_str()))
-                                    .collect::<Vec<_>>()
-                                    .join("\n")
-                            })
-                            .filter(|s| !s.trim().is_empty())
-                            .or_else(|| item["text"].as_str().map(str::to_owned));
-                        let text = summary.unwrap_or_else(|| std::mem::take(&mut self.thinking));
-                        self.thinking.clear();
-                        if !text.trim().is_empty() {
-                            self.messages.push(("Thinking".into(), text));
-                        }
-                    }
-                }
-                "item/reasoning/summaryTextDelta" => {
-                    if self.busy {
-                        if let Some(delta) = p["delta"].as_str() {
-                            self.thinking.push_str(delta);
-                        }
+                "item/agentMessage/delta"
+                | "item/reasoning/summaryTextDelta"
+                | "item/started"
+                | "item/completed" => {
+                    let kind = match method {
+                        "item/agentMessage/delta" => Some(ItemKind::Assistant),
+                        "item/reasoning/summaryTextDelta" => Some(ItemKind::Thinking),
+                        _ => match p["item"]["type"].as_str() {
+                            Some("agentMessage") => Some(ItemKind::Assistant),
+                            Some("reasoning") => Some(ItemKind::Thinking),
+                            _ => None,
+                        },
+                    };
+                    if let (Some(kind), Some(turn), Some(id)) = (
+                        kind,
+                        p["turnId"].as_str(),
+                        p["itemId"].as_str().or_else(|| p["item"]["id"].as_str()),
+                    ) {
+                        let update = match method {
+                            "item/started" => Update::Started,
+                            "item/completed" => Update::Completed(match kind {
+                                ItemKind::Assistant => {
+                                    p["item"]["text"].as_str().map(str::to_owned)
+                                }
+                                ItemKind::Thinking => p["item"]["summary"]
+                                    .as_array()
+                                    .map(|parts| {
+                                        parts
+                                            .iter()
+                                            .filter_map(|s| {
+                                                s.as_str().or_else(|| s["text"].as_str())
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join("\n")
+                                    })
+                                    .filter(|text| !text.trim().is_empty())
+                                    .or_else(|| p["item"]["text"].as_str().map(str::to_owned)),
+                            }),
+                            _ => Update::Delta(p["delta"].as_str().unwrap_or_default().into()),
+                        };
+                        self.transcript.apply(
+                            Event::Item {
+                                turn: turn.into(),
+                                id: id.into(),
+                                kind,
+                                update,
+                            },
+                            Instant::now(),
+                        );
                     }
                 }
                 "turn/completed" => {
-                    self.busy = false;
-                    self.turn = None;
-                    self.status = "Ready".into();
-                    if let Some(err) = p["turn"]["error"]["message"].as_str() {
-                        self.error = Some(err.into());
-                    }
-                    if !self.thinking.trim().is_empty() {
-                        self.messages
-                            .push(("Thinking".into(), std::mem::take(&mut self.thinking)));
-                    }
-                    if !self.answer.is_empty() {
-                        self.messages
-                            .push(("Assistant".into(), std::mem::take(&mut self.answer)));
+                    if let Some(turn) = p["turn"]["id"].as_str() {
+                        let error = p["turn"]["error"]["message"].as_str().map(str::to_owned);
+                        let failed = error.is_some();
+                        if self.transcript.apply(
+                            Event::TurnCompleted {
+                                turn: turn.into(),
+                                error,
+                            },
+                            Instant::now(),
+                        ) {
+                            self.status = if failed { "Failed" } else { "Ready" }.into();
+                        }
                     }
                 }
                 "item/tool/call" => {
@@ -561,13 +591,11 @@ impl AssistantWindow {
             if matches!(method.as_str(), "initialize" | "account/read") {
                 self.disconnected(message);
             } else if method == "model/list" {
-                self.messages.push((
-                    "Activity".into(),
-                    format!("Model list unavailable: {message} · using Codex default"),
+                self.error = Some(format!(
+                    "Model list unavailable: {message} · using Codex default"
                 ));
-            } else {
-                self.error = Some(message);
-                self.busy = false;
+            } else if method != "turn/interrupt" {
+                self.fail(message);
             }
             return;
         }
@@ -589,7 +617,8 @@ impl AssistantWindow {
                     self.account = label.is_some();
                     self.account_label = label;
                     self.connecting = false;
-                    if !self.busy {
+                    self.transcript.apply(Event::Reconnected, Instant::now());
+                    if !self.transcript.busy {
                         self.status = if self.account {
                             "Ready"
                         } else {
@@ -624,7 +653,7 @@ impl AssistantWindow {
                         }
                     }
                 }
-                Err(e) => self.messages.push(("Activity".into(), e)),
+                Err(e) => self.error = Some(e),
             },
             "account/login/start" => {
                 self.login = Some(r.clone());
@@ -636,12 +665,21 @@ impl AssistantWindow {
             }
             "thread/start" => {
                 self.thread = r["thread"]["id"].as_str().map(str::to_owned);
-                self.start_prepared();
+                if self.thread.is_some() {
+                    self.start_prepared();
+                } else if self.transcript.busy {
+                    self.fail("Codex returned no thread id".into());
+                }
             }
             "turn/start" => {
-                self.turn = r["turn"]["id"].as_str().map(str::to_owned);
-                if !self.busy {
-                    if let (Some(thread), Some(turn)) = (&self.thread, &self.turn) {
+                if let Some(turn) = r["turn"]["id"].as_str() {
+                    self.transcript
+                        .apply(Event::TurnStarted(turn.into()), Instant::now());
+                } else if self.transcript.busy {
+                    self.fail("Codex returned no turn id".into());
+                }
+                if !self.transcript.busy {
+                    if let (Some(thread), Some(turn)) = (&self.thread, &self.transcript.turn) {
                         let _ = self
                             .request("turn/interrupt", json!({"threadId":thread,"turnId":turn}));
                     }
@@ -663,13 +701,16 @@ impl AssistantWindow {
                     self.effort(),
                 ),
             ) {
-                self.error = Some(e);
-                self.busy = false;
+                self.fail(e);
             }
         }
     }
     fn run(&mut self, cx: &mut Context<Self>) {
-        if self.busy || !self.account || pending_blocks_run(&self.pending) {
+        if self.transcript.busy
+            || self.transcript.stop_pending
+            || !self.account
+            || pending_blocks_run(&self.pending)
+        {
             return;
         }
         let prompt = self.input.read(cx).text().trim().to_owned();
@@ -683,15 +724,30 @@ impl AssistantWindow {
         let Some(directory) = self.client.as_ref().map(|c| c.directory.clone()) else {
             return;
         };
-        self.busy = true;
+        self.transcript
+            .apply(Event::Send(prompt.clone()), Instant::now());
         self.error = None;
-        self.answer.clear();
         self.run_generation += 1;
         self.processing_checks.clear();
+        self.tool_calls.clear();
         let generation = self.run_generation;
-        self.messages.push(("You".into(), prompt.clone()));
         self.input.update(cx, |input, cx| input.set_text("", cx));
         self.status = "Preparing current state and plots…".into();
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(Duration::from_secs(1)).await;
+                if !this
+                    .update(cx, |app, cx| {
+                        cx.notify();
+                        app.transcript.busy && app.run_generation == generation
+                    })
+                    .unwrap_or(false)
+                {
+                    break;
+                }
+            }
+        })
+        .detach();
         let include_plots = self.include_plots;
         let allow = self.allow_changes;
         cx.spawn(async move|this,cx|{
@@ -716,26 +772,42 @@ impl AssistantWindow {
                             });
                             if let Some(model) = app.model() { params["model"] = json!(model.model); }
                             if let Err(e) = app.request("thread/start", params) {
-                                app.error = Some(e);
-                                app.busy = false;
+                                app.fail(e);
                             }
                         }
                     }
-                    Err(e) => { app.error = Some(e); app.busy = false; }
+                    Err(e) => app.fail(e),
                 }
                 cx.notify();
             }).ok();
   }).detach();
         cx.notify();
     }
+    fn fail(&mut self, error: String) {
+        self.status = "Failed".into();
+        self.transcript.apply(Event::Failed(error), Instant::now());
+    }
     fn stop(&mut self, cx: &mut Context<Self>) {
+        if !self.transcript.apply(Event::StopRequested, Instant::now()) {
+            return;
+        }
         self.run_generation += 1;
+        let generation = self.run_generation;
         self.prepared = None;
-        if let (Some(thread), Some(turn)) = (&self.thread, &self.turn) {
+        if let (Some(thread), Some(turn)) = (&self.thread, &self.transcript.turn) {
             let _ = self.request("turn/interrupt", json!({"threadId":thread,"turnId":turn}));
         }
-        self.busy = false;
-        self.status = "Stopped".into();
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_secs(2)).await;
+            this.update(cx, |app, cx| {
+                if app.run_generation == generation {
+                    app.transcript.apply(Event::StopTimeout, Instant::now());
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
         cx.notify();
     }
     fn change_layout(&mut self, args: &Value, cx: &mut Context<Self>) -> Result<Value, String> {
@@ -812,7 +884,7 @@ impl AssistantWindow {
             let started = std::time::Instant::now();
             loop {
                 cx.background_executor().timer(Duration::from_millis(100)).await;
-                if !this.read_with(cx, |app, _| app.busy && app.run_generation == generation).unwrap_or(false) { break; }
+                if !this.read_with(cx, |app, _| app.transcript.busy && app.run_generation == generation).unwrap_or(false) { break; }
                 let result = studio.update(cx, |app, cx| {
                     let busy = match kind { "search" => app.structure.search_running, "choose" => app.structure.fetch_running, _ => app.feff_running };
                     if busy { return None; }
@@ -825,12 +897,12 @@ impl AssistantWindow {
                     } else { Ok(app.assistant_calculation_state(cx)) })
                 });
                 match result {
-                    Ok(Some(v)) => { this.update(cx, |app, _| app.tool_response(id, v)).ok(); break; }
+                    Ok(Some(v)) => { this.update(cx, |app, cx| app.tool_response(id, v, cx)).ok(); break; }
                     Err(_) => break,
                     _ => {}
                 }
                 if started.elapsed() > Duration::from_secs(900) {
-                    this.update(cx, |app, _| app.tool_response(id, Err("Calculation is taking longer than expected; inspect job status in the app.".into()))).ok();
+                    this.update(cx, |app, cx| app.tool_response(id, Err("Calculation is taking longer than expected; inspect job status in the app.".into()), cx)).ok();
                     break;
                 }
             }
@@ -877,7 +949,7 @@ impl AssistantWindow {
             .map_err(|e| e.to_string())
             .and_then(|r| r);
         let Ok((path, params, stage, fit, index, ranges, derived)) = data else {
-            self.tool_response(id, data.map(|_| Value::Null));
+            self.tool_response(id, data.map(|_| Value::Null), cx);
             return;
         };
         let images = self.include_plots;
@@ -911,47 +983,57 @@ impl AssistantWindow {
                 }
                 Ok::<_, String>(contents)
             }).await;
-            this.update(cx, |app, _| {
-                if app.run_generation != generation || !app.busy { return; }
+            this.update(cx, |app, cx| {
+                if app.run_generation != generation || !app.transcript.busy { return; }
                 match result {
                     Ok(contents) => {
                         app.processing_checks.push((path, stage, stamp));
-                        if let Some(c) = &app.client { let _ = c.send(json!({"id":id,"result":{"success":true,"contentItems":contents}})); }
+                        app.tool_response(id, Ok(json!({"contentItems": contents})), cx);
                     }
-                    Err(e) => app.tool_response(id, Err(e))
+                    Err(e) => app.tool_response(id, Err(e), cx)
                 }
             }).ok();
         }).detach();
     }
-    fn tool_response(&mut self, id: Value, result: Result<Value, String>) {
-        let (success, text) = match result {
-            Ok(v) => (true, v.to_string()),
-            Err(e) => (false, e),
+    fn tool_response(&mut self, id: Value, result: Result<Value, String>, cx: &mut Context<Self>) {
+        let error = result.as_ref().err().cloned();
+        if let Some((turn, call)) = self.tool_calls.remove(&id.to_string()) {
+            self.transcript.apply(
+                Event::ToolFinished {
+                    turn,
+                    id: call,
+                    error: error.clone(),
+                },
+                Instant::now(),
+            );
+        }
+        let contents = match result {
+            Ok(mut value) => value
+                .get_mut("contentItems")
+                .map(Value::take)
+                .unwrap_or_else(|| json!([{"type":"inputText","text":value.to_string()}])),
+            Err(text) => json!([{"type":"inputText","text":text}]),
         };
-        // Close the pending activity line for this call in the transcript.
-        if let Some((_, entry)) = self
-            .messages
-            .iter_mut()
-            .rev()
-            .find(|(role, m)| role == "Activity" && m.ends_with('…'))
-        {
-            let label = entry.trim_end_matches('…').to_string();
-            *entry = if success {
-                format!("{label} · done")
-            } else {
-                format!("{label} · failed: {text}")
-            };
-        }
         if let Some(c) = &self.client {
-            let _=c.send(json!({"id":id,"result":{"success":success,"contentItems":[{"type":"inputText","text":text}]}}));
+            let _ = c.send(
+                json!({"id":id,"result":{"success":error.is_none(),"contentItems":contents}}),
+            );
         }
+        cx.notify();
     }
     fn tool_call(&mut self, v: Value, cx: &mut Context<Self>) {
         let id = v["id"].clone();
         let tool = v["params"]["tool"].as_str().unwrap_or("");
         let args = v["params"]["arguments"].clone();
-        if !self.busy {
-            self.tool_response(id, Err("The assistant turn has stopped".into()));
+        let Some((turn, call)) = v["params"]["turnId"]
+            .as_str()
+            .zip(v["params"]["callId"].as_str())
+        else {
+            self.tool_response(id, Err("Missing tool turn or call id".into()), cx);
+            return;
+        };
+        if !self.transcript.accepts(turn) {
+            self.tool_response(id, Err("The assistant turn has stopped".into()), cx);
             return;
         }
         self.status = match tool {
@@ -966,16 +1048,25 @@ impl AssistantWindow {
             _ => "Updating model…",
         }
         .into();
-        self.messages
-            .push(("Activity".into(), format!("{} ({tool})", self.status)));
+        self.tool_calls
+            .insert(id.to_string(), (turn.into(), call.into()));
+        self.transcript.apply(
+            Event::ToolStarted {
+                turn: turn.into(),
+                id: call.into(),
+                label: self.status.clone(),
+                tool: tool.into(),
+            },
+            Instant::now(),
+        );
         if tool == "xray_get_state" {
             let result=self.studio.update(cx,|app,cx|json!({"state":app.analysis_snapshot().context(),"calculation":app.assistant_calculation_state(cx),"processing":app.load_running||app.recompute_dirty,"fitting":app.fit_running,"fit_error":app.fit_error,"status":app.status.to_string()})).map_err(|e|e.to_string());
-            self.tool_response(id, result);
+            self.tool_response(id, result, cx);
             return;
         }
         if tool == "xray_set_layout" {
             let result = self.change_layout(&args, cx);
-            self.tool_response(id, result);
+            self.tool_response(id, result, cx);
             return;
         }
         if tool == "xray_navigate" {
@@ -984,7 +1075,7 @@ impl AssistantWindow {
                 .update(cx, |app, cx| app.assistant_navigate(&args, cx))
                 .map_err(|e| e.to_string())
                 .and_then(|v| v);
-            self.tool_response(id, result);
+            self.tool_response(id, result, cx);
             return;
         }
         if tool == "xray_get_plots" {
@@ -1009,16 +1100,17 @@ impl AssistantWindow {
                 .map_err(|e| e.to_string())
                 .and_then(|r| r);
             if let Err(e) = result {
-                self.tool_response(id, Err(e));
+                self.tool_response(id, Err(e), cx);
             } else {
                 self.wait_structure(id, "search", cx);
             }
             return;
         }
-        if !self.allow_changes || !self.busy {
+        if !self.allow_changes || !self.transcript.busy {
             self.tool_response(
                 id,
                 Err("App changes are disabled. Describe the proposed change instead.".into()),
+                cx,
             );
             return;
         }
@@ -1029,7 +1121,7 @@ impl AssistantWindow {
                     .update(cx, |app, cx| app.assistant_select_paths(&args, cx))
                     .map_err(|e| e.to_string())
                     .and_then(|r| r);
-                self.tool_response(id, result);
+                self.tool_response(id, result, cx);
             }
             "xray_choose_structure" | "xray_calculate_paths" => {
                 let result = self
@@ -1064,7 +1156,7 @@ impl AssistantWindow {
                     .map_err(|e| e.to_string())
                     .and_then(|r| r);
                 if let Err(e) = result {
-                    self.tool_response(id, Err(e));
+                    self.tool_response(id, Err(e), cx);
                 } else {
                     self.wait_structure(
                         id,
@@ -1089,7 +1181,7 @@ impl AssistantWindow {
                     })
                     .map_err(|e| e.to_string())
                     .and_then(|v| v);
-                self.tool_response(id, result);
+                self.tool_response(id, result, cx);
             }
             "xray_set_processing" => {
                 let prepared = self
@@ -1116,15 +1208,15 @@ impl AssistantWindow {
                     .map_err(|e| e.to_string())
                     .and_then(|v| v);
                 let Ok((path, before, next, target)) = prepared else {
-                    self.tool_response(id, prepared.map(|_| Value::Null));
+                    self.tool_response(id, prepared.map(|_| Value::Null), cx);
                     return;
                 };
                 let studio = self.studio.clone();
                 let generation = self.run_generation;
                 cx.spawn(async move|this,cx|{let file=path.clone();let params=next.clone();let result=cx.background_executor().spawn(async move{crate::params::process_file(&file,&params)}).await;
-     let still_allowed=this.read_with(cx,|app,_|app.allow_changes&&app.busy&&app.run_generation==generation).unwrap_or(false);
+     let still_allowed=this.read_with(cx,|app,_|app.allow_changes&&app.transcript.busy&&app.run_generation==generation).unwrap_or(false);
      let result=if !still_allowed{Err("Action cancelled".into())}else{result.and_then(|_|studio.update(cx,|app,cx|{if app.current_path!=path||app.ui_params()!=&before||app.override_target()!=target{return Err("Settings changed while validating; read state again".into());}*app.edit_params()=next.clone();let stage=if args["changes"].as_object().is_some_and(|m|m.keys().any(|k|k.starts_with("fft_")||k.starts_with("bft_"))){super::Stage::Transform}else if args["changes"].as_object().is_some_and(|m|m.keys().any(|k|k.starts_with("bkg_")||k=="rbkg")){super::Stage::Background}else{super::Stage::Normalize};app.set_stage(stage,cx);app.record_param_edit(target,None,before,next,"Assistant: update processing".into());app.sync_param_fields(cx);app.schedule_recompute(cx);app.sync_handles(cx);cx.notify();Ok(json!({"applied":true,"processing":"scheduled","spectrum":path}))}).map_err(|e|e.to_string()).and_then(|v|v))};
-     this.update(cx,|app,_|app.tool_response(id,result)).ok();
+     this.update(cx,|app,cx|{if app.run_generation == generation { app.tool_response(id,result, cx); } cx.notify();}).ok();
     }).detach();
             }
             "xray_run_fit" => {
@@ -1167,7 +1259,7 @@ impl AssistantWindow {
                     })
                     .unwrap_or(false);
                 if !inspected {
-                    self.tool_response(id,Err("Before fitting, navigate to Normalize, Background and Transform and call xray_get_plots in each stage for every assigned spectrum with its current processing settings.".into()));
+                    self.tool_response(id,Err("Before fitting, navigate to Normalize, Background and Transform and call xray_get_plots in each stage for every assigned spectrum with its current processing settings.".into()), cx);
                     return;
                 }
                 let started = self
@@ -1191,13 +1283,14 @@ impl AssistantWindow {
                     .map_err(|e| e.to_string())
                     .and_then(|v| v);
                 if let Err(e) = started {
-                    self.tool_response(id, Err(e));
+                    self.tool_response(id, Err(e), cx);
                     return;
                 }
                 let studio = self.studio.clone();
-                cx.spawn(async move|this,cx|{loop{cx.background_executor().timer(Duration::from_millis(100)).await;let result=studio.update(cx,|app,_|{if app.fit_running{None}else{Some(if let Some(e)=&app.fit_error{Err(e.to_string())}else{Ok(json!({"status":app.status.to_string(),"latest_fit":app.fit_history.last()}))})}});match result{Ok(Some(result))=>{this.update(cx,|app,_|app.tool_response(id,result)).ok();break;},Err(_)=>break,_=>{}}if this.read_with(cx,|app,_|app.busy).unwrap_or(false)==false{break;}}}).detach();
+                let generation = self.run_generation;
+                cx.spawn(async move|this,cx|{loop{cx.background_executor().timer(Duration::from_millis(100)).await;if !this.read_with(cx,|app,_|app.transcript.busy && app.run_generation == generation).unwrap_or(false){break;}let result=studio.update(cx,|app,_|{if app.fit_running{None}else{Some(if let Some(e)=&app.fit_error{Err(e.to_string())}else{Ok(json!({"status":app.status.to_string(),"latest_fit":app.fit_history.last()}))})}});match result{Ok(Some(result))=>{this.update(cx,|app,cx|app.tool_response(id,result, cx)).ok();break;},Err(_)=>break,_=>{}}}}).detach();
             }
-            _ => self.tool_response(id, Err("Unknown app tool".into())),
+            _ => self.tool_response(id, Err("Unknown app tool".into()), cx),
         }
     }
 }
@@ -1297,109 +1390,178 @@ impl Render for AssistantWindow {
                 )),
             );
         }
+        let now = Instant::now();
+        let revision = self.transcript.revision();
+        if self.follow && revision != self.last_rendered_revision {
+            self.scroll.scroll_to_bottom();
+        }
+        self.last_rendered_revision = revision;
         let mut body = div()
             .id("assistant-messages")
-            .flex_1()
-            .min_h_0()
+            .size_full()
             .overflow_y_scroll()
+            .track_scroll(&self.scroll)
+            .on_scroll_wheel(cx.listener(|this, event: &gpui::ScrollWheelEvent, _, cx| {
+                // GPUI's internal bubble listener has already applied this delta.
+                this.follow = follow_after_scroll(
+                    this.follow,
+                    f32::from(event.delta.pixel_delta(px(21.)).y),
+                    f32::from(this.scroll.offset().y),
+                    f32::from(this.scroll.max_offset().y),
+                );
+                cx.notify();
+            }))
             .flex()
             .flex_col()
-            .gap_4();
-        if self.messages.is_empty() {
+            .gap(px(8.));
+        if self.transcript.entries.is_empty() {
             body = body.child(
                 div()
                     .text_color(t.text_muted)
                     .child("Review spectra, adjust processing, or draft a report."),
             );
         }
-        for (i, (role, message)) in self.messages.iter().enumerate() {
-            body =
-                body.child(match role.as_str() {
-                    // Tool activity: one muted line, so the steps read as a log
-                    // between the messages they belong to.
-                    "Activity" => div()
-                        .id(("assistant-message", i))
-                        .px_3()
-                        .text_size(px(11.5))
-                        .text_color(if message.contains("· failed") {
-                            t.error
-                        } else {
-                            t.text_muted
-                        })
-                        .child(format!("⚙ {message}")),
-                    // Reasoning summaries: folded to their first line by default;
-                    // click the header to read the whole step.
-                    "Thinking" => {
-                        let open = self.unfolded.contains(&i);
-                        let lines = message.lines().count().max(1);
-                        let preview = message.lines().next().unwrap_or("").to_string();
-                        div()
-                            .id(("assistant-message", i))
-                            .px_3()
-                            .py_2()
-                            .border_l_2()
-                            .border_color(t.border)
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .cursor_pointer()
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                if !this.unfolded.remove(&i) {
-                                    this.unfolded.insert(i);
-                                }
-                                cx.notify();
-                            }))
-                            .child(div().text_size(px(11.)).text_color(t.text_muted).child(
-                                if open {
-                                    "▾ Thinking".to_string()
-                                } else if lines > 1 {
-                                    format!("▸ Thinking · {lines} lines")
-                                } else {
-                                    "▸ Thinking".to_string()
-                                },
-                            ))
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(t.text_muted)
-                                    .when(!open, |d| {
-                                        d.overflow_hidden().whitespace_nowrap().text_ellipsis()
-                                    })
-                                    .child(if open { message.clone() } else { preview }),
-                            )
-                    }
-                    _ => div()
-                        .id(("assistant-message", i))
-                        .p_3()
-                        .rounded_md()
-                        .bg(t.surface)
+        for (i, entry) in self.transcript.entries.iter().enumerate() {
+            let message = entry.text(now);
+            if message.is_empty() {
+                continue;
+            }
+            let row = div()
+                .id(("assistant-message", i))
+                .flex_shrink_0()
+                .when(i > 0 && matches!(entry, Entry::User(_)), |d| d.mt(px(12.)));
+            body = body.child(match entry {
+                Entry::Activity { state, .. } => row
+                    .px_3()
+                    .text_size(px(11.5))
+                    .text_color(if matches!(state, ActivityState::Failed(_)) {
+                        t.error
+                    } else {
+                        t.text_muted
+                    })
+                    .child(format!("⚙ {message}")),
+                Entry::Status(status) => row
+                    .px_3()
+                    .text_size(px(11.5))
+                    .text_color(if matches!(status, Status::Error(_)) {
+                        t.error
+                    } else {
+                        t.text_muted
+                    })
+                    .child(message),
+                Entry::Thinking { .. } => {
+                    let open = self.unfolded.contains(&i);
+                    row.px_3()
+                        .border_l_2()
+                        .border_color(t.border)
                         .flex()
                         .flex_col()
-                        .gap_2()
+                        .gap_1()
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            if !this.unfolded.remove(&i) {
+                                this.unfolded.insert(i);
+                            }
+                            cx.notify();
+                        }))
                         .child(
                             div()
                                 .text_size(px(11.))
-                                .text_color(t.accent)
-                                .child(role.clone()),
+                                .text_color(t.text_muted)
+                                .child(if open { "▾ Thinking" } else { "▸ Thinking" }),
                         )
-                        .child(div().text_size(px(13.)).child(message.clone())),
-                });
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(t.text_muted)
+                                .when(!open, |d| {
+                                    d.overflow_hidden().whitespace_nowrap().text_ellipsis()
+                                })
+                                .child(if open {
+                                    message
+                                } else {
+                                    message.lines().next().unwrap_or_default().to_owned()
+                                }),
+                        )
+                }
+                Entry::User(_) => row
+                    .p_3()
+                    .rounded_md()
+                    .bg(t.surface)
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(div().text_size(px(11.)).text_color(t.accent).child("You"))
+                    .child(div().text_size(px(13.)).child(message)),
+                Entry::Assistant { .. } => row
+                    .max_w(px(720.))
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(px(14.))
+                            .line_height(px(21.))
+                            .child(message.clone()),
+                    )
+                    .child(
+                        div().child(
+                            button(
+                                &t,
+                                ("assistant-copy-item", i),
+                                if self.copied.contains_key(&i) {
+                                    "Copied"
+                                } else {
+                                    "Copy"
+                                },
+                                false,
+                            )
+                            .on_click(cx.listener(
+                                move |this, _: &ClickEvent, _, cx| {
+                                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                        message.clone(),
+                                    ));
+                                    let copied_at = Instant::now();
+                                    this.copied.insert(i, copied_at);
+                                    cx.spawn(async move |this, cx| {
+                                        cx.background_executor()
+                                            .timer(Duration::from_secs(2))
+                                            .await;
+                                        this.update(cx, |app, cx| {
+                                            if app.copied.get(&i) == Some(&copied_at) {
+                                                app.copied.remove(&i);
+                                            }
+                                            cx.notify();
+                                        })
+                                        .ok();
+                                    })
+                                    .detach();
+                                    cx.notify();
+                                },
+                            )),
+                        ),
+                    ),
+            });
         }
-        if self.busy && !self.thinking.trim().is_empty() {
-            body = body.child(
-                div()
-                    .px_3()
-                    .py_2()
-                    .border_l_2()
-                    .border_color(t.border)
-                    .text_size(px(12.))
-                    .text_color(t.text_muted)
-                    .child(self.thinking.clone()),
-            );
-        }
-        if !self.answer.is_empty() {
-            body = body.child(div().p_3().text_size(px(13.)).child(self.answer.clone()));
-        }
+        let transcript = div()
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .child(body)
+            .when(!self.follow, |d| {
+                d.child(
+                    div().absolute().bottom_2().right_2().child(
+                        button(&t, "assistant-jump", "Jump to latest", true)
+                            .rounded_full()
+                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                this.follow = true;
+                                this.scroll.scroll_to_bottom();
+                                cx.notify();
+                            })),
+                    ),
+                )
+            });
         let mut root = div()
             .size_full()
             .min_h_0()
@@ -1473,7 +1635,7 @@ impl Render for AssistantWindow {
             let focused = self.studio.upgrade().is_some_and(|studio| studio.read(cx).panels_hidden());
             button(&t,"assistant-focus-plots",if focused {"Show panels"} else {"Focus plots"},focused).on_click(cx.listener(move |this,_:&ClickEvent,_,cx|{if let Err(e)=this.change_layout(&json!({"file_browser":focused,"inspector":focused,"window_action":"focus_app"}),cx){this.error=Some(e);}cx.notify();}))
         }));
-        root = root.child(body);
+        root = root.child(transcript);
         if let Some(error) = &self.error {
             root = root.child(
                 div()
@@ -1491,7 +1653,7 @@ impl Render for AssistantWindow {
                     .child(
                         super::chip(&t, "assistant-plots", "Plots", self.include_plots).on_click(
                             cx.listener(|this, _: &ClickEvent, _, cx| {
-                                if !this.busy {
+                                if !this.transcript.busy {
                                     this.include_plots = !this.include_plots;
                                 }
                                 cx.notify();
@@ -1507,20 +1669,10 @@ impl Render for AssistantWindow {
                     )
                     .child(div().flex_1())
                     .child(
-                        div()
-                            .text_size(px(11.5))
-                            .text_color(if self.busy { t.accent } else { t.text_muted })
-                            .child(self.status.clone()),
-                    )
-                    .child(
                         button(&t, "assistant-copy", "Copy conversation", false).on_click(
                             cx.listener(|this, _: &ClickEvent, _, cx| {
                                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                    this.messages
-                                        .iter()
-                                        .map(|(r, m)| format!("## {r}\n\n{m}\n"))
-                                        .collect::<Vec<_>>()
-                                        .join("\n"),
+                                    this.transcript.conversation(Instant::now()),
                                 ));
                             }),
                         ),
@@ -1532,10 +1684,19 @@ impl Render for AssistantWindow {
                     .gap_2()
                     .items_end()
                     .child(div().flex_1().min_w_0().child(self.input.clone()))
-                    .child(if self.busy {
-                        button(&t, "assistant-stop", "Stop", false)
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.stop(cx)))
-                            .into_any_element()
+                    .child(if self.transcript.busy || self.transcript.stop_pending {
+                        button(
+                            &t,
+                            "assistant-stop",
+                            if self.transcript.stop_pending {
+                                "Stopping…"
+                            } else {
+                                "Stop"
+                            },
+                            false,
+                        )
+                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.stop(cx)))
+                        .into_any_element()
                     } else {
                         button(&t, "assistant-send", "Send", true)
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.run(cx)))

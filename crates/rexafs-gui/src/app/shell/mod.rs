@@ -8,6 +8,7 @@
 
 pub(crate) mod assistant;
 pub(crate) mod assistant_actions;
+mod assistant_state;
 mod bond_geometry;
 pub mod center;
 mod depth_controls;
