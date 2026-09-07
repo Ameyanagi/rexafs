@@ -2,7 +2,7 @@
 use super::button;
 use crate::{
     app::StudioApp,
-    codex_client::Client,
+    codex_client::{self, Client, Model},
     theme::Theme,
     widgets::text_input::{InputEvent, InputStyle, TextInput},
 };
@@ -12,6 +12,13 @@ use gpui::{
 };
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, time::Duration};
+
+fn pending_blocks_run(pending: &BTreeMap<u64, String>) -> bool {
+    // Model discovery (including pagination) may finish after a turn starts.
+    pending
+        .values()
+        .any(|method| matches!(method.as_str(), "thread/start" | "turn/start"))
+}
 
 pub(crate) struct AssistantWindow {
     studio: WeakEntity<StudioApp>,
@@ -23,6 +30,14 @@ pub(crate) struct AssistantWindow {
     status: String,
     error: Option<String>,
     account: bool,
+    account_label: Option<String>,
+    connecting: bool,
+    models: Vec<Model>,
+    models_requested: bool,
+    model_cursors: Vec<String>,
+    preferred_model: Option<String>,
+    preferred_effort: Option<String>,
+    model_picker_open: bool,
     login: Option<Value>,
     thread: Option<String>,
     turn: Option<String>,
@@ -43,7 +58,6 @@ pub(crate) struct AssistantWindow {
 impl StudioApp {
     pub(crate) fn open_assistant(&mut self, cx: &mut Context<Self>) {
         let studio = cx.entity().downgrade();
-        let existing = self.assistant_window;
         let theme = self.theme;
         let bounds = gpui::Bounds::centered(
             None,
@@ -56,6 +70,11 @@ impl StudioApp {
         // Opening a native window can synchronously render its root. Defer it
         // until this StudioApp update has released the entity borrow.
         cx.spawn(async move |this, cx| {
+            // Read at execution time so two queued open actions share a window.
+            let existing = this
+                .read_with(cx, |app, _| app.assistant_window)
+                .ok()
+                .flatten();
             if let Some(handle) = existing {
                 if handle
                     .update(cx, |_, window, _| window.activate_window())
@@ -105,16 +124,28 @@ impl AssistantWindow {
         if let Some(app) = studio.upgrade() {
             cx.observe(&app, |_, _, cx| cx.notify()).detach();
         }
-        Self {
+        let settings = studio
+            .upgrade()
+            .map(|app| app.read(cx).structure.settings.clone())
+            .unwrap_or_default();
+        let mut assistant = Self {
             studio,
             theme,
             input,
             client: None,
             pending: BTreeMap::new(),
             next_id: 1,
-            status: "Use your Codex login".into(),
+            status: "Disconnected".into(),
             error: None,
             account: false,
+            account_label: None,
+            connecting: false,
+            models: Vec::new(),
+            models_requested: false,
+            model_cursors: Vec::new(),
+            preferred_model: settings.assistant_model,
+            preferred_effort: settings.assistant_effort,
+            model_picker_open: false,
             login: None,
             thread: None,
             turn: None,
@@ -129,7 +160,186 @@ impl AssistantWindow {
             run_generation: 0,
             processing_checks: Vec::new(),
             saved_main_size: None,
+        };
+        assistant.connect(cx);
+        assistant
+    }
+    fn model(&self) -> Option<&Model> {
+        codex_client::selected_model(&self.models, self.preferred_model.as_deref())
+    }
+    fn effort(&self) -> &str {
+        codex_client::selected_effort(self.model(), self.preferred_effort.as_deref())
+    }
+    fn save_preferences(
+        &mut self,
+        model: Option<String>,
+        effort: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let result = self
+            .studio
+            .update(cx, |app, _| {
+                let mut settings = app.structure.settings.clone();
+                settings.assistant_model = model.clone();
+                settings.assistant_effort = effort.clone();
+                settings.save()?;
+                app.structure.settings = settings;
+                Ok::<_, String>(())
+            })
+            .map_err(|e| e.to_string())
+            .and_then(|r| r);
+        match result {
+            Ok(()) => {
+                self.preferred_model = model;
+                self.preferred_effort = effort;
+            }
+            Err(e) => self.error = Some(format!("Could not save Assistant preferences: {e}")),
         }
+        cx.notify();
+    }
+    fn model_controls(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let t = self.theme;
+        let current = self
+            .model()
+            .map(|m| m.display_name.as_str())
+            .unwrap_or("Default (latest)");
+        let mut controls = div().flex().flex_col().gap_1();
+        let mut efforts = super::segmented(&t);
+        let selected_effort = self.effort();
+        // Keep the requested four levels visible, but do not offer levels the
+        // selected model explicitly does not support.
+        let mut levels = vec!["low", "medium", "high", "xhigh"];
+        if !levels.contains(&selected_effort) {
+            levels.push(selected_effort);
+        }
+        for (i, effort) in levels.into_iter().enumerate() {
+            let supported = self.model().is_none_or(|m| {
+                m.supported_reasoning_efforts.is_empty()
+                    || m.supported_reasoning_efforts
+                        .iter()
+                        .any(|e| e.reasoning_effort == effort)
+            });
+            let effort = effort.to_owned();
+            efforts = efforts.child(
+                super::segment(
+                    &t,
+                    ("assistant-effort", i),
+                    effort.clone(),
+                    selected_effort == effort,
+                    i == 0,
+                )
+                .when(!supported, |d| d.opacity(0.4))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    if !this.busy && supported {
+                        this.save_preferences(
+                            this.preferred_model.clone(),
+                            Some(effort.clone()),
+                            cx,
+                        );
+                    }
+                })),
+            );
+        }
+        controls = controls.child(
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(t.text_muted)
+                        .child("Model"),
+                )
+                .child(
+                    button(&t, "assistant-model", format!("{current} ▾"), false).on_click(
+                        cx.listener(|this, _: &ClickEvent, _, cx| {
+                            this.model_picker_open = !this.model_picker_open;
+                            cx.notify();
+                        }),
+                    ),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(t.text_muted)
+                        .child("Reasoning"),
+                )
+                .child(efforts)
+                .child(
+                    button(
+                        &t,
+                        "assistant-effort-default",
+                        "Auto",
+                        self.preferred_effort.is_none(),
+                    )
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        if !this.busy {
+                            this.save_preferences(this.preferred_model.clone(), None, cx);
+                        }
+                    })),
+                ),
+        );
+        if self.model_picker_open {
+            let mut list = div()
+                .id("assistant-model-options")
+                .max_h(px(150.))
+                .overflow_y_scroll()
+                .rounded_sm()
+                .border_1()
+                .border_color(t.border)
+                .bg(t.bg)
+                .flex()
+                .flex_col();
+            let options = std::iter::once((None, "Default (latest)".to_owned())).chain(
+                self.models
+                    .iter()
+                    .map(|m| (Some(m.model.clone()), m.display_name.clone())),
+            );
+            for (i, (model, label)) in options.enumerate() {
+                let selected = self.preferred_model == model;
+                list = list.child(
+                    div()
+                        .id(("assistant-model-option", i))
+                        .px_2()
+                        .py_1()
+                        .text_xs()
+                        .cursor_pointer()
+                        .when(selected, |d| d.bg(t.raised).text_color(t.accent))
+                        .hover(|d| d.bg(t.raised))
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            if !this.busy {
+                                this.save_preferences(
+                                    model.clone(),
+                                    this.preferred_effort.clone(),
+                                    cx,
+                                );
+                                this.model_picker_open = false;
+                            }
+                            cx.notify();
+                        }))
+                        .child(label),
+                );
+            }
+            controls = controls.child(list);
+        }
+        controls
+    }
+    fn disconnected(&mut self, error: String) {
+        self.error = Some(error);
+        self.connecting = false;
+        self.busy = false;
+        self.account = false;
+        self.account_label = None;
+        self.client = None;
+        self.thread = None;
+        self.turn = None;
+        self.login = None;
+        self.prepared = None;
+        self.run_generation += 1;
+        self.pending.clear();
+        self.status = "Disconnected".into();
     }
     fn request(&mut self, method: &str, params: Value) -> Result<(), String> {
         let id = self.next_id;
@@ -142,44 +352,45 @@ impl AssistantWindow {
         Ok(())
     }
     fn connect(&mut self, cx: &mut Context<Self>) {
-        if self.client.is_some() || self.status == "Connecting…" {
+        if self.client.is_some() || self.connecting {
             return;
         }
         self.error = None;
         self.status = "Connecting…".into();
+        self.connecting = true;
+        self.models.clear();
+        self.models_requested = false;
+        self.model_cursors.clear();
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
                 .spawn(async { Client::start() })
                 .await;
-            if this
+            if !this
                 .update(cx, |app, cx| {
                     match result {
                         Ok(client) => {
-                            app.client = Some(client);
                             let id = app.next_id;
                             app.next_id += 1;
-                            app.pending.insert(id, "initialize".into());
-                            if let Err(e) = app
-                                .client
-                                .as_ref()
-                                .unwrap()
-                                .send(crate::codex_client::initialize(id))
-                            {
-                                app.error = Some(e);
+                            let sent = client.send(codex_client::initialize(id));
+                            app.client = Some(client);
+                            match sent {
+                                Ok(()) => {
+                                    app.pending.insert(id, "initialize".into());
+                                }
+                                Err(e) => app.disconnected(e),
                             }
                         }
-                        Err(e) => {
-                            app.error = Some(e);
-                            app.status = "Disconnected".into();
-                        }
+                        Err(e) => app.disconnected(e),
                     }
                     cx.notify();
+                    app.client.is_some()
                 })
-                .is_err()
+                .unwrap_or(false)
             {
                 return;
             }
+            let deadline = std::time::Instant::now() + Duration::from_secs(30);
             loop {
                 cx.background_executor()
                     .timer(Duration::from_millis(50))
@@ -191,17 +402,15 @@ impl AssistantWindow {
                         for msg in messages {
                             match msg {
                                 Ok(v) => app.receive(v, cx),
-                                Err(e) => {
-                                    app.error = Some(e);
-                                    app.busy = false;
-                                    app.account = false;
-                                    app.client = None;
-                                    app.thread = None;
-                                    app.turn = None;
-                                    app.pending.clear();
-                                    app.status = "Disconnected".into();
-                                }
+                                Err(e) => app.disconnected(e),
                             }
+                            if app.client.is_none() {
+                                break;
+                            }
+                        }
+                        if app.connecting && std::time::Instant::now() >= deadline {
+                            app.disconnected("Codex connection timed out".into());
+                            cx.notify();
                         }
                         if changed {
                             cx.notify();
@@ -302,7 +511,7 @@ impl AssistantWindow {
                         }
                     }
                 }
-                m if m.starts_with("item/reasoning") && m.ends_with("delta") => {
+                "item/reasoning/summaryTextDelta" => {
                     if self.busy {
                         if let Some(delta) = p["delta"].as_str() {
                             self.thinking.push_str(delta);
@@ -345,34 +554,78 @@ impl AssistantWindow {
             return;
         };
         if let Some(error) = v.get("error") {
-            self.error = Some(
-                error["message"]
-                    .as_str()
-                    .unwrap_or("Codex request failed")
-                    .into(),
-            );
-            self.busy = false;
+            let message = error["message"]
+                .as_str()
+                .unwrap_or("Codex request failed")
+                .to_owned();
+            if matches!(method.as_str(), "initialize" | "account/read") {
+                self.disconnected(message);
+            } else if method == "model/list" {
+                self.messages.push((
+                    "Activity".into(),
+                    format!("Model list unavailable: {message} · using Codex default"),
+                ));
+            } else {
+                self.error = Some(message);
+                self.busy = false;
+            }
             return;
         }
         let r = &v["result"];
         match method.as_str() {
             "initialize" => {
-                if let Some(c) = &self.client {
-                    let _ = c.send(json!({"method":"initialized","params":{}}));
+                let sent = self
+                    .client
+                    .as_ref()
+                    .ok_or_else(|| "Codex disconnected".to_owned())
+                    .and_then(|c| c.send(json!({"method":"initialized","params":{}})))
+                    .and_then(|()| self.request("account/read", json!({"refreshToken":false})));
+                if let Err(e) = sent {
+                    self.disconnected(e);
                 }
-                let _ = self.request("account/read", json!({"refreshToken":false}));
             }
-            "account/read" => {
-                self.account = !r["account"].is_null();
-                self.status = if self.account {
-                    format!(
-                        "Connected · {}",
-                        r["account"]["planType"].as_str().unwrap_or("Codex")
-                    )
-                } else {
-                    "Sign in to Codex".into()
-                };
-            }
+            "account/read" => match codex_client::account_label(r) {
+                Ok(label) => {
+                    self.account = label.is_some();
+                    self.account_label = label;
+                    self.connecting = false;
+                    if !self.busy {
+                        self.status = if self.account {
+                            "Ready"
+                        } else {
+                            "Sign in to Codex"
+                        }
+                        .into();
+                    }
+                    if self.account && !self.models_requested {
+                        self.models_requested = true;
+                        if let Err(e) = self.request("model/list", json!({"includeHidden":false})) {
+                            self.disconnected(e);
+                        }
+                    }
+                }
+                Err(e) => self.disconnected(e),
+            },
+            "model/list" => match codex_client::model_page(r) {
+                Ok(page) => {
+                    for model in page.data {
+                        if !self.models.iter().any(|m| m.model == model.model) {
+                            self.models.push(model);
+                        }
+                    }
+                    if let Some(cursor) = page.next_cursor
+                        && !self.model_cursors.contains(&cursor)
+                    {
+                        self.model_cursors.push(cursor.clone());
+                        if let Err(e) = self
+                            .request("model/list", json!({"cursor":cursor,"includeHidden":false}))
+                        {
+                            self.disconnected(e);
+                        }
+                    }
+                }
+                Err(e) => self.messages.push(("Activity".into(), e)),
+            },
             "account/login/start" => {
                 self.login = Some(r.clone());
                 self.status = "Complete device login in your browser".into();
@@ -401,14 +654,22 @@ impl AssistantWindow {
     }
     fn start_prepared(&mut self) {
         if let (Some(thread), Some(input)) = (self.thread.clone(), self.prepared.take()) {
-            if let Err(e) = self.request("turn/start", json!({"threadId":thread,"input":input})) {
+            if let Err(e) = self.request(
+                "turn/start",
+                codex_client::turn_params(
+                    &thread,
+                    input,
+                    self.model().map(|m| m.model.as_str()),
+                    self.effort(),
+                ),
+            ) {
                 self.error = Some(e);
                 self.busy = false;
             }
         }
     }
     fn run(&mut self, cx: &mut Context<Self>) {
-        if self.busy || !self.account {
+        if self.busy || !self.account || pending_blocks_run(&self.pending) {
             return;
         }
         let prompt = self.input.read(cx).text().trim().to_owned();
@@ -439,7 +700,31 @@ impl AssistantWindow {
     if include_plots{if let Some(s)=snapshot.spectra.first(){let sp=s.process()?;for (name,plot) in crate::publication::spectrum_plots(sp,"Current spectrum"){let path=directory.join(format!("turn-{generation}-{name}.png"));plot.size_px(1000,650).save(&path).map_err(|e|e.to_string())?;input.push(json!({"type":"localImage","path":path}));}}}
     Ok::<_,String>(input)
    }).await;
-   this.update(cx,|app,cx|{if generation!=app.run_generation{return;}match result{Ok(input)=>{app.prepared=Some(input);if app.thread.is_some(){app.start_prepared();}else{let cwd=app.client.as_ref().unwrap().directory.clone();let result=app.request("thread/start",json!({"cwd":cwd,"sandbox":"read-only","approvalPolicy":"never","ephemeral":true,"selectedCapabilityRoots":[],"config":{"mcp_servers":{}},"dynamicTools":crate::codex_client::dynamic_tools(),"developerInstructions":include_str!("assistant_workflow.md")}));if let Err(e)=result{app.error=Some(e);app.busy=false;}}},Err(e)=>{app.error=Some(e);app.busy=false;}}cx.notify();}).ok();
+            this.update(cx, |app, cx| {
+                if generation != app.run_generation { return; }
+                match result {
+                    Ok(input) => {
+                        app.prepared = Some(input);
+                        if app.thread.is_some() {
+                            app.start_prepared();
+                        } else if let Some(client) = &app.client {
+                            let mut params = json!({
+                                "cwd":client.directory,"sandbox":"read-only","approvalPolicy":"never",
+                                "ephemeral":true,"selectedCapabilityRoots":[],"config":{"mcp_servers":{}},
+                                "dynamicTools":codex_client::dynamic_tools(),
+                                "developerInstructions":include_str!("assistant_workflow.md")
+                            });
+                            if let Some(model) = app.model() { params["model"] = json!(model.model); }
+                            if let Err(e) = app.request("thread/start", params) {
+                                app.error = Some(e);
+                                app.busy = false;
+                            }
+                        }
+                    }
+                    Err(e) => { app.error = Some(e); app.busy = false; }
+                }
+                cx.notify();
+            }).ok();
   }).detach();
         cx.notify();
     }
@@ -992,12 +1277,13 @@ impl Render for AssistantWindow {
                     .child("Experimental"),
             )
             .child(div().flex_1());
-        if self.client.is_none() {
+        if self.client.is_none() && !self.connecting {
             header = header.child(
-                button(&t, "assistant-connect", "Connect Codex", true)
+                button(&t, "assistant-connect", "Retry connection", true)
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.connect(cx))),
             );
-        } else if !self.account && self.login.is_none() {
+        } else if self.client.is_some() && !self.connecting && !self.account && self.login.is_none()
+        {
             header = header.child(
                 button(&t, "assistant-login", "Device login", true).on_click(cx.listener(
                     |this, _: &ClickEvent, _, cx| {
@@ -1124,6 +1410,14 @@ impl Render for AssistantWindow {
             .bg(t.bg)
             .text_color(t.text)
             .child(header);
+        if let Some(label) = &self.account_label {
+            root = root.child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child(label.clone()),
+            );
+        }
         if let Some(login) = &self.login {
             let url = login["verificationUrl"].as_str().unwrap_or("").to_owned();
             let code = login["userCode"].as_str().unwrap_or("").to_owned();
@@ -1189,6 +1483,7 @@ impl Render for AssistantWindow {
             );
         }
         root = root
+            .child(self.model_controls(cx))
             .child(
                 div()
                     .flex()
@@ -1256,6 +1551,26 @@ impl Render for AssistantWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn assistant_pending_models_do_not_block_run() {
+        let mut pending = BTreeMap::new();
+        assert!(!pending_blocks_run(&pending));
+
+        pending.insert(1, "model/list".into());
+        assert!(!pending_blocks_run(&pending));
+        // A subsequent catalog page has a new request ID but the same method.
+        pending.remove(&1);
+        pending.insert(2, "model/list".into());
+        assert!(!pending_blocks_run(&pending));
+
+        for method in ["thread/start", "turn/start"] {
+            pending.insert(3, method.into());
+            assert!(pending_blocks_run(&pending));
+            pending.remove(&3);
+            assert!(!pending_blocks_run(&pending));
+        }
+    }
+
     #[test]
     fn assistant_changes_validate_scope_and_ranges() {
         let p = crate::params::PipelineParams::default();

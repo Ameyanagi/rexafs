@@ -39,6 +39,10 @@ pub struct UserSettings {
     pub update_channel: crate::updates::UpdateChannel,
     /// None uses the default: check automatically on startup, without installing.
     pub check_updates_on_startup: Option<bool>,
+    /// None follows the first model in the Codex app-server catalog.
+    pub assistant_model: Option<String>,
+    /// None follows the selected model's default, falling back to high.
+    pub assistant_effort: Option<String>,
 }
 
 /// `~/.rexafs` (created on demand, owner-only on Unix because it
@@ -283,6 +287,8 @@ mod tests {
             mp_api_key: "abc".into(),
             update_channel: crate::updates::UpdateChannel::Nightly,
             check_updates_on_startup: Some(false),
+            assistant_model: Some("catalog-model".into()),
+            assistant_effort: Some("xhigh".into()),
         };
         s.save_to(&path).unwrap();
         assert_eq!(UserSettings::load_from(&path).unwrap(), s);
