@@ -49,7 +49,7 @@ use crate::params::{
 use crate::plotting::{
     K_AXIS, QuadTrace, R_AXIS, SeriesSource, ViewOptions, build_fit_k, build_fit_q, build_fit_r,
     build_fit_residual_k, build_fit_residual_r, build_frame_chik_source, build_heatmap,
-    build_quadrant_specs, build_trend, chik_label, chir_label, middle_truncate, trace_rgba,
+    build_trend, chik_label, chir_label, middle_truncate, trace_rgba,
 };
 use crate::project::{PROJECT_VERSION, ParamOverride, ProjectFile};
 use crate::theme::Theme;
@@ -978,6 +978,8 @@ pub struct StudioApp {
     spectrum_fingerprint: u64,
     /// Identity of the data retained in `spectrum`, independent of selection.
     spectrum_group: Option<shell::tools::ToolTarget>,
+    /// Scientific quantity captured with the loaded data, including stale plots.
+    spectrum_quantity: crate::params::Quantity,
     spectrum: Option<Arc<XASSpectrum>>,
     spectrum_label: SharedString,
     /// Set when the newest selection failed to load. The plots still show the
@@ -1879,6 +1881,7 @@ impl StudioApp {
             spectrum_path: path.clone(),
             spectrum_fingerprint: 0,
             spectrum_group: None,
+            spectrum_quantity: crate::params::Quantity::RawMu,
             spectrum: None,
             spectrum_label: label.clone(),
             stale_plots: None,
@@ -2143,7 +2146,14 @@ impl StudioApp {
     }
 
     fn effective_fingerprint(&self, ix: usize) -> u64 {
-        self.effective_params(ix).fingerprint()
+        let params = self.effective_params(ix);
+        if ix >= DERIVED_BASE
+            && let Some(group) = self.derived.get(ix - DERIVED_BASE)
+        {
+            group.fingerprint(params)
+        } else {
+            params.fingerprint()
+        }
     }
 
     /// Effective fingerprint of the active spectrum (global when nothing
@@ -3288,6 +3298,13 @@ impl StudioApp {
             .then(|| self.raw_cache.get(&raw_key).cloned())
             .flatten();
         cx.background_executor().spawn(async move {
+            // Dispatch typed results before consulting the raw cache: cached
+            // arrays must never bypass the quantity guard on later edits.
+            if let Some(group) = &derived
+                && group.processing_block_reason().is_some()
+            {
+                return group.for_display(&params).map(|sp| (sp, None));
+            }
             match raw {
                 Some(raw) => {
                     process_arrays(raw.0.clone(), raw.1.clone(), &params).map(|sp| (sp, None))
@@ -3314,12 +3331,25 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) {
         self.status = spectrum_status(&label, &sp);
+        if ix >= DERIVED_BASE
+            && let Some(reason) = self
+                .derived
+                .get(ix - DERIVED_BASE)
+                .and_then(DerivedSpectrum::processing_block_reason)
+        {
+            self.status = reason.into();
+        }
         self.spectrum_group = self.tool_target(ix).map(|mut identity| {
             identity.fingerprint = fingerprint;
             identity.label = label.to_string();
             identity.path = path.clone();
             identity
         });
+        self.spectrum_quantity = ix
+            .checked_sub(DERIVED_BASE)
+            .and_then(|i| self.derived.get(i))
+            .map(|g| g.quantity)
+            .unwrap_or_default();
         self.spectrum_label = label;
         self.spectrum_path = path;
         self.spectrum_fingerprint = fingerprint;
@@ -4006,7 +4036,7 @@ impl StudioApp {
                 .map(|(ix, fingerprint, source, params)| {
                     let result = match source {
                         Ok(path) => process_file(path, params),
-                        Err(d) => d.process(params),
+                        Err(d) => d.for_display(params),
                     };
                     (*ix, *fingerprint, result)
                 })
@@ -4135,7 +4165,13 @@ impl StudioApp {
             Vec::new()
         };
         let in_plot_legend = self.maximized.is_some();
-        let mut specs = build_quadrant_specs(&traces, &self.view, &self.theme, in_plot_legend);
+        let mut specs = crate::plotting::quantity_quadrant_specs(
+            &traces,
+            &self.view,
+            &self.theme,
+            in_plot_legend,
+            self.spectrum_quantity,
+        );
         if self.stage == Stage::Background
             && let Some((_, hi)) = self
                 .spectrum
@@ -4918,7 +4954,7 @@ impl StudioApp {
                             d.label
                         )
                     } else {
-                        d.label.clone()
+                        d.display_label()
                     }
                 })
                 .unwrap_or_else(|| "merged".into())

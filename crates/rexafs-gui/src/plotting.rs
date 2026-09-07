@@ -508,6 +508,24 @@ fn add_mu_diagnostics(spec: &mut QuadrantSpec, sp: &XASSpectrum, view: &ViewOpti
 /// Specs for all five Explore quadrants (mu(E), normalized mu(E), k-weighted
 /// chi(k), |chi(R)|, chi(q)) for a set of traces. `in_plot_legend` opts into
 /// ruviz legends (maximized quadrant); the grid uses the shared GPUI strip.
+pub(crate) fn quantity_quadrant_specs(
+    traces: &[QuadTrace],
+    view: &ViewOptions,
+    theme: &Theme,
+    in_plot_legend: bool,
+    quantity: crate::params::Quantity,
+) -> [QuadrantSpec; 5] {
+    let mut specs = build_quadrant_specs(traces, view, theme, in_plot_legend);
+    if matches!(
+        quantity,
+        crate::params::Quantity::NormalizedMu | crate::params::Quantity::NormalizedDifference
+    ) {
+        specs[0].title = quantity.label().into();
+        specs[0].ylabel = format!("{} (dimensionless)", quantity.label());
+    }
+    specs
+}
+
 pub fn build_quadrant_specs(
     traces: &[QuadTrace],
     view: &ViewOptions,

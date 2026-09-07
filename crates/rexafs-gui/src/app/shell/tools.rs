@@ -16,7 +16,7 @@ use rexafs::prelude::{AnalysisSpace, LcfConfig, PcaConfig};
 
 use super::button;
 use crate::app::{DERIVED_BASE, NO_ENTRY, StudioApp, filter_match_lower};
-use crate::params::DerivedSpectrum;
+use crate::params::{DerivedSpectrum, Operation, OperationInput, PipelineParams, Quantity};
 use crate::widgets::numeric_field::{FieldEvent, FieldKind, NumericField};
 use crate::widgets::text_input::{InputEvent, TextInput};
 
@@ -219,6 +219,16 @@ pub(crate) struct ToolTarget {
 }
 
 impl ToolTarget {
+    fn operation_input(&self) -> OperationInput {
+        OperationInput {
+            label: self.label.clone(),
+            path: self.path.clone(),
+            derived_id: self.derived_id,
+            fingerprint: self.fingerprint,
+            size: self.size,
+        }
+    }
+
     pub(crate) fn standalone(
         path: PathBuf,
         label: String,
@@ -249,6 +259,7 @@ enum StandardLoad {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ReadinessReason {
+    Quantity,
     NoTarget,
     CurrentFailed,
     TargetChanged,
@@ -263,6 +274,9 @@ enum ReadinessReason {
 impl ReadinessReason {
     fn message(self) -> &'static str {
         match self {
+            Self::Quantity => {
+                "Tool requires confirmed absorption μ(E) inputs; this quantity is for plotting/export only"
+            }
             Self::NoTarget => "No target group; select a group and reopen the tool",
             Self::CurrentFailed => "Current group failed to load",
             Self::TargetChanged => "Target group or parameters changed; reopen the tool",
@@ -300,6 +314,14 @@ fn readiness(
         return Err(ReadinessReason::LoadedMismatch);
     }
     standard.unwrap_or(Ok(()))
+}
+
+fn quantity_readiness(
+    identity: Result<(), ReadinessReason>,
+    quantity: impl FnOnce() -> Result<(), ReadinessReason>,
+) -> Result<(), ReadinessReason> {
+    identity?;
+    quantity()
 }
 
 fn default_standard(
@@ -345,6 +367,32 @@ fn standard_row_index(
         None if row - derived < files => Some(row - derived),
         None => None,
     }
+}
+
+fn materialize_tool_output(
+    tool: Tool,
+    label: String,
+    sp: &XASSpectrum,
+    params: &PipelineParams,
+    operation: Operation,
+) -> Result<DerivedSpectrum, String> {
+    let (Some(energy), Some(mu)) = (&sp.energy, &sp.mu) else {
+        return Err("tool produced no data".into());
+    };
+    let inherited = params.for_materialized(operation.applied_energy_shift_ev);
+    Ok(DerivedSpectrum {
+        label,
+        energy: energy.iter().copied().collect(),
+        mu: mu.iter().copied().collect(),
+        params: Some(inherited),
+        quantity: if tool == Tool::Difference {
+            Quantity::NormalizedDifference
+        } else {
+            Quantity::RawMu
+        },
+        operation: Some(operation),
+        ..Default::default()
+    })
 }
 
 fn calibrate_from_standard(
@@ -807,13 +855,33 @@ impl StudioApp {
                 &self.tools.standard_load,
             )
         });
-        readiness(
-            self.tools.target.as_ref(),
-            current.as_ref(),
-            self.spectrum.as_ref().and(self.spectrum_group.as_ref()),
-            self.stale_plots.is_some(),
-            self.load_running,
-            standard,
+        quantity_readiness(
+            readiness(
+                self.tools.target.as_ref(),
+                current.as_ref(),
+                self.spectrum.as_ref().and(self.spectrum_group.as_ref()),
+                self.stale_plots.is_some(),
+                self.load_running,
+                standard,
+            ),
+            || {
+                for input in self
+                    .tools
+                    .target
+                    .iter()
+                    .chain(self.tools.standard.iter().filter(|_| tool.needs_standard()))
+                {
+                    if input.ix >= DERIVED_BASE
+                        && self
+                            .derived
+                            .get(input.ix - DERIVED_BASE)
+                            .is_some_and(|g| g.processing_block_reason().is_some())
+                    {
+                        return Err(ReadinessReason::Quantity);
+                    }
+                }
+                Ok(())
+            },
         )
     }
 
@@ -844,6 +912,18 @@ impl StudioApp {
         };
         let name = self.current_group_label().to_string();
         let mut sp: XASSpectrum = (*source).clone();
+        let mut operation = Operation {
+            tool: tool.name().into(),
+            parameters: serde_json::json!({}),
+            inputs: self
+                .tools
+                .target
+                .iter()
+                .chain(self.tools.standard.iter().filter(|_| tool.needs_standard()))
+                .map(ToolTarget::operation_input)
+                .collect(),
+            applied_energy_shift_ev: 0.0,
+        };
         let result: Result<String, String> = (|| {
             let label = match tool {
                 Tool::Align => {
@@ -853,6 +933,8 @@ impl StudioApp {
                     let shift = sp
                         .align_to(reference, (lo, hi))
                         .map_err(|e| e.to_string())?;
+                    operation.parameters = serde_json::json!({"window_relative_e0_ev": [lo, hi]});
+                    operation.applied_energy_shift_ev = shift;
                     format!("align: {name} → {ref_name} ({shift:+.2} eV)")
                 }
                 Tool::Calibrate => {
@@ -861,38 +943,49 @@ impl StudioApp {
                         .ok_or("enter the target E₀")?;
                     let (ref_name, reference) = self.tool_standard()?;
                     let shift = calibrate_from_standard(&mut sp, reference, target)?;
+                    operation.parameters = serde_json::json!({"expected_energy_ev": target, "measured_energy_ev": target - shift, "feature": "DerivativeMax"});
+                    operation.applied_energy_shift_ev = shift;
                     format!("calibrate: {name} via {ref_name} → {target:.1} eV ({shift:+.2})")
                 }
                 Tool::Deglitch => {
                     let lo = self.tool_value(ToolField::ELo, cx).ok_or("enter a range")?;
                     let hi = self.tool_value(ToolField::EHi, cx).ok_or("enter a range")?;
                     let n = sp.deglitch_range(lo, hi).map_err(|e| e.to_string())?;
+                    operation.parameters =
+                        serde_json::json!({"range_ev": [lo, hi], "removed_points": n});
                     format!("deglitch: {name} (−{n} pts)")
                 }
                 Tool::Truncate => {
                     let before = self.tool_value(ToolField::Before, cx);
                     let after = self.tool_value(ToolField::After, cx);
                     sp.truncate(before, after).map_err(|e| e.to_string())?;
+                    operation.parameters =
+                        serde_json::json!({"keep_from_ev": before, "keep_to_ev": after});
                     format!("truncate: {name}")
                 }
                 Tool::Rebin => {
                     let cfg = RebinConfig {
+                        e0: sp.e0(),
                         pre_step: self.tool_value(ToolField::PreStep, cx).unwrap_or(10.0),
                         xanes_step: self.tool_value(ToolField::XanesStep, cx).unwrap_or(0.5),
                         exafs_kstep: self.tool_value(ToolField::KStep, cx).unwrap_or(0.05),
                         ..RebinConfig::default()
                     };
                     sp.rebin(&cfg).map_err(|e| e.to_string())?;
+                    operation.parameters = serde_json::json!(cfg);
                     format!("rebin: {name}")
                 }
                 Tool::Smooth => {
                     let sigma = self.tool_value(ToolField::Sigma, cx).unwrap_or(1.0);
                     sp.smooth_mu(ConvolveForm::Gaussian, Some(sigma), None)
                         .map_err(|e| e.to_string())?;
+                    operation.parameters =
+                        serde_json::json!({"form": "Gaussian", "sigma_ev": sigma});
                     format!("smooth: {name} (σ {sigma:.2} eV)")
                 }
                 Tool::Lcf | Tool::Pca => unreachable!("analysis tools run above"),
                 Tool::Difference => {
+                    operation.parameters = serde_json::json!({"space": Quantity::NormalizedMu});
                     let (ref_name, reference) = self.tool_standard()?;
                     sp = rexafs::xafs::tools::difference(
                         &sp,
@@ -907,18 +1000,22 @@ impl StudioApp {
         })();
         match result {
             Ok(label) => {
-                let (Some(energy), Some(mu)) = (sp.energy.as_ref(), sp.mu.as_ref()) else {
-                    self.tools.message = "tool produced no data".into();
-                    cx.notify();
-                    return;
-                };
-                let derived = DerivedSpectrum {
-                    label: label.clone(),
-                    energy: energy.iter().copied().collect(),
-                    mu: mu.iter().copied().collect(),
-                    id: self.next_group_id(),
-                    params: Some(self.ui_params().clone()),
-                    ..Default::default()
+                let derived = match materialize_tool_output(
+                    tool,
+                    label.clone(),
+                    &sp,
+                    self.ui_params(),
+                    operation,
+                ) {
+                    Ok(mut derived) => {
+                        derived.id = self.next_group_id();
+                        derived
+                    }
+                    Err(error) => {
+                        self.tools.message = error.into();
+                        cx.notify();
+                        return;
+                    }
                 };
                 self.record(
                     format!("tool: {label}"),
@@ -1411,6 +1508,67 @@ mod tool_readiness_tests {
     use super::*;
     use std::{collections::BTreeSet, num::NonZeroUsize};
 
+    #[test]
+    fn typed_outputs_materialize_quantity_and_bound_operation_inputs() {
+        let params = PipelineParams {
+            e0: Some(110.0),
+            bkg_ek0: Some(111.0),
+            ..Default::default()
+        };
+        let standard = edge(100.0);
+        let mut target = edge(110.0);
+        let original_energy = target.energy.clone().unwrap();
+        let measured = standard
+            .edge_feature_energy(EdgeFeature::DerivativeMax)
+            .unwrap();
+        let shift = calibrate_from_standard(&mut target, &standard, measured + 3.0).unwrap();
+        let inputs = vec![
+            group(DERIVED_BASE + 7).operation_input(),
+            group(2).operation_input(),
+        ];
+        for tool in Tool::PROCESSING {
+            let applied = if matches!(tool, Tool::Align | Tool::Calibrate) {
+                shift
+            } else {
+                0.0
+            };
+            let operation = Operation {
+                tool: tool.name().into(),
+                parameters: serde_json::json!({"expected_energy_ev": measured + 3.0}),
+                inputs: inputs.clone(),
+                applied_energy_shift_ev: applied,
+            };
+            let output =
+                materialize_tool_output(tool, "output".into(), &target, &params, operation.clone())
+                    .unwrap();
+            assert_eq!(output.operation, Some(operation));
+            assert_eq!(
+                output.operation.as_ref().unwrap().inputs[0].derived_id,
+                Some(7)
+            );
+            assert_eq!(
+                output.quantity,
+                if tool == Tool::Difference {
+                    Quantity::NormalizedDifference
+                } else {
+                    Quantity::RawMu
+                }
+            );
+            assert!(!output.quantity_unconfirmed);
+            assert_eq!(output.params.as_ref().unwrap().e0, Some(110.0 + applied));
+            assert_eq!(
+                output.params.as_ref().unwrap().bkg_ek0,
+                Some(111.0 + applied)
+            );
+            for _ in 0..2 {
+                let (energy, _) = output.raw(output.params.as_ref().unwrap()).unwrap();
+                for (before, after) in original_energy.iter().zip(&energy) {
+                    assert!((after - before - shift).abs() < 1e-10);
+                }
+            }
+        }
+    }
+
     fn group(ix: usize) -> ToolTarget {
         ToolTarget {
             ix,
@@ -1422,6 +1580,66 @@ mod tool_readiness_tests {
             catalog_generation: 2,
             size: Some(100),
         }
+    }
+
+    #[test]
+    fn quantity_readiness_checks_identity_before_rekeyed_array_slots() {
+        let bound = group(DERIVED_BASE + 3);
+        let moved = ToolTarget {
+            ix: DERIVED_BASE + 2,
+            ..bound.clone()
+        };
+        let replaced = ToolTarget {
+            derived_id: Some(4),
+            ..bound.clone()
+        };
+        for current in [&moved, &replaced] {
+            assert_eq!(
+                quantity_readiness(
+                    readiness(
+                        Some(&bound),
+                        Some(current),
+                        Some(&bound),
+                        false,
+                        false,
+                        None
+                    ),
+                    || panic!("must not inspect a re-keyed slot's quantity"),
+                ),
+                Err(ReadinessReason::TargetChanged)
+            );
+        }
+        let standard = group(DERIVED_BASE + 4);
+        let moved_standard = ToolTarget {
+            ix: DERIVED_BASE + 3,
+            ..standard.clone()
+        };
+        assert_eq!(
+            quantity_readiness(
+                readiness(
+                    Some(&bound),
+                    Some(&bound),
+                    Some(&bound),
+                    false,
+                    false,
+                    Some(standard_readiness(
+                        Some(&standard),
+                        Some(&moved_standard),
+                        &StandardLoad::Loading
+                    ))
+                ),
+                || panic!("must not inspect a changed standard's quantity")
+            ),
+            Err(ReadinessReason::StandardChanged)
+        );
+        assert_eq!(
+            quantity_readiness(
+                readiness(Some(&bound), Some(&bound), Some(&bound), false, false, None),
+                || Err(ReadinessReason::Quantity)
+            ),
+            Err(ReadinessReason::Quantity)
+        );
+        assert_eq!(quantity_readiness(Ok(()), || Ok(())), Ok(()));
     }
 
     #[test]

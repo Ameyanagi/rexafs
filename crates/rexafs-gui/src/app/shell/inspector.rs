@@ -8,6 +8,7 @@ use gpui::{
 
 use super::{MONO, Stage, button, parameter_actions::ParamScope, section_label};
 use crate::app::{EnumParam, ParamKey, ParamSection, StudioApp};
+use crate::params::Quantity;
 
 fn apply_hint(marked: usize, locked: usize) -> Option<String> {
     if marked == 0 && locked == 0 {
@@ -29,6 +30,44 @@ impl StudioApp {
             Stage::Transform => self.transform_inspector(cx).into_any_element(),
             Stage::Series => self.series_inspector(cx).into_any_element(),
             Stage::Fit | Stage::Publish => div().into_any_element(),
+        };
+        let body = if self.stage.is_processing()
+            && let Some(group) = self
+                .selected
+                .filter(|&ix| ix >= crate::app::DERIVED_BASE)
+                .and_then(|ix| self.derived.get(ix - crate::app::DERIVED_BASE))
+        {
+            let mut notice = div()
+                .p_3()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(group.display_label());
+            let blocked = group.processing_block_reason();
+            if let Some(reason) = &blocked {
+                notice = notice.child(reason.clone());
+            }
+            notice = notice.child("Confirm what the stored arrays represent:");
+            for quantity in [
+                Quantity::RawMu,
+                Quantity::NormalizedMu,
+                Quantity::NormalizedDifference,
+                Quantity::ChiK,
+            ] {
+                notice = notice.child(
+                    button(&t, quantity.label(), quantity.label(), false).on_click(cx.listener(
+                        move |this, _: &ClickEvent, _, cx| {
+                            this.confirm_current_quantity(quantity, cx);
+                        },
+                    )),
+                );
+            }
+            if blocked.is_none() {
+                notice = notice.child(body);
+            }
+            notice.into_any_element()
+        } else {
+            body
         };
         div()
             .w(px(312.))
@@ -55,6 +94,25 @@ impl StudioApp {
                     .child(body),
             )
             .into_any_element()
+    }
+
+    fn confirm_current_quantity(&mut self, quantity: Quantity, cx: &mut Context<Self>) {
+        if self.refuse_frozen_edit(cx) {
+            return;
+        }
+        let Some(index) = self
+            .selected
+            .and_then(|ix| ix.checked_sub(crate::app::DERIVED_BASE))
+        else {
+            return;
+        };
+        let Some(group) = self.derived.get_mut(index) else {
+            return;
+        };
+        if self.journal.confirm_quantity(index, group, quantity) {
+            self.reprocess_current(cx);
+            cx.notify();
+        }
     }
 
     fn inspector_header(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {

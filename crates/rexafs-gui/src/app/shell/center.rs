@@ -99,46 +99,13 @@ impl StudioApp {
 
     /// Which quadrant plots the current stage shows, top to bottom.
     pub(crate) fn stage_plots(&self) -> Vec<(usize, SharedString)> {
-        let v = self.stage_view;
-        let kw = self.fft_summary().3;
-        let chik: SharedString = crate::plotting::chik_label(kw).into();
-        let chir: SharedString = if self.mixed_overlay_weight.is_some() {
-            "|χ(R)| · mixed k weights".into()
-        } else {
-            crate::plotting::chir_label(kw).into()
-        };
-        if let Some(i) = v.thumbnail_focus {
-            return vec![match i {
-                0 => (PLOT_NORM, "normalized μ(E)".into()),
-                1 => (PLOT_CHIK, chik),
-                2 => (PLOT_CHIK, format!("{} · window", chik).into()),
-                _ => (PLOT_CHIR, chir),
-            }];
-        }
-        match self.stage {
-            Stage::Data | Stage::Normalize => vec![match v.e_quantity {
-                EQuantity::Mu => (PLOT_MU, "μ(E)".into()),
-                EQuantity::Norm => (PLOT_NORM, "normalized μ(E)".into()),
-                EQuantity::Flat => (PLOT_NORM, "flattened μ(E)".into()),
-            }],
-            Stage::Background => match v.bkg_view {
-                BkgView::Energy => vec![
-                    (PLOT_MU, "μ(E) with AUTOBK spline".into()),
-                    (
-                        PLOT_CHIR,
-                        "|χ(R)| · R < Rbkg is the background region".into(),
-                    ),
-                ],
-                BkgView::K => vec![(PLOT_CHIK, chik), (PLOT_CHIR, chir)],
-            },
-            Stage::Transform => match v.tf_view {
-                TfView::K => vec![(PLOT_CHIK, chik)],
-                TfView::R => vec![(PLOT_CHIR, chir)],
-                TfView::Q => vec![(PLOT_CHIQ, "χ(q) back-transform".into())],
-                TfView::Both => vec![(PLOT_CHIK, chik), (PLOT_CHIR, chir)],
-            },
-            Stage::Fit | Stage::Series | Stage::Publish => Vec::new(),
-        }
+        stage_plot_selection(
+            self.stage,
+            self.stage_view,
+            self.fft_summary().3,
+            self.mixed_overlay_weight.is_some(),
+            self.spectrum_quantity,
+        )
     }
 
     fn plot_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -200,6 +167,9 @@ impl StudioApp {
                     ),
             )
             .child(div().w(px(1.)).h(px(18.)).bg(t.border));
+        if self.stage.is_processing() && !self.spectrum_quantity.is_absorption() {
+            return bar.child(self.spectrum_quantity.label());
+        }
         match self.stage {
             Stage::Data | Stage::Normalize => {
                 let q = v.e_quantity;
@@ -572,5 +542,125 @@ impl StudioApp {
             );
         }
         strip
+    }
+}
+
+/// Shared main-view selection for freshly created and reopened groups.
+pub(crate) fn stage_plot_selection(
+    stage: Stage,
+    v: super::StageView,
+    kw: f64,
+    mixed_weights: bool,
+    quantity: crate::params::Quantity,
+) -> Vec<(usize, SharedString)> {
+    if stage.is_processing() && !quantity.is_absorption() {
+        return vec![if quantity == crate::params::Quantity::ChiK {
+            (PLOT_CHIK, crate::plotting::chik_label(kw).into())
+        } else {
+            (PLOT_MU, quantity.label().into())
+        }];
+    }
+    let chik: SharedString = crate::plotting::chik_label(kw).into();
+    let chir: SharedString = if mixed_weights {
+        "|χ(R)| · mixed k weights".into()
+    } else {
+        crate::plotting::chir_label(kw).into()
+    };
+    if let Some(i) = v.thumbnail_focus {
+        return vec![match i {
+            0 => (PLOT_NORM, "normalized μ(E)".into()),
+            1 => (PLOT_CHIK, chik),
+            2 => (PLOT_CHIK, format!("{} · window", chik).into()),
+            _ => (PLOT_CHIR, chir),
+        }];
+    }
+    match stage {
+        Stage::Data | Stage::Normalize => vec![match v.e_quantity {
+            EQuantity::Mu => (PLOT_MU, "μ(E)".into()),
+            EQuantity::Norm => (PLOT_NORM, "normalized μ(E)".into()),
+            EQuantity::Flat => (PLOT_NORM, "flattened μ(E)".into()),
+        }],
+        Stage::Background => match v.bkg_view {
+            BkgView::Energy => vec![
+                (PLOT_MU, "μ(E) with AUTOBK spline".into()),
+                (
+                    PLOT_CHIR,
+                    "|χ(R)| · R < Rbkg is the background region".into(),
+                ),
+            ],
+            BkgView::K => vec![(PLOT_CHIK, chik), (PLOT_CHIR, chir)],
+        },
+        Stage::Transform => match v.tf_view {
+            TfView::K => vec![(PLOT_CHIK, chik)],
+            TfView::R => vec![(PLOT_CHIR, chir)],
+            TfView::Q => vec![(PLOT_CHIQ, "χ(q) back-transform".into())],
+            TfView::Both => vec![(PLOT_CHIK, chik), (PLOT_CHIR, chir)],
+        },
+        Stage::Fit | Stage::Series | Stage::Publish => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::shell::StageView;
+
+    #[test]
+    fn difference_default_create_reopen_plot_view_uses_quantity_axes() {
+        use crate::project::{DataStorage, ProjectFile, load, save_with_storage};
+        use crate::{
+            params::{DerivedSpectrum, Quantity},
+            plotting::{QuadTrace, ViewOptions, quantity_quadrant_specs},
+            theme::Theme,
+        };
+        let temp =
+            std::env::temp_dir().join(format!("rexafs-difference-view-{}", std::process::id()));
+        std::fs::create_dir_all(&temp).unwrap();
+        let mut project = ProjectFile::default();
+        let difference = DerivedSpectrum {
+            id: 99,
+            label: "renamed output".into(),
+            quantity: Quantity::NormalizedDifference,
+            energy: vec![100., 101., 102.],
+            mu: vec![-0.2, 0., 0.3],
+            ..Default::default()
+        };
+        project.derived = vec![difference.clone()];
+        project.active_derived = Some(99);
+        let assert_default_view = |group: &DerivedSpectrum| {
+            let spectrum = std::sync::Arc::new(group.for_display(&project.params).unwrap());
+            assert!(spectrum.norm().is_none() && spectrum.flat().is_none());
+            let specs = quantity_quadrant_specs(
+                &[QuadTrace {
+                    label: group.display_label(),
+                    sp: spectrum,
+                    active: true,
+                }],
+                &ViewOptions::default(),
+                &Theme::dark(),
+                false,
+                group.quantity,
+            );
+            for stage in [Stage::Data, Stage::Normalize] {
+                let view = StageView::default();
+                let selected = stage_plot_selection(stage, view, 2., false, group.quantity);
+                assert_eq!(selected.len(), 1);
+                assert_eq!(selected[0].1.as_ref(), "Δμnorm");
+                let plot = &specs[selected[0].0];
+                assert_eq!(plot.xlabel, "Energy (eV)");
+                assert_eq!(plot.ylabel, "Δμnorm (dimensionless)");
+                assert_eq!(plot.series[0].x, group.energy);
+                assert_eq!(plot.series[0].y, group.mu);
+            }
+        };
+        assert_default_view(&difference);
+        for storage in [DataStorage::Paths, DataStorage::Embedded] {
+            let path = temp.join(format!("difference-view-{storage:?}.rxs"));
+            save_with_storage(&path, &project, storage).unwrap();
+            let reopened = load(&path).unwrap();
+            assert_eq!(reopened.active_derived, Some(99));
+            assert_default_view(&reopened.derived[0]);
+        }
+        std::fs::remove_dir_all(temp).unwrap();
     }
 }

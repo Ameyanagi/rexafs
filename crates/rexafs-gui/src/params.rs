@@ -729,6 +729,18 @@ fn legacy_bkg_clamp_policy() -> AUTOBKClampScalePolicy {
 }
 
 impl PipelineParams {
+    /// Inherit settings for already materialized, energy-shifted arrays.
+    /// Pre/post-edge ranges are relative to E0; only the two absolute edge
+    /// overrides move. Reference alignment belongs to the input read, not replay.
+    pub fn for_materialized(&self, applied_shift_ev: f64) -> Self {
+        let mut params = self.clone();
+        params.e0 = params.e0.map(|e| e + applied_shift_ev);
+        params.bkg_ek0 = params.bkg_ek0.map(|e| e + applied_shift_ev);
+        params.align_to_ref = false;
+        params.align_target = None;
+        params
+    }
+
     pub fn legacy_defaults() -> Self {
         Self {
             bkg_clamp_policy: legacy_bkg_clamp_policy(),
@@ -870,12 +882,136 @@ pub struct DerivedSpectrum {
     pub source: Option<std::path::PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub params: Option<PipelineParams>,
+    #[serde(default)]
+    pub quantity: Quantity,
+    /// Legacy materialized arrays have no trustworthy scientific type.
+    #[serde(default)]
+    pub quantity_unconfirmed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation: Option<Operation>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Quantity {
+    #[default]
+    RawMu,
+    NormalizedMu,
+    NormalizedDifference,
+    ChiK,
+}
+
+impl Quantity {
+    /// Compatibility predicate for raw absorption operations (including Merge).
+    pub fn is_absorption(self) -> bool {
+        self == Self::RawMu
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::RawMu => "μ(E)",
+            Self::NormalizedMu => "μnorm",
+            Self::NormalizedDifference => "Δμnorm",
+            Self::ChiK => "χ(k)",
+        }
+    }
+}
+
+/// Portable subset of a bound ToolTarget. Session indices/generations are not
+/// durable identities; preserve the source path or derived id and revision.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OperationInput {
+    pub label: String,
+    pub path: std::path::PathBuf,
+    pub derived_id: Option<u64>,
+    pub fingerprint: u64,
+    pub size: Option<u64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Operation {
+    pub tool: String,
+    pub parameters: serde_json::Value,
+    /// Target first, then the explicit standard/baseline, when present.
+    pub inputs: Vec<OperationInput>,
+    /// Historical correction already baked into energy and inherited E0s.
+    /// Loading/reprocessing must never replay it.
+    pub applied_energy_shift_ev: f64,
 }
 
 impl DerivedSpectrum {
+    pub fn fingerprint(&self, params: &PipelineParams) -> u64 {
+        let mut hasher = std::hash::DefaultHasher::new();
+        params.fingerprint().hash(&mut hasher);
+        self.quantity.hash(&mut hasher);
+        self.quantity_unconfirmed.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    pub fn confirm_quantity(&mut self, quantity: Quantity) -> bool {
+        if !self.quantity_unconfirmed && self.quantity == quantity {
+            return false;
+        }
+        self.quantity = quantity;
+        self.quantity_unconfirmed = false;
+        true
+    }
+
+    pub fn display_label(&self) -> String {
+        let mut label = self.label.clone();
+        if !self.quantity.is_absorption() {
+            label.push_str(&format!(" · {}", self.quantity.label()));
+        }
+        if self.quantity_unconfirmed {
+            label.push_str(" · quantity unconfirmed");
+        }
+        label
+    }
+
+    pub fn processing_block_reason(&self) -> Option<String> {
+        if self.quantity_unconfirmed {
+            Some("Quantity unconfirmed: confirm the quantity before normalization/AUTOBK; plotting/export available.".into())
+        } else if !self.quantity.is_absorption() {
+            Some(format!(
+                "{}: normalization/AUTOBK disabled; plotting/export available.",
+                self.quantity.label()
+            ))
+        } else {
+            None
+        }
+    }
+
     pub fn process(&self, params: &PipelineParams) -> Result<XASSpectrum, String> {
+        if let Some(reason) = self.processing_block_reason() {
+            return Err(reason);
+        }
         let (energy, mu) = self.raw(params)?;
         process_arrays(energy, mu, params)
+    }
+
+    /// Display/export bypass for quantities that must not enter the pipeline.
+    /// No normalization/background objects are manufactured for differences.
+    pub fn for_display(&self, params: &PipelineParams) -> Result<XASSpectrum, String> {
+        if self.processing_block_reason().is_none() {
+            return self.process(params);
+        }
+        let (energy, mu) = self.raw(params)?;
+        let mut sp = XASSpectrum::new();
+        sp.set_name(self.display_label());
+        if self.quantity == Quantity::ChiK {
+            sp.k = Some(energy.into());
+            sp.chi = Some(mu.into());
+            // XASSpectrum's plotting getters borrow these buffers from AUTOBK.
+            // This is only an array adapter: no background fit is performed,
+            // and no normalization, spline or Fourier output is supplied.
+            sp.background = Some(BackgroundMethod::AUTOBK(AUTOBK {
+                k: sp.k.clone(),
+                chi: sp.chi.clone(),
+                ..Default::default()
+            }));
+        } else {
+            sp.set_spectrum(energy, mu);
+        }
+        Ok(sp)
     }
     pub fn raw(&self, params: &PipelineParams) -> Result<(Vec<f64>, Vec<f64>), String> {
         match &self.source {
@@ -1172,6 +1308,114 @@ pub fn resample_chik(sp: &XASSpectrum, grid: &[f64]) -> Option<Vec<f64>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn typed_outputs_refuse_processing_but_preserve_display_arrays() {
+        let params = PipelineParams {
+            edge_step: Some(-1.0),
+            ..Default::default()
+        };
+        for quantity in [
+            Quantity::NormalizedDifference,
+            Quantity::NormalizedMu,
+            Quantity::ChiK,
+        ] {
+            let group = DerivedSpectrum {
+                quantity,
+                label: "renamed result".into(),
+                energy: vec![1.0, 2.0, 3.0],
+                mu: vec![-0.1, 0.0, 0.2],
+                ..Default::default()
+            };
+            let reason = group.process(&params).unwrap_err();
+            assert!(reason.contains(quantity.label()));
+            assert!(reason.contains("normalization/AUTOBK disabled"));
+            let sp = group.for_display(&params).unwrap();
+            assert!(sp.normalization.is_none() && sp.xftf.is_none());
+            let (x, y) = if quantity == Quantity::ChiK {
+                (sp.k(), sp.chi())
+            } else {
+                assert!(sp.background.is_none());
+                (
+                    sp.energy.as_ref().map(|v| v.as_slice()),
+                    sp.mu.as_ref().map(|v| v.as_slice()),
+                )
+            };
+            assert_eq!(x.unwrap(), group.energy);
+            assert_eq!(y.unwrap(), group.mu);
+            if quantity == Quantity::ChiK {
+                let figures = crate::publication::figures::quantity_figures(
+                    std::sync::Arc::new(sp),
+                    "chi",
+                    Some(quantity),
+                );
+                assert_eq!(figures.len(), 1);
+                assert_eq!(figures[0].key, "chi-k");
+                assert_eq!(figures[0].series[0].x, group.energy);
+                assert_eq!(figures[0].series[0].y, vec![-0.1, 0.0, 1.8]);
+                assert_eq!(
+                    figures[0].csv(&Default::default()).unwrap().lines().count(),
+                    4
+                );
+            }
+            assert!(group.display_label().contains(quantity.label()));
+            assert!(!quantity.is_absorption());
+        }
+        assert!(Quantity::RawMu.is_absorption());
+    }
+
+    #[test]
+    fn typed_outputs_confirmation_changes_revision_and_allows_correction() {
+        let mut group = DerivedSpectrum {
+            quantity_unconfirmed: true,
+            ..Default::default()
+        };
+        let params = PipelineParams::default();
+        let fingerprint = group.fingerprint(&params);
+        assert!(
+            group
+                .process(&params)
+                .unwrap_err()
+                .contains("Quantity unconfirmed")
+        );
+        assert!(group.display_label().contains("quantity unconfirmed"));
+        assert!(group.confirm_quantity(Quantity::NormalizedDifference));
+        assert_ne!(fingerprint, group.fingerprint(&params));
+        assert!(!group.confirm_quantity(Quantity::NormalizedDifference));
+        assert_eq!(group.quantity, Quantity::NormalizedDifference);
+        assert!(!group.display_label().contains("unconfirmed"));
+        assert!(group.confirm_quantity(Quantity::RawMu));
+        assert!(group.processing_block_reason().is_none());
+    }
+
+    #[test]
+    fn typed_outputs_shift_only_absolute_energy_overrides() {
+        let params = PipelineParams {
+            e0: Some(9000.0),
+            bkg_ek0: Some(9001.0),
+            pre_edge_start: Some(-150.0),
+            pre_edge_end: Some(-30.0),
+            norm_start: Some(50.0),
+            norm_end: Some(500.0),
+            align_to_ref: true,
+            align_target: Some(8980.0),
+            ..Default::default()
+        };
+        for shift in [-3.0, 0.0, 4.5] {
+            let shifted = params.for_materialized(shift);
+            assert_eq!(shifted.e0, Some(9000.0 + shift));
+            assert_eq!(shifted.bkg_ek0, Some(9001.0 + shift));
+            let mut expected = params.clone();
+            expected.e0 = shifted.e0;
+            expected.bkg_ek0 = shifted.bkg_ek0;
+            expected.align_to_ref = false;
+            expected.align_target = None;
+            assert!(shifted == expected);
+        }
+        let auto = PipelineParams::default().for_materialized(3.0);
+        assert_eq!(auto.e0, None);
+        assert_eq!(auto.bkg_ek0, None);
+    }
 
     #[test]
     fn mapping_roi_parse_deduplicates_overlapping_ranges() {

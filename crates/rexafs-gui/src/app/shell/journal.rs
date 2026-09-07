@@ -7,7 +7,7 @@ use gpui::{ClickEvent, Context, IntoElement, ParentElement, Styled, div, prelude
 
 use super::MONO;
 use crate::app::{DERIVED_BASE, ParamKey, StudioApp};
-use crate::params::{DerivedSpectrum, PipelineParams};
+use crate::params::{DerivedSpectrum, PipelineParams, Quantity};
 
 /// Inverse of a recorded change.
 #[allow(clippy::large_enum_variant)]
@@ -26,6 +26,12 @@ pub enum UndoOp {
         before: PipelineParams,
         after: PipelineParams,
     },
+    DerivedQuantity {
+        index: usize,
+        id: u64,
+        before: (Quantity, bool),
+        after: (Quantity, bool),
+    },
     /// A derived group was created at `index`.
     DerivedAdd {
         index: usize,
@@ -39,6 +45,27 @@ pub enum UndoOp {
 }
 
 impl UndoOp {
+    fn remap_quantity_index(&mut self, derived: &[DerivedSpectrum]) {
+        if let Self::DerivedQuantity { index, id, .. } = self
+            && let Some(current) = derived.iter().position(|g| g.id == *id)
+        {
+            *index = current;
+        }
+    }
+
+    fn apply_quantity(&self, derived: &mut [DerivedSpectrum], forward: bool) {
+        if let Self::DerivedQuantity {
+            index,
+            id,
+            before,
+            after,
+        } = self
+            && let Some(group) = derived.get_mut(*index).filter(|g| g.id == *id)
+        {
+            (group.quantity, group.quantity_unconfirmed) = if forward { *after } else { *before };
+        }
+    }
+
     fn param_snapshot(&self, forward: bool) -> Option<(Option<usize>, PipelineParams)> {
         match self {
             Self::Param {
@@ -67,6 +94,28 @@ pub struct JournalState {
 const JOURNAL_CAPACITY: usize = 500;
 
 impl JournalState {
+    pub(crate) fn confirm_quantity(
+        &mut self,
+        index: usize,
+        group: &mut DerivedSpectrum,
+        quantity: Quantity,
+    ) -> bool {
+        let before = (group.quantity, group.quantity_unconfirmed);
+        if !group.confirm_quantity(quantity) {
+            return false;
+        }
+        self.record(
+            format!("Confirm quantity: {}", group.display_label()),
+            Some(UndoOp::DerivedQuantity {
+                index,
+                id: group.id,
+                before,
+                after: (group.quantity, group.quantity_unconfirmed),
+            }),
+        );
+        true
+    }
+
     /// Append a journal line, optionally with its inverse.
     pub(crate) fn record(&mut self, text: impl Into<String>, op: Option<UndoOp>) {
         let text = text.into();
@@ -160,6 +209,9 @@ impl StudioApp {
                 Some(ix - 1)
             }
         };
+        for op in self.journal.undo.iter_mut().chain(&mut self.journal.redo) {
+            op.remap_quantity_index(&self.derived);
+        }
         self.selection = self.selection.iter().copied().filter_map(map).collect();
         self.frozen = self.frozen.iter().copied().filter_map(map).collect();
         self.selected = self.selected.and_then(map);
@@ -175,8 +227,8 @@ impl StudioApp {
     }
     fn insert_derived(&mut self, index: usize, spectrum: DerivedSpectrum, cx: &mut Context<Self>) {
         let index = index.min(self.derived.len());
-        self.remap_derived_indices(index, true);
         self.derived.insert(index, spectrum);
+        self.remap_derived_indices(index, true);
         self.select_entry(DERIVED_BASE + index, cx);
         self.sync_param_fields(cx);
     }
@@ -190,8 +242,8 @@ impl StudioApp {
             return None;
         }
         let was_active = self.selected == Some(DERIVED_BASE + index);
-        self.remap_derived_indices(index, false);
         let spectrum = self.derived.remove(index);
+        self.remap_derived_indices(index, false);
         if was_active {
             self.current_path.clear();
             self.spectrum_path.clear();
@@ -227,6 +279,11 @@ impl StudioApp {
             self.after_param_undo(cx);
         }
         let inverse = match op {
+            op @ UndoOp::DerivedQuantity { .. } => {
+                op.apply_quantity(&mut self.derived, false);
+                self.after_param_undo(cx);
+                op
+            }
             UndoOp::FitModel { before, after } => {
                 self.restore_model_settings(&before, cx);
                 UndoOp::FitModel { before, after }
@@ -267,6 +324,11 @@ impl StudioApp {
             self.after_param_undo(cx);
         }
         let forward = match op {
+            op @ UndoOp::DerivedQuantity { .. } => {
+                op.apply_quantity(&mut self.derived, true);
+                self.after_param_undo(cx);
+                op
+            }
             UndoOp::FitModel { before, after } => {
                 self.restore_model_settings(&after, cx);
                 UndoOp::FitModel { before, after }
@@ -377,6 +439,68 @@ impl StudioApp {
 mod tests {
     use super::*;
     use crate::params::DetectionMode;
+
+    #[test]
+    fn quantity_confirmation_undo_redo_and_reconfirmation_follow_identity() {
+        let params = PipelineParams::default();
+        let mut groups = vec![DerivedSpectrum {
+            id: 7,
+            quantity_unconfirmed: true,
+            ..Default::default()
+        }];
+        let original = groups[0].fingerprint(&params);
+        let mut journal = JournalState::default();
+        journal.record("earlier edit", Some(UndoOp::Params { changes: vec![] }));
+        assert!(journal.confirm_quantity(0, &mut groups[0], Quantity::ChiK));
+        let confirmed = groups[0].fingerprint(&params);
+        assert_ne!(original, confirmed);
+        assert_eq!(journal.undo.len(), 2);
+        let op = journal.undo.pop().unwrap();
+        op.apply_quantity(&mut groups, false);
+        journal.redo.push(op);
+        assert_eq!(groups[0].fingerprint(&params), original);
+        assert!(groups[0].quantity_unconfirmed);
+        assert!(matches!(journal.undo.last(), Some(UndoOp::Params { .. })));
+
+        // Re-key while the confirmation sits in redo, then restore by identity.
+        groups.insert(
+            0,
+            DerivedSpectrum {
+                id: 8,
+                ..Default::default()
+            },
+        );
+        for op in &mut journal.redo {
+            op.remap_quantity_index(&groups);
+        }
+        let op = journal.redo.pop().unwrap();
+        op.apply_quantity(&mut groups, true);
+        journal.undo.push(op);
+        assert_eq!(groups[1].fingerprint(&params), confirmed);
+        assert_eq!(groups[0].quantity, Quantity::RawMu);
+
+        // Removing and reinserting this group must not retarget its history.
+        let saved = groups.remove(1);
+        for op in &mut journal.undo {
+            op.remap_quantity_index(&groups);
+        }
+        groups.insert(0, saved);
+        for op in &mut journal.undo {
+            op.remap_quantity_index(&groups);
+        }
+        assert!(journal.confirm_quantity(0, &mut groups[0], Quantity::RawMu));
+        assert!(groups[0].processing_block_reason().is_none());
+        assert!(!journal.confirm_quantity(0, &mut groups[0], Quantity::RawMu));
+        let correction = journal.undo.pop().unwrap();
+        correction.apply_quantity(&mut groups, false);
+        assert_eq!(groups[0].fingerprint(&params), confirmed);
+        correction.apply_quantity(&mut groups, true);
+        assert_eq!(groups[0].quantity, Quantity::RawMu);
+        assert!(!groups[0].quantity_unconfirmed);
+        let confirmation = journal.undo.pop().unwrap();
+        confirmation.apply_quantity(&mut groups, false);
+        assert_eq!(groups[0].fingerprint(&params), original);
+    }
 
     #[test]
     fn mapping_column_steps_coalesce_and_alignment_round_trips() {

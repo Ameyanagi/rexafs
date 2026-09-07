@@ -168,8 +168,29 @@ fn version(value: &serde_json::Value) -> Result<u32, String> {
     Ok(v)
 }
 fn parse(json: &str) -> Result<ProjectFile, String> {
-    let value: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
+    let mut value: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
     version(&value)?;
+    if let Some(groups) = value.get_mut("derived").and_then(|v| v.as_array_mut()) {
+        for group in groups {
+            if !group.is_object() {
+                continue; // Let serde report malformed groups without indexing them.
+            }
+            if group.get("quantity").is_none() {
+                let materialized = group.get("source").is_none_or(|s| s.is_null());
+                let label = group["label"].as_str().unwrap_or_default();
+                // Historical tool labels are hints only: even a recognizable
+                // marker remains unconfirmed until explicitly reviewed.
+                let difference =
+                    materialized && (label.starts_with("diff:") || label.contains("Δμnorm"));
+                group["quantity"] = serde_json::json!(if difference {
+                    crate::params::Quantity::NormalizedDifference
+                } else {
+                    crate::params::Quantity::RawMu
+                });
+                group["quantity_unconfirmed"] = materialized.into();
+            }
+        }
+    }
     let mut project: ProjectFile = serde_json::from_value(value).map_err(|e| e.to_string())?;
     let mut ids = std::collections::BTreeSet::new();
     for group in &project.derived {

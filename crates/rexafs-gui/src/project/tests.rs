@@ -603,3 +603,179 @@ fn invalid_channel_ids_are_rejected_and_legacy_groups_get_stable_ids() {
         assert!(parse(&bad.to_string()).is_err());
     }
 }
+
+#[test]
+fn typed_outputs_difference_and_calibration_roundtrip_linked_and_embedded() {
+    use crate::params::{Operation, OperationInput, Quantity, process_file};
+    use crate::publication::{SpectrumInput, figures};
+    let temp = Temp::new();
+    let mut project = specimen(&temp.join("original"));
+    let source = project.spectrum_file.clone().unwrap();
+    let params = PipelineParams {
+        e0: Some(8979.0),
+        bkg_ek0: Some(8979.0),
+        ..Default::default()
+    };
+    let sp = process_file(&source, &params).unwrap();
+    let difference =
+        rexafs::xafs::tools::difference(&sp, &sp, rexafs::xafs::tools::DiffSpace::Norm).unwrap();
+    let baseline = DerivedSpectrum {
+        id: 1,
+        label: "baseline".into(),
+        energy: sp.energy.as_ref().unwrap().as_slice().to_vec(),
+        mu: sp.mu.as_ref().unwrap().as_slice().to_vec(),
+        params: Some(params.clone()),
+        ..Default::default()
+    };
+    let input = OperationInput {
+        label: "Cu".into(),
+        path: source,
+        derived_id: None,
+        fingerprint: params.fingerprint(),
+        size: Some(20737),
+    };
+    let diff = DerivedSpectrum {
+        id: 2,
+        label: "arbitrary renamed result".into(),
+        energy: difference.energy.unwrap().as_slice().to_vec(),
+        mu: difference.mu.unwrap().as_slice().to_vec(),
+        quantity: Quantity::NormalizedDifference,
+        params: Some(params.clone()),
+        operation: Some(Operation {
+            tool: "Difference spectrum".into(),
+            parameters: json!({"space": "NormalizedMu"}),
+            inputs: vec![
+                input.clone(),
+                OperationInput {
+                    label: "baseline".into(),
+                    path: PathBuf::new(),
+                    derived_id: Some(1),
+                    fingerprint: baseline.fingerprint(&params),
+                    size: None,
+                },
+            ],
+            applied_energy_shift_ev: 0.0,
+        }),
+        ..Default::default()
+    };
+    let mut shifted = sp.clone();
+    shifted.shift_energy(3.25);
+    let calibrated = DerivedSpectrum {
+        id: 3,
+        label: "calibrated Cu".into(),
+        energy: shifted.energy.unwrap().as_slice().to_vec(),
+        mu: shifted.mu.unwrap().as_slice().to_vec(),
+        params: Some(params.for_materialized(3.25)),
+        operation: Some(Operation {
+            tool: "Calibrate energy".into(),
+            parameters: json!({"expected_energy_ev": 8982.25}),
+            inputs: vec![input],
+            applied_energy_shift_ev: 3.25,
+        }),
+        ..Default::default()
+    };
+    project.derived = vec![baseline, diff.clone(), calibrated.clone()];
+    project.active_derived = Some(2);
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let saved = temp.join(&format!("typed-{mode:?}.rxs"));
+        save_with_storage(&saved, &project, mode).unwrap();
+        let loaded = load(&saved).unwrap();
+        assert_eq!(state(&project), state(&loaded));
+        let result = &loaded.derived[1];
+        assert_eq!(result.quantity, Quantity::NormalizedDifference);
+        assert!(!result.quantity_unconfirmed);
+        assert!(result.display_label().contains("Δμnorm"));
+        assert!(
+            result
+                .process(&params)
+                .unwrap_err()
+                .contains("normalization/AUTOBK disabled")
+        );
+        let display = result.for_display(&params).unwrap();
+        assert_eq!(display.mu.as_ref().unwrap().as_slice(), diff.mu);
+        assert!(display.normalization.is_none() && display.background.is_none());
+        let input = SpectrumInput {
+            group: Some(result.clone()),
+            params: params.clone(),
+            data: Some(std::sync::Arc::new(display)),
+            ..Default::default()
+        };
+        assert!(
+            input.process().is_err(),
+            "cached display data cannot enter fitting"
+        );
+        let plots = figures::quantity_figures(
+            input.for_display().unwrap(),
+            &result.display_label(),
+            Some(result.quantity),
+        );
+        assert_eq!(plots.len(), 1);
+        assert_eq!(plots[0].series[0].x, diff.energy);
+        assert_eq!(plots[0].series[0].y, diff.mu);
+        let csv = plots[0].csv(&Default::default()).unwrap();
+        assert!(
+            csv.lines()
+                .next()
+                .unwrap()
+                .contains("Δμnorm (dimensionless)")
+        );
+        assert_eq!(csv.lines().count(), diff.energy.len() + 1);
+        let result = &loaded.derived[2];
+        let settings = result.params.as_ref().unwrap();
+        assert_eq!(settings.e0, Some(8982.25));
+        assert_eq!(settings.bkg_ek0, Some(8982.25));
+        assert_eq!(
+            result.operation.as_ref().unwrap().applied_energy_shift_ev,
+            3.25
+        );
+        for _ in 0..2 {
+            let processed = result.process(settings).unwrap();
+            assert_eq!(processed.energy.unwrap().as_slice(), calibrated.energy);
+            assert_eq!(processed.e0, settings.e0);
+        }
+        // A second save/reopen must preserve provenance and never add ΔE again.
+        save(&saved, &loaded).unwrap();
+        assert_eq!(state(&loaded), state(&load(&saved).unwrap()));
+    }
+}
+
+#[test]
+fn typed_outputs_legacy_quantity_hints_require_explicit_confirmation() {
+    use crate::params::Quantity;
+    for invalid in [json!(5), json!("invalid"), json!(null)] {
+        assert!(parse(&json!({"version": 1, "derived": [invalid]}).to_string()).is_err());
+    }
+    for (label, expected) in [
+        ("unknown", Quantity::RawMu),
+        ("diff: A − B", Quantity::NormalizedDifference),
+        ("A − B · Δμnorm", Quantity::NormalizedDifference),
+    ] {
+        let value = json!({"version": 1, "derived": [{"label": label, "energy": [1., 2.], "mu": [0., 0.]}]});
+        let mut project = parse(&value.to_string()).unwrap();
+        let group = &mut project.derived[0];
+        assert_eq!(group.quantity, expected);
+        assert!(group.quantity_unconfirmed);
+        assert!(
+            group
+                .process(&PipelineParams::default())
+                .unwrap_err()
+                .contains("Quantity unconfirmed")
+        );
+        group.label = "renamed again".into();
+        let encoded = compact::encode(serde_json::to_value(&project).unwrap()).unwrap();
+        let mut reopened = parse(std::str::from_utf8(&encoded).unwrap()).unwrap();
+        assert_eq!(reopened.derived[0].quantity, expected);
+        assert!(reopened.derived[0].quantity_unconfirmed);
+        reopened.derived[0].confirm_quantity(Quantity::NormalizedDifference);
+        let encoded = compact::encode(serde_json::to_value(&reopened).unwrap()).unwrap();
+        let confirmed = parse(std::str::from_utf8(&encoded).unwrap()).unwrap();
+        assert!(!confirmed.derived[0].quantity_unconfirmed);
+        assert_eq!(
+            confirmed.derived[0].quantity,
+            Quantity::NormalizedDifference
+        );
+    }
+    let channel = parse(r#"{"version":1,"derived":[{"label":"diff: editable name","source":"scan.dat","energy":[],"mu":[]}]}"#).unwrap();
+    assert_eq!(channel.derived[0].quantity, Quantity::RawMu);
+    assert!(!channel.derived[0].quantity_unconfirmed);
+}

@@ -315,6 +315,24 @@ pub(crate) fn render_figure(
     })
 }
 
+pub(crate) fn quantity_figures(
+    sp: Arc<XASSpectrum>,
+    label: &str,
+    quantity: Option<crate::params::Quantity>,
+) -> Vec<FigureData> {
+    let mut figures = spectrum_figures(sp, label);
+    if let Some(quantity) = quantity.filter(|q| !q.is_absorption()) {
+        figures.retain(|figure| !figure.series.is_empty());
+        for figure in &mut figures {
+            if figure.key == "mu-energy" {
+                figure.label = quantity.label().into();
+                figure.ylabel = format!("{} (dimensionless)", quantity.label());
+            }
+        }
+    }
+    figures
+}
+
 pub(crate) fn spectrum_figures(sp: Arc<XASSpectrum>, label: &str) -> Vec<FigureData> {
     // Use the library output directly: a missing flat array must never become
     // a normalized curve carrying a flattened label.

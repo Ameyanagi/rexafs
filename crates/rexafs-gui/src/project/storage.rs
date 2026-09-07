@@ -198,6 +198,13 @@ pub(super) fn map_paths(
     }
     for group in &mut project.derived {
         option(&mut group.source, f)?;
+        if let Some(operation) = &mut group.operation {
+            for input in &mut operation.inputs {
+                if !input.path.as_os_str().is_empty() {
+                    input.path = f(&input.path)?;
+                }
+            }
+        }
     }
     for p in &mut project.raw_files {
         *p = f(p)?;
@@ -537,10 +544,13 @@ pub(super) fn restore(
         .map(|f| absolute(&folder.join(&f.path)))
         .collect::<Result<_, _>>()?;
     if header.storage == DataStorage::Embedded {
-        let root = crate::settings::app_dir()
-            .ok_or("Project cache directory unavailable")?
-            .join("project-data")
-            .join(digest(json));
+        // Fixture tests must not create or chmod the user's settings directory.
+        let cache = if cfg!(test) {
+            std::env::temp_dir().join(format!("rexafs-project-test-cache-{}", std::process::id()))
+        } else {
+            crate::settings::app_dir().ok_or("Project cache directory unavailable")?
+        };
+        let root = cache.join("project-data").join(digest(json));
         restore_embedded(&mut project, &header, &folder, &root)?;
     } else if !project.embedded.is_empty() {
         return Err("A paths-only project contains unexpected embedded payloads.".into());
