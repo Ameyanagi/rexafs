@@ -1,0 +1,22 @@
+{
+  "FEFF10-LICENSE": {
+    "url": "https://github.com/times-software/feff10/blob/0a4fbd797cf72938f64dda034a438ce009ec6eb7/LICENSE",
+    "sha256": "5d3cb6f6ce1314502b5caf55743b66cb89ff259b92b466606195a8fc1642eac2"
+  },
+  "COPYING3": {
+    "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING3",
+    "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+  },
+  "COPYING.RUNTIME": {
+    "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING.RUNTIME",
+    "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74"
+  },
+  "COPYING.LIB": {
+    "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING.LIB",
+    "sha256": "a9bdde5616ecdd1e980b44f360600ee8783b1f99b8cc83a2beb163a0a390e861"
+  },
+  "COPYING3.LIB": {
+    "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING3.LIB",
+    "sha256": "a853c2ffec17057872340eee242ae4d96cbf2b520ae27d903e1b2fef1a5f9d1c"
+  }
+}

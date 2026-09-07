@@ -54,3 +54,33 @@ Run core tests, the simple API tests, clippy, documentation builds, optional
 feature checks, Python wheel installation, Wasm runtime tests and desktop builds.
 Version resolution alone is not evidence of a working release. Record final
 results and remaining platform qualification in [the release runbook](releasing.md).
+
+## Embedded FEFF engines — 7 September 2026
+
+The next desktop release uses [ReFEFF 0.3.0](https://github.com/Ameyanagi/refeff/releases/tag/v0.3.0)
+(component crates 0.2.0) and [feff10 0.2.3](https://github.com/Ameyanagi/feff10-rs/releases/tag/v0.2.3),
+verified against crates.io and upstream releases. Both use workspace dependency
+requirements, and Cargo.lock records the exact registry artifacts. FEFF10 is the
+existing Fortran-backed Rust wrapper shown as “FEFF-RS / FEFF10” in the GUI.
+
+Published Mac Stable and Nightly apps include both engines. Select **Fit → Calculate → engine**
+to run either on the same structure/input; ReFEFF is the default. Every calculation
+gets a separate workspace and adds a source, whose label includes its engine.
+The saved project retains each source's input and engine marker. Calculating a
+second source preserves existing path edits; enable only the intended source's
+paths when comparing fits, since enabling both adds both sets to the model.
+
+The extracted package and copied installer app run `--self-check-feff`, checking
+both engines against the analytical first-shell geometry of fcc Cu and finite,
+nonzero amplitudes. FEFF10 is forced into worker mode in this check, exercising
+re-execution before app initialization. The desktop regression suite additionally
+compares Cu/Ni foil fits from identical inputs with both engines.
+
+The unpublished Windows preview retains ReFEFF only: its GUI uses MSVC, while the
+upstream FEFF10 archive targets MinGW. Windows/Linux desktop downloads remain
+unpublished pending their existing platform qualification. Rust consumers can opt
+into either backend; Python and Wasm packages keep their existing analysis APIs.
+
+For a single-engine comparison, select that source in **Paths**, choose the desired
+preset (for example **First shell**), then click **Deselect other sources**. This
+retains the other calculations and their parameter edits for later comparison.

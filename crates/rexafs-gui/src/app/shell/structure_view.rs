@@ -129,6 +129,7 @@ pub(crate) struct StructureState {
     pub preview_context: Option<CrystalContext>,
     pub preview_radius: f64,
     pub source_clusters: BTreeMap<PathBuf, Cluster>,
+    pub source_engines: BTreeMap<PathBuf, String>,
     pub source_contexts: BTreeMap<PathBuf, CrystalContext>,
     pub source_filter: Option<PathBuf>,
     pub path_leg: Option<usize>,
@@ -275,6 +276,7 @@ impl StructureState {
             preview_context: None,
             preview_radius: 8.,
             source_clusters: BTreeMap::new(),
+            source_engines: BTreeMap::new(),
             source_contexts: BTreeMap::new(),
             source_filter: None,
             path_leg: None,
@@ -368,6 +370,16 @@ impl StudioApp {
             }
         }
         for source in sources {
+            if !self.structure.source_engines.contains_key(&source) {
+                if let Ok(engine) = std::fs::read_to_string(source.join("engine.txt")) {
+                    let label = engine.lines().next().unwrap_or_default().trim();
+                    if !label.is_empty() {
+                        self.structure
+                            .source_engines
+                            .insert(source.clone(), label.chars().take(64).collect());
+                    }
+                }
+            }
             if !self.structure.source_clusters.contains_key(&source) {
                 if let Some(cluster) = load_cluster(&source) {
                     self.structure
@@ -1175,7 +1187,8 @@ impl StudioApp {
         sources
     }
     pub(crate) fn source_label(&self, source: &std::path::Path) -> String {
-        self.structure
+        let title = self
+            .structure
             .source_clusters
             .get(source)
             .map(|c| c.title.lines().next().unwrap_or("Structure").to_string())
@@ -1186,7 +1199,11 @@ impl StudioApp {
                     .unwrap_or_default()
                     .to_string_lossy()
                     .to_string()
-            })
+            });
+        match self.structure.source_engines.get(source) {
+            Some(engine) => format!("{engine} · {title}"),
+            None => title,
+        }
     }
 
     pub(crate) fn structure_generate_paths(&mut self, cx: &mut Context<Self>) {

@@ -219,6 +219,98 @@ pub fn backend_name(mode: FeffExecutionMode) -> &'static str {
     }
 }
 
+pub fn compiled_features() -> &'static [&'static str] {
+    &[
+        #[cfg(feature = "refeff-runner")]
+        "refeff-runner",
+        #[cfg(feature = "feff10-runner")]
+        "feff10-runner",
+    ]
+}
+
+/// Exercise the embedded engines from a fresh package, without a checkout or GUI.
+/// FEFF10 is explicitly run as workers, as it is in an initialized macOS GUI.
+pub fn check_package_backends() -> Result<(), String> {
+    let modes = [
+        #[cfg(feature = "refeff-runner")]
+        FeffExecutionMode::RefeffPipeline,
+        #[cfg(feature = "feff10-runner")]
+        FeffExecutionMode::Feff10Pipeline,
+    ];
+    if modes.is_empty() {
+        return Err("No embedded FEFF engine was compiled".into());
+    }
+    let input = generate_inp(&CrystalSpec {
+        element: "Cu".into(),
+        element2: None,
+        structure: "fcc".into(),
+        a: 3.615,
+        c: None,
+        edge: "K".into(),
+        rmax: 3.0,
+    })?;
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "rexafs-package-feff-{}-{stamp}",
+        std::process::id()
+    ));
+    std::fs::create_dir(&root).map_err(|e| e.to_string())?;
+    let result = (|| {
+        for (i, mode) in modes.into_iter().enumerate() {
+            let workspace = root.join(i.to_string());
+            std::fs::create_dir(&workspace).map_err(|e| e.to_string())?;
+            std::fs::write(workspace.join("feff.inp"), &input).map_err(|e| e.to_string())?;
+            #[cfg(feature = "feff10-runner")]
+            if mode == FeffExecutionMode::Feff10Pipeline {
+                let config = feff10::FeffConfigBuilder::new()
+                    .work_dir(&workspace)
+                    .input(feff10::FeffInput::parse(&input).map_err(|e| e.to_string())?)
+                    .stage_isolation(feff10::config::StageIsolation::Worker)
+                    .stage_timeout(std::time::Duration::from_secs(120))
+                    .build()
+                    .map_err(|e| e.to_string())?;
+                feff10::FeffPipeline::new(config)
+                    .run()
+                    .map_err(|e| e.to_string())?;
+            } else {
+                run_backend(&workspace, mode)?;
+            }
+            #[cfg(not(feature = "feff10-runner"))]
+            run_backend(&workspace, mode)?;
+            let file = workspace.join("feff0001.dat");
+            let path = feffpath(&file.to_string_lossy(), FeffFlavor::Feff85L)
+                .map_err(|e| e.to_string())?
+                .feff;
+            if path.nleg != 2
+                || (path.reff - 3.615 / 2.0_f64.sqrt()).abs() > 1e-4
+                || (path.degen - 12.0).abs() > 1e-6
+                || path.k.is_empty()
+                || path
+                    .amp
+                    .iter()
+                    .chain(path.pha.iter())
+                    .any(|v| !v.is_finite())
+                || !path.amp.iter().any(|v| v.abs() > 1e-8)
+            {
+                return Err(format!(
+                    "{} produced invalid Cu first-shell output",
+                    backend_name(mode)
+                ));
+            }
+            println!(
+                "{}: Cu first-shell package check passed",
+                backend_name(mode)
+            );
+        }
+        Ok(())
+    })();
+    let cleanup = std::fs::remove_dir_all(root).map_err(|e| e.to_string());
+    result.and(cleanup)
+}
+
 pub(crate) fn selected_feff_mode() -> Result<FeffExecutionMode, String> {
     #[cfg(all(feature = "refeff-runner", feature = "feff10-runner"))]
     {

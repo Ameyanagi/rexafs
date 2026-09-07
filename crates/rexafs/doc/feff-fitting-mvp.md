@@ -68,6 +68,8 @@ This explicit dispatch behavior is intentional to keep caller contracts stable w
 - `FeffExecutionMode::RefeffPipeline`: pure-Rust in-memory backend compiled with ReFEFF's minimal `exafs` engine feature, supported when crate feature `refeff-runner` is enabled.
 - FEFF10 execution auto-raises `PRINT` `ipr6` to at least `3` so `feffNNNN.dat` files are generated for existing fitting path loading.
 - ReFEFF writes only `feffNNNN.dat` by default; `FeffRunRequest::keep_all_outputs = true` writes every generated FEFF artifact.
+- ReFEFF 0.3.0 honors `timeout_sec` as a cooperative deadline for the entire calculation. FEFF10 0.2.3 retains its per-stage worker timeout. ReFEFF may stop only at its next cancellation checkpoint; this is not a hard process-kill deadline.
+- Applications using `feff10-runner` must call `feff10::worker::init()` before argument handling or GUI initialization when using Worker mode, or Auto mode on Windows / initialized macOS GUI hosts. The rexafs desktop and backend-probe example install this hook.
 
 ## FEFF10 Follow-up Path
 

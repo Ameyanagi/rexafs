@@ -2660,9 +2660,9 @@ dependencies = [
 
 [[package]]
 name = "feff10"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58d8149e3cb1652db0b43f44742ef2ea8c18ddf1218405eca0be9fa4047309e0"
+checksum = "8e595b5738bf1ed264a2bf7f2d760f29ed65f4c48ef7ecb9a2342e27d4a271e8"
 dependencies = [
  "feff10-sys",
  "libc",
@@ -2672,9 +2672,9 @@ dependencies = [
 
 [[package]]
 name = "feff10-sys"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37b21209b064bc693321e55d23b31378eb5c397dc2a5beb87529ec09d7a06983"
+checksum = "7422dd28b6fbbd2d00fc5983537d7aa4cc5fb153a8b694dee4f3dffed456298e"
 dependencies = [
  "sha2 0.10.9",
  "which 7.0.3",
@@ -6637,7 +6637,7 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
 name = "py-rexafs"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "ndarray",
  "numpy",
@@ -7086,9 +7086,9 @@ dependencies = [
 
 [[package]]
 name = "refeff"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f9c6670bb898472517b10871c50e78bf3b14628f8eee64d1a1559a1fbe5da33"
+checksum = "5f73b1a672dc79c05a4ad08c260e9db7f525e64617024aaeb43cc6fb94191ceb"
 dependencies = [
  "refeff-core",
  "refeff-engine",
@@ -7099,22 +7099,23 @@ dependencies = [
 
 [[package]]
 name = "refeff-core"
-version = "0.1.3"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "023b584227d483a0e8a86a156f51d9833f6d7bc4d19af60c3d92a351ddd627de"
+checksum = "436aa3a1cfafef276eb88c97e906a5346c7bf4b1886f4c8f6ec6d46f65769b11"
 dependencies = [
  "ndarray",
  "num-complex",
  "rayon",
  "refeff-linalg",
+ "smallvec",
  "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "refeff-engine"
-version = "0.1.3"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10b4982ac017ad2d75a927633e2c4c7384cc2fa677d34ae12da68c1b07d1409e"
+checksum = "2a2b452b8cb887bd542ec2e32a9149fa4f007abce3c1078b417226bc597ff08b"
 dependencies = [
  "anyhow",
  "ndarray",
@@ -7125,14 +7126,15 @@ dependencies = [
  "refeff-linalg",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "refeff-io"
-version = "0.1.3"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ab8c5e4dc84d2296a90a24247e206c6ba96fb858b0f6277afc4be29e7517112"
+checksum = "7004b0c8f6c92b4008c490b659cc19c73272b71026a0efcae47c0d64e45602f7"
 dependencies = [
  "ndarray",
  "num-complex",
@@ -7143,9 +7145,9 @@ dependencies = [
 
 [[package]]
 name = "refeff-linalg"
-version = "0.1.3"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d9d42c769dca8cd44eeba33790c5fea9c1c7fe3d814e718f61c9a4a0e644fa2"
+checksum = "d1c457f404a29550d23d187ee2c9413763c2c2c7301025246695219007fb9699"
 dependencies = [
  "faer",
  "ndarray",
@@ -7232,7 +7234,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "apex-solver",
  "approx",
@@ -7272,7 +7274,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs-gui"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -7300,7 +7302,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs-wasm"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "js-sys",
  "rexafs",

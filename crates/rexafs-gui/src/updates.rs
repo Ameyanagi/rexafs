@@ -31,7 +31,7 @@ impl UpdateChannel {
 pub fn build_info() -> serde_json::Value {
     serde_json::json!({"version":env!("CARGO_PKG_VERSION"), "channel":installed_channel(),
         "release_tag":installed_tag(), "commit":option_env!("GITHUB_SHA").unwrap_or("development"),
-        "built_at":option_env!("REXAFS_BUILD_UTC")})
+        "built_at":option_env!("REXAFS_BUILD_UTC"), "features":crate::feffgen::compiled_features()})
 }
 pub fn installed_channel() -> UpdateChannel {
     if option_env!("REXAFS_BUILD_CHANNEL") == Some("nightly") {

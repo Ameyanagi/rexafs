@@ -175,7 +175,10 @@ def sign_archive(archive, output, metadata, keychain, directory, dmg=False):
     run(["ditto", "-x", "-k", final, fresh])
     extracted = fresh / archive.stem / application_name
     verify_app(extracted, team)
-    for option in ["--version", "--self-check"]:
+    options = ["--version", "--self-check"]
+    if "feff10-runner" in metadata.get("features", []):
+        options.append("--self-check-feff")
+    for option in options:
         subprocess.run([str(extracted / "Contents/MacOS/rexafs"), option], cwd=fresh, check=True)
     Path(str(final) + ".sha256").write_text(f"{digest(final)}  {final.name}\n")
     if dmg:

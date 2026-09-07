@@ -440,18 +440,45 @@ impl StudioApp {
                     })),
             );
         }
-        col.child(sources)
-            .child(
-                button(&t, "another-path-source", "+ Add another structure", false).on_click(
-                    cx.listener(|this, _, _, cx| {
-                        this.set_fit_step(super::fit_workspace::FitStep::Structure, cx);
-                    }),
-                ),
-            )
-            .child(presets)
-            .child(header)
-            .child(list)
-            .flex_1()
+        col = col.child(sources);
+        if self.path_sources().len() > 1 {
+            col = col.child(
+                div()
+                    .px_2()
+                    .text_size(px(10.5))
+                    .text_color(t.text_muted)
+                    .child("Selected paths from all sources contribute to the fit."),
+            );
+            if let Some(source) = self.structure.source_filter.clone() {
+                col = col.child(
+                    button(
+                        &t,
+                        "pp-exclude-other-sources",
+                        "Deselect other sources",
+                        false,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        for path in &mut this.fit_paths {
+                            if path.spec.file.parent() != Some(source.as_path()) {
+                                path.spec.enabled = false;
+                            }
+                        }
+                        this.paths_selection_changed(cx);
+                    })),
+                );
+            }
+        }
+        col.child(
+            button(&t, "another-path-source", "+ Add another structure", false).on_click(
+                cx.listener(|this, _, _, cx| {
+                    this.set_fit_step(super::fit_workspace::FitStep::Structure, cx);
+                }),
+            ),
+        )
+        .child(presets)
+        .child(header)
+        .child(list)
+        .flex_1()
     }
 
     fn picker_checkbox<F: Fn(&mut Self, &mut Context<Self>) + 'static>(

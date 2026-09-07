@@ -35,6 +35,12 @@ binary.parent.mkdir(parents=True, exist_ok=True)
 shutil.copy2(Path(metadata["target_directory"]) / "release" / binary_name, binary)
 resources = bundle / (f"{application_name}/Contents/Resources" if system == "Darwin" else "resources")
 compiled_identity = json.loads(subprocess.check_output([str(binary), "--build-info"], text=True))
+features = compiled_identity.get("features")
+if (not features or len(features) != len(set(features))
+        or not set(features) <= {"refeff-runner", "feff10-runner"}):
+    raise SystemExit("Compiled desktop must report its embedded calculation engines")
+if system == "Darwin" and set(features) != {"refeff-runner", "feff10-runner"}:
+    raise SystemExit("Mac releases must include both ReFEFF and FEFF10")
 for key, value in {"version": version, **build_identity}.items():
     if compiled_identity.get(key) != value:
         raise SystemExit(f"Compiled desktop has the wrong {key}")
@@ -67,7 +73,7 @@ for name in ["LICENSE-MIT", "LICENSE-APACHE"]:
 # Include exact resolved third-party license declarations for release review.
 dependencies = json.loads(subprocess.check_output([
     "cargo", "metadata", "--locked", "--format-version", "1", "--filter-platform", target,
-    "--manifest-path", "crates/rexafs-gui/Cargo.toml", "--no-default-features", "--features", "refeff-runner",
+    "--manifest-path", "crates/rexafs-gui/Cargo.toml", "--no-default-features", "--features", ",".join(features),
 ], cwd=root))
 packages = {p["id"]: p for p in dependencies["packages"]}
 nodes = {n["id"]: n for n in dependencies["resolve"]["nodes"]}
@@ -97,9 +103,12 @@ for package_id in sorted(included):
             dest.parent.mkdir(exist_ok=True)
             shutil.copy2(source, dest)
 (bundle / "dependencies.json").write_text(json.dumps(inventory, indent=2) + "\n")
+if "feff10-runner" in features:
+    shutil.copytree(root / "assets/licenses/feff10-native", notices / "feff10-native")
 (bundle / "README.txt").write_text(
     f"rexafs {version} · {build_identity['channel']} · {build_identity['release_tag']}\nRust-powered X-ray absorption analysis\nhttps://rexafs.com\n\n"
-    "Built with ReFEFF. Keep the extracted directory together; it contains the example and notices.\n"
+    f"Calculation engines: {', '.join(features)}. Select the engine in Fit > Calculate.\n"
+    "Keep the extracted directory together; it contains the example and notices.\n"
     f"Open {application_name} on macOS or run rexafs / rexafs.exe on Linux / Windows.\n"
     "This archive has no publisher code signature; macOS notarization is not included.\n"
     "Linux requires a graphical session, Vulkan-capable driver, GTK 3, fontconfig and xkbcommon.\n"
@@ -117,7 +126,7 @@ if system in {"Darwin", "Linux"}:
             raise SystemExit(f"Non-system dynamic library:\n{linked}")
     (bundle / "linked-libraries.txt").write_text(linked)
 (bundle / "build.json").write_text(json.dumps({
-    "version": version, "target": target, "features": ["refeff-runner"], **build_identity,
+    "version": version, "target": target, "features": features, **build_identity,
     "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
     "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root)),
@@ -141,6 +150,7 @@ with tempfile.TemporaryDirectory(prefix="rexafs-package-") as directory:
     extracted = Path(directory) / stem / binary_relative
     subprocess.run([str(extracted), "--version"], cwd=directory, check=True)
     subprocess.run([str(extracted), "--self-check"], cwd=directory, check=True)
+    subprocess.run([str(extracted), "--self-check-feff"], cwd=directory, check=True, timeout=600)
 checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
 Path(str(archive) + ".sha256").write_text(f"{checksum}  {archive.name}\n")
 print(archive)

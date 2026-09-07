@@ -5,6 +5,9 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use rexafs::prelude::{run_feff, FeffExecutionMode, FeffRunRequest};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "feff10-runner")]
+    feff10::worker::init();
+
     let mut args = std::env::args().skip(1);
     let backend = args.next().unwrap_or_else(|| "refeff".to_string());
     let input = args

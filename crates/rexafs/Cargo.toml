@@ -42,7 +42,7 @@ pest_derive = { workspace = true }
 thiserror = { workspace = true }
 ruviz = { workspace = true, optional = true, features = ["svg", "typst-math"] }
 refeff = { workspace = true, optional = true }
-feff10 = { version = "0.2.2", features = ["prebuilt"], optional = true }
+feff10 = { workspace = true, optional = true }
 # apex-io 0.3 (via apex-solver 1.4) links sqlite3 through rusqlite 0.31.
 # Cargo permits only one libsqlite3-sys version in this workspace.
 rusqlite = { version = "0.31", features = ["bundled"], optional = true }
