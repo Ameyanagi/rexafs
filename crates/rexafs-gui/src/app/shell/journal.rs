@@ -89,11 +89,27 @@ pub struct JournalState {
     pub undo: Vec<UndoOp>,
     pub redo: Vec<UndoOp>,
     pub open: bool,
+    pub(crate) receipt_revision: u64,
 }
 
 const JOURNAL_CAPACITY: usize = 500;
 
 impl JournalState {
+    fn changed(&mut self) {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        self.receipt_revision = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub(crate) fn take_history(&mut self, redo: bool) -> Option<UndoOp> {
+        let op = if redo {
+            self.redo.pop()
+        } else {
+            self.undo.pop()
+        }?;
+        self.changed();
+        Some(op)
+    }
+
     pub(crate) fn confirm_quantity(
         &mut self,
         index: usize,
@@ -118,6 +134,7 @@ impl JournalState {
 
     /// Append a journal line, optionally with its inverse.
     pub(crate) fn record(&mut self, text: impl Into<String>, op: Option<UndoOp>) {
+        self.changed();
         let text = text.into();
         self.entries.push(JournalEntry { text });
         if self.entries.len() > JOURNAL_CAPACITY {
@@ -157,6 +174,7 @@ impl JournalState {
                 last.text = text;
             }
             self.redo.clear();
+            self.changed();
             return;
         }
         self.record(
@@ -269,7 +287,7 @@ impl StudioApp {
     }
 
     pub(crate) fn undo(&mut self, cx: &mut Context<Self>) {
-        let Some(op) = self.journal.undo.pop() else {
+        let Some(op) = self.journal.take_history(false) else {
             self.status = "nothing to undo".into();
             cx.notify();
             return;
@@ -314,7 +332,7 @@ impl StudioApp {
     }
 
     pub(crate) fn redo(&mut self, cx: &mut Context<Self>) {
-        let Some(op) = self.journal.redo.pop() else {
+        let Some(op) = self.journal.take_history(true) else {
             self.status = "nothing to redo".into();
             cx.notify();
             return;

@@ -1,4 +1,7 @@
 //! Semantic assistant actions: explicit spectrum targets and reversible model edits.
+use super::assistant_receipts::{
+    Receipt, diff, navigation_target, scope_label, select_history_result,
+};
 use super::{BkgView, EQuantity, FitView, Stage, TfView, fit_workspace::FitStep, journal::UndoOp};
 use crate::{
     app::StudioApp,
@@ -8,7 +11,7 @@ use crate::{
 use gpui::Context;
 use serde_json::{Value, json};
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize)]
 pub(crate) struct ModelSettings {
     pub paths: Vec<crate::fitting::FitPathSpec>,
     pub ranges: FitRanges,
@@ -62,10 +65,11 @@ impl StudioApp {
             }
         }
         if let Some(file) = args["spectrum"].as_str() {
-            let ix = (0..self.catalog.len())
-                .find(|&ix| self.catalog.path(ix).to_string_lossy() == file)
-                .ok_or("Spectrum must already be in the open catalog")?;
-            self.select_entry(ix, cx);
+            let catalog_index =
+                (0..self.catalog.len()).find(|&ix| self.catalog.path(ix).to_string_lossy() == file);
+            if let Some(ix) = navigation_target(file, &self.current_path, catalog_index)? {
+                self.select_entry(ix, cx);
+            }
         }
         self.set_stage(stage, cx);
         if let Some(step) = step {
@@ -113,6 +117,33 @@ impl StudioApp {
         Ok(
             json!({"stage":stage.name(),"fit_step":format!("{:?}",self.stage_view.fit_step),"plot":view,"current_spectrum":self.current_path,"dataset_id":dataset,"loading":self.load_running}),
         )
+    }
+    /// Display cached results without restoring the model used to obtain them.
+    pub(super) fn assistant_show_result(
+        &mut self,
+        id: usize,
+        cx: &mut Context<Self>,
+    ) -> Result<Value, String> {
+        let entry = self
+            .fit_history
+            .iter()
+            .find(|e| e.id == id)
+            .ok_or("Fit history is no longer available")?;
+        let result = self
+            .fit_history_results
+            .get(&id)
+            .cloned()
+            .ok_or("Fit plots are no longer available in this session")?;
+        self.joint.result_config = entry.joint.clone();
+        self.joint.result_index = 0;
+        self.fit_result = Some(result);
+        select_history_result(&mut self.fit_provenance, &mut self.fit_history_selected, id);
+        self.stage_view.fit_result_tab = 0;
+        self.set_stage(Stage::Fit, cx);
+        self.set_fit_step(FitStep::Results, cx);
+        self.rebuild_fit_plots(cx);
+        cx.notify();
+        Ok(json!({"shown_fit":id}))
     }
     fn model_settings(&self) -> ModelSettings {
         ModelSettings {
@@ -163,11 +194,11 @@ impl StudioApp {
          "selected":self.structure.summary.as_ref().map(|s|json!({"id":s.hit.id,"formula":s.hit.formula,"name":s.hit.name,"lattice":s.lattice,"sites":s.sites.iter().map(|s|json!({"label":s.label,"element":s.symbol,"site_index":s.site_index,"multiplicity":s.multiplicity})).collect::<Vec<_>>()})),
          "absorber":self.structure.absorber,"absorber_site":self.structure.absorber_site,"edge":self.structure.edge,"cluster_radius_angstrom":self.structure.radius.read(cx).text(),"backend":crate::feffgen::backend_name(self.structure.backend),"workspace":self.feff_workspace,"paths":self.fit_path_infos})
     }
-    pub(crate) fn assistant_select_paths(
+    pub(super) fn assistant_select_paths(
         &mut self,
         args: &Value,
         cx: &mut Context<Self>,
-    ) -> Result<Value, String> {
+    ) -> Result<(Value, Option<Receipt>), String> {
         let files: Vec<std::path::PathBuf> =
             serde_json::from_value(args["files"].clone()).map_err(|e| e.to_string())?;
         if files.is_empty() {
@@ -215,6 +246,7 @@ impl StudioApp {
             self.apply_fit_template(cx);
         }
         let after = self.model_settings();
+        let lines = diff(&json!(before), &json!(after));
         self.record(
             "Assistant: select paths",
             Some(UndoOp::FitModel { before, after }),
@@ -223,13 +255,23 @@ impl StudioApp {
         self.set_fit_step(FitStep::Paths, cx);
         self.fit_model_changed(cx);
         cx.notify();
-        Ok(json!({"selected_paths":files,"dataset_id":id}))
+        Ok((
+            json!({"selected_paths":files,"dataset_id":id}),
+            self.model_receipt(
+                id,
+                "paths",
+                lines,
+                (args["rebuild_parameters"] == true && self.joint.config.enabled)
+                    .then_some(self.joint.config.datasets.len()),
+                cx,
+            ),
+        ))
     }
-    pub(crate) fn assistant_fit_ranges(
+    pub(super) fn assistant_fit_ranges(
         &mut self,
         args: &Value,
         cx: &mut Context<Self>,
-    ) -> Result<Value, String> {
+    ) -> Result<(Value, Option<Receipt>), String> {
         if self.fit_running {
             return Err("Wait for the running fit".into());
         }
@@ -252,6 +294,7 @@ impl StudioApp {
             &self.fit_ranges
         };
         let ranges = proposed_ranges(old, &args["ranges"])?;
+        let lines = diff(&json!(old), &json!(ranges));
         let before = self.model_settings();
         if let Some(id) = id {
             self.joint
@@ -276,13 +319,16 @@ impl StudioApp {
         self.select_fit_space_view(ranges.fitspace, cx);
         self.fit_model_changed(cx);
         cx.notify();
-        Ok(json!({"applied":true,"dataset_id":id,"ranges":ranges}))
+        Ok((
+            json!({"applied":true,"dataset_id":id,"ranges":ranges}),
+            self.model_receipt(id, "model", lines, None, cx),
+        ))
     }
-    pub(crate) fn assistant_fit_parameter(
+    pub(super) fn assistant_fit_parameter(
         &mut self,
         args: &Value,
         cx: &mut Context<Self>,
-    ) -> Result<Value, String> {
+    ) -> Result<(Value, Option<Receipt>), String> {
         if self.fit_running {
             return Err("Wait for the running fit".into());
         }
@@ -326,6 +372,8 @@ impl StudioApp {
         {
             return Err("This parameter is local in every spectrum. Specify dataset_id to change its value.".into());
         }
+        let old_value = id.map_or(spec.value, |id| self.joint.config.initial_value(id, &spec));
+        let lines = diff(&json!({name:old_value}), &json!({name:value}));
         let before = self.model_settings();
         if let Some(id) = id {
             if !self.joint.config.is_local(id, name) {
@@ -360,9 +408,57 @@ impl StudioApp {
         self.set_fit_step(FitStep::Model, cx);
         self.fit_model_changed(cx);
         cx.notify();
-        Ok(
+        let shared = (id.is_none() && self.joint.config.enabled).then(|| {
+            self.joint
+                .config
+                .datasets
+                .iter()
+                .filter(|d| !self.joint.config.is_local(d.id, name))
+                .count()
+        });
+        let mut receipt = self.model_receipt(id, "model", lines, shared, cx);
+        if let Some(receipt) = &mut receipt {
+            receipt.finish_parameter_edit(self.fit_preview.loading);
+        }
+        Ok((
             json!({"applied":true,"name":name,"value":value,"dataset_id":id,"scope":if id.is_some(){"local"}else{"global"}}),
-        )
+            receipt,
+        ))
+    }
+    fn model_receipt(
+        &mut self,
+        id: Option<usize>,
+        step: &str,
+        lines: Vec<String>,
+        shared: Option<usize>,
+        cx: &mut Context<Self>,
+    ) -> Option<Receipt> {
+        if lines.is_empty() {
+            return None;
+        }
+        let file = id
+            .and_then(|id| self.joint.config.datasets.iter().find(|d| d.id == id))
+            .map_or(&self.current_path, |d| &d.file);
+        let mut receipt = Receipt::change(
+            &file.to_string_lossy(),
+            Stage::Fit,
+            lines,
+            self.journal.receipt_revision,
+        );
+        receipt.navigation["fit_step"] = json!(step);
+        if let Some(id) = id {
+            receipt.navigation["dataset_id"] = json!(id);
+        }
+        receipt.scope = scope_label(shared);
+        receipt.model = self.fit_model_fingerprint();
+        // Range previews are the calculation triggered by model edits; parameter
+        // values themselves are applied synchronously and do not run a fit.
+        if step == "model" {
+            self.ensure_fit_preview(cx);
+        } else {
+            receipt.state = "Recalculation complete".into();
+        }
+        Some(receipt)
     }
 }
 fn proposed_ranges(old: &FitRanges, patch: &Value) -> Result<FitRanges, String> {

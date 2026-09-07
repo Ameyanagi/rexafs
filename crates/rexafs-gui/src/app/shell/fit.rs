@@ -59,6 +59,19 @@ impl StudioApp {
                 );
             }
         }
+        if let Some(notice) = super::assistant_receipts::history_result_notice(
+            self.fit_provenance.is_some(),
+            self.fit_history_selected,
+        ) {
+            column = column.child(
+                div()
+                    .mx_3()
+                    .mt_2()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child(notice),
+            );
+        }
         let Some(plots) = self.fit_plots.as_ref().map(|p| FitPlotHandles {
             k: p.k.clone(),
             k_residual: p.k_residual.clone(),

@@ -1,4 +1,5 @@
 //! Pure transcript reducer. Protocol IDs are scoped to the current turn.
+use super::assistant_receipts::Receipt;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -17,7 +18,7 @@ pub(super) enum Status {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum Entry {
-    User(String),
+    User(String, bool),
     Assistant {
         id: String,
         text: String,
@@ -32,6 +33,7 @@ pub(super) enum Entry {
         tool: String,
         state: ActivityState,
     },
+    Receipt(Receipt),
     Status(Status),
 }
 #[derive(Clone, Copy, Debug)]
@@ -47,7 +49,7 @@ pub(super) enum Update {
 }
 #[derive(Debug)]
 pub(super) enum Event {
-    Send(String),
+    Send(String, bool),
     TurnStarted(String),
     TurnCompleted {
         turn: String,
@@ -70,6 +72,7 @@ pub(super) enum Event {
         id: String,
         error: Option<String>,
     },
+    Receipt(Receipt),
     Failed(String),
     StopRequested,
     StopTimeout,
@@ -130,7 +133,8 @@ impl Transcript {
     }
     fn apply_event(&mut self, event: Event, now: Instant) -> bool {
         match event {
-            Event::Send(text) => {
+            Event::Receipt(receipt) => self.entries.push(Entry::Receipt(receipt)),
+            Event::Send(text, edit) => {
                 if self.busy || self.stop_pending {
                     return false;
                 }
@@ -139,7 +143,7 @@ impl Transcript {
                 self.busy = true;
                 self.awaiting_ack = true;
                 self.entries
-                    .extend([Entry::User(text), Entry::Status(Status::Preparing)]);
+                    .extend([Entry::User(text, edit), Entry::Status(Status::Preparing)]);
             }
             Event::TurnStarted(turn) => {
                 if !self.awaiting_ack {
@@ -295,12 +299,25 @@ impl Transcript {
         }
         true
     }
+    pub fn update_receipts(&mut self, mut update: impl FnMut(&mut Receipt)) {
+        for entry in &mut self.entries {
+            if let Entry::Receipt(receipt) = entry {
+                let before = receipt.clone();
+                update(receipt);
+                if *receipt != before {
+                    self.revision = self.revision.wrapping_add(1);
+                }
+            }
+        }
+    }
     pub fn conversation(&self, now: Instant) -> String {
         self.entries
             .iter()
             .map(|entry| {
                 let role = match entry {
-                    Entry::User(_) => "You",
+                    Entry::User(_, true) => "You · Edit",
+                    Entry::User(_, false) => "You · Review",
+                    Entry::Receipt(_) => "Receipt",
                     Entry::Assistant { .. } => "Assistant",
                     Entry::Thinking { .. } => "Thinking",
                     Entry::Activity { .. } => "Activity",
@@ -315,13 +332,12 @@ impl Transcript {
 impl Entry {
     pub fn text(&self, now: Instant) -> String {
         match self {
-            Self::User(text) | Self::Assistant { text, .. } | Self::Thinking { text, .. } => {
+            Self::User(text, _) | Self::Assistant { text, .. } | Self::Thinking { text, .. } => {
                 text.clone()
             }
-            Self::Activity {
-                label, tool, state, ..
-            } => format!(
-                "{label} ({tool}){}",
+            Self::Receipt(receipt) => receipt.text(),
+            Self::Activity { label, state, .. } => format!(
+                "{label}{}",
                 match state {
                     ActivityState::Running => String::new(),
                     ActivityState::Done => " · done".into(),
@@ -376,7 +392,7 @@ mod tests {
     use super::*;
     fn active(now: Instant) -> Transcript {
         let mut t = Transcript::default();
-        assert!(t.apply(Event::Send("hello".into()), now));
+        assert!(t.apply(Event::Send("hello".into(), false), now));
         assert_eq!(t.entries[1].text(now), "Preparing…");
         assert!(t.apply(Event::TurnStarted("turn".into()), now));
         t
@@ -409,6 +425,34 @@ mod tests {
             turn: turn.into(),
             error: error.map(str::to_owned),
         }
+    }
+    #[test]
+    fn mode_and_app_receipts_survive_turn_completion() {
+        let now = Instant::now();
+        let mut t = Transcript::default();
+        t.apply(Event::Send("edit".into(), true), now);
+        t.apply(Event::TurnStarted("turn".into()), now);
+        assert_eq!(t.entries[0], Entry::User("edit".into(), true));
+        t.apply(
+            Event::Receipt(Receipt::change(
+                "Cu",
+                super::super::Stage::Normalize,
+                vec!["E₀: Auto → 8979 eV".into()],
+                1,
+            )),
+            now,
+        );
+        t.apply(completed("turn", None), now);
+        let revision = t.revision();
+        t.update_receipts(|r| r.state = "Recalculation complete".into());
+        assert!(t.revision() > revision);
+        let revision = t.revision();
+        t.update_receipts(|_| {});
+        assert_eq!(t.revision(), revision);
+        assert!(t.conversation(now).contains("You · Edit"));
+        assert!(t.conversation(now).contains("Recalculation complete"));
+        t.apply(Event::Send("review".into(), false), now);
+        assert!(t.conversation(now).contains("You · Review"));
     }
     #[test]
     fn small_upward_scrolls_release_follow_and_accumulate() {
@@ -464,7 +508,7 @@ mod tests {
         assert_eq!(t.revision(), 0);
         assert!(!t.apply(Event::Reconnected, now));
         assert_eq!(t.revision(), 0);
-        t.apply(Event::Send("hello".into()), now);
+        t.apply(Event::Send("hello".into(), false), now);
         t.apply(Event::TurnStarted("turn".into()), now);
         assert_eq!(t.revision(), 2);
         let _ = t.conversation(now + Duration::from_secs(20));
@@ -493,7 +537,7 @@ mod tests {
         assert!(!t.apply(finished("unknown", None), now));
         assert!(t.apply(finished("X", None), now));
         assert!(t.entries[1].text(now).ends_with("· done"));
-        assert_eq!(t.entries[2].text(now), "Inspecting… (xray_get_plots)");
+        assert_eq!(t.entries[2].text(now), "Inspecting…");
         assert!(t.apply(finished("Y", Some("oops")), now));
         assert!(!t.apply(finished("Y", None), now));
         assert!(t.entries[2].text(now).ends_with("· failed: oops"));
@@ -563,7 +607,7 @@ mod tests {
             Some(&Entry::Status(Status::Error("failed".into())))
         );
         assert!(!t.apply(item("A", Update::Completed(Some("late".into()))), now));
-        t.apply(Event::Send("next".into()), now);
+        t.apply(Event::Send("next".into(), false), now);
         t.apply(Event::TurnStarted("next".into()), now);
         assert!(!t.apply(item("A", Update::Delta("old".into())), now));
         assert!(!t.apply(tool("X"), now));
@@ -574,7 +618,7 @@ mod tests {
         let now = Instant::now();
         for timeout_first in [false, true] {
             let mut t = Transcript::default();
-            t.apply(Event::Send("hello".into()), now);
+            t.apply(Event::Send("hello".into(), false), now);
             t.apply(Event::StopRequested, now);
             assert!(!t.busy && t.stop_pending);
             if timeout_first {
@@ -587,7 +631,10 @@ mod tests {
             assert!(!t.apply(Event::StopTimeout, now));
             assert_eq!(
                 t.entries,
-                vec![Entry::User("hello".into()), Entry::Status(Status::Stopped)]
+                vec![
+                    Entry::User("hello".into(), false),
+                    Entry::Status(Status::Stopped)
+                ]
             );
         }
     }
@@ -621,12 +668,12 @@ mod tests {
             Some("Connection restored. The next message starts a new conversation.")
         );
         assert!(!t.apply(Event::Reconnected, now));
-        t.apply(Event::Send("next".into()), now);
+        t.apply(Event::Send("next".into(), false), now);
         t.apply(Event::Failed("preparing failed".into()), now);
         assert!(!t.busy);
-        t.apply(Event::Send("cancel preparation".into()), now);
+        t.apply(Event::Send("cancel preparation".into(), false), now);
         t.apply(Event::StopRequested, now);
         t.apply(Event::StopTimeout, now);
-        assert!(t.apply(Event::Send("try again".into()), now));
+        assert!(t.apply(Event::Send("try again".into(), false), now));
     }
 }
