@@ -37,35 +37,41 @@ impl StudioApp {
                 .filter(|&ix| ix >= crate::app::DERIVED_BASE)
                 .and_then(|ix| self.derived.get(ix - crate::app::DERIVED_BASE))
         {
-            let mut notice = div()
-                .p_3()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(group.display_label());
+            // Only legacy groups whose stored quantity is unknown get the
+            // confirmation prompt; a blocked quantity (Δμnorm) gets the plain
+            // notice; every other derived group renders the normal body.
             let blocked = group.processing_block_reason();
-            if let Some(reason) = &blocked {
-                notice = notice.child(reason.clone());
+            if !group.quantity_unconfirmed && blocked.is_none() {
+                body
+            } else {
+                let mut notice = div()
+                    .p_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(group.display_label());
+                if let Some(reason) = &blocked {
+                    notice = notice.child(reason.clone());
+                }
+                if group.quantity_unconfirmed {
+                    notice = notice.child("Confirm what the stored arrays represent:");
+                    for quantity in [
+                        Quantity::RawMu,
+                        Quantity::NormalizedMu,
+                        Quantity::NormalizedDifference,
+                        Quantity::ChiK,
+                    ] {
+                        notice = notice.child(
+                            button(&t, quantity.label(), quantity.label(), false).on_click(
+                                cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                    this.confirm_current_quantity(quantity, cx);
+                                }),
+                            ),
+                        );
+                    }
+                }
+                notice.into_any_element()
             }
-            notice = notice.child("Confirm what the stored arrays represent:");
-            for quantity in [
-                Quantity::RawMu,
-                Quantity::NormalizedMu,
-                Quantity::NormalizedDifference,
-                Quantity::ChiK,
-            ] {
-                notice = notice.child(
-                    button(&t, quantity.label(), quantity.label(), false).on_click(cx.listener(
-                        move |this, _: &ClickEvent, _, cx| {
-                            this.confirm_current_quantity(quantity, cx);
-                        },
-                    )),
-                );
-            }
-            if blocked.is_none() {
-                notice = notice.child(body);
-            }
-            notice.into_any_element()
         } else {
             body
         };
@@ -155,19 +161,29 @@ impl StudioApp {
         if self.stage.is_processing() {
             header = header
                 .when(copy_scope.is_some() && marked > 0, |header| {
-                    header.child(
-                        button(
-                            &t,
-                            "apply-marked",
-                            format!("Apply {} to {marked}", self.stage.name()),
-                            false,
+                    header
+                        .child(
+                            button(
+                                &t,
+                                "apply-marked",
+                                format!("Apply {} to {marked}", self.stage.name()),
+                                false,
+                            )
+                            .on_click(cx.listener(
+                                |this, _: &ClickEvent, _w, cx| {
+                                    this.apply_params_to_marked(cx);
+                                },
+                            )),
                         )
-                        .on_click(cx.listener(
-                            |this, _: &ClickEvent, _w, cx| {
-                                this.apply_params_to_marked(cx);
-                            },
-                        )),
-                    )
+                        .when_some(hint.clone(), |header, hint| {
+                            header.child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(t.text_muted)
+                                    .whitespace_nowrap()
+                                    .child(hint),
+                            )
+                        })
                 })
                 .child(
                     div()
@@ -194,7 +210,9 @@ impl StudioApp {
             .flex()
             .flex_col()
             .child(header)
-            .when_some(hint, |d, hint| {
+            // With no eligible recipients there is no Apply button to sit next
+            // to, so the lock explanation gets its own line.
+            .when_some(hint.filter(|_| marked == 0), |d, hint| {
                 d.child(
                     div()
                         .px_3()
