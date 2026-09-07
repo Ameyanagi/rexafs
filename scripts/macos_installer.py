@@ -102,7 +102,9 @@ def build_installer(bundle, output, metadata):
             "background": None, "window_rect": ((160, 160), (640, 440)),
             "default_view": "icon-view", "icon_size": 96, "text_size": 14,
             "icon_locations": {name: (160, 125), "Applications": (480, 125), "Install.txt": (320, 245)},
-            "hide": ["build.json"], "hide_extensions": [name, "Install.txt"],
+            # dmgbuild hides extensions with SetFile, which adds FinderInfo.
+            # Never attach that metadata to an already-signed application.
+            "hide": ["build.json"], "hide_extensions": ["Install.txt"],
             "show_toolbar": False, "show_status_bar": False, "show_pathbar": False,
             "show_tab_view": False, "show_sidebar": False,
             "include_icon_view_settings": True, "include_list_view_settings": False,
@@ -132,11 +134,17 @@ def verify_installation(image, metadata, verify_app=None):
         source = check_payload(mounted, metadata)
         if verify_app:
             verify_app(source, metadata["apple_team_id"])
+        else:
+            # Ad hoc previews must also preserve their signature through DMG
+            # creation; execution alone can miss forbidden Finder attributes.
+            subprocess.run(["codesign", "--verify", "--deep", "--strict", str(source)], check=True)
         with tempfile.TemporaryDirectory(prefix="rexafs-installed-") as temporary:
             installed = Path(temporary) / source.name
             subprocess.run(["ditto", str(source), str(installed)], check=True)
             if verify_app:
                 verify_app(installed, metadata["apple_team_id"])
+            else:
+                subprocess.run(["codesign", "--verify", "--deep", "--strict", str(installed)], check=True)
             executable = installed / "Contents/MacOS/rexafs"
             actual = json.loads(subprocess.check_output([str(executable), "--build-info"], text=True))
             for key in ("version", "commit", "channel", "release_tag"):
