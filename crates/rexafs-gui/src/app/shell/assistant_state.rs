@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 pub(super) enum ActivityState {
     Running,
     Done,
+    Stopped,
     Failed(String),
 }
 #[derive(Clone, Debug, PartialEq)]
@@ -76,6 +77,7 @@ pub(super) enum Event {
     Failed(String),
     StopRequested,
     StopTimeout,
+    AnalysisClosed,
     Disconnected,
     Reconnected,
 }
@@ -274,7 +276,8 @@ impl Transcript {
                 self.awaiting_ack = false;
                 self.finish(Some(Status::Error(error)));
             }
-            Event::Disconnected => {
+            Event::AnalysisClosed | Event::Disconnected => {
+                let intentional = matches!(event, Event::AnalysisClosed);
                 let changed = !self.disconnected
                     || self.busy
                     || self.stop_pending
@@ -282,10 +285,22 @@ impl Transcript {
                     || self.turn.is_some();
                 self.disconnected = true;
                 self.awaiting_ack = false;
-                self.finish(
-                    (self.busy || self.stop_pending)
-                        .then(|| Status::Error("Connection lost".into())),
-                );
+                if intentional {
+                    for entry in &mut self.entries[self.start..] {
+                        if let Entry::Activity { state, .. } = entry
+                            && *state == ActivityState::Running
+                        {
+                            *state = ActivityState::Stopped;
+                        }
+                    }
+                }
+                self.finish((self.busy || self.stop_pending).then(|| {
+                    if intentional {
+                        Status::Stopped
+                    } else {
+                        Status::Error("Connection lost".into())
+                    }
+                }));
                 self.turn = None;
                 return changed;
             }
@@ -341,6 +356,7 @@ impl Entry {
                 match state {
                     ActivityState::Running => String::new(),
                     ActivityState::Done => " · done".into(),
+                    ActivityState::Stopped => " · stopped".into(),
                     ActivityState::Failed(error) => format!(" · failed: {error}"),
                 }
             ),
@@ -637,6 +653,67 @@ mod tests {
                 ]
             );
         }
+    }
+    #[test]
+    fn assistant_analysis_close_stops_neutrally_and_ignores_late_events() {
+        let now = Instant::now();
+        for acknowledged in [false, true] {
+            for stop_pending in [false, true] {
+                let mut t = Transcript::default();
+                t.apply(Event::Send("keep my question".into(), false), now);
+                if acknowledged {
+                    t.apply(Event::TurnStarted("turn".into()), now);
+                    t.apply(item("A", Update::Delta("partial reply".into())), now);
+                    t.apply(tool("running"), now);
+                }
+                if stop_pending {
+                    t.apply(Event::StopRequested, now);
+                }
+                assert!(t.apply(Event::AnalysisClosed, now));
+                assert!(!t.busy && !t.stop_pending && !t.awaiting_ack);
+                assert!(t.turn.is_none());
+                assert_eq!(t.entries.last(), Some(&Entry::Status(Status::Stopped)));
+                let copied = t.conversation(now);
+                assert!(copied.contains("keep my question"));
+                assert!(!copied.contains("Error:") && !copied.contains("failed:"));
+                assert!(!copied.contains("Preparing") && !copied.contains("Waiting"));
+                if acknowledged {
+                    assert!(copied.contains("partial reply"));
+                    assert!(copied.contains("Inspecting… · stopped"));
+                }
+                let revision = t.revision();
+                assert!(!t.apply(Event::Disconnected, now));
+                assert!(!t.apply(Event::AnalysisClosed, now));
+                assert!(!t.apply(Event::TurnStarted("late".into()), now));
+                assert!(!t.apply(completed("turn", Some("late error")), now));
+                assert!(!t.apply(item("A", Update::Delta("late text".into())), now));
+                assert!(!t.apply(finished("running", None), now));
+                assert!(!t.apply(Event::StopTimeout, now));
+                assert_eq!(t.revision(), revision);
+                assert_eq!(t.conversation(now), copied);
+            }
+        }
+    }
+    #[test]
+    fn assistant_idle_analysis_close_preserves_history_and_real_disconnect_errors() {
+        let now = Instant::now();
+        let mut idle = Transcript::default();
+        assert!(idle.apply(Event::AnalysisClosed, now));
+        assert!(idle.entries.is_empty());
+
+        let mut done = active(now);
+        done.apply(item("A", Update::Delta("finished reply".into())), now);
+        done.apply(completed("turn", None), now);
+        let copied = done.conversation(now);
+        assert!(done.apply(Event::AnalysisClosed, now));
+        assert_eq!(done.conversation(now), copied);
+
+        let mut lost = active(now);
+        lost.apply(Event::Disconnected, now);
+        assert_eq!(
+            lost.entries.last(),
+            Some(&Entry::Status(Status::Error("Connection lost".into())))
+        );
     }
     #[test]
     fn labels_and_reconnection() {

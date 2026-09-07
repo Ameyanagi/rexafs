@@ -407,6 +407,12 @@ const DETECTION_MODES: [DetectionMode; 4] = [
 actions!(
     studio,
     [
+        Quit,
+        AssistantSend,
+        AssistantStop,
+        AssistantEscape,
+        AssistantNextControl,
+        AssistantPreviousControl,
         NavUp,
         NavDown,
         NavExtendUp,
@@ -447,6 +453,16 @@ actions!(
 /// editing keystroke must stay with the focused editor.
 pub fn studio_keybindings() -> Vec<KeyBinding> {
     vec![
+        KeyBinding::new("cmd-q", Quit, None),
+        KeyBinding::new("cmd-enter", AssistantSend, Some("Assistant")),
+        KeyBinding::new("cmd-.", AssistantStop, Some("Assistant")),
+        KeyBinding::new("escape", AssistantEscape, Some("Assistant")),
+        KeyBinding::new("tab", AssistantNextControl, Some("Assistant && !TextInput")),
+        KeyBinding::new(
+            "shift-tab",
+            AssistantPreviousControl,
+            Some("Assistant && !TextInput"),
+        ),
         KeyBinding::new("up", NavUp, Some("DataPanel")),
         KeyBinding::new("down", NavDown, Some("DataPanel")),
         KeyBinding::new("shift-up", NavExtendUp, Some("DataPanel")),
@@ -1844,6 +1860,21 @@ impl StudioApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let studio = cx.weak_entity();
+        _window.on_window_should_close(cx, move |_, cx| {
+            let assistant = studio
+                .read_with(cx, |app, _| app.assistant_window)
+                .ok()
+                .flatten();
+            if let Some(handle) =
+                assistant.and_then(|handle| handle.downcast::<shell::assistant::AssistantWindow>())
+            {
+                handle
+                    .update(cx, |assistant, _, cx| assistant.analysis_closed(cx))
+                    .ok();
+            }
+            true
+        });
         let initial_project = initial_open
             .as_ref()
             .filter(|path| crate::project::is_project(path))

@@ -226,11 +226,17 @@ impl TextInput {
     }
 
     fn commit(&mut self, _: &Commit, _window: &mut Window, cx: &mut Context<Self>) {
-        cx.emit(InputEvent::Committed(self.content.clone()));
+        if !self.is_composing() {
+            cx.emit(InputEvent::Committed(self.content.clone()));
+        }
+    }
+
+    pub(crate) fn is_composing(&self) -> bool {
+        self.marked_range.is_some()
     }
 
     fn insert_newline(&mut self, _: &InsertNewline, window: &mut Window, cx: &mut Context<Self>) {
-        if self.style.multiline {
+        if self.style.multiline && !self.is_composing() {
             self.replace_text_in_range(None, "\n", window, cx);
         }
     }

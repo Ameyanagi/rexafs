@@ -311,7 +311,7 @@ pub(crate) fn initialize(id: u64) -> Value {
 }
 pub(crate) fn dynamic_tools() -> Value {
     json!([
-    {"type":"function","name":"xray_set_layout","description":"Change visible panels and the main desktop window. File browser/inspector and current/marked plot scope are presentation only. Window actions: focus_app, maximize_app (resize to display), restore_app, resize_app. Read-only analysis mode allows presentation changes.","inputSchema":{"type":"object","properties":{"file_browser":{"type":"boolean"},"inspector":{"type":"boolean"},"plot_scope":{"type":"string","enum":["current","marked"]},"window_action":{"type":"string","enum":["focus_app","maximize_app","restore_app","resize_app"]},"width":{"type":"number"},"height":{"type":"number"}},"additionalProperties":false}},
+    {"type":"function","name":"xray_set_layout","description":"Change file browser/inspector visibility and current/marked plot scope only. Review mode allows these presentation changes.","inputSchema":{"type":"object","properties":{"file_browser":{"type":"boolean"},"inspector":{"type":"boolean"},"plot_scope":{"type":"string","enum":["current","marked"]}},"additionalProperties":false}},
     {"type":"function","name":"xray_get_plots","description":"Inspect the current processing stage or fit results: returns fresh plots plus resolved numerical settings. Navigate to Normalize, Background and Transform and inspect each before running a fit. Respects the Plots switch.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
     {"type":"function","name":"xray_search_structures","description":"Search the curated reference-structure library and display Structure. Returns candidates with stable ids; do not infer metallic composition merely from an element name.","inputSchema":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"],"additionalProperties":false}},
     {"type":"function","name":"xray_choose_structure","description":"Choose a returned curated structure id; display its crystal and 8 Å cluster preview. Returns absorber, edge and site information for inspection.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
@@ -329,6 +329,24 @@ pub(crate) fn dynamic_tools() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn assistant_layout_schema_only_exposes_panels_and_scope() {
+        let tools = dynamic_tools();
+        let layout = tools
+            .as_array()
+            .expect("tool array")
+            .iter()
+            .find(|tool| tool["name"] == "xray_set_layout")
+            .expect("layout tool");
+        let schema = &layout["inputSchema"];
+        let properties = schema["properties"].as_object().expect("properties");
+        assert_eq!(properties.len(), 3);
+        for key in ["file_browser", "inspector", "plot_scope"] {
+            assert!(properties.contains_key(key));
+        }
+        assert_eq!(schema["additionalProperties"], false);
+    }
+
     #[test]
     fn assistant_resolved_model_labels() {
         assert_eq!(

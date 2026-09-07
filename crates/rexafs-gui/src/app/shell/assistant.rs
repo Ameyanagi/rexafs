@@ -2,6 +2,10 @@
 use super::assistant_receipts::{
     Receipt, changes_allowed, completion, diff, processing_scope_label, requires_edit,
 };
+use super::assistant_shell::{
+    ANALYSIS_CLOSED, ControlState, EscapeTarget, PanelMemory, STARTERS, account_disclosure,
+    control_key_activates, empty_state_message, escape_target, model_picker_handles_key,
+};
 use super::{
     assistant_state::{
         ActivityState, Entry, Event, ItemKind, Status, Transcript, Update, follow_after_scroll,
@@ -9,7 +13,10 @@ use super::{
     button,
 };
 use crate::{
-    app::StudioApp,
+    app::{
+        AssistantEscape, AssistantNextControl, AssistantPreviousControl, AssistantSend,
+        AssistantStop, StudioApp,
+    },
     codex_client::{self, Client, Model},
     theme::Theme,
     widgets::text_input::{InputEvent, InputStyle, TextInput},
@@ -63,7 +70,7 @@ impl Render for ModelControlsBusyTip {
             .border_1()
             .border_color(self.0.border)
             .shadow_md()
-            .text_size(px(11.))
+            .text_size(px(12.))
             .text_color(self.0.text)
             .child("Available after this response")
     }
@@ -109,7 +116,11 @@ pub(crate) struct AssistantWindow {
     prepared: Option<Vec<Value>>,
     run_generation: u64,
     processing_checks: Vec<(std::path::PathBuf, super::Stage, u64)>,
-    saved_main_size: Option<gpui::Size<gpui::Pixels>>,
+    panel_memory: PanelMemory,
+    analysis_closed: bool,
+    account_expanded: bool,
+    focus_composer: bool,
+    controls_focus: std::collections::HashMap<gpui::ElementId, gpui::FocusHandle>,
 }
 impl StudioApp {
     pub(crate) fn open_assistant(&mut self, cx: &mut Context<Self>) {
@@ -148,7 +159,7 @@ impl StudioApp {
                     }),
                     ..Default::default()
                 },
-                move |_, cx| cx.new(|cx| AssistantWindow::new(studio, theme, cx)),
+                move |window, cx| cx.new(|cx| AssistantWindow::new(studio, theme, window, cx)),
             );
             this.update(cx, |app, cx| {
                 match opened {
@@ -163,7 +174,173 @@ impl StudioApp {
     }
 }
 impl AssistantWindow {
-    fn new(studio: WeakEntity<StudioApp>, theme: Theme, cx: &mut Context<Self>) -> Self {
+    fn controls(&self) -> ControlState {
+        ControlState::derive(
+            !self.analysis_closed,
+            self.client.is_some() && !self.connecting,
+            self.account,
+            self.transcript.busy || self.transcript.stop_pending,
+        )
+    }
+    pub(crate) fn analysis_closed(&mut self, cx: &mut Context<Self>) {
+        if self.analysis_closed {
+            return;
+        }
+        self.analysis_closed = true;
+        self.focus_composer = true;
+        self.transcript.apply(Event::AnalysisClosed, Instant::now());
+        self.disconnected(String::new());
+        self.error = None;
+        self.model_picker_open = false;
+        self.account_expanded = false;
+        self.processing_checks.clear();
+        cx.notify();
+    }
+    fn escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.input.read(cx).is_composing() {
+            return;
+        }
+        match escape_target(
+            self.model_picker_open || self.account_expanded || self.shared_context_open,
+            self.controls().stop,
+        ) {
+            EscapeTarget::CloseMenu => {
+                self.account_expanded = false;
+                self.shared_context_open = false;
+                self.close_model_picker(window, cx);
+            }
+            EscapeTarget::Stop => self.stop(cx),
+            EscapeTarget::FocusComposer => self.input.read(cx).focus_handle(cx).focus(window, cx),
+        }
+    }
+    // Allocate once in new, and for incoming transcript/catalog entries when
+    // notified. Rendering only borrows handles; hidden controls leave the ring.
+    fn sync_control_focus(&mut self, cx: &mut Context<Self>) {
+        let mut ids: Vec<gpui::ElementId> = [
+            "assistant-connect",
+            "assistant-login",
+            "assistant-account",
+            "assistant-close",
+            "assistant-device-browser",
+            "assistant-cancel-login",
+            "assistant-show-app",
+            "assistant-focus-plots",
+            "assistant-plots",
+            "assistant-review",
+            "assistant-edit",
+            "assistant-copy",
+            "assistant-shared-context",
+            "assistant-stop",
+            "assistant-send",
+            "assistant-jump",
+        ]
+        .into_iter()
+        .map(Into::into)
+        .collect();
+        for i in 0usize..3 {
+            ids.push(("assistant-starter", i).into());
+        }
+        for i in 0..self.transcript.entries.len() {
+            for prefix in [
+                "assistant-message",
+                "assistant-copy-item",
+                "receipt-view",
+                "receipt-undo",
+            ] {
+                ids.push((prefix, i).into());
+            }
+        }
+        for i in 0..=self.models.len() {
+            ids.push(("assistant-model-option", i).into());
+        }
+        for i in
+            0..codex_client::effort_choices(self.model(), self.preferred_effort.as_deref()).len()
+        {
+            ids.push(("assistant-effort", i).into());
+        }
+        for id in ids {
+            self.controls_focus
+                .entry(id)
+                .or_insert_with(|| cx.focus_handle().tab_index(0).tab_stop(true));
+        }
+    }
+    fn control(
+        &self,
+        id: impl Into<gpui::ElementId>,
+        element: gpui::Stateful<gpui::Div>,
+        enabled: bool,
+        on_click: impl Fn(&ClickEvent, &mut Window, &mut gpui::App) + 'static,
+    ) -> gpui::Stateful<gpui::Div> {
+        let id = id.into();
+        let on_click = Rc::new(on_click);
+        element
+            .text_size(px(12.))
+            .when(!enabled, |d| d.opacity(0.5))
+            .when(enabled, |d| {
+                d.on_click({
+                    let on_click = on_click.clone();
+                    move |event, window, cx| on_click(event, window, cx)
+                })
+                .when_some(self.controls_focus.get(&id), |d, focus| {
+                    let focus = focus.clone();
+                    d.track_focus(&focus)
+                        .focus(|s| s.border_2().border_color(self.theme.text))
+                        .on_key_down(move |event, window, cx| {
+                            if focus.is_focused(window)
+                                && control_key_activates(
+                                    &event.keystroke.key,
+                                    event.keystroke.modifiers.modified(),
+                                )
+                            {
+                                window.prevent_default();
+                                cx.stop_propagation();
+                                on_click(
+                                    &ClickEvent::Keyboard(gpui::KeyboardClickEvent {
+                                        button: if event.keystroke.key == "enter" {
+                                            gpui::KeyboardButton::Enter
+                                        } else {
+                                            gpui::KeyboardButton::Space
+                                        },
+                                        ..Default::default()
+                                    }),
+                                    window,
+                                    cx,
+                                );
+                            }
+                        })
+                })
+            })
+    }
+    fn button(
+        &self,
+        t: &Theme,
+        id: impl Into<gpui::ElementId>,
+        label: impl Into<gpui::SharedString>,
+        primary: bool,
+        on_click: impl Fn(&ClickEvent, &mut Window, &mut gpui::App) + 'static,
+    ) -> gpui::Stateful<gpui::Div> {
+        let id = id.into();
+        let c = self.controls();
+        let enabled = match &id {
+            gpui::ElementId::Name(name) => match name.as_ref() {
+                "assistant-send" => c.send,
+                "assistant-stop" => c.stop,
+                "assistant-show-app" | "assistant-focus-plots" => c.navigation,
+                "assistant-plots" => !self.transcript.busy,
+                "assistant-copy" => c.copy,
+                "assistant-close" => c.close,
+                _ => true,
+            },
+            _ => true,
+        };
+        self.control(id.clone(), button(t, id, label, primary), enabled, on_click)
+    }
+    fn new(
+        studio: WeakEntity<StudioApp>,
+        theme: Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let input = cx.new(|cx| {
             TextInput::new("Ask about this analysis…", "", theme, cx).with_style(InputStyle {
                 multiline: true,
@@ -177,7 +354,23 @@ impl AssistantWindow {
             }
         })
         .detach();
+        cx.observe_window_activation(window, |this, window, cx| {
+            if window.is_window_active() && !this.model_picker_open && !this.account_expanded {
+                this.input.read(cx).focus_handle(cx).focus(window, cx);
+            }
+        })
+        .detach();
+        cx.on_app_quit(|this, _| {
+            this.analysis_closed = true;
+            this.client = None;
+            async {}
+        })
+        .detach();
+        cx.observe_self(|this, cx| this.sync_control_focus(cx))
+            .detach();
         if let Some(app) = studio.upgrade() {
+            cx.observe_release(&app, |this, _, cx| this.analysis_closed(cx))
+                .detach();
             cx.observe(&app, |this, _, cx| {
                 this.refresh_receipts(cx);
                 cx.notify();
@@ -189,7 +382,7 @@ impl AssistantWindow {
             .map(|app| app.read(cx).structure.settings.clone())
             .unwrap_or_default();
         let mut assistant = Self {
-            studio,
+            studio: studio.clone(),
             theme,
             input,
             client: None,
@@ -227,8 +420,22 @@ impl AssistantWindow {
             prepared: None,
             run_generation: 0,
             processing_checks: Vec::new(),
-            saved_main_size: None,
+            panel_memory: studio
+                .upgrade()
+                .map(|app| {
+                    let app = app.read(cx);
+                    PanelMemory {
+                        file_browser: app.data_panel_open,
+                        inspector: app.context_panel_open,
+                    }
+                })
+                .unwrap_or_default(),
+            analysis_closed: false,
+            account_expanded: false,
+            focus_composer: true,
+            controls_focus: std::collections::HashMap::new(),
         };
+        assistant.sync_control_focus(cx);
         assistant.connect(cx);
         assistant
     }
@@ -348,36 +555,50 @@ impl AssistantWindow {
                 .into_iter()
                 .enumerate()
         {
-            efforts = efforts.child(
-                super::segment(&t, ("assistant-effort", i), label, selected, i == 0).on_click(
-                    cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        if !this.transcript.busy {
-                            this.save_preferences(this.preferred_model.clone(), value.clone(), cx);
-                        }
-                    }),
-                ),
-            );
+            efforts = efforts.child(self.control(
+                ("assistant-effort", i),
+                super::segment(&t, ("assistant-effort", i), label, selected, i == 0),
+                !busy,
+                cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    if !this.transcript.busy {
+                        this.save_preferences(this.preferred_model.clone(), value.clone(), cx);
+                    }
+                }),
+            ));
         }
         let bounds = self.model_trigger_bounds.clone();
         let model_picker_open = self.model_picker_open;
         let entity = cx.entity().downgrade();
-        let trigger = button(&t, "assistant-model", current, false)
-            .track_focus(&self.model_picker_focus)
-            .on_key_down(cx.listener(Self::model_picker_key))
+        let trigger = self
+            .button(
+                &t,
+                "assistant-model",
+                current,
+                false,
+                cx.listener(|this, _: &ClickEvent, window, cx| {
+                    if this.transcript.busy {
+                        return;
+                    }
+                    if this.model_picker_open {
+                        this.close_model_picker(window, cx);
+                    } else {
+                        this.open_model_picker(window, cx);
+                    }
+                }),
+            )
+            .when(!busy, |d| {
+                d.track_focus(&self.model_picker_focus)
+                    .focus(|s| s.border_2().border_color(t.accent))
+            })
+            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
+                if model_picker_handles_key(this.model_picker_open, &event.keystroke.key) {
+                    this.model_picker_key(event, window, cx);
+                }
+            }))
             .when(busy, |d| {
                 d.opacity(0.5)
                     .tooltip(move |_, cx| cx.new(|_| ModelControlsBusyTip(t)).into())
             })
-            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
-                if this.transcript.busy {
-                    return;
-                }
-                if this.model_picker_open {
-                    this.close_model_picker(window, cx);
-                } else {
-                    this.open_model_picker(window, cx);
-                }
-            }))
             .child(
                 gpui::canvas(
                     |_, _, _| (),
@@ -415,14 +636,14 @@ impl AssistantWindow {
                 .gap_2()
                 .child(
                     div()
-                        .text_size(px(11.))
+                        .text_size(px(12.))
                         .text_color(t.text_muted)
                         .child("Model"),
                 )
                 .child(trigger)
                 .child(
                     div()
-                        .text_size(px(11.))
+                        .text_size(px(12.))
                         .text_color(t.text_muted)
                         .child("Reasoning"),
                 )
@@ -434,7 +655,7 @@ impl AssistantWindow {
         if let Some(warning) = warning.filter(|_| catalog_settled) {
             controls = controls.child(
                 div()
-                    .text_size(px(11.))
+                    .text_size(px(12.))
                     .text_color(t.warn)
                     .whitespace_nowrap()
                     .overflow_hidden()
@@ -481,28 +702,31 @@ impl AssistantWindow {
         );
         for (i, (model, label)) in options.enumerate() {
             list = list.child(
-                div()
-                    .id(("assistant-model-option", i))
-                    .h(px(MODEL_ROW_HEIGHT))
-                    .flex_shrink_0()
-                    .px_2()
-                    .flex()
-                    .items_center()
-                    .text_xs()
-                    .cursor_pointer()
-                    .when(i == self.model_highlight, |d| d.bg(t.raised))
-                    .when(self.preferred_model == model, |d| d.text_color(t.accent))
-                    .hover(|d| d.bg(t.raised))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                self.control(
+                    ("assistant-model-option", i),
+                    div().id(("assistant-model-option", i)),
+                    true,
+                    cx.listener(move |this, _: &ClickEvent, window, cx| {
                         this.choose_model(i, window, cx);
-                    }))
-                    .child(
-                        div()
-                            .whitespace_nowrap()
-                            .overflow_hidden()
-                            .text_ellipsis()
-                            .child(label),
-                    ),
+                    }),
+                )
+                .h(px(MODEL_ROW_HEIGHT))
+                .flex_shrink_0()
+                .px_2()
+                .flex()
+                .items_center()
+                .text_xs()
+                .cursor_pointer()
+                .when(i == self.model_highlight, |d| d.bg(t.raised))
+                .when(self.preferred_model == model, |d| d.text_color(t.accent))
+                .hover(|d| d.bg(t.raised))
+                .child(
+                    div()
+                        .whitespace_nowrap()
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .child(label),
+                ),
             );
         }
         let popup = div()
@@ -521,6 +745,12 @@ impl AssistantWindow {
                 }
             })
             .id("assistant-model-popup")
+            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
+                if matches!(event.keystroke.key.as_str(), "up" | "down") {
+                    this.model_picker_focus.focus(window, cx);
+                    this.model_picker_key(event, window, cx);
+                }
+            }))
             .w(px(280.))
             .p(px(4.))
             .rounded_md()
@@ -606,7 +836,7 @@ impl AssistantWindow {
         Ok(())
     }
     fn connect(&mut self, cx: &mut Context<Self>) {
-        if self.client.is_some() || self.connecting {
+        if self.analysis_closed || self.client.is_some() || self.connecting {
             return;
         }
         self.error = None;
@@ -622,6 +852,9 @@ impl AssistantWindow {
                 .await;
             if !this
                 .update(cx, |app, cx| {
+                    if app.analysis_closed {
+                        return false;
+                    }
                     match result {
                         Ok(client) => {
                             let id = app.next_id;
@@ -717,6 +950,7 @@ impl AssistantWindow {
                     }
                     .into();
                     if p["willRetry"] != true {
+                        self.focus_composer = true;
                         self.transcript.apply(
                             Event::Failed(self.error.clone().unwrap_or_default()),
                             Instant::now(),
@@ -801,6 +1035,7 @@ impl AssistantWindow {
                             },
                             Instant::now(),
                         ) {
+                            self.focus_composer = true;
                             self.status = if failed { "Failed" } else { "Ready" }.into();
                         }
                     }
@@ -947,9 +1182,9 @@ impl AssistantWindow {
         }
     }
     fn run(&mut self, cx: &mut Context<Self>) {
-        if self.transcript.busy
+        if !self.controls().send
+            || self.input.read(cx).is_composing()
             || self.transcript.stop_pending
-            || !self.account
             || pending_blocks_run(&self.pending)
         {
             return;
@@ -966,6 +1201,7 @@ impl AssistantWindow {
             return;
         };
         self.model_picker_open = false;
+        self.focus_composer = true;
         self.turn_edit = self.allow_changes;
         self.transcript
             .apply(Event::Send(prompt.clone(), self.turn_edit), Instant::now());
@@ -1027,6 +1263,7 @@ impl AssistantWindow {
         cx.notify();
     }
     fn fail(&mut self, error: String) {
+        self.focus_composer = true;
         self.status = "Failed".into();
         self.transcript.apply(Event::Failed(error), Instant::now());
     }
@@ -1035,6 +1272,7 @@ impl AssistantWindow {
             return;
         }
         self.run_generation += 1;
+        self.focus_composer = true;
         let generation = self.run_generation;
         self.prepared = None;
         if let (Some(thread), Some(turn)) = (&self.thread, &self.transcript.turn) {
@@ -1043,8 +1281,10 @@ impl AssistantWindow {
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(Duration::from_secs(2)).await;
             this.update(cx, |app, cx| {
-                if app.run_generation == generation {
-                    app.transcript.apply(Event::StopTimeout, Instant::now());
+                if app.run_generation == generation
+                    && app.transcript.apply(Event::StopTimeout, Instant::now())
+                {
+                    app.focus_composer = true;
                 }
                 cx.notify();
             })
@@ -1054,71 +1294,47 @@ impl AssistantWindow {
         cx.notify();
     }
     fn change_layout(&mut self, args: &Value, cx: &mut Context<Self>) -> Result<Value, String> {
-        let action = args["window_action"].as_str();
-        let size = if action == Some("resize_app") {
-            let width = args["width"]
-                .as_f64()
-                .filter(|n| n.is_finite() && *n >= 720. && *n <= 8000.)
-                .ok_or("width must be 720–8000 pixels")?;
-            let height = args["height"]
-                .as_f64()
-                .filter(|n| n.is_finite() && *n >= 500. && *n <= 5000.)
-                .ok_or("height must be 500–5000 pixels")?;
-            Some(gpui::Size {
-                width: px(width as f32),
-                height: px(height as f32),
-            })
-        } else {
-            None
-        };
-        if action.is_some_and(|v| {
-            !matches!(
-                v,
-                "resize_app" | "focus_app" | "maximize_app" | "restore_app"
-            )
-        }) {
-            return Err("Unknown window action".into());
+        if !self.controls().navigation {
+            return Err("The analysis window is closed".into());
         }
-        let (handle,panels)=self.studio.update(cx,|app,cx|{
-            if let Some(show)=args["file_browser"].as_bool(){app.data_panel_open=show;}
-            if let Some(show)=args["inspector"].as_bool(){app.context_panel_open=show;}
-            if let Some(scope)=args["plot_scope"].as_str(){app.stage_view.scope=if scope=="marked"{super::PlotScope::Marked}else{super::PlotScope::Current};app.stage_view_changed(cx);}
-            cx.notify();(app.main_window,json!({"file_browser":app.data_panel_open,"inspector":app.context_panel_open,"stage":app.stage.name()}))
-        }).map_err(|e|e.to_string())?;
-        let saved = self.saved_main_size;
-        let (before, after) = handle
-            .update(cx, |_, window, cx| {
-                let before = window.viewport_size();
-                match action {
-                    Some("focus_app") => window.activate_window(),
-                    Some("maximize_app") => {
-                        if let Some(display) = window.display(cx) {
-                            let mut size = display.bounds().size;
-                            size.height -= px(90.);
-                            window.resize(size);
-                        }
-                    }
-                    Some("restore_app") => {
-                        if let Some(size) = saved {
-                            window.resize(size);
-                        }
-                    }
-                    Some("resize_app") => {
-                        if let Some(size) = size {
-                            window.resize(size);
-                        }
-                    }
-                    _ => {}
-                }
-                (before, window.bounds())
-            })
-            .map_err(|e| e.to_string())?;
-        if saved.is_none() && matches!(action, Some("maximize_app" | "resize_app")) {
-            self.saved_main_size = Some(before);
+        self.studio.update(cx, |app, cx| {
+            if let Some(show) = args["file_browser"].as_bool() { app.data_panel_open = show; }
+            if let Some(show) = args["inspector"].as_bool() { app.context_panel_open = show; }
+            if let Some(scope) = args["plot_scope"].as_str() {
+                app.stage_view.scope = if scope == "marked" { super::PlotScope::Marked } else { super::PlotScope::Current };
+                app.stage_view_changed(cx);
+            }
+            cx.notify();
+            json!({"panels":{"file_browser":app.data_panel_open,"inspector":app.context_panel_open,"stage":app.stage.name()}})
+        }).map_err(|e| e.to_string())
+    }
+    fn show_analysis(&mut self, cx: &mut Context<Self>) {
+        if !self.controls().navigation {
+            return;
         }
-        Ok(
-            json!({"panels":panels,"window":{"x":f32::from(after.origin.x),"y":f32::from(after.origin.y),"width":f32::from(after.size.width),"height":f32::from(after.size.height)}}),
-        )
+        if let Some(app) = self.studio.upgrade() {
+            let handle = app.read(cx).main_window;
+            if let Err(e) = handle.update(cx, |_, window, _| window.activate_window()) {
+                self.error = Some(e.to_string());
+                cx.notify();
+            }
+        }
+    }
+    fn toggle_panels(&mut self, cx: &mut Context<Self>) {
+        if !self.controls().navigation {
+            return;
+        }
+        self.studio
+            .update(cx, |app, cx| {
+                let next = self.panel_memory.toggle(PanelMemory {
+                    file_browser: app.data_panel_open,
+                    inspector: app.context_panel_open,
+                });
+                app.data_panel_open = next.file_browser;
+                app.context_panel_open = next.inspector;
+                cx.notify();
+            })
+            .ok();
     }
     fn wait_structure(&mut self, id: Value, kind: &'static str, cx: &mut Context<Self>) {
         let studio = self.studio.clone();
@@ -1291,6 +1507,9 @@ impl AssistantWindow {
         });
     }
     fn receipt_action(&mut self, receipt: &Receipt, undo: bool, cx: &mut Context<Self>) {
+        if !self.controls().navigation {
+            return;
+        }
         let result = self
             .studio
             .update(cx, |app, cx| {
@@ -1669,15 +1888,36 @@ fn proposed_processing(
     Ok(p)
 }
 impl Render for AssistantWindow {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.focus_composer {
+            self.focus_composer = false;
+            self.input.read(cx).focus_handle(cx).focus(window, cx);
+        }
+        let controls = self.controls();
+        let connected = self.client.is_some() && !self.connecting;
+        let (group, stage, spectrum, panels_hidden) = self
+            .studio
+            .upgrade()
+            .map(|studio| {
+                let app = studio.read(cx);
+                (
+                    app.current_group_label(),
+                    app.stage.name().to_owned(),
+                    app.spectrum.is_some(),
+                    app.panels_hidden(),
+                )
+            })
+            .unwrap_or_default();
         let t = self.theme;
         let mut header = div()
+            .h(px(28.))
+            .flex_shrink_0()
             .flex()
             .items_center()
             .gap_2()
             .child(
                 div()
-                    .text_size(px(20.))
+                    .text_size(px(16.))
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .child("Assistant"),
             )
@@ -1687,30 +1927,51 @@ impl Render for AssistantWindow {
                     .py_1()
                     .rounded_md()
                     .bg(t.raised)
-                    .text_size(px(10.))
-                    .text_color(t.warn)
+                    .text_size(px(12.))
+                    .text_color(t.text_muted)
                     .child("Experimental"),
             )
             .child(div().flex_1());
-        if self.client.is_none() && !self.connecting {
-            header = header.child(
-                button(&t, "assistant-connect", "Retry connection", true)
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.connect(cx))),
-            );
-        } else if self.client.is_some() && !self.connecting && !self.account && self.login.is_none()
+        if let Some(label) = &self.account_label {
+            header = header.child(self.button(
+                &t,
+                "assistant-account",
+                account_disclosure(label, false).to_owned(),
+                false,
+                cx.listener(|this, _: &ClickEvent, _, cx| {
+                    this.account_expanded = !this.account_expanded;
+                    cx.notify();
+                }),
+            ));
+        }
+        if controls.navigation && self.client.is_none() && !self.connecting {
+            header = header.child(self.button(
+                &t,
+                "assistant-connect",
+                "Retry connection",
+                true,
+                cx.listener(|this, _: &ClickEvent, _, cx| this.connect(cx)),
+            ));
+        } else if controls.navigation
+            && self.client.is_some()
+            && !self.connecting
+            && !self.account
+            && self.login.is_none()
         {
-            header = header.child(
-                button(&t, "assistant-login", "Device login", true).on_click(cx.listener(
-                    |this, _: &ClickEvent, _, cx| {
-                        if let Err(e) =
-                            this.request("account/login/start", json!({"type":"chatgptDeviceCode"}))
-                        {
-                            this.error = Some(e);
-                        }
-                        cx.notify();
-                    },
-                )),
-            );
+            header = header.child(self.button(
+                &t,
+                "assistant-login",
+                "Device login",
+                true,
+                cx.listener(|this, _: &ClickEvent, _, cx| {
+                    if let Err(e) =
+                        this.request("account/login/start", json!({"type":"chatgptDeviceCode"}))
+                    {
+                        this.error = Some(e);
+                    }
+                    cx.notify();
+                }),
+            ));
         }
         let now = Instant::now();
         let revision = self.transcript.revision();
@@ -1736,12 +1997,46 @@ impl Render for AssistantWindow {
             .flex()
             .flex_col()
             .gap(px(8.));
-        if self.transcript.entries.is_empty() {
-            body = body.child(
-                div()
-                    .text_color(t.text_muted)
-                    .child("Review spectra, adjust processing, or draft a report."),
-            );
+        if self.transcript.entries.is_empty() && !self.analysis_closed {
+            let mut empty = div()
+                .flex()
+                .flex_col()
+                .gap(px(8.))
+                .text_size(px(12.))
+                .when(spectrum, |d| {
+                    d.child(
+                        div()
+                            .font_weight(gpui::FontWeight::BOLD)
+                            .child(group.clone()),
+                    )
+                })
+                .child(if self.connecting {
+                    "Connecting…"
+                } else {
+                    empty_state_message(!self.analysis_closed, connected, self.account, spectrum)
+                });
+            if controls.starters && spectrum {
+                for (i, (label, prompt)) in STARTERS.into_iter().enumerate() {
+                    empty = empty.child(
+                        self.button(
+                            &t,
+                            ("assistant-starter", i),
+                            label,
+                            false,
+                            cx.listener(move |this, _: &ClickEvent, window, cx| {
+                                if !this.controls().starters {
+                                    return;
+                                }
+                                this.input
+                                    .update(cx, |input, cx| input.set_text(prompt, cx));
+                                this.input.read(cx).focus_handle(cx).focus(window, cx);
+                            }),
+                        )
+                        .h(px(32.)),
+                    );
+                }
+            }
+            body = body.child(empty);
         }
         for (i, entry) in self.transcript.entries.iter().enumerate() {
             let message = entry.text(now);
@@ -1755,21 +2050,26 @@ impl Render for AssistantWindow {
                     d.mt(px(12.))
                 });
             body = body.child(match entry {
-                Entry::Activity { state, tool, .. } => row
+                Entry::Activity { state, tool, .. } => self
+                    .control(
+                        ("assistant-message", i),
+                        row,
+                        true,
+                        cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            if !this.unfolded.remove(&i) {
+                                this.unfolded.insert(i);
+                            }
+                            cx.notify();
+                        }),
+                    )
                     .px_3()
-                    .text_size(px(11.5))
+                    .text_size(px(12.))
                     .text_color(if matches!(state, ActivityState::Failed(_)) {
                         t.error
                     } else {
                         t.text_muted
                     })
                     .cursor_pointer()
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        if !this.unfolded.remove(&i) {
-                            this.unfolded.insert(i);
-                        }
-                        cx.notify();
-                    }))
                     .child(format!(
                         "{} ⚙ {message}",
                         if self.unfolded.contains(&i) {
@@ -1782,16 +2082,17 @@ impl Render for AssistantWindow {
                         d.child(div().child(tool.clone()))
                     }),
                 Entry::Receipt(receipt) => {
-                    let available = self.studio.upgrade().is_some_and(|studio| {
-                        let app = studio.read(cx);
-                        receipt.can_undo(
-                            &app.journal,
-                            app.running_job_count() > 0
-                                || app.recompute_dirty
-                                || app.fit_preview.loading,
-                            app.fit_model_fingerprint(),
-                        )
-                    });
+                    let available = controls.navigation
+                        && self.studio.upgrade().is_some_and(|studio| {
+                            let app = studio.read(cx);
+                            receipt.can_undo(
+                                &app.journal,
+                                app.running_job_count() > 0
+                                    || app.recompute_dirty
+                                    || app.fit_preview.loading,
+                                app.fit_model_fingerprint(),
+                            )
+                        });
                     let view = receipt.clone();
                     let undo = receipt.clone();
                     row.p_3()
@@ -1816,7 +2117,7 @@ impl Render for AssistantWindow {
                             div()
                                 .flex()
                                 .gap_2()
-                                .text_size(px(11.))
+                                .text_size(px(12.))
                                 .text_color(t.text_muted)
                                 .when(!receipt.scope.is_empty(), |d| {
                                     d.child(
@@ -1833,7 +2134,8 @@ impl Render for AssistantWindow {
                             div()
                                 .flex()
                                 .gap_2()
-                                .child(
+                                .child(self.control(
+                                    ("receipt-view", i),
                                     button(
                                         &t,
                                         ("receipt-view", i),
@@ -1843,25 +2145,27 @@ impl Render for AssistantWindow {
                                             "Show Results"
                                         },
                                         false,
-                                    )
-                                    .on_click(cx.listener(
-                                        move |this, _: &ClickEvent, _, cx| {
-                                            this.receipt_action(&view, false, cx)
-                                        },
-                                    )),
-                                )
+                                    ),
+                                    controls.navigation,
+                                    cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                        this.receipt_action(&view, false, cx)
+                                    }),
+                                ))
                                 .when(receipt.journal.is_some(), |d| {
                                     d.child(if available {
-                                        button(&t, ("receipt-undo", i), "Undo", false)
-                                            .on_click(cx.listener(
-                                                move |this, _: &ClickEvent, _, cx| {
-                                                    this.receipt_action(&undo, true, cx)
-                                                },
-                                            ))
-                                            .into_any_element()
+                                        self.button(
+                                            &t,
+                                            ("receipt-undo", i),
+                                            "Undo",
+                                            false,
+                                            cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                                this.receipt_action(&undo, true, cx)
+                                            }),
+                                        )
+                                        .into_any_element()
                                     } else {
                                         div()
-                                            .text_size(px(11.))
+                                            .text_size(px(12.))
                                             .text_color(t.text_muted)
                                             .child("Use analysis history")
                                             .into_any_element()
@@ -1871,7 +2175,7 @@ impl Render for AssistantWindow {
                 }
                 Entry::Status(status) => row
                     .px_3()
-                    .text_size(px(11.5))
+                    .text_size(px(12.))
                     .text_color(if matches!(status, Status::Error(_)) {
                         t.error
                     } else {
@@ -1880,38 +2184,43 @@ impl Render for AssistantWindow {
                     .child(message),
                 Entry::Thinking { .. } => {
                     let open = self.unfolded.contains(&i);
-                    row.px_3()
-                        .border_l_2()
-                        .border_color(t.border)
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    self.control(
+                        ("assistant-message", i),
+                        row,
+                        true,
+                        cx.listener(move |this, _: &ClickEvent, _, cx| {
                             if !this.unfolded.remove(&i) {
                                 this.unfolded.insert(i);
                             }
                             cx.notify();
-                        }))
-                        .child(
-                            div()
-                                .text_size(px(11.))
-                                .text_color(t.text_muted)
-                                .child(if open { "▾ Thinking" } else { "▸ Thinking" }),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(t.text_muted)
-                                .when(!open, |d| {
-                                    d.overflow_hidden().whitespace_nowrap().text_ellipsis()
-                                })
-                                .child(if open {
-                                    message
-                                } else {
-                                    message.lines().next().unwrap_or_default().to_owned()
-                                }),
-                        )
+                        }),
+                    )
+                    .px_3()
+                    .border_l_2()
+                    .border_color(t.border)
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .cursor_pointer()
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(t.text_muted)
+                            .child(if open { "▾ Thinking" } else { "▸ Thinking" }),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(t.text_muted)
+                            .when(!open, |d| {
+                                d.overflow_hidden().whitespace_nowrap().text_ellipsis()
+                            })
+                            .child(if open {
+                                message
+                            } else {
+                                message.lines().next().unwrap_or_default().to_owned()
+                            }),
+                    )
                 }
                 Entry::User(_, edit) => row
                     .p_3()
@@ -1922,7 +2231,7 @@ impl Render for AssistantWindow {
                     .gap_2()
                     .child(
                         div()
-                            .text_size(px(11.))
+                            .text_size(px(12.))
                             .text_color(t.accent)
                             .child(format!("You · {}", if *edit { "Edit" } else { "Review" })),
                     )
@@ -1939,44 +2248,69 @@ impl Render for AssistantWindow {
                             .line_height(px(21.))
                             .child(message.clone()),
                     )
-                    .child(
-                        div().child(
-                            button(
-                                &t,
-                                ("assistant-copy-item", i),
-                                if self.copied.contains_key(&i) {
-                                    "Copied"
-                                } else {
-                                    "Copy"
-                                },
-                                false,
-                            )
-                            .on_click(cx.listener(
-                                move |this, _: &ClickEvent, _, cx| {
-                                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                        message.clone(),
-                                    ));
-                                    let copied_at = Instant::now();
-                                    this.copied.insert(i, copied_at);
-                                    cx.spawn(async move |this, cx| {
-                                        cx.background_executor()
-                                            .timer(Duration::from_secs(2))
-                                            .await;
-                                        this.update(cx, |app, cx| {
-                                            if app.copied.get(&i) == Some(&copied_at) {
-                                                app.copied.remove(&i);
-                                            }
-                                            cx.notify();
-                                        })
-                                        .ok();
-                                    })
-                                    .detach();
+                    .child(div().child(self.button(
+                        &t,
+                        ("assistant-copy-item", i),
+                        if self.copied.contains_key(&i) {
+                            "Copied"
+                        } else {
+                            "Copy"
+                        },
+                        false,
+                        cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(message.clone()));
+                            let copied_at = Instant::now();
+                            this.copied.insert(i, copied_at);
+                            cx.spawn(async move |this, cx| {
+                                cx.background_executor().timer(Duration::from_secs(2)).await;
+                                this.update(cx, |app, cx| {
+                                    if app.copied.get(&i) == Some(&copied_at) {
+                                        app.copied.remove(&i);
+                                    }
                                     cx.notify();
-                                },
-                            )),
-                        ),
-                    ),
+                                })
+                                .ok();
+                            })
+                            .detach();
+                            cx.notify();
+                        }),
+                    ))),
             });
+        }
+        if let Some(login) = &self.login {
+            let url = login["verificationUrl"].as_str().unwrap_or("").to_owned();
+            let code = login["userCode"].as_str().unwrap_or("").to_owned();
+            let login_id = login["loginId"].clone();
+            body = body.child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .items_center()
+                    .p_3()
+                    .bg(t.surface)
+                    .child(div().font_family(super::MONO).child(code.clone()))
+                    .child(self.button(
+                        &t,
+                        "assistant-device-browser",
+                        "Open login page",
+                        true,
+                        cx.listener(move |_, _: &ClickEvent, _, cx| {
+                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(code.clone()));
+                            cx.open_url(&url);
+                        }),
+                    ))
+                    .child(self.button(
+                        &t,
+                        "assistant-cancel-login",
+                        "Cancel",
+                        false,
+                        cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            let _ =
+                                this.request("account/login/cancel", json!({"loginId":login_id}));
+                            cx.notify();
+                        }),
+                    )),
+            );
         }
         let transcript = div()
             .relative()
@@ -1986,13 +2320,18 @@ impl Render for AssistantWindow {
             .when(!self.follow, |d| {
                 d.child(
                     div().absolute().bottom_2().right_2().child(
-                        button(&t, "assistant-jump", "Jump to latest", true)
-                            .rounded_full()
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        self.button(
+                            &t,
+                            "assistant-jump",
+                            "Jump to latest",
+                            true,
+                            cx.listener(|this, _: &ClickEvent, _, cx| {
                                 this.follow = true;
                                 this.scroll.scroll_to_bottom();
                                 cx.notify();
-                            })),
+                            }),
+                        )
+                        .rounded_full(),
                     ),
                 )
             });
@@ -2000,76 +2339,81 @@ impl Render for AssistantWindow {
             .relative()
             .size_full()
             .min_h_0()
-            .p_4()
+            .px(px(16.))
+            .py(px(12.))
+            .key_context("Assistant")
+            .on_action(cx.listener(|this, _: &AssistantSend, _, cx| this.run(cx)))
+            .on_action(cx.listener(|this, _: &AssistantStop, _, cx| {
+                if this.controls().stop {
+                    this.stop(cx);
+                }
+            }))
+            .on_action(cx.listener(|this, _: &AssistantEscape, window, cx| this.escape(window, cx)))
+            .on_action(cx.listener(|_, _: &AssistantNextControl, window, cx| window.focus_next(cx)))
+            .on_action(
+                cx.listener(|_, _: &AssistantPreviousControl, window, cx| window.focus_prev(cx)),
+            )
             .flex()
             .flex_col()
-            .gap_3()
+            .gap(px(8.))
             .bg(t.bg)
             .text_color(t.text)
             .child(header);
-        if let Some(label) = &self.account_label {
-            root = root.child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(t.text_muted)
-                    .child(label.clone()),
-            );
-        }
-        if let Some(login) = &self.login {
-            let url = login["verificationUrl"].as_str().unwrap_or("").to_owned();
-            let code = login["userCode"].as_str().unwrap_or("").to_owned();
-            let login_id = login["loginId"].clone();
+        if controls.close {
             root = root.child(
                 div()
                     .flex()
-                    .gap_2()
                     .items_center()
-                    .p_3()
-                    .bg(t.surface)
-                    .child(div().font_family(super::MONO).child(code.clone()))
-                    .child(
-                        button(&t, "assistant-device-browser", "Open login page", true).on_click(
-                            cx.listener(move |_, _: &ClickEvent, _, cx| {
-                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                    code.clone(),
-                                ));
-                                cx.open_url(&url);
-                            }),
-                        ),
-                    )
-                    .child(
-                        button(&t, "assistant-cancel-login", "Cancel", false).on_click(
-                            cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                let _ = this
-                                    .request("account/login/cancel", json!({"loginId":login_id}));
-                                cx.notify();
-                            }),
-                        ),
-                    ),
+                    .gap_2()
+                    .text_size(px(12.))
+                    .child(div().flex_1().child(ANALYSIS_CLOSED))
+                    .child(self.button(
+                        &t,
+                        "assistant-close",
+                        "Close",
+                        false,
+                        cx.listener(|_, _: &ClickEvent, window, _| window.remove_window()),
+                    )),
             );
-        }
-        if let Some(studio) = self.studio.upgrade() {
-            let app = studio.read(cx);
+        } else {
             root = root.child(
                 div()
-                    .px_2()
-                    .py_1()
-                    .rounded_md()
-                    .bg(t.surface)
-                    .text_size(px(11.))
-                    .text_color(t.accent)
-                    .child(format!(
-                        "{}  ·  {}",
-                        app.stage.name(),
-                        app.current_group_label()
+                    .h(px(28.))
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .text_size(px(12.))
+                            .text_color(t.text_muted)
+                            .child(format!("{stage} · {group}")),
+                    )
+                    .child(self.button(
+                        &t,
+                        "assistant-show-app",
+                        "Show analysis",
+                        false,
+                        cx.listener(|this, _: &ClickEvent, _, cx| this.show_analysis(cx)),
+                    ))
+                    .child(self.button(
+                        &t,
+                        "assistant-focus-plots",
+                        if panels_hidden {
+                            "Restore side panels"
+                        } else {
+                            "Hide side panels"
+                        },
+                        false,
+                        cx.listener(|this, _: &ClickEvent, _, cx| this.toggle_panels(cx)),
                     )),
             );
         }
-        root = root.child(div().flex().gap_2().child(button(&t,"assistant-show-app","Show app",false).on_click(cx.listener(|this,_:&ClickEvent,_,cx|{if let Err(e)=this.change_layout(&json!({"window_action":"focus_app"}),cx){this.error=Some(e);}cx.notify();}))).child({
-            // Focus hides both side panels; the same button brings them back.
-            let focused = self.studio.upgrade().is_some_and(|studio| studio.read(cx).panels_hidden());
-            button(&t,"assistant-focus-plots",if focused {"Show panels"} else {"Focus plots"},focused).on_click(cx.listener(move |this,_:&ClickEvent,_,cx|{if let Err(e)=this.change_layout(&json!({"file_browser":focused,"inspector":focused,"window_action":"focus_app"}),cx){this.error=Some(e);}cx.notify();}))
-        }));
         root = root.child(transcript);
         if let Some(error) = &self.error {
             root = root.child(
@@ -2084,26 +2428,26 @@ impl Render for AssistantWindow {
             .child(self.model_controls(catalog_settled, cx))
             .child(
                 div()
-                    .flex()
+                    .flex().flex_wrap()
                     .gap_2()
                     .child(
-                        button(&t, "assistant-plots", if self.include_plots { "Share plot images: On" } else { "Share plot images: Off" }, self.include_plots).when(self.transcript.busy, |d| d.opacity(0.5)).on_click(
+                        self.button(&t, "assistant-plots", if self.include_plots { "Share plot images: On" } else { "Share plot images: Off" }, self.include_plots,
                             cx.listener(|this, _: &ClickEvent, _, cx| {
                                 if !this.transcript.busy {
                                     this.include_plots = !this.include_plots;
                                 }
                                 cx.notify();
                             }),
-                        ),
+                        ).when(self.transcript.busy, |d| d.opacity(0.5)),
                     )
                     .child(
                         div().flex().items_center().gap_1().child("Mode:").child(super::segmented(&t)
-                            .child(super::segment(&t, "assistant-review", "Review", !self.allow_changes, true).on_click(cx.listener(|this, _: &ClickEvent, _, cx| { this.allow_changes = false; this.turn_edit = false; cx.notify(); })))
-                            .child(super::segment(&t, "assistant-edit", "Edit analysis", self.allow_changes, false).on_click(cx.listener(|this, _: &ClickEvent, _, cx| { this.allow_changes = true; cx.notify(); })))),
+                            .child(self.control("assistant-review", super::segment(&t, "assistant-review", "Review", !self.allow_changes, true), true, cx.listener(|this, _: &ClickEvent, _, cx| { this.allow_changes = false; this.turn_edit = false; cx.notify(); })))
+                            .child(self.control("assistant-edit", super::segment(&t, "assistant-edit", "Edit analysis", self.allow_changes, false), true, cx.listener(|this, _: &ClickEvent, _, cx| { this.allow_changes = true; cx.notify(); })))),
                     )
                     .child(div().flex_1())
                     .child(
-                        button(&t, "assistant-copy", "Copy conversation", false).on_click(
+                        self.button(&t, "assistant-copy", "Copy conversation", false,
                             cx.listener(|this, _: &ClickEvent, _, cx| {
                                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(
                                     this.transcript.conversation(Instant::now()),
@@ -2113,8 +2457,7 @@ impl Render for AssistantWindow {
                     ),
             )
             .child(div().text_size(px(12.)).text_color(t.text_muted).child("Review can inspect data and navigate. Edit analysis can also change parameters and run calculations."))
-            .child(div().id("assistant-shared-context").text_size(px(12.)).text_color(t.text_muted).cursor_pointer()
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| { this.shared_context_open = !this.shared_context_open; cx.notify(); }))
+            .child(self.control("assistant-shared-context", div().id("assistant-shared-context").text_color(t.text_muted).cursor_pointer(), true, cx.listener(|this, _: &ClickEvent, _, cx| { this.shared_context_open = !this.shared_context_open; cx.notify(); }))
                 .child(if self.shared_context_open { "▾ Shared context…" } else { "▸ Shared context…" }))
             .when(self.shared_context_open, |d| d.child(div().text_size(px(12.)).text_color(t.text_muted)
                 .child("Send includes project state; spectrum names and file paths; processing settings and source comments; model and results; journal entries; and plot images when enabled.")))
@@ -2125,7 +2468,7 @@ impl Render for AssistantWindow {
                     .items_end()
                     .child(div().flex_1().min_w_0().child(self.input.clone()))
                     .child(if self.transcript.busy || self.transcript.stop_pending {
-                        button(
+                        self.button(
                             &t,
                             "assistant-stop",
                             if self.transcript.stop_pending {
@@ -2134,15 +2477,35 @@ impl Render for AssistantWindow {
                                 "Stop"
                             },
                             false,
+                            cx.listener(|this, _: &ClickEvent, _, cx| this.stop(cx)),
                         )
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.stop(cx)))
                         .into_any_element()
                     } else {
-                        button(&t, "assistant-send", "Send", true)
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.run(cx)))
+                        self.button(&t, "assistant-send", "Send", true, cx.listener(|this, _: &ClickEvent, _, cx| this.run(cx)))
                             .into_any_element()
                     }),
             );
+        if self.account_expanded
+            && let Some(label) = &self.account_label
+        {
+            root = root.child(
+                div()
+                    .absolute()
+                    .top(px(44.))
+                    .right(px(16.))
+                    .max_w(px(560.))
+                    .p_2()
+                    .bg(t.raised)
+                    .border_1()
+                    .border_color(t.border)
+                    .rounded_md()
+                    .shadow_md()
+                    .text_size(px(12.))
+                    .id("assistant-account-details")
+                    .occlude()
+                    .child(account_disclosure(label, true).to_owned()),
+            );
+        }
         if let Some(picker) = self.model_picker_overlay(cx) {
             root = root.child(picker);
         }
