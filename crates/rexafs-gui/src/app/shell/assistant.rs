@@ -26,6 +26,10 @@ pub(crate) struct AssistantWindow {
     include_plots: bool,
     messages: Vec<(String, String)>,
     answer: String,
+    /// Streaming reasoning summary of the current turn.
+    thinking: String,
+    /// Transcript indices of "Thinking" entries the user unfolded.
+    unfolded: std::collections::BTreeSet<usize>,
     prepared: Option<Vec<Value>>,
     run_generation: u64,
     processing_checks: Vec<(std::path::PathBuf, super::Stage, u64)>,
@@ -101,6 +105,8 @@ impl AssistantWindow {
             allow_changes: false,
             include_plots: true,
             messages: vec![],
+            thinking: String::new(),
+            unfolded: std::collections::BTreeSet::new(),
             answer: String::new(),
             prepared: None,
             run_generation: 0,
@@ -258,6 +264,32 @@ impl AssistantWindow {
                                 self.answer = text.into();
                             }
                         }
+                    } else if item["type"] == "reasoning" {
+                        // The summary of a reasoning item replaces whatever
+                        // streamed in; the transcript keeps it as a step.
+                        let summary = item["summary"]
+                            .as_array()
+                            .map(|parts| {
+                                parts
+                                    .iter()
+                                    .filter_map(|s| s.as_str().or_else(|| s["text"].as_str()))
+                                    .collect::<Vec<_>>()
+                                    .join("\n")
+                            })
+                            .filter(|s| !s.trim().is_empty())
+                            .or_else(|| item["text"].as_str().map(str::to_owned));
+                        let text = summary.unwrap_or_else(|| std::mem::take(&mut self.thinking));
+                        self.thinking.clear();
+                        if !text.trim().is_empty() {
+                            self.messages.push(("Thinking".into(), text));
+                        }
+                    }
+                }
+                m if m.starts_with("item/reasoning") && m.ends_with("delta") => {
+                    if self.busy {
+                        if let Some(delta) = p["delta"].as_str() {
+                            self.thinking.push_str(delta);
+                        }
                     }
                 }
                 "turn/completed" => {
@@ -266,6 +298,10 @@ impl AssistantWindow {
                     self.status = "Ready".into();
                     if let Some(err) = p["turn"]["error"]["message"].as_str() {
                         self.error = Some(err.into());
+                    }
+                    if !self.thinking.trim().is_empty() {
+                        self.messages
+                            .push(("Thinking".into(), std::mem::take(&mut self.thinking)));
                     }
                     if !self.answer.is_empty() {
                         self.messages
@@ -585,11 +621,25 @@ impl AssistantWindow {
             }).ok();
         }).detach();
     }
-    fn tool_response(&self, id: Value, result: Result<Value, String>) {
+    fn tool_response(&mut self, id: Value, result: Result<Value, String>) {
         let (success, text) = match result {
             Ok(v) => (true, v.to_string()),
             Err(e) => (false, e),
         };
+        // Close the pending activity line for this call in the transcript.
+        if let Some((_, entry)) = self
+            .messages
+            .iter_mut()
+            .rev()
+            .find(|(role, m)| role == "Activity" && m.ends_with('…'))
+        {
+            let label = entry.trim_end_matches('…').to_string();
+            *entry = if success {
+                format!("{label} · done")
+            } else {
+                format!("{label} · failed: {text}")
+            };
+        }
         if let Some(c) = &self.client {
             let _=c.send(json!({"id":id,"result":{"success":success,"contentItems":[{"type":"inputText","text":text}]}}));
         }
@@ -614,6 +664,8 @@ impl AssistantWindow {
             _ => "Updating model…",
         }
         .into();
+        self.messages
+            .push(("Activity".into(), format!("{} ({tool})", self.status)));
         if tool == "xray_get_state" {
             let result=self.studio.update(cx,|app,cx|json!({"state":app.analysis_snapshot().context(),"calculation":app.assistant_calculation_state(cx),"processing":app.load_running||app.recompute_dirty,"fitting":app.fit_running,"fit_error":app.fit_error,"status":app.status.to_string()})).map_err(|e|e.to_string());
             self.tool_response(id, result);
@@ -922,13 +974,7 @@ impl Render for AssistantWindow {
                     .text_color(t.warn)
                     .child("Experimental"),
             )
-            .child(div().flex_1())
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(t.text_muted)
-                    .child(self.status.clone()),
-            );
+            .child(div().flex_1());
         if self.client.is_none() {
             header = header.child(
                 button(&t, "assistant-connect", "Connect Codex", true)
@@ -964,22 +1010,88 @@ impl Render for AssistantWindow {
             );
         }
         for (i, (role, message)) in self.messages.iter().enumerate() {
+            body =
+                body.child(match role.as_str() {
+                    // Tool activity: one muted line, so the steps read as a log
+                    // between the messages they belong to.
+                    "Activity" => div()
+                        .id(("assistant-message", i))
+                        .px_3()
+                        .text_size(px(11.5))
+                        .text_color(if message.contains("· failed") {
+                            t.error
+                        } else {
+                            t.text_muted
+                        })
+                        .child(format!("⚙ {message}")),
+                    // Reasoning summaries: folded to their first line by default;
+                    // click the header to read the whole step.
+                    "Thinking" => {
+                        let open = self.unfolded.contains(&i);
+                        let lines = message.lines().count().max(1);
+                        let preview = message.lines().next().unwrap_or("").to_string();
+                        div()
+                            .id(("assistant-message", i))
+                            .px_3()
+                            .py_2()
+                            .border_l_2()
+                            .border_color(t.border)
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .cursor_pointer()
+                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                if !this.unfolded.remove(&i) {
+                                    this.unfolded.insert(i);
+                                }
+                                cx.notify();
+                            }))
+                            .child(div().text_size(px(11.)).text_color(t.text_muted).child(
+                                if open {
+                                    "▾ Thinking".to_string()
+                                } else if lines > 1 {
+                                    format!("▸ Thinking · {lines} lines")
+                                } else {
+                                    "▸ Thinking".to_string()
+                                },
+                            ))
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(t.text_muted)
+                                    .when(!open, |d| {
+                                        d.overflow_hidden().whitespace_nowrap().text_ellipsis()
+                                    })
+                                    .child(if open { message.clone() } else { preview }),
+                            )
+                    }
+                    _ => div()
+                        .id(("assistant-message", i))
+                        .p_3()
+                        .rounded_md()
+                        .bg(t.surface)
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_size(px(11.))
+                                .text_color(t.accent)
+                                .child(role.clone()),
+                        )
+                        .child(div().text_size(px(13.)).child(message.clone())),
+                });
+        }
+        if self.busy && !self.thinking.trim().is_empty() {
             body = body.child(
                 div()
-                    .id(("assistant-message", i))
-                    .p_3()
-                    .rounded_md()
-                    .bg(t.surface)
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_size(px(11.))
-                            .text_color(t.accent)
-                            .child(role.clone()),
-                    )
-                    .child(div().text_size(px(13.)).child(message.clone())),
+                    .px_3()
+                    .py_2()
+                    .border_l_2()
+                    .border_color(t.border)
+                    .text_size(px(12.))
+                    .text_color(t.text_muted)
+                    .child(self.thinking.clone()),
             );
         }
         if !self.answer.is_empty() {
@@ -1045,7 +1157,11 @@ impl Render for AssistantWindow {
                     )),
             );
         }
-        root = root.child(div().flex().gap_2().child(button(&t,"assistant-show-app","Show app",false).on_click(cx.listener(|this,_:&ClickEvent,_,cx|{if let Err(e)=this.change_layout(&json!({"window_action":"focus_app"}),cx){this.error=Some(e);}cx.notify();}))).child(button(&t,"assistant-focus-plots","Focus plots",false).on_click(cx.listener(|this,_:&ClickEvent,_,cx|{if let Err(e)=this.change_layout(&json!({"file_browser":false,"inspector":false,"window_action":"focus_app"}),cx){this.error=Some(e);}cx.notify();}))));
+        root = root.child(div().flex().gap_2().child(button(&t,"assistant-show-app","Show app",false).on_click(cx.listener(|this,_:&ClickEvent,_,cx|{if let Err(e)=this.change_layout(&json!({"window_action":"focus_app"}),cx){this.error=Some(e);}cx.notify();}))).child({
+            // Focus hides both side panels; the same button brings them back.
+            let focused = self.studio.upgrade().is_some_and(|studio| studio.read(cx).panels_hidden());
+            button(&t,"assistant-focus-plots",if focused {"Show panels"} else {"Focus plots"},focused).on_click(cx.listener(move |this,_:&ClickEvent,_,cx|{if let Err(e)=this.change_layout(&json!({"file_browser":focused,"inspector":focused,"window_action":"focus_app"}),cx){this.error=Some(e);}cx.notify();}))
+        }));
         root = root.child(body);
         if let Some(error) = &self.error {
             root = root.child(
@@ -1078,6 +1194,12 @@ impl Render for AssistantWindow {
                             })),
                     )
                     .child(div().flex_1())
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(if self.busy { t.accent } else { t.text_muted })
+                            .child(self.status.clone()),
+                    )
                     .child(
                         button(&t, "assistant-copy", "Copy conversation", false).on_click(
                             cx.listener(|this, _: &ClickEvent, _, cx| {

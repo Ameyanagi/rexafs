@@ -1834,6 +1834,11 @@ fn spectrum_status(label: &SharedString, sp: &XASSpectrum) -> SharedString {
 }
 
 impl StudioApp {
+    /// Both side panels hidden (the assistant's "Focus plots" layout).
+    pub(crate) fn panels_hidden(&self) -> bool {
+        !self.data_panel_open && !self.context_panel_open
+    }
+
     pub fn new_with_open(
         initial_open: Option<PathBuf>,
         _window: &mut Window,
