@@ -249,6 +249,7 @@ mod tests {
         };
         let spectrum = Arc::new(difference.for_display(&params).unwrap());
         let loaded = ToolTarget {
+            group_id: Some(crate::group_identity::GroupId::legacy_result(1)),
             ix: DERIVED_BASE,
             fingerprint: difference.fingerprint(&params),
             label: difference.display_label(),

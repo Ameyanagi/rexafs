@@ -318,6 +318,7 @@ impl StudioApp {
                             suffix += 1;
                         }
                         merged.id = app.next_group_id();
+                        merged.group_id = Some(crate::group_identity::GroupId::new_result());
                         let label = merged.label.clone();
                         app.record(
                             format!("merge → {label}"),
@@ -327,6 +328,7 @@ impl StudioApp {
                             }),
                         );
                         app.derived.push(merged);
+                        app.rekey_after_catalog_change();
                         if keep_current(
                             (selected, current.as_ref(), current_generation),
                             (
@@ -362,6 +364,7 @@ mod tests {
 
     fn target(ix: usize, label: &str) -> ToolTarget {
         ToolTarget {
+            group_id: Some(crate::group_identity::GroupId::legacy_result(ix as u64)),
             ix,
             label: label.into(),
             path: PathBuf::new(),

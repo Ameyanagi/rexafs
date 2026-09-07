@@ -216,6 +216,8 @@ impl StudioApp {
                     if app.catalog_gen != generation { return false; }
                     match event {
                         ImportEvent::Batch(batch) => {
+                            let catalog_start = app.catalog.len();
+                            let derived_start = app.derived.len();
                             for file in batch {
                                 let path = PathBuf::from(file.meta.dir.as_ref()).join(file.meta.name.as_ref());
                                 if app.catalog.find_by_canonical_path(&path).is_some() { continue; }
@@ -229,15 +231,17 @@ impl StudioApp {
                                     reference_params.edge_step = None;
                                     reference_params.bkg_ek0 = None;
                                     reference_params.bkg_standard = None;
-                                    let group = DerivedSpectrum {
+                                    let mut group = DerivedSpectrum {
                                         id: app.next_group_id(),
                                         label: path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
                                         source: Some(path), params: Some(reference_params), ..Default::default()
                                     };
+                                    app.group_registry.assign_group(&mut group, &app.project_source_origins);
                                     app.derived.push(group);
                                     channels += 1;
                                 }
                             }
+                            app.register_appended_groups(catalog_start, derived_start);
                             if app.selected.is_none() && app.pending_project_spectrum.is_none() && app.pending_derived.is_none() && !app.catalog.is_empty() { app.select_entry(0, cx); }
                             app.status = format!("Importing · {added} files · {channels} reference channels").into();
                         }
@@ -261,7 +265,10 @@ impl StudioApp {
     }
 
     pub(super) fn add_import_channel(&mut self, mode: DetectionMode, cx: &mut Context<Self>) {
-        let path = self.current_path.clone();
+        let path = self
+            .current_path
+            .canonicalize()
+            .unwrap_or_else(|_| self.current_path.clone());
         if path.as_os_str().is_empty() {
             return;
         }
@@ -278,7 +285,7 @@ impl StudioApp {
             self.select_entry(DERIVED_BASE + i, cx);
             return;
         }
-        let group = DerivedSpectrum {
+        let mut group = DerivedSpectrum {
             id: self.next_group_id(),
             label: path
                 .file_name()
@@ -289,15 +296,18 @@ impl StudioApp {
             params: Some(params),
             ..Default::default()
         };
+        self.group_registry
+            .assign_group(&mut group, &self.project_source_origins);
         let index = self.derived.len();
+        self.derived.push(group);
+        self.rekey_after_catalog_change();
         self.record(
             format!("Add {} channel", mode.label()),
             Some(shell::journal::UndoOp::DerivedAdd {
                 index,
-                spectrum: group.clone(),
+                spectrum: self.derived[index].clone(),
             }),
         );
-        self.derived.push(group);
         self.select_entry(DERIVED_BASE + index, cx);
     }
 }

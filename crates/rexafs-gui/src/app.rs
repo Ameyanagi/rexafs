@@ -532,7 +532,7 @@ const NO_ENTRY: usize = usize::MAX;
 
 /// Derived (merged) spectra get virtual indices above this base so the
 /// selection/cache/compare machinery treats them like catalog entries.
-const DERIVED_BASE: usize = usize::MAX / 2;
+pub(crate) const DERIVED_BASE: usize = usize::MAX / 2;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DataTab {
@@ -991,6 +991,9 @@ pub struct StudioApp {
     palette: Option<shell::palette::PaletteState>,
     /// Inspector scroll position (tools reveal their form on open).
     inspector_scroll: gpui::ScrollHandle,
+    /// Durable identities backing the compact index-based UI.
+    group_registry: crate::group_identity::GroupRegistry,
+    group_state: crate::group_identity::GroupState,
     /// Groups skipped by bulk operations (Athena's frozen groups).
     frozen: BTreeSet<usize>,
     data_panel_open: bool,
@@ -1054,8 +1057,8 @@ pub struct StudioApp {
     recompute_epoch: u64,
     params: PipelineParams,
     /// Per-spectrum parameter overrides (copy-on-write of the full param
-    /// set), keyed by catalog index. Indices are only stable within one
-    /// scan session; persistence re-keys by file path (`ParamOverride`).
+    /// set), keyed by the registry’s current catalog indices. The central
+    /// catalog adapter and project persistence bind them to durable IDs.
     overrides: BTreeMap<usize, PipelineParams>,
     /// Path-keyed overrides from a loaded project, resolved to catalog
     /// indices once the folder scan / index restore materializes entries.
@@ -1548,6 +1551,207 @@ mod override_tests {
     use crate::params::PipelineParams;
 
     #[test]
+    fn derived_only_index_shift_keeps_batch_fit_and_active_filter() {
+        use super::{CatalogBindings, IndexChange};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+        let mut generations = [10; 6];
+        let mut running = [true; 5];
+        let batch = Arc::new(AtomicBool::new(false));
+        let mut cancellations = [
+            Some(Arc::new(AtomicBool::new(false))),
+            Some(batch.clone()),
+            None,
+        ];
+        let matches = Arc::new(vec![2, 5, 8]);
+        let mut filtered = Some(matches.clone());
+        CatalogBindings {
+            generations: generations.each_mut(),
+            running: running.each_mut(),
+            cancellations: cancellations.each_mut(),
+            filtered: &mut filtered,
+        }
+        .invalidate(IndexChange::DerivedOnly);
+        assert_eq!(generations, [10; 6]);
+        assert_eq!(running, [true; 5]);
+        assert!(!batch.load(Ordering::Relaxed));
+        assert!(cancellations[1].is_some());
+        assert!(Arc::ptr_eq(filtered.as_ref().unwrap(), &matches));
+        // A genuine catalog swap still retires all catalog jobs and filtering.
+        CatalogBindings {
+            generations: generations.each_mut(),
+            running: running.each_mut(),
+            cancellations: cancellations.each_mut(),
+            filtered: &mut filtered,
+        }
+        .invalidate(IndexChange::Catalog);
+        assert_eq!(generations, [11; 6]);
+        assert_eq!(running, [false; 5]);
+        assert!(batch.load(Ordering::Relaxed));
+        assert!(filtered.is_none());
+    }
+
+    #[test]
+    fn reopen_marked_channels_and_result_loads_comparison_and_lcf_cache() {
+        use super::*;
+        use crate::group_identity::{GroupId, GroupRegistry};
+        use crate::params::{ImportConfig, Quantity};
+        let root = std::env::temp_dir().join(format!(
+            "rexafs-reopen-compare-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let source = root.join("multi.dat");
+        std::fs::copy(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../rexafs/tests/testfiles/Ru_QAS.dat"),
+            &source,
+        )
+        .unwrap();
+        let source = source.canonicalize().unwrap();
+        let mut project = ProjectFile {
+            version: PROJECT_VERSION,
+            spectrum_file: Some(source.clone()),
+            raw_files: vec![source.clone()],
+            ..Default::default()
+        };
+        project.derived = [DetectionMode::Transmission, DetectionMode::Reference]
+            .into_iter()
+            .enumerate()
+            .map(|(i, mode)| DerivedSpectrum {
+                id: i as u64 + 1,
+                source: Some(source.clone()),
+                params: Some(PipelineParams {
+                    import: ImportConfig {
+                        mode,
+                        ..Default::default()
+                    },
+                    fft_kweight: Some(2.),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .collect();
+        project.derived.push(DerivedSpectrum {
+            id: 3,
+            group_id: Some(GroupId::new_result()),
+            quantity: Quantity::NormalizedDifference,
+            energy: vec![22000., 22001., 22002.],
+            mu: vec![0.1, 0.2, 0.1],
+            ..Default::default()
+        });
+        project.assign_group_ids();
+        let registry = GroupRegistry::rebuild(
+            [(0, source.clone(), DetectionMode::Auto)],
+            &mut project.derived,
+            &mut project.source_groups,
+            &project.source_origins,
+        );
+        project.group_state.capture(
+            &registry,
+            &BTreeSet::from([DERIVED_BASE, DERIVED_BASE + 1, DERIVED_BASE + 2]),
+            &BTreeSet::new(),
+            &BTreeMap::from([(
+                0,
+                PipelineParams {
+                    fft_kweight: Some(1.),
+                    ..Default::default()
+                },
+            )]),
+            Some(0),
+        );
+        let path = root.join("session.rxs");
+        crate::project::save(&path, &project).unwrap();
+        let mut reopened = crate::project::load(&path).unwrap();
+        reopened.assign_group_ids();
+        let mut catalog = Catalog::default();
+        catalog.extend(vec![crate::catalog::FileMeta {
+            dir: Arc::from(source.parent().unwrap().to_str().unwrap()),
+            name: "multi.dat".into(),
+            size: 1,
+        }]);
+        let registry = GroupRegistry::from_sources(reopened.source_groups.clone());
+        registry.replace_catalog(GroupRegistry::prepare_catalog(
+            &catalog,
+            &reopened.source_groups,
+        ));
+        registry.replace_derived(&reopened.derived);
+        let selection = registry.indices(&reopened.group_state.marked);
+        let overrides = reopened.group_state.resolved_overrides(&registry);
+        let active = registry
+            .index(reopened.group_state.current.as_ref().unwrap())
+            .unwrap();
+        let mut cache = LruCache::new(NonZeroUsize::new(16).unwrap());
+        // Reopening first loads the active file. The remaining marks require the
+        // same comparison scheduling used by restore/import completion.
+        for request in missing_compare_loads(
+            &catalog,
+            &reopened.derived,
+            &reopened.params,
+            &overrides,
+            &[active],
+            &cache,
+        ) {
+            let (ix, fingerprint, result) = request.process();
+            cache.put((ix, fingerprint), Arc::new(result.unwrap()));
+        }
+        let indices: Vec<_> = selection.iter().copied().chain([active]).collect();
+        let missing = missing_compare_loads(
+            &catalog,
+            &reopened.derived,
+            &reopened.params,
+            &overrides,
+            &indices,
+            &cache,
+        );
+        assert_eq!(missing.len(), 3);
+        let fingerprints: BTreeMap<_, _> = missing.iter().map(|r| (r.ix, r.fingerprint)).collect();
+        for request in missing {
+            let (ix, fingerprint, result) = request.process();
+            cache.put((ix, fingerprint), Arc::new(result.unwrap()));
+        }
+        assert!(
+            missing_compare_loads(
+                &catalog,
+                &reopened.derived,
+                &reopened.params,
+                &overrides,
+                &indices,
+                &cache
+            )
+            .is_empty()
+        );
+        let standards = cached_marked_spectra(
+            &selection,
+            &cache,
+            |ix| fingerprints[&ix],
+            |ix| format!("{ix}"),
+        );
+        assert_eq!(standards.len(), 3);
+        assert!(
+            standards
+                .iter()
+                .all(|(_, sp)| sp.raw_mu.as_ref().is_some_and(|mu| !mu.is_empty()))
+        );
+        assert_eq!(
+            cache
+                .peek(&(active, overrides[&active].fingerprint()))
+                .unwrap()
+                .raw_mu
+                .as_ref()
+                .unwrap()
+                .len(),
+            standards[0].1.raw_mu.as_ref().unwrap().len()
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn mapping_edit_preparation_skips_noops_and_rejects_partial_edits() {
         let before = PipelineParams::default();
         assert!(
@@ -1908,6 +2112,107 @@ fn default_for(param: PathParam) -> f64 {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum IndexChange {
+    DerivedOnly,
+    Catalog,
+}
+
+/// Catalog jobs and filters share the catalog's index lifetime. Keeping their
+/// invalidation together makes the derived-only boundary testable without GPUI.
+struct CatalogBindings<'a> {
+    generations: [&'a mut u64; 6],
+    running: [&'a mut bool; 5],
+    cancellations: [&'a mut Option<Arc<AtomicBool>>; 3],
+    filtered: &'a mut Option<Arc<Vec<usize>>>,
+}
+
+impl CatalogBindings<'_> {
+    fn invalidate(self, change: IndexChange) {
+        if change == IndexChange::DerivedOnly {
+            return;
+        }
+        for generation in self.generations {
+            *generation += 1;
+        }
+        for running in self.running {
+            *running = false;
+        }
+        for cancellation in self.cancellations {
+            if let Some(cancel) = cancellation.take() {
+                cancel.store(true, Ordering::Relaxed);
+            }
+        }
+        *self.filtered = None;
+    }
+}
+
+/// A window-independent comparison request, shared by reopen and normal marks.
+struct CompareLoad {
+    ix: usize,
+    fingerprint: u64,
+    source: Result<PathBuf, DerivedSpectrum>,
+    params: PipelineParams,
+}
+
+impl CompareLoad {
+    fn process(&self) -> (usize, u64, Result<XASSpectrum, String>) {
+        let result = match &self.source {
+            Ok(path) => process_file(path, &self.params),
+            Err(group) => group.for_display(&self.params),
+        };
+        (self.ix, self.fingerprint, result)
+    }
+}
+
+fn cached_marked_spectra(
+    selection: &BTreeSet<usize>,
+    cache: &LruCache<(usize, u64), Arc<XASSpectrum>>,
+    fingerprint: impl Fn(usize) -> u64,
+    label: impl Fn(usize) -> String,
+) -> Vec<(String, Arc<XASSpectrum>)> {
+    selection
+        .iter()
+        .filter(|&&ix| ix != NO_ENTRY)
+        .filter_map(|&ix| {
+            cache
+                .peek(&(ix, fingerprint(ix)))
+                .map(|sp| (label(ix), sp.clone()))
+        })
+        .collect()
+}
+
+fn missing_compare_loads(
+    catalog: &Catalog,
+    derived: &[DerivedSpectrum],
+    params: &PipelineParams,
+    overrides: &BTreeMap<usize, PipelineParams>,
+    indices: &[usize],
+    cache: &LruCache<(usize, u64), Arc<XASSpectrum>>,
+) -> Vec<CompareLoad> {
+    indices
+        .iter()
+        .filter_map(|&ix| {
+            let (source, effective, fingerprint) = if ix >= DERIVED_BASE {
+                let group = derived.get(ix - DERIVED_BASE)?;
+                let effective = group.params.as_ref().unwrap_or(params);
+                (Err(group.clone()), effective, group.fingerprint(effective))
+            } else if ix < catalog.len() {
+                let effective = overrides.get(&ix).unwrap_or(params);
+                (Ok(catalog.path(ix)), effective, effective.fingerprint())
+            } else {
+                return None;
+            };
+            (!cache.contains(&(ix, fingerprint))).then(|| CompareLoad {
+                ix,
+                fingerprint,
+                source,
+                params: effective.clone(),
+            })
+        })
+        .collect()
+}
+
 fn spectrum_status(label: &SharedString, sp: &XASSpectrum) -> SharedString {
     format!(
         "{} · {} points · E0 {:.1} eV",
@@ -1987,6 +2292,8 @@ impl StudioApp {
             journal: shell::journal::JournalState::default(),
             palette: None,
             inspector_scroll: gpui::ScrollHandle::new(),
+            group_registry: Default::default(),
+            group_state: Default::default(),
             frozen: BTreeSet::new(),
             data_panel_open: true,
             context_panel_open: true,
@@ -2443,6 +2750,11 @@ impl StudioApp {
     }
 
     fn restore_project_selection(&mut self, cx: &mut Context<Self>) {
+        self.restore_active_project_group(cx);
+        self.ensure_compare_loaded(cx);
+    }
+
+    fn restore_active_project_group(&mut self, cx: &mut Context<Self>) {
         if let Some(id) = self.pending_derived.take() {
             if let Some(i) = self.derived.iter().position(|d| d.id == id) {
                 self.select_entry(DERIVED_BASE + i, cx);
@@ -2450,6 +2762,9 @@ impl StudioApp {
             }
         }
         let Some(path) = self.pending_project_spectrum.take() else {
+            if let Some(ix) = self.selected {
+                self.select_entry(ix, cx);
+            }
             return;
         };
         if let Some(ix) = self.catalog.find_by_path(&path) {
@@ -2536,34 +2851,189 @@ impl StudioApp {
             .is_some_and(|batch| batch.model_fingerprint != self.fit_model_fingerprint())
     }
 
-    /// Reset every state that is indexed by the current catalog before a new
-    /// folder starts streaming. Generation bumps also make old async arrivals
-    /// harmless while their receivers/workers wind down.
-    fn reset_catalog_state(&mut self, cx: &mut Context<Self>) {
+    /// Materialize a durable source identity only when a caller references it.
+    fn group_id(&self, ix: usize) -> Option<crate::group_identity::GroupId> {
+        self.group_registry.id(ix).or_else(|| {
+            (ix < self.catalog.len()).then(|| {
+                self.group_registry.register_source(
+                    Some(ix),
+                    self.catalog.path(ix),
+                    self.effective_params(ix).import.mode,
+                    &self.project_source_origins,
+                )
+            })
+        })
+    }
+
+    fn standalone_group_id(&self, path: &std::path::Path) -> crate::group_identity::GroupId {
+        self.group_registry.register_source(
+            None,
+            path.canonicalize().unwrap_or_else(|_| path.to_path_buf()),
+            self.params.import.mode,
+            &self.project_source_origins,
+        )
+    }
+
+    fn capture_group_state(&self, state: &mut crate::group_identity::GroupState) {
+        for ix in self
+            .selection
+            .iter()
+            .chain(&self.frozen)
+            .chain(self.overrides.keys())
+            .copied()
+            .chain(self.selected)
+        {
+            self.group_id(ix);
+        }
+        state.capture(
+            &self.group_registry,
+            &self.selection,
+            &self.frozen,
+            &self.overrides,
+            self.selected,
+        );
+    }
+
+    fn capture_groups(&mut self) {
+        let mut state = std::mem::take(&mut self.group_state);
+        self.capture_group_state(&mut state);
+        self.group_state = state;
+    }
+
+    fn resolve_group_state(&mut self) {
+        self.selection = self.group_registry.indices(&self.group_state.marked);
+        self.frozen = self.group_registry.indices(&self.group_state.frozen);
+        self.overrides = self.group_state.resolved_overrides(&self.group_registry);
+        self.selected = self
+            .group_state
+            .current
+            .as_ref()
+            .and_then(|id| self.group_registry.index(id));
+    }
+
+    /// Central adapter for derived insert/remove/reorder. Catalog indices did
+    /// not move: catalog jobs, filters, thumbnails and caches remain valid.
+    fn rekey_after_catalog_change(&mut self) {
+        self.capture_groups();
+        self.group_registry.reserve_groups(&self.derived);
+        for group in &mut self.derived {
+            self.group_registry
+                .assign_group(group, &self.project_source_origins);
+        }
+        if self.group_registry.replace_derived(&self.derived) {
+            self.invalidate_index_bindings(IndexChange::DerivedOnly);
+        }
+        self.resolve_group_state();
+    }
+
+    fn invalidate_index_bindings(&mut self, change: IndexChange) {
         self.tools.invalidate_bindings();
-        self.catalog_gen += 1;
         self.generation += 1;
         self.compare_gen += 1;
-        self.operando_gen += 1;
-        self.batch_gen += 1;
-        self.merge_gen += 1;
-        if let Some(cancel) = self.operando_cancel.take() {
-            cancel.store(true, Ordering::Relaxed);
+        self.load_running = false;
+        self.compare_running = false;
+        CatalogBindings {
+            generations: [
+                &mut self.operando_gen,
+                &mut self.batch_gen,
+                &mut self.merge_gen,
+                &mut self.fit_gen,
+                &mut self.lcf_gen,
+                &mut self.filter_gen,
+            ],
+            running: [
+                &mut self.operando_running,
+                &mut self.batch_running,
+                &mut self.merge_running,
+                &mut self.fit_running,
+                &mut self.lcf_running,
+            ],
+            cancellations: [
+                &mut self.operando_cancel,
+                &mut self.batch_cancel,
+                &mut self.merge_cancel,
+            ],
+            filtered: &mut self.filtered,
         }
-        if let Some(cancel) = self.batch_cancel.take() {
-            cancel.store(true, Ordering::Relaxed);
+        .invalidate(change);
+        if change == IndexChange::Catalog {
+            self.cache.clear();
+            self.raw_cache.clear();
+            self.thumbs = None;
+        } else {
+            // Only shifted derived slots can now refer to another group.
+            let keys: Vec<_> = self
+                .cache
+                .iter()
+                .filter(|(key, _)| key.0 >= DERIVED_BASE)
+                .map(|(key, _)| *key)
+                .collect();
+            for key in keys {
+                self.cache.pop(&key);
+            }
+            let keys: Vec<_> = self
+                .raw_cache
+                .iter()
+                .filter(|(key, _)| key.0 >= DERIVED_BASE)
+                .map(|(key, _)| *key)
+                .collect();
+            for key in keys {
+                self.raw_cache.pop(&key);
+            }
         }
-        if let Some(cancel) = self.merge_cancel.take() {
-            cancel.store(true, Ordering::Relaxed);
+    }
+
+    /// Append never captures/rekeys existing state or retires workers.
+    fn register_appended_groups(&mut self, catalog_start: usize, derived_start: usize) {
+        self.group_registry
+            .append_catalog(&self.catalog, catalog_start);
+        self.group_registry
+            .append_derived(&self.derived, derived_start);
+        let appended = |ix: &usize| {
+            (*ix < DERIVED_BASE && *ix >= catalog_start) || *ix >= DERIVED_BASE + derived_start
+        };
+        self.selection.extend(
+            self.group_registry
+                .indices(&self.group_state.marked)
+                .into_iter()
+                .filter(appended),
+        );
+        self.frozen.extend(
+            self.group_registry
+                .indices(&self.group_state.frozen)
+                .into_iter()
+                .filter(appended),
+        );
+        for (ix, params) in self.group_state.resolved_overrides(&self.group_registry) {
+            if appended(&ix) {
+                self.overrides.entry(ix).or_insert(params);
+            }
         }
+        if self.selected.is_none() {
+            self.selected = self
+                .group_state
+                .current
+                .as_ref()
+                .and_then(|id| self.group_registry.index(id))
+                .filter(appended);
+        }
+    }
+
+    /// Retire workers and clear catalog presentation before a folder streams.
+    /// Durable state remains pending until its groups resolve again.
+    fn reset_catalog_state(&mut self, cx: &mut Context<Self>) {
+        self.catalog_gen += 1;
+        self.invalidate_index_bindings(IndexChange::Catalog);
+        self.capture_groups();
         self.catalog = Catalog::default();
+        self.group_registry.replace_catalog(Default::default());
+        self.group_registry.replace_derived(&self.derived);
+        self.resolve_group_state();
         self.catalog_index_path = None;
         self.verify_running = false;
         self.load_running = false;
         self.compare_running = false;
         self.merge_running = false;
-        self.selected = None;
-        self.selection.clear();
         self.filtered = None;
         self.filter_gen += 1;
         self.filter_text.clear();
@@ -2571,14 +3041,9 @@ impl StudioApp {
             input.update(cx, |input, cx| input.set_text("", cx));
         }
         self.cache.clear();
-        // Overrides are keyed by catalog index; a new catalog orphans them.
         self.raw_cache.clear();
-        self.frozen.clear();
         self.thumbs = None;
         self.stale_plots = None;
-        // Persisted copies live in the project file, keyed by path.
-        self.overrides.clear();
-        self.pending_overrides.clear();
         self.pending_project_spectrum = None;
         self.current_path = PathBuf::new();
         self.spectrum_path = PathBuf::new();
@@ -3393,6 +3858,11 @@ impl StudioApp {
         label: SharedString,
         cx: &mut Context<Self>,
     ) {
+        if ix == NO_ENTRY {
+            self.standalone_group_id(&path);
+        } else {
+            self.group_id(ix);
+        }
         self.generation += 1;
         let generation = self.generation;
         let key = (ix, self.effective_fingerprint(ix));
@@ -4175,26 +4645,14 @@ impl StudioApp {
     /// its own effective params.
     fn ensure_compare_loaded(&mut self, cx: &mut Context<Self>) {
         let (indices, _) = self.compare_indices();
-        let mut missing: Vec<(usize, u64, Result<PathBuf, DerivedSpectrum>, PipelineParams)> =
-            Vec::new();
-        for &ix in &indices {
-            if ix == NO_ENTRY {
-                continue;
-            }
-            let fingerprint = self.effective_fingerprint(ix);
-            if self.cache.contains(&(ix, fingerprint)) {
-                continue;
-            }
-            let source = if ix >= DERIVED_BASE {
-                match self.derived.get(ix - DERIVED_BASE) {
-                    Some(d) => Err(d.clone()),
-                    None => continue,
-                }
-            } else {
-                Ok(self.catalog.path(ix))
-            };
-            missing.push((ix, fingerprint, source, self.effective_params(ix).clone()));
-        }
+        let missing = missing_compare_loads(
+            &self.catalog,
+            &self.derived,
+            &self.params,
+            &self.overrides,
+            &indices,
+            &self.cache,
+        );
         if missing.is_empty() {
             self.invalidate_explore_plots(cx);
             cx.notify();
@@ -4208,13 +4666,7 @@ impl StudioApp {
         let job = cx.background_executor().spawn(async move {
             missing
                 .par_iter()
-                .map(|(ix, fingerprint, source, params)| {
-                    let result = match source {
-                        Ok(path) => process_file(path, params),
-                        Err(d) => d.for_display(params),
-                    };
-                    (*ix, *fingerprint, result)
-                })
+                .map(CompareLoad::process)
                 .collect::<Vec<_>>()
         });
         cx.spawn(async move |this, cx| {
@@ -4510,9 +4962,16 @@ impl StudioApp {
     fn load_catalog_index(&mut self, root: PathBuf, index_path: PathBuf, cx: &mut Context<Self>) {
         let catalog_gen = self.catalog_gen;
         self.status = format!("loading index for {} ...", root.display()).into();
+        let sources = self.group_registry.sources();
         let job = cx.background_executor().spawn({
             let root = root.clone();
-            async move { load_index(&index_path, &root) }
+            async move {
+                load_index(&index_path, &root).map(|catalog| {
+                    let entries =
+                        crate::group_identity::GroupRegistry::prepare_catalog(&catalog, &sources);
+                    (catalog, entries)
+                })
+            }
         });
         cx.spawn(async move |this, cx| {
             let result = job.await;
@@ -4521,10 +4980,14 @@ impl StudioApp {
                     return;
                 }
                 match result {
-                    Ok(catalog) => {
+                    Ok((catalog, mut entries)) => {
                         let total = catalog.len();
                         app.tools.invalidate_bindings();
+                        app.capture_groups();
+                        entries.include_recent(&catalog, &app.group_registry);
                         app.catalog = catalog;
+                        app.group_registry.replace_catalog(entries);
+                        app.resolve_group_state();
                         app.resolve_pending_overrides(cx);
                         app.restore_project_selection(cx);
                         app.status =
@@ -4587,16 +5050,21 @@ impl StudioApp {
                 }
             }
             let Ok(Some(live_parts)) = this.update(cx, |app, _| {
-                (app.catalog_gen == catalog_gen).then(|| app.catalog.index_parts())
+                (app.catalog_gen == catalog_gen).then(|| {
+                    app.capture_groups();
+                    (app.catalog.index_parts(), app.group_registry.sources())
+                })
             }) else {
                 return;
             };
             // Million-entry comparison stays off the UI thread.
             let compare = cx.background_executor().spawn(async move {
-                let unchanged = live_parts.same_index(&shadow.index_parts());
-                (unchanged, shadow)
+                let unchanged = live_parts.0.same_index(&shadow.index_parts());
+                let entries =
+                    crate::group_identity::GroupRegistry::prepare_catalog(&shadow, &live_parts.1);
+                (unchanged, shadow, entries)
             });
-            let (unchanged, shadow) = compare.await;
+            let (unchanged, shadow, entries) = compare.await;
             this.update(cx, |app, cx| {
                 if app.catalog_gen != catalog_gen {
                     return;
@@ -4606,7 +5074,7 @@ impl StudioApp {
                     app.status = format!("index verified · {} files", app.catalog.len()).into();
                 } else {
                     let before = app.catalog.len();
-                    app.install_refreshed_catalog(shadow, cx);
+                    app.install_refreshed_catalog(shadow, entries, cx);
                     app.status = format!(
                         "index refreshed · {} files (was {before})",
                         app.catalog.len()
@@ -4624,68 +5092,18 @@ impl StudioApp {
     /// Swap in a freshly walked catalog after the index diverged. Everything
     /// keyed by catalog indices is invalidated; the active spectrum is
     /// re-located by path so the plots keep their subject when it survived.
-    fn install_refreshed_catalog(&mut self, catalog: Catalog, cx: &mut Context<Self>) {
-        self.tools.invalidate_bindings();
-        let remap = |indices: &BTreeSet<usize>| -> BTreeSet<usize> {
-            indices
-                .iter()
-                .filter_map(|&ix| {
-                    if ix >= DERIVED_BASE {
-                        Some(ix)
-                    } else if ix < self.catalog.len() {
-                        catalog.find_by_path(&self.catalog.path(ix))
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        };
-        let selection = remap(&self.selection);
-        let frozen = remap(&self.frozen);
-        let derived_selected = self
-            .selected
-            .filter(|&ix| ix >= DERIVED_BASE && ix != NO_ENTRY);
-        self.generation += 1;
-        self.compare_gen += 1;
-        self.operando_gen += 1;
-        self.batch_gen += 1;
-        self.merge_gen += 1;
-        // Filter results contain catalog indices. Invalidate them before the
-        // catalog swap so no render can observe old indices with new entries.
-        self.filter_gen += 1;
-        self.filtered = None;
-        for cancel in [
-            self.operando_cancel.take(),
-            self.batch_cancel.take(),
-            self.merge_cancel.take(),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            cancel.store(true, Ordering::Relaxed);
-        }
-        self.load_running = false;
-        self.compare_running = false;
-        self.merge_running = false;
-        self.operando_running = false;
-        self.batch_running = false;
-        // Indices shift under a refreshed walk; re-key overrides by path so
-        // surviving files keep their per-spectrum params.
-        let path_overrides: Vec<(PathBuf, PipelineParams)> = self
-            .overrides
-            .iter()
-            .filter(|&(&ix, _)| ix < self.catalog.len())
-            .map(|(&ix, params)| (self.catalog.path(ix), params.clone()))
-            .collect();
+    fn install_refreshed_catalog(
+        &mut self,
+        catalog: Catalog,
+        mut entries: crate::group_identity::PreparedCatalog,
+        cx: &mut Context<Self>,
+    ) {
+        self.invalidate_index_bindings(IndexChange::Catalog);
+        self.capture_groups();
+        entries.include_recent(&catalog, &self.group_registry);
         self.catalog = catalog;
-        self.overrides = path_overrides
-            .into_iter()
-            .filter_map(|(path, params)| self.catalog.find_by_path(&path).map(|ix| (ix, params)))
-            .collect();
-        self.selection = selection;
-        self.frozen = frozen;
-        self.cache.clear();
-        self.raw_cache.clear();
+        self.group_registry.replace_catalog(entries);
+        self.resolve_group_state();
         self.expanded_scan = None;
         self.active_scan = None;
         self.operando = None;
@@ -4693,7 +5111,6 @@ impl StudioApp {
         self.time_pos = 0;
         self.pending_time_pos = None;
         self.batch_fit = None;
-        self.selected = derived_selected.or_else(|| self.catalog.find_by_path(&self.current_path));
         self.resolve_pending_overrides(cx);
         if self.pending_project_spectrum.is_some() {
             self.restore_project_selection(cx);
@@ -4708,6 +5125,7 @@ impl StudioApp {
             let label = self.entry_label(ix);
             self.load_spectrum(ix, path, label.into(), cx);
         }
+        self.ensure_compare_loaded(cx);
         if !self.filter_text.is_empty() {
             self.apply_filter(cx);
         }
@@ -4766,7 +5184,9 @@ impl StudioApp {
                                 .active_scan
                                 .and_then(|scan_ix| app.catalog.scans.get(scan_ix))
                                 .map(|scan| scan.len);
+                            let start = app.catalog.len();
                             app.catalog.extend(batch);
+                            app.register_appended_groups(start, app.derived.len());
                             let active_extended = app.active_scan.is_some_and(|scan_ix| {
                                 let new_len = app.catalog.scans.get(scan_ix).map(|scan| scan.len);
                                 old_active_len.is_some() && new_len > old_active_len
@@ -6143,17 +6563,12 @@ impl StudioApp {
 
     /// Marked groups whose processed spectra are cached, as LCF standards.
     pub(crate) fn lcf_standards(&self) -> Vec<(String, Arc<XASSpectrum>)> {
-        let mut out = Vec::new();
-        for &ix in &self.selection {
-            if ix == NO_ENTRY {
-                continue;
-            }
-            let fp = self.effective_fingerprint(ix);
-            if let Some(sp) = self.cache.peek(&(ix, fp)) {
-                out.push((self.entry_label(ix), sp.clone()));
-            }
-        }
-        out
+        cached_marked_spectra(
+            &self.selection,
+            &self.cache,
+            |ix| self.effective_fingerprint(ix),
+            |ix| self.entry_label(ix),
+        )
     }
 
     /// LCF weights of every frame of the active scan against the marked
@@ -6762,7 +7177,11 @@ impl StudioApp {
             })
             .collect();
         overrides.extend(self.pending_overrides.iter().cloned());
+        let mut group_state = self.group_state.clone();
+        self.capture_group_state(&mut group_state);
         ProjectFile {
+            source_groups: self.group_registry.sources(),
+            group_state,
             header: self.project_header.clone(),
             version: PROJECT_VERSION,
             source_dir: self.source_dir.clone(),
@@ -6908,9 +7327,15 @@ impl StudioApp {
         self.project_load_generation += 1;
         let generation = self.project_load_generation;
         self.status = "Opening project…".into();
-        let job = cx
-            .background_executor()
-            .spawn(async move { crate::project::load(&path) });
+        let job = cx.background_executor().spawn(async move {
+            crate::project::load(&path).map(|mut project| {
+                let next = project.assign_group_ids();
+                let registry = crate::group_identity::GroupRegistry::from_sources(std::mem::take(
+                    &mut project.source_groups,
+                ));
+                (project, next, registry)
+            })
+        });
         cx.spawn(async move |this, cx| {
             let result = job.await;
             this.update(cx, |app, cx| {
@@ -6918,7 +7343,7 @@ impl StudioApp {
                     return;
                 }
                 match result {
-                    Ok(project) => app.apply_project(project, cx),
+                    Ok((project, next, registry)) => app.apply_project(project, next, registry, cx),
                     Err(error) => {
                         app.status = format!("Open failed: {error}").into();
                         app.record_job_error("open project", error);
@@ -6932,8 +7357,21 @@ impl StudioApp {
         cx.notify();
     }
 
-    fn apply_project(&mut self, mut project: ProjectFile, cx: &mut Context<Self>) {
-        self.next_derived_id = project.assign_group_ids();
+    fn apply_project(
+        &mut self,
+        project: ProjectFile,
+        next_derived_id: u64,
+        registry: crate::group_identity::GroupRegistry,
+        cx: &mut Context<Self>,
+    ) {
+        self.next_derived_id = next_derived_id;
+        self.group_state = Default::default();
+        self.group_registry = registry;
+        self.selection.clear();
+        self.frozen.clear();
+        self.overrides.clear();
+        self.pending_overrides.clear();
+        self.selected = None;
         self.project_generation += 1;
         self.assistant_history = project.assistant.clone();
         self.assistant_history_revision = 0;
@@ -7013,6 +7451,7 @@ impl StudioApp {
         self.fit_history_results.clear();
         self.sync_range_fields(cx);
         self.derived = project.derived;
+        self.group_registry.reserve_groups(&self.derived);
         self.pending_derived = project.active_derived;
 
         // Reopen the data source. Per-spectrum overrides wait path-keyed
@@ -7035,6 +7474,12 @@ impl StudioApp {
                 self.append_import(files, true, cx);
             }
         }
+        let restored_current = self.selected.and_then(|ix| self.group_id(ix));
+        self.group_state = project.group_state;
+        self.group_state.current = self.group_state.current.take().or(restored_current);
+        self.selected = None;
+        self.resolve_group_state();
+        self.ensure_compare_loaded(cx);
         if !self.fit_paths.is_empty() {
             self.set_fit_step(shell::fit_workspace::FitStep::Model, cx);
         }

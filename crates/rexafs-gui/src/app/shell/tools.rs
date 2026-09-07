@@ -216,6 +216,7 @@ pub struct ToolState {
 /// or a derived-group removal. Keep source/name and derived id as well.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ToolTarget {
+    pub group_id: Option<crate::group_identity::GroupId>,
     pub ix: usize,
     pub fingerprint: u64,
     pub label: String,
@@ -229,6 +230,7 @@ pub(crate) struct ToolTarget {
 impl ToolTarget {
     pub(crate) fn operation_input(&self) -> OperationInput {
         OperationInput {
+            group_id: self.group_id.clone(),
             label: self.label.clone(),
             path: self.path.clone(),
             derived_id: self.derived_id,
@@ -238,6 +240,7 @@ impl ToolTarget {
     }
 
     pub(crate) fn standalone(
+        group_id: Option<crate::group_identity::GroupId>,
         path: PathBuf,
         label: String,
         fingerprint: u64,
@@ -245,6 +248,7 @@ impl ToolTarget {
         catalog_generation: u64,
     ) -> Self {
         Self {
+            group_id,
             ix: NO_ENTRY,
             path,
             label,
@@ -745,6 +749,7 @@ impl StudioApp {
         if ix == NO_ENTRY {
             return (!self.current_path.as_os_str().is_empty()).then(|| {
                 ToolTarget::standalone(
+                    Some(self.standalone_group_id(&self.current_path)),
                     self.current_path.clone(),
                     self.spectrum_label.to_string(),
                     self.params.fingerprint(),
@@ -760,6 +765,7 @@ impl StudioApp {
             .checked_sub(DERIVED_BASE)
             .and_then(|i| self.derived.get(i));
         Some(ToolTarget {
+            group_id: self.group_id(ix),
             ix,
             fingerprint: self.effective_fingerprint(ix),
             label: self.entry_label(ix),
@@ -1015,6 +1021,7 @@ impl StudioApp {
                 ) {
                     Ok(mut derived) => {
                         derived.id = self.next_group_id();
+                        derived.group_id = Some(crate::group_identity::GroupId::new_result());
                         derived
                     }
                     Err(error) => {
@@ -1031,6 +1038,7 @@ impl StudioApp {
                     }),
                 );
                 self.derived.push(derived);
+                self.rekey_after_catalog_change();
                 let ix = DERIVED_BASE + self.derived.len() - 1;
                 self.tools.message = format!("created {label}").into();
                 self.tools.open = None;
@@ -1577,6 +1585,7 @@ mod tool_readiness_tests {
 
     fn group(ix: usize) -> ToolTarget {
         ToolTarget {
+            group_id: Some(crate::group_identity::GroupId::legacy_result(ix as u64)),
             ix,
             fingerprint: 42,
             label: format!("group {ix}"),
@@ -1917,8 +1926,101 @@ mod tool_readiness_tests {
     }
 
     #[test]
+    fn standalone_target_identity_roundtrip_after_relocation_uses_actual_channel() {
+        use crate::group_identity::GroupRegistry;
+        use crate::params::DetectionMode;
+        use crate::project::{DataStorage, ProjectFile, load, save_with_storage};
+        use std::collections::BTreeMap;
+        let root = std::env::temp_dir().join(format!(
+            "rexafs-standalone-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        for mode in [DetectionMode::Transmission, DetectionMode::Reference] {
+            let old = root.join(format!("old-{mode:?}"));
+            std::fs::create_dir_all(&old).unwrap();
+            let source = old.join("source.xmu");
+            std::fs::copy(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/projects/data/cu_150k.xmu"),
+                &source,
+            )
+            .unwrap();
+            let source = source.canonicalize().unwrap();
+            let registry = GroupRegistry::default();
+            let params = PipelineParams {
+                import: crate::params::ImportConfig {
+                    mode,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            // An independently added channel may already own the base ID.
+            let mut channel = DerivedSpectrum {
+                id: 1,
+                source: Some(source.clone()),
+                params: Some(params.clone()),
+                ..Default::default()
+            };
+            registry.assign_group(&mut channel, &BTreeMap::new());
+            let id = registry.register_source(None, source.clone(), mode, &BTreeMap::new());
+            assert_ne!(Some(id.clone()), channel.group_id);
+            let target = ToolTarget::standalone(
+                Some(id.clone()),
+                source.clone(),
+                "source".into(),
+                params.fingerprint(),
+                1,
+                1,
+            );
+            let output = DerivedSpectrum {
+                id: 2,
+                group_id: Some(crate::group_identity::GroupId::new_result()),
+                energy: vec![1., 2.],
+                mu: vec![3., 4.],
+                operation: Some(Operation {
+                    tool: "smooth".into(),
+                    parameters: serde_json::json!({}),
+                    inputs: vec![target.operation_input()],
+                    applied_energy_shift_ev: 0.,
+                }),
+                ..Default::default()
+            };
+            let project = ProjectFile {
+                version: crate::project::PROJECT_VERSION,
+                params,
+                spectrum_file: Some(source),
+                source_groups: registry.sources(),
+                derived: vec![channel, output],
+                ..Default::default()
+            };
+            assert_eq!(project.source_groups[0].channel, mode);
+            save_with_storage(&old.join("session.rxs"), &project, DataStorage::Paths).unwrap();
+            let moved = root.join(format!("moved-{mode:?}"));
+            std::fs::rename(&old, &moved).unwrap();
+            let mut reopened = load(&moved.join("session.rxs")).unwrap();
+            reopened.assign_group_ids();
+            let relocated = reopened.spectrum_file.clone().unwrap();
+            assert!(relocated.starts_with(moved.canonicalize().unwrap()));
+            let registry = GroupRegistry::from_sources(reopened.source_groups.clone());
+            let imported_id =
+                registry.register_source(Some(0), relocated.clone(), mode, &BTreeMap::new());
+            let input = &reopened.derived[1].operation.as_ref().unwrap().inputs[0];
+            assert_eq!(input.group_id, Some(id.clone()));
+            assert_eq!(imported_id, id);
+            assert_eq!(input.path, relocated);
+            assert_eq!(registry.index(input.group_id.as_ref().unwrap()), Some(0));
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn standalone_readiness_checks_path_parameters_and_load_state() {
         let target = ToolTarget::standalone(
+            None,
             "/outside/project.dat".into(),
             "project.dat".into(),
             42,

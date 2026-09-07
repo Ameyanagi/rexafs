@@ -715,7 +715,14 @@ fn independent_channels_roundtrip_linked_and_embedded_with_one_raw_source() {
 fn invalid_channel_ids_are_rejected_and_legacy_groups_get_stable_ids() {
     let base = json!({"version":1,"derived":[{"label":"A","energy":[],"mu":[]},{"label":"B","energy":[],"mu":[]}]});
     let mut parsed = parse(&base.to_string()).unwrap();
+    let mut repeat = parsed.clone();
     parsed.assign_group_ids();
+    repeat.assign_group_ids();
+    assert_eq!(parsed.derived[0].group_id, repeat.derived[0].group_id);
+    assert_ne!(parsed.derived[0].group_id, parsed.derived[1].group_id);
+    let mut duplicate = serde_json::to_value(&parsed).unwrap();
+    duplicate["derived"][1]["group_id"] = duplicate["derived"][0]["group_id"].clone();
+    assert!(parse(&duplicate.to_string()).is_err());
     assert_ne!(parsed.derived[0].id, parsed.derived[1].id);
     assert!(parsed.derived.iter().all(|d| d.id > 0));
     for id in [1, u64::MAX] {
@@ -750,6 +757,7 @@ fn typed_outputs_difference_calibration_and_merge_roundtrip_linked_and_embedded(
         ..Default::default()
     };
     let input = OperationInput {
+        group_id: None,
         label: "Cu".into(),
         path: source,
         derived_id: None,
@@ -769,6 +777,7 @@ fn typed_outputs_difference_calibration_and_merge_roundtrip_linked_and_embedded(
             inputs: vec![
                 input.clone(),
                 OperationInput {
+                    group_id: None,
                     label: "baseline".into(),
                     path: PathBuf::new(),
                     derived_id: Some(1),
@@ -805,6 +814,7 @@ fn typed_outputs_difference_calibration_and_merge_roundtrip_linked_and_embedded(
         parameters: json!({"template": "calibrated Cu", "count": 2}),
         inputs: [2, 0]
             .map(|i| OperationInput {
+                group_id: None,
                 label: project.derived[i].label.clone(),
                 path: PathBuf::new(),
                 derived_id: Some(project.derived[i].id),
@@ -926,4 +936,165 @@ fn typed_outputs_legacy_quantity_hints_require_explicit_confirmation() {
     let channel = parse(r#"{"version":1,"derived":[{"label":"diff: editable name","source":"scan.dat","energy":[],"mu":[]}]}"#).unwrap();
     assert_eq!(channel.derived[0].quantity, Quantity::RawMu);
     assert!(!channel.derived[0].quantity_unconfirmed);
+}
+
+#[test]
+fn group_identity_roundtrip_relocation_channels_results_and_three_more_imports() {
+    use crate::app::DERIVED_BASE;
+    use crate::group_identity::{GroupId, GroupRegistry};
+    use crate::params::{DetectionMode, Operation, OperationInput};
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let temp = Temp::new();
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let old = temp.join(&format!("old-{mode:?}"));
+        let mut project = specimen(&old);
+        let old = storage::resolved_location(&old);
+        let source = storage::resolved_location(project.spectrum_file.as_ref().unwrap());
+        project.derived = vec![
+            DerivedSpectrum {
+                id: 1,
+                source: Some(source.clone()),
+                params: Some(PipelineParams {
+                    import: crate::params::ImportConfig {
+                        mode: DetectionMode::Reference,
+                        ..Default::default()
+                    },
+                    e0: Some(8000.),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            DerivedSpectrum {
+                id: 2,
+                group_id: Some(GroupId::new_result()),
+                label: "tool result".into(),
+                energy: vec![1., 2.],
+                mu: vec![3., 4.],
+                ..Default::default()
+            },
+        ];
+        project.assign_group_ids();
+        let mut files = project.raw_files.clone();
+        files.sort();
+        files.dedup();
+        let build = |project: &mut ProjectFile, files: &[PathBuf]| {
+            GroupRegistry::rebuild(
+                files
+                    .iter()
+                    .cloned()
+                    .enumerate()
+                    .map(|(ix, path)| (ix, path, DetectionMode::Auto)),
+                &mut project.derived,
+                &mut project.source_groups,
+                &project.source_origins,
+            )
+        };
+        let registry = build(&mut project, &files);
+        let source_ix = files.iter().position(|p| *p == source).unwrap();
+        let marked = BTreeSet::from([source_ix, DERIVED_BASE, DERIVED_BASE + 1]);
+        let frozen = BTreeSet::from([source_ix, DERIVED_BASE]);
+        let custom = PipelineParams {
+            e0: Some(9001.),
+            ..Default::default()
+        };
+        project.group_state.capture(
+            &registry,
+            &marked,
+            &frozen,
+            &BTreeMap::from([(source_ix, custom.clone())]),
+            Some(DERIVED_BASE),
+        );
+        let inputs: Vec<_> = marked
+            .iter()
+            .filter(|&&ix| ix != DERIVED_BASE + 1)
+            .map(|&ix| OperationInput {
+                group_id: registry.id(ix),
+                label: format!("input {ix}"),
+                path: if ix == source_ix {
+                    source.clone()
+                } else {
+                    PathBuf::new()
+                },
+                derived_id: ix.checked_sub(DERIVED_BASE).map(|i| project.derived[i].id),
+                fingerprint: 123,
+                size: None,
+            })
+            .collect();
+        project.derived[1].operation = Some(Operation {
+            tool: "test".into(),
+            parameters: json!({}),
+            inputs: inputs.clone(),
+            applied_energy_shift_ev: 0.,
+        });
+        let identities = serde_json::to_value(&project.group_state).unwrap();
+        save_with_storage(&old.join("durable.rxs"), &project, mode).unwrap();
+        let moved = temp.join(&format!("moved-{mode:?}"));
+        std::fs::rename(&old, &moved).unwrap();
+        let mut reopened = load(&moved.join("durable.rxs")).unwrap();
+        reopened.assign_group_ids();
+        assert_eq!(
+            serde_json::to_value(&reopened.group_state).unwrap(),
+            identities
+        );
+        assert_eq!(reopened.derived[0].params.as_ref().unwrap().e0, Some(8000.));
+        assert_eq!(
+            reopened.derived[1]
+                .operation
+                .as_ref()
+                .unwrap()
+                .inputs
+                .iter()
+                .map(|i| &i.group_id)
+                .collect::<Vec<_>>(),
+            inputs.iter().map(|i| &i.group_id).collect::<Vec<_>>()
+        );
+        // The real catalog can reopen in a different order, then append files.
+        let mut files: Vec<_> = files
+            .iter()
+            .map(|path| {
+                let tail = path.strip_prefix(&old).unwrap();
+                let moved_source = storage::resolved_location(&moved.join(tail));
+                reopened
+                    .source_origins
+                    .iter()
+                    .find(|(_, original)| **original == moved_source)
+                    .map(|(cache, _)| cache.clone())
+                    .unwrap_or(moved_source)
+            })
+            .collect();
+        files.reverse();
+        let before = build(&mut reopened, &files);
+        for i in 0..3 {
+            let path = moved.join(format!("added-{i}.xmu"));
+            std::fs::copy(fixture("data/cu_150k.xmu"), &path).unwrap();
+            files.push(path);
+        }
+        let after = build(&mut reopened, &files);
+        assert!(!before.indices_changed(&after));
+        assert_eq!(
+            before.indices(&reopened.group_state.marked),
+            after.indices(&reopened.group_state.marked)
+        );
+        assert_eq!(
+            after.indices(&reopened.group_state.marked).len(),
+            3,
+            "{mode:?}"
+        );
+        assert_eq!(after.indices(&reopened.group_state.frozen).len(), 2);
+        assert!(
+            reopened
+                .group_state
+                .resolved_overrides(&after)
+                .values()
+                .any(|p| *p == custom)
+        );
+        for input in &reopened.derived[1].operation.as_ref().unwrap().inputs {
+            assert!(after.index(input.group_id.as_ref().unwrap()).is_some());
+        }
+        reopened.raw_files = files;
+        let again = moved.join("again.rxs");
+        save_with_storage(&again, &reopened, mode).unwrap();
+        assert_eq!(state(&reopened), state(&load(&again).unwrap()));
+    }
 }

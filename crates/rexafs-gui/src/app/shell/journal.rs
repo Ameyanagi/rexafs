@@ -7,6 +7,7 @@ use gpui::{ClickEvent, Context, IntoElement, ParentElement, Styled, div, prelude
 
 use super::MONO;
 use crate::app::{DERIVED_BASE, ParamKey, StudioApp};
+use crate::group_identity::GroupId;
 use crate::params::{DerivedSpectrum, PipelineParams, Quantity};
 
 /// Inverse of a recorded change.
@@ -17,18 +18,17 @@ pub enum UndoOp {
         after: super::assistant_actions::ModelSettings,
     },
     Params {
-        changes: Vec<(usize, Option<PipelineParams>, Option<PipelineParams>)>,
+        changes: Vec<(GroupId, Option<PipelineParams>, Option<PipelineParams>)>,
     },
     /// Pipeline parameters of `target` (a group override, or the globals).
     Param {
-        target: Option<usize>,
+        target: Option<GroupId>,
         key: Option<ParamKey>,
         before: PipelineParams,
         after: PipelineParams,
     },
     DerivedQuantity {
-        index: usize,
-        id: u64,
+        id: GroupId,
         before: (Quantity, bool),
         after: (Quantity, bool),
     },
@@ -45,35 +45,30 @@ pub enum UndoOp {
 }
 
 impl UndoOp {
-    fn remap_quantity_index(&mut self, derived: &[DerivedSpectrum]) {
-        if let Self::DerivedQuantity { index, id, .. } = self
-            && let Some(current) = derived.iter().position(|g| g.id == *id)
-        {
-            *index = current;
-        }
-    }
-
     fn apply_quantity(&self, derived: &mut [DerivedSpectrum], forward: bool) {
         if let Self::DerivedQuantity {
-            index,
-            id,
-            before,
-            after,
+            id, before, after, ..
         } = self
-            && let Some(group) = derived.get_mut(*index).filter(|g| g.id == *id)
+            && let Some(group) = derived.iter_mut().find(|g| {
+                g.group_id
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| GroupId::legacy_result(g.id))
+                    == *id
+            })
         {
             (group.quantity, group.quantity_unconfirmed) = if forward { *after } else { *before };
         }
     }
 
-    fn param_snapshot(&self, forward: bool) -> Option<(Option<usize>, PipelineParams)> {
+    fn param_snapshot(&self, forward: bool) -> Option<(Option<GroupId>, PipelineParams)> {
         match self {
             Self::Param {
                 target,
                 before,
                 after,
                 ..
-            } => Some((*target, if forward { after } else { before }.clone())),
+            } => Some((target.clone(), if forward { after } else { before }.clone())),
             _ => None,
         }
     }
@@ -112,7 +107,7 @@ impl JournalState {
 
     pub(crate) fn confirm_quantity(
         &mut self,
-        index: usize,
+        _index: usize,
         group: &mut DerivedSpectrum,
         quantity: Quantity,
     ) -> bool {
@@ -123,8 +118,10 @@ impl JournalState {
         self.record(
             format!("Confirm quantity: {}", group.display_label()),
             Some(UndoOp::DerivedQuantity {
-                index,
-                id: group.id,
+                id: group
+                    .group_id
+                    .clone()
+                    .unwrap_or_else(|| GroupId::legacy_result(group.id)),
                 before,
                 after: (group.quantity, group.quantity_unconfirmed),
             }),
@@ -150,7 +147,7 @@ impl JournalState {
     /// the same target (a drag, a stepper burst) collapse into one step.
     pub(crate) fn record_param_edit(
         &mut self,
-        target: Option<usize>,
+        target: Option<GroupId>,
         key: Option<ParamKey>,
         before: PipelineParams,
         after: PipelineParams,
@@ -202,8 +199,11 @@ impl StudioApp {
         after: PipelineParams,
         text: String,
     ) {
-        self.journal
-            .record_param_edit(target, key, before, after, text);
+        let id = target.and_then(|ix| self.group_id(ix));
+        if target.is_some() && id.is_none() {
+            return;
+        }
+        self.journal.record_param_edit(id, key, before, after, text);
     }
 
     pub(crate) fn apply_params_to(&mut self, target: Option<usize>, params: PipelineParams) {
@@ -215,38 +215,10 @@ impl StudioApp {
         }
     }
 
-    fn remap_derived_indices(&mut self, index: usize, insert: bool) {
-        let map = |ix: usize| {
-            if ix < DERIVED_BASE || ix - DERIVED_BASE < index {
-                Some(ix)
-            } else if insert {
-                Some(ix + 1)
-            } else if ix - DERIVED_BASE == index {
-                None
-            } else {
-                Some(ix - 1)
-            }
-        };
-        for op in self.journal.undo.iter_mut().chain(&mut self.journal.redo) {
-            op.remap_quantity_index(&self.derived);
-        }
-        self.selection = self.selection.iter().copied().filter_map(map).collect();
-        self.frozen = self.frozen.iter().copied().filter_map(map).collect();
-        self.selected = self.selected.and_then(map);
-        // An in-flight result carries its old vector index. Retire it before
-        // inserting/removing groups so it cannot populate another group's cache.
-        self.generation += 1;
-        self.compare_gen += 1;
-        self.load_running = false;
-        self.compare_running = false;
-        self.cache.clear();
-        self.raw_cache.clear();
-        self.thumbs = None;
-    }
     fn insert_derived(&mut self, index: usize, spectrum: DerivedSpectrum, cx: &mut Context<Self>) {
         let index = index.min(self.derived.len());
         self.derived.insert(index, spectrum);
-        self.remap_derived_indices(index, true);
+        self.rekey_after_catalog_change();
         self.select_entry(DERIVED_BASE + index, cx);
         self.sync_param_fields(cx);
     }
@@ -261,7 +233,7 @@ impl StudioApp {
         }
         let was_active = self.selected == Some(DERIVED_BASE + index);
         let spectrum = self.derived.remove(index);
-        self.remap_derived_indices(index, false);
+        self.rekey_after_catalog_change();
         if was_active {
             self.current_path.clear();
             self.spectrum_path.clear();
@@ -293,7 +265,14 @@ impl StudioApp {
             return;
         };
         if let Some((target, params)) = op.param_snapshot(false) {
-            self.apply_params_to(target, params);
+            match target {
+                Some(id) => {
+                    if let Some(ix) = self.group_registry.index(&id) {
+                        self.apply_params_to(Some(ix), params);
+                    }
+                }
+                None => self.apply_params_to(None, params),
+            }
             self.after_param_undo(cx);
         }
         let inverse = match op {
@@ -309,13 +288,21 @@ impl StudioApp {
             op @ UndoOp::Param { .. } => op,
             UndoOp::Params { changes } => {
                 for (ix, before, _) in &changes {
-                    self.set_custom_params(*ix, before.clone());
+                    if let Some(ix) = self.group_registry.index(ix) {
+                        self.set_custom_params(ix, before.clone());
+                    }
                 }
                 self.after_param_undo(cx);
                 UndoOp::Params { changes }
             }
             UndoOp::DerivedAdd { index, spectrum } => {
-                let spectrum = self.take_derived(index, cx).unwrap_or(spectrum);
+                let spectrum = spectrum
+                    .group_id
+                    .as_ref()
+                    .and_then(|id| self.group_registry.index(id))
+                    .and_then(|ix| ix.checked_sub(DERIVED_BASE))
+                    .and_then(|i| self.take_derived(i, cx))
+                    .unwrap_or(spectrum);
                 UndoOp::DerivedAdd { index, spectrum }
             }
             UndoOp::DerivedRemove { index, spectrum } => {
@@ -338,7 +325,14 @@ impl StudioApp {
             return;
         };
         if let Some((target, params)) = op.param_snapshot(true) {
-            self.apply_params_to(target, params);
+            match target {
+                Some(id) => {
+                    if let Some(ix) = self.group_registry.index(&id) {
+                        self.apply_params_to(Some(ix), params);
+                    }
+                }
+                None => self.apply_params_to(None, params),
+            }
             self.after_param_undo(cx);
         }
         let forward = match op {
@@ -354,7 +348,9 @@ impl StudioApp {
             op @ UndoOp::Param { .. } => op,
             UndoOp::Params { changes } => {
                 for (ix, _, before) in &changes {
-                    self.set_custom_params(*ix, before.clone());
+                    if let Some(ix) = self.group_registry.index(ix) {
+                        self.set_custom_params(ix, before.clone());
+                    }
                 }
                 self.after_param_undo(cx);
                 UndoOp::Params { changes }
@@ -364,7 +360,13 @@ impl StudioApp {
                 UndoOp::DerivedAdd { index, spectrum }
             }
             UndoOp::DerivedRemove { index, spectrum } => {
-                let spectrum = self.take_derived(index, cx).unwrap_or(spectrum);
+                let spectrum = spectrum
+                    .group_id
+                    .as_ref()
+                    .and_then(|id| self.group_registry.index(id))
+                    .and_then(|ix| ix.checked_sub(DERIVED_BASE))
+                    .and_then(|i| self.take_derived(i, cx))
+                    .unwrap_or(spectrum);
                 UndoOp::DerivedRemove { index, spectrum }
             }
         };
@@ -488,9 +490,6 @@ mod tests {
                 ..Default::default()
             },
         );
-        for op in &mut journal.redo {
-            op.remap_quantity_index(&groups);
-        }
         let op = journal.redo.pop().unwrap();
         op.apply_quantity(&mut groups, true);
         journal.undo.push(op);
@@ -499,13 +498,7 @@ mod tests {
 
         // Removing and reinserting this group must not retarget its history.
         let saved = groups.remove(1);
-        for op in &mut journal.undo {
-            op.remap_quantity_index(&groups);
-        }
         groups.insert(0, saved);
-        for op in &mut journal.undo {
-            op.remap_quantity_index(&groups);
-        }
         assert!(journal.confirm_quantity(0, &mut groups[0], Quantity::RawMu));
         assert!(groups[0].processing_block_reason().is_none());
         assert!(!journal.confirm_quantity(0, &mut groups[0], Quantity::RawMu));
@@ -521,8 +514,61 @@ mod tests {
     }
 
     #[test]
+    fn group_identity_history_resolves_after_reordering_and_missing_targets() {
+        use crate::group_identity::GroupRegistry;
+        let mut sources = Vec::new();
+        let build = |paths: &[&str], sources: &mut Vec<_>| {
+            GroupRegistry::rebuild(
+                paths
+                    .iter()
+                    .enumerate()
+                    .map(|(ix, p)| (ix, (*p).into(), DetectionMode::Auto)),
+                &mut [],
+                sources,
+                &Default::default(),
+            )
+        };
+        let old = build(&["/a", "/b"], &mut sources);
+        let id = old.id(1).unwrap().clone();
+        let mut journal = JournalState::default();
+        let before = PipelineParams::default();
+        let after = PipelineParams {
+            e0: Some(42.),
+            ..before.clone()
+        };
+        journal.record_param_edit(Some(id.clone()), None, before, after, "edit B".into());
+        let missing = build(&["/c", "/a"], &mut sources);
+        let op = journal.undo.pop().unwrap();
+        assert!(
+            missing
+                .index(op.param_snapshot(false).unwrap().0.as_ref().unwrap())
+                .is_none()
+        );
+        journal.redo.push(op);
+        let restored = build(&["/b", "/c", "/a"], &mut sources);
+        let op = journal.redo.pop().unwrap();
+        let (target, params) = op.param_snapshot(true).unwrap();
+        assert_eq!(restored.index(target.as_ref().unwrap()), Some(0));
+        assert_eq!(params.e0, Some(42.));
+        let bulk = UndoOp::Params {
+            changes: vec![(id, None, Some(params))],
+        };
+        let UndoOp::Params { changes } = bulk else {
+            unreachable!()
+        };
+        assert_eq!(restored.index(&changes[0].0), Some(0));
+    }
+
+    #[test]
     fn mapping_column_steps_coalesce_and_alignment_round_trips() {
-        for target in [Some(0), Some(DERIVED_BASE), None] {
+        for target in [
+            Some(GroupId::source(
+                std::path::Path::new("/sample"),
+                DetectionMode::Auto,
+            )),
+            Some(GroupId::legacy_result(1)),
+            None,
+        ] {
             let mut journal = JournalState::default();
             let mut initial = PipelineParams::default();
             initial.import.i0_col = Some(1);
@@ -531,7 +577,7 @@ mod tests {
                 let mut after = before.clone();
                 after.import.i0_col = Some(column);
                 journal.record_param_edit(
-                    target,
+                    target.clone(),
                     Some(ParamKey::ImpI0Col),
                     before,
                     after.clone(),
@@ -552,7 +598,7 @@ mod tests {
             .unwrap()
             .unwrap();
             journal.record_param_edit(
-                target,
+                target.clone(),
                 None,
                 before.clone(),
                 after.clone(),
@@ -567,14 +613,21 @@ mod tests {
 
     #[test]
     fn mapping_journal_round_trip_keeps_catalog_channel_and_global_targets() {
-        for target in [Some(0), Some(DERIVED_BASE), None] {
+        for target in [
+            Some(GroupId::source(
+                std::path::Path::new("/sample"),
+                DetectionMode::Auto,
+            )),
+            Some(GroupId::legacy_result(1)),
+            None,
+        ] {
             let mut journal = JournalState::default();
             let mut before = PipelineParams::default();
             before.import.mode = DetectionMode::Reference;
             let mut after = before.clone();
             after.import.ir_col = Some(7);
             journal.record_param_edit(
-                target,
+                target.clone(),
                 None,
                 before.clone(),
                 after.clone(),
@@ -593,7 +646,7 @@ mod tests {
             journal.undo.push(op);
             // Separate mapping commands do not coalesce; a new edit retires redo.
             journal.record_param_edit(
-                target,
+                target.clone(),
                 None,
                 after.clone(),
                 before.clone(),
@@ -602,14 +655,14 @@ mod tests {
             assert_eq!(journal.undo.len(), 2);
             journal.redo.push(journal.undo.pop().unwrap());
             journal.record_param_edit(
-                target,
+                target.clone(),
                 None,
                 after.clone(),
                 after.clone(),
                 "No change".into(),
             );
             assert_eq!(journal.redo.len(), 1);
-            journal.record_param_edit(target, None, after, before, "New mapping".into());
+            journal.record_param_edit(target.clone(), None, after, before, "New mapping".into());
             assert!(journal.redo.is_empty());
         }
     }

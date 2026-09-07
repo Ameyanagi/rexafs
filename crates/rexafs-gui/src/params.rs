@@ -1259,6 +1259,8 @@ pub(crate) fn load_group_raw_with_diagnostics(
 /// be retained until the group is viewed or analyzed.
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct DerivedSpectrum {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<crate::group_identity::GroupId>,
     pub label: String,
     pub energy: Vec<f64>,
     pub mu: Vec<f64>,
@@ -1306,6 +1308,8 @@ impl Quantity {
 /// durable identities; preserve the source path or derived id and revision.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OperationInput {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<crate::group_identity::GroupId>,
     pub label: String,
     pub path: std::path::PathBuf,
     pub derived_id: Option<u64>,

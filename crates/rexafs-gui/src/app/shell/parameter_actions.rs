@@ -418,7 +418,9 @@ impl StudioApp {
                 continue;
             }
             self.set_custom_params(ix, after.clone());
-            changes.push((ix, before, after));
+            if let Some(id) = self.group_id(ix) {
+                changes.push((id.clone(), before, after));
+            }
         }
         let n = changes.len();
         if n > 0 {

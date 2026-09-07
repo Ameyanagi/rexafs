@@ -193,6 +193,9 @@ pub(super) fn map_paths(
     option(&mut project.source_dir, f)?;
     option(&mut project.spectrum_file, f)?;
     option(&mut project.feff_workspace, f)?;
+    for group in &mut project.source_groups {
+        group.path = f(&group.path)?;
+    }
     for p in &mut project.overrides {
         p.path = f(&p.path)?;
     }
