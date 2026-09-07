@@ -287,7 +287,8 @@ def build(
         "packaging_run_id": os.environ.get("GITHUB_RUN_ID"),
         "compiler": subprocess.run(
             [str(compiler), "/?"], capture_output=True, text=True, check=False
-        ).stdout.splitlines()[:5],
+        ).stdout.splitlines()[:12],
+        "compiler_sha256": digest(compiler),
     }
     installer.with_suffix(".build.json").write_text(
         json.dumps(record, indent=2) + "\n", encoding="utf-8"

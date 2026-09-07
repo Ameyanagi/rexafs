@@ -25,6 +25,34 @@ $startLink = Join-Path $programs "$product.lnk"
 $desktopLink = Join-Path $desktop "$product.lnk"
 if ((Test-Path $startLink) -or (Test-Path $desktopLink)) { throw 'Existing shortcuts found' }
 
+# WScript.Shell exposes the legacy ANSI target and loses Japanese characters.
+# Read the actual Unicode shell-link interface used by Explorer instead.
+Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+public static class InstallerShortcut {
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+    private class ShellLink {}
+    [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellLinkW {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int size, IntPtr data, int flags);
+    }
+    public static string Target(string filename) {
+        object link = new ShellLink();
+        try {
+            ((IPersistFile)link).Load(filename, 0);
+            var path = new StringBuilder(32768);
+            ((IShellLinkW)link).GetPath(path, path.Capacity, IntPtr.Zero, 0);
+            return path.ToString();
+        } finally {
+            Marshal.FinalReleaseComObject(link);
+        }
+    }
+}
+'@
+
 function Install-Checked([string]$LogName) {
     $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/TASKS=desktopicon',
         "/DIR=`"$installed`"", "/LOG=`"$(Join-Path $logs $LogName)`"")
@@ -38,14 +66,13 @@ function Install-Checked([string]$LogName) {
     }
     $registration = Get-ItemProperty -Path $registry
     if ($registration.DisplayVersion -ne $record.source_build.version) { throw 'Wrong registered version' }
-    $shell = New-Object -ComObject WScript.Shell
     foreach ($link in @($startLink, $desktopLink)) {
         if (!(Test-Path $link)) { throw "Missing shortcut: $link" }
-        $shortcut = $shell.CreateShortcut($link)
+        $target = [InstallerShortcut]::Target($link)
         $expected = Join-Path $installed 'rexafs.exe'
         Copy-Item -LiteralPath $link -Destination (Join-Path $logs ((Split-Path $link -Leaf) + '-' + (Split-Path (Split-Path $link -Parent) -Leaf) + '.lnk'))
-        if ($shortcut.TargetPath -ne $expected) {
-            throw "Shortcut $link points to '$($shortcut.TargetPath)', expected '$expected'"
+        if ($target -ne $expected) {
+            throw "Shortcut $link points to '$target', expected '$expected'"
         }
     }
 }
