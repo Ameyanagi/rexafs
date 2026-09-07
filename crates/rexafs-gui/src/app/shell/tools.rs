@@ -560,7 +560,7 @@ impl StudioApp {
         }
         self.tools.open = Some(tool);
         self.tools.message = SharedString::default();
-        self.tools.target = self.tool_target(self.selected.unwrap_or(NO_ENTRY));
+        self.tools.target = self.current_tool_target();
         self.tools.standard_picker_open = false;
         self.tools.standard_filter_request += 1;
         self.tools.standard_matches = None;
@@ -745,18 +745,22 @@ impl StudioApp {
             .and_then(|(_, e)| e.read(cx).value())
     }
 
+    pub(crate) fn current_tool_target(&self) -> Option<ToolTarget> {
+        self.current_group_index()
+            .and_then(|ix| self.tool_target(ix))
+    }
+
     pub(crate) fn tool_target(&self, ix: usize) -> Option<ToolTarget> {
         if ix == NO_ENTRY {
-            return (!self.current_path.as_os_str().is_empty()).then(|| {
-                ToolTarget::standalone(
-                    Some(self.standalone_group_id(&self.current_path)),
-                    self.current_path.clone(),
-                    self.spectrum_label.to_string(),
-                    self.params.fingerprint(),
-                    self.project_generation,
-                    self.tools.generation,
-                )
-            });
+            let (path, label, id) = self.standalone_source.as_ref()?;
+            return Some(ToolTarget::standalone(
+                Some(id.clone()),
+                path.clone(),
+                label.to_string(),
+                self.params.fingerprint(),
+                self.project_generation,
+                self.tools.generation,
+            ));
         }
         if !self.valid_group_index(ix) {
             return None;
@@ -854,7 +858,7 @@ impl StudioApp {
     }
 
     fn tool_readiness(&self, tool: Tool) -> Result<(), ReadinessReason> {
-        let current = self.tool_target(self.selected.unwrap_or(NO_ENTRY));
+        let current = self.current_tool_target();
         let standard = tool.needs_standard().then(|| {
             let current = self
                 .tools

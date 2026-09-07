@@ -24,10 +24,8 @@ fn collect_inputs(
     mut resolve: impl FnMut(usize) -> Option<ToolTarget>,
 ) -> Result<Vec<ToolTarget>, String> {
     let unavailable = |ix| format!("merge refused: marked group {ix} is no longer available");
-    if marks.contains(&NO_ENTRY) {
-        return Err(unavailable(NO_ENTRY));
-    }
     let inputs = marked_group_indices(marks)
+        .chain(marks.contains(&NO_ENTRY).then_some(NO_ENTRY))
         .map(|ix| resolve(ix).ok_or_else(|| unavailable(ix)))
         .collect::<Result<Vec<_>, _>>()?;
     if inputs.len() < 2 {
@@ -249,7 +247,7 @@ impl StudioApp {
     }
 
     pub(super) fn merge_selection(&mut self, cx: &mut Context<Self>) {
-        let current = self.tool_target(self.selected.unwrap_or(NO_ENTRY));
+        let current = self.current_tool_target();
         let mut targets = match collect_inputs(&self.selection, |ix| self.tool_target(ix)) {
             Ok(inputs) => inputs,
             Err(e) => {
@@ -333,7 +331,7 @@ impl StudioApp {
                             (selected, current.as_ref(), current_generation),
                             (
                                 app.selected,
-                                app.tool_target(app.selected.unwrap_or(NO_ENTRY)).as_ref(),
+                                app.current_tool_target().as_ref(),
                                 app.generation,
                             ),
                         ) {
@@ -430,11 +428,21 @@ mod tests {
         );
         assert!(collect_inputs(&BTreeSet::from([0]), |ix| Some(target(ix, "one"))).is_err());
         assert!(
-            collect_inputs(&BTreeSet::from([0, NO_ENTRY]), |ix| Some(target(
-                ix, "invalid"
-            )))
+            collect_inputs(&BTreeSet::from([0, NO_ENTRY]), |ix| (ix != NO_ENTRY)
+                .then(|| target(ix, "invalid")))
             .is_err()
         );
+    }
+
+    #[test]
+    fn merge_uses_marks_independently_of_current() {
+        let marks = BTreeSet::from([0, DERIVED_BASE]);
+        for current in [0, 1] {
+            let inputs = collect_inputs(&marks, |ix| Some(target(ix, "input"))).unwrap();
+            assert_eq!(inputs.iter().map(|t| t.ix).collect::<BTreeSet<_>>(), marks);
+            let compare = crate::app::group_rows::compare_set(Some(current), &marks);
+            assert_eq!(compare.len(), if current == 0 { 2 } else { 3 });
+        }
     }
 
     #[test]

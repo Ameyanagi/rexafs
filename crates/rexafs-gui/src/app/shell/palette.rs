@@ -104,8 +104,8 @@ impl StudioApp {
         }
         items.extend(reset_params_item(self.stage));
         let simple: [(&str, &'static str, &'static str, PaletteCmd); 13] = [
-            ("Mark all groups", "groups", "", PaletteCmd::MarkAll),
-            ("Unmark all groups", "groups", "", PaletteCmd::MarkNone),
+            ("Mark shown", "groups", "", PaletteCmd::MarkAll),
+            ("Clear marks", "groups", "", PaletteCmd::MarkNone),
             (
                 "Apply all processing settings to marked groups",
                 "params",
@@ -446,14 +446,13 @@ impl StudioApp {
         )
     }
 
-    /// Mark (or unmark) every catalog group.
+    /// Mark displayed rows, or clear marks across the project.
     pub(crate) fn mark_all(&mut self, on: bool, cx: &mut Context<Self>) {
         if on {
-            self.selection.extend(0..self.catalog.len());
-            self.selection
-                .extend((0..self.derived.len()).map(|i| DERIVED_BASE + i));
+            self.interaction_rows().mark_shown(&mut self.selection);
         } else {
-            self.selection.clear();
+            self.clear_selection(cx);
+            return;
         }
         self.ensure_compare_loaded(cx);
         self.sync_param_fields(cx);

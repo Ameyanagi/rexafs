@@ -42,14 +42,58 @@ impl Row {
 /// virtual, including filtered catalogs (the filter's Arc is shared).
 pub struct Rows {
     catalog_len: usize,
+    scan_scope: Option<Box<Rows>>,
+    collapsed: BTreeSet<usize>,
+    /// Visible ancestors supplied only as context for a matching child.
+    context_only: BTreeSet<usize>,
     filtered: Option<std::sync::Arc<Vec<usize>>>,
     base_len: usize,
+    base_start: usize,
     primaries: BTreeMap<usize, Row>,
     inserted: Vec<(usize, Row)>,
     inserted_groups: BTreeMap<usize, usize>,
 }
 
 impl Rows {
+    /// The existing folder-run browser exposes one contiguous expanded run.
+    pub fn catalog_range(catalog_len: usize, start: usize, len: usize) -> Self {
+        Self {
+            catalog_len,
+            scan_scope: None,
+            base_start: start.min(catalog_len),
+            base_len: len.min(catalog_len.saturating_sub(start)),
+            filtered: None,
+            collapsed: BTreeSet::new(),
+            context_only: BTreeSet::new(),
+            primaries: BTreeMap::new(),
+            inserted: Vec::new(),
+            inserted_groups: BTreeMap::new(),
+        }
+    }
+
+    /// Use the same filtered members for scan rendering and interaction. Keep
+    /// the full filtered model to distinguish collapsed rows from filter misses.
+    pub fn in_catalog_range(self, start: usize, len: usize) -> Self {
+        let mut rows = Self::catalog_range(self.catalog_len, start, len);
+        if let Some(filtered) = &self.filtered {
+            rows.base_start = filtered.partition_point(|&g| g < start);
+            rows.base_len =
+                filtered.partition_point(|&g| g < start.saturating_add(len)) - rows.base_start;
+            rows.filtered = Some(filtered.clone());
+        }
+        rows.scan_scope = Some(Box::new(self));
+        rows
+    }
+
+    pub fn scroll_row(&self, group: usize, expanded_scan: Option<usize>) -> Option<usize> {
+        let row = self.row_index(group)?;
+        if self.scan_scope.is_some() {
+            Some(expanded_scan? + 1 + row)
+        } else {
+            Some(row)
+        }
+    }
+
     pub fn row_count(&self) -> usize {
         self.base_len + self.inserted.len()
     }
@@ -66,7 +110,7 @@ impl Rows {
         }
         let group = catalog_row_index(
             self.filtered.as_deref().map(Vec::as_slice),
-            row - before,
+            row - before + self.base_start,
             self.catalog_len,
         )?;
         Some(self.primaries.get(&group).copied().unwrap_or(Row::Primary {
@@ -84,8 +128,14 @@ impl Rows {
             return None;
         }
         let base = match &self.filtered {
-            Some(f) => f.binary_search(&group).ok()?,
-            None => group,
+            Some(f) => f
+                .binary_search(&group)
+                .ok()?
+                .checked_sub(self.base_start)
+                .filter(|&i| i < self.base_len)?,
+            None => group
+                .checked_sub(self.base_start)
+                .filter(|&i| i < self.base_len)?,
         };
         // Insertion anchors are recoverable by subtracting the sparse ordinal.
         let mut lo = 0;
@@ -125,6 +175,139 @@ impl Rows {
             .filter_map(|i| self.row_at(i)?.group())
             .collect()
     }
+
+    pub fn shown(&self) -> impl Iterator<Item = usize> + '_ {
+        (0..self.row_count()).filter_map(|i| self.row_at(i)?.group())
+    }
+
+    pub fn mark_shown(&self, marks: &mut BTreeSet<usize>) {
+        marks.extend(self.shown().filter(|g| !self.context_only.contains(g)));
+    }
+
+    pub fn invert_shown(&self, marks: &mut BTreeSet<usize>) {
+        for group in self.shown().filter(|g| !self.context_only.contains(g)) {
+            if !marks.remove(&group) {
+                marks.insert(group);
+            }
+        }
+    }
+
+    pub fn hidden_by_filter(&self, group: usize) -> bool {
+        if let Some(scope) = &self.scan_scope {
+            return scope.hidden_by_filter(group);
+        }
+        self.row_index(group).is_none() && !self.collapsed.contains(&group)
+    }
+
+    pub fn mark_counts(&self, marks: &BTreeSet<usize>) -> (usize, usize, usize) {
+        (
+            marks.len(),
+            marks.iter().filter(|&&g| self.hidden_by_filter(g)).count(),
+            marks
+                .iter()
+                .filter(|&&g| {
+                    if self.scan_scope.is_some() {
+                        !self.hidden_by_filter(g) && self.row_index(g).is_none()
+                    } else {
+                        self.collapsed.contains(&g)
+                    }
+                })
+                .count(),
+        )
+    }
+
+    /// Search the old display order, resolving only survivors still displayed
+    /// after removal (a context-only ancestor can disappear with its child).
+    pub fn after_removal(
+        &self,
+        removed: usize,
+        remap: impl Fn(usize) -> Option<usize>,
+    ) -> Option<usize> {
+        let row = self.row_index(removed)?;
+        (row + 1..self.row_count())
+            .chain((0..row).rev())
+            .find_map(|i| self.row_at(i)?.group().and_then(&remap))
+    }
+}
+
+/// Transient interaction state follows durable identities across replacements.
+pub struct InteractionIds([Option<crate::group_identity::GroupId>; 3]);
+
+impl InteractionIds {
+    pub fn capture(
+        indices: [Option<usize>; 3],
+        mut identify: impl FnMut(usize) -> Option<crate::group_identity::GroupId>,
+    ) -> Self {
+        Self(indices.map(|ix| ix.and_then(&mut identify)))
+    }
+
+    pub fn resolve(
+        self,
+        mut index: impl FnMut(&crate::group_identity::GroupId) -> Option<usize>,
+    ) -> [Option<usize>; 3] {
+        self.0.map(|id| id.as_ref().and_then(&mut index))
+    }
+}
+
+pub fn migrate_standalone(
+    marks: &mut BTreeSet<usize>,
+    focus: &mut Option<usize>,
+    anchor: &mut Option<usize>,
+    reveal: &mut Option<usize>,
+    index: usize,
+) {
+    if marks.remove(&super::NO_ENTRY) {
+        marks.insert(index);
+    }
+    for slot in [focus, anchor, reveal] {
+        if *slot == Some(super::NO_ENTRY) {
+            *slot = Some(index);
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum Gesture {
+    Current,
+    Toggle,
+    Range,
+}
+
+/// Return whether the endpoint should become current. Mark gestures only move
+/// focus; a range keeps its anchor until that anchor leaves displayed order.
+pub fn interact(
+    rows: &Rows,
+    focus: &mut Option<usize>,
+    anchor: &mut Option<usize>,
+    marks: &mut BTreeSet<usize>,
+    endpoint: usize,
+    gesture: Gesture,
+) -> bool {
+    *focus = Some(endpoint);
+    match gesture {
+        Gesture::Current => {
+            *anchor = Some(endpoint);
+            true
+        }
+        Gesture::Toggle => {
+            *anchor = Some(endpoint);
+            if !marks.remove(&endpoint) {
+                marks.insert(endpoint);
+            }
+            false
+        }
+        Gesture::Range => {
+            if anchor.is_none_or(|g| rows.row_index(g).is_none()) {
+                *anchor = Some(endpoint);
+            }
+            marks.extend(rows.range(*anchor, endpoint));
+            false
+        }
+    }
+}
+
+pub fn compare_set(current: Option<usize>, marks: &BTreeSet<usize>) -> BTreeSet<usize> {
+    marks.iter().copied().chain(current).collect()
 }
 
 /// Catalog order, orphan stacks, then Results. A matching child can reveal
@@ -138,14 +321,51 @@ pub fn build_rows(
     query: &str,
     standalone: Option<&std::path::Path>,
 ) -> Rows {
+    build_rows_revealing(
+        catalog,
+        derived,
+        |g| expanded.contains(&g).then_some(true),
+        filtered,
+        query,
+        standalone,
+        &BTreeSet::new(),
+    )
+}
+
+pub fn build_rows_revealing(
+    catalog: &Catalog,
+    derived: &[DerivedSpectrum],
+    disclosure: impl Fn(usize) -> Option<bool>,
+    filtered: Option<std::sync::Arc<Vec<usize>>>,
+    query: &str,
+    standalone: Option<&std::path::Path>,
+    reveal: &BTreeSet<usize>,
+) -> Rows {
+    let filtered = filtered.map(|f| {
+        if reveal.is_empty() {
+            return f;
+        }
+        std::sync::Arc::new(
+            f.iter()
+                .copied()
+                .chain(reveal.iter().copied().filter(|&g| g < catalog.len()))
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect(),
+        )
+    });
     let query = query.to_ascii_lowercase();
     let base_len = filtered.as_ref().map_or(catalog.len(), |f| {
         f.partition_point(|&ix| ix < catalog.len())
     });
     let mut rows = Rows {
+        scan_scope: None,
         catalog_len: catalog.len(),
+        collapsed: BTreeSet::new(),
+        context_only: BTreeSet::new(),
         filtered,
         base_len,
+        base_start: 0,
         primaries: BTreeMap::new(),
         inserted: Vec::new(),
         inserted_groups: BTreeMap::new(),
@@ -179,7 +399,8 @@ pub fn build_rows(
     }
     let matches = |group: usize| {
         let d = &derived[group - DERIVED_BASE];
-        filter_match_lower(&d.label.to_ascii_lowercase(), &query)
+        reveal.contains(&group)
+            || filter_match_lower(&d.label.to_ascii_lowercase(), &query)
             || filter_match_lower(
                 &d.params
                     .as_ref()
@@ -197,9 +418,10 @@ pub fn build_rows(
         .chain(orphans)
     {
         let source_matches = if group == super::NO_ENTRY {
-            standalone.is_some_and(|path| {
-                filter_match_lower(&path.to_string_lossy().to_ascii_lowercase(), &query)
-            })
+            reveal.contains(&group)
+                || standalone.is_some_and(|path| {
+                    filter_match_lower(&path.to_string_lossy().to_ascii_lowercase(), &query)
+                })
         } else if group < catalog.len() {
             rows.filtered
                 .as_ref()
@@ -213,10 +435,14 @@ pub fn build_rows(
             .copied()
             .filter(|&g| source_matches || matches(g))
             .collect();
-        if !source_matches && matching.is_empty() && group != super::NO_ENTRY {
+        if !source_matches && matching.is_empty() {
             continue;
         }
-        let expanded = expanded.contains(&group) || (!source_matches && !matching.is_empty());
+        if !source_matches {
+            rows.context_only.insert(group);
+        }
+        let expanded = disclosure(group).unwrap_or(!source_matches && !matching.is_empty())
+            || members.iter().any(|g| reveal.contains(g));
         let primary = Row::Primary {
             group,
             expanded,
@@ -238,6 +464,9 @@ pub fn build_rows(
             inserts.entry(base_len).or_default().push(primary);
             base_len
         };
+        if !expanded {
+            rows.collapsed.extend(matching.iter().copied());
+        }
         if expanded {
             inserts
                 .entry(anchor)
@@ -446,6 +675,400 @@ mod tests {
             })
             .collect()
     }
+    #[test]
+    fn scan_filter_drives_render_navigation_space_marks_counts_and_scroll() {
+        let rows = super::build_rows(
+            &catalog(),
+            &[],
+            &BTreeSet::new(),
+            Some(std::sync::Arc::new(vec![1])),
+            "b.dat",
+            None,
+        )
+        .in_catalog_range(0, 2);
+        assert_eq!(rows.shown().collect::<Vec<_>>(), vec![1]);
+        assert_eq!(rows.neighbor(None, 1), Some(1));
+        assert_eq!(rows.row_index(1), Some(0)); // Space guard
+        assert_eq!(rows.scroll_row(1, Some(3)), Some(4));
+        assert_eq!(rows.row_index(0), None);
+        let mut marks = BTreeSet::new();
+        rows.mark_shown(&mut marks);
+        assert_eq!(marks, BTreeSet::from([1]));
+        marks.insert(0);
+        assert_eq!(rows.mark_counts(&marks), (2, 1, 0));
+        rows.invert_shown(&mut marks);
+        assert_eq!(marks, BTreeSet::from([0]));
+        let collapsed = super::build_rows(
+            &catalog(),
+            &[],
+            &BTreeSet::new(),
+            Some(std::sync::Arc::new(vec![1])),
+            "b.dat",
+            None,
+        )
+        .in_catalog_range(0, 0);
+        assert_eq!(collapsed.mark_counts(&BTreeSet::from([0, 1])), (2, 1, 1));
+        let files = super::build_rows(&catalog(), &[], &BTreeSet::new(), None, "", None);
+        assert_eq!(files.scroll_row(1, Some(3)), Some(1));
+        let second_run = super::build_rows(
+            &catalog(),
+            &[],
+            &BTreeSet::new(),
+            Some(std::sync::Arc::new(vec![0, 1])),
+            "",
+            None,
+        )
+        .in_catalog_range(1, 1);
+        assert_eq!(second_run.row_index(1), Some(0));
+        assert_eq!(second_run.row_index(0), None);
+        assert_eq!(second_run.shown().collect::<Vec<_>>(), vec![1]);
+    }
+
+    #[test]
+    fn standalone_mark_focus_anchor_reveal_migrate_by_identity_without_aliases() {
+        use super::super::NO_ENTRY;
+        use crate::group_identity::GroupRegistry;
+        let registry = GroupRegistry::default();
+        let id = registry.register_source(
+            None,
+            "/data/a.dat".into(),
+            DetectionMode::Auto,
+            &BTreeMap::new(),
+        );
+        registry.append_catalog(&catalog(), 0);
+        let ix = registry.index(&id).unwrap();
+        let mut marks = BTreeSet::from([NO_ENTRY, ix]);
+        let (mut focus, mut anchor, mut reveal) = (Some(NO_ENTRY), Some(NO_ENTRY), Some(NO_ENTRY));
+        migrate_standalone(&mut marks, &mut focus, &mut anchor, &mut reveal, ix);
+        assert_eq!((focus, anchor, reveal), (Some(ix), Some(ix), Some(ix)));
+        assert_eq!(marks, BTreeSet::from([ix]));
+        assert_eq!(compare_set(Some(ix), &marks), marks);
+        let mut unmarked = BTreeSet::new();
+        migrate_standalone(&mut unmarked, &mut focus, &mut anchor, &mut reveal, ix);
+        assert!(unmarked.is_empty());
+    }
+
+    #[test]
+    fn catalog_refresh_rekeys_focus_anchor_and_reveal_before_space_and_range() {
+        use crate::group_identity::GroupRegistry;
+        let registry = GroupRegistry::default();
+        for (ix, name) in ["a.dat", "b.dat"].into_iter().enumerate() {
+            registry.register_source(
+                Some(ix),
+                format!("/data/{name}").into(),
+                DetectionMode::Auto,
+                &BTreeMap::new(),
+            );
+        }
+        let saved = InteractionIds::capture([Some(1), Some(0), Some(1)], |ix| registry.id(ix));
+        let mut refreshed = Catalog::default();
+        refreshed.extend(
+            ["inserted.dat", "a.dat", "b.dat"]
+                .into_iter()
+                .map(|name| FileMeta {
+                    dir: "/data".into(),
+                    name: name.into(),
+                    size: 0,
+                })
+                .collect(),
+        );
+        registry.replace_catalog(GroupRegistry::prepare_catalog(
+            &refreshed,
+            &registry.sources(),
+        ));
+        let [mut focus, mut anchor, reveal] = saved.resolve(|id| registry.index(id));
+        assert_eq!((focus, anchor, reveal), (Some(2), Some(1), Some(2)));
+        let rows = super::build_rows(&refreshed, &[], &BTreeSet::new(), None, "", None);
+        assert_eq!(rows.range(anchor, focus.unwrap()), vec![1, 2]);
+        let mut marks = BTreeSet::new();
+        let endpoint = focus.unwrap();
+        interact(
+            &rows,
+            &mut focus,
+            &mut anchor,
+            &mut marks,
+            endpoint,
+            Gesture::Toggle,
+        );
+        assert_eq!(marks, BTreeSet::from([2]));
+        let saved = InteractionIds::capture([Some(2); 3], |ix| registry.id(ix));
+        registry.replace_catalog(Default::default());
+        assert_eq!(saved.resolve(|id| registry.index(id)), [None; 3]);
+    }
+
+    #[test]
+    fn undo_filtered_out_current_result_chooses_displayed_source_survivor() {
+        let derived = vec![group(None, DetectionMode::Auto)];
+        let order = super::build_rows_revealing(
+            &catalog(),
+            &derived,
+            |_| Some(true),
+            None,
+            "",
+            None,
+            &BTreeSet::new(),
+        );
+        let displayed_before = super::build_rows(
+            &catalog(),
+            &derived,
+            &BTreeSet::new(),
+            Some(std::sync::Arc::new(vec![0, 1])),
+            "dat",
+            None,
+        );
+        assert_eq!(displayed_before.row_index(DERIVED_BASE), None);
+        let after = super::build_rows(
+            &catalog(),
+            &[],
+            &BTreeSet::new(),
+            Some(std::sync::Arc::new(vec![0, 1])),
+            "dat",
+            None,
+        );
+        assert_eq!(
+            order.after_removal(DERIVED_BASE, |ix| after.row_index(ix).map(|_| ix)),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn navigation_and_range_keep_current_marks_and_anchor_independent() {
+        let mut d = channels();
+        d.push(group(None, DetectionMode::Auto));
+        let rows = super::build_rows(&catalog(), &d, &BTreeSet::from([0, 1]), None, "", None);
+        let (mut focus, mut anchor, mut current) = (None, None, None);
+        let mut marks = BTreeSet::from([1]);
+        let mut act = |endpoint, gesture| {
+            if interact(
+                &rows,
+                &mut focus,
+                &mut anchor,
+                &mut marks,
+                endpoint,
+                gesture,
+            ) {
+                current = Some(endpoint);
+            }
+            (focus, anchor, current, marks.clone())
+        };
+        assert_eq!(
+            act(0, Gesture::Current),
+            (Some(0), Some(0), Some(0), BTreeSet::from([1]))
+        );
+        assert_eq!(
+            act(DERIVED_BASE, Gesture::Toggle),
+            (
+                Some(DERIVED_BASE),
+                Some(DERIVED_BASE),
+                Some(0),
+                BTreeSet::from([1, DERIVED_BASE])
+            )
+        );
+        let (_, a, c, m) = act(DERIVED_BASE + 4, Gesture::Range);
+        assert_eq!(a, Some(DERIVED_BASE));
+        assert_eq!(c, Some(0));
+        assert_eq!(
+            m,
+            BTreeSet::from([
+                1,
+                DERIVED_BASE,
+                DERIVED_BASE + 1,
+                DERIVED_BASE + 2,
+                DERIVED_BASE + 3,
+                DERIVED_BASE + 4
+            ])
+        );
+        assert_eq!(act(1, Gesture::Range).3, m, "shrinking a range is additive");
+        assert_eq!(rows.neighbor(Some(0), 1), Some(DERIVED_BASE));
+        assert_eq!(
+            rows.neighbor(Some(DERIVED_BASE + 3), 1),
+            Some(DERIVED_BASE + 4),
+            "skip Results header"
+        );
+    }
+
+    #[test]
+    fn explicit_collapse_overrides_filter_expansion_and_reveal_is_temporary() {
+        let c = catalog();
+        let d = channels();
+        let filtered = Some(std::sync::Arc::new(vec![]));
+        let collapsed = super::build_rows_revealing(
+            &c,
+            &d,
+            |_| Some(false),
+            filtered.clone(),
+            "reference",
+            None,
+            &BTreeSet::new(),
+        );
+        let marks = BTreeSet::from([DERIVED_BASE + 1]);
+        assert_eq!(collapsed.mark_counts(&marks), (1, 0, 1));
+        let revealed = super::build_rows_revealing(
+            &c,
+            &d,
+            |_| Some(false),
+            filtered,
+            "reference",
+            None,
+            &marks,
+        );
+        assert_eq!(revealed.mark_counts(&marks), (1, 0, 0));
+        let mut shown_marks = BTreeSet::new();
+        revealed.mark_shown(&mut shown_marks);
+        assert_eq!(
+            shown_marks, marks,
+            "context ancestors are not filter matches"
+        );
+        revealed.invert_shown(&mut shown_marks);
+        assert!(shown_marks.is_empty());
+        assert_eq!(collapsed.mark_counts(&marks), (1, 0, 1));
+        let run = Rows::catalog_range(100, 40, 5);
+        assert_eq!(run.shown().collect::<Vec<_>>(), vec![40, 41, 42, 43, 44]);
+        assert_eq!(run.row_index(39), None);
+        assert_eq!(run.row_index(45), None);
+    }
+
+    #[test]
+    fn hidden_or_removed_anchor_restarts_at_endpoint() {
+        let rows = super::build_rows(
+            &catalog(),
+            &channels(),
+            &BTreeSet::new(),
+            Some(std::sync::Arc::new(vec![1])),
+            "b.dat",
+            None,
+        );
+        for hidden in [0, DERIVED_BASE, DERIVED_BASE + 99] {
+            let (mut focus, mut anchor) = (Some(hidden), Some(hidden));
+            let mut marks = BTreeSet::from([hidden]);
+            assert!(!interact(
+                &rows,
+                &mut focus,
+                &mut anchor,
+                &mut marks,
+                1,
+                Gesture::Range
+            ));
+            assert_eq!(anchor, Some(1));
+            assert_eq!(marks, BTreeSet::from([hidden, 1]));
+            assert_eq!(rows.neighbor(Some(hidden), 1), Some(1));
+        }
+    }
+
+    #[test]
+    fn shown_commands_include_offscreen_rows_but_preserve_hidden_marks() {
+        let mut c = catalog();
+        c.extend(
+            (0..1000)
+                .map(|i| FileMeta {
+                    dir: "/data".into(),
+                    name: format!("scan{i}.dat").into(),
+                    size: 0,
+                })
+                .collect(),
+        );
+        let rows = super::build_rows(&c, &channels(), &BTreeSet::new(), None, "", None);
+        let mut marks = BTreeSet::from([DERIVED_BASE]);
+        rows.mark_shown(&mut marks);
+        assert_eq!(marks.len(), c.len() + 1);
+        assert!(!marks.contains(&(DERIVED_BASE + 1)));
+        rows.invert_shown(&mut marks);
+        assert_eq!(marks, BTreeSet::from([DERIVED_BASE]));
+        marks.clear();
+        assert!(marks.is_empty());
+    }
+
+    #[test]
+    fn acceptance_navigation_filter_collapse_and_merge_scope_agree() {
+        let c = catalog();
+        let d = channels();
+        let expanded = BTreeSet::from([0, 1]);
+        let rows = super::build_rows(&c, &d, &expanded, None, "", None);
+        let mut marks = BTreeSet::from([0, 1, DERIVED_BASE]);
+        let (mut focus, mut anchor, mut current) = (Some(0), Some(0), Some(0));
+        for _ in 0..3 {
+            let next = rows.neighbor(focus, 1).unwrap();
+            if interact(
+                &rows,
+                &mut focus,
+                &mut anchor,
+                &mut marks,
+                next,
+                Gesture::Current,
+            ) {
+                current = Some(next);
+            }
+        }
+        assert_eq!(marks, BTreeSet::from([0, 1, DERIVED_BASE]));
+        let filtered = Some(std::sync::Arc::new(vec![0]));
+        let collapsed =
+            super::build_rows(&c, &d, &BTreeSet::new(), filtered.clone(), "a.dat", None);
+        assert_eq!(collapsed.mark_counts(&marks), (3, 1, 1));
+        assert_eq!(compare_set(current, &marks), marks);
+        let revealed =
+            super::build_rows_revealing(&c, &d, |_| None, filtered.clone(), "a.dat", None, &marks);
+        assert!(marks.iter().all(|&g| revealed.row_index(g).is_some()));
+        let restored = super::build_rows(&c, &d, &BTreeSet::new(), filtered, "a.dat", None);
+        assert_eq!(restored.mark_counts(&marks), (3, 1, 1));
+        marks.retain(|&g| !restored.hidden_by_filter(g));
+        assert_eq!(
+            marks,
+            BTreeSet::from([0, DERIVED_BASE]),
+            "clear hidden retains collapsed marks"
+        );
+        assert_eq!(
+            compare_set(current, &marks),
+            BTreeSet::from([0, 1, DERIVED_BASE]),
+            "current is deduplicated and never silently dropped"
+        );
+    }
+
+    #[test]
+    fn removal_prefers_next_then_previous_and_never_hidden_groups() {
+        let mut d = channels();
+        d.push(group(None, DetectionMode::Auto));
+        let rows = super::build_rows(&catalog(), &d, &BTreeSet::from([0, 1]), None, "", None);
+        assert_eq!(
+            rows.after_removal(DERIVED_BASE + 3, Some),
+            Some(DERIVED_BASE + 4)
+        );
+        assert_eq!(
+            rows.after_removal(DERIVED_BASE + 4, Some),
+            Some(DERIVED_BASE + 3)
+        );
+        let filtered = super::build_rows(
+            &catalog(),
+            &d,
+            &BTreeSet::new(),
+            Some(std::sync::Arc::new(vec![1])),
+            "b.dat",
+            None,
+        );
+        assert_eq!(filtered.after_removal(1, Some), None);
+        assert_eq!(filtered.after_removal(0, Some), None);
+        let before = super::build_rows(
+            &catalog(),
+            &[group(Some("/data/a.dat"), DetectionMode::Reference)],
+            &BTreeSet::new(),
+            Some(std::sync::Arc::new(vec![])),
+            "reference",
+            None,
+        );
+        let after = super::build_rows(
+            &catalog(),
+            &[],
+            &BTreeSet::new(),
+            Some(std::sync::Arc::new(vec![])),
+            "reference",
+            None,
+        );
+        assert_eq!(
+            before.after_removal(DERIVED_BASE, |g| after.row_index(g).map(|_| g)),
+            None,
+            "removing the only match also hides its context ancestor"
+        );
+    }
+
     #[test]
     fn kinds_distinguish_channels_and_persisted_tool_outputs() {
         use crate::params::{Operation, Quantity};
@@ -765,8 +1388,12 @@ mod tests {
             "absent",
             Some(path),
         );
-        assert_eq!(rows.row_count(), 1);
-        assert_eq!(rows.row_at(0).and_then(Row::group), Some(NO_ENTRY));
+        assert_eq!(
+            rows.row_count(),
+            0,
+            "a filter may hide current without changing it"
+        );
+        assert_eq!(rows.row_index(NO_ENTRY), None);
     }
 
     #[test]

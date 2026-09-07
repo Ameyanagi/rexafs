@@ -231,7 +231,19 @@ impl StudioApp {
         if index >= self.derived.len() {
             return None;
         }
-        let was_active = self.selected == Some(DERIVED_BASE + index);
+        let removed = DERIVED_BASE + index;
+        let was_active = self.selected == Some(removed);
+        // Locate even a filtered-out current in the full presentation order.
+        // Survivors are checked against the actual displayed rows below.
+        let before = crate::app::group_rows::build_rows_revealing(
+            &self.catalog,
+            &self.derived,
+            |_| Some(true),
+            None,
+            "",
+            self.standalone_path(),
+            &Default::default(),
+        );
         let spectrum = self.derived.remove(index);
         self.rekey_after_catalog_change();
         if was_active {
@@ -245,12 +257,24 @@ impl StudioApp {
             self.import_preview = None;
             self.import_preview_gen += 1;
         }
-        if let Some(ix) = self.selected {
+        if was_active {
+            let after = self.interaction_rows();
+            let next = before.after_removal(removed, |ix| {
+                let ix = if ix > removed && ix != crate::app::NO_ENTRY {
+                    ix - 1
+                } else {
+                    ix
+                };
+                after.row_index(ix).map(|_| ix)
+            });
+            if let Some(ix) = next {
+                self.select_entry(ix, cx);
+            }
+        } else if let Some(ix) = self.selected {
+            // Reload after cache rekeying without changing keyboard focus or anchor.
+            let (focus, anchor) = (self.focus_group, self.mark_anchor);
             self.select_entry(ix, cx);
-        } else if !self.catalog.is_empty() {
-            self.select_entry(0, cx);
-        } else if !self.derived.is_empty() {
-            self.select_entry(DERIVED_BASE, cx);
+            (self.focus_group, self.mark_anchor) = (focus, anchor);
         }
         self.ensure_compare_loaded(cx);
         self.invalidate_explore_plots(cx);

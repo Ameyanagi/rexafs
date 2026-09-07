@@ -70,6 +70,7 @@ const JOB_ERROR_CAPACITY: usize = 200;
 const RAW_CACHE_CAPACITY: usize = 256;
 /// Raw (energy, mu) of one file after import math.
 type RawArrays = Arc<crate::params::RawData>;
+type GroupLoadResult = Result<(XASSpectrum, Option<RawArrays>), String>;
 /// Live-follow recompute cadence while dragging a plot handle.
 const DRAG_RECOMPUTE_TICK: Duration = Duration::from_millis(50);
 /// Import-preview column width. Wide enough for a 4-decimal energy value
@@ -421,6 +422,11 @@ actions!(
         MarkAllGroups,
         InvertGroupMarks,
         ClearCompare,
+        ToggleFocusedMark,
+        CollapseFocusedStack,
+        ExpandFocusedStack,
+        LeaveFilter,
+        EscapeFilter,
         FramePrev,
         FrameNext,
         FrameJumpBack,
@@ -464,18 +470,23 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
             AssistantPreviousControl,
             Some("Assistant && !TextInput"),
         ),
-        KeyBinding::new("up", NavUp, Some("DataPanel")),
-        KeyBinding::new("down", NavDown, Some("DataPanel")),
-        KeyBinding::new("shift-up", NavExtendUp, Some("DataPanel")),
-        KeyBinding::new("shift-down", NavExtendDown, Some("DataPanel")),
+        KeyBinding::new("up", NavUp, Some("DataPanel && !TextInput")),
+        KeyBinding::new("down", NavDown, Some("DataPanel && !TextInput")),
+        KeyBinding::new("shift-up", NavExtendUp, Some("DataPanel && !TextInput")),
+        KeyBinding::new("shift-down", NavExtendDown, Some("DataPanel && !TextInput")),
         KeyBinding::new("cmd-a", MarkAllGroups, Some("DataPanel && !TextInput")),
         KeyBinding::new("cmd-shift-a", ClearCompare, Some("DataPanel && !TextInput")),
         KeyBinding::new("cmd-i", InvertGroupMarks, Some("DataPanel && !TextInput")),
+        KeyBinding::new("space", ToggleFocusedMark, Some("DataPanel && !TextInput")),
         KeyBinding::new(
-            "escape",
-            ClearCompare,
-            Some("DataPanel && !Explore && !TextInput"),
+            "left",
+            CollapseFocusedStack,
+            Some("DataPanel && !TextInput"),
         ),
+        KeyBinding::new("right", ExpandFocusedStack, Some("DataPanel && !TextInput")),
+        KeyBinding::new("down", LeaveFilter, Some("GroupFilter > TextInput")),
+        KeyBinding::new("enter", LeaveFilter, Some("GroupFilter > TextInput")),
+        KeyBinding::new("escape", EscapeFilter, Some("GroupFilter > TextInput")),
         KeyBinding::new("left", FramePrev, Some("Operando && !TextInput")),
         KeyBinding::new("right", FrameNext, Some("Operando && !TextInput")),
         KeyBinding::new("shift-left", FrameJumpBack, Some("Operando && !TextInput")),
@@ -1009,7 +1020,10 @@ pub struct StudioApp {
     verify_running: bool,
     /// Active spectrum (drives params/fit/status).
     selected: Option<usize>,
-    /// Compare set; the active spectrum is implicitly included.
+    /// Keyboard row focus and stable range anchor, independent of current.
+    focus_group: Option<usize>,
+    mark_anchor: Option<usize>,
+    /// Marks are project-wide; visibility and navigation never remove them.
     selection: BTreeSet<usize>,
     /// Merged/averaged spectra (virtual indices DERIVED_BASE + i).
     derived: Vec<DerivedSpectrum>,
@@ -1017,10 +1031,14 @@ pub struct StudioApp {
     pending_derived: Option<u64>,
     compare_gen: u64,
     compare_running: bool,
+    plot_coverage: [crate::plotting::PlotCoverage; 5],
     view: ViewOptions,
     view_offset_field: Option<Entity<NumericField>>,
     filter_input: Option<Entity<TextInput>>,
     filter_text: String,
+    /// Saved expansion while temporarily revealing marked/current groups.
+    filter_reveal: Option<(BTreeMap<crate::group_identity::GroupId, bool>, DataTab)>,
+    reveal_current: Option<usize>,
     root_focus: FocusHandle,
     data_focus: FocusHandle,
     operando_focus: FocusHandle,
@@ -1104,7 +1122,7 @@ pub struct StudioApp {
     maximized: Option<usize>,
     data_tab: DataTab,
     file_scroll: UniformListScrollHandle,
-    expanded_sources: BTreeSet<crate::group_identity::GroupId>,
+    expanded_sources: BTreeMap<crate::group_identity::GroupId, bool>,
     groups_resize: Option<(gpui::Pixels, f32)>,
     scan_scroll: UniformListScrollHandle,
     /// At most one scan is expanded, keeping row-to-member mapping O(1)
@@ -1555,6 +1573,58 @@ mod override_tests {
     use crate::params::PipelineParams;
 
     #[test]
+    fn compare_excludes_pending_current_and_retains_other_marked_loads() {
+        use super::*;
+        let request = |ix| CompareLoad {
+            ix,
+            fingerprint: 1,
+            source: Ok("/data/scan.dat".into()),
+            params: Default::default(),
+        };
+        let mut loads = vec![request(0), request(1), request(NO_ENTRY)];
+        exclude_pending_current(&mut loads, Some(1));
+        assert_eq!(
+            loads.iter().map(|load| load.ix).collect::<Vec<_>>(),
+            vec![0, NO_ENTRY]
+        );
+        exclude_pending_current(&mut loads, Some(NO_ENTRY));
+        assert_eq!(loads.len(), 1);
+        exclude_pending_current(&mut loads, None);
+        assert_eq!(loads.len(), 1);
+        exclude_pending_current(&mut loads, Some(0));
+        assert!(
+            loads.is_empty(),
+            "plain navigation needs no overlay batch or diagnostic ticket"
+        );
+    }
+
+    #[test]
+    fn compare_processing_preserves_parser_diagnostics_for_cached_current() {
+        use super::*;
+        let path = std::env::temp_dir().join(format!(
+            "rexafs-compare-warnings-{}.xmu",
+            std::process::id()
+        ));
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/projects/data/cu_150k.xmu");
+        let mut text = std::fs::read_to_string(fixture).unwrap();
+        text.push_str("\nnot a numeric data row\n");
+        std::fs::write(&path, text).unwrap();
+        let request = CompareLoad {
+            ix: 0,
+            fingerprint: 0,
+            source: Ok(path.clone()),
+            params: Default::default(),
+        };
+        let (_, _, result) = request.process();
+        let (_, raw) = result.unwrap();
+        let warnings = raw.unwrap().diagnostics.warnings();
+        assert!(!warnings.is_empty());
+        assert!(warnings.iter().any(|w| w.contains("malformed")));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn derived_only_index_shift_keeps_batch_fit_and_active_filter() {
         use super::{CatalogBindings, IndexChange};
         use std::sync::{
@@ -1702,7 +1772,7 @@ mod override_tests {
             &cache,
         ) {
             let (ix, fingerprint, result) = request.process();
-            cache.put((ix, fingerprint), Arc::new(result.unwrap()));
+            cache.put((ix, fingerprint), Arc::new(result.unwrap().0));
         }
         let indices: Vec<_> = selection.iter().copied().chain([active]).collect();
         let missing = missing_compare_loads(
@@ -1717,7 +1787,7 @@ mod override_tests {
         let fingerprints: BTreeMap<_, _> = missing.iter().map(|r| (r.ix, r.fingerprint)).collect();
         for request in missing {
             let (ix, fingerprint, result) = request.process();
-            cache.put((ix, fingerprint), Arc::new(result.unwrap()));
+            cache.put((ix, fingerprint), Arc::new(result.unwrap().0));
         }
         assert!(
             missing_compare_loads(
@@ -1993,6 +2063,55 @@ mod keybinding_tests {
     }
 
     #[test]
+    fn list_keys_yield_to_text_editing_and_escape_preserves_marks() {
+        use super::{
+            ClearCompare, CollapseFocusedStack, ExpandFocusedStack, InvertGroupMarks,
+            MarkAllGroups, NavDown, NavExtendDown, NavExtendUp, NavUp, ToggleFocusedMark,
+        };
+        let bindings = studio_keybindings();
+        let list = KeyContext::parse("DataPanel").unwrap();
+        let input = KeyContext::parse("TextInput").unwrap();
+        for b in [
+            binding::<NavUp>(&bindings),
+            binding::<NavDown>(&bindings),
+            binding::<NavExtendUp>(&bindings),
+            binding::<NavExtendDown>(&bindings),
+            binding::<MarkAllGroups>(&bindings),
+            binding::<ClearCompare>(&bindings),
+            binding::<InvertGroupMarks>(&bindings),
+            binding::<ToggleFocusedMark>(&bindings),
+            binding::<CollapseFocusedStack>(&bindings),
+            binding::<ExpandFocusedStack>(&bindings),
+        ] {
+            let p = b.predicate().unwrap();
+            assert!(p.depth_of(std::slice::from_ref(&list)).is_some());
+            assert!(p.depth_of(&[list.clone(), input.clone()]).is_none());
+        }
+        assert_eq!(
+            bindings
+                .iter()
+                .filter(|b| b.action().as_any().is::<ClearCompare>())
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn filter_exit_keys_only_match_the_filter_editor() {
+        let bindings = studio_keybindings();
+        let filter = KeyContext::parse("GroupFilter").unwrap();
+        let input = KeyContext::parse("TextInput").unwrap();
+        for binding in [
+            binding::<super::LeaveFilter>(&bindings),
+            binding::<super::EscapeFilter>(&bindings),
+        ] {
+            let p = binding.predicate().unwrap();
+            assert_eq!(p.depth_of(&[filter.clone(), input.clone()]), Some(2));
+            assert!(p.depth_of(std::slice::from_ref(&input)).is_none());
+        }
+    }
+
+    #[test]
     fn text_input_context_blocks_shell_editing_keys() {
         let bindings = studio_keybindings();
         let studio = KeyContext::parse("Studio Explore").unwrap();
@@ -2160,13 +2279,27 @@ struct CompareLoad {
 }
 
 impl CompareLoad {
-    fn process(&self) -> (usize, u64, Result<XASSpectrum, String>) {
-        let result = match &self.source {
-            Ok(path) => process_file(path, &self.params),
-            Err(group) => group.for_display(&self.params),
-        };
+    fn process(&self) -> (usize, u64, GroupLoadResult) {
+        let result = (|| {
+            let (path, derived) = match &self.source {
+                Ok(path) => (path.as_path(), None),
+                Err(group) => {
+                    if group.processing_block_reason().is_some() {
+                        return group.for_display(&self.params).map(|sp| (sp, None));
+                    }
+                    (std::path::Path::new(""), Some(group))
+                }
+            };
+            let raw = load_group_raw_with_diagnostics(path, &self.params, derived)?;
+            let sp = process_arrays(raw.energy.clone(), raw.mu.clone(), &self.params)?;
+            Ok((sp, Some(Arc::new(raw))))
+        })();
         (self.ix, self.fingerprint, result)
     }
+}
+
+fn exclude_pending_current(loads: &mut Vec<CompareLoad>, pending: Option<usize>) {
+    loads.retain(|load| Some(load.ix) != pending);
 }
 
 fn cached_marked_spectra(
@@ -2308,15 +2441,20 @@ impl StudioApp {
             verify_running: false,
             selected: None,
             selection: BTreeSet::new(),
+            focus_group: None,
+            mark_anchor: None,
             derived: Vec::new(),
             next_derived_id: 1,
             pending_derived: None,
             compare_gen: 0,
             compare_running: false,
+            plot_coverage: Default::default(),
             view: ViewOptions::default(),
             view_offset_field: None,
             filter_input: None,
             filter_text: String::new(),
+            filter_reveal: None,
+            reveal_current: None,
             filtered: None,
             filter_gen: 0,
             root_focus: cx.focus_handle(),
@@ -2368,7 +2506,7 @@ impl StudioApp {
             maximized: None,
             data_tab: DataTab::Files,
             file_scroll: UniformListScrollHandle::new(),
-            expanded_sources: BTreeSet::new(),
+            expanded_sources: BTreeMap::new(),
             groups_resize: None,
             scan_scroll: UniformListScrollHandle::new(),
             expanded_scan: None,
@@ -2924,12 +3062,38 @@ impl StudioApp {
             &self.overrides,
             self.selected,
         );
+        if let Some((_, _, id)) = &self.standalone_source {
+            if self.selection.contains(&NO_ENTRY) {
+                state.marked.insert(id.clone());
+            } else if self.group_registry.index(id).is_none() {
+                state.marked.remove(id);
+            }
+            if self.current_group_index() == Some(NO_ENTRY) {
+                state.current = Some(id.clone());
+            }
+        }
     }
 
-    fn capture_groups(&mut self) {
+    fn capture_groups(&mut self) -> group_rows::InteractionIds {
+        let interaction = group_rows::InteractionIds::capture(
+            [self.focus_group, self.mark_anchor, self.reveal_current],
+            |ix| self.group_id(ix),
+        );
         let mut state = std::mem::take(&mut self.group_state);
         self.capture_group_state(&mut state);
         self.group_state = state;
+        interaction
+    }
+
+    fn resolve_interaction(&mut self, interaction: group_rows::InteractionIds) {
+        [self.focus_group, self.mark_anchor, self.reveal_current] = interaction.resolve(|id| {
+            self.group_registry.index(id).or_else(|| {
+                self.standalone_path()
+                    .and(self.standalone_source.as_ref())
+                    .filter(|(_, _, standalone)| standalone == id)
+                    .map(|_| NO_ENTRY)
+            })
+        });
     }
 
     fn resolve_group_state(&mut self) {
@@ -2941,12 +3105,21 @@ impl StudioApp {
             .current
             .as_ref()
             .and_then(|id| self.group_registry.index(id));
+        if let Some((_, _, id)) = self
+            .standalone_source
+            .as_ref()
+            .filter(|_| self.catalog.is_empty())
+            && self.group_state.marked.contains(id)
+        {
+            self.selection.insert(NO_ENTRY);
+        }
+        self.migrate_catalog_standalone();
     }
 
     /// Central adapter for derived insert/remove/reorder. Catalog indices did
     /// not move: catalog jobs, filters, thumbnails and caches remain valid.
     fn rekey_after_catalog_change(&mut self) {
-        self.capture_groups();
+        let interaction = self.capture_groups();
         self.group_registry.reserve_groups(&self.derived);
         for group in &mut self.derived {
             self.group_registry
@@ -2956,6 +3129,7 @@ impl StudioApp {
             self.invalidate_index_bindings(IndexChange::DerivedOnly);
         }
         self.resolve_group_state();
+        self.resolve_interaction(interaction);
     }
 
     fn invalidate_index_bindings(&mut self, change: IndexChange) {
@@ -3015,12 +3189,55 @@ impl StudioApp {
         }
     }
 
-    /// Append never captures/rekeys existing state or retires workers.
+    /// Retire the standalone adapter once its durable source has a catalog slot.
+    fn migrate_catalog_standalone(&mut self) {
+        if let Some((_, _, id)) = &self.standalone_source
+            && let Some(ix) = self.group_registry.index(id)
+        {
+            group_rows::migrate_standalone(
+                &mut self.selection,
+                &mut self.focus_group,
+                &mut self.mark_anchor,
+                &mut self.reveal_current,
+                ix,
+            );
+            if self.selected.is_none()
+                && self
+                    .spectrum_group
+                    .as_ref()
+                    .and_then(|t| t.group_id.as_ref())
+                    == Some(id)
+            {
+                self.selected = Some(ix);
+            }
+            if let Some(target) = &mut self.spectrum_group
+                && target.group_id.as_ref() == Some(id)
+            {
+                target.ix = ix;
+            }
+            self.standalone_source = None;
+            let aliases: Vec<_> = self
+                .cache
+                .iter()
+                .filter(|(key, _)| key.0 == NO_ENTRY)
+                .map(|(key, _)| *key)
+                .collect();
+            for key in aliases {
+                if let Some(sp) = self.cache.pop(&key) {
+                    self.cache.put((ix, key.1), sp);
+                }
+            }
+        }
+    }
+
+    /// Append keeps existing catalog indices and workers, migrating a newly
+    /// cataloged standalone source through its durable identity.
     fn register_appended_groups(&mut self, catalog_start: usize, derived_start: usize) {
         self.group_registry
             .append_catalog(&self.catalog, catalog_start);
         self.group_registry
             .append_derived(&self.derived, derived_start);
+        self.migrate_catalog_standalone();
         let appended = |ix: &usize| {
             (*ix < DERIVED_BASE && *ix >= catalog_start) || *ix >= DERIVED_BASE + derived_start
         };
@@ -3056,11 +3273,13 @@ impl StudioApp {
     fn reset_catalog_state(&mut self, cx: &mut Context<Self>) {
         self.catalog_gen += 1;
         self.invalidate_index_bindings(IndexChange::Catalog);
-        self.capture_groups();
+        let interaction = self.capture_groups();
+        self.standalone_source = None;
         self.catalog = Catalog::default();
         self.group_registry.replace_catalog(Default::default());
         self.group_registry.replace_derived(&self.derived);
         self.resolve_group_state();
+        self.resolve_interaction(interaction);
         self.catalog_index_path = None;
         self.verify_running = false;
         self.load_running = false;
@@ -3082,7 +3301,6 @@ impl StudioApp {
         self.spectrum_fingerprint = 0;
         self.spectrum_group = None;
         self.spectrum = None;
-        self.standalone_source = None;
         self.group_diagnostics = Default::default();
         self.spectrum_label = "no spectrum".into();
         self.import_preview = None;
@@ -3893,6 +4111,21 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) {
         if ix == NO_ENTRY {
+            if self
+                .standalone_source
+                .as_ref()
+                .is_some_and(|(old, _, _)| old != &path)
+            {
+                let keys: Vec<_> = self
+                    .cache
+                    .iter()
+                    .filter(|(key, _)| key.0 == NO_ENTRY)
+                    .map(|(key, _)| *key)
+                    .collect();
+                for key in keys {
+                    self.cache.pop(&key);
+                }
+            }
             let id = self.standalone_group_id(&path);
             self.standalone_source = Some((path.clone(), label.clone(), id));
         } else {
@@ -3945,6 +4178,17 @@ impl StudioApp {
                     return; // a newer selection/edit superseded this load
                 }
                 app.load_running = false;
+                // Import can assign a catalog index while a standalone load is
+                // running. Its completion must use the durable source's new slot.
+                let ix = if ix == NO_ENTRY {
+                    app.catalog
+                        .find_by_canonical_path(&processed_path)
+                        .unwrap_or(ix)
+                } else {
+                    ix
+                };
+                let key = (ix, key.1);
+                let raw_key = (ix, raw_key.1);
                 match result {
                     Ok((sp, raw)) => {
                         if let Some(ticket) = &diagnostics {
@@ -4053,6 +4297,7 @@ impl StudioApp {
         if ix == NO_ENTRY {
             let id = self.standalone_group_id(&path);
             self.standalone_source = Some((path.clone(), label.clone(), id));
+            self.cache.put((ix, fingerprint), sp.clone());
         }
         self.status = spectrum_status(&label, &sp);
         if ix >= DERIVED_BASE
@@ -4730,16 +4975,35 @@ impl StudioApp {
         self.replace_operando_chik(key, row);
     }
 
+    fn current_group_index(&self) -> Option<usize> {
+        self.selected.or_else(|| {
+            self.standalone_path()
+                .filter(|p| *p == self.current_path)
+                .map(|_| NO_ENTRY)
+        })
+    }
+
+    fn compare_count(&self) -> usize {
+        self.selection.len()
+            + usize::from(
+                self.current_group_index()
+                    .is_some_and(|g| !self.selection.contains(&g)),
+            )
+    }
+
+    fn compare_groups(&self) -> BTreeSet<usize> {
+        group_rows::compare_set(self.current_group_index(), &self.selection)
+    }
+
     /// Selection (plus active) thinned evenly to MAX_OVERLAY, active always
     /// kept. Returns (indices, total_before_thinning).
     fn compare_indices(&self) -> (Vec<usize>, usize) {
-        let mut set: BTreeSet<usize> = self.selection.clone();
-        if let Some(active) = self.selected {
-            set.insert(active);
-        }
-        let all: Vec<usize> = set.into_iter().collect();
+        let all: Vec<usize> = self.compare_groups().into_iter().collect();
         let total = all.len();
-        (thin_even(&all, MAX_OVERLAY, self.selected), total)
+        (
+            thin_even(&all, MAX_OVERLAY, self.current_group_index()),
+            total,
+        )
     }
 
     /// Process any compare-set members missing from the cache (rayon batch),
@@ -4747,13 +5011,32 @@ impl StudioApp {
     /// its own effective params.
     fn ensure_compare_loaded(&mut self, cx: &mut Context<Self>) {
         let (indices, _) = self.compare_indices();
-        let missing = missing_compare_loads(
+        let mut missing = missing_compare_loads(
             &self.catalog,
             &self.derived,
             &self.params,
             &self.overrides,
             &indices,
             &self.cache,
+        );
+        if indices.contains(&NO_ENTRY)
+            && let Some(path) = self.standalone_path()
+        {
+            let fingerprint = self.params.fingerprint();
+            if !self.cache.contains(&(NO_ENTRY, fingerprint)) {
+                missing.push(CompareLoad {
+                    ix: NO_ENTRY,
+                    fingerprint,
+                    source: Ok(path.to_path_buf()),
+                    params: self.params.clone(),
+                });
+            }
+        }
+        exclude_pending_current(
+            &mut missing,
+            self.load_running
+                .then(|| self.current_group_index())
+                .flatten(),
         );
         if missing.is_empty() {
             self.invalidate_explore_plots(cx);
@@ -4788,21 +5071,32 @@ impl StudioApp {
                 let mut failed = 0usize;
                 for (ix, fingerprint, result) in results {
                     if let Some(ticket) = diagnostics.remove(&ix) {
-                        let problems = result
-                            .as_ref()
-                            .err()
-                            .map(|error| {
-                                vec![JobError {
-                                    severity: ProblemSeverity::Error,
+                        let problems = match &result {
+                            Ok((_, Some(raw))) => raw
+                                .diagnostics
+                                .warnings()
+                                .into_iter()
+                                .map(|message| JobError {
+                                    severity: ProblemSeverity::Warning,
                                     label: app.entry_label(ix),
-                                    message: error.to_string(),
-                                }]
-                            })
-                            .unwrap_or_default();
+                                    message,
+                                })
+                                .collect(),
+                            Ok((_, None)) => Vec::new(),
+                            Err(error) => vec![JobError {
+                                severity: ProblemSeverity::Error,
+                                label: app.entry_label(ix),
+                                message: error.to_string(),
+                            }],
+                        };
                         app.group_diagnostics.finish(&ticket, problems);
                     }
                     match result {
-                        Ok(sp) => {
+                        Ok((sp, raw)) => {
+                            if let Some(raw) = raw {
+                                app.raw_cache
+                                    .put((ix, app.effective_params(ix).raw_fingerprint()), raw);
+                            }
                             app.cache.put((ix, fingerprint), Arc::new(sp));
                         }
                         Err(error) => {
@@ -4844,10 +5138,21 @@ impl StudioApp {
         self.view.show_bkg = self.stage_view.show_bkg && self.stage == Stage::Background;
         let (indices, total) = self.compare_indices();
         let mut traces: Vec<QuadTrace> = Vec::new();
-        for ix in indices {
-            if ix == NO_ENTRY {
-                continue;
-            }
+
+        let current = self.current_group_index();
+        let current_only =
+            self.stage == Stage::Fit || self.stage_view.scope == shell::PlotScope::Current;
+        let sampled = if current_only {
+            usize::from(current.is_some())
+        } else {
+            indices.len()
+        };
+        let total = if current_only { sampled } else { total };
+        self.plot_coverage = [crate::plotting::PlotCoverage::new(total, sampled, 0, 0); 5];
+        for ix in indices
+            .into_iter()
+            .filter(|&ix| !current_only || Some(ix) == current)
+        {
             let label = self.entry_label(ix);
             let fingerprint = self.effective_fingerprint(ix);
             let color_index = self.group_color_index(ix);
@@ -4856,7 +5161,7 @@ impl StudioApp {
                     color_index,
                     label,
                     sp: sp.clone(),
-                    active: Some(ix) == self.selected,
+                    active: Some(ix) == current,
                 });
             }
         }
@@ -4887,13 +5192,6 @@ impl StudioApp {
             group_rows::overlay_colors(&traces.iter().map(|t| t.color_index).collect::<Vec<_>>());
         for (trace, color) in traces.iter_mut().zip(colors) {
             trace.color_index = color;
-        }
-        if total > MAX_OVERLAY && self.stage_view.scope == shell::PlotScope::Marked {
-            self.status = format!(
-                "showing {} of {total} marked — the Series heatmap shows the full set",
-                traces.len()
-            )
-            .into();
         }
         // The grid uses one shared legend strip; per-plot legends only when a
         // quadrant is maximized.
@@ -4934,6 +5232,8 @@ impl StudioApp {
             in_plot_legend,
             self.spectrum_quantity,
         );
+        self.plot_coverage =
+            std::array::from_fn(|i| specs[i].coverage(total, sampled, traces.len()));
         if self.stage == Stage::Background
             && let Some((_, hi)) = self
                 .spectrum
@@ -5118,11 +5418,12 @@ impl StudioApp {
                     Ok((catalog, mut entries)) => {
                         let total = catalog.len();
                         app.tools.invalidate_bindings();
-                        app.capture_groups();
+                        let interaction = app.capture_groups();
                         entries.include_recent(&catalog, &app.group_registry);
                         app.catalog = catalog;
                         app.group_registry.replace_catalog(entries);
                         app.resolve_group_state();
+                        app.resolve_interaction(interaction);
                         app.resolve_pending_overrides(cx);
                         app.restore_project_selection(cx);
                         app.status =
@@ -5234,11 +5535,12 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) {
         self.invalidate_index_bindings(IndexChange::Catalog);
-        self.capture_groups();
+        let interaction = self.capture_groups();
         entries.include_recent(&catalog, &self.group_registry);
         self.catalog = catalog;
         self.group_registry.replace_catalog(entries);
         self.resolve_group_state();
+        self.resolve_interaction(interaction);
         self.expanded_scan = None;
         self.active_scan = None;
         self.operando = None;
@@ -5386,84 +5688,46 @@ impl StudioApp {
         .detach();
     }
 
-    /// Modifier-aware list click: plain = activate (clears compare set),
-    /// shift = extend range from the active row, cmd = toggle membership.
+    /// Current, keyboard focus, marks and anchor have independent lifetimes.
     fn click_entry(&mut self, ix: usize, modifiers: gpui::Modifiers, cx: &mut Context<Self>) {
-        if modifiers.shift {
-            let range = if self.data_tab == DataTab::Scans {
-                self.expanded_scan
-                    .and_then(|i| self.catalog.scans.get(i))
-                    .map(|scan| {
-                        let anchor = self
-                            .selected
-                            .filter(|&a| scan_entry_offset(scan.start, scan.len, a).is_some())
-                            .unwrap_or(ix);
-                        (anchor.min(ix)..=anchor.max(ix)).collect()
-                    })
-                    .unwrap_or_default()
-            } else {
-                self.group_rows().range(
-                    self.selected
-                        .or_else(|| self.standalone_path().map(|_| NO_ENTRY)),
-                    ix,
-                )
-            };
-            self.selection
-                .extend(range.into_iter().filter(|&g| g != NO_ENTRY));
-            self.ensure_compare_loaded(cx);
+        let gesture = if modifiers.shift {
+            group_rows::Gesture::Range
         } else if modifiers.platform {
-            if !self.selection.remove(&ix) {
-                self.selection.insert(ix);
-            }
-            self.ensure_compare_loaded(cx);
+            group_rows::Gesture::Toggle
         } else {
-            self.selection.clear();
+            group_rows::Gesture::Current
+        };
+        let rows = self.interaction_rows();
+        if group_rows::interact(
+            &rows,
+            &mut self.focus_group,
+            &mut self.mark_anchor,
+            &mut self.selection,
+            ix,
+            gesture,
+        ) {
             self.select_entry(ix, cx);
+        } else {
+            self.ensure_compare_loaded(cx);
         }
-        // Selection-count changes can flip the panel between a spectrum's
-        // override and the globals.
         self.sync_param_fields(cx);
+        self.sync_handles(cx);
         cx.notify();
-    }
-
-    /// Neighbor of the active row within the visible (filtered) list.
-    fn visible_neighbor(&self, delta: isize) -> Option<usize> {
-        if self.data_tab == DataTab::Scans {
-            let scan = self.expanded_scan.and_then(|i| self.catalog.scans.get(i))?;
-            let active = self
-                .selected
-                .filter(|&ix| scan_entry_offset(scan.start, scan.len, ix).is_some());
-            return match active {
-                Some(ix) => ix
-                    .checked_add_signed(delta)
-                    .filter(|&ix| scan_entry_offset(scan.start, scan.len, ix).is_some()),
-                None => (scan.len > 0).then_some(scan.start),
-            };
-        }
-        self.group_rows().neighbor(
-            self.selected
-                .or_else(|| self.standalone_path().map(|_| NO_ENTRY)),
-            delta,
-        )
     }
 
     fn nav_move(&mut self, delta: isize, extend: bool, cx: &mut Context<Self>) {
-        let Some(next) = self.visible_neighbor(delta) else {
+        let Some(next) = self.interaction_rows().neighbor(self.focus_group, delta) else {
             return;
         };
-        if extend {
-            if let Some(active) = self.selected {
-                self.selection.insert(active);
-            }
-            if next != NO_ENTRY {
-                self.selection.insert(next);
-            }
-        }
-        self.select_entry(next, cx);
-        if extend {
-            self.ensure_compare_loaded(cx);
-        }
-        cx.notify();
+        self.click_entry(
+            next,
+            gpui::Modifiers {
+                shift: extend,
+                ..Default::default()
+            },
+            cx,
+        );
+        self.scroll_group_row(next);
     }
 
     /// Add a whole scan to the compare set (shift/cmd-click on a scan row).
@@ -5477,6 +5741,7 @@ impl StudioApp {
     }
 
     fn clear_selection(&mut self, cx: &mut Context<Self>) {
+        self.group_state.marked.clear();
         if !self.selection.is_empty() {
             self.selection.clear();
             self.invalidate_explore_plots(cx);
@@ -5564,17 +5829,19 @@ impl StudioApp {
         cx.notify();
     }
 
-    /// Add all filter results to the compare set.
+    /// Same displayed scope as the toolbar and keyboard command.
     fn select_filter_results(&mut self, cx: &mut Context<Self>) {
-        if let Some(filtered) = &self.filtered {
-            self.selection.extend(filtered.iter().copied());
-            self.ensure_compare_loaded(cx);
-            self.sync_param_fields(cx);
-            cx.notify();
-        }
+        self.mark_all(true, cx);
     }
 
     fn entry_label(&self, ix: usize) -> String {
+        if ix == NO_ENTRY {
+            return self
+                .standalone_source
+                .as_ref()
+                .map(|(_, label, _)| label.to_string())
+                .unwrap_or_else(|| self.spectrum_label.to_string());
+        }
         if ix >= DERIVED_BASE {
             self.derived
                 .get(ix - DERIVED_BASE)
@@ -5596,6 +5863,8 @@ impl StudioApp {
     }
 
     fn select_entry(&mut self, ix: usize, cx: &mut Context<Self>) {
+        self.focus_group = Some(ix);
+        self.mark_anchor = Some(ix);
         self.pending_project_spectrum = None;
         self.pending_derived = None;
         if ix == NO_ENTRY {
@@ -7534,6 +7803,10 @@ impl StudioApp {
         self.overrides.clear();
         self.pending_overrides.clear();
         self.selected = None;
+        self.focus_group = None;
+        self.mark_anchor = None;
+        self.filter_reveal = None;
+        self.reveal_current = None;
         self.project_generation += 1;
         self.assistant_history = project.assistant.clone();
         self.assistant_history_revision = 0;
@@ -7678,6 +7951,7 @@ impl StudioApp {
         cx.defer_in(window, move |_this, window, cx| {
             if let Some(input) = input {
                 input.read(cx).focus_handle(cx).focus(window, cx);
+                input.update(cx, |input, cx| input.select_all_text(cx));
             }
         });
     }
@@ -7698,8 +7972,6 @@ impl StudioApp {
             cx.notify();
         } else if self.maximized.is_some() {
             self.set_maximized(None, cx);
-        } else {
-            self.clear_selection(cx);
         }
     }
 
@@ -8822,7 +9094,7 @@ impl StudioApp {
 
     /// Banner shown when the selected entry failed to load and the plots are
     /// therefore showing a *different* spectrum than the one selected.
-    fn stale_plots_banner(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
+    fn stale_plots_banner(&self, _cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
         let t = self.theme;
         let stale = self.stale_plots.as_ref()?;
         let headline: SharedString = format!(
@@ -8859,22 +9131,6 @@ impl StudioApp {
                         .text_xs()
                         .text_color(t.text_muted)
                         .child(detail),
-                )
-                .child(
-                    div()
-                        .id("stale-dismiss")
-                        .flex_none()
-                        .px_1()
-                        .rounded_sm()
-                        .text_xs()
-                        .text_color(t.text_muted)
-                        .cursor_pointer()
-                        .hover(|d| d.text_color(t.text))
-                        .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                            this.stale_plots = None;
-                            cx.notify();
-                        }))
-                        .child("✕"),
                 ),
         )
     }

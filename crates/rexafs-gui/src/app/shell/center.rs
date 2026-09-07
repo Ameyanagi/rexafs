@@ -139,7 +139,7 @@ impl StudioApp {
                         segment(
                             &t,
                             "scope-current",
-                            "current",
+                            "Current",
                             v.scope == PlotScope::Current,
                             true,
                         )
@@ -154,7 +154,7 @@ impl StudioApp {
                         segment(
                             &t,
                             "scope-marked",
-                            format!("current + marked ({marked})"),
+                            "Compare",
                             v.scope == PlotScope::Marked,
                             false,
                         )
@@ -165,6 +165,15 @@ impl StudioApp {
                             },
                         )),
                     ),
+            )
+            .child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child(format!(
+                        "current + {marked} marked · {} spectra",
+                        self.compare_count()
+                    )),
             )
             .child(div().w(px(1.)).h(px(18.)).bg(t.border));
         if self.stage.is_processing() && !self.spectrum_quantity.is_absorption() {
@@ -442,6 +451,24 @@ impl StudioApp {
                     .text_size(px(11.5))
                     .child(div().font_weight(gpui::FontWeight::MEDIUM).child(title))
                     .child(div().text_color(t.text_muted).child(label)),
+            )
+            .when(
+                self.stage_view.scope == PlotScope::Marked && self.stage != Stage::Fit,
+                |d| {
+                    d.children(
+                        self.plot_coverage
+                            .get(index)
+                            .and_then(|coverage| coverage.disclosure())
+                            .map(|text| {
+                                div()
+                                    .px_3()
+                                    .pt_1()
+                                    .text_size(px(11.5))
+                                    .text_color(t.warn)
+                                    .child(text)
+                            }),
+                    )
+                },
             )
             .child(
                 div()
