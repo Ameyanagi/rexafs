@@ -4,9 +4,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rexafs::prelude::{
-    feffpath, run_feff, FeffExecutionMode, FeffFlavor, FeffRunRequest, FittingError,
-};
+use rexafs::prelude::{feffpath, run_feff, FeffExecutionMode, FeffFlavor, FeffRunRequest};
+use rexafs::xafs::fitting::FittingError;
+use rexafs::xafs::XAFSError;
 
 struct TestWorkspace(PathBuf);
 
@@ -93,7 +93,10 @@ fn refeff_expired_deadline_leaves_no_partial_path_outputs() {
     };
     assert!(matches!(
         run_feff(&request),
-        Err(FittingError::ProcessTimedOut { timeout_sec: 0, .. })
+        Err(XAFSError::Fitting(FittingError::ProcessTimedOut {
+            timeout_sec: 0,
+            ..
+        }))
     ));
     assert_eq!(fs::read_dir(&workspace.0).unwrap().count(), 0);
 }

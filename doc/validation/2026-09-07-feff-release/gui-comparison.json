@@ -1,0 +1,116 @@
+{
+  "version": "0.1.3",
+  "source": "local release candidate with both engines",
+  "project_sha256": "5ab6229df6496dab1604cf5390e24d0e5a276c28dfa96fc570606d839b183128",
+  "sources": [
+    {
+      "engine": "ReFEFF",
+      "input_sha256": "381ad7d8178ee7935722f56421243038f41aebdccab342ee7734d931eaf79237",
+      "normalized_input_sha256": "bf596e3e141e0b308dcad517b3f440f46fc11478e309ed169ff59d49f0e02c6b",
+      "paths": 62,
+      "selected_paths": 1,
+      "source": "ws-1788747607447196000"
+    },
+    {
+      "engine": "FEFF-RS / FEFF10",
+      "input_sha256": "ee1c0cef41ba57e0c09cf176394904df12450b7c5bf21ae96baaace117953c2c",
+      "normalized_input_sha256": "bf596e3e141e0b308dcad517b3f440f46fc11478e309ed169ff59d49f0e02c6b",
+      "paths": 62,
+      "selected_paths": 0,
+      "source": "ws-1788747641798681000"
+    }
+  ],
+  "fits": [
+    {
+      "engine": "FEFF-RS / FEFF10",
+      "r_factor": 0.002455718409133738,
+      "variables": [
+        [
+          "p2_dr_1",
+          -0.004438610382984877,
+          0.0027081294216618167
+        ],
+        [
+          "p2_e0",
+          6.39813903380086,
+          0.4704462450376209
+        ],
+        [
+          "p2_s02",
+          0.9338808906949392,
+          0.04191344410370855
+        ],
+        [
+          "p2_ss_1",
+          0.005680575470273252,
+          0.00036748912629774345
+        ]
+      ],
+      "solver": {
+        "method": "TrustRegionDogLeg",
+        "converged": true,
+        "termination": "Cost tolerance reached",
+        "iterations": 6,
+        "evaluations": null,
+        "initial_cost": 0.48433353142637126,
+        "final_cost": 0.0020032866188095105
+      }
+    },
+    {
+      "engine": "ReFEFF",
+      "r_factor": 0.002455289234422646,
+      "variables": [
+        [
+          "dr_1",
+          -0.00443963413318492,
+          0.0027078440733981873
+        ],
+        [
+          "e0",
+          6.397896608862752,
+          0.47039361785412415
+        ],
+        [
+          "s02",
+          0.933889499088442,
+          0.04191042703991455
+        ],
+        [
+          "ss_1",
+          0.005680639604809134,
+          0.00036745909409431713
+        ]
+      ],
+      "solver": {
+        "method": "TrustRegionDogLeg",
+        "converged": true,
+        "termination": "Cost tolerance reached",
+        "iterations": 6,
+        "evaluations": null,
+        "initial_cost": 0.4843274625346312,
+        "final_cost": 0.002002936513539841
+      }
+    }
+  ],
+  "protocol": {
+    "scan": "bundled Cu 150 K",
+    "cluster_radius_angstrom": 8,
+    "k_range": [
+      2,
+      12
+    ],
+    "r_range": [
+      1,
+      3
+    ],
+    "kweight": 2,
+    "first_shell_only": true
+  },
+  "checks": [
+    "both engines visible",
+    "paths retained while switching engines",
+    "deselect other sources leaves one first-shell path and four variables",
+    "two converged fits retained in history",
+    "portable project saved and reopened with 124 paths and both engine sources"
+  ]
+}

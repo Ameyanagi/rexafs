@@ -11,6 +11,7 @@ are not supported or retained as compatibility fixtures.
 | `rexafs-0.1.0-embedded.rxs` | The same state with compressed originals and duplicate-payload deduplication |
 | `rexafs-0.1.1-links.rxs`, `rexafs-0.1.1-embedded.rxs` | Saved and reopened through the 0.1.1 writer from the 0.1.0 linked fixture; same format and complete state in both storage modes |
 | `rexafs-0.1.2-links.rxs`, `rexafs-0.1.2-embedded.rxs` | Saved and reopened through the 0.1.2 writer; stable reference-group identity, independent processing, embedded synthetic χ standard and explicit inverse grid |
+| `rexafs-0.1.3-links.rxs`, `rexafs-0.1.3-embedded.rxs` | Saved and reopened through the 0.1.3 writer from the 0.1.2 linked fixture; same format and preserved reference/standard/inverse-grid state |
 | `future-version.rxs` | Future format: reject without modification |
 | `truncated.rxs` | Corrupt/incomplete input: reject without modification |
 | `data/*.xmu`, `feff/*.dat` | Real inputs for relocation, byte recovery and processing checks |
