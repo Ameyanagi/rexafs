@@ -35,6 +35,23 @@ use std::{
 
 const MODEL_ROW_HEIGHT: f32 = 32.;
 
+#[derive(Clone)]
+enum AccessAction {
+    Fetch {
+        input: crate::structure::StructureInput,
+        label: Option<String>,
+    },
+    Command(codex_client::CommandApproval),
+}
+#[derive(Clone)]
+struct PendingAccess {
+    id: Value,
+    action: AccessAction,
+    question: String,
+    deadline: Instant,
+    approved: bool,
+}
+
 /// Thumb height and top offset in pixels for seven visible rows. GPUI scroll
 /// offsets are negative; clamp overscroll and handle an empty list explicitly.
 fn model_scrollbar(rows: usize, offset: f32) -> (f32, f32) {
@@ -108,6 +125,12 @@ pub(crate) struct AssistantWindow {
     last_rendered_revision: u64,
     copied: BTreeMap<usize, Instant>,
     allow_changes: bool,
+    web_search: bool,
+    extended_access: bool,
+    reconnect_next: bool,
+    resume_after_connect: bool,
+    client_epoch: u64,
+    access: BTreeMap<String, PendingAccess>,
     turn_edit: bool,
     shared_context_open: bool,
     include_plots: bool,
@@ -186,6 +209,7 @@ impl AssistantWindow {
         if self.analysis_closed {
             return;
         }
+        self.deny_all_access("Analysis window closed");
         self.analysis_closed = true;
         self.focus_composer = true;
         self.transcript.apply(Event::AnalysisClosed, Instant::now());
@@ -226,6 +250,8 @@ impl AssistantWindow {
             "assistant-show-app",
             "assistant-focus-plots",
             "assistant-plots",
+            "assistant-web",
+            "assistant-extended",
             "assistant-review",
             "assistant-edit",
             "assistant-copy",
@@ -413,6 +439,12 @@ impl AssistantWindow {
             last_rendered_revision: 0,
             copied: BTreeMap::new(),
             allow_changes: false,
+            web_search: settings.assistant_web_search.unwrap_or(true),
+            extended_access: false,
+            reconnect_next: false,
+            resume_after_connect: false,
+            client_epoch: 0,
+            access: BTreeMap::new(),
             turn_edit: false,
             shared_context_open: false,
             include_plots: true,
@@ -807,6 +839,8 @@ impl AssistantWindow {
         )
     }
     fn disconnected(&mut self, error: String) {
+        self.deny_all_access("Connection closed");
+        self.client_epoch += 1;
         self.error = Some(error);
         // A spawned client is not established until account/read succeeds.
         // Initial setup failures must not mark the transcript as disconnected.
@@ -845,14 +879,18 @@ impl AssistantWindow {
         self.models.clear();
         self.models_requested = false;
         self.model_cursors.clear();
+        let web_search = self.web_search;
+        let extended = self.extended_access;
+        self.client_epoch += 1;
+        let epoch = self.client_epoch;
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
-                .spawn(async { Client::start() })
+                .spawn(async move { Client::start(web_search, extended) })
                 .await;
             if !this
                 .update(cx, |app, cx| {
-                    if app.analysis_closed {
+                    if app.analysis_closed || app.client_epoch != epoch {
                         return false;
                     }
                     match result {
@@ -884,6 +922,19 @@ impl AssistantWindow {
                     .await;
                 let keep = this
                     .update(cx, |app, cx| {
+                        if app.client_epoch != epoch {
+                            return false;
+                        }
+                        let expired: Vec<_> = app
+                            .access
+                            .iter()
+                            .filter(|(_, p)| !p.approved && Instant::now() >= p.deadline)
+                            .map(|(k, _)| k.clone())
+                            .collect();
+                        for key in expired {
+                            app.deny_access(&key, "Approval timed out after 5 minutes");
+                            cx.notify();
+                        }
                         let messages = app.client.as_ref().map(Client::drain).unwrap_or_default();
                         let changed = !messages.is_empty();
                         for msg in messages {
@@ -898,6 +949,14 @@ impl AssistantWindow {
                         if app.connecting && std::time::Instant::now() >= deadline {
                             app.disconnected("Codex connection timed out".into());
                             cx.notify();
+                        }
+                        if app.resume_after_connect
+                            && !app.connecting
+                            && catalog_settled(app.account, app.models_requested, &app.pending)
+                            && !pending_blocks_run(&app.pending)
+                        {
+                            app.resume_after_connect = false;
+                            app.run(cx);
                         }
                         if changed {
                             cx.notify();
@@ -928,12 +987,20 @@ impl AssistantWindow {
         }
         if let Some(method) = v["method"].as_str() {
             let p = &v["params"];
+            if method == "item/commandExecution/requestApproval" {
+                self.command_permission(&v, cx);
+                return;
+            }
             if method != "item/tool/call"
                 && p["turnId"]
                     .as_str()
                     .is_some_and(|id| self.transcript.turn.as_deref() != Some(id))
             {
                 return;
+            }
+            if let Some(outcome) = codex_client::command_outcome(&v) {
+                self.transcript
+                    .apply(Event::ActivityNote(outcome), Instant::now());
             }
             match method {
                 "error" => {
@@ -950,6 +1017,7 @@ impl AssistantWindow {
                     }
                     .into();
                     if p["willRetry"] != true {
+                        self.deny_all_access("Turn failed");
                         self.focus_composer = true;
                         self.transcript.apply(
                             Event::Failed(self.error.clone().unwrap_or_default()),
@@ -1026,6 +1094,9 @@ impl AssistantWindow {
                 }
                 "turn/completed" => {
                     if let Some(turn) = p["turn"]["id"].as_str() {
+                        if self.transcript.turn.as_deref() == Some(turn) {
+                            self.deny_all_access("Turn ended");
+                        }
                         let error = p["turn"]["error"]["message"].as_str().map(str::to_owned);
                         let failed = error.is_some();
                         if self.transcript.apply(
@@ -1193,6 +1264,13 @@ impl AssistantWindow {
         if prompt.is_empty() {
             return;
         }
+        if self.reconnect_next && !self.transcript.busy && !self.transcript.stop_pending {
+            self.reconnect_next = false;
+            self.disconnected(String::new());
+            self.resume_after_connect = true;
+            self.connect(cx);
+            return;
+        }
         let Ok(snapshot) = self.studio.update(cx, |app, _| app.analysis_snapshot()) else {
             self.error = Some("The analysis window is closed".into());
             return;
@@ -1243,12 +1321,9 @@ impl AssistantWindow {
                         if app.thread.is_some() {
                             app.start_prepared();
                         } else if let Some(client) = &app.client {
-                            let mut params = json!({
-                                "cwd":client.directory,"sandbox":"read-only","approvalPolicy":"never",
-                                "ephemeral":true,"selectedCapabilityRoots":[],"config":{"mcp_servers":{}},
-                                "dynamicTools":codex_client::dynamic_tools(),
-                                "developerInstructions":include_str!("assistant_workflow.md")
-                            });
+                            let mut params = codex_client::access_thread_params(&client.directory, app.extended_access);
+                            params["dynamicTools"] = codex_client::dynamic_tools();
+                            params["developerInstructions"] = json!(include_str!("assistant_workflow.md"));
                             if let Some(model) = app.model() { params["model"] = json!(model.model); }
                             if let Err(e) = app.request("thread/start", params) {
                                 app.fail(e);
@@ -1263,11 +1338,14 @@ impl AssistantWindow {
         cx.notify();
     }
     fn fail(&mut self, error: String) {
+        self.deny_all_access("Turn failed");
         self.focus_composer = true;
         self.status = "Failed".into();
         self.transcript.apply(Event::Failed(error), Instant::now());
     }
     fn stop(&mut self, cx: &mut Context<Self>) {
+        self.deny_all_access("Denied by Stop");
+        self.resume_after_connect = false;
         if !self.transcript.apply(Event::StopRequested, Instant::now()) {
             return;
         }
@@ -1538,6 +1616,258 @@ impl AssistantWindow {
         }
         cx.notify();
     }
+    fn access_preferences(&mut self, extended: bool, cx: &mut Context<Self>) {
+        if self.transcript.busy || self.connecting || self.transcript.stop_pending {
+            return;
+        }
+        let web = if extended {
+            self.web_search
+        } else {
+            !self.web_search
+        };
+        let requested = extended && !self.extended_access;
+        let result = self
+            .studio
+            .update(cx, |app, _| {
+                let mut settings = app.structure.settings.clone();
+                settings.assistant_web_search = Some(web);
+                if extended {
+                    settings.assistant_extended_access = requested;
+                }
+                settings.save()?;
+                app.structure.settings = settings;
+                Ok::<_, String>(())
+            })
+            .map_err(|e| e.to_string())
+            .and_then(|r| r);
+        if let Err(e) = result {
+            self.error = Some(e);
+            cx.notify();
+            return;
+        }
+        self.web_search = web;
+        if extended {
+            self.extended_access = requested;
+        }
+        self.reconnect_next = true;
+        let name = if extended {
+            "Extended access"
+        } else {
+            "Web search"
+        };
+        let enabled = if extended {
+            self.extended_access
+        } else {
+            self.web_search
+        };
+        self.transcript.apply(
+            Event::ActivityNote(format!(
+                "{name} {} · reconnecting on next turn",
+                if enabled { "on" } else { "off" }
+            )),
+            Instant::now(),
+        );
+        cx.notify();
+    }
+    fn queue_access(
+        &mut self,
+        id: Value,
+        action: AccessAction,
+        question: String,
+        lines: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let key = id.to_string();
+        if self.access.contains_key(&key) {
+            return;
+        }
+        self.access.insert(
+            key.clone(),
+            PendingAccess {
+                id,
+                action,
+                question: question.clone(),
+                deadline: Instant::now() + Duration::from_secs(300),
+                approved: false,
+            },
+        );
+        self.transcript
+            .apply(Event::ActivityNote(question.clone()), Instant::now());
+        self.transcript.apply(
+            Event::Receipt(Receipt::permission(key, question, lines)),
+            Instant::now(),
+        );
+        cx.notify();
+    }
+    fn access_decision(&mut self, key: &str, question: &str, decision: &str) {
+        self.transcript.apply(
+            Event::PermissionDecision {
+                id: key.into(),
+                decision: decision.into(),
+            },
+            Instant::now(),
+        );
+        self.transcript.apply(
+            Event::ActivityNote(format!("{decision} · {question}")),
+            Instant::now(),
+        );
+    }
+    fn deny_access(&mut self, key: &str, reason: &str) {
+        let Some(pending) = self.access.remove(key) else {
+            return;
+        };
+        self.access_decision(key, &pending.question, reason);
+        let response = match pending.action {
+            AccessAction::Command(_) => codex_client::approval_response(pending.id, false),
+            AccessAction::Fetch { .. } => {
+                if let Some((turn, id)) = self.tool_calls.remove(key) {
+                    self.transcript.apply(
+                        Event::ToolFinished {
+                            turn,
+                            id,
+                            error: Some(reason.into()),
+                        },
+                        Instant::now(),
+                    );
+                }
+                json!({"id":pending.id,"result":{"success":false,"contentItems":[{"type":"inputText","text":reason}]}})
+            }
+        };
+        if let Some(client) = &self.client {
+            let _ = client.send(response);
+        }
+    }
+    fn deny_all_access(&mut self, reason: &str) {
+        for key in self.access.keys().cloned().collect::<Vec<_>>() {
+            self.deny_access(&key, reason);
+        }
+    }
+    fn command_permission(&mut self, v: &Value, cx: &mut Context<Self>) {
+        let approval = codex_client::command_approval(v).and_then(|p| {
+            if !self.extended_access
+                || !self.transcript.accepts(&p.turn)
+                || self.thread.as_deref() != Some(&p.thread)
+            {
+                return Err(
+                    "Command denied: Extended access is off or the turn has stopped".into(),
+                );
+            }
+            let root = self
+                .client
+                .as_ref()
+                .ok_or("Disconnected")?
+                .directory
+                .canonicalize()
+                .map_err(|e| e.to_string())?;
+            let cwd = p.cwd.canonicalize().map_err(|e| e.to_string())?;
+            if !cwd.starts_with(root) || !cwd.is_dir() {
+                return Err("Command cwd must be inside the assistant workspace".into());
+            }
+            Ok(p)
+        });
+        match approval {
+            Ok(p) => self.queue_access(
+                p.id.clone(),
+                AccessAction::Command(p.clone()),
+                format!("Run command: {}?", p.command),
+                vec![format!("Working directory: {}", p.cwd.display())],
+                cx,
+            ),
+            Err(e) => {
+                if let Some(c) = &self.client {
+                    let _ = c.send(codex_client::approval_response(v["id"].clone(), false));
+                }
+                self.transcript
+                    .apply(Event::ActivityNote(e), Instant::now());
+                cx.notify();
+            }
+        }
+    }
+    fn answer_access(&mut self, key: &str, allow: bool, cx: &mut Context<Self>) {
+        let Some(pending) = self.access.get(key).cloned() else {
+            return;
+        };
+        if pending.approved {
+            return;
+        }
+        if !allow
+            || Instant::now() >= pending.deadline
+            || !self.transcript.busy
+            || self.transcript.stop_pending
+        {
+            self.deny_access(
+                key,
+                if allow {
+                    "Approval expired or turn stopped"
+                } else {
+                    "Denied by user"
+                },
+            );
+            cx.notify();
+            return;
+        }
+        match pending.action {
+            AccessAction::Command(approval) => {
+                if !self.extended_access || !self.transcript.accepts(&approval.turn) {
+                    self.deny_access(key, "Extended access revoked");
+                } else {
+                    self.access.remove(key);
+                    self.access_decision(key, &pending.question, "Allowed once");
+                    if let Some(c) = &self.client {
+                        let _ = c.send(codex_client::approval_response(pending.id, true));
+                    }
+                }
+            }
+            AccessAction::Fetch { input, label } => {
+                if !changes_allowed(self.allow_changes, self.turn_edit, self.transcript.busy) {
+                    self.deny_access(key, "Edit analysis permission revoked");
+                    cx.notify();
+                    return;
+                }
+                if let Some(p) = self.access.get_mut(key) {
+                    p.approved = true;
+                }
+                self.access_decision(key, &pending.question, "Allowed once");
+                let key = key.to_owned();
+                let generation = self.run_generation;
+                let filename =
+                    crate::structure::structure_filename(label.as_deref(), &input.source());
+                cx.spawn(async move |this, cx| {
+                    let result = cx.background_executor().spawn(async move { input.read() }).await;
+                    this.update(cx, |app, cx| {
+                        // Stop/reconnect/revocation removes the request. Never save or
+                        // apply late data, or answer a request on a replacement client.
+                        if !app.access.contains_key(&key) { return; }
+                        if app.run_generation != generation { return; }
+                        if !changes_allowed(app.allow_changes, app.turn_edit, app.transcript.busy) {
+                            app.deny_access(&key, "Action cancelled"); cx.notify(); return;
+                        }
+                        app.access.remove(&key);
+                        let result = result.and_then(|(bytes, structure)| {
+                            app.studio.update(cx, |studio, cx| {
+                                if studio.structure.fetch_running || studio.feff_running { return Err("Wait for the running structure or path calculation".into()); }
+                                let library = studio.structure.settings.cif_library.clone().or_else(|| crate::settings::app_dir().map(|d| d.join("structures"))).ok_or("Structure library directory unavailable")?;
+                                let summary = crate::structure::save_structure(&library, &filename, &bytes, structure)?;
+                                let result = json!({"formula":summary.formula(),"cell":summary.lattice,"number_of_sites":summary.structure.sites.len(),"saved_path":summary.hit.id});
+                                studio.structure.settings.cif_library = Some(library);
+                                if let Err(e) = studio.structure.settings.save() { studio.record_job_error("Structure library preference", e); }
+                                studio.structure.cif_library = None;
+                                studio.structure.source = crate::structure::StructureSourceKind::LocalCif;
+                                studio.set_stage(super::Stage::Fit, cx);
+                                studio.set_fit_step(super::fit_workspace::FitStep::Structure, cx);
+                                studio.structure_set_summary(summary, cx);
+                                Ok::<_, String>(result)
+                            }).map_err(|e| e.to_string()).and_then(|r| r)
+                        });
+                        let outcome = match &result { Ok(v) => format!("Structure loaded · {} · {} sites · {}", v["formula"].as_str().unwrap_or(""), v["number_of_sites"], v["saved_path"].as_str().unwrap_or("")), Err(e) => format!("Structure failed · {e}") };
+                        app.transcript.apply(Event::ActivityNote(outcome), Instant::now());
+                        app.tool_response(pending.id, result, cx);
+                    }).ok();
+                }).detach();
+            }
+        }
+        cx.notify();
+    }
     fn tool_response(&mut self, id: Value, result: Result<Value, String>, cx: &mut Context<Self>) {
         let error = result.as_ref().err().cloned();
         if let Some((turn, call)) = self.tool_calls.remove(&id.to_string()) {
@@ -1586,6 +1916,7 @@ impl AssistantWindow {
             "xray_set_layout" => "Updating layout…",
             "xray_search_structures" => "Searching structures…",
             "xray_choose_structure" => "Loading structure…",
+            "xray_fetch_structure" => "Requesting structure access…",
             "xray_calculate_paths" => "Calculating paths…",
             "xray_run_fit" => "Fitting…",
             _ => "Updating model…",
@@ -1606,6 +1937,30 @@ impl AssistantWindow {
             && !changes_allowed(self.allow_changes, self.turn_edit, self.transcript.busy)
         {
             self.tool_response(id, Err("Edit analysis mode is disabled for this turn. Describe the proposed change instead.".into()), cx);
+            return;
+        }
+        if tool == "xray_fetch_structure" {
+            let result = self
+                .client
+                .as_ref()
+                .ok_or("Connect Codex first".to_string())
+                .and_then(|c| crate::structure::StructureInput::from_args(&args, &c.directory));
+            match result {
+                Ok(input) => {
+                    let question = input.question();
+                    self.queue_access(
+                        id,
+                        AccessAction::Fetch {
+                            input,
+                            label: args["label"].as_str().map(str::to_owned),
+                        },
+                        question,
+                        vec![],
+                        cx,
+                    );
+                }
+                Err(e) => self.tool_response(id, Err(e), cx),
+            }
             return;
         }
         if tool == "xray_get_state" {
@@ -2093,6 +2448,11 @@ impl Render for AssistantWindow {
                                 app.fit_model_fingerprint(),
                             )
                         });
+                    let permission = receipt.permission.is_some();
+                    let pending_permission = receipt
+                        .permission
+                        .as_ref()
+                        .is_some_and(|key| self.access.get(key).is_some_and(|p| !p.approved));
                     let view = receipt.clone();
                     let undo = receipt.clone();
                     row.p_3()
@@ -2130,48 +2490,60 @@ impl Render for AssistantWindow {
                                 })
                                 .child(receipt.state.clone()),
                         )
-                        .child(
-                            div()
-                                .flex()
-                                .gap_2()
-                                .child(self.control(
-                                    ("receipt-view", i),
-                                    button(
-                                        &t,
+                        .when(!permission || pending_permission, |d| {
+                            d.child(
+                                div()
+                                    .flex()
+                                    .gap_2()
+                                    .child(self.control(
                                         ("receipt-view", i),
-                                        if receipt.journal.is_some() {
-                                            "View in analysis"
-                                        } else {
-                                            "Show Results"
-                                        },
-                                        false,
-                                    ),
-                                    controls.navigation,
-                                    cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                        this.receipt_action(&view, false, cx)
-                                    }),
-                                ))
-                                .when(receipt.journal.is_some(), |d| {
-                                    d.child(if available {
-                                        self.button(
+                                        button(
                                             &t,
-                                            ("receipt-undo", i),
-                                            "Undo",
+                                            ("receipt-view", i),
+                                            if permission {
+                                                "Allow"
+                                            } else if receipt.journal.is_some() {
+                                                "View in analysis"
+                                            } else {
+                                                "Show Results"
+                                            },
                                             false,
-                                            cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                                this.receipt_action(&undo, true, cx)
-                                            }),
-                                        )
-                                        .into_any_element()
-                                    } else {
-                                        div()
-                                            .text_size(px(12.))
-                                            .text_color(t.text_muted)
-                                            .child("Use analysis history")
+                                        ),
+                                        controls.navigation,
+                                        cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                            if let Some(key) = &view.permission {
+                                                this.answer_access(key, true, cx);
+                                            } else {
+                                                this.receipt_action(&view, false, cx);
+                                            }
+                                        }),
+                                    ))
+                                    .when(permission || receipt.journal.is_some(), |d| {
+                                        d.child(if permission || available {
+                                            self.button(
+                                                &t,
+                                                ("receipt-undo", i),
+                                                if permission { "Deny" } else { "Undo" },
+                                                false,
+                                                cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                                    if let Some(key) = &undo.permission {
+                                                        this.answer_access(key, false, cx);
+                                                    } else {
+                                                        this.receipt_action(&undo, true, cx);
+                                                    }
+                                                }),
+                                            )
                                             .into_any_element()
-                                    })
-                                }),
-                        )
+                                        } else {
+                                            div()
+                                                .text_size(px(12.))
+                                                .text_color(t.text_muted)
+                                                .child("Use analysis history")
+                                                .into_any_element()
+                                        })
+                                    }),
+                            )
+                        })
                 }
                 Entry::Status(status) => row
                     .px_3()
@@ -2440,9 +2812,15 @@ impl Render for AssistantWindow {
                             }),
                         ).when(self.transcript.busy, |d| d.opacity(0.5)),
                     )
+                    .child(self.button(&t, "assistant-web", if self.web_search { "Web search: On" } else { "Web search: Off" }, self.web_search,
+                        cx.listener(|this, _: &ClickEvent, _, cx| this.access_preferences(false, cx)))
+                        .when(self.transcript.busy || self.connecting, |d| d.opacity(0.5)))
+                    .child(self.button(&t, "assistant-extended", if self.extended_access { "Extended access: On" } else { "Extended access: Off" }, self.extended_access,
+                        cx.listener(|this, _: &ClickEvent, _, cx| this.access_preferences(true, cx)))
+                        .when(self.transcript.busy || self.connecting, |d| d.opacity(0.5)))
                     .child(
                         div().flex().items_center().gap_1().child("Mode:").child(super::segmented(&t)
-                            .child(self.control("assistant-review", super::segment(&t, "assistant-review", "Review", !self.allow_changes, true), true, cx.listener(|this, _: &ClickEvent, _, cx| { this.allow_changes = false; this.turn_edit = false; cx.notify(); })))
+                            .child(self.control("assistant-review", super::segment(&t, "assistant-review", "Review", !self.allow_changes, true), true, cx.listener(|this, _: &ClickEvent, _, cx| { this.allow_changes = false; this.turn_edit = false; this.deny_all_access("Edit analysis permission revoked"); cx.notify(); })))
                             .child(self.control("assistant-edit", super::segment(&t, "assistant-edit", "Edit analysis", self.allow_changes, false), true, cx.listener(|this, _: &ClickEvent, _, cx| { this.allow_changes = true; cx.notify(); })))),
                     )
                     .child(div().flex_1())
@@ -2456,6 +2834,7 @@ impl Render for AssistantWindow {
                         ),
                     ),
             )
+            .when(self.extended_access, |d| d.child(div().text_size(px(12.)).text_color(gpui::rgb(0xd69e2e)).child("Extended access: approved commands run outside the sandbox with your full permissions and network access; the Allow/Deny card is the only barrier. Known-safe read-only commands run without approval.")))
             .child(div().text_size(px(12.)).text_color(t.text_muted).child("Review can inspect data and navigate. Edit analysis can also change parameters and run calculations."))
             .child(self.control("assistant-shared-context", div().id("assistant-shared-context").text_color(t.text_muted).cursor_pointer(), true, cx.listener(|this, _: &ClickEvent, _, cx| { this.shared_context_open = !this.shared_context_open; cx.notify(); }))
                 .child(if self.shared_context_open { "▾ Shared context…" } else { "▸ Shared context…" }))
@@ -2549,7 +2928,7 @@ mod tests {
     }
 
     #[test]
-    fn assistant_catalog_warning_waits_for_signed_in_settled_catalog() {
+    fn assistant_catalog_warning_and_resume_wait_for_signed_in_settled_catalog() {
         let mut pending = BTreeMap::new();
         assert!(!catalog_settled(false, false, &pending));
         assert!(!catalog_settled(false, true, &pending));
@@ -2563,6 +2942,9 @@ mod tests {
         pending.insert(2, "model/list".into());
         assert!(!catalog_settled(true, true, &pending));
         pending.remove(&2);
+        // A successful empty list or an error both remove the request before
+        // the resume check. Neither needs a model or a saved preference.
+        assert!(catalog_settled(true, true, &pending));
         // Completion (including failure) settles the catalog; other requests do not block it.
         pending.insert(3, "turn/start".into());
         assert!(catalog_settled(true, true, &pending));

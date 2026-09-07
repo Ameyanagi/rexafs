@@ -150,6 +150,8 @@ pub(super) fn diff(before: &Value, after: &Value) -> Vec<String> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Receipt {
+    /// One-time access confirmation, rendered with the same receipt card.
+    pub permission: Option<String>,
     pub header: String,
     pub lines: Vec<String>,
     pub scope: String,
@@ -176,6 +178,7 @@ impl Receipt {
             .map(|s| s.to_string_lossy())
             .unwrap_or_default();
         Self {
+            permission: None,
             header: format!("{label} · {}", stage.name()),
             lines,
             scope: scope_label(None),
@@ -190,6 +193,7 @@ impl Receipt {
     }
     pub fn job(header: String, history: Option<usize>) -> Self {
         Self {
+            permission: None,
             header,
             lines: vec![],
             scope: String::new(),
@@ -201,6 +205,13 @@ impl Receipt {
             model: 0,
             undo_retired: false,
         }
+    }
+    pub fn permission(id: String, question: String, lines: Vec<String>) -> Self {
+        let mut receipt = Self::job(question, None);
+        receipt.permission = Some(id);
+        receipt.lines = lines;
+        receipt.state = "Awaiting approval · expires in 5 minutes".into();
+        receipt
     }
     pub fn can_undo(&self, journal: &JournalState, running: bool, model: u64) -> bool {
         !self.undo_retired
@@ -315,6 +326,7 @@ mod tests {
     fn every_tool_has_review_or_edit_classification() {
         let tools = crate::codex_client::dynamic_tools();
         let edit = [
+            "xray_fetch_structure",
             "xray_choose_structure",
             "xray_calculate_paths",
             "xray_select_paths",

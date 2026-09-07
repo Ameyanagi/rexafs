@@ -966,6 +966,262 @@ pub fn import_cif(path: &Path) -> Result<StructureSummary, String> {
     Ok(StructureSummary::from_structure(hit, structure))
 }
 
+const CIF_LIMIT: usize = 4 * 1024 * 1024;
+
+/// Validation is deliberately local: no DNS lookup or request before approval.
+pub(crate) fn structure_url(url: &str) -> Result<ureq::http::Uri, String> {
+    let uri: ureq::http::Uri = url.parse().map_err(|_| "Invalid structure URL")?;
+    if uri.scheme_str() != Some("https")
+        || uri.host().is_none_or(str::is_empty)
+        || uri.authority().is_none_or(|a| a.as_str().contains('@'))
+        || url.chars().any(|c| c.is_control() || c.is_whitespace())
+        || url.contains(['\\', '#'])
+    {
+        return Err("Use an HTTPS URL with a host, without credentials or a fragment".into());
+    }
+    Ok(uri)
+}
+
+pub(crate) fn workspace_path(workspace: &Path, path: &Path) -> Result<PathBuf, String> {
+    let root = workspace.canonicalize().map_err(|e| e.to_string())?;
+    let file = root.join(path).canonicalize().map_err(|e| e.to_string())?;
+    if !file.starts_with(&root) || !file.is_file() {
+        return Err("Structure path must be a file inside the assistant workspace".into());
+    }
+    Ok(file)
+}
+
+pub(crate) fn structure_filename(label: Option<&str>, source: &str) -> String {
+    let source = source.split(['?', '#']).next().unwrap_or(source);
+    let name = label
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| source.rsplit('/').next().unwrap_or("structure"));
+    let stem = name.strip_suffix(".cif").unwrap_or(name);
+    let safe: String = stem
+        .chars()
+        .take(80)
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    format!(
+        "{}.cif",
+        if safe.trim_matches('_').is_empty() {
+            "structure"
+        } else {
+            &safe
+        }
+    )
+}
+
+pub(crate) fn structure_content(
+    content_type: &str,
+    path: &str,
+    bytes: &[u8],
+) -> Result<core::Structure, String> {
+    if bytes.len() > CIF_LIMIT {
+        return Err("Structure is too large (maximum 4 MiB)".into());
+    }
+    let mime = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if mime.contains("html")
+        || !(mime.starts_with("text/")
+            || mime == "chemical/x-cif"
+            || path.to_ascii_lowercase().ends_with(".cif"))
+    {
+        return Err("Not a CIF: expected text, chemical/x-cif, or a .cif path".into());
+    }
+    let text = std::str::from_utf8(bytes).map_err(|_| "Not a CIF: invalid UTF-8 text")?;
+    let beginning = text
+        .trim_start_matches('\u{feff}')
+        .trim_start()
+        .to_ascii_lowercase();
+    if beginning.starts_with('<') || beginning.contains("<html") {
+        return Err("Not a CIF: received HTML (use the direct Supporting Information URL)".into());
+    }
+    let structure = core::structure_from_cif(text).map_err(|e| format!("Not a CIF: {e}"))?;
+    if structure.sites.is_empty() {
+        return Err("Not a CIF: no atomic sites".into());
+    }
+    Ok(structure)
+}
+
+fn structure_redirect_error(status: u16, location: Option<&str>) -> String {
+    match location {
+        Some(location) => format!("URL redirected to {location}; request that URL instead"),
+        None => format!(
+            "URL redirected (HTTP {status}) without a Location; request a direct HTTPS CIF URL instead"
+        ),
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum StructureInput {
+    Url(String),
+    Path { workspace: PathBuf, file: PathBuf },
+}
+impl StructureInput {
+    pub fn from_args(args: &serde_json::Value, workspace: &Path) -> Result<Self, String> {
+        match (args.get("url"), args.get("path")) {
+            (Some(url), None) => {
+                let url = url.as_str().ok_or("url must be a string")?;
+                structure_url(url)?;
+                Ok(Self::Url(url.into()))
+            }
+            (None, Some(path)) => Ok(Self::Path {
+                workspace: workspace.into(),
+                file: workspace_path(
+                    workspace,
+                    Path::new(path.as_str().ok_or("path must be a string")?),
+                )?,
+            }),
+            _ => Err("Provide exactly one of url or path".into()),
+        }
+    }
+    pub fn source(&self) -> String {
+        match self {
+            Self::Url(url) => url.clone(),
+            Self::Path { file, .. } => file.display().to_string(),
+        }
+    }
+    pub fn question(&self) -> String {
+        format!(
+            "{} structure from {}?",
+            if matches!(self, Self::Url(_)) {
+                "Download"
+            } else {
+                "Load"
+            },
+            self.source()
+        )
+    }
+    /// Called only after an explicit Allow. Uses the COD fetcher's ureq agent
+    /// and default TLS roots, with stricter redirect and body limits.
+    pub fn read(&self) -> Result<(Vec<u8>, core::Structure), String> {
+        use std::io::Read;
+        let (mime, path, bytes) = match self {
+            Self::Url(url) => {
+                let uri = structure_url(url)?;
+                let agent: ureq::Agent = ureq::Agent::config_builder()
+                    .timeout_global(Some(std::time::Duration::from_secs(30)))
+                    .https_only(true)
+                    .max_redirects(0)
+                    .user_agent(concat!(
+                        "rexafs/",
+                        env!("CARGO_PKG_VERSION"),
+                        " (+https://github.com/Ameyanagi/rexafs)"
+                    ))
+                    .build()
+                    .into();
+                let mut response = agent
+                    .get(url)
+                    .call()
+                    .map_err(|e| format!("Structure download failed (30 s timeout): {e}"))?;
+                // ureq returns 3xx responses with max_redirects(0), even with
+                // http_status_as_error enabled (which applies only to 4xx/5xx).
+                if response.status().is_redirection() {
+                    return Err(structure_redirect_error(
+                        response.status().as_u16(),
+                        response
+                            .headers()
+                            .get("location")
+                            .and_then(|v| v.to_str().ok()),
+                    ));
+                }
+                if !response.status().is_success() {
+                    return Err(format!("Structure download failed: {}", response.status()));
+                }
+                if response
+                    .headers()
+                    .get("content-length")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .is_some_and(|n| n > CIF_LIMIT as u64)
+                {
+                    return Err("Structure is too large (maximum 4 MiB)".into());
+                }
+                let mime = response
+                    .headers()
+                    .get("content-type")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("")
+                    .to_owned();
+                let bytes = response
+                    .body_mut()
+                    .with_config()
+                    .limit(CIF_LIMIT as u64 + 1)
+                    .read_to_vec()
+                    .map_err(|e| format!("Cannot read CIF (maximum 4 MiB, timeout 30 s): {e}"))?;
+                (mime, uri.path().to_owned(), bytes)
+            }
+            Self::Path { workspace, file } => {
+                // Recheck after the wait: a command may have replaced a symlink.
+                let path = workspace_path(workspace, file)?;
+                let mut bytes = Vec::new();
+                std::fs::File::open(&path)
+                    .map_err(|e| e.to_string())?
+                    .take(CIF_LIMIT as u64 + 1)
+                    .read_to_end(&mut bytes)
+                    .map_err(|e| e.to_string())?;
+                ("text/plain".into(), path.display().to_string(), bytes)
+            }
+        };
+        let structure = structure_content(&mime, &path, &bytes)?;
+        Ok((bytes, structure))
+    }
+}
+
+/// Save only validated bytes; create_new prevents overwriting library entries.
+pub(crate) fn save_structure(
+    library: &Path,
+    filename: &str,
+    bytes: &[u8],
+    mut structure: core::Structure,
+) -> Result<StructureSummary, String> {
+    use std::io::Write;
+    std::fs::create_dir_all(library).map_err(|e| e.to_string())?;
+    let stem = filename.strip_suffix(".cif").unwrap_or(filename);
+    for n in 0..1000 {
+        let path = library.join(if n == 0 {
+            filename.into()
+        } else {
+            format!("{stem}-{n}.cif")
+        });
+        let mut file = match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.to_string()),
+        };
+        if let Err(e) = file.write_all(bytes) {
+            let _ = std::fs::remove_file(&path);
+            return Err(e.to_string());
+        }
+        let id = path.to_string_lossy().to_string();
+        structure.source = format!("cif:{id}");
+        if structure.title == "structure" {
+            structure.title = stem.into();
+        }
+        let hit = StructureHit::from_core(
+            core::db::hit_from_structure(&structure, "cif", &id),
+            StructureSourceKind::LocalCif,
+        );
+        return Ok(StructureSummary::from_structure(hit, structure));
+    }
+    Err("Too many structures with this filename; choose another label".into())
+}
+
 /// Import an XYZ file as a ready-made cluster.
 pub fn import_xyz(path: &Path) -> Result<StructureSummary, String> {
     let xyz = core::read_xyz(path).map_err(|e| e.to_string())?;
@@ -1131,6 +1387,126 @@ pub fn provider_for(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn structure_redirect_requires_approval_of_the_destination() {
+        for status in [301, 302, 303, 307, 308] {
+            for location in ["https://other.example/x.cif", "/other.cif"] {
+                assert_eq!(
+                    structure_redirect_error(status, Some(location)),
+                    format!("URL redirected to {location}; request that URL instead")
+                );
+            }
+        }
+        assert_eq!(
+            structure_redirect_error(302, None),
+            "URL redirected (HTTP 302) without a Location; request a direct HTTPS CIF URL instead"
+        );
+    }
+    #[test]
+    fn assistant_structure_urls_and_filenames() {
+        for url in [
+            "https://example.org/file.cif",
+            "https://example.org/download?id=12",
+            "https://[::1]/file.cif",
+        ] {
+            assert!(structure_url(url).is_ok(), "{url}");
+        }
+        for url in [
+            "http://example.org/a.cif",
+            "https:///a.cif",
+            "https://",
+            "file:///tmp/a.cif",
+            "https://user:secret@example.org/a.cif",
+            "https://@example.org/a.cif",
+            "https://example.org/a\nb",
+            "https://example.org/a#hidden",
+            "https://example.org\\@evil.org/a",
+        ] {
+            assert!(structure_url(url).is_err(), "{url}");
+        }
+        assert_eq!(
+            structure_filename(None, "https://example.org/ru.cif?token=secret"),
+            "ru.cif"
+        );
+        assert_eq!(
+            structure_filename(Some("Ru hydride"), "ignored"),
+            "Ru_hydride.cif"
+        );
+        assert_eq!(
+            structure_filename(Some("../../"), "ignored"),
+            "structure.cif"
+        );
+        assert_eq!(
+            structure_filename(None, "https://example.org/"),
+            "structure.cif"
+        );
+        assert!(!structure_filename(Some("../bad/path"), "ignored").contains('/'));
+    }
+    #[test]
+    fn assistant_structure_content_gate() {
+        let cif = include_bytes!("../../rexafs/tests/testfiles/cif/ru_hcp.cif");
+        for (mime, path) in [
+            ("text/plain; charset=utf-8", "/download"),
+            ("chemical/x-cif", "/download"),
+            ("application/octet-stream", "/ru.cif"),
+        ] {
+            assert!(!structure_content(mime, path, cif).unwrap().sites.is_empty());
+        }
+        assert!(structure_content("text/html", "/ru.cif", cif).is_err());
+        assert!(structure_content("application/pdf", "/download", cif).is_err());
+        for html in [
+            b"<!DOCTYPE html><html>Login</html>".as_slice(),
+            b"<html>Not found</html>",
+        ] {
+            assert!(structure_content("text/plain", "/ru.cif", html).is_err());
+        }
+        assert!(structure_content("text/plain", "/ru.cif", b"not a crystal").is_err());
+        assert!(
+            structure_content("text/plain", "/ru.cif", &vec![b' '; CIF_LIMIT + 1])
+                .unwrap_err()
+                .contains("too large")
+        );
+    }
+    #[test]
+    fn assistant_structure_workspace_and_exclusive_save() {
+        let temp = std::env::temp_dir().join(format!("rexafs-access-test-{}", std::process::id()));
+        let root = temp.join("workspace");
+        std::fs::create_dir_all(&root).unwrap();
+        let cif = include_bytes!("../../rexafs/tests/testfiles/cif/ru_hcp.cif");
+        std::fs::write(root.join("Ru.cif"), cif).unwrap();
+        std::fs::write(temp.join("outside.cif"), cif).unwrap();
+        assert!(workspace_path(&root, Path::new("Ru.cif")).is_ok());
+        assert!(workspace_path(&root, Path::new("../outside.cif")).is_err());
+        assert!(workspace_path(&root, &temp.join("outside.cif")).is_err());
+        assert!(workspace_path(&root, Path::new(".")).is_err());
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(temp.join("outside.cif"), root.join("escape.cif")).unwrap();
+            assert!(workspace_path(&root, Path::new("escape.cif")).is_err());
+        }
+        let input =
+            StructureInput::from_args(&serde_json::json!({"path":"Ru.cif"}), &root).unwrap();
+        assert!(input.question().starts_with("Load structure from "));
+        let (bytes, structure) = input.read().unwrap();
+        let library = temp.join("library");
+        let first = save_structure(&library, "Ru.cif", &bytes, structure.clone()).unwrap();
+        let second = save_structure(&library, "Ru.cif", &bytes, structure).unwrap();
+        assert_ne!(first.hit.id, second.hit.id);
+        assert_eq!(
+            import_cif(Path::new(&first.hit.id)).unwrap().formula(),
+            first.formula()
+        );
+        assert!(
+            StructureInput::from_args(
+                &serde_json::json!({"path":"Ru.cif","url":"https://example.org/ru.cif"}),
+                &root
+            )
+            .is_err()
+        );
+        assert!(StructureInput::from_args(&serde_json::json!({}), &root).is_err());
+        std::fs::remove_dir_all(temp).unwrap();
+    }
 
     const INP: &str = "TITLE Ru hcp (generated)\nHOLE 1 1.0\n\nPOTENTIALS\n 0 44 Ru\n 1 44 Ru\n\nATOMS\n 0.0 0.0 0.0 0 Ru0 0.0\n 1.353 -0.78115 -2.141 1 Ru1 2.65041\n -1.353 -2.34346 0.0 1 Ru1 2.706\n 2.706 1.56231 -2.141 1 Ru1 3.78776\nEND\n";
 

@@ -43,6 +43,10 @@ pub struct UserSettings {
     pub assistant_model: Option<String>,
     /// None follows the selected model's default, falling back to high.
     pub assistant_effort: Option<String>,
+    /// None enables Codex's configured web search (legacy settings default).
+    pub assistant_web_search: Option<bool>,
+    /// Preference only: activation always requires a click in this app session.
+    pub assistant_extended_access: bool,
 }
 
 /// `~/.rexafs` (created on demand, owner-only on Unix because it
@@ -289,6 +293,8 @@ mod tests {
             check_updates_on_startup: Some(false),
             assistant_model: Some("catalog-model".into()),
             assistant_effort: Some("xhigh".into()),
+            assistant_web_search: Some(false),
+            assistant_extended_access: true,
         };
         s.save_to(&path).unwrap();
         assert_eq!(UserSettings::load_from(&path).unwrap(), s);
@@ -298,6 +304,8 @@ mod tests {
             let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
             assert_eq!(mode, 0o600, "settings file must be owner-only");
         }
+        assert!(!UserSettings::default().assistant_extended_access);
+        assert!(UserSettings::default().assistant_web_search.unwrap_or(true));
         // Missing keys fall back to defaults.
         std::fs::write(&path, "{}").unwrap();
         assert_eq!(

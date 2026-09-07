@@ -774,7 +774,11 @@ impl StudioApp {
     }
 
     /// Apply a fetched/imported structure to the panel.
-    fn structure_set_summary(&mut self, summary: StructureSummary, cx: &mut Context<Self>) {
+    pub(super) fn structure_set_summary(
+        &mut self,
+        summary: StructureSummary,
+        cx: &mut Context<Self>,
+    ) {
         let el = summary.elements();
         if let Some(interest) = self.spectrum_interest()
             && el.iter().any(|(s, _)| s == &interest.element)

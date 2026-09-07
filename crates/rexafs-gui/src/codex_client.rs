@@ -190,6 +190,111 @@ pub(crate) struct Client {
     rx: mpsc::Receiver<Result<Value, String>>,
     pub directory: PathBuf,
 }
+
+fn client_flags(web_search: bool, extended: bool) -> Vec<String> {
+    let mut flags = vec![
+        "-c".into(),
+        format!("features.shell_tool={extended}"),
+        "-c".into(),
+        format!("features.unified_exec={extended}"),
+        "-c".into(),
+        "features.apps=false".into(),
+        "-c".into(),
+        "features.multi_agent=false".into(),
+    ];
+    if !web_search {
+        flags.extend(["-c".into(), "web_search=\"disabled\"".into()]);
+    }
+    flags.push("app-server".into());
+    flags
+}
+
+pub(crate) fn access_thread_params(directory: &Path, extended: bool) -> Value {
+    json!({"cwd":directory,"runtimeWorkspaceRoots":[directory],
+        "sandbox":if extended {"workspace-write"} else {"read-only"},
+        "approvalPolicy":if extended {"untrusted"} else {"never"},
+        "approvalsReviewer":"user","ephemeral":true,"selectedCapabilityRoots":[],
+        "config":{"mcp_servers":{},"sandbox_workspace_write":{
+            "writable_roots":[directory],"network_access":extended,
+            "exclude_tmpdir_env_var":true,"exclude_slash_tmp":true}}})
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CommandApproval {
+    pub id: Value,
+    pub thread: String,
+    pub turn: String,
+    pub command: String,
+    pub cwd: PathBuf,
+}
+/// v2 CommandExecutionRequestApprovalParams, including opaque JSON-RPC ids.
+pub(crate) fn command_approval(v: &Value) -> Result<CommandApproval, String> {
+    if v["method"] != "item/commandExecution/requestApproval" {
+        return Err("Not a command approval request".into());
+    }
+    let id = v
+        .get("id")
+        .filter(|id| id.is_string() || id.is_i64() || id.is_u64())
+        .ok_or("Missing approval request id")?
+        .clone();
+    let p = &v["params"];
+    // Never grant a network policy, session approval, stdin, or extra filesystem
+    // permissions through a card that only describes one command.
+    if p.get("kind").is_some_and(|k| k != "command")
+        || p.get("additionalPermissions").is_some_and(|p| !p.is_null())
+        || p.get("networkApprovalContext")
+            .is_some_and(|p| !p.is_null())
+    {
+        return Err("Only individual workspace command approvals are supported".into());
+    }
+    if let Some(decisions) = p["availableDecisions"].as_array()
+        && !decisions.iter().any(|d| d == "accept")
+    {
+        return Err("This command does not offer a one-time approval".into());
+    }
+    let field = |key: &str| {
+        p[key]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .ok_or_else(|| format!("Missing approval {key}"))
+    };
+    Ok(CommandApproval {
+        id,
+        thread: field("threadId")?,
+        turn: field("turnId")?,
+        command: field("command")?,
+        cwd: field("cwd")?.into(),
+    })
+}
+
+pub(crate) fn approval_response(id: Value, allow: bool) -> Value {
+    json!({"id":id,"result":{"decision":if allow {"accept"} else {"decline"}}})
+}
+
+pub(crate) fn command_outcome(v: &Value) -> Option<String> {
+    let item = &v["params"]["item"];
+    if v["method"] != "item/completed" || item["type"] != "commandExecution" {
+        return None;
+    }
+    let output = item["aggregatedOutput"]
+        .as_str()
+        .unwrap_or("")
+        .lines()
+        .take(5)
+        .collect::<Vec<_>>()
+        .join("\n")
+        .chars()
+        .take(1200)
+        .collect::<String>();
+    Some(format!(
+        "Command {} · exit {}\n{}\n{}",
+        item["status"].as_str().unwrap_or("completed"),
+        item["exitCode"],
+        item["command"].as_str().unwrap_or(""),
+        output
+    ))
+}
 impl Drop for Client {
     fn drop(&mut self) {
         let _ = self.child.kill();
@@ -198,7 +303,7 @@ impl Drop for Client {
     }
 }
 impl Client {
-    pub fn start() -> Result<Self, String> {
+    pub fn start(web_search: bool, extended: bool) -> Result<Self, String> {
         let executable = executable().ok_or(
             "Codex CLI not found. Install Codex, or set REXAFS_CODEX to its executable path.",
         )?;
@@ -218,19 +323,7 @@ impl Client {
         }
         builder.create(&directory).map_err(|e| e.to_string())?;
         let mut child = Command::new(executable)
-            .args([
-                "-c",
-                "features.shell_tool=false",
-                "-c",
-                "features.unified_exec=false",
-                "-c",
-                "features.apps=false",
-                "-c",
-                "features.multi_agent=false",
-                "-c",
-                "web_search=\"disabled\"",
-                "app-server",
-            ])
+            .args(client_flags(web_search, extended))
             .current_dir(&directory)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -311,6 +404,7 @@ pub(crate) fn initialize(id: u64) -> Value {
 }
 pub(crate) fn dynamic_tools() -> Value {
     json!([
+    {"type":"function","name":"xray_fetch_structure","description":"After stating the exact source, request user confirmation to download an HTTPS CIF URL or load a CIF path inside the temporary assistant workspace. Requires Edit analysis. Provide exactly one of url or path; returns formula, cell, number of sites and saved path.","inputSchema":{"type":"object","properties":{"url":{"type":"string"},"path":{"type":"string"},"label":{"type":"string"}},"oneOf":[{"required":["url"]},{"required":["path"]}],"additionalProperties":false}},
     {"type":"function","name":"xray_set_layout","description":"Change file browser/inspector visibility and current/marked plot scope only. Review mode allows these presentation changes.","inputSchema":{"type":"object","properties":{"file_browser":{"type":"boolean"},"inspector":{"type":"boolean"},"plot_scope":{"type":"string","enum":["current","marked"]}},"additionalProperties":false}},
     {"type":"function","name":"xray_get_plots","description":"Inspect the current processing stage or fit results: returns fresh plots plus resolved numerical settings. Navigate to Normalize, Background and Transform and inspect each before running a fit. Respects the Plots switch.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
     {"type":"function","name":"xray_search_structures","description":"Search the curated reference-structure library and display Structure. Returns candidates with stable ids; do not infer metallic composition merely from an element name.","inputSchema":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"],"additionalProperties":false}},
@@ -329,6 +423,94 @@ pub(crate) fn dynamic_tools() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn assistant_command_approval_protocol() {
+        let fixture = json!({"id":"approval-4","method":"item/commandExecution/requestApproval","params":{
+            "kind":"command","threadId":"thread-1","turnId":"turn-2","itemId":"cmd-3","startedAtMs":123,
+            "approvalId":null,"environmentId":null,"command":"curl -o ru.cif https://example.org/ru.cif",
+            "cwd":"/tmp/rexafs-workspace","commandActions":[],"additionalPermissions":null,
+            "availableDecisions":["accept","acceptForSession","decline","cancel"]}});
+        let parsed = command_approval(&fixture).unwrap();
+        assert_eq!(parsed.id, "approval-4");
+        assert_eq!(parsed.turn, "turn-2");
+        assert_eq!(parsed.cwd, Path::new("/tmp/rexafs-workspace"));
+        assert_eq!(
+            approval_response(parsed.id.clone(), true),
+            json!({"id":"approval-4","result":{"decision":"accept"}})
+        );
+        assert_eq!(
+            approval_response(parsed.id, false),
+            json!({"id":"approval-4","result":{"decision":"decline"}})
+        );
+        for field in ["command", "cwd", "turnId", "threadId"] {
+            let mut bad = fixture.clone();
+            bad["params"][field] = Value::Null;
+            assert!(command_approval(&bad).is_err());
+        }
+        let mut unsupported = fixture.clone();
+        unsupported["params"]["additionalPermissions"] = json!({"network":{"enabled":true}});
+        assert!(command_approval(&unsupported).is_err());
+        unsupported = fixture.clone();
+        unsupported["params"]["kind"] = json!("stdin");
+        assert!(command_approval(&unsupported).is_err());
+        let done = json!({"method":"item/completed","params":{"turnId":"turn-2","item":{"type":"commandExecution","id":"cmd-3","command":"false","cwd":"/tmp/rexafs-workspace","status":"failed","exitCode":1,"aggregatedOutput":"first\nsecond\nthird\nfourth\nfifth\nsixth"}}});
+        let text = command_outcome(&done).unwrap();
+        assert!(text.contains("exit 1"));
+        assert!(text.contains("first"));
+        assert!(!text.contains("sixth"));
+    }
+    #[test]
+    fn assistant_access_flags_and_workspace() {
+        assert!(
+            !client_flags(true, false)
+                .iter()
+                .any(|s| s.starts_with("web_search="))
+        );
+        assert!(client_flags(false, false).contains(&"web_search=\"disabled\"".to_string()));
+        for requested in [false, true] {
+            let flags = client_flags(true, requested);
+            assert!(flags.contains(&format!("features.shell_tool={requested}")));
+            assert!(flags.contains(&format!("features.unified_exec={requested}")));
+            assert!(flags.contains(&"features.apps=false".to_string()));
+            assert!(flags.contains(&"features.multi_agent=false".to_string()));
+            let params = access_thread_params(Path::new("/tmp/assistant"), requested);
+            assert_eq!(params["cwd"], "/tmp/assistant");
+            assert_eq!(params["runtimeWorkspaceRoots"], json!(["/tmp/assistant"]));
+            assert_eq!(params["approvalsReviewer"], "user");
+            assert_eq!(
+                params["sandbox"],
+                if requested {
+                    "workspace-write"
+                } else {
+                    "read-only"
+                }
+            );
+            assert_eq!(
+                params["approvalPolicy"],
+                if requested { "untrusted" } else { "never" }
+            );
+            let sandbox = &params["config"]["sandbox_workspace_write"];
+            assert_eq!(sandbox["network_access"], requested);
+            assert_eq!(sandbox["writable_roots"], json!(["/tmp/assistant"]));
+            assert_eq!(sandbox["exclude_tmpdir_env_var"], true);
+            assert_eq!(
+                params["config"]["sandbox_workspace_write"]["exclude_slash_tmp"],
+                true
+            );
+        }
+        let tools = dynamic_tools();
+        let fetch = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == "xray_fetch_structure")
+            .unwrap();
+        assert_eq!(
+            fetch["inputSchema"]["oneOf"],
+            json!([{"required":["url"]},{"required":["path"]}])
+        );
+    }
+
     #[test]
     fn assistant_layout_schema_only_exposes_panels_and_scope() {
         let tools = dynamic_tools();
@@ -598,12 +780,12 @@ mod tests {
     fn device_code_protocol_does_not_read_credentials() {
         let init = initialize(1);
         assert_eq!(init["params"]["capabilities"]["experimentalApi"], true);
-        assert_eq!(dynamic_tools().as_array().unwrap().len(), 12);
+        assert_eq!(dynamic_tools().as_array().unwrap().len(), 13);
     }
     #[test]
     #[ignore = "requires an installed Codex CLI; reads account status without starting a model turn"]
     fn installed_codex_auth_handshake() {
-        let c = Client::start().unwrap();
+        let c = Client::start(true, false).unwrap();
         c.send(initialize(1)).unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         let mut account = false;

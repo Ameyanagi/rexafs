@@ -50,6 +50,11 @@ pub(super) enum Update {
 }
 #[derive(Debug)]
 pub(super) enum Event {
+    ActivityNote(String),
+    PermissionDecision {
+        id: String,
+        decision: String,
+    },
     Send(String, bool),
     TurnStarted(String),
     TurnCompleted {
@@ -135,6 +140,21 @@ impl Transcript {
     }
     fn apply_event(&mut self, event: Event, now: Instant) -> bool {
         match event {
+            Event::ActivityNote(label) => self.entries.push(Entry::Activity {
+                id: String::new(),
+                label,
+                tool: String::new(),
+                state: ActivityState::Done,
+            }),
+            Event::PermissionDecision { id, decision } => {
+                for entry in &mut self.entries {
+                    if let Entry::Receipt(receipt) = entry
+                        && receipt.permission.as_deref() == Some(&id)
+                    {
+                        receipt.state = decision.clone();
+                    }
+                }
+            }
             Event::Receipt(receipt) => self.entries.push(Entry::Receipt(receipt)),
             Event::Send(text, edit) => {
                 if self.busy || self.stop_pending {
@@ -442,6 +462,89 @@ mod tests {
             error: error.map(str::to_owned),
         }
     }
+    #[test]
+    fn assistant_permission_receipt_retains_request_decision_and_outcome() {
+        let now = Instant::now();
+        let mut transcript = Transcript::default();
+        let question = "Download structure from https://example.org/ru.cif?";
+        transcript.apply(Event::ActivityNote(question.into()), now);
+        transcript.apply(
+            Event::Receipt(Receipt::permission("rpc-7".into(), question.into(), vec![])),
+            now,
+        );
+        transcript.apply(
+            Event::PermissionDecision {
+                id: "rpc-7".into(),
+                decision: "Denied by user".into(),
+            },
+            now,
+        );
+        transcript.apply(Event::ActivityNote("Denied by user".into()), now);
+        let copy = transcript.conversation(now);
+        assert!(copy.contains(question));
+        assert!(copy.contains("Denied by user"));
+        assert!(!copy.contains("Awaiting approval"));
+        assert!(
+            matches!(&transcript.entries[1], Entry::Receipt(r) if r.permission.as_deref() == Some("rpc-7"))
+        );
+    }
+
+    #[test]
+    fn assistant_command_permission_decisions_preserve_other_pending_cards() {
+        let now = Instant::now();
+        for decision in [
+            "Allowed once",
+            "Denied by user",
+            "Denied by Stop",
+            "Approval timed out after 5 minutes",
+        ] {
+            let mut transcript = Transcript::default();
+            transcript.apply(Event::Send("Create a workspace file".into(), false), now);
+            transcript.apply(Event::TurnStarted("turn-2".into()), now);
+            let question = "Run command: touch approval-check.txt?";
+            transcript.apply(
+                Event::Receipt(Receipt::permission(
+                    "cmd-1".into(),
+                    question.into(),
+                    vec!["Working directory: /tmp/assistant".into()],
+                )),
+                now,
+            );
+            transcript.apply(
+                Event::Receipt(Receipt::permission(
+                    "cmd-2".into(),
+                    "Run command: touch second.txt?".into(),
+                    vec![],
+                )),
+                now,
+            );
+            transcript.apply(
+                Event::PermissionDecision {
+                    id: "cmd-1".into(),
+                    decision: decision.into(),
+                },
+                now,
+            );
+            let receipts = transcript
+                .entries
+                .iter()
+                .filter_map(|entry| match entry {
+                    Entry::Receipt(receipt) => Some(receipt),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(receipts[0].state, decision);
+            assert_eq!(
+                receipts[1].state,
+                "Awaiting approval · expires in 5 minutes"
+            );
+            let copy = transcript.conversation(now);
+            assert!(copy.contains(question));
+            assert!(copy.contains("Working directory: /tmp/assistant"));
+            assert!(copy.contains(decision));
+        }
+    }
+
     #[test]
     fn mode_and_app_receipts_survive_turn_completion() {
         let now = Instant::now();
