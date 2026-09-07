@@ -1222,7 +1222,7 @@ impl StudioApp {
                             .child(format!("{distance_label}   {} Å", value(&p.distance, 4))),
                     )
                     .child(div().text_color(t.text_muted).child(format!(
-                            "FEFF R_eff {} Å · {} legs · degeneracy {}",
+                            "FEFF R_eff {} Å · {} legs · FEFF degeneracy {}",
                             p.reff
                                 .map(|r| format!("{r:.4}"))
                                 .unwrap_or_else(|| "unavailable".into()),
@@ -1231,6 +1231,7 @@ impl StudioApp {
                                 .map(|n| n.to_string())
                                 .unwrap_or_else(|| "?".into())
                         )))
+                    .child(format!("N  {}", value(&p.effective_degen, 2)))
                     .child(format!("ΔR  {} Å", value(&p.deltar, 4)))
                     .child(format!("σ²  {} Å²", value(&p.sigma2, 5)))
                     .child(format!(

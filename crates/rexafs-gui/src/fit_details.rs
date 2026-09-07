@@ -30,6 +30,9 @@ pub(crate) struct PathFitDetails {
     pub reff: Option<f64>,
     pub nleg: Option<usize>,
     pub degeneracy: Option<f64>,
+    /// Coordination number used by the fit (FEFF degeneracy unless overridden).
+    #[serde(default)]
+    pub effective_degen: Option<Estimate>,
     pub distance: Option<Estimate>,
     pub deltar: Option<Estimate>,
     pub sigma2: Option<Estimate>,
@@ -37,11 +40,13 @@ pub(crate) struct PathFitDetails {
     pub e0: Option<Estimate>,
 }
 
-fn evaluate(expr: &str, reff: Option<f64>, vars: &FitVariables) -> Option<f64> {
+fn evaluate(expr: &str, reff: Option<f64>, degen: Option<f64>, vars: &FitVariables) -> Option<f64> {
     let globals = vars.resolve_values().ok()?;
     eval_expression_with(if expr.trim().is_empty() { "0" } else { expr }, |symbol| {
         (if symbol == "reff" {
             reff
+        } else if symbol == "degen" {
+            degen
         } else {
             globals.get(symbol).copied()
         })
@@ -54,8 +59,13 @@ fn evaluate(expr: &str, reff: Option<f64>, vars: &FitVariables) -> Option<f64> {
 
 /// J C Jᵀ, including shared-variable correlations and constrained expressions.
 /// The FEFF reference geometry is treated as exact; this is fit uncertainty.
-fn estimate(expr: &str, reff: Option<f64>, result: &FeffFitResult) -> Option<Estimate> {
-    let value = evaluate(expr, reff, &result.variables)?;
+fn estimate(
+    expr: &str,
+    reff: Option<f64>,
+    degen: Option<f64>,
+    result: &FeffFitResult,
+) -> Option<Estimate> {
+    let value = evaluate(expr, reff, degen, &result.variables)?;
     let gradient: Option<Vec<f64>> = result
         .varying_names
         .iter()
@@ -73,9 +83,9 @@ fn estimate(expr: &str, reff: Option<f64>, result: &FeffFitResult) -> Option<Est
             }
             let mut vars = result.variables.clone();
             vars.get_mut(name)?.value = hi;
-            let a = evaluate(expr, reff, &vars)?;
+            let a = evaluate(expr, reff, degen, &vars)?;
             vars.get_mut(name)?.value = lo;
-            let b = evaluate(expr, reff, &vars)?;
+            let b = evaluate(expr, reff, degen, &vars)?;
             Some((a - b) / (hi - lo))
         })
         .collect();
@@ -136,7 +146,8 @@ pub(crate) fn snapshot(paths: &[FitPathSpec], result: &FeffFitResult) -> Vec<Pat
                 .ok()
                 .map(|p| p.feff);
             let reff = feff.as_ref().map(|f| f.reff);
-            let deltar = estimate(&p.deltar, reff, result);
+            let degen = feff.as_ref().map(|f| f.degen);
+            let deltar = estimate(&p.deltar, reff, degen, result);
             let distance = reff.zip(deltar.as_ref()).map(|(r, dr)| Estimate {
                 value: r + dr.value,
                 ..dr.clone()
@@ -146,16 +157,27 @@ pub(crate) fn snapshot(paths: &[FitPathSpec], result: &FeffFitResult) -> Vec<Pat
                 label: p.label.clone(),
                 reff,
                 nleg: feff.as_ref().map(|f| f.nleg),
-                degeneracy: feff.as_ref().map(|f| f.degen),
+                degeneracy: degen,
+                effective_degen: estimate(
+                    if p.degen.trim().is_empty() {
+                        "degen"
+                    } else {
+                        &p.degen
+                    },
+                    reff,
+                    degen,
+                    result,
+                ),
                 distance,
                 deltar,
-                sigma2: estimate(&p.sigma2, reff, result),
+                sigma2: estimate(&p.sigma2, reff, degen, result),
                 s02: estimate(
                     if p.s02.trim().is_empty() { "1" } else { &p.s02 },
                     reff,
+                    degen,
                     result,
                 ),
-                e0: estimate(&p.e0, reff, result),
+                e0: estimate(&p.e0, reff, degen, result),
             }
         })
         .collect()
@@ -165,6 +187,17 @@ pub(crate) fn snapshot(paths: &[FitPathSpec], result: &FeffFitResult) -> Vec<Pat
 mod tests {
     use super::*;
     use rexafs::xafs::fitting::FitVariable;
+    #[test]
+    fn effective_coordination_number_uses_the_feff_degeneracy_local() {
+        let r = FeffFitResult::default();
+        let n = estimate("degen", None, Some(6.0), &r).unwrap();
+        assert_eq!(n.value, 6.0);
+        assert!(n.fixed);
+        let half = estimate("degen / 2", None, Some(6.0), &r).unwrap();
+        assert_eq!(half.value, 3.0);
+        assert!(estimate("degen", None, None, &r).is_none());
+    }
+
     #[test]
     fn propagates_shared_constraints_and_covariance() {
         let mut r = FeffFitResult::default();
@@ -193,16 +226,16 @@ mod tests {
         );
         r.varying_names = vec!["a".into(), "b".into()];
         r.covariance = Some(vec![vec![0.0001, 0.00005], vec![0.00005, 0.0004]]);
-        let e = estimate("reff+dr", Some(2.5), &r).unwrap();
+        let e = estimate("reff+dr", Some(2.5), None, &r).unwrap();
         assert!((e.value - 2.54).abs() < 1e-10);
         assert!((e.stderr.unwrap() - 0.001_f64.sqrt()).abs() < 1e-9);
         assert!(!e.fixed);
         r.covariance = None;
-        assert!(estimate("dr", None, &r).unwrap().stderr.is_none());
-        assert!(estimate("2.5", None, &r).unwrap().fixed);
-        assert!(estimate("unknown", None, &r).is_none());
+        assert!(estimate("dr", None, None, &r).unwrap().stderr.is_none());
+        assert!(estimate("2.5", None, None, &r).unwrap().fixed);
+        assert!(estimate("unknown", None, None, &r).is_none());
         r.variables.get_mut("a").unwrap().value = 0.;
-        assert!(!estimate("a*a", None, &r).unwrap().fixed);
+        assert!(!estimate("a*a", None, None, &r).unwrap().fixed);
     }
     #[test]
     fn respects_bounds_when_differentiating() {
@@ -218,6 +251,6 @@ mod tests {
         );
         r.varying_names = vec!["a".into()];
         r.covariance = Some(vec![vec![0.0004]]);
-        assert!((estimate("a", None, &r).unwrap().stderr.unwrap() - 0.02).abs() < 1e-10);
+        assert!((estimate("a", None, None, &r).unwrap().stderr.unwrap() - 0.02).abs() < 1e-10);
     }
 }

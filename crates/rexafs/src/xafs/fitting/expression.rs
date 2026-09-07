@@ -333,7 +333,7 @@ fn collect_symbols(ast: &Expr, out: &mut Vec<String>, seen: &mut HashSet<String>
     match ast {
         Expr::Number(_) => {}
         Expr::Symbol(symbol) => {
-            if symbol == "reff" {
+            if symbol == "reff" || symbol == "degen" {
                 return;
             }
             if seen.insert(symbol.clone()) {

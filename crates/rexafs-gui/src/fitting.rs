@@ -82,6 +82,10 @@ pub struct FitPathSpec {
     pub file: PathBuf,
     pub label: String,
     pub s02: String,
+    /// Coordination number N (path degeneracy). Empty = the FEFF value;
+    /// a number or an expression (`degen` is the FEFF value) overrides it.
+    #[serde(default)]
+    pub degen: String,
     pub e0: String,
     pub sigma2: String,
     pub deltar: String,
@@ -107,6 +111,7 @@ impl FitPathSpec {
             file,
             label,
             s02: String::new(),
+            degen: String::new(),
             e0: String::new(),
             sigma2: String::new(),
             deltar: String::new(),
@@ -128,6 +133,7 @@ impl FitPathSpec {
             file,
             label,
             s02: "amp".into(),
+            degen: String::new(),
             e0: "de0".into(),
             sigma2: format!("sig2_{i}"),
             deltar: format!("dr_{i}"),
@@ -501,6 +507,9 @@ pub(crate) fn path_model(p: &FitPathSpec) -> Result<FeffPathModel, String> {
         .set_e0(spec(&p.e0))
         .set_sigma2(spec(&p.sigma2))
         .set_deltar(spec(&p.deltar));
+    if !p.degen.trim().is_empty() {
+        model = model.set_degen(spec(&p.degen));
+    }
     if !p.ei.trim().is_empty() {
         model = model.set_ei(spec(&p.ei));
     }
@@ -778,6 +787,40 @@ mod tests {
         }));
         let error = run_spectrum_fit(&spectrum, &[], &[], &FitRanges::default()).unwrap_err();
         assert!(error.contains("Rbkg (1.3000 Å)"), "{error}");
+    }
+
+    #[test]
+    fn path_spec_coordination_number_overrides_feff_degeneracy() {
+        let file = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../rexafs/tests/testfiles/feffcu01.dat");
+        let feff_degen = feffpath(&file.to_string_lossy(), FeffFlavor::Feff85L)
+            .unwrap()
+            .feff
+            .degen;
+        let mut spec = FitPathSpec::standard(file, 1);
+        assert!(spec.degen.is_empty(), "N is empty (FEFF value) by default");
+        let model = path_model(&spec).unwrap();
+        assert_eq!(model.degen, PathParamSpec::Value(feff_degen));
+
+        spec.degen = "1".into();
+        assert_eq!(path_model(&spec).unwrap().degen, PathParamSpec::Value(1.0));
+
+        spec.degen = "n1 * degen".into();
+        assert_eq!(
+            path_model(&spec).unwrap().degen,
+            PathParamSpec::Expression("n1 * degen".into())
+        );
+        assert_eq!(expr_identifiers("n1 * degen"), vec!["n1".to_string()]);
+    }
+
+    #[test]
+    fn path_spec_without_coordination_number_still_deserializes() {
+        let json = r#"{"file":"feff0001.dat","label":"p","s02":"amp","e0":"de0","sigma2":"ss","deltar":"dr","enabled":true}"#;
+        let spec: FitPathSpec = serde_json::from_str(json).unwrap();
+        assert!(spec.degen.is_empty());
+        let back: FitPathSpec =
+            serde_json::from_str(&serde_json::to_string(&spec).unwrap()).unwrap();
+        assert!(back.degen.is_empty());
     }
 
     #[test]

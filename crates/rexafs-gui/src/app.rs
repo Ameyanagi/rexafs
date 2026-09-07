@@ -853,6 +853,7 @@ pub(crate) struct FitVar {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum PathParam {
     S02,
+    Degen,
     E0,
     Sigma2,
     DeltaR,
@@ -862,8 +863,9 @@ pub(crate) enum PathParam {
 }
 
 impl PathParam {
-    pub(crate) const ALL: [PathParam; 7] = [
+    pub(crate) const ALL: [PathParam; 8] = [
         PathParam::S02,
+        PathParam::Degen,
         PathParam::E0,
         PathParam::DeltaR,
         PathParam::Sigma2,
@@ -877,13 +879,18 @@ impl PathParam {
     pub(crate) fn is_primary(self) -> bool {
         matches!(
             self,
-            PathParam::S02 | PathParam::E0 | PathParam::DeltaR | PathParam::Sigma2
+            PathParam::S02
+                | PathParam::Degen
+                | PathParam::E0
+                | PathParam::DeltaR
+                | PathParam::Sigma2
         )
     }
 
     pub(crate) fn label(self) -> &'static str {
         match self {
             PathParam::S02 => "S₀²",
+            PathParam::Degen => "N",
             PathParam::E0 => "ΔE₀",
             PathParam::Sigma2 => "σ²",
             PathParam::DeltaR => "ΔR",
@@ -896,6 +903,7 @@ impl PathParam {
     fn get(self, spec: &FitPathSpec) -> &str {
         match self {
             PathParam::S02 => &spec.s02,
+            PathParam::Degen => &spec.degen,
             PathParam::E0 => &spec.e0,
             PathParam::Sigma2 => &spec.sigma2,
             PathParam::DeltaR => &spec.deltar,
@@ -908,6 +916,7 @@ impl PathParam {
     fn set(self, spec: &mut FitPathSpec, text: String) {
         match self {
             PathParam::S02 => spec.s02 = text,
+            PathParam::Degen => spec.degen = text,
             PathParam::E0 => spec.e0 = text,
             PathParam::Sigma2 => spec.sigma2 = text,
             PathParam::DeltaR => spec.deltar = text,
@@ -1804,6 +1813,7 @@ fn default_data_file() -> PathBuf {
 fn default_for(param: PathParam) -> f64 {
     match param {
         PathParam::S02 => 0.9,
+        PathParam::Degen => 1.0,
         PathParam::Sigma2 => 0.003,
         PathParam::E0
         | PathParam::DeltaR
@@ -2363,6 +2373,7 @@ impl StudioApp {
             row.spec.file.hash(&mut hasher);
             row.spec.label.hash(&mut hasher);
             row.spec.s02.hash(&mut hasher);
+            row.spec.degen.hash(&mut hasher);
             row.spec.e0.hash(&mut hasher);
             row.spec.sigma2.hash(&mut hasher);
             row.spec.deltar.hash(&mut hasher);
@@ -5166,7 +5177,9 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) {
         let text = text.trim().to_string();
-        if text.is_empty() && param.is_primary() {
+        // An empty N cell means "use the FEFF degeneracy"; the other primary
+        // cells keep their previous value instead of going blank.
+        if text.is_empty() && param.is_primary() && param != PathParam::Degen {
             return;
         }
         if text.parse::<f64>().is_err() {
@@ -5349,7 +5362,15 @@ impl StudioApp {
             .into_iter()
             .map(|param| (param, param.get(&spec).to_string()))
             .map(|(param, initial)| {
-                let placeholder = if param.is_primary() { "expr" } else { "0" };
+                let placeholder: SharedString = match param {
+                    PathParam::Degen => meta
+                        .as_ref()
+                        .map(|m| format!("{}", m.degen))
+                        .unwrap_or_else(|| "FEFF".into())
+                        .into(),
+                    p if p.is_primary() => "expr".into(),
+                    _ => "0".into(),
+                };
                 let field = cx.new(|cx| {
                     TextInput::new(placeholder, initial, theme, cx).with_style(
                         crate::widgets::text_input::InputStyle {
