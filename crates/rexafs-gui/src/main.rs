@@ -13,6 +13,7 @@ mod fit_report;
 mod fitting;
 mod group_identity;
 mod import_mapping;
+mod import_recipes;
 mod joint_fitting;
 mod params;
 mod plotting;

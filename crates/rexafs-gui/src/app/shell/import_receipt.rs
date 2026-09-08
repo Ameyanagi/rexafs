@@ -97,6 +97,19 @@ impl StudioApp {
                     )),
                 );
             card = card.child(line);
+            let mut names = self
+                .imports
+                .applications
+                .iter()
+                .filter(|a| a.batch == id)
+                .filter_map(|a| self.imports.recipes.get(&a.recipe))
+                .map(|r| r.label())
+                .collect::<Vec<_>>();
+            names.sort();
+            names.dedup();
+            if !names.is_empty() {
+                card = card.child(format!("Recipe: {}", names.join(" · ")));
+            }
         }
         if let Some(text) = self.intake.queued_text() {
             card = card.child(text);

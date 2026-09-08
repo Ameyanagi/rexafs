@@ -58,6 +58,9 @@ enum Action {
     ReviewFile(bool),
     ReviewLayout(bool),
     ReviewLocate,
+    RememberRecipe,
+    GlobalRecipe,
+    ConfirmUnits,
 }
 
 pub(crate) struct ImportEditor {
@@ -93,6 +96,10 @@ pub(crate) struct ImportEditor {
     review_configs: Vec<crate::params::ImportConfig>,
     review_outputs: Vec<DetectionMode>,
     review_file: usize,
+    recipe_name: Entity<TextInput>,
+    remember_recipe: bool,
+    global_recipe: bool,
+    confirmed_units: bool,
 }
 
 const REVIEW_CHANNELS: [DetectionMode; 4] = [
@@ -217,6 +224,9 @@ impl ImportEditor {
         let opener = window.focused(cx);
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
+        let recipe_name = cx.new(|cx| TextInput::new("Recipe name", "", theme, cx));
+        cx.subscribe(&recipe_name, |_, _, _, cx| cx.notify())
+            .detach();
         let spacing = cx.new(|cx| TextInput::new("d spacing (Å)", "", theme, cx));
         spacing.update(cx, |input, cx| input.set_enabled(!locked, cx));
         cx.subscribe(&spacing, |this, _, event, cx| {
@@ -277,6 +287,10 @@ impl ImportEditor {
             review_configs: vec![],
             review_outputs: vec![],
             review_file: 0,
+            recipe_name,
+            remember_recipe: false,
+            global_recipe: false,
+            confirmed_units: false,
         }
     }
 
@@ -365,6 +379,13 @@ impl ImportEditor {
                 if let Some(Ok(result)) = &this.preview.result {
                     if initial {
                         this.table = Some(result.table.clone());
+                        if this.review_scope.is_some()
+                            && this.recipe_name.read(cx).text().is_empty()
+                        {
+                            let name = format!("{}-column layout", result.table.column_count);
+                            this.recipe_name
+                                .update(cx, |input, cx| input.set_text(name, cx));
+                        }
                         this.draft = Some(MappingDraft::new(&result.table, &config));
                         this.batch_available = this
                             .studio
@@ -467,16 +488,24 @@ impl ImportEditor {
             let Some(validated) = &self.validation else {
                 return;
             };
-            let Some(choice) = self.review_choice() else {
+            let Ok(recipe) = self.review_recipe(cx) else {
                 return;
             };
-            let Some(table) = &self.table else {
-                return;
+            let choice = ReviewChoice {
+                primary: recipe.primary,
+                channels: recipe.channels.clone(),
             };
-            let layout = LayoutKey::from_preview(table);
             let revision = draft.revision;
             let result = self.studio.update(cx, |studio, cx| {
-                studio.accept_review(scope, validated, &choice, &layout, revision, cx)
+                studio.accept_review(
+                    scope,
+                    validated,
+                    &choice,
+                    recipe,
+                    self.remember_recipe,
+                    revision,
+                    cx,
+                )
             });
             let batch = scope.batch;
             let cluster = scope.cluster;
@@ -587,6 +616,21 @@ impl ImportEditor {
 
     fn activate(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
         match action {
+            Action::RememberRecipe => {
+                self.remember_recipe = !self.remember_recipe;
+                cx.notify();
+                return;
+            }
+            Action::GlobalRecipe => {
+                self.global_recipe = !self.global_recipe;
+                cx.notify();
+                return;
+            }
+            Action::ConfirmUnits => {
+                self.confirmed_units = !self.confirmed_units;
+                cx.notify();
+                return;
+            }
             Action::ReviewLocate => {
                 self.locate_pending(cx);
                 return;
@@ -850,6 +894,27 @@ impl ImportEditor {
         {
             *config = draft.config().clone();
         }
+    }
+
+    fn review_recipe(
+        &self,
+        cx: &Context<Self>,
+    ) -> Result<crate::import_recipes::RecipeVersion, String> {
+        let table = self.table.as_ref().ok_or("Load a representative source.")?;
+        let choice = self.review_choice().ok_or("Choose the output channels.")?;
+        let scope = if self.global_recipe {
+            crate::import_recipes::RecipeScope::AllSources
+        } else {
+            crate::import_recipes::RecipeScope::for_source(&self.target.path, table.xdi.as_ref())
+        };
+        crate::import_recipes::RecipeVersion::from_review(
+            self.recipe_name.read(cx).text(),
+            scope,
+            table,
+            choice.primary,
+            &choice.channels,
+            self.confirmed_units,
+        )
     }
 
     fn review_choice(&self) -> Option<ReviewChoice> {
@@ -1223,6 +1288,7 @@ impl Render for ImportEditor {
             if draft.channel() == DetectionMode::Fluorescence {
                 let mut rois = div()
                     .id("mapping-rois")
+                    .flex_none()
                     .max_h(px(90.))
                     .overflow_y_scroll()
                     .flex()
@@ -1253,6 +1319,7 @@ impl Render for ImportEditor {
             if self.open_role.is_some() {
                 let mut choices = div()
                     .id("mapping-column-picker")
+                    .flex_none()
                     .max_h(px(120.))
                     .overflow_y_scroll()
                     .flex()
@@ -1337,7 +1404,15 @@ impl Render for ImportEditor {
                 plot = plot
                     .child("Raw μ(E) preview unavailable while the draft is invalid or updating.");
             }
-            panel = panel.child(div().flex().gap_3().min_h_0().child(table).child(plot));
+            panel = panel.child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .gap_3()
+                    .min_h(px(280.))
+                    .child(table)
+                    .child(plot),
+            );
         } else {
             panel = panel.child(if self.error.is_some() {
                 "Source preview unavailable."
@@ -1354,7 +1429,86 @@ impl Render for ImportEditor {
             .and_then(|d| self.key(d.revision))
             .is_some_and(|key| self.preview.ready(&key))
             && !self.locked;
+        let recipe_error = self
+            .review_scope
+            .as_ref()
+            .and_then(|_| self.review_recipe(cx).err());
+        if self.review_scope.is_some() {
+            self.visible_focus
+                .push(self.recipe_name.read(cx).focus_handle(cx));
+            let scope = if self.global_recipe {
+                crate::import_recipes::RecipeScope::AllSources
+            } else {
+                crate::import_recipes::RecipeScope::for_source(
+                    &self.target.path,
+                    self.table.as_ref().and_then(|t| t.xdi.as_ref()),
+                )
+            };
+            let missing_units = self.review_choice().is_some_and(|choice| {
+                self.table.as_ref().is_some_and(|table| {
+                    choice.channels.iter().any(|config| {
+                        let column = table.for_mapping(config).resolved.energy_col;
+                        LayoutKey::from_preview(table)
+                            .units
+                            .get(column)
+                            .is_none_or(|u| u.is_none())
+                    })
+                })
+            });
+            panel = panel
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child("Recipe name:")
+                        .child(div().flex_1().child(self.recipe_name.clone())),
+                )
+                .child(scope.label())
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_2()
+                        .child(self.button(
+                            Action::RememberRecipe,
+                            if self.remember_recipe {
+                                "☑ Remember on this computer"
+                            } else {
+                                "☐ Remember on this computer"
+                            },
+                            true,
+                            cx,
+                        ))
+                        .child(self.button(
+                            Action::GlobalRecipe,
+                            if self.global_recipe {
+                                "☑ Reuse at all source locations"
+                            } else {
+                                "☐ Reuse at all source locations"
+                            },
+                            true,
+                            cx,
+                        )),
+                );
+            if missing_units {
+                panel = panel.child(self.button(
+                    Action::ConfirmUnits,
+                    if self.confirmed_units {
+                        "☑ Confirm displayed axis units (Detected assumes eV when units are absent)"
+                    } else {
+                        "☐ Confirm displayed axis units (Detected assumes eV when units are absent)"
+                    },
+                    true,
+                    cx,
+                ));
+            }
+            if let Some(error) = &recipe_error {
+                panel = panel.child(div().text_color(t.warn).child(error.clone()));
+            }
+        }
         let ready = raw_ready
+            && recipe_error.is_none()
             && self.error.is_none()
             && (self.creation.is_none() || self.channel_scope.is_some())
             && self.bulk_scope.as_ref().is_none_or(|_| {
@@ -1447,6 +1601,7 @@ impl Render for ImportEditor {
                 let scope = self.bulk_scope.as_ref().unwrap();
                 let mut list = div()
                     .id("mapping-target-files")
+                    .flex_none()
                     .max_h(px(150.))
                     .overflow_y_scroll();
                 for (index, target) in scope.targets.iter().enumerate() {
@@ -1555,7 +1710,13 @@ impl Render for ImportEditor {
                 if event.keystroke.key == "escape" {
                     this.close(window, cx);
                     cx.stop_propagation();
-                } else if !this.spacing.read(cx).focus_handle(cx).is_focused(window) {
+                } else if !this.spacing.read(cx).focus_handle(cx).is_focused(window)
+                    && !this
+                        .recipe_name
+                        .read(cx)
+                        .focus_handle(cx)
+                        .is_focused(window)
+                {
                     // Unhandled keys must reach the native input handler while a
                     // text field has focus. The ImportEditor context already
                     // excludes the surrounding Studio shortcuts.

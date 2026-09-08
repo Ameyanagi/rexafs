@@ -13,7 +13,7 @@ use crate::{
 };
 use gpui::Context;
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct PendingSource {
     pub detection: Option<ImportDetection>,
     pub reason: String,
@@ -124,6 +124,8 @@ pub(crate) struct Approval {
     pub choice: ReviewChoice,
     pub layout: LayoutKey,
     pub source: SourceRevision,
+    pub recipe: Option<crate::import_recipes::RecipeRef>,
+    pub application: Option<String>,
 }
 
 pub(crate) type Approvals = BTreeMap<PathBuf, Approval>;
@@ -334,7 +336,8 @@ impl StudioApp {
         scope: &ReviewScope,
         validated: &RepairValidation,
         choice: &ReviewChoice,
-        layout: &LayoutKey,
+        recipe: crate::import_recipes::RecipeVersion,
+        remember: bool,
         revision: u64,
         cx: &mut Context<Self>,
     ) -> Result<usize, String> {
@@ -373,10 +376,38 @@ impl StudioApp {
                 Approval {
                     batch: scope.batch,
                     choice: choice.clone(),
-                    layout: layout.clone(),
+                    layout: recipe.layout.clone(),
                     source,
+                    recipe: None,
+                    application: None,
                 },
             ));
+        }
+        let mut library = self.imports.recipes.clone();
+        let recipe = library.commit_review(recipe);
+        let mut machine = self.structure.settings.import_recipes.clone();
+        if remember {
+            machine.remember(recipe.clone())?;
+        }
+        let application = crate::import_recipes::new_id("application");
+        for (_, approval) in &mut approvals {
+            approval.recipe = Some(recipe.reference.clone());
+            approval.application = Some(application.clone());
+        }
+        self.imports.recipes = library;
+        self.imports
+            .applications
+            .push(crate::import_recipes::ImportApplication {
+                id: application,
+                batch: scope.batch,
+                recipe: recipe.reference,
+                members: vec![],
+            });
+        if remember {
+            self.structure.settings.import_recipes = machine;
+            if let Err(error) = self.structure.settings.save() {
+                self.record_job_error("Remember import recipe", error);
+            }
         }
         let paths: Vec<_> = approvals.iter().map(|(path, _)| path.clone()).collect();
         let count = paths.len();

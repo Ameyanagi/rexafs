@@ -41,7 +41,7 @@ impl DetectionMode {
 
 /// Configure-once import applied to every file in the catalog. `None` and
 /// [`DetectionMode::Auto`] resolve independently from each file's content.
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ImportConfig {
     pub mode: DetectionMode,
@@ -108,7 +108,7 @@ impl ImportConfig {
 }
 
 /// File-derived import assignments after applying any manual overrides.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResolvedImport {
     pub mode: DetectionMode,
     pub energy_col: usize,
@@ -242,10 +242,11 @@ pub struct ImportPreview {
 
 /// Prefix-only layout evidence. Deliberately has no row/point diagnostics or
 /// signal validation result: even a short source is not validated at intake.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ImportDetection {
     pub column_count: usize,
     pub names: Option<Vec<String>>,
+    #[serde(skip)]
     pub rows: Vec<Vec<f64>>,
     /// Fully automatic assignments, used for role-picker auto labels.
     pub detected: ResolvedImport,
@@ -305,6 +306,20 @@ impl ImportDetection {
 }
 
 impl ImportPreview {
+    /// Resolve a different channel against the retained original table.
+    pub fn for_mapping(&self, config: &ImportConfig) -> Self {
+        let data = ParsedData {
+            names: self.names.clone(),
+            rows: self.rows.clone(),
+            xdi: self.xdi.clone(),
+            source_lines: vec![],
+            diagnostics: self.diagnostics.clone(),
+        };
+        let mut preview = self.clone();
+        preview.resolved = resolve_import(&data, config);
+        preview
+    }
+
     pub fn available_channels(&self) -> Vec<DetectionMode> {
         available_channels(&self.names, self.resolved.mode)
     }

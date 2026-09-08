@@ -190,6 +190,25 @@ pub(super) fn map_paths(
         }
         Ok(())
     }
+    for recipe in &mut project.imports.recipes.versions {
+        if let crate::import_recipes::RecipeScope::FolderTree(root) = &mut recipe.scope {
+            *root = f(root)?;
+        }
+    }
+    for application in &mut project.imports.applications {
+        for member in &mut application.members {
+            member.path = f(&member.path)?;
+        }
+    }
+    for batch in &mut project.import_history {
+        for path in &mut batch.paths {
+            *path = f(path)?;
+        }
+        batch.sources = std::mem::take(&mut batch.sources)
+            .into_iter()
+            .map(|(path, source)| Ok((f(&path)?, source)))
+            .collect::<Result<_, String>>()?;
+    }
     option(&mut project.source_dir, f)?;
     option(&mut project.spectrum_file, f)?;
     option(&mut project.feff_workspace, f)?;

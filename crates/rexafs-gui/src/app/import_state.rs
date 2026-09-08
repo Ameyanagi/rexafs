@@ -1,4 +1,4 @@
-//! Session-only intake ledger. Counts describe sources, never list rows.
+//! Persisted intake ledger. Counts describe sources, never list rows.
 use crate::group_identity::GroupId;
 use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
@@ -6,7 +6,8 @@ use std::time::{Duration, SystemTime};
 
 pub type BatchId = usize;
 
-#[derive(Default)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct SourceOutcome {
     pub pending: Option<super::import_review::PendingSource>,
     pub created: Vec<GroupId>,
@@ -55,6 +56,7 @@ impl SourceOutcome {
     }
 }
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct IntakeBatch {
     pub paths: Vec<PathBuf>,
     pub sources: BTreeMap<PathBuf, SourceOutcome>,
@@ -156,6 +158,7 @@ pub struct IntakeState {
     pub history: Vec<IntakeBatch>,
     pub queue: VecDeque<IntakeRequest>,
     pub active: Option<BatchId>,
+    active_restore: bool,
     pub receipt: Option<BatchId>,
     pub history_open: bool,
     pub reveal: Vec<GroupId>,
@@ -172,6 +175,32 @@ pub struct IntakeOrigin {
 }
 
 impl IntakeState {
+    pub fn from_history(mut history: Vec<IntakeBatch>) -> Self {
+        for batch in &mut history {
+            if !batch.finished {
+                batch.stopped = true;
+                batch.finished = true;
+            }
+        }
+        let receipt = history
+            .iter()
+            .rposition(|b| b.sources.values().any(|s| s.pending.is_some()));
+        Self {
+            history,
+            receipt,
+            ..Default::default()
+        }
+    }
+
+    pub fn is_pending(&self, path: &std::path::Path) -> bool {
+        self.history.iter().any(|batch| {
+            batch
+                .sources
+                .get(path)
+                .is_some_and(|source| source.pending.is_some())
+        })
+    }
+
     /// Capture when scheduling work: a later reimport of a sibling at this
     /// path must not acquire the original group's diagnostics.
     pub fn origin(&self, path: &std::path::Path, group: &GroupId) -> Option<IntakeOrigin> {
@@ -216,7 +245,9 @@ impl IntakeState {
             recent_folders,
             reviewed_paths: None,
         });
-        self.receipt = Some(id);
+        if !restore {
+            self.receipt = Some(id);
+        }
         id
     }
 
@@ -240,16 +271,21 @@ impl IntakeState {
         }
         let request = self.queue.pop_front()?;
         self.active = Some(request.id);
-        self.receipt = Some(request.id);
+        self.active_restore = request.restore;
+        if !request.restore {
+            self.receipt = Some(request.id);
+        }
         Some(request)
     }
 
     pub fn finish(&mut self, id: BatchId) {
         self.history[id].finished = true;
+        let restoring = self.active == Some(id) && self.active_restore;
         if self.active == Some(id) {
             self.active = None;
+            self.active_restore = false;
         }
-        if self.receipt.is_some() {
+        if self.receipt.is_some() && !restoring {
             self.receipt = Some(id);
         }
     }
@@ -313,6 +349,20 @@ pub fn flush_due(first: bool, count: usize, elapsed: Duration) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_restore_keeps_the_saved_intake_receipt_available() {
+        let mut state = IntakeState::default();
+        let original = state.enqueue(vec!["/run".into()], false, vec![]);
+        state.start_next().unwrap();
+        state.finish(original);
+        let restored = state.enqueue(vec!["/run/a.dat".into()], true, vec![]);
+        assert_eq!(state.receipt, Some(original));
+        assert!(state.start_next().unwrap().restore);
+        assert_eq!(state.receipt, Some(original));
+        state.finish(restored);
+        assert_eq!(state.receipt, Some(original));
+    }
     fn id(n: u64) -> GroupId {
         GroupId::legacy_result(n)
     }

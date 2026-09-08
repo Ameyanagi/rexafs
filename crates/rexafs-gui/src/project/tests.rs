@@ -63,6 +63,159 @@ fn state(project: &ProjectFile) -> Value {
 }
 
 #[test]
+fn recipes_exact_applications_and_pending_sources_survive_conflicting_machine_library() {
+    use crate::{
+        app::{
+            import_review::PendingSource,
+            import_state::{IntakeBatch, IntakeState, SourceOutcome},
+        },
+        group_identity::{GroupId, SourceGroup},
+        import_recipes::*,
+        params::{DetectionMode, ImportConfig},
+    };
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let dir = Temp::new();
+        let source = dir.join("sample.dat");
+        std::fs::write(
+            &source,
+            "# energy i0 it ir\n8900 10 5 2\n9000 12 5 2\n9100 14 5 2\n",
+        )
+        .unwrap();
+        let source = source.canonicalize().unwrap();
+        let pending = source.parent().unwrap().join("unreadable.dat");
+        let table = crate::params::preview_import(&source, &ImportConfig::default()).unwrap();
+        let recipe = RecipeVersion::from_review(
+            "Saved beamline",
+            RecipeScope::for_source(&source, None),
+            &table,
+            DetectionMode::Transmission,
+            &[
+                ImportConfig {
+                    mode: DetectionMode::Transmission,
+                    ..Default::default()
+                },
+                ImportConfig {
+                    mode: DetectionMode::Reference,
+                    ..Default::default()
+                },
+            ],
+            true,
+        )
+        .unwrap();
+        let primary = GroupId::source(&source, DetectionMode::Transmission);
+        let reference = GroupId::source(&source, DetectionMode::Reference);
+        let mappings = recipe.channels.clone();
+        let params = PipelineParams {
+            import: mappings[0].clone(),
+            ..Default::default()
+        };
+        let mut project = ProjectFile {
+            spectrum_file: Some(source.clone()),
+            raw_files: vec![source.clone()],
+            params: params.clone(),
+            source_groups: vec![SourceGroup {
+                id: primary.clone(),
+                path: source.clone(),
+                channel: DetectionMode::Transmission,
+            }],
+            overrides: vec![ParamOverride {
+                path: source.clone(),
+                params,
+            }],
+            derived: vec![DerivedSpectrum {
+                id: 1,
+                group_id: Some(reference.clone()),
+                source: Some(source.clone()),
+                params: Some(PipelineParams {
+                    import: mappings[1].clone(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }],
+            import_history: vec![IntakeBatch {
+                paths: vec![source.parent().unwrap().into()],
+                stopped: false,
+                finished: true,
+                dropped_queue: 0,
+                sources: std::collections::BTreeMap::from([
+                    (
+                        source.clone(),
+                        SourceOutcome {
+                            created: vec![primary.clone(), reference.clone()],
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        pending.clone(),
+                        SourceOutcome {
+                            pending: Some(PendingSource {
+                                detection: None,
+                                reason: "Locate source".into(),
+                            }),
+                            ..Default::default()
+                        },
+                    ),
+                ]),
+            }],
+            ..Default::default()
+        };
+        project.imports.recipes.remember(recipe.clone()).unwrap();
+        project.imports.applications.push(ImportApplication {
+            id: "application:original-batch".into(),
+            batch: 0,
+            recipe: recipe.reference.clone(),
+            members: [primary.clone(), reference.clone()]
+                .into_iter()
+                .zip(&mappings)
+                .map(|(group, mapping)| ApplicationMember {
+                    source_id: primary.clone(),
+                    path: source.clone(),
+                    group,
+                    channel: mapping.mode,
+                    mapping_revision: mapping_revision(mapping),
+                })
+                .collect(),
+        });
+        let saved = dir.join("recipe.rxs");
+        save_with_storage(&saved, &project, mode).unwrap();
+
+        let mut machine = crate::settings::UserSettings::default();
+        machine.import_recipes.remember(recipe.clone()).unwrap();
+        let mut conflict = recipe.clone();
+        conflict.channels[0].axis = crate::import_mapping::AxisConversion::EnergyKev;
+        machine.import_recipes.commit_review(conflict);
+        let machine: crate::settings::UserSettings =
+            serde_json::from_value(serde_json::to_value(machine).unwrap()).unwrap();
+        assert_eq!(machine.import_recipes.versions.len(), 2);
+
+        let mut reopened = load(&saved).unwrap();
+        reopened.assign_group_ids();
+        assert_eq!(
+            reopened.imports.recipes.get(&recipe.reference).unwrap(),
+            &recipe
+        );
+        assert!(reopened.overrides[0].params.import == mappings[0]);
+        assert!(reopened.derived[0].params.as_ref().unwrap().import == mappings[1]);
+        let application = reopened.imports.application_for(&reference).unwrap();
+        assert_eq!(application.batch, 0);
+        assert_eq!(application.members.len(), 2);
+        assert_eq!(application.members[0].group, primary);
+        assert_eq!(
+            application.members[1].mapping_revision,
+            mapping_revision(&mappings[1])
+        );
+        assert_eq!(application.members[0].path, reopened.overrides[0].path);
+        let history = IntakeState::from_history(reopened.import_history.clone());
+        assert!(history.is_pending(&pending));
+        assert_eq!(
+            history.history[0].sources[&reopened.overrides[0].path].created,
+            vec![primary, reference]
+        );
+        assert_eq!(history.receipt, Some(0));
+    }
+}
+
+#[test]
 fn assistant_conversations_roundtrip_in_both_storage_modes_and_limit_at_save() {
     use super::assistant::{Conversation, ConversationEntry, ConversationMode};
     for mode in [DataStorage::Paths, DataStorage::Embedded] {

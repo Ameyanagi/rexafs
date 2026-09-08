@@ -566,6 +566,7 @@ impl StudioApp {
                                     app.intake.history[id].sources.entry(path).or_default().skipped = Some("Stopped before adding groups".into());
                                     continue;
                                 }
+                                if restore && app.intake.is_pending(&path) { continue; }
                                 let existing = app.catalog.find_by_canonical_path(&path);
                                 let in_batch = app.intake.history[id].sources.get(&path)
                                     .is_some_and(|s| !s.created.is_empty() || s.retained);
@@ -658,6 +659,24 @@ impl StudioApp {
                                         source.pending = None;
                                         source.failed = None;
                                         if approval.batch != id { source.created.extend(created); }
+                                    }
+                                    if let Some(application_id) = &approval.application {
+                                        let source_id = app.group_id(primary).expect("new primary has an identity");
+                                        let members = app.intake.history[id].sources.get(&path).into_iter().flat_map(|s| &s.created)
+                                            .filter_map(|group| {
+                                                let mapping = if *group == source_id { &app.effective_params(primary).import } else {
+                                                    &app.derived.iter().find(|d| d.group_id.as_ref() == Some(group))?.params.as_ref()?.import
+                                                };
+                                                Some(crate::import_recipes::ApplicationMember {
+                                                    source_id: source_id.clone(), path: path.clone(), group: group.clone(),
+                                                    channel: mapping.mode, mapping_revision: crate::import_recipes::mapping_revision(mapping),
+                                                })
+                                            }).collect::<Vec<_>>();
+                                        if let Some(application) = app.imports.applications.iter_mut().find(|a| &a.id == application_id) {
+                                            for member in members {
+                                                if !application.members.iter().any(|m| m.group == member.group) { application.members.push(member); }
+                                            }
+                                        }
                                     }
                                     app.intake.approved.remove(&path);
                                 }
@@ -1122,6 +1141,8 @@ mod tests {
             path.clone(),
             Approval {
                 batch: 0,
+                recipe: None,
+                application: None,
                 layout: LayoutKey::from_preview(&table),
                 choice: ReviewChoice {
                     primary: DetectionMode::Transmission,

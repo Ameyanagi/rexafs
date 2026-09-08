@@ -30,6 +30,7 @@ pub fn home_dir() -> Option<PathBuf> {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UserSettings {
+    pub import_recipes: crate::import_recipes::RecipeLibrary,
     pub recent_projects: Vec<PathBuf>,
     pub recent_import_folders: Vec<PathBuf>,
     /// Width of the Groups sidebar in logical pixels. None uses 280 px.
@@ -59,6 +60,7 @@ pub struct UserSettings {
 impl Default for UserSettings {
     fn default() -> Self {
         Self {
+            import_recipes: Default::default(),
             groups_panel_width: None,
             recent_import_folders: Vec::new(),
             recent_projects: Vec::new(),
@@ -403,6 +405,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("settings.json");
         let s = UserSettings {
+            import_recipes: Default::default(),
             cif_library: Some(PathBuf::from("/tmp/cifs")),
             amcsd_db: None,
             mp_api_key: "abc".into(),

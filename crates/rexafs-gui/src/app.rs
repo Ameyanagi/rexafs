@@ -60,8 +60,8 @@ mod group_rows;
 mod import_channels;
 mod import_preview;
 mod import_repair;
-mod import_review;
-mod import_state;
+pub(crate) mod import_review;
+pub(crate) mod import_state;
 mod importing;
 mod merge;
 mod shell;
@@ -1254,6 +1254,7 @@ pub struct StudioApp {
     merge_cancel: Option<Arc<AtomicBool>>,
     status: SharedString,
     job_errors: Vec<JobError>,
+    imports: crate::import_recipes::ProjectImports,
     intake: import_state::IntakeState,
     intake_cancel: Option<Arc<AtomicBool>>,
     problems_batch: Option<import_state::BatchId>,
@@ -3056,6 +3057,7 @@ impl StudioApp {
             merge_cancel: None,
             status: "loading...".into(),
             job_errors: Vec::new(),
+            imports: Default::default(),
             intake: Default::default(),
             intake_cancel: None,
             problems_batch: None,
@@ -8345,6 +8347,8 @@ impl StudioApp {
         let mut group_state = self.group_state.clone();
         self.capture_group_state(&mut group_state);
         ProjectFile {
+            imports: self.imports.clone(),
+            import_history: self.intake.history.clone(),
             source_groups: self.group_registry.sources(),
             group_state,
             header: self.project_header.clone(),
@@ -8559,6 +8563,9 @@ impl StudioApp {
         registry: crate::group_identity::GroupRegistry,
         cx: &mut Context<Self>,
     ) {
+        self.reset_catalog_state(cx);
+        self.intake = import_state::IntakeState::from_history(project.import_history.clone());
+        self.imports = project.imports.clone();
         self.next_derived_id = next_derived_id;
         self.group_state = Default::default();
         self.group_registry = registry;
