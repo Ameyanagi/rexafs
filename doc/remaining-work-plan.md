@@ -189,8 +189,10 @@ changing code; do not reopen bugs already fixed by Phase 0–2.
 | R8 | Website/documentation deployment. | The release runbook treats domain hosting as separate. Verify current hosting, DNS/HTTPS, installation instructions, and download links before claiming deployment is still missing or complete. |
 
 The requested broader UI review is planned in
-[UI simplification handoff](ui-simplification-plan.md), U1–U7. It prioritizes
-progressive disclosure and visual hierarchy rather than adding instructions.
+[UI simplification handoff](ui-simplification-plan.md), U1–U9. A native computer-use
+review on 2026-09-08 recorded concrete findings across the main workflows,
+including missing-source repair, Series selection, Publish, and accessibility.
+Implementation remains deferred for delegation.
 
 ## G. Current requested polish
 
@@ -208,7 +210,7 @@ Review: [PR #45](https://github.com/Ameyanagi/rexafs/pull/45), branch
 `fix/startup-help-release`, worktree `/private/tmp/rexafs-startup-help`.
 Its CI/review and a future app release remain separate from the completed
 0.2.0 download-page cleanup. Do not reimplement this polish when delegating F1–F10
-or U1–U7; incorporate the reviewed PR first.
+or U1–U9; incorporate the reviewed PR first.
 
 ## Workspace handoff
 
@@ -218,5 +220,5 @@ branch `release/0.2.0`. Post-release evidence is recorded in
 `/private/tmp/rexafs-release-020-evidence`, branch `docs/release-020-evidence`. The main checkout at
 `/Users/ryuichi/dev/rexafs` remains on `feature/import-groups-phase1`; its unrelated
 dirty README, documentation, benchmark, and experiment files are preserved.
-Only this plan is synchronized back to that checkout. Build/test logs and
-disposable native fixtures are linked from the validation reports.
+This plan and the UI simplification handoff are synchronized back to that checkout.
+Build/test logs and disposable native fixtures are linked from the validation reports.
