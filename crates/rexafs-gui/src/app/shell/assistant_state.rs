@@ -94,6 +94,7 @@ pub(super) struct Transcript {
     pub stop_pending: bool,
     start: usize,
     awaiting_ack: bool,
+    sent_at: Option<Instant>,
     disconnected: bool,
     revision: u64,
 }
@@ -164,6 +165,7 @@ impl Transcript {
                 self.turn = None;
                 self.busy = true;
                 self.awaiting_ack = true;
+                self.sent_at = Some(now);
                 self.entries
                     .extend([Entry::User(text, edit), Entry::Status(Status::Preparing)]);
             }
@@ -175,8 +177,9 @@ impl Transcript {
                 self.turn = Some(turn);
                 if self.busy {
                     self.clear_waiting();
-                    self.entries
-                        .push(Entry::Status(Status::Waiting { started: now }));
+                    self.entries.push(Entry::Status(Status::Waiting {
+                        started: self.sent_at.unwrap_or(now),
+                    }));
                 }
             }
             Event::TurnCompleted { turn, error } => {
@@ -405,22 +408,10 @@ pub(super) fn waiting_label(elapsed: Duration) -> String {
         elapsed.as_secs()
     )
 }
-/// GPUI adds the delta to its negative offset before our scroll listener runs.
-/// Any upward motion releases follow, even inside the bottom threshold. Only
-/// downward motion can resume it; horizontal/zero-delta events preserve intent.
-pub(super) fn follow_after_scroll(
-    prev_follow: bool,
-    delta_y: f32,
-    offset: f32,
-    max_offset: f32,
-) -> bool {
-    if delta_y > 0. {
-        false
-    } else if delta_y < 0. {
-        max_offset + offset <= 32.
-    } else {
-        prev_follow
-    }
+/// GPUI offsets are negative and max_offset is the positive overflow height.
+/// Follow within one transcript line of the bottom; short content always follows.
+pub(super) fn should_follow(offset: f32, max_offset: f32) -> bool {
+    max_offset <= 0. || max_offset + offset <= 21.
 }
 
 #[cfg(test)]
@@ -574,27 +565,33 @@ mod tests {
         assert!(t.conversation(now).contains("You · Review"));
     }
     #[test]
-    fn small_upward_scrolls_release_follow_and_accumulate() {
-        let mut follow = true;
-        let mut offset = -800.;
-        for _ in 0..20 {
-            offset += 2.;
-            follow = follow_after_scroll(follow, 2., offset, 800.);
-            assert!(!follow);
-            // Gesture-end and horizontal events must not re-enable follow.
-            assert!(!follow_after_scroll(follow, 0., offset, 800.));
+    fn assistant_short_content_always_follows() {
+        for offset in [-100., -1., 0., 1., 100.] {
+            assert!(should_follow(offset, 0.));
+            assert!(should_follow(offset, -20.));
         }
-        assert_eq!(offset, -760.);
     }
     #[test]
-    fn downward_scroll_resumes_follow_only_near_bottom() {
-        assert!(!follow_after_scroll(false, -1., -767., 800.));
-        assert!(follow_after_scroll(false, -1., -768., 800.));
-        assert!(follow_after_scroll(false, -32., -800., 800.));
-        assert!(follow_after_scroll(false, -1., -801., 800.));
-        assert!(follow_after_scroll(false, -1., 0., 0.));
-        assert!(follow_after_scroll(true, 0., -800., 800.));
-        assert!(!follow_after_scroll(true, 0.5, -799.5, 800.));
+    fn assistant_follow_uses_one_line_bottom_threshold() {
+        assert!(!should_follow(-778., 800.));
+        assert!(should_follow(-779., 800.));
+        assert!(should_follow(-800., 800.));
+        assert!(should_follow(-801., 800.));
+        assert!(!should_follow(0., 800.));
+    }
+    #[test]
+    fn assistant_waiting_timer_includes_preparation() {
+        let now = Instant::now();
+        let mut t = Transcript::default();
+        t.apply(Event::Send("hello".into(), false), now);
+        t.apply(
+            Event::TurnStarted("turn".into()),
+            now + Duration::from_secs(2),
+        );
+        assert_eq!(
+            t.entries.last().unwrap().text(now + Duration::from_secs(3)),
+            "Waiting for response · 3 s"
+        );
     }
     #[test]
     fn revisions_track_updates_to_earlier_entries_and_ignore_duplicates() {

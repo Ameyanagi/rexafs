@@ -33,6 +33,8 @@ pub(super) fn model_picker_handles_key(open: bool, key: &str) -> bool {
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct ControlState {
     pub send: bool,
+    pub composer: bool,
+    pub preferences: bool,
     pub starters: bool,
     pub navigation: bool,
     pub stop: bool,
@@ -44,6 +46,8 @@ impl ControlState {
         let ready = analysis_open && connected && signed_in;
         Self {
             send: ready && !busy,
+            composer: analysis_open,
+            preferences: analysis_open && !busy,
             starters: ready && !busy,
             navigation: analysis_open,
             stop: ready && busy,
@@ -53,7 +57,7 @@ impl ControlState {
     }
 }
 
-pub(super) const STARTERS: [(&str, &str); 3] = [
+const STARTERS: [(&str, &str); 5] = [
     (
         "Check processing",
         "Check the current spectrum's processing. Review normalization, background subtraction, and transform settings; explain any concerns before proposing changes.",
@@ -64,9 +68,47 @@ pub(super) const STARTERS: [(&str, &str); 3] = [
     ),
     (
         "Summarize latest fit",
-        "Summarize the latest recorded fit for the current spectrum, including fit quality, important estimates, uncertainties, and limitations. If no fit exists, say so.",
+        "Summarize the latest recorded fit for the current spectrum, including fit quality, important estimates, uncertainties, and limitations.",
+    ),
+    (
+        "Explain this spectrum",
+        "Explain the current spectrum and the active processing stage. Describe what the data can tell us and any limitations.",
+    ),
+    (
+        "Suggest a fit model",
+        "Suggest a fit model using the available paths for the current spectrum. Explain path choices and parameter constraints before proposing changes.",
     ),
 ];
+
+pub(super) fn task_starters(
+    spectrum: bool,
+    paths: bool,
+    fit: bool,
+) -> Vec<(&'static str, &'static str)> {
+    if !spectrum {
+        return Vec::new();
+    }
+    let mut starters = vec![STARTERS[0]];
+    if paths {
+        starters.push(STARTERS[if fit { 1 } else { 4 }]);
+    } else {
+        starters.push(STARTERS[3]);
+    }
+    if fit {
+        starters.push(STARTERS[2]);
+    }
+    starters
+}
+
+/// Compact connection status, omitting the email retained in the disclosure.
+pub(super) fn account_status(label: &str) -> String {
+    let parts: Vec<_> = label.split(" · ").collect();
+    if parts.first() == Some(&"ChatGPT") && parts.len() >= 3 {
+        format!("ChatGPT · {}", parts[parts.len() - 1])
+    } else {
+        parts.first().copied().unwrap_or_default().to_owned()
+    }
+}
 
 pub(super) const ANALYSIS_CLOSED: &str = "Analysis closed — conversation kept for copying";
 
@@ -173,6 +215,8 @@ mod tests {
                         let c = ControlState::derive(open, connected, signed_in, busy);
                         assert_eq!(c.send, open && connected && signed_in && !busy);
                         assert_eq!(c.starters, c.send);
+                        assert_eq!(c.composer, open);
+                        assert_eq!(c.preferences, open && !busy);
                         assert_eq!(c.stop, open && connected && signed_in && busy);
                         assert_eq!(c.navigation, open);
                         assert!(c.copy);
@@ -191,6 +235,41 @@ mod tests {
                 assert_ne!(prompt, other_prompt);
             }
         }
+    }
+    #[test]
+    fn assistant_starters_match_available_data() {
+        for spectrum in [false, true] {
+            for paths in [false, true] {
+                for fit in [false, true] {
+                    let starters = task_starters(spectrum, paths, fit);
+                    assert!(starters.len() <= 3);
+                    let labels: Vec<_> = starters.iter().map(|s| s.0).collect();
+                    assert_eq!(labels.contains(&"Check processing"), spectrum);
+                    assert_eq!(
+                        labels.contains(&"Explain this spectrum"),
+                        spectrum && !paths
+                    );
+                    assert_eq!(
+                        labels.contains(&"Suggest a fit model"),
+                        spectrum && paths && !fit
+                    );
+                    assert_eq!(
+                        labels.contains(&"Review fit setup"),
+                        spectrum && paths && fit
+                    );
+                    assert_eq!(labels.contains(&"Summarize latest fit"), spectrum && fit);
+                }
+            }
+        }
+    }
+    #[test]
+    fn assistant_account_status_keeps_plan_without_email() {
+        assert_eq!(
+            account_status("ChatGPT · user@example.com · pro"),
+            "ChatGPT · pro"
+        );
+        assert_eq!(account_status("API key"), "API key");
+        assert_eq!(account_status("ChatGPT"), "ChatGPT");
     }
     #[test]
     fn assistant_empty_state_priority() {

@@ -143,6 +143,7 @@ pub struct TextInput {
     /// window, so render observes every transition.)
     was_focused: bool,
     style: InputStyle,
+    enabled: bool,
 }
 
 impl TextInput {
@@ -171,6 +172,16 @@ impl TextInput {
             error: false,
             was_focused: false,
             style: InputStyle::default(),
+            enabled: true,
+        }
+    }
+
+    pub fn set_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        if self.enabled != enabled {
+            self.enabled = enabled;
+            self.is_selecting = false;
+            self.marked_range = None;
+            cx.notify();
         }
     }
 
@@ -1413,6 +1424,31 @@ impl Element for TextElement {
 impl Render for TextInput {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = self.theme;
+        if !self.enabled {
+            // No focus tracking, action listeners, or IME input handler while disabled.
+            self.was_focused = false;
+            return div()
+                .w_full()
+                .min_w_0()
+                .max_h(px(self.style.max_lines.max(1) as f32 * 18. + 6.))
+                .overflow_hidden()
+                .px(px(6.))
+                .py(px(3.))
+                .rounded_sm()
+                .bg(t.bg)
+                .border_1()
+                .border_color(t.border)
+                .text_color(t.text_muted)
+                .opacity(0.5)
+                .line_height(px(18.))
+                .text_size(px(12.))
+                .child(if self.content.is_empty() {
+                    self.placeholder.clone()
+                } else {
+                    self.content.clone()
+                })
+                .into_any_element();
+        }
         let focused = self.focus_handle.is_focused(window);
         if self.was_focused && !focused && !self.style.multiline {
             // blur commits exactly like Enter (doc: "commit on Enter/blur")
@@ -1478,6 +1514,7 @@ impl Render for TextInput {
                     .py(px(3.))
                     .child(TextElement { input: cx.entity() }),
             )
+            .into_any_element()
     }
 }
 
