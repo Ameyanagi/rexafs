@@ -81,10 +81,14 @@ warnings. See [mapping and follow-up qualification](validation/2026-09-08-import
 and [0.2.0 development notes](release-notes-0.2.0.md).
 
 - [x] Integrate Phase 1 and Phase 2 implementation in an isolated worktree.
-- [ ] Rebase the integration branch onto the published main commit, push the
-  review PR, and complete its CI/review before merge.
-- [ ] Plan and execute a separate 0.2.0 release after integration. The development
-  candidate still reports package version 0.1.4 and is not the tagged artifact.
+- [x] Rebase the integration branch onto published main (`6041c78`); the rebase
+  preserved the tested tree exactly.
+- [ ] Complete integration PR CI/review and merge. The review branch is
+  [`feature/import-groups-phase2`](https://github.com/Ameyanagi/rexafs/tree/feature/import-groups-phase2).
+
+A future 0.2.0 release needs its own version, compatibility fixtures, qualification,
+and publication pass after integration. The development candidate still reports
+package version 0.1.4 and is not the tagged artifact.
 
 ## D. Follow-up gaps and deferred work
 
