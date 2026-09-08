@@ -340,11 +340,8 @@ impl StudioApp {
         div()
             .id("empty-drop-target")
             .flex_1()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .items_center()
-            .justify_center()
+            .min_h_0()
+            .min_w_0()
             .border_2()
             .border_color(t.bg)
             .drag_over::<ExternalPaths>(move |style, _, _, _| {
@@ -353,19 +350,6 @@ impl StudioApp {
             .on_drop(cx.listener(|app, paths: &ExternalPaths, _, cx| {
                 app.route_paths(paths.paths().to_vec(), false, cx)
             }))
-            .child(
-                div()
-                    .flex()
-                    .gap_3()
-                    .child(
-                        button(&t, "empty-import", "Import…", true)
-                            .on_click(cx.listener(|app, _, _, cx| app.open_folder(cx))),
-                    )
-                    .child(
-                        button(&t, "empty-open-project", "Open project…", false)
-                            .on_click(cx.listener(|app, _, _, cx| app.open_project(cx))),
-                    ),
-            )
     }
 }
 

@@ -9,6 +9,7 @@ The maintainer's original checkout and active app sessions were preserved.
   Import retains a visible label. Overview plots are optional. Everyday plot
   controls remain visible after maintainer feedback.
   A sun/moon button keeps theme switching directly available in the top bar.
+  Ordinary startup opens Data with an empty dataset and no central import prompt.
 - Common inspector parameters stay open; advanced controls have disclosure panels
   and override indicators. Source mapping is visible at the top of Data unless
   an explicitly opened tool takes that position.
@@ -30,6 +31,9 @@ The maintainer's original checkout and active app sessions were preserved.
 - Assistant keeps model, reasoning, mode and sharing/access switches visible.
   Conversation utilities and longer descriptions use Settings. Permission and
   approval behavior retain the existing backend and busy-state guards.
+  Its retained view now follows application theme changes, including composer and
+  history inputs in both docked and separate-window hosts. Access text uses the
+  theme warning color.
 - Series opens the actual scan selector, suppresses invalid frame/run UI and
   preserves marks during frame navigation. Publish has one export area, explicit
   format/scope and a large preview; Style remains open by default.
@@ -47,6 +51,7 @@ The maintainer's original checkout and active app sessions were preserved.
 - After adding structure focus, eight depth tests passed, including smooth center
   fading, highlighted-path picking and preservation of explicit clipping.
   All four molecular-view tests also passed.
+- After correcting Assistant theme synchronization, all 47 Assistant tests passed.
 - Optimized build passed with the distributed `refeff-runner,feff10-runner` features.
 - The earlier optimized package passed extracted Cu example/pipeline and both FEFF
   backend self-checks. The final candidate is repackaged from the final release binary.

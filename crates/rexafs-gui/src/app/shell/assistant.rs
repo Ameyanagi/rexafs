@@ -694,6 +694,17 @@ impl AssistantWindow {
         };
         self.control(id, element, enabled, on_click)
     }
+    fn sync_theme(&mut self, theme: Theme, cx: &mut Context<Self>) {
+        if self.theme.mode == theme.mode {
+            return;
+        }
+        self.theme = theme;
+        self.input
+            .update(cx, |input, cx| input.set_theme(theme, cx));
+        self.history_limit
+            .update(cx, |field, cx| field.set_theme(theme, cx));
+    }
+
     fn new(studio: WeakEntity<StudioApp>, theme: Theme, cx: &mut Context<Self>) -> Self {
         let input = cx.new(|cx| {
             TextInput::new("Ask about this analysis…", "", theme, cx).with_style(InputStyle {
@@ -722,7 +733,8 @@ impl AssistantWindow {
         if let Some(app) = studio.upgrade() {
             cx.observe_release(&app, |this, _, cx| this.analysis_closed(cx))
                 .detach();
-            cx.observe(&app, |this, _, cx| {
+            cx.observe(&app, |this, app, cx| {
+                this.sync_theme(app.read(cx).theme, cx);
                 this.refresh_receipts(cx);
                 cx.notify();
             })
@@ -3556,7 +3568,7 @@ impl Render for AssistantWindow {
                             }),
                         ),
                     ),
-            )            .when(self.extended_access, |d| d.child(div().text_size(px(12.)).text_color(gpui::rgb(0xd69e2e)).child("Extended access: approved commands run in the assistant workspace sandbox; commands that need to leave the sandbox are declined automatically. Known-safe read-only commands run without approval.")))
+            )            .when(self.extended_access, |d| d.child(div().text_size(px(12.)).text_color(t.warn).child("Extended access: approved commands run in the assistant workspace sandbox; commands that need to leave the sandbox are declined automatically. Known-safe read-only commands run without approval.")))
             .child(div().text_size(px(12.)).text_color(t.text_muted).child("Review can inspect data and navigate. Edit analysis can also change parameters and run calculations."))
             .child(self.control("assistant-shared-context", div().id("assistant-shared-context").text_color(t.text_muted).cursor_pointer(), controls.composer, cx.listener(|this, _: &ClickEvent, _, cx| { this.shared_context_open = !this.shared_context_open; cx.notify(); }))
                 .child(if self.shared_context_open { "▾ Shared context…" } else { "▸ Shared context…" }))

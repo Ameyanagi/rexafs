@@ -2825,12 +2825,13 @@ impl StudioApp {
         // Scripted launches (screenshots) can pick the initial stage.
         let initial_stage = match crate::settings::env_var("STAGE").ok().as_deref() {
             Some("data") => Stage::Data,
+            Some("normalize") => Stage::Normalize,
             Some("background") => Stage::Background,
             Some("transform") => Stage::Transform,
             Some("fit") => Stage::Fit,
             Some("series") => Stage::Series,
             Some("publish") => Stage::Publish,
-            _ => Stage::Normalize,
+            _ => Stage::Data,
         };
 
         let structure = shell::structure_view::StructureState::new(theme, cx);
