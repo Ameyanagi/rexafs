@@ -54,7 +54,14 @@ impl StudioApp {
                     .child(self.status.clone()),
             );
         }
-        let plots: Vec<(usize, SharedString)> = self.stage_plots();
+        let tool_preview = (self.stage == Stage::Data && self.tool_preview_current(cx))
+            .then(|| self.tools.preview_plot.clone())
+            .flatten();
+        let plots: Vec<(usize, SharedString)> = if tool_preview.is_some() {
+            Vec::new()
+        } else {
+            self.stage_plots()
+        };
         let mut area = div()
             .flex_1()
             .min_h_0()
@@ -64,6 +71,24 @@ impl StudioApp {
             .gap_2()
             .px_3()
             .pt_2();
+        if let Some(plot) = tool_preview {
+            area = area.child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(t.text_muted)
+                            .child("Preview · original / result / standard"),
+                    )
+                    .child(div().flex_1().min_h_0().min_w_0().child(plot)),
+            );
+        }
         for (index, title) in plots {
             area = area.child(self.plot_card(index, title, cx));
         }
@@ -104,7 +129,7 @@ impl StudioApp {
         if self.view.legend && !self.legend_entries.is_empty() {
             column = column.child(self.legend_strip());
         }
-        column.child(self.thumbnail_strip(cx))
+        column.when(self.ui.overview, |d| d.child(self.thumbnail_strip(cx)))
     }
 
     /// Which quadrant plots the current stage shows, top to bottom.
@@ -119,258 +144,276 @@ impl StudioApp {
     }
 
     fn plot_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        use super::controls::{Menu, icon_button};
+        use crate::icons::Icon;
         let t = self.theme;
         let v = self.stage_view;
-        let marked = self.selection.len();
         let mut bar = div()
-            .h(px(36.))
-            .w_full()
+            .min_h(px(36.))
             .min_w_0()
+            .w_full()
             .flex_none()
             .flex()
+            .flex_wrap()
             .items_center()
-            .gap_2()
-            .px_3()
+            .gap_1()
+            .px_2()
+            .py_1()
             .bg(t.surface)
             .border_b_1()
             .border_color(t.border)
-            .overflow_hidden();
-        // scope
-        bar = bar
             .child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(t.text_muted)
-                    .child("Plot"),
-            )
-            .child(
-                segmented(&t)
-                    .child(
-                        segment(
-                            &t,
-                            "scope-current",
-                            "Current",
-                            v.scope == PlotScope::Current,
-                            true,
-                        )
-                        .on_click(cx.listener(
-                            |this, _: &ClickEvent, _w, cx| {
-                                this.stage_view.scope = PlotScope::Current;
-                                this.stage_view_changed(cx);
-                            },
-                        )),
-                    )
-                    .child(
-                        segment(
-                            &t,
-                            "scope-marked",
-                            "Compare",
-                            v.scope == PlotScope::Marked,
-                            false,
-                        )
-                        .on_click(cx.listener(
-                            |this, _: &ClickEvent, _w, cx| {
-                                this.stage_view.scope = PlotScope::Marked;
-                                this.stage_view_changed(cx);
-                            },
-                        )),
-                    ),
-            )
-            .child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(t.text_muted)
-                    .child(format!(
-                        "current + {marked} marked · {} spectra",
+                icon_button(
+                    &t,
+                    "plot-compare",
+                    Icon::Layers,
+                    format!(
+                        "Compare current + {} marked · {} spectra",
+                        self.selection.len(),
                         self.compare_count()
-                    )),
-            )
-            .child(div().w(px(1.)).h(px(18.)).bg(t.border));
+                    ),
+                    v.scope == PlotScope::Marked,
+                )
+                .w_auto()
+                .px_2()
+                .gap_1()
+                .child(format!("Compare {}", self.compare_count()))
+                .on_click(cx.listener(|app, _, _, cx| {
+                    app.stage_view.scope = if app.stage_view.scope == PlotScope::Current {
+                        PlotScope::Marked
+                    } else {
+                        PlotScope::Current
+                    };
+                    app.stage_view_changed(cx);
+                })),
+            );
         if self.stage.is_processing() && !self.spectrum_quantity.is_absorption() {
             return bar.child(self.spectrum_quantity.label());
         }
+        let mut choices = segmented(&t).flex_none();
         match self.stage {
             Stage::Data | Stage::Normalize => {
-                let q = v.e_quantity;
-                bar =
-                    bar.child(
-                        segmented(&t)
-                            .child(
-                                segment(&t, "eq-mu", "μ(E)", q == EQuantity::Mu, true).on_click(
-                                    cx.listener(|this, _: &ClickEvent, _w, cx| {
-                                        this.stage_view.e_quantity = EQuantity::Mu;
-                                        this.stage_view_changed(cx);
-                                    }),
-                                ),
-                            )
-                            .child(
-                                segment(&t, "eq-norm", "norm", q == EQuantity::Norm, false)
-                                    .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
-                                        this.stage_view.e_quantity = EQuantity::Norm;
-                                        this.stage_view_changed(cx);
-                                    })),
-                            )
-                            .child(
-                                segment(&t, "eq-flat", "flat", q == EQuantity::Flat, false)
-                                    .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
-                                        this.stage_view.e_quantity = EQuantity::Flat;
-                                        this.stage_view_changed(cx);
-                                    })),
-                            ),
+                for (index, (quantity, label)) in [
+                    (EQuantity::Mu, "μ(E)"),
+                    (EQuantity::Norm, "norm"),
+                    (EQuantity::Flat, "flat"),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    choices = choices.child(
+                        segment(
+                            &t,
+                            ("energy-view", index),
+                            label,
+                            v.e_quantity == quantity,
+                            index == 0,
+                        )
+                        .on_click(cx.listener(move |app, _, _, cx| {
+                            app.stage_view.e_quantity = quantity;
+                            app.stage_view_changed(cx);
+                        })),
                     );
-                let lines_on = self.view.show_pre && self.view.show_post;
-                bar = bar
-                    .child(chip(&t, "chip-lines", "pre/post lines", lines_on).on_click(
-                        cx.listener(move |this, _: &ClickEvent, _w, cx| {
-                            this.view.show_pre = !lines_on;
-                            this.view.show_post = !lines_on;
-                            this.stage_view_changed(cx);
+                }
+            }
+            Stage::Background => {
+                for (index, (view, label)) in [(BkgView::Energy, "μ(E)"), (BkgView::K, "χ(k)")]
+                    .into_iter()
+                    .enumerate()
+                {
+                    choices = choices.child(
+                        segment(
+                            &t,
+                            ("background-view", index),
+                            label,
+                            v.bkg_view == view,
+                            index == 0,
+                        )
+                        .on_click(cx.listener(move |app, _, _, cx| {
+                            app.stage_view.bkg_view = view;
+                            app.stage_view_changed(cx);
+                        })),
+                    );
+                }
+            }
+            Stage::Transform => {
+                for (index, (view, label)) in [
+                    (TfView::K, "k"),
+                    (TfView::R, "R"),
+                    (TfView::Both, "k + R"),
+                    (TfView::Q, "q"),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    choices = choices.child(
+                        segment(
+                            &t,
+                            ("transform-view", index),
+                            label,
+                            v.tf_view == view,
+                            index == 0,
+                        )
+                        .on_click(cx.listener(move |app, _, _, cx| {
+                            app.stage_view.tf_view = view;
+                            if view == TfView::Q {
+                                app.ui.sections.insert("back-transform");
+                            }
+                            app.stage_view_changed(cx);
+                        })),
+                    );
+                }
+            }
+            _ => {}
+        }
+        bar = bar.child(choices);
+        match self.stage {
+            Stage::Data | Stage::Normalize => {
+                bar =
+                    bar.child(chip(&t, "common-e0", "E₀", self.view.show_e0).on_click(
+                        cx.listener(|a, _, _, c| {
+                            a.view.show_e0 = !a.view.show_e0;
+                            a.stage_view_changed(c);
                         }),
                     ))
                     .child(
-                        chip(&t, "chip-e0", "E₀", self.view.show_e0).on_click(cx.listener(
-                            |this, _: &ClickEvent, _w, cx| {
-                                this.view.show_e0 = !this.view.show_e0;
-                                this.stage_view_changed(cx);
+                        chip(&t, "common-derivative", "dμ/dE", self.view.show_deriv).on_click(
+                            cx.listener(|a, _, _, c| {
+                                a.view.show_deriv = !a.view.show_deriv;
+                                a.stage_view_changed(c);
+                            }),
+                        ),
+                    );
+                if self.stage == Stage::Normalize {
+                    bar = bar.child(
+                        chip(
+                            &t,
+                            "common-pre-post",
+                            "Pre/post",
+                            self.view.show_pre && self.view.show_post,
+                        )
+                        .on_click(cx.listener(|a, _, _, c| {
+                            let on = !(a.view.show_pre && a.view.show_post);
+                            a.view.show_pre = on;
+                            a.view.show_post = on;
+                            a.stage_view_changed(c);
+                        })),
+                    );
+                }
+            }
+            Stage::Background => {
+                bar = bar.child(self.kweight_buttons(cx)).child(
+                    chip(&t, "common-spline", "Spline", v.show_bkg).on_click(cx.listener(
+                        |a, _, _, c| {
+                            a.stage_view.show_bkg = !a.stage_view.show_bkg;
+                            a.stage_view_changed(c);
+                        },
+                    )),
+                );
+            }
+            Stage::Transform => {
+                bar = bar
+                    .child(self.kweight_buttons(cx))
+                    .child(
+                        chip(&t, "common-real", "Re", v.show_re).on_click(cx.listener(
+                            |a, _, _, c| {
+                                a.stage_view.show_re = !a.stage_view.show_re;
+                                a.stage_view_changed(c);
                             },
                         )),
                     )
                     .child(
-                        chip(&t, "chip-deriv", "derivative", self.view.show_deriv).on_click(
-                            cx.listener(|this, _: &ClickEvent, _w, cx| {
-                                this.view.show_deriv = !this.view.show_deriv;
-                                this.stage_view_changed(cx);
+                        chip(&t, "common-window", "Window", self.view.show_kwin).on_click(
+                            cx.listener(|a, _, _, c| {
+                                a.view.show_kwin = !a.view.show_kwin;
+                                a.invalidate_explore_plots(c);
+                                c.notify();
                             }),
                         ),
                     );
             }
-            Stage::Background => {
-                bar = bar
-                    .child(
-                        segmented(&t)
-                            .child(
-                                segment(
-                                    &t,
-                                    "bv-e",
-                                    "μ(E) + bkg",
-                                    v.bkg_view == BkgView::Energy,
-                                    true,
-                                )
-                                .on_click(cx.listener(
-                                    |this, _: &ClickEvent, _w, cx| {
-                                        this.stage_view.bkg_view = BkgView::Energy;
-                                        this.stage_view_changed(cx);
-                                    },
-                                )),
-                            )
-                            .child(
-                                segment(&t, "bv-k", "χ(k)", v.bkg_view == BkgView::K, false)
-                                    .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
-                                        this.stage_view.bkg_view = BkgView::K;
-                                        this.stage_view_changed(cx);
-                                    })),
-                            ),
-                    )
-                    .child(self.kweight_buttons(cx))
-                    .child(
-                        chip(&t, "chip-bkg", "show spline", v.show_bkg).on_click(cx.listener(
-                            |this, _: &ClickEvent, _w, cx| {
-                                this.stage_view.show_bkg = !this.stage_view.show_bkg;
-                                this.stage_view_changed(cx);
-                            },
-                        )),
-                    );
-            }
-            Stage::Transform => {
-                let tv = v.tf_view;
-                bar = bar
-                    .child(
-                        segmented(&t)
-                            .child(segment(&t, "tv-k", "χ(k)", tv == TfView::K, true).on_click(
-                                cx.listener(|this, _: &ClickEvent, _w, cx| {
-                                    this.stage_view.tf_view = TfView::K;
-                                    this.stage_view_changed(cx);
-                                }),
-                            ))
-                            .child(
-                                segment(&t, "tv-r", "χ(R)", tv == TfView::R, false).on_click(
-                                    cx.listener(|this, _: &ClickEvent, _w, cx| {
-                                        this.stage_view.tf_view = TfView::R;
-                                        this.stage_view_changed(cx);
-                                    }),
-                                ),
-                            )
-                            .child(
-                                segment(&t, "tv-q", "χ(q)", tv == TfView::Q, false).on_click(
-                                    cx.listener(|this, _: &ClickEvent, _w, cx| {
-                                        this.stage_view.tf_view = TfView::Q;
-                                        this.stage_view_changed(cx);
-                                    }),
-                                ),
-                            )
-                            .child(
-                                segment(&t, "tv-both", "k + R", tv == TfView::Both, false)
-                                    .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
-                                        this.stage_view.tf_view = TfView::Both;
-                                        this.stage_view_changed(cx);
-                                    })),
-                            ),
-                    )
-                    .child(self.kweight_buttons(cx))
-                    .child(chip(&t, "chip-re", "Re", v.show_re).on_click(cx.listener(
-                        |this, _: &ClickEvent, _w, cx| {
-                            this.stage_view.show_re = !this.stage_view.show_re;
-                            this.stage_view_changed(cx);
-                        },
-                    )))
-                    .child(
-                        chip(&t, "chip-win", "window", self.view.show_kwin).on_click(cx.listener(
-                            |this, _: &ClickEvent, _w, cx| {
-                                this.view.show_kwin = !this.view.show_kwin;
-                                this.invalidate_explore_plots(cx);
-                                cx.notify();
-                            },
-                        )),
-                    );
-            }
             _ => {}
         }
-        let waterfall = self.view.layout == crate::plotting::TraceLayout::Waterfall;
-        bar.child(div().flex_1())
+        bar = bar
+            .child(div().flex_1())
             .child(
-                chip(&t, "chip-offset", "offset", waterfall).on_click(cx.listener(
-                    |this, _: &ClickEvent, _w, cx| {
-                        this.view.layout = match this.view.layout {
-                            crate::plotting::TraceLayout::Overlay => {
-                                crate::plotting::TraceLayout::Waterfall
-                            }
-                            crate::plotting::TraceLayout::Waterfall => {
-                                crate::plotting::TraceLayout::Overlay
-                            }
-                        };
-                        this.invalidate_explore_plots(cx);
-                        cx.notify();
-                    },
-                )),
+                icon_button(
+                    &t,
+                    "plot-overview",
+                    Icon::Grid,
+                    "Overview plots",
+                    self.ui.overview,
+                )
+                .on_click(cx.listener(|app, _, _, cx| {
+                    app.ui.overview = !app.ui.overview;
+                    cx.notify();
+                })),
             )
             .child(
-                chip(&t, "chip-legend", "legend", self.view.legend).on_click(cx.listener(
-                    |this, _: &ClickEvent, _w, cx| {
-                        this.view.legend = !this.view.legend;
-                        this.invalidate_explore_plots(cx);
-                        cx.notify();
-                    },
-                )),
-            )
-            .child(
-                chip(&t, "chip-grid", "grid", self.view.grid).on_click(cx.listener(
-                    |this, _: &ClickEvent, _w, cx| {
-                        this.view.grid = !this.view.grid;
-                        this.invalidate_explore_plots(cx);
-                        cx.notify();
-                    },
-                )),
-            )
+                icon_button(
+                    &t,
+                    "plot-options",
+                    Icon::Sliders,
+                    "Plot options",
+                    self.ui.menu == Some(Menu::Plot),
+                )
+                .on_click(cx.listener(|app, event, window, cx| {
+                    app.open_chrome_menu(Menu::Plot, event, window, cx)
+                })),
+            );
+        bar
+    }
+
+    pub(crate) fn plot_options(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let panel = div().flex().flex_col().gap_1();
+        panel
+            .child(self.plot_option(
+                "view-offset",
+                "Stack curves",
+                self.view.layout == crate::plotting::TraceLayout::Waterfall,
+                |a, c| {
+                    a.view.layout = if a.view.layout == crate::plotting::TraceLayout::Waterfall {
+                        crate::plotting::TraceLayout::Overlay
+                    } else {
+                        crate::plotting::TraceLayout::Waterfall
+                    };
+                    a.invalidate_explore_plots(c);
+                    c.notify();
+                },
+                cx,
+            ))
+            .child(self.plot_option(
+                "view-legend",
+                "Legend",
+                self.view.legend,
+                |a, c| {
+                    a.view.legend = !a.view.legend;
+                    a.invalidate_explore_plots(c);
+                    c.notify();
+                },
+                cx,
+            ))
+            .child(self.plot_option(
+                "view-grid",
+                "Grid",
+                self.view.grid,
+                |a, c| {
+                    a.view.grid = !a.view.grid;
+                    a.invalidate_explore_plots(c);
+                    c.notify();
+                },
+                cx,
+            ))
+            .child(self.plot_option(
+                "view-overview",
+                "Overview plots",
+                self.ui.overview,
+                |a, c| {
+                    a.ui.overview = !a.ui.overview;
+                    c.notify();
+                },
+                cx,
+            ))
     }
 
     /// k-weight 0/1/2/3 (plotting + forward FT; AUTOBK's k-weight is its own).
@@ -386,36 +429,40 @@ impl StudioApp {
         for kw in 0..=3 {
             let on = kw == current;
             row = row.child(
-                div()
-                    .id(SharedString::from(format!("kw-{kw}")))
-                    .w(px(24.))
-                    .h(px(22.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_md()
-                    .border_1()
-                    .font_family(MONO)
-                    .text_size(px(11.5))
-                    .cursor_pointer()
-                    .when(on, |d| {
-                        d.bg(gpui::Rgba {
-                            a: 0.16,
-                            ..t.accent
-                        })
-                        .border_color(t.accent)
-                        .text_color(t.text)
+                crate::accessibility::Control::new(
+                    div().id(SharedString::from(format!("kw-{kw}"))),
+                    format!("k-weight {kw}"),
+                    accesskit::Role::Tab,
+                )
+                .selected(on)
+                .w(px(24.))
+                .h(px(22.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_md()
+                .border_1()
+                .font_family(MONO)
+                .text_size(px(11.5))
+                .cursor_pointer()
+                .when(on, |d| {
+                    d.bg(gpui::Rgba {
+                        a: 0.16,
+                        ..t.accent
                     })
-                    .when(!on, |d| {
-                        d.border_color(t.border)
-                            .text_color(t.text_muted)
-                            .hover(|d| d.bg(t.raised))
-                    })
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
-                        this.apply_param(ParamKey::FftKweight, Some(kw as f64), cx);
-                        this.sync_param_fields(cx);
-                    }))
-                    .child(kw.to_string()),
+                    .border_color(t.accent)
+                    .text_color(t.text)
+                })
+                .when(!on, |d| {
+                    d.border_color(t.border)
+                        .text_color(t.text_muted)
+                        .hover(|d| d.bg(t.raised))
+                })
+                .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
+                    this.apply_param(ParamKey::FftKweight, Some(kw as f64), cx);
+                    this.sync_param_fields(cx);
+                }))
+                .child(kw.to_string()),
             );
         }
         row

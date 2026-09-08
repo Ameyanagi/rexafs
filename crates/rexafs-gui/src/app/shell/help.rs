@@ -8,6 +8,7 @@ pub(crate) struct HelpState {
     menu: bool,
     reader: Option<LicenseReader>,
     focus: Option<FocusHandle>,
+    return_focus: Option<FocusHandle>,
 }
 
 struct LicenseReader {
@@ -36,6 +37,9 @@ impl StudioApp {
             let _ = handle.update(cx, |_, window, cx| {
                 let _ = view.update(cx, |app, cx| {
                     if app.help.is_open() {
+                        if app.help.return_focus.is_none() {
+                            app.help.return_focus = window.focused(cx);
+                        }
                         focus.focus(window, cx);
                     }
                 });
@@ -52,7 +56,11 @@ impl StudioApp {
     fn close_help(&mut self, cx: &mut Context<Self>) {
         self.help.menu = false;
         self.help.reader = None;
-        let focus = self.root_focus.clone();
+        let focus = self
+            .help
+            .return_focus
+            .take()
+            .unwrap_or_else(|| self.root_focus.clone());
         let view = cx.weak_entity();
         let handle = self.main_window;
         cx.defer(move |cx| {
@@ -95,36 +103,45 @@ impl StudioApp {
             return None;
         }
         let t = self.theme;
-        let overlay = div()
-            .id("help-overlay")
-            .absolute()
-            .inset_0()
-            .occlude()
-            .track_focus(self.help.focus.as_ref().expect("help has focus"))
-            .on_key_down(cx.listener(|app, event: &gpui::KeyDownEvent, _, cx| {
-                if event.keystroke.key == "escape" {
-                    app.close_help(cx);
-                }
-                cx.stop_propagation();
-            }))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|app, _, _, cx| app.close_help(cx)),
-            );
+        let overlay = crate::accessibility::Control::new(
+            div().id("help-overlay"),
+            "Help",
+            accesskit::Role::Dialog,
+        )
+        .modal()
+        .tab_group()
+        .absolute()
+        .inset_0()
+        .occlude()
+        .track_focus(self.help.focus.as_ref().expect("help has focus"))
+        .on_key_down(cx.listener(|app, event: &gpui::KeyDownEvent, window, cx| {
+            if event.keystroke.key == "escape" {
+                app.close_help(cx);
+            }
+            super::controls::navigate(event, window, cx);
+            cx.stop_propagation();
+        }))
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|app, _, _, cx| app.close_help(cx)),
+        );
         let Some(reader) = &self.help.reader else {
             let item =
                 |id: &'static str,
                  label: &'static str,
                  action: fn(&mut StudioApp, &mut Context<StudioApp>)| {
-                    div()
-                        .id(id)
-                        .px_3()
-                        .py_2()
-                        .cursor_pointer()
-                        .rounded_sm()
-                        .hover(|d| d.bg(t.raised))
-                        .child(label)
-                        .on_click(cx.listener(move |app, _, _, cx| action(app, cx)))
+                    crate::accessibility::Control::new(
+                        div().id(id),
+                        label,
+                        accesskit::Role::MenuItem,
+                    )
+                    .px_3()
+                    .py_2()
+                    .cursor_pointer()
+                    .rounded_sm()
+                    .hover(|d| d.bg(t.raised))
+                    .child(label)
+                    .on_click(cx.listener(move |app, _, _, cx| action(app, cx)))
                 };
             return Some(
                 overlay

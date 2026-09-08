@@ -1427,6 +1427,23 @@ impl StudioApp {
 
     fn structure_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
+        super::controls::icon_button(
+            &t,
+            "structure-display-options",
+            crate::icons::Icon::Sliders,
+            "Structure display",
+            self.ui.menu == Some(super::controls::Menu::Structure),
+        )
+        .on_click(cx.listener(|app, event, window, cx| {
+            app.open_chrome_menu(super::controls::Menu::Structure, event, window, cx);
+        }))
+    }
+
+    pub(crate) fn structure_display_menu(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
+        let t = self.theme;
         let mut presets = div().flex().items_center().gap_1();
         for p in CameraPreset::ALL {
             presets = presets.child(

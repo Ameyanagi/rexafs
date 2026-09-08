@@ -1,5 +1,9 @@
 //! About, update-channel preferences, and verified desktop downloads.
-use super::button;
+use super::{
+    button,
+    controls::{disclosure, icon, icon_button},
+};
+use crate::icons::Icon;
 use crate::{
     app::StudioApp,
     updates::{self, UpdateChannel, UpdateCheck},
@@ -17,6 +21,8 @@ pub(crate) struct UpdateState {
     error: Option<String>,
     downloaded: Option<PathBuf>,
     focus: Option<gpui::FocusHandle>,
+    return_focus: Option<gpui::FocusHandle>,
+    preferences_open: bool,
 }
 
 impl StudioApp {
@@ -33,6 +39,9 @@ impl StudioApp {
             let _ = handle.update(cx, |_, window, cx| {
                 let _ = view.update(cx, |app, cx| {
                     if app.updates.open {
+                        if app.updates.return_focus.is_none() {
+                            app.updates.return_focus = window.focused(cx);
+                        }
                         focus.focus(window, cx);
                     }
                 });
@@ -45,7 +54,11 @@ impl StudioApp {
     }
     fn close_updates(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
         self.updates.open = false;
-        let focus = self.root_focus.clone();
+        let focus = self
+            .updates
+            .return_focus
+            .take()
+            .unwrap_or_else(|| self.root_focus.clone());
         cx.defer_in(window, move |_, window, cx| focus.focus(window, cx));
         cx.notify();
     }
@@ -171,41 +184,74 @@ impl StudioApp {
             .settings
             .check_updates_on_startup
             .unwrap_or(true);
-        let mut panel=div().w(px(480.)).p_4().flex().flex_col().gap_3().rounded_lg().bg(t.surface).border_1().border_color(t.border)
-            .child(div().flex().items_center().gap_3()
-                .child(div().flex_1().text_size(px(18.)).child("rexafs updates"))
-                .child(button(&t,"close-updates","Close",false).on_click(cx.listener(|this,_,window,cx|this.close_updates(window,cx)))))
-            .child(div().text_color(t.text_muted).child(format!("Installed: {} · {}",updates::installed_label(),updates::installed_channel().label())))
-            .child(div().text_color(t.text_muted).child("Choose your update channel"))
-            .child(div().flex().gap_2()
-                .child(button(&t,"stable-updates","Stable",channel==UpdateChannel::Stable).on_click(cx.listener(|this,_,_,cx|this.set_update_channel(UpdateChannel::Stable,cx))))
-                .child(button(&t,"nightly-updates","Nightly",channel==UpdateChannel::Nightly).on_click(cx.listener(|this,_,_,cx|this.set_update_channel(UpdateChannel::Nightly,cx)))))
-            .child(div().text_color(t.text_muted).child(match channel {
-                UpdateChannel::Stable=>"Reviewed releases for routine analysis.",
-                UpdateChannel::Nightly=>"Daily builds from main with the newest changes. On macOS, rexafs Nightly can be installed alongside Stable.",
-            }))
-            .child(button(&t,"startup-updates",if auto {"✓ Check for updates on startup"}else{"Check for updates on startup"},false)
-                .on_click(cx.listener(|this,_,_,cx|this.toggle_startup_update_check(cx))));
+        let mut panel = crate::accessibility::Control::new(
+            div().id("updates-panel"),
+            "Updates",
+            accesskit::Role::Dialog,
+        )
+        .modal()
+        .w(px(440.))
+        .max_w_full()
+        .max_h_full()
+        .overflow_y_scroll()
+        .p_4()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .rounded_lg()
+        .bg(t.surface)
+        .border_1()
+        .border_color(t.border)
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_3()
+                .child(div().flex_1().text_size(px(18.)).child("Updates"))
+                .child(
+                    icon_button(&t, "close-updates", Icon::Close, "Close updates", false)
+                        .on_click(cx.listener(|app, _, window, cx| app.close_updates(window, cx))),
+                ),
+        )
+        .child(div().text_color(t.text_muted).child(format!(
+            "{} · {}",
+            updates::installed_label(),
+            updates::installed_channel().label()
+        )));
         if self.updates.checking {
-            panel = panel.child("Checking GitHub releases…");
+            panel = panel.child("Checking…");
         } else if let Some(result) = &self.updates.result {
             if let Some(release) = &result.release {
-                panel = panel.child(if result.available {
-                    format!("Available: {}", release.tag)
-                } else {
-                    format!(
-                        "Up to date · latest {} release: {}",
-                        channel.label(),
-                        release.tag
-                    )
-                });
+                panel = panel.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(icon(
+                            &t,
+                            if result.available {
+                                Icon::Download
+                            } else {
+                                Icon::Check
+                            },
+                        ))
+                        .child(if result.available {
+                            format!("{} available", release.tag)
+                        } else {
+                            "Up to date".into()
+                        }),
+                );
                 let url = release.url.clone();
                 panel = panel.child(
                     button(&t, "update-notes", "Release notes", false)
+                        .child(icon(&t, Icon::External))
                         .on_click(cx.listener(move |_, _, _, cx| cx.open_url(&url))),
                 );
                 if let Some(asset) = &release.asset {
-                    if !self.updates.downloading && self.updates.downloaded.is_none() {
+                    if !self.updates.downloading
+                        && self.updates.downloaded.is_none()
+                        && (result.available || self.updates.preferences_open)
+                    {
                         panel = panel.child(
                             button(
                                 &t,
@@ -215,57 +261,145 @@ impl StudioApp {
                                     release.tag,
                                     asset.size as f64 / 1_000_000.
                                 ),
-                                true,
+                                result.available,
                             )
-                            .on_click(cx.listener(|this, _, _, cx| this.download_update(cx))),
+                            .on_click(cx.listener(|app, _, _, cx| app.download_update(cx))),
                         );
                     }
-                } else {
-                    panel=panel.child(div().text_color(t.text_muted).child("No checksum-verified desktop download is available for this platform. See the release notes for supported builds."));
+                } else if result.available {
+                    panel = panel.child(
+                        div()
+                            .text_color(t.warn)
+                            .child("No verified download for this platform."),
+                    );
                 }
             } else {
-                panel = panel.child(format!(
-                    "No {} releases are published yet.",
-                    channel.label()
-                ));
+                panel = panel.child(format!("No {} releases yet", channel.label()));
             }
         }
         if self.updates.downloading {
-            panel = panel.child("Downloading and verifying SHA-256…");
+            panel = panel.child("Downloading and verifying…");
         }
         if let Some(path) = &self.updates.downloaded {
             let path = path.clone();
-            panel=panel.child("Download complete · SHA-256 verified")
-                .child(button(&t,"reveal-update","Show download in Finder",true).on_click(cx.listener(move |_,_,_,cx|cx.reveal_path(&path))))
-                .child(div().text_color(t.text_muted).child("Open the ZIP. Save your project and quit the app before moving the downloaded application into Applications."));
+            panel = panel
+                .child(
+                    div()
+                        .flex()
+                        .gap_2()
+                        .child(icon(&t, Icon::Check))
+                        .child("Download verified"),
+                )
+                .child(
+                    button(&t, "reveal-update", "Show download", true)
+                        .on_click(cx.listener(move |_, _, _, cx| cx.reveal_path(&path))),
+                )
+                .child(
+                    div()
+                        .text_color(t.text_muted)
+                        .child("Save your project and quit before replacing the app."),
+                );
         }
         if let Some(error) = &self.updates.error {
             panel = panel.child(div().text_color(t.error).child(error.clone()));
         }
-        if !self.updates.checking && !self.updates.downloading {
-            panel = panel.child(
-                button(&t, "check-updates", "Check again", false)
-                    .on_click(cx.listener(|this, _, _, cx| this.check_for_updates(cx))),
-            );
+        panel = panel.child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    disclosure(
+                        &t,
+                        "update-preferences",
+                        "Preferences",
+                        self.updates.preferences_open,
+                        false,
+                    )
+                    .flex_1()
+                    .on_click(cx.listener(|app, _, _, cx| {
+                        app.updates.preferences_open = !app.updates.preferences_open;
+                        cx.notify();
+                    })),
+                )
+                .when(!self.updates.checking && !self.updates.downloading, |d| {
+                    d.child(
+                        icon_button(&t, "check-updates", Icon::Refresh, "Check again", false)
+                            .on_click(cx.listener(|app, _, _, cx| app.check_for_updates(cx))),
+                    )
+                }),
+        );
+        if self.updates.preferences_open {
+            panel = panel
+                .child(
+                    div()
+                        .flex()
+                        .gap_2()
+                        .child(
+                            button(
+                                &t,
+                                "stable-updates",
+                                "Stable",
+                                channel == UpdateChannel::Stable,
+                            )
+                            .on_click(cx.listener(|app, _, _, cx| {
+                                app.set_update_channel(UpdateChannel::Stable, cx)
+                            })),
+                        )
+                        .child(
+                            button(
+                                &t,
+                                "nightly-updates",
+                                "Nightly",
+                                channel == UpdateChannel::Nightly,
+                            )
+                            .on_click(cx.listener(|app, _, _, cx| {
+                                app.set_update_channel(UpdateChannel::Nightly, cx)
+                            })),
+                        ),
+                )
+                .when(channel == UpdateChannel::Nightly, |d| {
+                    d.child(
+                        div()
+                            .text_color(t.text_muted)
+                            .child("Daily development builds"),
+                    )
+                })
+                .child(
+                    button(
+                        &t,
+                        "startup-updates",
+                        if auto {
+                            "✓ Check on startup"
+                        } else {
+                            "Check on startup"
+                        },
+                        false,
+                    )
+                    .on_click(cx.listener(|app, _, _, cx| app.toggle_startup_update_check(cx))),
+                );
         }
         Some(
             div()
                 .id("updates-overlay")
                 .occlude()
+                .tab_group()
                 .track_focus(
                     self.updates
                         .focus
                         .as_ref()
                         .expect("open update dialog has focus"),
                 )
-                .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
+                .on_key_down(cx.listener(|app, event: &gpui::KeyDownEvent, window, cx| {
                     if event.keystroke.key == "escape" {
-                        this.close_updates(window, cx);
+                        app.close_updates(window, cx);
                     }
+                    super::controls::navigate(event, window, cx);
                     cx.stop_propagation();
                 }))
                 .absolute()
                 .inset_0()
+                .p_4()
                 .flex()
                 .items_center()
                 .justify_center()

@@ -124,6 +124,7 @@ pub struct TextInput {
     focus_handle: FocusHandle,
     content: SharedString,
     placeholder: SharedString,
+    accessible_name: Option<SharedString>,
     theme: Theme,
     selected_range: Range<usize>,
     selection_reversed: bool,
@@ -158,6 +159,7 @@ impl TextInput {
             focus_handle: cx.focus_handle().tab_index(0).tab_stop(true),
             content: initial.into(),
             placeholder: placeholder.into(),
+            accessible_name: None,
             theme,
             selected_range: 0..0,
             selection_reversed: false,
@@ -176,6 +178,9 @@ impl TextInput {
         }
     }
 
+    pub fn set_accessible_name(&mut self, name: impl Into<SharedString>) {
+        self.accessible_name = Some(name.into());
+    }
     pub fn set_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
         if self.enabled != enabled {
             self.enabled = enabled;
@@ -1430,30 +1435,40 @@ impl Element for TextElement {
 impl Render for TextInput {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = self.theme;
+        let name = self
+            .accessible_name
+            .clone()
+            .unwrap_or_else(|| self.placeholder.clone());
         if !self.enabled {
             // No focus tracking, action listeners, or IME input handler while disabled.
             self.was_focused = false;
-            return div()
-                .w_full()
-                .min_w_0()
-                .max_h(px(self.style.max_lines.max(1) as f32 * 18. + 6.))
-                .overflow_hidden()
-                .px(px(6.))
-                .py(px(3.))
-                .rounded_sm()
-                .bg(t.bg)
-                .border_1()
-                .border_color(t.border)
-                .text_color(t.text_muted)
-                .opacity(0.5)
-                .line_height(px(18.))
-                .text_size(px(12.))
-                .child(if self.content.is_empty() {
-                    self.placeholder.clone()
-                } else {
-                    self.content.clone()
-                })
-                .into_any_element();
+            return crate::accessibility::Control::new(
+                div().id("disabled-input"),
+                name,
+                accesskit::Role::TextInput,
+            )
+            .value(self.content.to_string())
+            .disabled(true)
+            .w_full()
+            .min_w_0()
+            .max_h(px(self.style.max_lines.max(1) as f32 * 18. + 6.))
+            .overflow_hidden()
+            .px(px(6.))
+            .py(px(3.))
+            .rounded_sm()
+            .bg(t.bg)
+            .border_1()
+            .border_color(t.border)
+            .text_color(t.text_muted)
+            .opacity(0.5)
+            .line_height(px(18.))
+            .text_size(px(12.))
+            .child(if self.content.is_empty() {
+                self.placeholder.clone()
+            } else {
+                self.content.clone()
+            })
+            .into_any_element();
         }
         let focused = self.focus_handle.is_focused(window);
         if self.was_focused && !focused && !self.style.multiline {
@@ -1461,7 +1476,32 @@ impl Render for TextInput {
             cx.emit(InputEvent::Committed(self.content.clone()));
         }
         self.was_focused = focused;
-        div()
+        let input = cx.weak_entity();
+        crate::accessibility::Control::new(div().id("text-input"), name, accesskit::Role::TextInput)
+            .value(self.content.to_string())
+            .placeholder(self.placeholder.to_string())
+            .on_request(
+                vec![
+                    accesskit::Action::SetValue,
+                    accesskit::Action::ReplaceSelectedText,
+                ],
+                move |action, data, window, cx| {
+                    let Some(accesskit::ActionData::Value(value)) = data else {
+                        return;
+                    };
+                    let _ = input.update(cx, |this, cx| {
+                        if !this.enabled {
+                            return;
+                        }
+                        let range = (action == accesskit::Action::SetValue)
+                            .then(|| 0..this.content.encode_utf16().count());
+                        this.replace_text_in_range(range, &value, window, cx);
+                        if action == accesskit::Action::SetValue && !this.style.multiline {
+                            cx.emit(InputEvent::Committed(this.content.clone()));
+                        }
+                    });
+                },
+            )
             .flex()
             .key_context(if self.style.multiline {
                 "TextInput MultilineTextInput"

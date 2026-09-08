@@ -104,6 +104,7 @@ fn start_import(
         cancel,
         use_index,
         false,
+        false,
         Approvals::new(),
         None,
     )
@@ -116,6 +117,7 @@ fn start_import_reviewed(
     cancel: Arc<AtomicBool>,
     use_index: bool,
     review_new: bool,
+    choose_channels: bool,
     approvals: Approvals,
     dispatch: Option<crate::import_recipes::DispatchContext>,
 ) -> mpsc::Receiver<Vec<ImportEvent>> {
@@ -303,59 +305,78 @@ fn start_import_reviewed(
                                             )
                                         })
                                         .unwrap_or(crate::import_recipes::Dispatch::Detection);
-                                    match decision {
-                                        crate::import_recipes::Dispatch::Recipe(recipe) => {
-                                            if let Some(Ok(source)) = &source_before {
-                                                let application = applications
-                                                    .iter()
-                                                    .find(|(reference, _)| {
-                                                        *reference == recipe.reference
-                                                    })
-                                                    .map(|(_, id)| id.clone())
-                                                    .unwrap_or_else(|| {
-                                                        let id = crate::import_recipes::new_id(
-                                                            "application",
-                                                        );
-                                                        applications.push((
-                                                            recipe.reference.clone(),
-                                                            id.clone(),
-                                                        ));
-                                                        id
-                                                    });
-                                                approval = Some(Approval {
-                                                    batch: dispatch.as_ref().unwrap().batch,
-                                                    choice: super::import_review::ReviewChoice {
-                                                        primary: recipe.primary,
-                                                        channels: recipe.channels.clone(),
-                                                    },
-                                                    layout: recipe.layout.clone(),
-                                                    source: source.clone(),
-                                                    recipe: Some(recipe.reference.clone()),
-                                                    application: Some(application),
-                                                });
-                                                applied_recipe = Some(recipe);
-                                            } else {
-                                                pending = Some(PendingSource { detection: Some(preview.clone()), suggestion: None,
-                                                    reason: "Cannot verify the source revision; review it before adding groups.".into() });
+                                    if choose_channels {
+                                        let suggestion = match &decision {
+                                            crate::import_recipes::Dispatch::Recipe(recipe) => {
+                                                Some(recipe.clone())
                                             }
-                                        }
-                                        crate::import_recipes::Dispatch::Review {
-                                            reason,
+                                            crate::import_recipes::Dispatch::Review {
+                                                suggestion,
+                                                ..
+                                            } => suggestion.clone(),
+                                            _ => None,
+                                        };
+                                        pending = Some(PendingSource {
+                                            detection: Some(preview.clone()),
                                             suggestion,
-                                        } => {
-                                            pending = Some(PendingSource {
-                                                detection: Some(preview.clone()),
+                                            reason: preview.review_reason().unwrap_or_else(|| "Choose the main spectrum and any additional channels.".into()),
+                                        });
+                                    } else {
+                                        match decision {
+                                            crate::import_recipes::Dispatch::Recipe(recipe) => {
+                                                if let Some(Ok(source)) = &source_before {
+                                                    let application = applications
+                                                        .iter()
+                                                        .find(|(reference, _)| {
+                                                            *reference == recipe.reference
+                                                        })
+                                                        .map(|(_, id)| id.clone())
+                                                        .unwrap_or_else(|| {
+                                                            let id = crate::import_recipes::new_id(
+                                                                "application",
+                                                            );
+                                                            applications.push((
+                                                                recipe.reference.clone(),
+                                                                id.clone(),
+                                                            ));
+                                                            id
+                                                        });
+                                                    approval = Some(Approval {
+                                                        batch: dispatch.as_ref().unwrap().batch,
+                                                        choice:
+                                                            super::import_review::ReviewChoice {
+                                                                primary: recipe.primary,
+                                                                channels: recipe.channels.clone(),
+                                                            },
+                                                        layout: recipe.layout.clone(),
+                                                        source: source.clone(),
+                                                        recipe: Some(recipe.reference.clone()),
+                                                        application: Some(application),
+                                                    });
+                                                    applied_recipe = Some(recipe);
+                                                } else {
+                                                    pending = Some(PendingSource { detection: Some(preview.clone()), suggestion: None,
+                                                    reason: "Cannot verify the source revision; review it before adding groups.".into() });
+                                                }
+                                            }
+                                            crate::import_recipes::Dispatch::Review {
                                                 reason,
                                                 suggestion,
-                                            });
-                                        }
-                                        crate::import_recipes::Dispatch::Detection => {
-                                            if let Some(reason) = preview.review_reason() {
+                                            } => {
                                                 pending = Some(PendingSource {
                                                     detection: Some(preview.clone()),
                                                     reason,
-                                                    suggestion: None,
+                                                    suggestion,
                                                 });
+                                            }
+                                            crate::import_recipes::Dispatch::Detection => {
+                                                if let Some(reason) = preview.review_reason() {
+                                                    pending = Some(PendingSource {
+                                                        detection: Some(preview.clone()),
+                                                        reason,
+                                                        suggestion: None,
+                                                    });
+                                                }
                                             }
                                         }
                                     }
@@ -370,7 +391,8 @@ fn start_import_reviewed(
                             {
                                 return;
                             }
-                            (approval.is_none()
+                            (pending.is_none()
+                                && approval.is_none()
                                 && preview.resolved.mode != DetectionMode::Reference
                                 && preview
                                     .available_channels()
@@ -566,6 +588,7 @@ impl StudioApp {
         let id = request.id;
         let restore = request.restore;
         let recent_folders = request.recent_folders;
+        let choose_channels = !restore && request.reviewed_paths.is_none();
         let mut paths = request
             .reviewed_paths
             .unwrap_or_else(|| self.intake.history[id].paths.clone());
@@ -609,6 +632,7 @@ impl StudioApp {
             cancel,
             activate_first,
             !restore,
+            choose_channels,
             self.intake.approved.clone(),
             (!restore).then(|| crate::import_recipes::DispatchContext {
                 batch: id,
@@ -616,7 +640,12 @@ impl StudioApp {
                 machine: self.structure.settings.import_recipes.clone(),
             }),
         );
-        self.status = "Importing files and detecting reference channels…".into();
+        self.status = if choose_channels {
+            "Reading source columns…"
+        } else {
+            "Importing selected channels…"
+        }
+        .into();
         cx.spawn(async move |this, cx| {
             let mut migrating_source = migrating_source;
             let mut reimported = false;
@@ -820,6 +849,21 @@ impl StudioApp {
                                 crate::settings::push_recent(&mut app.structure.settings.recent_import_folders, folder.clone(), 8);
                             }
                             if !imported_folders.is_empty() { app.persist_recent_locations(); }
+                            if choose_channels && !app.intake.history[id].stopped && !app.pending_clusters(id).is_empty() {
+                                let main = app.main_window;
+                                let studio = cx.weak_entity();
+                                cx.defer(move |cx| {
+                                    let _ = main.update(cx, |_, window, cx| {
+                                        let _ = studio.update(cx, |app, cx| {
+                                            if app.catalog_gen == generation && app.import_editor.is_none()
+                                                && app.path_route.is_none() && app.ui.menu.is_none()
+                                                && !app.help.is_open() && !app.updates.open && app.palette.is_none() {
+                                                app.open_import_review(id, 0, window, cx);
+                                            }
+                                        });
+                                    });
+                                });
+                            }
                             app.finish_routed_import(cx);
                             app.start_queued_import(cx);
                         }
@@ -1235,6 +1279,7 @@ mod tests {
                 Default::default(),
                 false,
                 true,
+                false,
                 Approvals::new(),
                 Some(dispatch),
             )
@@ -1281,6 +1326,312 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    /// Opt-in validation of a user's folder; source files are only read.
+    #[test]
+    #[ignore = "set REXAFS_IMPORT_VALIDATION_DIR to a local folder"]
+    fn validate_selected_channels_in_external_folder() {
+        use crate::app::{
+            import_preview::SourceRevision,
+            import_repair::{RepairScope, RepairTarget},
+            import_review::{ReviewChoice, clusters, validate},
+        };
+        use crate::group_identity::GroupId;
+        use crate::import_mapping::{LayoutKey, MappingDraft};
+        let root = PathBuf::from(
+            std::env::var_os("REXAFS_IMPORT_VALIDATION_DIR").expect("validation folder"),
+        );
+        let events = futures::executor::block_on(
+            super::start_import_reviewed(
+                vec![root],
+                ImportConfig::default(),
+                true,
+                Default::default(),
+                false,
+                true,
+                true,
+                Approvals::new(),
+                None,
+            )
+            .collect::<Vec<_>>(),
+        );
+        let mut pending = Vec::new();
+        for event in events.into_iter().flatten() {
+            if let ImportEvent::Batch(files) = event {
+                for file in files {
+                    let path = PathBuf::from(file.meta.dir.as_ref()).join(file.meta.name.as_ref());
+                    assert!(file.approval.is_none() && file.reference.is_none());
+                    pending.push((path, file.pending.expect("no unchosen channels")));
+                }
+            }
+        }
+        assert!(!pending.is_empty());
+        let grouped = clusters(pending);
+        let mut files = 0;
+        let mut raw_points = 0;
+        let mut processed = 0;
+        let mut failures = Vec::new();
+        let mut e0 = Vec::new();
+        let mut approvals = Approvals::new();
+        for cluster in &grouped {
+            let primary = ImportConfig {
+                mode: DetectionMode::Fluorescence,
+                ..Default::default()
+            };
+            let table = crate::params::preview_import(&cluster.files[0], &primary).unwrap();
+            let fluorescence = MappingDraft::new(&table, &primary).config().clone();
+            let reference_config = ImportConfig {
+                mode: DetectionMode::Reference,
+                ..Default::default()
+            };
+            let reference_table =
+                crate::params::preview_import(&cluster.files[0], &reference_config).unwrap();
+            let reference = MappingDraft::new(&reference_table, &reference_config)
+                .config()
+                .clone();
+            let choice = ReviewChoice {
+                primary: DetectionMode::Fluorescence,
+                channels: vec![fluorescence, reference],
+            };
+            let layout = LayoutKey::from_preview(&table);
+            let targets: Vec<_> = cluster
+                .files
+                .iter()
+                .map(|path| RepairTarget {
+                    target: shell::tools::ToolTarget::standalone(
+                        Some(GroupId::source(path, DetectionMode::Auto)),
+                        path.clone(),
+                        path.file_name().unwrap().to_string_lossy().into_owned(),
+                        0,
+                        0,
+                        0,
+                    ),
+                    params: PipelineParams::default(),
+                    locked: false,
+                    changed: false,
+                    source: SourceRevision::read(path),
+                })
+                .collect();
+            let validation = validate(
+                RepairScope {
+                    label: "External folder validation".into(),
+                    targets,
+                },
+                layout.clone(),
+                choice.clone(),
+                1,
+            );
+            assert_eq!(
+                validation.ready_count(),
+                cluster.files.len(),
+                "{} · first: {} · mappings: {}",
+                validation.summary(),
+                validation
+                    .results
+                    .first()
+                    .map(|v| v.description())
+                    .unwrap_or_default(),
+                serde_json::to_string(&choice.channels).unwrap()
+            );
+            for path in &cluster.files {
+                let source = SourceRevision::read(path).unwrap();
+                for mapping in &choice.channels {
+                    let params = super::super::import_channels::channel_params(mapping.clone());
+                    let (energy, mu) = crate::params::load_raw(path, &params).unwrap();
+                    assert!(
+                        energy.len() == mu.len() && energy.iter().chain(&mu).all(|v| v.is_finite())
+                    );
+                    raw_points += energy.len();
+                    match crate::params::process_file(path, &params) {
+                        Ok(spectrum) => {
+                            processed += 1;
+                            e0.extend(spectrum.e0());
+                        }
+                        Err(error) => failures.push(format!(
+                            "{} · {}: {error}",
+                            path.file_name().unwrap().to_string_lossy(),
+                            mapping.mode.label()
+                        )),
+                    }
+                }
+                assert!(
+                    SourceRevision::read(path).unwrap() == source,
+                    "source was changed during validation"
+                );
+                approvals.insert(
+                    path.clone(),
+                    Approval {
+                        batch: 0,
+                        recipe: None,
+                        application: None,
+                        source,
+                        layout: layout.clone(),
+                        choice: choice.clone(),
+                    },
+                );
+                files += 1;
+            }
+        }
+        let selected = approvals.keys().cloned().collect();
+        let accepted = futures::executor::block_on(
+            super::start_import_reviewed(
+                selected,
+                ImportConfig::default(),
+                true,
+                Default::default(),
+                false,
+                true,
+                false,
+                approvals,
+                None,
+            )
+            .collect::<Vec<_>>(),
+        );
+        let mut channel_counts = [0usize; 2];
+        for event in accepted.into_iter().flatten() {
+            if let ImportEvent::Batch(batch) = event {
+                for file in batch {
+                    assert!(file.pending.is_none() && file.reference.is_none());
+                    let choice = file.approval.unwrap().choice;
+                    assert_eq!(choice.primary, DetectionMode::Fluorescence);
+                    for config in choice.channels {
+                        match config.mode {
+                            DetectionMode::Fluorescence => channel_counts[0] += 1,
+                            DetectionMode::Reference => channel_counts[1] += 1,
+                            _ => panic!("unselected channel was imported"),
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(channel_counts, [files, files]);
+        let report = serde_json::json!({"files": files, "layouts": grouped.len(), "fluorescence_groups": channel_counts[0], "reference_groups": channel_counts[1], "transmission_groups": 0, "raw_points": raw_points, "processed_groups": processed, "e0_min": e0.iter().copied().reduce(f64::min), "e0_max": e0.iter().copied().reduce(f64::max), "processing_failures": failures});
+        if let Some(path) = std::env::var_os("REXAFS_IMPORT_VALIDATION_REPORT") {
+            std::fs::write(path, serde_json::to_string_pretty(&report).unwrap()).unwrap();
+        }
+        println!("{report}");
+        assert!(
+            failures.is_empty(),
+            "chosen channels must process successfully"
+        );
+    }
+
+    #[test]
+    fn explicit_channel_import_keeps_detected_transmission_pending_and_only_accepts_chosen_channels()
+     {
+        use crate::app::{import_preview::SourceRevision, import_review::ReviewChoice};
+        use crate::import_mapping::LayoutKey;
+        let root =
+            std::env::temp_dir().join(format!("rexafs-explicit-channels-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        for i in 0..6 {
+            std::fs::write(root.join(format!("qas_{i:04}.dat")), "# energy i0 it ir iff aux1 aux2 aux3 aux4\n8900 10 5 2 1 0 0 0 0\n9000 12 6 2 2 0 0 0 0\n9100 14 7 2 3 0 0 0 0\n").unwrap();
+        }
+        let events = futures::executor::block_on(
+            super::start_import_reviewed(
+                vec![root.clone()],
+                ImportConfig::default(),
+                true,
+                Default::default(),
+                false,
+                true,
+                true,
+                Approvals::new(),
+                None,
+            )
+            .collect::<Vec<_>>(),
+        );
+        let files: Vec<_> = events
+            .iter()
+            .flatten()
+            .filter_map(|event| {
+                if let ImportEvent::Batch(files) = event {
+                    Some(files)
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .collect();
+        assert_eq!(files.len(), 6);
+        let mut approvals = Approvals::new();
+        let mut selected = Vec::new();
+        for file in files {
+            assert!(
+                file.pending.is_some(),
+                "Detection must not create Transmission groups"
+            );
+            assert!(file.approval.is_none() && file.reference.is_none());
+            let path = PathBuf::from(file.meta.dir.as_ref()).join(file.meta.name.as_ref());
+            let fluorescence = ImportConfig {
+                mode: DetectionMode::Fluorescence,
+                energy_col: Some(0),
+                i0_col: Some(1),
+                fluor_cols: Some(vec![4]),
+                ..Default::default()
+            };
+            let reference = ImportConfig {
+                mode: DetectionMode::Reference,
+                energy_col: Some(0),
+                it_col: Some(2),
+                ir_col: Some(3),
+                ..Default::default()
+            };
+            let table = crate::params::preview_import(&path, &fluorescence).unwrap();
+            approvals.insert(
+                path.clone(),
+                Approval {
+                    batch: 0,
+                    recipe: None,
+                    application: None,
+                    source: SourceRevision::read(&path).unwrap(),
+                    layout: LayoutKey::from_preview(&table),
+                    choice: ReviewChoice {
+                        primary: DetectionMode::Fluorescence,
+                        channels: vec![fluorescence, reference],
+                    },
+                },
+            );
+            selected.push(path);
+        }
+        let events = futures::executor::block_on(
+            super::start_import_reviewed(
+                selected,
+                ImportConfig::default(),
+                true,
+                Default::default(),
+                false,
+                true,
+                false,
+                approvals,
+                None,
+            )
+            .collect::<Vec<_>>(),
+        );
+        let files: Vec<_> = events
+            .iter()
+            .flatten()
+            .filter_map(|event| {
+                if let ImportEvent::Batch(files) = event {
+                    Some(files)
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .collect();
+        assert_eq!(files.len(), 6);
+        for file in files {
+            assert!(file.pending.is_none() && file.reference.is_none());
+            let choice = &file.approval.as_ref().unwrap().choice;
+            assert_eq!(choice.primary, DetectionMode::Fluorescence);
+            assert_eq!(
+                choice.channels.iter().map(|c| c.mode).collect::<Vec<_>>(),
+                vec![DetectionMode::Fluorescence, DetectionMode::Reference]
+            );
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn fresh_review_intake_keeps_guesses_pending_and_accepts_a_full_reviewed_long_header() {
         use crate::app::import_review::ReviewChoice;
@@ -1303,6 +1654,7 @@ mod tests {
                 Default::default(),
                 false,
                 true,
+                false,
                 Approvals::new(),
                 None,
             )
@@ -1364,6 +1716,7 @@ mod tests {
                 Default::default(),
                 false,
                 true,
+                false,
                 approvals,
                 None,
             )

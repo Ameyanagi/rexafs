@@ -6,8 +6,14 @@ use gpui::{
     ClickEvent, Context, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, px,
 };
 
-use super::{MONO, Stage, button, parameter_actions::ParamScope, section_label};
+use super::{
+    MONO, Stage, button,
+    controls::{Tooltip, icon, icon_button},
+    parameter_actions::ParamScope,
+    section_label,
+};
 use crate::app::{EnumParam, ParamKey, ParamSection, StudioApp};
+use crate::icons::Icon;
 use crate::params::Quantity;
 
 fn apply_hint(marked: usize, locked: usize) -> Option<String> {
@@ -21,6 +27,45 @@ fn apply_hint(marked: usize, locked: usize) -> Option<String> {
 }
 
 impl StudioApp {
+    fn advanced_section_changed(&self, title: &str) -> bool {
+        let p = self.ui_params();
+        match title {
+            "Background options" => {
+                p.bkg_nknots.is_some() || p.bkg_ek0.is_some() || p.bkg_standard.is_some()
+            }
+            "Back FT  R → q" => {
+                p.bft_rmin.is_some()
+                    || p.bft_rmax.is_some()
+                    || p.bft_dr.is_some()
+                    || p.bft_dr2.is_some()
+                    || p.bft_rweight.is_some()
+                    || p.bft_qmax.is_some()
+                    || p.bft_kstep.is_some()
+                    || p.bft_nfft.is_some()
+                    || p.bft_window.is_some()
+            }
+            "Advanced" => p.fft_dk2.is_some() || p.fft_kstep.is_some() || p.fft_nfft.is_some(),
+            "Clamps & window" => {
+                p.bkg_clamp_lo.is_some()
+                    || p.bkg_clamp_hi.is_some()
+                    || p.bkg_nclamp.is_some()
+                    || p.bkg_window.is_some()
+                    || p.bkg_dk.is_some()
+                    || p.bkg_clamp_policy
+                        != crate::params::PipelineParams::default().bkg_clamp_policy
+            }
+            "Solver" => {
+                p.bkg_solver.is_some()
+                    || p.bkg_kstep.is_some()
+                    || p.bkg_nfft.is_some()
+                    || p.bkg_linear_condition_limit.is_some()
+                    || p.bkg_linear_regularization.is_some()
+                    || p.bkg_linear_residual_ratio_limit.is_some()
+                    || p.bkg_linear_fallback_to_lm.is_some()
+            }
+            _ => false,
+        }
+    }
     pub(crate) fn inspector(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
         let body = match self.stage {
@@ -100,16 +145,19 @@ impl StudioApp {
                     .map(|message| div().p_3().text_size(px(12.)).child(message)),
             )
             .child(
-                div()
-                    .id("inspector-scroll")
-                    .flex_1()
-                    .min_h_0()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.inspector_scroll)
-                    .child(body),
+                crate::accessibility::scroll(
+                    div().id("inspector-scroll"),
+                    "Parameters",
+                    &self.inspector_scroll,
+                )
+                .flex_1()
+                .min_h_0()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .overflow_y_scroll()
+                .track_scroll(&self.inspector_scroll)
+                .child(body),
             )
             .into_any_element()
     }
@@ -149,6 +197,7 @@ impl StudioApp {
             .py_2()
             .flex()
             .items_center()
+            .flex_wrap()
             .gap_2()
             .border_b_1()
             .border_color(t.border)
@@ -162,7 +211,7 @@ impl StudioApp {
                     .text_size(px(11.5))
                     .text_color(t.text_muted)
                     .child(
-                        div().flex().gap_1().child("Editing").child(
+                        div().flex().gap_1().child(
                             div()
                                 .text_color(t.text)
                                 .font_weight(gpui::FontWeight::MEDIUM)
@@ -175,17 +224,10 @@ impl StudioApp {
                 .when(copy_scope.is_some() && marked > 0, |header| {
                     header
                         .child(
-                            button(
-                                &t,
-                                "apply-marked",
-                                format!("Apply {} to {marked}", self.stage.name()),
-                                false,
-                            )
-                            .on_click(cx.listener(
-                                |this, _: &ClickEvent, _w, cx| {
+                            button(&t, "apply-marked", format!("Apply to {marked}"), false)
+                                .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
                                     this.apply_params_to_marked(cx);
-                                },
-                            )),
+                                })),
                         )
                         .when_some(hint.clone(), |header, hint| {
                             header.child(
@@ -198,21 +240,14 @@ impl StudioApp {
                         })
                 })
                 .child(
-                    div()
-                        .id("reset-params")
-                        .px_1p5()
-                        .h(px(24.))
-                        .flex()
-                        .items_center()
-                        .rounded_md()
-                        .text_size(px(11.5))
-                        .text_color(t.text_muted)
-                        .cursor_pointer()
-                        .hover(|d| d.bg(t.raised).text_color(t.text))
-                        .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
-                            this.reset_params(cx);
-                        }))
-                        .child("Reset"),
+                    icon_button(
+                        &t,
+                        "reset-params",
+                        Icon::Undo,
+                        format!("Reset {} for the current group", self.stage.name()),
+                        false,
+                    )
+                    .on_click(cx.listener(|app, _, _, cx| app.reset_params(cx))),
                 );
         }
         let count = self
@@ -305,16 +340,115 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let t = self.theme;
+        let foldable = matches!(
+            title,
+            "Clamps & window"
+                | "Solver"
+                | "Advanced"
+                | "Back FT  R → q"
+                | "Background options"
+                | "Result"
+                | "Metadata"
+        );
+        let key = if title == "Back FT  R → q" {
+            "back-transform"
+        } else {
+            title
+        };
+        let open = !foldable || self.ui.sections.contains(key);
+        let display_title = match title {
+            "Pre-edge line" => "Pre-edge · E − E₀",
+            "Normalization" => "Normalization · E − E₀",
+            _ => title,
+        };
+        let hint = match title {
+            "Pre-edge line" => {
+                "Range relative to E₀, in eV. Drag the blue plot handles to change it."
+            }
+            "Normalization" => {
+                "Range relative to E₀, in eV. Drag the yellow plot handles; clear a value for Auto."
+            }
+            "AUTOBK" => {
+                "Drag Rbkg on |χ(R)|, or the k-window edges on χ(k). Rbkg must remain below the shell being fitted."
+            }
+            "Back FT  R → q" => {
+                "Select an R window to isolate shells in χ(q). Auto q step follows the R grid and inverse NFFT; q max changes the extent, not the spacing."
+            }
+            _ => "",
+        };
+        let heading = crate::accessibility::Control::new(
+            div().id(SharedString::from(format!("section-toggle-{title}"))),
+            display_title,
+            if foldable {
+                accesskit::Role::DisclosureTriangle
+            } else {
+                accesskit::Role::Heading
+            },
+        )
+        .description(format!(
+            "{}{}",
+            if self.advanced_section_changed(title) {
+                "Modified. "
+            } else {
+                ""
+            },
+            hint
+        ))
+        .when(foldable, |d| d.expanded(open))
+        .min_h(px(28.))
+        .min_w_0()
+        .flex_1()
+        .flex()
+        .items_center()
+        .gap_1()
+        .when(foldable, |d| {
+            d.tab_index(0)
+                .key_context("Control")
+                .cursor_pointer()
+                .child(icon(
+                    &t,
+                    if open {
+                        Icon::ChevronDown
+                    } else {
+                        Icon::ChevronRight
+                    },
+                ))
+                .on_click(cx.listener(move |app, _, _, cx| {
+                    if !app.ui.sections.remove(key) {
+                        app.ui.sections.insert(key);
+                    }
+                    cx.notify();
+                }))
+        })
+        .child(section_label(&t, display_title))
+        .when(
+            foldable && !open && self.advanced_section_changed(title),
+            |d| {
+                d.child(
+                    div()
+                        .text_size(px(10.))
+                        .text_color(t.accent)
+                        .child("Modified"),
+                )
+            },
+        )
+        .when(!hint.is_empty(), |d| {
+            d.tooltip(move |_, cx| {
+                cx.new(|_| Tooltip {
+                    theme: t,
+                    label: hint.into(),
+                })
+                .into()
+            })
+        });
         let mut head = div()
             .id(SharedString::from(format!("section-context-{title}")))
-            .px_3()
-            .pt_3()
-            .pb_1()
+            .px_2()
+            .pt_1()
             .flex()
             .items_center()
-            .gap_2()
-            .child(section_label(&t, title))
-            .child(div().flex_1());
+            .gap_1()
+            .child(heading);
         if let Some(section) = section {
             head = head.children(self.override_chip(
                 SharedString::from(format!("ovr-{title}")),
@@ -328,10 +462,11 @@ impl StudioApp {
         {
             let scope = super::parameter_actions::ParamScope::Section(title);
             head = head.children(self.parameter_badge(scope, cx)).child(
-                button(
+                icon_button(
                     &t,
                     SharedString::from(format!("section-actions-{title}")),
-                    "⋯",
+                    Icon::More,
+                    format!("{title} actions"),
                     false,
                 )
                 .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
@@ -355,7 +490,7 @@ impl StudioApp {
             .border_color(t.border)
             .pb_2()
             .child(head)
-            .children(rows)
+            .when(open, |d| d.children(rows))
     }
 
     /// Key/value result card.
@@ -409,31 +544,54 @@ impl StudioApp {
                     .unwrap_or("—".into()),
             ),
         ];
-        div()
-            .flex()
-            .flex_col()
-            .child(self.import_summary(cx))
-            .child(self.section(
+        let processing = self
+            .section(
                 "Processing tools",
                 None,
                 vec![
-                    div().px_2().child(self.tools_section(cx)).into_any_element(),
-                    self.note("Tools never modify the source: each Apply creates a derived group (↳) that runs through the same pipeline.")
+                    div()
+                        .px_2()
+                        .child(self.tools_section(cx))
                         .into_any_element(),
                 ],
                 cx,
-            ))
-            .child(self.section(
+            )
+            .into_any_element();
+        let analysis = self
+            .section(
                 "Analysis",
                 None,
                 vec![
-                    div().px_2().child(self.analysis_tools_section(cx)).into_any_element(),
-                    self.note("LCF fits the current group as a mix of the marked groups; PCA trains on the marked groups and projects the current one.")
+                    div()
+                        .px_2()
+                        .child(self.analysis_tools_section(cx))
                         .into_any_element(),
                 ],
                 cx,
+            )
+            .into_any_element();
+        let (first, second) = if self.tools.open.is_some_and(super::tools::Tool::is_analysis) {
+            (analysis, processing)
+        } else {
+            (processing, analysis)
+        };
+        div()
+            .flex()
+            .flex_col()
+            .when(self.tools.open.is_none(), |d| {
+                d.child(self.import_summary(cx))
+            })
+            .child(first)
+            .child(second)
+            .when(self.tools.open.is_some(), |d| {
+                d.child(self.import_summary(cx))
+            })
+            .child(self.section(
+                "Metadata",
+                None,
+                vec![self.result_card(meta).into_any_element()],
+                cx,
             ))
-            .child(self.section("Metadata", None, vec![self.result_card(meta).into_any_element()], cx))
             .child(div().h(px(12.)).bg(t.surface))
     }
 
@@ -450,43 +608,52 @@ impl StudioApp {
         div()
             .flex()
             .flex_col()
-            .child(self.section(
-                "Edge",
-                Some(ParamSection::Norm),
-                [self.field(ParamKey::E0, cx), self.field(ParamKey::EdgeStep, cx)].into_iter().flatten().collect(),
-                cx,
-            ))
-            .child(self.section(
-                "Pre-edge line",
-                None,
-                [
-                    self.field(ParamKey::PreEdgeStart, cx),
-                    self.field(ParamKey::PreEdgeEnd, cx),
-                    self.field(ParamKey::NVictoreen, cx),
-                    Some(
-                        self.note("Relative to E₀. Default −200 … −30 eV; end before the pre-edge features.")
-                            .into_any_element(),
-                    ),
-                ]
-                .into_iter()
-                .flatten()
-                .collect(),
-                cx,
-            ))
-            .child(self.section(
-                "Normalization",
-                None,
-                [
-                    self.field(ParamKey::NormStart, cx),
-                    self.field(ParamKey::NormEnd, cx),
-                    self.field(ParamKey::NormPolyorder, cx),
-                    Some(self.note("Fit minimum and maximum are energies relative to E₀. Click a value to type; Enter applies it. The yellow plot handles edit the same window. Clear the value for Auto.").into_any_element()),
-                ]
-                .into_iter()
-                .flatten()
-                .collect(),
-                cx,
-            ))
+            .child(
+                self.section(
+                    "Edge",
+                    Some(ParamSection::Norm),
+                    [
+                        self.field(ParamKey::E0, cx),
+                        self.field(ParamKey::EdgeStep, cx),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+                    cx,
+                ),
+            )
+            .child(
+                self.section(
+                    "Pre-edge line",
+                    None,
+                    [
+                        self.field(ParamKey::PreEdgeStart, cx),
+                        self.field(ParamKey::PreEdgeEnd, cx),
+                        self.field(ParamKey::NVictoreen, cx),
+                        None,
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+                    cx,
+                ),
+            )
+            .child(
+                self.section(
+                    "Normalization",
+                    None,
+                    [
+                        self.field(ParamKey::NormStart, cx),
+                        self.field(ParamKey::NormEnd, cx),
+                        self.field(ParamKey::NormPolyorder, cx),
+                        None,
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+                    cx,
+                ),
+            )
             .child(self.section(
                 "Result",
                 None,
@@ -577,18 +744,18 @@ impl StudioApp {
                     self.field(ParamKey::Rbkg, cx),
                     self.field(ParamKey::BkgKmin, cx),
                     self.field(ParamKey::BkgKmax, cx),
-                    Some(self.note("On the χ(k) plot, drag the shaded window's left or right edge to set k min or k max. Clear the numeric value for Auto.").into_any_element()),
+                    None,
                     self.field(ParamKey::BkgKweight, cx),
-                    self.field(ParamKey::BkgNknots, cx),
-                    self.field(ParamKey::BkgEk0, cx),
-                    Some(self.note("k origin E₀ defaults to the normalization edge energy. An override changes the energy-to-k conversion only.").into_any_element()),
-                    Some(standard.into_any_element()),
+
                 ]
                 .into_iter()
                 .flatten()
                 .collect(),
                 cx,
             ))
+            .child(self.section("Background options", None,
+                [self.field(ParamKey::BkgNknots, cx), self.field(ParamKey::BkgEk0, cx), Some(standard.into_any_element())]
+                    .into_iter().flatten().collect(), cx))
             .child(self.section(
                 "Clamps & window",
                 None,
@@ -617,7 +784,6 @@ impl StudioApp {
                 solver,
                 cx,
             ))
-            .child(self.note("Rbkg: drag the shaded region edge on |χ(R)|. Rbkg too large removes the first shell; slightly small is harmless."))
     }
 
     fn transform_inspector(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -646,59 +812,62 @@ impl StudioApp {
         div()
             .flex()
             .flex_col()
-            .child(self.section(
-                "Forward FT  k → R",
-                Some(ParamSection::Fft),
-                [
-                    self.field(ParamKey::FftKmin, cx),
-                    self.field(ParamKey::FftKmax, cx),
-                    self.field(ParamKey::FftDk, cx),
-                    Some(self.enum_row("window", EnumParam::FftWindow, cx)),
-                    self.field(ParamKey::FftKweight, cx),
-                    self.field(ParamKey::FftRmax, cx),
-                ]
-                .into_iter()
-                .flatten()
-                .collect(),
-                cx,
-            ))
-            .child(self.section(
-                "Back FT  R → q",
-                None,
-                [
-                    self.field(ParamKey::BftRmin, cx),
-                    self.field(ParamKey::BftRmax, cx),
-                    self.field(ParamKey::BftDr, cx),
-                    self.field(ParamKey::BftDr2, cx),
-                    Some(self.enum_row("window", EnumParam::BftWindow, cx)),
-                    self.field(ParamKey::BftRweight, cx),
-                    self.field(ParamKey::BftQmax, cx),
-                    self.field(ParamKey::BftNfft, cx),
-                    self.field(ParamKey::BftKstep, cx),
-                    Some(self.note("Auto q step is derived from the input R grid and inverse NFFT. If both are specified, they must describe the same R spacing. q max limits the output extent; it does not stretch the grid.").into_any_element()),
-                    Some(
-                        self.note("Drag the R-window edges on χ(R) to set this range. The back transform isolates the selected shell in χ(q).")
-                            .into_any_element(),
-                    ),
-                ]
-                .into_iter()
-                .flatten()
-                .collect(),
-                cx,
-            ))
-            .child(self.section(
-                "Advanced",
-                None,
-                [
-                    self.field(ParamKey::FftDk2, cx),
-                    self.field(ParamKey::FftKstep, cx),
-                    self.field(ParamKey::FftNfft, cx),
-                ]
-                .into_iter()
-                .flatten()
-                .collect(),
-                cx,
-            ))
+            .child(
+                self.section(
+                    "Forward FT  k → R",
+                    Some(ParamSection::Fft),
+                    [
+                        self.field(ParamKey::FftKmin, cx),
+                        self.field(ParamKey::FftKmax, cx),
+                        self.field(ParamKey::FftDk, cx),
+                        Some(self.enum_row("window", EnumParam::FftWindow, cx)),
+                        self.field(ParamKey::FftKweight, cx),
+                        self.field(ParamKey::FftRmax, cx),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+                    cx,
+                ),
+            )
+            .child(
+                self.section(
+                    "Back FT  R → q",
+                    None,
+                    [
+                        self.field(ParamKey::BftRmin, cx),
+                        self.field(ParamKey::BftRmax, cx),
+                        self.field(ParamKey::BftDr, cx),
+                        self.field(ParamKey::BftDr2, cx),
+                        Some(self.enum_row("window", EnumParam::BftWindow, cx)),
+                        self.field(ParamKey::BftRweight, cx),
+                        self.field(ParamKey::BftQmax, cx),
+                        self.field(ParamKey::BftNfft, cx),
+                        self.field(ParamKey::BftKstep, cx),
+                        None,
+                        None,
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+                    cx,
+                ),
+            )
+            .child(
+                self.section(
+                    "Advanced",
+                    None,
+                    [
+                        self.field(ParamKey::FftDk2, cx),
+                        self.field(ParamKey::FftKstep, cx),
+                        self.field(ParamKey::FftNfft, cx),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+                    cx,
+                ),
+            )
             .child(self.section(
                 "Result",
                 None,

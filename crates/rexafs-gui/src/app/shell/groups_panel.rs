@@ -236,7 +236,7 @@ impl StudioApp {
         )
     }
 
-    fn toggle_filter_reveal(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_filter_reveal(&mut self, cx: &mut Context<Self>) {
         if let Some(expanded) = self.filter_reveal.take() {
             self.expanded_sources = expanded;
             self.reveal_current = None;
@@ -247,7 +247,7 @@ impl StudioApp {
         cx.notify();
     }
 
-    fn clear_hidden_marks(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn clear_hidden_marks(&mut self, cx: &mut Context<Self>) {
         let rows = self.interaction_rows();
         self.selection.retain(|&g| !rows.hidden_by_filter(g));
         self.ensure_compare_loaded(cx);
@@ -359,9 +359,13 @@ impl StudioApp {
         let merge_reason = self.merge_disabled_reason();
         let t = self.theme;
         let (marked, hidden, collapsed) = self.interaction_rows().mark_counts(&self.selection);
-        let footer = format!(
-            "{marked} marked · {hidden} hidden by filter · {collapsed} marked in collapsed rows"
-        );
+        let mut footer = format!("{marked} marked");
+        if hidden > 0 {
+            footer.push_str(&format!(" · {hidden} filtered"));
+        }
+        if collapsed > 0 {
+            footer.push_str(&format!(" · {collapsed} collapsed"));
+        }
         let scope_on = self.stage_view.scope == PlotScope::Marked;
         div()
             .id("groups-panel")
@@ -468,18 +472,26 @@ impl StudioApp {
                     )
                     .child(div().flex_1())
                     .child(
-                        div()
-                            .id("import-files")
-                            .px_1p5()
-                            .rounded_sm()
-                            .text_size(px(11.5))
-                            .text_color(t.accent)
-                            .cursor_pointer()
-                            .hover(|d| d.bg(t.raised))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                this.open_folder(cx);
-                            }))
-                            .child("+ Import"),
+                        super::controls::icon_button(
+                            &t,
+                            "import-files",
+                            crate::icons::Icon::Plus,
+                            "Import files or folders",
+                            false,
+                        )
+                        .on_click(cx.listener(|app, _, _, cx| app.open_folder(cx))),
+                    )
+                    .child(
+                        super::controls::icon_button(
+                            &t,
+                            "group-actions",
+                            crate::icons::Icon::More,
+                            "Group actions",
+                            false,
+                        )
+                        .on_click(cx.listener(|app, event, window, cx| {
+                            app.open_chrome_menu(super::controls::Menu::Groups, event, window, cx)
+                        })),
                     ),
             )
             .child(
@@ -507,26 +519,6 @@ impl StudioApp {
                     )
                     .children(self.filter_input.clone()),
             )
-            .child(
-                div()
-                    .px_2()
-                    .pb_1()
-                    .flex()
-                    .flex_wrap()
-                    .gap_1()
-                    .child(
-                        button(&t, "mark-all-groups", "Mark shown", false)
-                            .on_click(cx.listener(|this, _, _, cx| this.mark_all(true, cx))),
-                    )
-                    .child(
-                        button(&t, "unmark-all-groups", "Clear marks", false)
-                            .on_click(cx.listener(|this, _, _, cx| this.clear_selection(cx))),
-                    )
-                    .child(
-                        button(&t, "invert-all-groups", "Invert shown", false)
-                            .on_click(cx.listener(|this, _, _, cx| this.invert_group_marks(cx))),
-                    ),
-            )
             .children(self.pending_imports(cx))
             .child(self.file_list(cx))
             .child(
@@ -537,49 +529,62 @@ impl StudioApp {
                     .text_color(t.text_muted)
                     .child(footer),
             )
-            .child(
-                div()
-                    .px_2()
-                    .py_1()
-                    .flex()
-                    .flex_wrap()
-                    .gap_1()
-                    .child(
-                        button(
-                            &t,
-                            "show-marked",
-                            if self.filter_reveal.is_some() {
-                                "Back to filter"
-                            } else {
-                                "Show marked"
-                            },
-                            false,
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| this.toggle_filter_reveal(cx))),
-                    )
-                    .child(
-                        button(&t, "clear-hidden", "Clear hidden marks", false)
-                            .on_click(cx.listener(|this, _, _, cx| this.clear_hidden_marks(cx))),
-                    )
-                    .when(
-                        self.current_group_index()
-                            .is_some_and(|g| self.interaction_rows().row_index(g).is_none()),
-                        |d| {
-                            d.child(
-                                button(&t, "reveal-current", "Reveal current", false).on_click(
-                                    cx.listener(|this, _, _, cx| {
-                                        this.filter_reveal
-                                            .get_or_insert_with(|| this.expanded_sources.clone());
-                                        this.reveal_current = this.current_group_index();
-                                        if let Some(ix) = this.reveal_current {
-                                            this.reveal_group_row(ix);
-                                        }
-                                        cx.notify();
-                                    }),
+            .when(
+                hidden + collapsed > 0
+                    || self.filter_reveal.is_some()
+                    || self
+                        .current_group_index()
+                        .is_some_and(|g| self.interaction_rows().row_index(g).is_none()),
+                |d| {
+                    d.child(
+                        div()
+                            .px_2()
+                            .py_1()
+                            .flex()
+                            .flex_wrap()
+                            .gap_1()
+                            .child(
+                                button(
+                                    &t,
+                                    "show-marked",
+                                    if self.filter_reveal.is_some() {
+                                        "Back to filter"
+                                    } else {
+                                        "Show marked"
+                                    },
+                                    false,
+                                )
+                                .on_click(
+                                    cx.listener(|this, _, _, cx| this.toggle_filter_reveal(cx)),
                                 ),
                             )
-                        },
-                    ),
+                            .child(
+                                button(&t, "clear-hidden", "Clear hidden marks", false).on_click(
+                                    cx.listener(|this, _, _, cx| this.clear_hidden_marks(cx)),
+                                ),
+                            )
+                            .when(
+                                self.current_group_index().is_some_and(|g| {
+                                    self.interaction_rows().row_index(g).is_none()
+                                }),
+                                |d| {
+                                    d.child(
+                                        button(&t, "reveal-current", "Reveal current", false)
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.filter_reveal.get_or_insert_with(|| {
+                                                    this.expanded_sources.clone()
+                                                });
+                                                this.reveal_current = this.current_group_index();
+                                                if let Some(ix) = this.reveal_current {
+                                                    this.reveal_group_row(ix);
+                                                }
+                                                cx.notify();
+                                            })),
+                                    )
+                                },
+                            ),
+                    )
+                },
             )
             .child(
                 div()
@@ -602,13 +607,13 @@ impl StudioApp {
                                     .tooltip(move |_, cx| cx.new(|_| tip.clone()).into())
                             })
                             .when(merge_reason.is_none(), |d| {
-                                d.on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                    this.merge_selection(cx);
+                                d.on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+                                    this.open_merge_review(event, window, cx);
                                 }))
                             }),
                     )
                     .child(
-                        button(&t, "align-marked", "Align…", false).on_click(cx.listener(
+                        button(&t, "align-marked", "Align current…", false).on_click(cx.listener(
                             |this, _: &ClickEvent, _window, cx| {
                                 this.open_tool(super::tools::Tool::Align, cx);
                             },
@@ -621,7 +626,23 @@ impl StudioApp {
                                 this.stage_view_changed(cx);
                             },
                         )),
-                    ),
+                    )
+                    .when(marked > 0, |d| {
+                        d.child(
+                            super::controls::icon_button(
+                                &t,
+                                "remove-marked",
+                                crate::icons::Icon::Trash,
+                                format!("Remove {marked} marked groups…"),
+                                false,
+                            )
+                            .on_click(
+                                cx.listener(|app, _, window, cx| {
+                                    app.open_remove_marked(window, cx)
+                                }),
+                            ),
+                        )
+                    }),
             )
             .children(merge_reason.filter(|_| marked >= 2).map(|reason| {
                 div()
@@ -632,74 +653,6 @@ impl StudioApp {
                     .text_color(t.warn)
                     .child(reason)
             }))
-            .child(if self.catalog.is_empty() {
-                div().into_any_element()
-            } else {
-                let cmd = |id: &'static str,
-                           label: &'static str,
-                           enabled: bool,
-                           action: fn(&mut Self, &mut Context<Self>)| {
-                    div()
-                        .id(id)
-                        .px_1()
-                        .rounded_sm()
-                        .text_size(px(11.))
-                        .text_color(if enabled { t.accent } else { t.text_muted })
-                        .when(enabled, |d| d.cursor_pointer().hover(|d| d.bg(t.raised)))
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                            if enabled {
-                                action(this, cx);
-                            }
-                        }))
-                        .child(label)
-                };
-                div()
-                    .px_2()
-                    .pb_1()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .text_size(px(11.))
-                    .text_color(t.text_muted)
-                    .child("mark:")
-                    .flex_wrap()
-                    .child(cmd(
-                        "sel-scan",
-                        "scan",
-                        self.selected.is_some(),
-                        |this, cx| this.select_active_scan(cx),
-                    ))
-                    .child(cmd(
-                        "sel-tenth",
-                        "every 10th",
-                        self.selection.len() > 1,
-                        |this, cx| this.thin_selection(cx),
-                    ))
-                    .child(cmd(
-                        "sel-filter",
-                        "filter",
-                        self.filtered.is_some(),
-                        |this, cx| this.select_filter_results(cx),
-                    ))
-                    .child(cmd(
-                        "sel-freeze",
-                        if processing_locked(self.current_group_index(), &self.frozen) {
-                            "Unlock processing"
-                        } else {
-                            "Lock processing"
-                        },
-                        self.current_group_index().is_some(),
-                        |this, cx| this.toggle_frozen(cx),
-                    ))
-                    .child(div().flex_1())
-                    .child(cmd(
-                        "sel-clear",
-                        "clear",
-                        !self.selection.is_empty(),
-                        |this, cx| this.clear_selection(cx),
-                    ))
-                    .into_any_element()
-            })
             .child(
                 div()
                     .id("groups-width-handle")
@@ -893,118 +846,141 @@ impl StudioApp {
             &label,
             ((self.structure.settings.groups_panel_width() - reserved) / 7.2).max(2.) as usize,
         );
-        div()
-            .id(("group", ix))
-            .h(px(27.))
-            .w_full()
-            .min_w_0()
-            .px_1p5()
-            .when(child, |d| d.pl(px(18.)))
-            .flex()
-            .items_center()
-            .gap_1()
-            .rounded_md()
-            .border_1()
-            .border_color(if self.focus_group == Some(ix) {
-                t.accent
-            } else {
-                gpui::Rgba { a: 0., ..t.border }
+        crate::accessibility::Control::new(
+            div().id(("group", ix)),
+            format!(
+                "{}{}{}",
+                full_label,
+                if locked { " · locked" } else { "" },
+                if has_problems {
+                    " · source needs attention"
+                } else {
+                    ""
+                }
+            ),
+            accesskit::Role::Button,
+        )
+        .selected(active)
+        .when(active, |d| d.track_focus(&self.data_focus))
+        .h(px(27.))
+        .w_full()
+        .min_w_0()
+        .px_1p5()
+        .when(child, |d| d.pl(px(18.)))
+        .flex()
+        .items_center()
+        .gap_1()
+        .rounded_md()
+        .border_1()
+        .border_color(if self.focus_group == Some(ix) {
+            t.accent
+        } else {
+            gpui::Rgba { a: 0., ..t.border }
+        })
+        .cursor_pointer()
+        .when(active, |d| {
+            d.bg(gpui::Rgba {
+                a: 0.16,
+                ..t.accent
             })
-            .cursor_pointer()
-            .when(active, |d| {
-                d.bg(gpui::Rgba {
-                    a: 0.16,
-                    ..t.accent
-                })
-            })
-            .when(!active, |d| d.hover(|d| d.bg(t.raised)))
-            .tooltip(move |_, cx| cx.new(|_| tip.clone()).into())
-            .on_mouse_down(
-                gpui::MouseButton::Right,
-                cx.listener(move |this, ev: &gpui::MouseDownEvent, window, cx| {
-                    cx.stop_propagation();
-                    this.open_group_menu(ix, ev.position, window, cx);
-                }),
+        })
+        .when(!active, |d| d.hover(|d| d.bg(t.raised)))
+        .tooltip(move |_, cx| cx.new(|_| tip.clone()).into())
+        .on_mouse_down(
+            gpui::MouseButton::Right,
+            cx.listener(move |this, ev: &gpui::MouseDownEvent, window, cx| {
+                cx.stop_propagation();
+                this.open_group_menu(ix, ev.position, window, cx);
+            }),
+        )
+        .on_click(cx.listener(move |this, ev: &ClickEvent, window, cx| {
+            window.focus(&this.data_focus, cx);
+            this.click_group(ix, ev.modifiers(), cx);
+        }))
+        .child(
+            crate::accessibility::Control::new(
+                div().id("disclosure"),
+                "Additional channels",
+                accesskit::Role::DisclosureTriangle,
             )
-            .on_click(cx.listener(move |this, ev: &ClickEvent, window, cx| {
-                window.focus(&this.data_focus, cx);
-                this.click_group(ix, ev.modifiers(), cx);
+            .expanded(expanded)
+            .disabled(extra == 0)
+            .w(px(12.))
+            .flex_none()
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                cx.stop_propagation();
+                if extra > 0
+                    && let Some(id) = this.stack_id(ix)
+                {
+                    this.expanded_sources.insert(id, !expanded);
+                    cx.notify();
+                }
             }))
-            .child(
+            .child(if extra == 0 {
+                ""
+            } else if expanded {
+                "▾"
+            } else {
+                "▸"
+            }),
+        )
+        .child(
+            crate::accessibility::Control::new(
+                div().id("mark"),
+                format!("Mark {}", self.entry_label(ix)),
+                accesskit::Role::CheckBox,
+            )
+            .selected(self.selection.contains(&ix))
+            .flex_none()
+            .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                cx.stop_propagation();
+                window.focus(&this.data_focus, cx);
+                this.toggle_mark(ix, cx);
+            }))
+            .child(checkbox(&t, self.selection.contains(&ix))),
+        )
+        .child(swatch(trace_rgba(&t, self.group_color_index(ix))))
+        .child(self.group_label_editor(ix, label, cx))
+        .child(
+            div()
+                .flex_none()
+                .text_size(px(10.5))
+                .text_color(t.text_muted)
+                .child(suffix),
+        )
+        .child(
+            div()
+                .flex_none()
+                .text_size(px(10.5))
+                .text_color(t.text_muted)
+                .child(tag),
+        )
+        .when(has_problems, |d| {
+            d.child(
                 div()
-                    .id("disclosure")
-                    .w(px(12.))
                     .flex_none()
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    .text_color(if error { t.error } else { t.warn })
+                    .child(if error { "!" } else { "⚠" }),
+            )
+        })
+        .when(locked, |d| {
+            d.child(div().flex_none().text_size(px(11.)).child("🔒"))
+        })
+        .child(
+            div()
+                .id("group-more")
+                .w(px(12.))
+                .flex_none()
+                .child("⋯")
+                .on_mouse_down(
+                    gpui::MouseButton::Left,
+                    cx.listener(move |this, ev: &gpui::MouseDownEvent, window, cx| {
                         cx.stop_propagation();
-                        if extra > 0
-                            && let Some(id) = this.stack_id(ix)
-                        {
-                            this.expanded_sources.insert(id, !expanded);
-                            cx.notify();
-                        }
-                    }))
-                    .child(if extra == 0 {
-                        ""
-                    } else if expanded {
-                        "▾"
-                    } else {
-                        "▸"
+                        this.open_group_menu(ix, ev.position, window, cx);
                     }),
-            )
-            .child(
-                div()
-                    .id("mark")
-                    .flex_none()
-                    .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                        cx.stop_propagation();
-                        window.focus(&this.data_focus, cx);
-                        this.toggle_mark(ix, cx);
-                    }))
-                    .child(checkbox(&t, self.selection.contains(&ix))),
-            )
-            .child(swatch(trace_rgba(&t, self.group_color_index(ix))))
-            .child(self.group_label_editor(ix, label, cx))
-            .child(
-                div()
-                    .flex_none()
-                    .text_size(px(10.5))
-                    .text_color(t.text_muted)
-                    .child(suffix),
-            )
-            .child(
-                div()
-                    .flex_none()
-                    .text_size(px(10.5))
-                    .text_color(t.text_muted)
-                    .child(tag),
-            )
-            .when(has_problems, |d| {
-                d.child(
-                    div()
-                        .flex_none()
-                        .text_color(if error { t.error } else { t.warn })
-                        .child(if error { "!" } else { "⚠" }),
                 )
-            })
-            .when(locked, |d| {
-                d.child(div().flex_none().text_size(px(11.)).child("🔒"))
-            })
-            .child(
-                div()
-                    .id("group-more")
-                    .w(px(12.))
-                    .flex_none()
-                    .child("⋯")
-                    .on_mouse_down(
-                        gpui::MouseButton::Left,
-                        cx.listener(move |this, ev: &gpui::MouseDownEvent, window, cx| {
-                            cx.stop_propagation();
-                            this.open_group_menu(ix, ev.position, window, cx);
-                        }),
-                    )
-                    .on_click(|_, _, cx| cx.stop_propagation()),
-            )
+                .on_click(|_, _, cx| cx.stop_propagation()),
+        )
     }
 }
 

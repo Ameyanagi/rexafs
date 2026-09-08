@@ -165,7 +165,9 @@ impl NumericField {
             }
         })
         .detach();
-        let (label, unit) = split_unit(&label.into());
+        let label: SharedString = label.into();
+        input.update(cx, |input, _| input.set_accessible_name(label.clone()));
+        let (label, unit) = split_unit(&label);
         Self {
             label: label.into(),
             unit: unit.into(),

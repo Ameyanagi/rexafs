@@ -1443,3 +1443,60 @@ mod tests {
         assert_eq!(heatmap_y_extent(0, 0), (-0.5, 0.5));
     }
 }
+
+/// A tool preview uses full scientific inputs; display curves keep their own grids.
+pub(crate) fn build_tool_preview(
+    before: &XASSpectrum,
+    after: &XASSpectrum,
+    standard: Option<(&str, &XASSpectrum)>,
+    difference: bool,
+    theme: &Theme,
+) -> Result<Plot, String> {
+    let bx = before.energy.as_ref().ok_or("Target has no energy grid")?;
+    let by = if difference {
+        before.norm()
+    } else {
+        before.mu.clone()
+    }
+    .ok_or("Target quantity unavailable")?;
+    let ax = after.energy.as_ref().ok_or("Result has no energy grid")?;
+    let ay = after.mu.as_ref().ok_or("Result quantity unavailable")?;
+    let mut plot: Plot = Plot::new()
+        .theme(theme.plot_theme())
+        .line(&vecs(bx), &vecs(&by))
+        .color(trace_color(theme, 0))
+        .line_style(LineStyle::Dashed)
+        .label("Original")
+        .line(&vecs(ax), &vecs(ay))
+        .color(trace_color(theme, 1))
+        .line_width(1.8)
+        .label(if difference {
+            "Result: target − baseline"
+        } else {
+            "Result"
+        })
+        .into();
+    if let Some((name, standard)) = standard {
+        let sy = if difference {
+            standard.norm()
+        } else {
+            standard.mu.clone()
+        };
+        if let (Some(x), Some(y)) = (&standard.energy, sy) {
+            plot = plot
+                .line(&vecs(x), &vecs(&y))
+                .color(trace_color(theme, 2))
+                .line_width(1.1)
+                .label(format!("Standard: {name}"))
+                .into();
+        }
+    }
+    Ok(plot
+        .xlabel("Energy (eV)")
+        .ylabel(if difference {
+            "normalized μ(E) / Δμ(E)"
+        } else {
+            "μ(E)"
+        })
+        .legend_position(LegendPosition::UpperRight))
+}

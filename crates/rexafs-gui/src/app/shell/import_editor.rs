@@ -61,6 +61,7 @@ enum Action {
     RememberRecipe,
     GlobalRecipe,
     ConfirmUnits,
+    Recipe,
 }
 
 pub(crate) struct ImportEditor {
@@ -95,11 +96,13 @@ pub(crate) struct ImportEditor {
     review_scope: Option<ReviewScope>,
     review_configs: Vec<crate::params::ImportConfig>,
     review_outputs: Vec<DetectionMode>,
+    review_main_confirmed: bool,
     review_file: usize,
     recipe_name: Entity<TextInput>,
     remember_recipe: bool,
     global_recipe: bool,
     confirmed_units: bool,
+    recipe_open: bool,
 }
 
 const REVIEW_CHANNELS: [DetectionMode; 4] = [
@@ -108,6 +111,18 @@ const REVIEW_CHANNELS: [DetectionMode; 4] = [
     DetectionMode::Reference,
     DetectionMode::MuColumn,
 ];
+
+fn change_primary(
+    primary: &mut DetectionMode,
+    outputs: &mut Vec<DetectionMode>,
+    next: DetectionMode,
+) {
+    if *primary != next {
+        outputs.retain(|mode| *mode != *primary && *mode != next);
+        outputs.insert(0, next);
+        *primary = next;
+    }
+}
 
 impl StudioApp {
     pub(crate) fn open_import_review(
@@ -346,11 +361,13 @@ impl ImportEditor {
             review_scope: None,
             review_configs: vec![],
             review_outputs: vec![],
+            review_main_confirmed: false,
             review_file: 0,
             recipe_name,
             remember_recipe: false,
             global_recipe: false,
             confirmed_units: false,
+            recipe_open: false,
         }
     }
 
@@ -676,6 +693,11 @@ impl ImportEditor {
 
     fn activate(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
         match action {
+            Action::Recipe => {
+                self.recipe_open = !self.recipe_open;
+                cx.notify();
+                return;
+            }
             Action::RememberRecipe => {
                 self.remember_recipe = !self.remember_recipe;
                 cx.notify();
@@ -739,32 +761,51 @@ impl ImportEditor {
                 return;
             }
             Action::ReviewPrimary(index) => {
+                self.review_main_confirmed = true;
+                self.save_review_draft();
                 let mode = REVIEW_CHANNELS[index as usize];
                 if let Some(scope) = &mut self.review_scope {
-                    scope.primary = mode;
-                    if !self.review_outputs.contains(&mode) {
-                        self.review_outputs.push(mode);
-                    }
+                    change_primary(&mut scope.primary, &mut self.review_outputs, mode);
+                }
+                if let Some(config) = self
+                    .review_configs
+                    .iter()
+                    .find(|config| config.mode == mode)
+                {
+                    self.params.import = config.clone();
                 }
                 self.invalidate_validation();
-                cx.notify();
+                self.reload(cx);
                 return;
             }
             Action::ReviewOutput(index) => {
+                self.save_review_draft();
                 let mode = REVIEW_CHANNELS[index as usize];
-                if self
-                    .review_scope
-                    .as_ref()
-                    .is_some_and(|scope| scope.primary != mode)
+                if let Some(scope) = &self.review_scope
+                    && scope.primary != mode
                 {
                     if self.review_outputs.contains(&mode) {
                         self.review_outputs.retain(|&m| m != mode);
+                        if self.params.import.mode == mode {
+                            self.params.import = self
+                                .review_configs
+                                .iter()
+                                .find(|c| c.mode == scope.primary)
+                                .unwrap()
+                                .clone();
+                        }
                     } else {
                         self.review_outputs.push(mode);
+                        self.params.import = self
+                            .review_configs
+                            .iter()
+                            .find(|c| c.mode == mode)
+                            .unwrap()
+                            .clone();
                     }
                 }
                 self.invalidate_validation();
-                cx.notify();
+                self.reload(cx);
                 return;
             }
             Action::Details => {
@@ -960,6 +1001,9 @@ impl ImportEditor {
         &self,
         cx: &Context<Self>,
     ) -> Result<crate::import_recipes::RecipeVersion, String> {
+        if !self.review_main_confirmed {
+            return Err("Choose the main spectrum above.".into());
+        }
         let table = self.table.as_ref().ok_or("Load a representative source.")?;
         let choice = self.review_choice().ok_or("Choose the output channels.")?;
         let scope = if self.global_recipe {
@@ -1080,7 +1124,7 @@ impl ImportEditor {
         label: impl Into<gpui::SharedString>,
         enabled: bool,
         cx: &mut Context<Self>,
-    ) -> gpui::Stateful<gpui::Div> {
+    ) -> crate::accessibility::Control {
         let focus = self
             .controls
             .entry(action)
@@ -1102,44 +1146,116 @@ impl ImportEditor {
                     }
             })
         } else if let Action::ReviewPrimary(index) = action {
-            self.review_scope
-                .as_ref()
-                .is_some_and(|scope| scope.primary == REVIEW_CHANNELS[index as usize])
+            self.review_main_confirmed
+                && self
+                    .review_scope
+                    .as_ref()
+                    .is_some_and(|scope| scope.primary == REVIEW_CHANNELS[index as usize])
         } else if let Action::ReviewEdit(index) = action {
             self.params.import.mode == REVIEW_CHANNELS[index as usize]
         } else {
             false
         };
-        div()
-            .id(gpui::SharedString::from(format!("mapping-{action:?}")))
-            .px_2()
-            .py_1()
-            .rounded_sm()
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.surface)
-            .when(selected, |d| d.bg(theme.accent).text_color(theme.bg))
-            .child(label.into())
-            .when(!enabled, |d| d.opacity(0.45))
-            .when(enabled, |d| {
-                d.cursor_pointer()
-                    .track_focus(&focus)
-                    .focus(|s| s.border_color(theme.accent))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                        this.activate(action, window, cx)
-                    }))
-                    .on_key_down(cx.listener(
-                        move |this, event: &gpui::KeyDownEvent, window, cx| {
-                            if focus.is_focused(window)
-                                && matches!(event.keystroke.key.as_str(), "enter" | "space")
-                            {
-                                window.prevent_default();
-                                cx.stop_propagation();
-                                this.activate(action, window, cx);
-                            }
-                        },
-                    ))
-            })
+        let label = label.into();
+        let name = match action {
+            Action::ReviewPrimary(_) => format!("Main spectrum: {label}"),
+            Action::ReviewEdit(_) => format!("Preview columns: {label}"),
+            Action::ReviewOutput(_) => format!("Also import: {label}"),
+            _ => label.to_string(),
+        };
+        let role = match action {
+            Action::ReviewPrimary(_) | Action::ReviewEdit(_) | Action::Axis(_) => {
+                accesskit::Role::Tab
+            }
+            Action::ReviewOutput(_) | Action::ConfirmUnits => accesskit::Role::CheckBox,
+            _ => accesskit::Role::Button,
+        };
+        let selected = match action {
+            Action::ReviewOutput(index) => self
+                .review_outputs
+                .contains(&REVIEW_CHANNELS[index as usize]),
+            Action::ConfirmUnits => self.confirmed_units,
+            _ => selected,
+        };
+        crate::accessibility::Control::new(
+            div().id(gpui::SharedString::from(format!("mapping-{action:?}"))),
+            name,
+            role,
+        )
+        .selected(selected)
+        .disabled(!enabled)
+        .px_2()
+        .py_1()
+        .rounded_sm()
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.surface)
+        .when(
+            selected || matches!(action, Action::Apply | Action::ReviewLocate) && enabled,
+            |d| d.bg(theme.accent).text_color(theme.bg),
+        )
+        .child(label)
+        .when(!enabled, |d| d.opacity(0.45))
+        .when(enabled, |d| {
+            d.cursor_pointer()
+                .track_focus(&focus)
+                .focus(|s| s.border_color(theme.accent))
+                .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                    this.activate(action, window, cx)
+                }))
+        })
+    }
+}
+
+impl ImportEditor {
+    fn modal(
+        &self,
+        panel: gpui::Stateful<gpui::Div>,
+        cx: &mut Context<Self>,
+    ) -> crate::accessibility::Control {
+        let t = self.theme;
+        crate::accessibility::Control::new(
+            div().id("import-mapping-modal"),
+            "Import mapping",
+            accesskit::Role::Dialog,
+        )
+        .modal()
+        .key_context("ImportEditor")
+        .track_focus(&self.focus)
+        .absolute()
+        .inset_0()
+        .occlude()
+        .bg(gpui::rgba(0x00000099))
+        .flex()
+        .items_center()
+        .justify_center()
+        .p_4()
+        .text_size(px(12.))
+        .text_color(t.text)
+        .capture_action(
+            cx.listener(|this, _: &NextField, window, cx| this.focus_next(false, window, cx)),
+        )
+        .capture_action(
+            cx.listener(|this, _: &PrevField, window, cx| this.focus_next(true, window, cx)),
+        )
+        .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
+            if event.keystroke.key == "escape" {
+                this.close(window, cx);
+                cx.stop_propagation();
+            } else if !this.spacing.read(cx).focus_handle(cx).is_focused(window)
+                && !this
+                    .recipe_name
+                    .read(cx)
+                    .focus_handle(cx)
+                    .is_focused(window)
+            {
+                // Unhandled keys must reach the native input handler while a
+                // text field has focus. The ImportEditor context already
+                // excludes the surrounding Studio shortcuts.
+                cx.stop_propagation();
+            }
+        }))
+        .child(panel)
     }
 }
 
@@ -1149,7 +1265,6 @@ impl Render for ImportEditor {
         let t = self.theme;
         let mut panel = div()
             .id("mapping-editor-panel")
-            .overflow_y_scroll()
             .w_full()
             .max_w(px(1120.))
             .max_h_full()
@@ -1183,66 +1298,118 @@ impl Render for ImportEditor {
             )
             .child(
                 div()
+                    .id("mapping-source-location")
                     .text_color(t.text_muted)
+                    .text_size(px(11.))
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
+                    .tooltip({
+                        let text = self.target.path.display().to_string();
+                        move |_, cx| {
+                            cx.new(|_| super::controls::Tooltip {
+                                theme: t,
+                                label: text.clone().into(),
+                            })
+                            .into()
+                        }
+                    })
                     .child(self.target.path.display().to_string()),
             );
+        if self.review_scope.is_some() && self.table.is_none() && self.error.is_some() {
+            panel = panel
+                .max_w(px(640.))
+                .child(div().text_color(t.warn).child("Source unavailable"))
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .child(self.error.clone().unwrap_or_default()),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .gap_2()
+                        .child(self.button(Action::ReviewLocate, "Locate source…", true, cx))
+                        .child(self.button(Action::Reload, "Retry", true, cx))
+                        .child(div().flex_1())
+                        .child(self.button(Action::Cancel, "Review later", true, cx)),
+                );
+            return self.modal(panel, cx);
+        }
+        let mut body = div()
+            .id("mapping-scroll")
+            .min_h_0()
+            .flex_1()
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .pr_1();
         if let Some(scope) = self.review_scope.clone() {
-            panel = panel.child(scope.reason.clone()).child(
+            body = body.child(
                 div()
                     .flex()
                     .flex_wrap()
                     .gap_2()
                     .items_center()
                     .child(format!(
-                        "Layout {} of {} · representative {} of {}",
+                        "Layout {} / {} · file {} / {}",
                         scope.cluster + 1,
                         scope.cluster_count,
                         self.review_file + 1,
                         scope.targets.targets.len()
                     ))
-                    .child(self.button(
-                        Action::ReviewLayout(false),
-                        "Previous layout",
-                        scope.cluster_count > 1,
-                        cx,
-                    ))
-                    .child(self.button(
-                        Action::ReviewLayout(true),
-                        "Next layout",
-                        scope.cluster_count > 1,
-                        cx,
-                    ))
-                    .child(self.button(
-                        Action::ReviewFile(false),
-                        "Previous file",
-                        scope.targets.targets.len() > 1,
-                        cx,
-                    ))
-                    .child(self.button(
-                        Action::ReviewFile(true),
-                        "Next file",
-                        scope.targets.targets.len() > 1,
-                        cx,
-                    )),
+                    .when(scope.cluster_count > 1, |d| {
+                        d.child(self.button(
+                            Action::ReviewLayout(false),
+                            "Previous layout",
+                            scope.cluster_count > 1,
+                            cx,
+                        ))
+                    })
+                    .when(scope.cluster_count > 1, |d| {
+                        d.child(self.button(
+                            Action::ReviewLayout(true),
+                            "Next layout",
+                            scope.cluster_count > 1,
+                            cx,
+                        ))
+                    })
+                    .when(scope.targets.targets.len() > 1, |d| {
+                        d.child(self.button(
+                            Action::ReviewFile(false),
+                            "Previous file",
+                            scope.targets.targets.len() > 1,
+                            cx,
+                        ))
+                    })
+                    .when(scope.targets.targets.len() > 1, |d| {
+                        d.child(self.button(
+                            Action::ReviewFile(true),
+                            "Next file",
+                            scope.targets.targets.len() > 1,
+                            cx,
+                        ))
+                    }),
             );
             let mut primary = div()
                 .flex()
                 .flex_wrap()
                 .gap_2()
                 .items_center()
-                .child("Primary channel:");
+                .child("Main spectrum:");
             let mut outputs = div()
                 .flex()
                 .flex_wrap()
                 .gap_2()
                 .items_center()
-                .child("Create:");
+                .child("Also import:");
             let mut editing = div()
                 .flex()
                 .flex_wrap()
                 .gap_2()
                 .items_center()
-                .child("Editing channel:");
+                .child("Preview columns:");
             for (index, mode) in REVIEW_CHANNELS.into_iter().enumerate() {
                 primary = primary.child(self.button(
                     Action::ReviewPrimary(index as u8),
@@ -1250,38 +1417,41 @@ impl Render for ImportEditor {
                     true,
                     cx,
                 ));
-                outputs = outputs.child(self.button(
-                    Action::ReviewOutput(index as u8),
-                    format!(
-                        "{} {}",
-                        if self.review_outputs.contains(&mode) {
-                            "☑"
-                        } else {
-                            "☐"
-                        },
-                        mode.label()
-                    ),
-                    mode != scope.primary,
-                    cx,
-                ));
-                editing = editing.child(self.button(
-                    Action::ReviewEdit(index as u8),
-                    mode.label(),
-                    true,
-                    cx,
-                ));
+                if mode != scope.primary {
+                    outputs = outputs.child(self.button(
+                        Action::ReviewOutput(index as u8),
+                        format!(
+                            "{} {}",
+                            if self.review_outputs.contains(&mode) {
+                                "☑"
+                            } else {
+                                "☐"
+                            },
+                            mode.label()
+                        ),
+                        true,
+                        cx,
+                    ));
+                }
+                if self.review_outputs.len() > 1 && self.review_outputs.contains(&mode) {
+                    editing = editing.child(self.button(
+                        Action::ReviewEdit(index as u8),
+                        mode.label(),
+                        true,
+                        cx,
+                    ));
+                }
             }
-            panel = panel
+            body = body
                 .child(primary)
                 .child(outputs)
-                .child(editing)
-                .child(self.button(Action::ReviewLocate, "Locate source…", true, cx));
+                .when(self.review_outputs.len() > 1, |d| d.child(editing));
         }
         if self.locked {
-            panel = panel.child("Processing locked · mapping is read-only");
+            body = body.child("Processing locked · mapping is read-only");
         }
         if let Some(draft) = self.draft.clone() {
-            panel = panel.child(div().text_size(px(16.)).child(draft.formula()));
+            body = body.child(div().text_size(px(16.)).child(draft.formula()));
             let mut axes = div()
                 .flex()
                 .flex_wrap()
@@ -1311,7 +1481,7 @@ impl Render for ImportEditor {
                     .child(div().w(px(110.)).child(self.spacing.clone()))
                     .child("First-order Bragg conversion");
             }
-            panel = panel.child(axes);
+            body = body.child(axes);
             let mut roles = div().flex().flex_wrap().gap_2();
             for (role, col) in draft.roles().into_iter().filter(|(role, _)| role != "ROI") {
                 let key = match role.as_str() {
@@ -1344,7 +1514,7 @@ impl Render for ImportEditor {
                     cx,
                 ));
             }
-            panel = panel.child(roles);
+            body = body.child(roles);
             if draft.channel() == DetectionMode::Fluorescence {
                 let mut rois = div()
                     .id("mapping-rois")
@@ -1372,7 +1542,7 @@ impl Render for ImportEditor {
                         cx,
                     ));
                 }
-                panel = panel
+                body = body
                     .child(rois)
                     .child("Detector correction: none applied by rexafs");
             }
@@ -1393,7 +1563,7 @@ impl Render for ImportEditor {
                         cx,
                     ));
                 }
-                panel = panel.child(choices);
+                body = body.child(choices);
             }
             let mut table = div()
                 .id("mapping-original-table")
@@ -1443,7 +1613,7 @@ impl Render for ImportEditor {
             if let Some(Ok(result)) = &self.preview.result {
                 let summary = result.table.diagnostics.summary();
                 let warnings = result.table.diagnostics.warnings();
-                panel = panel.child(
+                body = body.child(
                     div()
                         .flex()
                         .gap_2()
@@ -1464,7 +1634,7 @@ impl Render for ImportEditor {
                 plot = plot
                     .child("Raw μ(E) preview unavailable while the draft is invalid or updating.");
             }
-            panel = panel.child(
+            body = body.child(
                 div()
                     .flex()
                     .flex_none()
@@ -1474,14 +1644,14 @@ impl Render for ImportEditor {
                     .child(plot),
             );
         } else {
-            panel = panel.child(if self.error.is_some() {
+            body = body.child(if self.error.is_some() {
                 "Source preview unavailable."
             } else {
                 "Reading source columns and full raw signal…"
             });
         }
         if let Some(error) = &self.error {
-            panel = panel.child(div().text_color(t.accent).child(error.clone()));
+            body = body.child(div().text_color(t.accent).child(error.clone()));
         }
         let raw_ready = self
             .draft
@@ -1489,13 +1659,16 @@ impl Render for ImportEditor {
             .and_then(|d| self.key(d.revision))
             .is_some_and(|key| self.preview.ready(&key))
             && !self.locked;
+        let mut unit_confirmation = None;
         let recipe_error = self
             .review_scope
             .as_ref()
             .and_then(|_| self.review_recipe(cx).err());
         if self.review_scope.is_some() {
-            self.visible_focus
-                .push(self.recipe_name.read(cx).focus_handle(cx));
+            if self.recipe_open {
+                self.visible_focus
+                    .push(self.recipe_name.read(cx).focus_handle(cx));
+            }
             let scope = if self.global_recipe {
                 crate::import_recipes::RecipeScope::AllSources
             } else {
@@ -1515,56 +1688,68 @@ impl Render for ImportEditor {
                     })
                 })
             });
-            panel = panel
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child("Recipe name:")
-                        .child(div().flex_1().child(self.recipe_name.clone())),
-                )
-                .child(scope.label())
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap_2()
-                        .child(self.button(
-                            Action::RememberRecipe,
-                            if self.remember_recipe {
-                                "☑ Remember on this computer"
-                            } else {
-                                "☐ Remember on this computer"
-                            },
-                            true,
-                            cx,
-                        ))
-                        .child(self.button(
-                            Action::GlobalRecipe,
-                            if self.global_recipe {
-                                "☑ Reuse at all source locations"
-                            } else {
-                                "☐ Reuse at all source locations"
-                            },
-                            true,
-                            cx,
-                        )),
-                );
+            body = body.child(self.button(
+                Action::Recipe,
+                if self.recipe_open {
+                    "Recipe ▴"
+                } else {
+                    "Recipe ▾"
+                },
+                true,
+                cx,
+            ));
+            if self.recipe_open {
+                body = body
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child("Recipe name:")
+                            .child(div().flex_1().child(self.recipe_name.clone())),
+                    )
+                    .child(scope.label())
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_2()
+                            .child(self.button(
+                                Action::RememberRecipe,
+                                if self.remember_recipe {
+                                    "☑ Remember on this computer"
+                                } else {
+                                    "☐ Remember on this computer"
+                                },
+                                true,
+                                cx,
+                            ))
+                            .child(self.button(
+                                Action::GlobalRecipe,
+                                if self.global_recipe {
+                                    "☑ Reuse at all source locations"
+                                } else {
+                                    "☐ Reuse at all source locations"
+                                },
+                                true,
+                                cx,
+                            )),
+                    );
+            }
             if missing_units {
-                panel = panel.child(self.button(
+                unit_confirmation = Some(self.button(
                     Action::ConfirmUnits,
                     if self.confirmed_units {
-                        "☑ Confirm displayed axis units (Detected assumes eV when units are absent)"
+                        "☑ Energy units confirmed"
                     } else {
-                        "☐ Confirm displayed axis units (Detected assumes eV when units are absent)"
+                        "☐ Confirm energy units above · no units in source"
                     },
                     true,
                     cx,
                 ));
             }
             if let Some(error) = &recipe_error {
-                panel = panel.child(div().text_color(t.warn).child(error.clone()));
+                body = body.child(div().text_color(t.warn).child(error.clone()));
             }
         }
         let ready = raw_ready
@@ -1578,7 +1763,7 @@ impl Render for ImportEditor {
                     && !self.validating
             });
         if self.batch_available && self.review_scope.is_none() {
-            panel = panel.child(
+            body = body.child(
                 div()
                     .flex()
                     .flex_wrap()
@@ -1618,7 +1803,7 @@ impl Render for ImportEditor {
                     "groups"
                 }
             );
-            panel = panel.child(label);
+            body = body.child(label);
             let summary = self
                 .validation
                 .as_ref()
@@ -1642,7 +1827,7 @@ impl Render for ImportEditor {
                     }
                     .into()
                 });
-            panel = panel.child(
+            body = body.child(
                 div()
                     .flex()
                     .flex_wrap()
@@ -1677,7 +1862,7 @@ impl Render for ImportEditor {
                         target.target.path.display()
                     )));
                 }
-                panel = panel.child(list);
+                body = body.child(list);
             }
         }
         let mut apply_label = self
@@ -1704,12 +1889,12 @@ impl Render for ImportEditor {
                 .as_ref()
                 .map(|v| {
                     format!(
-                        "Add {} files → {} groups",
+                        "Import {} files → {} groups",
                         v.file_count(),
                         v.file_count() * self.review_outputs.len()
                     )
                 })
-                .unwrap_or("Add validated files".into());
+                .unwrap_or("Import validated files".into());
         }
         let scope_label = if self.review_scope.is_some() {
             "Only accepted files are added; other sources stay pending"
@@ -1720,8 +1905,12 @@ impl Render for ImportEditor {
         } else {
             "Target: this group · 1 file"
         };
-        panel = panel.child(
+        panel = panel.child(body).children(unit_confirmation).child(
             div()
+                .flex_none()
+                .pt_2()
+                .border_t_1()
+                .border_color(t.border)
                 .flex()
                 .flex_wrap()
                 .gap_2()
@@ -1746,50 +1935,32 @@ impl Render for ImportEditor {
                 ))
                 .child(self.button(Action::Apply, apply_label, ready, cx)),
         );
-        div()
-            .id("import-mapping-modal")
-            .key_context("ImportEditor")
-            .track_focus(&self.focus)
-            .absolute()
-            .inset_0()
-            .occlude()
-            .bg(gpui::rgba(0x00000099))
-            .flex()
-            .items_center()
-            .justify_center()
-            .p_4()
-            .text_size(px(12.))
-            .text_color(t.text)
-            .capture_action(
-                cx.listener(|this, _: &NextField, window, cx| this.focus_next(false, window, cx)),
-            )
-            .capture_action(
-                cx.listener(|this, _: &PrevField, window, cx| this.focus_next(true, window, cx)),
-            )
-            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
-                if event.keystroke.key == "escape" {
-                    this.close(window, cx);
-                    cx.stop_propagation();
-                } else if !this.spacing.read(cx).focus_handle(cx).is_focused(window)
-                    && !this
-                        .recipe_name
-                        .read(cx)
-                        .focus_handle(cx)
-                        .is_focused(window)
-                {
-                    // Unhandled keys must reach the native input handler while a
-                    // text field has focus. The ImportEditor context already
-                    // excludes the surrounding Studio shortcuts.
-                    cx.stop_propagation();
-                }
-            }))
-            .child(panel)
+        self.modal(panel, cx)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn changing_main_spectrum_replaces_transmission_but_keeps_optional_reference() {
+        let mut primary = DetectionMode::Transmission;
+        let mut outputs = vec![primary, DetectionMode::Reference];
+        change_primary(&mut primary, &mut outputs, DetectionMode::Fluorescence);
+        assert_eq!(primary, DetectionMode::Fluorescence);
+        assert_eq!(
+            outputs,
+            vec![DetectionMode::Fluorescence, DetectionMode::Reference]
+        );
+        change_primary(&mut primary, &mut outputs, DetectionMode::Fluorescence);
+        assert_eq!(outputs.len(), 2);
+        change_primary(&mut primary, &mut outputs, DetectionMode::Transmission);
+        assert_eq!(
+            outputs,
+            vec![DetectionMode::Transmission, DetectionMode::Reference]
+        );
+    }
+
     #[test]
     fn apply_refuses_removed_replaced_edited_and_newly_locked_targets() {
         let target = ToolTarget::standalone(

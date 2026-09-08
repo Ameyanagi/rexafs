@@ -7,9 +7,8 @@ use super::assistant_receipts::{
 };
 use super::assistant_shell::{
     ANALYSIS_CLOSED, AssistantHost, ControlState, EscapeTarget, HostAction, PanelMemory, SidePanel,
-    account_disclosure, account_status, clamp_assistant_width, control_key_activates,
-    empty_state_message, escape_target, fit_assistant_panels, model_picker_handles_key,
-    task_starters,
+    account_disclosure, account_status, clamp_assistant_width, empty_state_message, escape_target,
+    fit_assistant_panels, model_picker_handles_key, task_starters,
 };
 use super::{
     assistant_state::{
@@ -157,6 +156,7 @@ pub(crate) struct AssistantWindow {
     preferred_model: Option<String>,
     preferred_effort: Option<String>,
     model_picker_open: bool,
+    settings_open: bool,
     model_picker_focus: gpui::FocusHandle,
     model_trigger_bounds: Rc<Cell<gpui::Bounds<gpui::Pixels>>>,
     model_scroll: gpui::ScrollHandle,
@@ -212,9 +212,12 @@ impl Render for AssistantPopout {
             .studio
             .read_with(cx, |app, _| app.assistant_host == AssistantHost::PoppedOut)
             .unwrap_or(true);
-        div()
-            .size_full()
-            .when(active, |d| d.child(self.assistant.clone()))
+        crate::accessibility::root(
+            div()
+                .size_full()
+                .when(active, |d| d.child(self.assistant.clone())),
+            "rexafs Assistant",
+        )
     }
 }
 impl StudioApp {
@@ -268,6 +271,8 @@ impl StudioApp {
                 let bounds = gpui::Bounds::centered(None, gpui::size(px(820.), px(740.)), cx);
                 let opened = cx.open_window(
                     gpui::WindowOptions {
+                        show: false,
+                        focus: false,
                         window_bounds: Some(gpui::WindowBounds::Windowed(bounds)),
                         titlebar: Some(gpui::TitlebarOptions {
                             title: Some("rexafs Assistant".into()),
@@ -276,6 +281,7 @@ impl StudioApp {
                         ..Default::default()
                     },
                     move |window, cx| {
+                        crate::accessibility::install(window, cx);
                         window.on_window_should_close(cx, move |_, cx| {
                             close_studio
                                 .update(cx, |app, cx| {
@@ -305,7 +311,11 @@ impl StudioApp {
                 );
                 app.update(cx, |app, cx| {
                     match opened {
-                        Ok(handle) => app.assistant_window = Some(handle.into()),
+                        Ok(handle) => {
+                            let _ = handle
+                                .update(cx, |_, window, _| crate::accessibility::show(window));
+                            app.assistant_window = Some(handle.into());
+                        }
                         Err(error) => {
                             app.assistant_host = AssistantHost::Docked;
                             app.structure.settings.assistant_docked = true;
@@ -482,6 +492,17 @@ impl AssistantWindow {
         cx.notify();
     }
     fn escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings_open && !self.model_picker_open {
+            self.settings_open = false;
+            if let Some(focus) = self
+                .controls_focus
+                .get(&gpui::ElementId::from("assistant-settings"))
+            {
+                focus.focus(window, cx);
+            }
+            cx.notify();
+            return;
+        }
         if self.history_open {
             self.history_open = false;
             self.focus_composer = true;
@@ -516,6 +537,7 @@ impl AssistantWindow {
         self.input
             .update(cx, |input, cx| input.set_enabled(enabled, cx));
         let mut ids: Vec<gpui::ElementId> = [
+            "assistant-settings",
             "assistant-host",
             "assistant-conversations",
             "assistant-new-conversation",
@@ -581,14 +603,18 @@ impl AssistantWindow {
     fn control(
         &self,
         id: impl Into<gpui::ElementId>,
-        element: gpui::Stateful<gpui::Div>,
+        element: impl Into<crate::accessibility::Control>,
         enabled: bool,
         on_click: impl Fn(&ClickEvent, &mut Window, &mut gpui::App) + 'static,
-    ) -> gpui::Stateful<gpui::Div> {
+    ) -> crate::accessibility::Control {
         let id = id.into();
         let on_click = Rc::new(on_click);
         let disclosure = id == gpui::ElementId::from("assistant-shared-context");
         element
+            .into()
+            .name_if_empty(id.to_string().replace("assistant-", "").replace('-', " "))
+            .role(accesskit::Role::Button)
+            .disabled(!enabled)
             .text_size(px(12.))
             .when(!enabled, |d| d.opacity(0.5).cursor_default())
             .when(enabled, |d| {
@@ -603,29 +629,6 @@ impl AssistantWindow {
                             d.focus(|s| s.border_2().border_color(self.theme.text))
                         })
                         .when(disclosure, |d| d.focus(|s| s.underline()))
-                        .on_key_down(move |event, window, cx| {
-                            if focus.is_focused(window)
-                                && control_key_activates(
-                                    &event.keystroke.key,
-                                    event.keystroke.modifiers.modified(),
-                                )
-                            {
-                                window.prevent_default();
-                                cx.stop_propagation();
-                                on_click(
-                                    &ClickEvent::Keyboard(gpui::KeyboardClickEvent {
-                                        button: if event.keystroke.key == "enter" {
-                                            gpui::KeyboardButton::Enter
-                                        } else {
-                                            gpui::KeyboardButton::Space
-                                        },
-                                        ..Default::default()
-                                    }),
-                                    window,
-                                    cx,
-                                );
-                            }
-                        })
                 })
             })
     }
@@ -636,7 +639,7 @@ impl AssistantWindow {
         label: impl Into<gpui::SharedString>,
         primary: bool,
         on_click: impl Fn(&ClickEvent, &mut Window, &mut gpui::App) + 'static,
-    ) -> gpui::Stateful<gpui::Div> {
+    ) -> crate::accessibility::Control {
         let id = id.into();
         let c = self.controls();
         let enabled = match &id {
@@ -658,7 +661,38 @@ impl AssistantWindow {
             },
             _ => true,
         };
-        self.control(id.clone(), button(t, id, label, primary), enabled, on_click)
+        let label = label.into();
+        let glyph = match &id {
+            gpui::ElementId::Name(name) => match name.as_ref() {
+                "assistant-settings" => Some(crate::icons::Icon::Settings),
+                "assistant-conversations" => Some(crate::icons::Icon::History),
+                "assistant-new-conversation" => Some(crate::icons::Icon::Plus),
+                "assistant-copy" => Some(crate::icons::Icon::Copy),
+                "assistant-send" => Some(crate::icons::Icon::Send),
+                "assistant-stop" => Some(crate::icons::Icon::Stop),
+                "assistant-panel-close" => Some(crate::icons::Icon::Close),
+                "assistant-host" | "assistant-show-app" => Some(crate::icons::Icon::External),
+                "assistant-focus-plots" => Some(crate::icons::Icon::Maximize),
+                _ => None,
+            },
+            _ => None,
+        };
+        let element = if let Some(glyph) = glyph {
+            super::controls::icon_button(
+                t,
+                id.clone(),
+                glyph,
+                if id == gpui::ElementId::from("assistant-panel-close") {
+                    "Close Assistant".into()
+                } else {
+                    label
+                },
+                primary,
+            )
+        } else {
+            button(t, id.clone(), label, primary)
+        };
+        self.control(id, element, enabled, on_click)
     }
     fn new(studio: WeakEntity<StudioApp>, theme: Theme, cx: &mut Context<Self>) -> Self {
         let input = cx.new(|cx| {
@@ -747,6 +781,7 @@ impl AssistantWindow {
             preferred_model: settings.assistant_model,
             preferred_effort: settings.assistant_effort,
             model_picker_open: false,
+            settings_open: false,
             model_picker_focus: cx.focus_handle().tab_index(0).tab_stop(true),
             model_trigger_bounds: Rc::default(),
             model_scroll: gpui::ScrollHandle::new(),
@@ -2942,12 +2977,15 @@ impl Render for AssistantWindow {
             if message.is_empty() {
                 continue;
             }
-            let row = div()
-                .id(("assistant-message", i))
-                .flex_shrink_0()
-                .when(i > 0 && matches!(entry, Entry::User(_, _)), |d| {
-                    d.mt(px(12.))
-                });
+            let row = crate::accessibility::Control::new(
+                div().id(("assistant-message", i)),
+                message.clone(),
+                accesskit::Role::Label,
+            )
+            .flex_shrink_0()
+            .when(i > 0 && matches!(entry, Entry::User(_, _)), |d| {
+                d.mt(px(12.))
+            });
             body = body.child(match entry {
                 Entry::Activity { state, tool, .. } => self
                     .control(
@@ -3280,7 +3318,7 @@ impl Render for AssistantWindow {
             .min_h_0()
             .min_w_0()
             .px(px(if narrow { 8. } else { 16. }))
-            .py(px(12.))
+            .py(px(8.))
             .key_context("Assistant")
             .on_action(cx.listener(|this, _: &AssistantSend, _, cx| this.run(cx)))
             .on_action(cx.listener(|this, _: &AssistantStop, _, cx| {
@@ -3299,7 +3337,20 @@ impl Render for AssistantWindow {
             .bg(t.bg)
             .text_color(t.text)
             .child(header)
-            .child(self.history_controls(cx))
+            .child(
+                self.history_controls(cx)
+                    .child(div().flex_1())
+                    .child(self.button(
+                        &t,
+                        "assistant-settings",
+                        "Assistant settings",
+                        self.settings_open,
+                        cx.listener(|this, _, _, cx| {
+                            this.settings_open = !this.settings_open;
+                            cx.notify();
+                        }),
+                    )),
+            )
             // Keep navigation below the account disclosure instead of beneath it.
             .when(self.account_expanded, |d| {
                 d.child(div().h(px(40.)).flex_shrink_0())
@@ -3400,28 +3451,102 @@ impl Render for AssistantWindow {
             .child(self.model_controls(catalog_settled, narrow, cx))
             .child(
                 div()
-                    .flex().flex_wrap()
+                    .flex()
+                    .flex_wrap()
                     .gap_2()
+                    .child(self.button(
+                        &t,
+                        "assistant-plots",
+                        if self.include_plots {
+                            "Images: On"
+                        } else {
+                            "Images: Off"
+                        },
+                        self.include_plots,
+                        cx.listener(|this, _: &ClickEvent, _, cx| {
+                            if this.controls().preferences {
+                                this.include_plots = !this.include_plots;
+                            }
+                            cx.notify();
+                        }),
+                    ))
+                    .child(self.button(
+                        &t,
+                        "assistant-web",
+                        if self.web_search {
+                            "Web: On"
+                        } else {
+                            "Web: Off"
+                        },
+                        self.web_search,
+                        cx.listener(|this, _: &ClickEvent, _, cx| {
+                            this.access_preferences(false, cx)
+                        }),
+                    ))
+                    .child(self.button(
+                        &t,
+                        "assistant-extended",
+                        if self.extended_access {
+                            "Extended access: On"
+                        } else {
+                            "Extended access: Off"
+                        },
+                        self.extended_access,
+                        cx.listener(|this, _: &ClickEvent, _, cx| {
+                            this.access_preferences(true, cx)
+                        }),
+                    ))
                     .child(
-                        self.button(&t, "assistant-plots", if self.include_plots { "Share plot images: On" } else { "Share plot images: Off" }, self.include_plots,
-                            cx.listener(|this, _: &ClickEvent, _, cx| {
-                                if this.controls().preferences {
-                                    this.include_plots = !this.include_plots;
-                                }
-                                cx.notify();
-                            }),
-                        ),
-                    )
-                    .child(self.button(&t, "assistant-web", if self.web_search { "Web search: On" } else { "Web search: Off" }, self.web_search,
-                        cx.listener(|this, _: &ClickEvent, _, cx| this.access_preferences(false, cx))))
-                    .child(self.button(&t, "assistant-extended", if self.extended_access { "Extended access: On" } else { "Extended access: Off" }, self.extended_access,
-                        cx.listener(|this, _: &ClickEvent, _, cx| this.access_preferences(true, cx))))
-                    .child(
-                        div().flex().items_center().gap_1().child(div().when(!controls.preferences, |d| d.text_color(t.text_muted)).child("Mode:")).child(super::segmented(&t)
-                            .child(self.control("assistant-review", super::segment(&t, "assistant-review", "Review", !self.allow_changes, true), controls.preferences, cx.listener(|this, _: &ClickEvent, _, cx| { this.allow_changes = false; this.turn_edit = false; this.deny_all_access("Edit analysis permission revoked"); cx.notify(); })))
-                            .child(self.control("assistant-edit", super::segment(&t, "assistant-edit", "Edit analysis", self.allow_changes, false), controls.preferences, cx.listener(|this, _: &ClickEvent, _, cx| { this.allow_changes = true; cx.notify(); })))),
-                    )
-                    .child(div().flex_1())
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .when(!controls.preferences, |d| d.text_color(t.text_muted))
+                                    .child("Mode:"),
+                            )
+                            .child(
+                                super::segmented(&t)
+                                    .child(self.control(
+                                        "assistant-review",
+                                        super::segment(
+                                            &t,
+                                            "assistant-review",
+                                            "Review",
+                                            !self.allow_changes,
+                                            true,
+                                        ),
+                                        controls.preferences,
+                                        cx.listener(|this, _: &ClickEvent, _, cx| {
+                                            this.allow_changes = false;
+                                            this.turn_edit = false;
+                                            this.deny_all_access(
+                                                "Edit analysis permission revoked",
+                                            );
+                                            cx.notify();
+                                        }),
+                                    ))
+                                    .child(self.control(
+                                        "assistant-edit",
+                                        super::segment(
+                                            &t,
+                                            "assistant-edit",
+                                            "Edit analysis",
+                                            self.allow_changes,
+                                            false,
+                                        ),
+                                        controls.preferences,
+                                        cx.listener(|this, _: &ClickEvent, _, cx| {
+                                            this.allow_changes = true;
+                                            cx.notify();
+                                        }),
+                                    )),
+                            ),
+                    ),
+            );
+        let settings = div().id("assistant-settings-menu").occlude().p_3().flex().flex_col().gap_2().bg(t.surface).border_1().border_color(t.border).rounded_lg().shadow_lg().max_h(px(400.)).overflow_y_scroll()
+            .child(div().flex()                    .child(div().flex_1())
                     .child(
                         self.button(&t, "assistant-copy", "Copy conversation", false,
                             cx.listener(|this, _: &ClickEvent, _, cx| {
@@ -3431,38 +3556,53 @@ impl Render for AssistantWindow {
                             }),
                         ),
                     ),
-            )
-            .when(self.extended_access, |d| d.child(div().text_size(px(12.)).text_color(gpui::rgb(0xd69e2e)).child("Extended access: approved commands run in the assistant workspace sandbox; commands that need to leave the sandbox are declined automatically. Known-safe read-only commands run without approval.")))
+            )            .when(self.extended_access, |d| d.child(div().text_size(px(12.)).text_color(gpui::rgb(0xd69e2e)).child("Extended access: approved commands run in the assistant workspace sandbox; commands that need to leave the sandbox are declined automatically. Known-safe read-only commands run without approval.")))
             .child(div().text_size(px(12.)).text_color(t.text_muted).child("Review can inspect data and navigate. Edit analysis can also change parameters and run calculations."))
             .child(self.control("assistant-shared-context", div().id("assistant-shared-context").text_color(t.text_muted).cursor_pointer(), controls.composer, cx.listener(|this, _: &ClickEvent, _, cx| { this.shared_context_open = !this.shared_context_open; cx.notify(); }))
                 .child(if self.shared_context_open { "▾ Shared context…" } else { "▸ Shared context…" }))
             .when(self.shared_context_open, |d| d.child(div().text_size(px(12.)).text_color(t.text_muted)
                 .child("Send includes project state; spectrum names and file paths; processing settings and source comments; model and results; journal entries; and plot images when enabled.")))
-            .child(
+;
+        root = root.child(
+            div()
+                .flex()
+                .gap_2()
+                .items_end()
+                .child(div().flex_1().min_w_0().child(self.input.clone()))
+                .child(if self.transcript.busy || self.transcript.stop_pending {
+                    self.button(
+                        &t,
+                        "assistant-stop",
+                        if self.transcript.stop_pending {
+                            "Stopping…"
+                        } else {
+                            "Stop"
+                        },
+                        false,
+                        cx.listener(|this, _: &ClickEvent, _, cx| this.stop(cx)),
+                    )
+                    .into_any_element()
+                } else {
+                    self.button(
+                        &t,
+                        "assistant-send",
+                        "Send",
+                        true,
+                        cx.listener(|this, _: &ClickEvent, _, cx| this.run(cx)),
+                    )
+                    .into_any_element()
+                }),
+        );
+        if self.settings_open {
+            root = root.child(
                 div()
-                    .flex()
-                    .gap_2()
-                    .items_end()
-                    .child(div().flex_1().min_w_0().child(self.input.clone()))
-                    .child(if self.transcript.busy || self.transcript.stop_pending {
-                        self.button(
-                            &t,
-                            "assistant-stop",
-                            if self.transcript.stop_pending {
-                                "Stopping…"
-                            } else {
-                                "Stop"
-                            },
-                            false,
-                            cx.listener(|this, _: &ClickEvent, _, cx| this.stop(cx)),
-                        )
-                        .into_any_element()
-                    } else {
-                        self.button(&t, "assistant-send", "Send", true, cx.listener(|this, _: &ClickEvent, _, cx| this.run(cx)))
-                            .into_any_element()
-                    }),
-            )
-            .child(div().flex().justify_end().text_size(px(12.)).text_color(t.text_muted).child("↩ to send · ⇧↩ newline"));
+                    .absolute()
+                    .left_2()
+                    .right_2()
+                    .bottom(px(90.))
+                    .child(settings),
+            );
+        }
         if self.account_expanded
             && let Some(label) = &self.account_label
         {
