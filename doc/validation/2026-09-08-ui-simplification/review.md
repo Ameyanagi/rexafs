@@ -54,7 +54,7 @@ The maintainer's original checkout and active app sessions were preserved.
   All four molecular-view tests also passed.
 - After correcting Assistant theme synchronization, all 47 Assistant tests passed.
 - Optimized build passed with the distributed `refeff-runner,feff10-runner` features.
-- The final optimized package at source commit `bb26002` passed the extracted Cu
+- The final optimized package at source commit `86b035c` passed the extracted Cu
   example/pipeline and both FEFF backend self-checks. Its build metadata records a
   clean source tree and the same commit as the embedded build identity.
 - `cargo fmt --all` and `git diff --check` passed.
@@ -94,6 +94,12 @@ requested a direct launch, macOS opened one release instance; its exact packaged
 executable was confirmed running. New empty-Data startup and live Assistant theme
 synchronization are implemented and compiled, but their final appearance is not
 visually qualified.
+
+The maintainer's follow-up screenshot clarified that the initial Data view should
+include the empty Groups panel and Source/tools inspector. The shell had still
+hidden those panels until an import existed; that gate was removed. The updated
+optimized build was launched for testing and its exact executable confirmed
+running. Its archive also passed the extracted example and FEFF checks above.
 
 Also pending: narrow/light-theme workflows, populated Series navigation, completed
 Fit/Assistant busy and approval states, export-preview comparison, and complete
