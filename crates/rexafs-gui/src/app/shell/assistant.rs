@@ -522,6 +522,7 @@ impl AssistantWindow {
             "assistant-resume-conversation",
             "assistant-panel-close",
             "assistant-connect",
+            "assistant-install",
             "assistant-login",
             "assistant-account",
             "assistant-close",
@@ -3377,6 +3378,22 @@ impl Render for AssistantWindow {
                     .text_color(t.error)
                     .child(error.clone()),
             );
+        }
+        if self.client.is_none()
+            && self.error.as_deref()
+                == Some(
+                    crate::codex_client::StartError::NotInstalled
+                        .to_string()
+                        .as_str(),
+                )
+        {
+            root = root.child(self.button(
+                &t,
+                "assistant-install",
+                "Install Codex CLI…",
+                false,
+                |_: &ClickEvent, _, cx| cx.open_url(crate::codex_client::INSTALL_URL),
+            ));
         }
         let catalog_settled = catalog_settled(self.account, self.models_requested, &self.pending);
         root = root

@@ -59,6 +59,9 @@ pub struct UserSettings {
 impl Default for UserSettings {
     fn default() -> Self {
         Self {
+            groups_panel_width: None,
+            recent_import_folders: Vec::new(),
+            recent_projects: Vec::new(),
             cif_library: None,
             amcsd_db: None,
             mp_api_key: String::new(),
