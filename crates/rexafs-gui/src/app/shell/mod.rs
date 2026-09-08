@@ -370,15 +370,10 @@ impl StudioApp {
             Stage::Publish => self.publish_panel(cx),
             _ => self.stage_center(cx).into_any_element(),
         };
-        let has_groups = !self.catalog.is_empty()
-            || !self.derived.is_empty()
-            || !self.current_path.as_os_str().is_empty()
-            || self.catalog.scanning
-            || !self.intake.history.is_empty();
-        let groups =
-            (self.data_panel_open && has_groups).then(|| self.groups_panel(cx).into_any_element());
+        let groups = self
+            .data_panel_open
+            .then(|| self.groups_panel(cx).into_any_element());
         let inspector = (self.context_panel_open
-            && has_groups
             && (self.stage != Stage::Series || self.series_ready())
             && !matches!(self.stage, Stage::Fit | Stage::Publish))
         .then(|| self.inspector(cx).into_any_element());

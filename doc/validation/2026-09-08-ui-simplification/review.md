@@ -9,7 +9,8 @@ The maintainer's original checkout and active app sessions were preserved.
   Import retains a visible label. Overview plots are optional. Everyday plot
   controls remain visible after maintainer feedback.
   A sun/moon button keeps theme switching directly available in the top bar.
-  Ordinary startup opens Data with an empty dataset and no central import prompt.
+  Ordinary startup opens the full Data workspace with an empty Groups panel,
+  blank plotting area and Source/tools inspector, with no central import prompt.
 - Common inspector parameters stay open; advanced controls have disclosure panels
   and override indicators. Source mapping is visible at the top of Data unless
   an explicitly opened tool takes that position.

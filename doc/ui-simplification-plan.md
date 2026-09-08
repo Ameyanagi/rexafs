@@ -15,9 +15,10 @@ Icons need accessible names; scientific units and ambiguous actions still need l
 Import keeps its word label. Source mapping, common plot toggles, Assistant model,
 reasoning, permissions and mode, and publication style remain visible.
 The theme sun/moon button remains directly available in the top bar.
-An ordinary launch opens Data with an empty dataset and blank canvas; there is
-no central Import/Open project prompt. File drops and the top-bar commands remain
-the entry points.
+An ordinary launch opens the full Data workspace: an empty Groups panel, blank
+plotting area, and Source/processing-tools inspector. Side panels follow their
+visibility toggles even before any import. There is no central Import/Open project
+prompt. File drops and the top-bar commands remain the entry points.
 
 Keep errors, unsaved changes, named operands, affected counts, active overrides,
 and permission scope visible when they affect a decision. Put detailed provenance,
