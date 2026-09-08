@@ -89,8 +89,7 @@ def build_installer(bundle, output, metadata):
             "Before replacing an older copy, save your project and quit that app.\n"
             "Stable and Nightly have different names and can be installed together.\n"
             "Nightly contains recent changes and is intended for testing.\n\n"
-            "Licenses are included inside the application: Show Package Contents,\n"
-            "then Contents/Resources/notices. Your project files are separate.\n"
+            "Licenses: Help > Licenses.\n"
             "https://rexafs.com\n", encoding="utf-8")
         provenance = Path(temporary) / "build.json"
         provenance.write_text(json.dumps(metadata, indent=2) + "\n")

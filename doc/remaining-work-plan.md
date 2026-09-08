@@ -2,14 +2,14 @@
 
 Releases 0.1.4 and [0.2.0](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.0)
 are published on GitHub and all three package registries. Phase 1, Phase 2.1–2.7,
-and concrete follow-up
-gaps D1–D4 are implemented and merged in [PR #41](https://github.com/Ameyanagi/rexafs/pull/41).
+and concrete follow-up gaps D1–D4 are implemented and merged in
+[PR #41](https://github.com/Ameyanagi/rexafs/pull/41).
 Release preparation [PR #42](https://github.com/Ameyanagi/rexafs/pull/42) passed all
 34 checks and merged. Tag `v0.2.0` points to
 `7278be4ce91b80de235ce785782b46e7f5647447`, whose tree exactly matches that tested
 candidate. The final [manual build 34204231697](https://github.com/Ameyanagi/rexafs/actions/runs/34204231697)
-passed all 29 jobs. Signed downloads are qualified, all 42 public asset digests
-verify, and every published package matches that build. Hardware qualification,
+passed all 29 jobs. Signed downloads are qualified, the initial 42-asset
+publication verified, and every published package matches that build. Hardware qualification,
 upstream advisories, and the explicitly deferred features remain as listed below.
 
 This replaces the earlier overlapping progress entries. The original Groups
@@ -109,8 +109,8 @@ and [0.2.0 release notes](release-notes-0.2.0.md).
 - [x] Complete release-preparation CI/review and tag the reviewed merge. PR #42
   passed Release builds 34198489189, Rust 34198489183, and Larch 34198489209.
 - [x] Finish the final manual GitHub build and signing; qualify the actual signed
-  ZIPs/DMGs, native Apple Silicon app and Intel app under Rosetta. All 42 public
-  asset digests match the final manifest.
+  ZIPs/DMGs, native Apple Silicon app and Intel app under Rosetta. All 42 original
+  asset digests verified; the current desktop-only list has 19 verified assets.
 - [x] Repair publisher downloads in [PR #43](https://github.com/Ameyanagi/rexafs/pull/43)
   after repeated unrelated desktop artifact transfer failures. Registry channels
   now verify only their complete required package set against the original build;
@@ -144,8 +144,66 @@ The following remain deliberate product decisions or explicitly deferred scope:
 - D5: Legacy derived groups require quantity confirmation before normalization.
 - D7: Confirmed series and explicit ordering/coordinate, frame-range processing,
   Spectrum/Catalog center view, persistent LCF/PCA result rows, paired-reference
-  alignment, full tool previews and operation-specific bulk execution, drag reorder.
+  alignment, full tool previews and operation-specific bulk execution, drag reorder,
+  and the separately deferred provenance graph.
 - D8: Assistant proposal-review mode, transcript search, and conversation export.
+
+## E. Feature handoff — not yet implemented
+
+CI/CD and publication for 0.2.0 are complete. The broader product design is not.
+The following expands D7/D8 into work that can be delegated independently.
+
+| ID | Work package | Done when |
+|---|---|---|
+| F1 | Confirmed series with durable ordered membership and coordinates. Folder intake must not imply a scientific series. | Treat as series previews numeric filename order, first/last members, ties/gaps, channel, coordinate, and edge/quantity compatibility. Unknown metadata requires an explicit decision; later imports never silently renumber frames. Save/reopen preserves the exact order. |
+| F2 | Frame-range browsing and processing for large series. Depends on F1. | Captured ranges are processed with bounded memory, progress/cancellation, exact coverage and failed-frame reporting; displayed overview samples are never confused with the full calculation. Qualify a 100,000-frame case. |
+| F3 | Spectrum/Catalog center switch and persistent display ordering. | Both views share durable current/marks/locks and filters. Sorting and drag/move reorder survive reopen without changing source identity, recipe membership, or acquisition order. Keep display order distinct from F1's scientific frame order. |
+| F4 | Full tool previews and operation-specific bulk execution. | Show one named before/after preview and exact target counts. Align each target to one named standard; Calibrate applies one measured shift; Difference uses one named baseline and common coverage; Merge remains N→1. Deglitch/Truncate/Rebin/Smooth retain their own units, bounds, and no-op rules. Preserve provenance, independent outputs, current/marks, and undo. |
+| F5 | Paired-reference alignment. Depends on durable group/source identities; coordinate with F4. | Persist explicit sample/reference pairs, align references to the selected standard, and transfer each measured correction only to its paired sample. Missing/ambiguous pairs and duplicate corrections are visible and blocked until resolved. |
+| F6 | Persistent LCF/PCA result rows. | Results have stable identity, recorded inputs/settings, export, save/reopen, and Inputs changed state. Distinguish analysis results from absorption spectra so they cannot enter incompatible tools. |
+| F7 | Assistant proposal-review mode. | A proposed edit shows its exact targets and change preview before application; reject/cancel changes nothing. Apply validates current revisions/permissions and records one undoable accepted operation. Existing saved transcripts remain readable. |
+| F8 | Assistant transcript search and conversation export. | Search can locate and open a saved conversation/message. Export preserves roles, timestamps, and historical receipts without treating them as executable actions. User chooses the conversation and destination; credentials are excluded. |
+| F9 | Provenance graph — optional later design. | Define the scope first. Any graph reflects recorded identities and operations; it must not invent ancestry or replace the simple source-stack/Results list. |
+| F10 | Native picker improvements — upstream-dependent. | Use a real `.rxs` filter and sensible initial folder when supported by the pinned toolkit. Retain post-selection validation, recent-folder access, and cross-platform behavior. |
+
+F1–F10 are future work, not hidden requirements to republish 0.2.0. Legacy
+quantity confirmation (D5) is intentional behavior, not a missing automatic
+conversion. Existing Series, LCF/PCA, and tool features do not imply that all of
+the newer contracts above are implemented.
+
+## F. Plans missing from the previous summary
+
+These cover broader audit/performance work outside the completed import phases.
+Where a finding came from an older audit, reproduce it on current `main` before
+changing code; do not reopen bugs already fixed by Phase 0–2.
+
+| ID | Plan | Acceptance / first step |
+|---|---|---|
+| R1 | Project Save/Save As, dirty state, close protection, and recovery snapshots. | Current Save still prompts for a path and the close handler does not implement a complete unsaved-work lifecycle. Define Save vs Save As; cover edits, pending saves, cancel, failed writes, recovery after interruption, linked relocation, and embedded projects. Preserve atomic writes and old fixtures. |
+| R2 | Input, allocation, and work limits. | Add checked budgets for FFT sizes, tiny-cell/large-cluster enumeration, decompressed input, and recursive parsers. Reproduce each reachable case with bounded tests; return useful GUI/Python/JS errors. Do not use blanket panic catching as the solution. |
+| R3 | Imported-project and Assistant trust review. | Specify how external linked files/comments enter context and which actions require authority. Preserve legitimate multi-directory projects and existing opt-in controls. Treat prompt-injection claims as hypotheses until reproduced. |
+| R4 | Remaining scientific/UI audit findings. | Recheck data-edge vs structure-absorber mismatch, persistent invalid-field feedback, reset subsection scope, and batch-local error counts. Confirm exact current behavior first; keep deliberate expert choices possible. |
+| R5 | Processing performance after cached AUTOBK SVD. | Separate PRs for FFT window/k-weight preparation, exact cubic-resampling preparation, normalization fit preparation, then allocation/cache-lock reduction. Preserve numerical conventions and per-spectrum validity checks. Compare cold/warm and changed geometry, one/ten workers, stage and full-pipeline timings. |
+| R6 | Render and fitting performance. | Profile render-time parameter serialization and fitting preparation, repeated FEFF interpolation/transform setup, and smoothing cost before selecting changes. Require measured benefits and numerical equivalence; do not infer speedups from call counts. |
+| R7 | Upstream advisory maintenance and native platform qualification. | Close D6 and B6 with actual dependency/platform evidence. Keep all-features inventories distinct from shipped binary reachability, and Rosetta distinct from native Intel validation. |
+| R8 | Website/documentation deployment. | The release runbook treats domain hosting as separate. Verify current hosting, DNS/HTTPS, installation instructions, and download links before claiming deployment is still missing or complete. |
+
+The requested broader UI review is planned in
+[UI simplification handoff](ui-simplification-plan.md), U1–U7. It prioritizes
+progressive disclosure and visual hierarchy rather than adding instructions.
+
+## G. Current requested polish
+
+- [x] Quiet startup implementation: no automatic Cu example; Import/Open project first; examples
+  available explicitly from Help.
+- [x] Offline license reader implementation under Help, including packaged dependency notices.
+- [x] Desktop-focused release downloads and concise registry/offline installation
+  instructions.
+
+These are the only implementation changes requested after the 0.2.0 release.
+The feature and broader UI work above remains a handoff for later delegation.
+The startup and Help changes passed 428 GUI tests and native packaged-app
+checks; they are not part of the already-published 0.2.0 binaries.
 
 ## Workspace handoff
 

@@ -40,6 +40,9 @@ pub enum PaletteCmd {
     RecentFolder(std::path::PathBuf),
     Theme,
     Updates,
+    Help,
+    Licenses,
+    Example,
     Undo,
     Redo,
     Journal,
@@ -171,7 +174,7 @@ impl StudioApp {
             });
         }
         items.extend(reset_params_item(self.stage));
-        let simple: [(&str, &'static str, &'static str, PaletteCmd); 13] = [
+        let simple = [
             ("Mark shown", "groups", "", PaletteCmd::MarkAll),
             ("Clear marks", "groups", "", PaletteCmd::MarkNone),
             (
@@ -205,6 +208,9 @@ impl StudioApp {
             ),
             ("Undo", "edit", "⌘Z", PaletteCmd::Undo),
             ("Redo", "edit", "⇧⌘Z", PaletteCmd::Redo),
+            ("Help", "app", "", PaletteCmd::Help),
+            ("Licenses", "app", "", PaletteCmd::Licenses),
+            ("Open Cu example", "file", "", PaletteCmd::Example),
         ];
         for (label, category, keys, cmd) in simple {
             items.push(PaletteItem {
@@ -314,7 +320,7 @@ impl StudioApp {
         cx.defer(move |cx| {
             let _ = handle.update(cx, |_, window, cx| {
                 let _ = view.update(cx, |app, cx| {
-                    if app.palette.is_none() && !app.updates.open {
+                    if app.palette.is_none() && !app.updates.open && !app.help.is_open() {
                         focus.focus(window, cx);
                     }
                 });
@@ -384,6 +390,9 @@ impl StudioApp {
             }
             PaletteCmd::Theme => self.toggle_theme(cx),
             PaletteCmd::Updates => self.open_updates(cx),
+            PaletteCmd::Help => self.open_help(cx),
+            PaletteCmd::Licenses => self.open_licenses(cx),
+            PaletteCmd::Example => self.open_example(cx),
             PaletteCmd::Undo => self.undo(cx),
             PaletteCmd::Redo => self.redo(cx),
             PaletteCmd::Journal => {

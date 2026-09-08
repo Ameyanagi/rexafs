@@ -47,10 +47,11 @@ Silicon. Native Intel hardware remains unqualified. The portable input's bytes
 remain identical to the retained fixture.
 
 Both signed ZIP/checksum pairs replaced their unsigned draft assets, and both
-signed DMGs and qualification sidecars were added. All **42** public GitHub asset
-digests match the final local files, including `SHA256SUMS` (which covers the
-other 41 assets). The original unsigned build manifest is retained separately.
-The final manifest's SHA-256 is
+signed DMGs and qualification sidecars were added. At initial publication, all
+**42** GitHub asset digests matched the final local files, including `SHA256SUMS`
+(which covered the other 41 assets). The original unsigned build manifest is
+retained separately. The [initial publication manifest](publication-SHA256SUMS)
+has SHA-256
 `94a3225c39a673cc7372b6d3cf5799890c2e20034db051ab73d15dab18f2b90d`.
 
 Final evidence: `/tmp/rexafs-020-final-check.log`,
@@ -92,6 +93,23 @@ same SHA-256 hashes as that build. The default stable endpoints on crates.io,
 npm, and PyPI all select 0.2.0. Verification output is retained in
 `/tmp/rexafs-020-registries.log`. Only after these checks passed was the GitHub
 draft made public and marked latest on 2026-09-08 at 09:55 UTC.
+
+## Desktop download cleanup
+
+The public asset list was subsequently reduced to **19** files: the same 18
+desktop archives/installers/checksums/evidence files plus a desktop-only
+`SHA256SUMS`. The 23 duplicate registry packages were removed from GitHub after
+rechecking their published registry hashes; all remain available through PyPI,
+crates.io, and npm. No desktop binary, installer, package version, or source tag
+changed. Offline package installation is documented in
+[installing.md](../../installing.md).
+
+All 19 public asset digests match the desktop files. The desktop manifest's
+SHA-256 is `c5ff5fe9dbc4215f96ab03d7668639084438d61499d65a46f8130325cb1c6e8c`.
+The original 41-file manifest above preserves the full publication evidence.
+Before/after API records are retained in
+`/tmp/rexafs-020-before-download-cleanup.json` and
+`/tmp/rexafs-020-desktop-public-assets.json`.
 
 ## Local release gates
 

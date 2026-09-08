@@ -225,6 +225,18 @@ wrong-version, or modified packages fail verification. GitHub draft creation sti
 requires the complete artifact set. A desktop artifact transfer failure therefore
 cannot block publication of already-qualified registry packages.
 
+GitHub's public download list is desktop-only. `release_downloads.py` stages the
+four platform archives, Windows installer, checksums, and available Mac installer
+evidence after verifying their original build hashes. Registry artifacts stay in
+the successful build and their registries. The staged `SHA256SUMS` covers only
+the files being uploaded; retain the original complete build manifest separately.
+After signing, replace the Mac archives, add their installers/evidence, and
+regenerate the public desktop manifest. Never mix unsigned and signed checksums.
+
+Lead release notes with platform download links; put package commands, detailed
+changes, and qualification evidence in collapsed sections. Link to
+[installation instructions](installing.md) for offline setup.
+
 The workflow normally runs on the release tag. To resume with corrected
 publication tooling, review and merge the tooling change, create a separate
 `vX.Y.Z-publish-tools.N` tag for that tooling commit, and supply the original

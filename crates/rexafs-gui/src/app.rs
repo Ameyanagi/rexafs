@@ -1222,6 +1222,7 @@ pub struct StudioApp {
     project_load_generation: u64,
     project_saving: bool,
     updates: shell::updates_view::UpdateState,
+    help: shell::help::HelpState,
     pub(crate) structure: shell::structure_view::StructureState,
     feff_running: bool,
     feff_gen: u64,
@@ -2569,10 +2570,11 @@ pub(crate) fn packaged_data_file() -> Option<PathBuf> {
     .find(|path| path.is_file())
 }
 
-fn default_data_file() -> PathBuf {
-    packaged_data_file().unwrap_or_else(|| {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../rexafs/tests/testfiles/xraylarch_d867/xafsdata/cu_150k.xmu")
+fn example_data_file() -> Option<PathBuf> {
+    packaged_data_file().or_else(|| {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../rexafs/tests/testfiles/xraylarch_d867/xafsdata/cu_150k.xmu");
+        path.is_file().then_some(path)
     })
 }
 
@@ -2803,17 +2805,6 @@ impl StudioApp {
             }
             true
         });
-        let path = if initial_open.is_some() {
-            PathBuf::new()
-        } else {
-            default_data_file()
-        };
-        let label: SharedString = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.display().to_string())
-            .into();
-
         let theme = match crate::settings::env_var("THEME").ok().as_deref() {
             Some("light") => Theme::light(),
             _ => Theme::dark(),
@@ -2908,14 +2899,14 @@ impl StudioApp {
             recompute_last: None,
             recompute_tick_pending: false,
             recompute_dirty: false,
-            current_path: path.clone(),
-            spectrum_path: path.clone(),
+            current_path: PathBuf::new(),
+            spectrum_path: PathBuf::new(),
             spectrum_fingerprint: 0,
             spectrum_group: None,
             standalone_source: None,
             spectrum_quantity: crate::params::Quantity::RawMu,
             spectrum: None,
-            spectrum_label: label.clone(),
+            spectrum_label: "".into(),
             stale_plots: None,
             quadrants: Vec::new(),
             quad_bindings: Vec::new(),
@@ -2976,6 +2967,7 @@ impl StudioApp {
             project_load_generation: 0,
             project_saving: false,
             updates: Default::default(),
+            help: Default::default(),
             feff_running: false,
             feff_gen: 0,
             batch_fit: None,
@@ -2989,7 +2981,7 @@ impl StudioApp {
             merge_running: false,
             merge_gen: 0,
             merge_cancel: None,
-            status: "loading...".into(),
+            status: "".into(),
             job_errors: Vec::new(),
             parser_evidence: Default::default(),
             imports: Default::default(),
@@ -3048,9 +3040,6 @@ impl StudioApp {
         })
         .detach();
         app.filter_input = Some(filter_input);
-        if initial_open.is_none() {
-            app.update_import_preview(cx);
-        }
         // Scripted launches: REXAFS_STRUCTURE_SOURCE=builtin|cif|mp|amcsd|cod,
         // REXAFS_IMPORT_CIF=<file>, REXAFS_SETTINGS=<settings.json>.
         if let Ok(src) = crate::settings::env_var("STRUCTURE_SOURCE") {
@@ -3077,17 +3066,6 @@ impl StudioApp {
         }
         if let Some(path) = initial_open {
             app.route_paths(vec![path], false, cx);
-            return app;
-        }
-        match process_file(&path, &app.params) {
-            Ok(sp) => {
-                let fingerprint = app.params.fingerprint();
-                app.set_processed(NO_ENTRY, label, path.clone(), fingerprint, Arc::new(sp), cx);
-            }
-            Err(e) => {
-                app.status = format!("failed to load {}: {e}", path.display()).into();
-                app.record_job_error(path.display().to_string(), e.to_string());
-            }
         }
         app
     }
@@ -9327,6 +9305,8 @@ impl Render for StudioApp {
             "PathRoute"
         } else if self.updates.open {
             "UpdateDialog"
+        } else if self.help.is_open() {
+            "HelpDialog"
         } else if self.palette.is_some() {
             "Palette"
         } else {

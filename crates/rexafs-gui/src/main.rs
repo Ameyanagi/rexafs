@@ -15,6 +15,7 @@ mod group_identity;
 mod import_mapping;
 mod import_recipes;
 mod joint_fitting;
+mod licenses;
 mod params;
 mod plotting;
 mod project;

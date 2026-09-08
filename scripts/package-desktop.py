@@ -11,6 +11,7 @@ from pathlib import Path
 
 from release_archive import zip_bundle
 from desktop_channels import app_name, identity
+from macos_installer import include_notices
 
 root = Path(__file__).resolve().parents[1]
 metadata = json.loads(subprocess.check_output(
@@ -105,11 +106,14 @@ for package_id in sorted(included):
 (bundle / "dependencies.json").write_text(json.dumps(inventory, indent=2) + "\n")
 if "feff10-runner" in features:
     shutil.copytree(root / "assets/licenses/feff10-native", notices / "feff10-native")
+if system == "Darwin":
+    include_notices(bundle, build_identity)
 (bundle / "README.txt").write_text(
     f"rexafs {version} · {build_identity['channel']} · {build_identity['release_tag']}\nRust-powered X-ray absorption analysis\nhttps://rexafs.com\n\n"
     f"Calculation engines: {', '.join(features)}. Select the engine in Fit > Calculate.\n"
     "Keep the extracted directory together; it contains the example and notices.\n"
     f"Open {application_name} on macOS or run rexafs / rexafs.exe on Linux / Windows.\n"
+    "Help contains the optional Cu example and offline licenses.\n"
     "This archive has no publisher code signature; macOS notarization is not included.\n"
     "Linux requires a graphical session, Vulkan-capable driver, GTK 3, fontconfig and xkbcommon.\n"
     "Save .rxs projects with relative source paths (default), or select Raw: embedded for portable originals.\n"
