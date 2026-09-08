@@ -88,9 +88,11 @@ still need native verification. Reconnecting for structure-focus verification fa
 with the same native-pipe error. Do not treat integration tests as visual QA.
 
 The final release candidate was packaged in a separate app bundle. The requested
-launch also failed at the native connection with the same error, before the app
-could open. New empty-Data startup and live Assistant theme synchronization are
-implemented and compiled, but their final appearance is not visually qualified.
+launch failed at the native connection with the same error. After the maintainer
+requested a direct launch, macOS opened one release instance; its exact packaged
+executable was confirmed running. New empty-Data startup and live Assistant theme
+synchronization are implemented and compiled, but their final appearance is not
+visually qualified.
 
 Also pending: narrow/light-theme workflows, populated Series navigation, completed
 Fit/Assistant busy and approval states, export-preview comparison, and complete
