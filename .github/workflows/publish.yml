@@ -1,6 +1,6 @@
 name: Publish reviewed release
 
-# Run this workflow on the reviewed vX.Y.Z tag after the repository rename.
+# Run on the release tag, or on a reviewed tooling tag with release_tag supplied.
 on:
   workflow_dispatch:
     inputs:
@@ -13,6 +13,10 @@ on:
         description: Successful Release builds run ID for this exact tag commit
         type: string
         required: true
+      release_tag:
+        description: Existing reviewed source tag (leave empty when running on that tag)
+        type: string
+        required: false
       registry_auth:
         description: Use token only for the first crates.io/npm upload; PyPI always uses trusted publishing
         type: choice
@@ -27,34 +31,27 @@ permissions:
 jobs:
   version:
     runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
+      version: ${{ steps.source.outputs.version }}
+      tag: ${{ steps.source.outputs.tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - name: Require a matching version tag
+      - name: Require the reviewed source tag and its successful manual build
+        id: source
         env:
           RELEASE_REF_TYPE: ${{ github.ref_type }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          test "$RELEASE_REF_TYPE" = tag
-          python scripts/check-release-version.py "$RELEASE_TAG"
-      - name: Require a successful GitHub build of this commit
-        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
           GH_TOKEN: ${{ github.token }}
           BUILD_RUN_ID: ${{ inputs.build_run_id }}
-          RELEASE_SHA: ${{ github.sha }}
         run: |
-          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]]
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID" > build-run.json
-          python - <<'PY'
-          import json, os
-          run = json.load(open('build-run.json'))
-          assert run['conclusion'] == 'success', 'Release build must have succeeded'
-          assert run['head_sha'] == os.environ['RELEASE_SHA'], 'Build commit does not match release tag'
-          assert run['path'] == '.github/workflows/release-build.yml', 'Unexpected build workflow'
-          assert run['event'] == 'workflow_dispatch', 'Use a maintainer-dispatched release build'
-          PY
+          test "$RELEASE_REF_TYPE" = tag
+          python scripts/check-release-source.py "$RELEASE_TAG" "$BUILD_RUN_ID"
 
   publish:
     needs: version
@@ -70,24 +67,76 @@ jobs:
         with:
           python-version: '3.12'
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: inputs.channel == 'github-draft'
         with:
           path: artifacts
           run-id: ${{ inputs.build_run_id }}
           github-token: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: inputs.channel != 'github-draft'
+        with:
+          name: release-manifest
+          path: artifacts/release-manifest
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: inputs.channel == 'crates-io'
+        with:
+          name: rust-package
+          path: artifacts/rust-package
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: inputs.channel == 'npm'
+        with:
+          name: npm-package
+          path: artifacts/npm-package
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: inputs.channel == 'pypi'
+        with:
+          pattern: wheel-*
+          path: artifacts
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: inputs.channel == 'pypi'
+        with:
+          name: python-sdist
+          path: artifacts/python-sdist
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
       - name: Verify GitHub artifact checksums
+        if: inputs.channel == 'github-draft'
         run: python scripts/check-artifacts.py verify artifacts artifacts/release-manifest/SHA256SUMS
+      - name: Require every registry package and its original build checksum
+        if: inputs.channel != 'github-draft'
+        env:
+          PUBLISH_CHANNEL: ${{ inputs.channel }}
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: python scripts/check-registry-artifacts.py "$PUBLISH_CHANNEL" artifacts artifacts/release-manifest/SHA256SUMS "$RELEASE_VERSION"
+      - name: Check out the exact qualified Rust source
+        if: inputs.channel == 'crates-io'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.version.outputs.commit }}
+          path: release-source
       - uses: dtolnay/rust-toolchain@ce678459e9fc7500d337468f904b95f1b5c10b5e # 1.98.1
+        if: inputs.channel == 'crates-io'
       - name: Verify Rust package matches the GitHub artifact
         if: inputs.channel == 'crates-io'
+        working-directory: release-source
         run: |
           cargo package --locked -p rexafs
-          cmp target/package/rexafs-*.crate artifacts/rust-package/rexafs-*.crate
+          cmp target/package/rexafs-*.crate ../artifacts/rust-package/rexafs-*.crate
       - name: Authenticate to crates.io with trusted publishing
         if: inputs.channel == 'crates-io' && inputs.registry_auth == 'trusted-publishing'
         id: crates_auth
         uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1
       - name: Publish Rust library
         if: inputs.channel == 'crates-io'
+        working-directory: release-source
         env:
           CARGO_REGISTRY_TOKEN: ${{ inputs.registry_auth == 'token' && secrets.CRATES_IO_TOKEN || steps.crates_auth.outputs.token }}
         run: |
@@ -112,7 +161,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ inputs.registry_auth == 'token' && secrets.NPM_TOKEN || '' }}
           REGISTRY_AUTH: ${{ inputs.registry_auth }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
         run: |
           if [[ "$REGISTRY_AUTH" == token ]]; then
             : "${NODE_AUTH_TOKEN:?Configure NPM_TOKEN in the release environment for the first upload}"
@@ -125,7 +174,7 @@ jobs:
         if: inputs.channel == 'github-draft'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
         run: |
           PRERELEASE=()
           if [[ "$RELEASE_TAG" == *-* ]]; then PRERELEASE=(--prerelease); fi

@@ -31,5 +31,5 @@ if __name__ == "__main__":
         "gh", "api", f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{run_id}"]))
     validate(run, tag, commit, version)
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-        output.write(f"commit={commit}\nversion={version}\n")
+        output.write(f"commit={commit}\nversion={version}\ntag={tag}\n")
     print(f"Qualified {tag} at {commit}, build {run_id}")

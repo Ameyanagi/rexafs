@@ -218,6 +218,31 @@ verifies every checksum. The Rust publishing step additionally reproduces the
 Python and npm upload the downloaded distributions directly. Local artifact paths
 are never accepted as publication inputs.
 
+Registry channels download only their required artifacts and the original build
+manifest. Rust requires the source crate, npm its tarball, and PyPI every wheel
+listed in that manifest plus the source archive. Missing, additional, duplicate,
+wrong-version, or modified packages fail verification. GitHub draft creation still
+requires the complete artifact set. A desktop artifact transfer failure therefore
+cannot block publication of already-qualified registry packages.
+
+The workflow normally runs on the release tag. To resume with corrected
+publication tooling, review and merge the tooling change, create a separate
+`vX.Y.Z-publish-tools.N` tag for that tooling commit, and supply the original
+`release_tag` explicitly. The release environment continues to require a tag;
+its permissions and trusted publishers are unchanged. Source validation resolves
+the original tag and requires its matching successful manual build. Rust is
+checked out at that resolved source commit before Cargo reproduces and compares
+the crate. npm's `latest`/`next` choice also uses the source release tag.
+
+```bash
+gh workflow run publish.yml --ref v0.2.0-publish-tools.1 \
+  -f release_tag=v0.2.0 -f channel=npm -f build_run_id=34204231697
+```
+
+Record both the publication-tooling ref and source build in the qualification
+report. Keep the source release tag immutable; a tooling tag does not create a
+new application release or replace its artifacts.
+
 The `release` GitHub environment is configured for the final repository. Channels:
 
 - `crates-io`: select `registry_auth=token` to use `CRATES_IO_TOKEN` for the first
