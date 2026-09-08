@@ -25,6 +25,7 @@ fn check_target(
 }
 use crate::app::{
     NO_ENTRY, StudioApp,
+    import_channels::{self, ChannelScope},
     import_preview::{self, PreviewKey, PreviewState, SourceRevision},
     import_repair::{self, RepairScope, RepairValidation},
 };
@@ -78,9 +79,45 @@ pub(crate) struct ImportEditor {
     show_targets: bool,
     show_details: bool,
     batch_available: bool,
+    creation: Option<DetectionMode>,
+    channel_scope: Option<ChannelScope>,
+    batch_selected: bool,
 }
 
 impl StudioApp {
+    pub(crate) fn open_channel_editor(
+        &mut self,
+        ix: usize,
+        mode: DetectionMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(target) = self
+            .tool_target(ix)
+            .filter(|t| !t.path.as_os_str().is_empty())
+        else {
+            return;
+        };
+        let Some(scope) = self.capture_channel_scope(&target, mode, false) else {
+            return;
+        };
+        self.open_import_editor(ix, window, cx);
+        if let Some(editor) = self.import_editor.clone() {
+            editor.update(cx, |editor, cx| {
+                editor.creation = Some(mode);
+                editor.channel_scope = Some(scope.clone());
+                editor.bulk_scope = Some(scope.targets);
+                editor.locked = false;
+                editor
+                    .spacing
+                    .update(cx, |input, cx| input.set_enabled(true, cx));
+                editor.params.import.mode = mode;
+                editor.params = import_channels::channel_params(editor.params.import.clone());
+                editor.reload(cx);
+            });
+        }
+    }
+
     pub(crate) fn open_import_editor(
         &mut self,
         ix: usize,
@@ -173,6 +210,9 @@ impl ImportEditor {
             show_targets: false,
             show_details: false,
             batch_available: false,
+            creation: None,
+            channel_scope: None,
+            batch_selected: false,
         }
     }
 
@@ -309,6 +349,9 @@ impl ImportEditor {
                 } else if let Some(Err(error)) = &this.preview.result {
                     this.error = Some(error.clone());
                 }
+                if initial && this.creation.is_some() {
+                    this.validate_targets(cx);
+                }
                 cx.notify();
             })
             .ok();
@@ -333,6 +376,9 @@ impl ImportEditor {
     }
 
     fn apply(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.creation.is_some() && self.channel_scope.is_none() {
+            return;
+        }
         let Some(draft) = &self.draft else {
             return;
         };
@@ -356,7 +402,11 @@ impl ImportEditor {
             let mapping = draft.config().clone();
             let revision = draft.revision;
             let result = self.studio.update(cx, |studio, cx| {
-                studio.apply_repair(validation, &mapping, revision, cx)
+                if let Some(scope) = &self.channel_scope {
+                    studio.apply_channels(scope, validation, &mapping, revision, cx)
+                } else {
+                    studio.apply_repair(validation, &mapping, revision, cx)
+                }
             });
             match result {
                 Ok(Ok(_)) => self.close(window, cx),
@@ -434,12 +484,44 @@ impl ImportEditor {
             }
             Action::ThisGroup => {
                 self.bulk_scope = None;
+                self.batch_selected = false;
+                if let Some(mode) = self.creation {
+                    self.channel_scope = self
+                        .studio
+                        .read_with(cx, |studio, _| {
+                            studio.capture_channel_scope(&self.target, mode, false)
+                        })
+                        .ok()
+                        .flatten();
+                    self.bulk_scope = self
+                        .channel_scope
+                        .as_ref()
+                        .map(|scope| scope.targets.clone());
+                }
                 self.invalidate_validation();
+                if self.creation.is_some() {
+                    self.validate_targets(cx);
+                }
                 cx.notify();
                 return;
             }
             Action::Batch => {
-                if self.bulk_scope.is_none()
+                if let Some(mode) = self.creation {
+                    if !self.batch_selected {
+                        self.channel_scope = self
+                            .studio
+                            .read_with(cx, |studio, _| {
+                                studio.capture_channel_scope(&self.target, mode, true)
+                            })
+                            .ok()
+                            .flatten();
+                        self.bulk_scope = self
+                            .channel_scope
+                            .as_ref()
+                            .map(|scope| scope.targets.clone());
+                        self.batch_selected = true;
+                    }
+                } else if self.bulk_scope.is_none()
                     && let Some(draft) = &self.draft
                 {
                     self.bulk_scope = self
@@ -539,6 +621,13 @@ impl ImportEditor {
         let mapping = draft.config().clone();
         let revision = draft.revision;
         let layout = LayoutKey::from_preview(table);
+        let channel_scope = self.channel_scope.as_ref().and_then(|scope| {
+            self.studio
+                .read_with(cx, |studio, _| {
+                    studio.refresh_channel_scope(scope, mapping.mode)
+                })
+                .ok()
+        });
         self.invalidate_validation();
         self.error = None;
         self.validating = true;
@@ -546,7 +635,13 @@ impl ImportEditor {
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
-                .spawn(async move { import_repair::validate(scope, layout, mapping, revision) })
+                .spawn(async move {
+                    if let Some(scope) = channel_scope {
+                        import_channels::validate(scope, layout, mapping, revision)
+                    } else {
+                        import_repair::validate(scope, layout, mapping, revision)
+                    }
+                })
                 .await;
             this.update(cx, |this, cx| {
                 if this.validation_generation == generation {
@@ -664,11 +759,13 @@ impl Render for ImportEditor {
                     .flex()
                     .justify_between()
                     .items_center()
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(format!("Re-map columns · {}", self.target.label)),
-                    )
+                    .child(div().flex_1().child(format!(
+                            "{} · {}",
+                            self.creation
+                                .map(|mode| format!("Add {}", mode.label()))
+                                .unwrap_or("Re-map columns".into()),
+                            self.target.label
+                        )))
                     .child(self.button(Action::Close, "Close", true, cx)),
             )
             .child(
@@ -876,6 +973,7 @@ impl Render for ImportEditor {
             && !self.locked;
         let ready = raw_ready
             && self.error.is_none()
+            && (self.creation.is_none() || self.channel_scope.is_some())
             && self.bulk_scope.as_ref().is_none_or(|_| {
                 self.validation
                     .as_ref()
@@ -890,17 +988,39 @@ impl Render for ImportEditor {
                     .gap_2()
                     .items_center()
                     .child("Target:")
-                    .child(self.button(Action::ThisGroup, "This group", true, cx))
+                    .child(self.button(
+                        Action::ThisGroup,
+                        if self.creation.is_some() {
+                            "This file"
+                        } else {
+                            "This group"
+                        },
+                        true,
+                        cx,
+                    ))
                     .child(self.button(
                         Action::Batch,
-                        "This channel in its import batch…",
+                        if self.creation.is_some() {
+                            "All files in this import batch…"
+                        } else {
+                            "This channel in its import batch…"
+                        },
                         self.draft.is_some() && !self.locked,
                         cx,
                     )),
             );
         }
         if let Some(scope) = &self.bulk_scope {
-            let label = format!("{} · {} captured groups", scope.label, scope.targets.len());
+            let label = format!(
+                "{} · {} captured {}",
+                scope.label,
+                scope.targets.len(),
+                if self.creation.is_some() {
+                    "files"
+                } else {
+                    "groups"
+                }
+            );
             panel = panel.child(label);
             let summary = self
                 .validation
@@ -951,7 +1071,7 @@ impl Render for ImportEditor {
                 panel = panel.child(list);
             }
         }
-        let apply_label = self
+        let mut apply_label = self
             .validation
             .as_ref()
             .map(|v| format!("Apply to {} files", v.file_count()))
@@ -962,7 +1082,16 @@ impl Render for ImportEditor {
                     "Apply to 1 file".into()
                 }
             });
-        let scope_label = if self.bulk_scope.is_some() {
+        if let Some(mode) = self.creation {
+            apply_label = self
+                .validation
+                .as_ref()
+                .map(|v| format!("Add {} {} groups", v.ready_count(), mode.label()))
+                .unwrap_or("Add validated channels".into());
+        }
+        let scope_label = if self.creation.is_some() {
+            "New groups · independent processing"
+        } else if self.bulk_scope.is_some() {
             "Mapping only · captured groups"
         } else {
             "Target: this group · 1 file"

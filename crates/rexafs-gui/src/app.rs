@@ -57,6 +57,7 @@ use crate::widgets::numeric_field::{FieldEvent, FieldKind, NumericField};
 use crate::widgets::text_input::{InputEvent, TextInput};
 
 mod group_rows;
+mod import_channels;
 mod import_preview;
 mod import_repair;
 mod import_state;
@@ -9225,7 +9226,11 @@ impl StudioApp {
                             false,
                         )
                         .on_click(cx.listener(
-                            move |this, _: &ClickEvent, _, cx| this.add_import_channel(mode, cx),
+                            move |this, _: &ClickEvent, window, cx| {
+                                if let Some(ix) = this.current_group_index() {
+                                    this.open_channel_editor(ix, mode, window, cx);
+                                }
+                            },
                         )),
                     );
                 }

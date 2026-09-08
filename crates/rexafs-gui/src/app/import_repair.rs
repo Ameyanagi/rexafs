@@ -32,6 +32,7 @@ pub(crate) struct RepairScope {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Validation {
     Ready(Vec<String>),
+    Existing,
     Locked,
     Changed,
     Incompatible(String),
@@ -40,6 +41,7 @@ pub(crate) enum Validation {
 impl Validation {
     pub fn description(&self) -> String {
         match self {
+            Self::Existing => "Channel already present · skipped".into(),
             Self::Ready(warnings) if warnings.is_empty() => "Compatible".into(),
             Self::Ready(warnings) => format!("Compatible · {}", warnings.join(" · ")),
             Self::Locked => "Processing locked · skipped".into(),
@@ -76,14 +78,19 @@ impl RepairValidation {
         let count = |predicate: fn(&Validation) -> bool| {
             self.results.iter().filter(|v| predicate(v)).count()
         };
-        format!(
+        let mut summary = format!(
             "{} compatible files · {} groups · {} incompatible · {} locked · {} changed",
             self.file_count(),
             self.ready_count(),
             count(|v| matches!(v, Validation::Incompatible(_))),
             count(|v| matches!(v, Validation::Locked)),
             count(|v| matches!(v, Validation::Changed))
-        )
+        );
+        let existing = count(|v| matches!(v, Validation::Existing));
+        if existing > 0 {
+            summary.push_str(&format!(" · {existing} already present"));
+        }
+        summary
     }
 }
 
@@ -158,7 +165,7 @@ pub(crate) fn validate(
     }
 }
 
-fn preflight(
+pub(super) fn preflight(
     validation: &RepairValidation,
     draft_revision: u64,
     current: impl Fn(&GroupId) -> Option<(ToolTarget, bool)>,
@@ -184,8 +191,7 @@ fn preflight(
             .as_ref()
             .and_then(|id| current(id))
             .ok_or("A target was removed; revalidate.")?;
-        if current.ix == super::NO_ENTRY
-            || !same_revision(&entry.target, &current)
+        if !same_revision(&entry.target, &current)
             || locked
             || SourceRevision::read(&current.path).ok().as_ref() != entry.source.as_ref().ok()
         {
@@ -199,6 +205,23 @@ fn preflight(
 }
 
 impl StudioApp {
+    /// A receipt may refer to a lazy primary that has never been selected.
+    /// Bind only the source identities in the explicitly chosen batch before
+    /// resolving its members; otherwise unseen sources disappear from counts.
+    pub(crate) fn bind_intake_batch(&self, batch_id: usize) {
+        if let Some(batch) = self.intake.history.get(batch_id) {
+            for (path, source) in &batch.sources {
+                if let Some(ix) = self.catalog.find_by_canonical_path(path)
+                    && self
+                        .peek_group_id(ix)
+                        .is_some_and(|id| source.created.contains(&id))
+                {
+                    self.group_id(ix);
+                }
+            }
+        }
+    }
+
     pub(crate) fn capture_repair_batch(
         &self,
         target: &ToolTarget,
@@ -207,6 +230,7 @@ impl StudioApp {
         let origin = self
             .intake
             .origin(&target.path, target.group_id.as_ref()?)?;
+        self.bind_intake_batch(origin.batch);
         let batch = self.intake.history.get(origin.batch)?;
         let mut seen = BTreeSet::new();
         let targets = batch

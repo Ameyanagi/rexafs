@@ -155,6 +155,19 @@ impl MenuContext {
                 .unwrap_or_default(),
             &present,
         );
+        // An existing channel can still be missing from other files in this
+        // exact batch. Its editor reports the existing count and never duplicates it.
+        self.channels.extend(
+            [
+                DetectionMode::Transmission,
+                DetectionMode::Fluorescence,
+                DetectionMode::Reference,
+                DetectionMode::MuColumn,
+            ]
+            .into_iter()
+            .filter(|mode| present.contains(mode))
+            .map(|mode| (mode, None)),
+        );
     }
 }
 
@@ -560,7 +573,7 @@ impl StudioApp {
             Item::Remap => {
                 self.open_import_editor(ix, window, cx);
             }
-            Item::Channel(mode) => self.add_import_channel_for(ix, mode, false, cx),
+            Item::Channel(mode) => self.open_channel_editor(ix, mode, window, cx),
             Item::Standard => {
                 if self.tools.pin_alignment_standard(id) {
                     self.choose_tool_standard(self.tool_target(ix), cx);
@@ -925,24 +938,20 @@ mod tests {
         };
         context.detect_channels(&path, &reference, &[primary.clone(), reference.clone()]);
         assert!(context.channels.contains(&(Transmission, None)));
-        assert!(
-            !context
-                .channels
-                .iter()
-                .any(|(m, _)| *m == MuColumn || *m == Reference)
-        );
+        // Existing interpretations remain reviewable for missing channels in
+        // other batch members, including Auto's manually chosen μ column.
+        assert!(context.channels.contains(&(MuColumn, None)));
+        assert!(context.channels.contains(&(Reference, None)));
+        assert_eq!(context.channels.len(), 4);
         // A second Auto sibling uses the source's transmission mapping.
         context.detect_channels(
             &path,
             &reference,
             &[primary, reference.clone(), ImportConfig::default()],
         );
-        assert!(
-            !context
-                .channels
-                .iter()
-                .any(|(m, _)| *m == Transmission || *m == MuColumn)
-        );
+        assert!(context.channels.contains(&(Transmission, None)));
+        assert!(context.channels.contains(&(MuColumn, None)));
+        assert_eq!(context.channels.len(), 4);
         std::fs::remove_file(path).unwrap();
     }
 

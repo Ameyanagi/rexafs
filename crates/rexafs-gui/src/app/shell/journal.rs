@@ -522,6 +522,10 @@ impl StudioApp {
 
     /// Journal the fresh identity introduced by an explicit re-import.
     pub(crate) fn record_reimport(&mut self, ids: BTreeSet<GroupId>) {
+        self.record_created_groups(ids, "Re-import removed file groups".into());
+    }
+
+    pub(crate) fn record_created_groups(&mut self, ids: BTreeSet<GroupId>, label: String) {
         let snapshot = RemovalSnapshot::take(
             ids,
             &self.group_registry,
@@ -535,7 +539,7 @@ impl StudioApp {
             &mut self.group_state,
         );
         self.record(
-            "Re-import removed file groups",
+            label,
             Some(UndoOp::GroupRemove {
                 snapshot,
                 restore_on_redo: true,
