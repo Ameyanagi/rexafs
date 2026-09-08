@@ -12,6 +12,7 @@ mod fit_details;
 mod fit_report;
 mod fitting;
 mod group_identity;
+mod import_mapping;
 mod joint_fitting;
 mod params;
 mod plotting;

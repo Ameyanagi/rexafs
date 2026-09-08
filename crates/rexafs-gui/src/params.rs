@@ -45,6 +45,7 @@ impl DetectionMode {
 #[serde(default)]
 pub struct ImportConfig {
     pub mode: DetectionMode,
+    pub axis: crate::import_mapping::AxisConversion,
     pub energy_col: Option<usize>,
     pub i0_col: Option<usize>,
     pub it_col: Option<usize>,
@@ -53,18 +54,22 @@ pub struct ImportConfig {
     pub fluor_cols: Option<Vec<usize>>,
     /// Precomputed mu(E), used by [`DetectionMode::MuColumn`].
     pub mu_col: Option<usize>,
+    /// Explicit precomputed reference μ, independent of the sample μ column.
+    pub reference_mu_col: Option<usize>,
 }
 
 impl Default for ImportConfig {
     fn default() -> Self {
         Self {
             mode: DetectionMode::Auto,
+            axis: Default::default(),
             energy_col: None,
             i0_col: None,
             it_col: None,
             ir_col: None,
             fluor_cols: None,
             mu_col: None,
+            reference_mu_col: None,
         }
     }
 }
@@ -714,21 +719,37 @@ pub fn preview_import(
     path: &std::path::Path,
     import: &ImportConfig,
 ) -> Result<ImportPreview, String> {
+    Ok(preview_import_raw(path, import)?.0)
+}
+
+/// Read once: the table retains source values while the plot uses converted eV.
+pub fn preview_import_raw(
+    path: &std::path::Path,
+    import: &ImportConfig,
+) -> Result<(ImportPreview, Result<RawData, String>), String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut data = parse_file_data(&text, path)?;
     let detection = import_detection(&data, path, import);
-    let signal_error = construct_mu(&mut data, path, import).err();
-    Ok(ImportPreview {
-        diagnostics: data.diagnostics,
-        signal_error,
-        column_count: detection.column_count,
-        names: detection.names,
-        rows: detection.rows,
-        detected: detection.detected,
-        auto_mode: detection.auto_mode,
-        resolved: detection.resolved,
-        xdi: detection.xdi,
-    })
+    let raw = construct_mu(&mut data, path, import).map(|(energy, mu)| RawData {
+        energy,
+        mu,
+        diagnostics: data.diagnostics.clone(),
+    });
+    let signal_error = raw.as_ref().err().cloned();
+    Ok((
+        ImportPreview {
+            diagnostics: data.diagnostics,
+            signal_error,
+            column_count: detection.column_count,
+            names: detection.names,
+            rows: detection.rows,
+            detected: detection.detected,
+            auto_mode: detection.auto_mode,
+            resolved: detection.resolved,
+            xdi: detection.xdi,
+        },
+        raw,
+    ))
 }
 
 /// Energy and mu(E) for one file under the import configuration. Rows whose
@@ -756,6 +777,18 @@ pub fn load_mu_with_diagnostics(
     })
 }
 
+/// Explicit reference-μ assignment takes precedence over named detection.
+pub(crate) fn reference_mu_column(
+    names: Option<&[String]>,
+    import: &ImportConfig,
+) -> Option<usize> {
+    import.reference_mu_col.or_else(|| {
+        names
+            .and_then(|names| names.iter().position(|n| name_matches(n, REF_MU_NAMES)))
+            .filter(|_| import.it_col.is_none() && import.ir_col.is_none())
+    })
+}
+
 /// Validate only column assignments, independently of finite point counts or
 /// axis conversion. The optional return value is a named reference-mu column.
 fn validate_mapping(
@@ -764,11 +797,7 @@ fn validate_mapping(
     import: &ImportConfig,
     resolved: &ResolvedImport,
 ) -> Result<Option<usize>, String> {
-    let ref_mu_col = data
-        .names
-        .as_ref()
-        .and_then(|names| names.iter().position(|n| name_matches(n, REF_MU_NAMES)))
-        .filter(|_| import.it_col.is_none() && import.ir_col.is_none());
+    let ref_mu_col = reference_mu_column(data.names.as_deref(), import);
     let rows = &data.rows;
     let width = rows[0].len();
     let need = |col: usize, name: &str| -> Result<usize, String> {
@@ -801,7 +830,9 @@ fn validate_mapping(
             need(resolved.it_col, "It")?;
             need(resolved.ir_col, "Ir")?;
         }
-        DetectionMode::Reference => {}
+        DetectionMode::Reference => {
+            need(ref_mu_col.unwrap(), "reference μ")?;
+        }
         DetectionMode::MuColumn => {
             let col = resolved
                 .mu_col
@@ -818,83 +849,35 @@ fn construct_mu(
     import: &ImportConfig,
 ) -> Result<(Vec<f64>, Vec<f64>), String> {
     let resolved = resolve_import(data, import);
-    if let Some(header) = &data.xdi {
-        for row in &mut data.rows {
-            let value = row
-                .get_mut(resolved.energy_col)
-                .ok_or_else(|| format!("{}: energy column out of range", path.display()))?;
-            *value = header
-                .energy_ev(resolved.energy_col, *value)
-                .map_err(|e| format!("{}: {e}", path.display()))?;
-        }
-    }
     let ref_mu_col = validate_mapping(data, path, import, &resolved)?;
-    let rows = &data.rows;
-    let e = resolved.energy_col;
-    let mut energy = Vec::with_capacity(rows.len());
-    let mut mu = Vec::with_capacity(rows.len());
-    match resolved.mode {
-        DetectionMode::Auto => unreachable!("auto mode is resolved before import math"),
-        DetectionMode::Transmission => {
-            let (i0, it) = (resolved.i0_col, resolved.it_col);
-            for (row, &line) in rows.iter().zip(&data.source_lines) {
-                let m = (row[i0] / row[it]).ln();
-                if m.is_finite() && row[e].is_finite() {
-                    energy.push(row[e]);
-                    mu.push(m);
-                } else {
-                    data.diagnostics.excluded_signal_points.record(Some(line));
-                }
+    let mut energy = Vec::with_capacity(data.rows.len());
+    let mut mu = Vec::with_capacity(data.rows.len());
+    for (row, &line) in data.rows.iter().zip(&data.source_lines) {
+        let e = import
+            .axis
+            .energy_ev(
+                data.xdi.as_ref(),
+                resolved.energy_col,
+                row[resolved.energy_col],
+            )
+            .map_err(|error| format!("{}: {error}", path.display()))?;
+        let m = match resolved.mode {
+            DetectionMode::Auto => unreachable!("auto mode is resolved before import math"),
+            DetectionMode::Transmission => (row[resolved.i0_col] / row[resolved.it_col]).ln(),
+            DetectionMode::Fluorescence => {
+                resolved.fluor_cols.iter().map(|&c| row[c]).sum::<f64>() / row[resolved.i0_col]
             }
-        }
-        DetectionMode::Fluorescence => {
-            let i0 = resolved.i0_col;
-            let cols = &resolved.fluor_cols;
-            for (row, &line) in rows.iter().zip(&data.source_lines) {
-                let m = cols.iter().map(|&c| row[c]).sum::<f64>() / row[i0];
-                if m.is_finite() && row[e].is_finite() {
-                    energy.push(row[e]);
-                    mu.push(m);
-                } else {
-                    data.diagnostics.excluded_signal_points.record(Some(line));
-                }
-            }
-        }
-        DetectionMode::Reference => {
-            if let Some(col) = ref_mu_col {
-                for (row, &line) in rows.iter().zip(&data.source_lines) {
-                    if row[col].is_finite() && row[e].is_finite() {
-                        energy.push(row[e]);
-                        mu.push(row[col]);
-                    } else {
-                        data.diagnostics.excluded_signal_points.record(Some(line));
-                    }
-                }
-            } else {
-                let (it, ir) = (resolved.it_col, resolved.ir_col);
-                for (row, &line) in rows.iter().zip(&data.source_lines) {
-                    let m = (row[it] / row[ir]).ln();
-                    if m.is_finite() && row[e].is_finite() {
-                        energy.push(row[e]);
-                        mu.push(m);
-                    } else {
-                        data.diagnostics.excluded_signal_points.record(Some(line));
-                    }
-                }
-            }
-        }
-        DetectionMode::MuColumn => {
-            let mu_col = resolved
-                .mu_col
-                .ok_or_else(|| format!("{}: no precomputed mu column detected", path.display()))?;
-            for (row, &line) in rows.iter().zip(&data.source_lines) {
-                if row[mu_col].is_finite() && row[e].is_finite() {
-                    energy.push(row[e]);
-                    mu.push(row[mu_col]);
-                } else {
-                    data.diagnostics.excluded_signal_points.record(Some(line));
-                }
-            }
+            DetectionMode::Reference => match ref_mu_col {
+                Some(column) => row[column],
+                None => (row[resolved.it_col] / row[resolved.ir_col]).ln(),
+            },
+            DetectionMode::MuColumn => row[resolved.mu_col.unwrap()],
+        };
+        if e.is_finite() && m.is_finite() {
+            energy.push(e);
+            mu.push(m);
+        } else {
+            data.diagnostics.excluded_signal_points.record(Some(line));
         }
     }
     data.diagnostics.valid_points = energy.len();
@@ -1106,6 +1089,7 @@ impl PipelineParams {
 
     fn hash_raw_fields(&self, hasher: &mut std::hash::DefaultHasher) {
         format!("{:?}", self.import.mode).hash(hasher);
+        self.import.axis.fingerprint().hash(hasher);
         self.align_to_ref.hash(hasher);
         self.align_target.map(f64::to_bits).hash(hasher);
         self.import.energy_col.hash(hasher);
@@ -1114,6 +1098,7 @@ impl PipelineParams {
         self.import.ir_col.hash(hasher);
         self.import.fluor_cols.hash(hasher);
         self.import.mu_col.hash(hasher);
+        self.import.reference_mu_col.hash(hasher);
     }
 
     pub fn fingerprint(&self) -> u64 {
