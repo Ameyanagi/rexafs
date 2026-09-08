@@ -1,4 +1,5 @@
 //! Append-only import. Detect channels from bounded prefixes; retain lazy sources.
+use super::import_review::{Approval, Approvals, PendingSource};
 use super::import_state::{flush_due, source_changed};
 use super::*;
 use crate::catalog::FileMeta;
@@ -10,6 +11,8 @@ struct ImportFile {
     reference: bool,
     modified: Option<std::time::SystemTime>,
     cached: bool,
+    pending: Option<PendingSource>,
+    approval: Option<Approval>,
 }
 enum ImportEvent {
     Root {
@@ -84,12 +87,33 @@ fn batch_import_events(
     }
 }
 
+#[cfg(test)]
 fn start_import(
     paths: Vec<PathBuf>,
     import: ImportConfig,
     detect_channels: bool,
     cancel: Arc<AtomicBool>,
     use_index: bool,
+) -> mpsc::Receiver<Vec<ImportEvent>> {
+    start_import_reviewed(
+        paths,
+        import,
+        detect_channels,
+        cancel,
+        use_index,
+        false,
+        Approvals::new(),
+    )
+}
+
+fn start_import_reviewed(
+    paths: Vec<PathBuf>,
+    import: ImportConfig,
+    detect_channels: bool,
+    cancel: Arc<AtomicBool>,
+    use_index: bool,
+    review_new: bool,
+    approvals: Approvals,
 ) -> mpsc::Receiver<Vec<ImportEvent>> {
     let (tx, rx) = mpsc::channel(2);
     let (worker_tx, worker_rx) = std::sync::mpsc::sync_channel(2);
@@ -131,6 +155,7 @@ fn start_import(
             // Seed visible rows from the persisted index before opening source
             // headers. The normal walk then validates them and discovers channels.
             if use_index
+                && !review_new
                 && let Some(index) = index
                 && let Ok(catalog) = load_index(&index, &root)
             {
@@ -156,6 +181,8 @@ fn start_import(
                             reference: false,
                             modified: None,
                             cached: true,
+                            pending: None,
+                            approval: None,
                         }]),
                     ) {
                         return;
@@ -218,10 +245,50 @@ fn start_import(
                     }
                     continue;
                 }
-                let reference = if detect_channels {
-                    match detect_import(entry.path(), &import) {
+                let approval = approvals.get(entry.path()).cloned();
+                let file_import = approval
+                    .as_ref()
+                    .and_then(|a| a.choice.primary_config())
+                    .unwrap_or(&import);
+                let mut pending = None;
+                let approved_unchanged = approval.as_ref().is_some_and(|approval| {
+                    super::import_preview::SourceRevision::read(entry.path())
+                        .ok()
+                        .as_ref()
+                        == Some(&approval.source)
+                });
+                let reference = if detect_channels && approved_unchanged {
+                    // The reviewed full source is stronger evidence than a prefix
+                    // that may end inside a long header. It was validated in full.
+                    false
+                } else if detect_channels {
+                    match detect_import(entry.path(), file_import) {
                         Ok(Some(preview)) => {
-                            if let Some(error) = &preview.mapping_error
+                            if review_new {
+                                let reason = if let Some(approved) = &approval {
+                                    (super::import_preview::SourceRevision::read(entry.path())
+                                        .ok()
+                                        .as_ref()
+                                        != Some(&approved.source)
+                                        || crate::import_mapping::LayoutKey::from_detection(
+                                            &preview,
+                                        ) != approved.layout)
+                                        .then(|| {
+                                            "Source changed after review; confirm its new layout."
+                                                .into()
+                                        })
+                                } else {
+                                    preview.review_reason()
+                                };
+                                if let Some(reason) = reason {
+                                    pending = Some(PendingSource {
+                                        detection: Some(preview.clone()),
+                                        reason,
+                                    });
+                                }
+                            }
+                            if !review_new
+                                && let Some(error) = &preview.mapping_error
                                 && !send(
                                     &mut tx,
                                     ImportEvent::Error(entry.path().to_path_buf(), error.clone()),
@@ -229,18 +296,27 @@ fn start_import(
                             {
                                 return;
                             }
-                            preview.resolved.mode != DetectionMode::Reference
+                            approval.is_none()
+                                && preview.resolved.mode != DetectionMode::Reference
                                 && preview
                                     .available_channels()
                                     .contains(&DetectionMode::Reference)
                         }
-                        Ok(None) => false, // The bounded prefix ended before data.
+                        Ok(None) => {
+                            if review_new {
+                                pending = Some(PendingSource { detection: None, reason: "The bounded header read did not reach numeric data; review the full source.".into() });
+                            }
+                            false
+                        }
                         Err(error) => {
                             if !send(
                                 &mut tx,
                                 ImportEvent::Error(entry.path().to_path_buf(), error),
                             ) {
                                 return;
+                            }
+                            if review_new {
+                                pending = Some(PendingSource { detection: None, reason: "Source could not be parsed. Repair or locate it, then reload its preview.".into() });
                             }
                             // Retain sources that need manual mapping.
                             false
@@ -289,6 +365,8 @@ fn start_import(
                         reference,
                         modified,
                         cached: false,
+                        pending,
+                        approval,
                     }]),
                 ) {
                     return;
@@ -406,7 +484,9 @@ impl StudioApp {
         let id = request.id;
         let restore = request.restore;
         let recent_folders = request.recent_folders;
-        let mut paths = self.intake.history[id].paths.clone();
+        let mut paths = request
+            .reviewed_paths
+            .unwrap_or_else(|| self.intake.history[id].paths.clone());
         let activate_first = self.catalog.is_empty()
             && self.derived.is_empty()
             && self.current_path.as_os_str().is_empty();
@@ -436,15 +516,22 @@ impl StudioApp {
             .collect();
         let cancel = Arc::new(AtomicBool::new(false));
         self.intake_cancel = Some(cancel.clone());
-        let mut rx = start_import(
+        let mut rx = start_import_reviewed(
             paths,
-            params.import.clone(),
+            if restore {
+                params.import.clone()
+            } else {
+                ImportConfig::default()
+            },
             !restore,
             cancel,
             activate_first,
+            !restore,
+            self.intake.approved.clone(),
         );
         self.status = "Importing files and detecting reference channels…".into();
         cx.spawn(async move |this, cx| {
+            let mut migrating_source = migrating_source;
             let mut reimported = false;
             let mut imported_folders = BTreeSet::new();
             while let Some(events) = rx.next().await {
@@ -454,6 +541,10 @@ impl StudioApp {
                     for event in events {
                     match event {
                         ImportEvent::Root { requested, canonical, folder, index } => {
+                            if migrating_source.as_ref() == Some(&requested) {
+                                migrating_source = Some(canonical.clone());
+                                app.pending_project_spectrum = Some(canonical.clone());
+                            }
                             let batch = &mut app.intake.history[id];
                             for path in &mut batch.paths {
                                 if *path == requested { *path = canonical.clone(); }
@@ -490,6 +581,21 @@ impl StudioApp {
                                     }
                                     continue;
                                 }
+                                let retained = migrating_source.as_ref() == Some(&path);
+                                if !retained && file.approval.as_ref().is_some_and(|approval| {
+                                    super::import_preview::SourceRevision::read(&path).ok().as_ref() != Some(&approval.source)
+                                }) {
+                                    app.intake.approved.remove(&path);
+                                    app.intake.history[id].sources.entry(path).or_default().pending = Some(PendingSource {
+                                        detection: None, reason: "Source changed while adding reviewed files; reload and confirm it again.".into()
+                                    });
+                                    continue;
+                                }
+                                if !retained && let Some(pending) = file.pending {
+                                    app.intake.approved.remove(&path);
+                                    app.intake.history[id].sources.entry(path).or_default().pending = Some(pending);
+                                    continue;
+                                }
                                 if !file.cached {
                                     app.intake.history[id].sources.entry(path.clone()).or_default().cached = false;
                                     if let Some(ix) = existing { app.catalog.update_size(ix, file.meta.size); }
@@ -505,8 +611,16 @@ impl StudioApp {
                                     }
                                 }
                                 if existing.is_none() { app.catalog.extend(vec![file.meta]); }
+                                if !restore && existing.is_none() {
+                                    let mut source_params = if retained { params.clone() } else { PipelineParams::default() };
+                                    if !retained {
+                                        source_params.import = file.approval.as_ref()
+                                            .and_then(|a| a.choice.primary_config()).cloned().unwrap_or_default();
+                                    }
+                                    app.set_custom_params(primary, (source_params != app.params).then_some(source_params));
+                                }
                                 let primary_id = app.peek_group_id(primary);
-                                if migrating_source.as_ref() == Some(&path) {
+                                if retained {
                                     app.intake.history[id].sources.entry(path.clone()).or_default().retained = true;
                                 } else if !in_batch {
                                     let outcome = app.intake.history[id].sources.entry(path.clone()).or_default();
@@ -514,13 +628,7 @@ impl StudioApp {
                                     outcome.created.extend(primary_id);
                                 }
                                 if file.reference && existing_references.insert(path.clone()) {
-                                    let mut reference_params = params.clone();
-                                    reference_params.import.mode = DetectionMode::Reference;
-                                    // A reference edge must resolve independently of sample overrides.
-                                    reference_params.e0 = None;
-                                    reference_params.edge_step = None;
-                                    reference_params.bkg_ek0 = None;
-                                    reference_params.bkg_standard = None;
+                                    let reference_params = super::import_channels::channel_params(ImportConfig { mode: DetectionMode::Reference, ..Default::default() });
                                     let mut group = DerivedSpectrum {
                                         id: app.next_group_id(),
                                         label: path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
@@ -533,6 +641,26 @@ impl StudioApp {
                                     outcome.created.extend(group.group_id.clone());
                                     app.derived.push(group);
                                 }
+                                if let Some(approval) = &file.approval {
+                                    for mapping in approval.choice.channels.iter().filter(|c| c.mode != approval.choice.primary) {
+                                        if app.source_has_channel(&path, mapping.mode) { continue; }
+                                        let mut group = DerivedSpectrum {
+                                            id: app.next_group_id(), label: path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+                                            source: Some(path.clone()), params: Some(super::import_channels::channel_params(mapping.clone())), ..Default::default()
+                                        };
+                                        app.group_registry.assign_group(&mut group, &app.project_source_origins);
+                                        app.intake.history[id].sources.entry(path.clone()).or_default().created.extend(group.group_id.clone());
+                                        app.derived.push(group);
+                                    }
+                                    let created = app.intake.history[id].sources.get(&path).map(|s| s.created.clone()).unwrap_or_default();
+                                    if let Some(batch) = app.intake.history.get_mut(approval.batch) {
+                                        let source = batch.sources.entry(path.clone()).or_default();
+                                        source.pending = None;
+                                        source.failed = None;
+                                        if approval.batch != id { source.created.extend(created); }
+                                    }
+                                    app.intake.approved.remove(&path);
+                                }
                                 if !restored_ids.is_empty() { app.record_reimport(restored_ids); }
                             }
                             app.register_appended_groups(catalog_start, derived_start);
@@ -541,6 +669,9 @@ impl StudioApp {
                         }
                         ImportEvent::Error(path, e) => {
                             app.intake.history[id].sources.entry(path.clone()).or_default().failed = Some(e.clone());
+                            if !restore && app.catalog.find_by_canonical_path(&path).is_none() {
+                                app.intake.history[id].sources.entry(path.clone()).or_default().pending.get_or_insert_with(|| PendingSource { detection: None, reason: e.clone() });
+                            }
                             app.record_intake_problem(id, &path, e, ProblemSeverity::Error);
                         }
                         ImportEvent::Skipped(path, reason) => {
@@ -714,6 +845,8 @@ mod tests {
                 reference: false,
                 modified: None,
                 cached: false,
+                pending: None,
+                approval: None,
             }]))
             .unwrap();
         let (observed_tx, observed_rx) = std::sync::mpsc::channel();
@@ -924,6 +1057,105 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn fresh_review_intake_keeps_guesses_pending_and_accepts_a_full_reviewed_long_header() {
+        use crate::app::import_review::ReviewChoice;
+        use crate::import_mapping::LayoutKey;
+        let root =
+            std::env::temp_dir().join(format!("rexafs-reviewed-intake-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        for (name, text) in [
+            ("known.dat", "# energy mu\n8900 1\n9000 2\n9100 3\n"),
+            ("unknown.dat", "8900 10 5\n9000 12 5\n9100 14 5\n"),
+            ("broken.dat", "broken file\n"),
+        ] {
+            std::fs::write(root.join(name), text).unwrap();
+        }
+        let events = futures::executor::block_on(
+            super::start_import_reviewed(
+                vec![root.clone()],
+                ImportConfig::default(),
+                true,
+                Default::default(),
+                false,
+                true,
+                Approvals::new(),
+            )
+            .collect::<Vec<_>>(),
+        );
+        let files = events
+            .iter()
+            .flatten()
+            .filter_map(|event| match event {
+                ImportEvent::Batch(files) => Some(files),
+                _ => None,
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        assert_eq!(files.len(), 3);
+        assert!(
+            files
+                .iter()
+                .find(|f| f.meta.name.as_ref() == "known.dat")
+                .unwrap()
+                .pending
+                .is_none()
+        );
+        assert!(files.iter().filter(|f| f.pending.is_some()).count() == 2);
+        let path = root.join("long.dat");
+        std::fs::write(
+            &path,
+            format!(
+                "{}# energy i0 it\n8900 10 5\n9000 12 5\n9100 14 5\n",
+                "# header padding\n".repeat(5000)
+            ),
+        )
+        .unwrap();
+        let path = path.canonicalize().unwrap();
+        let mapping = ImportConfig {
+            mode: DetectionMode::Transmission,
+            ..Default::default()
+        };
+        let table = crate::params::preview_import(&path, &mapping).unwrap();
+        let approvals = Approvals::from([(
+            path.clone(),
+            Approval {
+                batch: 0,
+                layout: LayoutKey::from_preview(&table),
+                choice: ReviewChoice {
+                    primary: DetectionMode::Transmission,
+                    channels: vec![mapping.clone()],
+                },
+                source: super::super::import_preview::SourceRevision::read(&path).unwrap(),
+            },
+        )]);
+        let events = futures::executor::block_on(
+            super::start_import_reviewed(
+                vec![path],
+                ImportConfig::default(),
+                true,
+                Default::default(),
+                false,
+                true,
+                approvals,
+            )
+            .collect::<Vec<_>>(),
+        );
+        let files = events
+            .iter()
+            .flatten()
+            .filter_map(|event| match event {
+                ImportEvent::Batch(files) => Some(files),
+                _ => None,
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        assert_eq!(files.len(), 1);
+        assert!(files[0].pending.is_none());
+        assert!(files[0].approval.as_ref().unwrap().choice.primary_config() == Some(&mapping));
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn import_thread_uses_bounded_detection_and_defers_full_source_diagnostics() {
         let path = std::env::temp_dir().join("rexafs-intake-bounded.dat");

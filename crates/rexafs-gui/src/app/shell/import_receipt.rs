@@ -27,6 +27,20 @@ impl StudioApp {
                 .items_center()
                 .gap_2()
                 .child(batch.receipt());
+            let pending = batch
+                .sources
+                .values()
+                .filter(|source| source.pending.is_some())
+                .count();
+            if pending > 0 {
+                line = line.child(
+                    button(&t, "resolve-import", &format!("Resolve {pending}…"), false).on_click(
+                        cx.listener(move |app, _, window, cx| {
+                            app.open_import_review(id, 0, window, cx)
+                        }),
+                    ),
+                );
+            }
             if batch.sources.iter().any(|(path, outcome)| {
                 outcome
                     .created

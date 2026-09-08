@@ -28,6 +28,7 @@ use crate::app::{
     import_channels::{self, ChannelScope},
     import_preview::{self, PreviewKey, PreviewState, SourceRevision},
     import_repair::{self, RepairScope, RepairValidation},
+    import_review::{self, ReviewChoice, ReviewScope},
 };
 use crate::import_mapping::{AxisConversion, ColumnRole, LayoutKey, MappingDraft};
 use crate::params::{DetectionMode, PipelineParams};
@@ -51,6 +52,12 @@ enum Action {
     Validate,
     Targets,
     Details,
+    ReviewOutput(u8),
+    ReviewPrimary(u8),
+    ReviewEdit(u8),
+    ReviewFile(bool),
+    ReviewLayout(bool),
+    ReviewLocate,
 }
 
 pub(crate) struct ImportEditor {
@@ -82,9 +89,62 @@ pub(crate) struct ImportEditor {
     creation: Option<DetectionMode>,
     channel_scope: Option<ChannelScope>,
     batch_selected: bool,
+    review_scope: Option<ReviewScope>,
+    review_configs: Vec<crate::params::ImportConfig>,
+    review_outputs: Vec<DetectionMode>,
+    review_file: usize,
 }
 
+const REVIEW_CHANNELS: [DetectionMode; 4] = [
+    DetectionMode::Transmission,
+    DetectionMode::Fluorescence,
+    DetectionMode::Reference,
+    DetectionMode::MuColumn,
+];
+
 impl StudioApp {
+    pub(crate) fn open_import_review(
+        &mut self,
+        batch: usize,
+        cluster: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(scope) = self.capture_review_scope(batch, cluster) else {
+            return;
+        };
+        let Some(target) = scope.targets.targets.first() else {
+            return;
+        };
+        let studio = cx.weak_entity();
+        let theme = self.theme;
+        let editor = cx.new(|cx| {
+            ImportEditor::new(
+                studio,
+                target.target.clone(),
+                target.params.clone(),
+                theme,
+                false,
+                window,
+                cx,
+            )
+        });
+        editor.update(cx, |editor, cx| {
+            editor.review_configs = REVIEW_CHANNELS
+                .iter()
+                .map(|&mode| crate::params::ImportConfig {
+                    mode,
+                    ..Default::default()
+                })
+                .collect();
+            editor.review_outputs = vec![scope.primary];
+            editor.bulk_scope = Some(scope.targets.clone());
+            editor.review_scope = Some(scope);
+            editor.reload(cx);
+        });
+        self.import_editor = Some(editor);
+        cx.notify();
+    }
     pub(crate) fn open_channel_editor(
         &mut self,
         ix: usize,
@@ -213,6 +273,10 @@ impl ImportEditor {
             creation: None,
             channel_scope: None,
             batch_selected: false,
+            review_scope: None,
+            review_configs: vec![],
+            review_outputs: vec![],
+            review_file: 0,
         }
     }
 
@@ -250,6 +314,7 @@ impl ImportEditor {
     }
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
+        self.save_review_draft();
         self.invalidate_validation();
         self.generation += 1;
         self.preview.invalidate();
@@ -349,7 +414,10 @@ impl ImportEditor {
                 } else if let Some(Err(error)) = &this.preview.result {
                     this.error = Some(error.clone());
                 }
-                if initial && this.creation.is_some() {
+                if initial {
+                    this.save_review_draft();
+                }
+                if initial && (this.creation.is_some() || this.review_scope.is_some()) {
                     this.validate_targets(cx);
                 }
                 cx.notify();
@@ -393,6 +461,53 @@ impl ImportEditor {
             self.preview.invalidate();
             self.plot = None;
             cx.notify();
+            return;
+        }
+        if let Some(scope) = &self.review_scope {
+            let Some(validated) = &self.validation else {
+                return;
+            };
+            let Some(choice) = self.review_choice() else {
+                return;
+            };
+            let Some(table) = &self.table else {
+                return;
+            };
+            let layout = LayoutKey::from_preview(table);
+            let revision = draft.revision;
+            let result = self.studio.update(cx, |studio, cx| {
+                studio.accept_review(scope, validated, &choice, &layout, revision, cx)
+            });
+            let batch = scope.batch;
+            let cluster = scope.cluster;
+            match result {
+                Ok(Ok(_)) => {
+                    let studio = self.studio.clone();
+                    self.close(window, cx);
+                    studio
+                        .update(cx, |studio, cx| {
+                            let remaining = studio.pending_clusters(batch).len();
+                            if remaining > 0 {
+                                studio.open_import_review(
+                                    batch,
+                                    cluster.min(remaining - 1),
+                                    window,
+                                    cx,
+                                );
+                            }
+                        })
+                        .ok();
+                }
+                result => {
+                    self.error = Some(match result {
+                        Ok(Err(e)) => e,
+                        Err(e) => e.to_string(),
+                        _ => unreachable!(),
+                    });
+                    self.invalidate_validation();
+                    cx.notify();
+                }
+            }
             return;
         }
         if self.bulk_scope.is_some() {
@@ -472,6 +587,82 @@ impl ImportEditor {
 
     fn activate(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
         match action {
+            Action::ReviewLocate => {
+                self.locate_pending(cx);
+                return;
+            }
+            Action::ReviewLayout(next) => {
+                if let Some(scope) = &self.review_scope {
+                    let batch = scope.batch;
+                    let cluster = if next {
+                        (scope.cluster + 1) % scope.cluster_count
+                    } else {
+                        (scope.cluster + scope.cluster_count - 1) % scope.cluster_count
+                    };
+                    let studio = self.studio.clone();
+                    self.close(window, cx);
+                    studio
+                        .update(cx, |studio, cx| {
+                            studio.open_import_review(batch, cluster, window, cx)
+                        })
+                        .ok();
+                }
+                return;
+            }
+            Action::ReviewFile(next) => {
+                self.save_review_draft();
+                if let Some(scope) = &self.review_scope {
+                    let len = scope.targets.targets.len();
+                    self.review_file = if next {
+                        (self.review_file + 1) % len
+                    } else {
+                        (self.review_file + len - 1) % len
+                    };
+                    self.target = scope.targets.targets[self.review_file].target.clone();
+                    if let Some(draft) = &self.draft {
+                        self.params.import = draft.config().clone();
+                    }
+                    self.reload(cx);
+                }
+                return;
+            }
+            Action::ReviewEdit(index) => {
+                self.save_review_draft();
+                if let Some(config) = self.review_configs.get(index as usize) {
+                    self.params.import = config.clone();
+                    self.reload(cx);
+                }
+                return;
+            }
+            Action::ReviewPrimary(index) => {
+                let mode = REVIEW_CHANNELS[index as usize];
+                if let Some(scope) = &mut self.review_scope {
+                    scope.primary = mode;
+                    if !self.review_outputs.contains(&mode) {
+                        self.review_outputs.push(mode);
+                    }
+                }
+                self.invalidate_validation();
+                cx.notify();
+                return;
+            }
+            Action::ReviewOutput(index) => {
+                let mode = REVIEW_CHANNELS[index as usize];
+                if self
+                    .review_scope
+                    .as_ref()
+                    .is_some_and(|scope| scope.primary != mode)
+                {
+                    if self.review_outputs.contains(&mode) {
+                        self.review_outputs.retain(|&m| m != mode);
+                    } else {
+                        self.review_outputs.push(mode);
+                    }
+                }
+                self.invalidate_validation();
+                cx.notify();
+                return;
+            }
             Action::Details => {
                 self.show_details = !self.show_details;
                 cx.notify();
@@ -549,6 +740,9 @@ impl ImportEditor {
                 return;
             }
             Action::Reload => {
+                if let Some(draft) = &self.draft {
+                    self.params.import = draft.config().clone();
+                }
                 self.reload(cx);
                 return;
             }
@@ -595,6 +789,81 @@ impl ImportEditor {
         self.validating = false;
     }
 
+    fn locate_pending(&mut self, cx: &mut Context<Self>) {
+        let Some(scope) = self.review_scope.clone() else {
+            return;
+        };
+        let old = self.target.path.clone();
+        let generation = self.generation;
+        let pick = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Locate source".into()),
+        });
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(paths))) = pick.await else {
+                return;
+            };
+            let Some(path) = paths.into_iter().next() else {
+                return;
+            };
+            let path = cx
+                .background_executor()
+                .spawn(async move { path.canonicalize().map_err(|e| e.to_string()) })
+                .await;
+            this.update(cx, |this, cx| {
+                if this.generation != generation {
+                    return;
+                }
+                let result = path.and_then(|path| {
+                    this.studio
+                        .update(cx, |studio, _| studio.locate_pending(&scope, &old, path))
+                        .map_err(|e| e.to_string())
+                        .and_then(|r| r)
+                });
+                match result {
+                    Ok(scope) => {
+                        this.target = scope.targets.targets[this.review_file].target.clone();
+                        this.bulk_scope = Some(scope.targets.clone());
+                        this.review_scope = Some(scope);
+                        this.reload(cx);
+                    }
+                    Err(error) => {
+                        this.error = Some(error);
+                        cx.notify();
+                    }
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn save_review_draft(&mut self) {
+        if self.review_scope.is_some()
+            && let Some(draft) = &self.draft
+            && let Some(config) = self
+                .review_configs
+                .iter_mut()
+                .find(|config| config.mode == draft.channel())
+        {
+            *config = draft.config().clone();
+        }
+    }
+
+    fn review_choice(&self) -> Option<ReviewChoice> {
+        Some(ReviewChoice {
+            primary: self.review_scope.as_ref()?.primary,
+            channels: self
+                .review_configs
+                .iter()
+                .filter(|config| self.review_outputs.contains(&config.mode))
+                .cloned()
+                .collect(),
+        })
+    }
+
     fn validate_targets(&mut self, cx: &mut Context<Self>) {
         let Some(draft) = &self.draft else {
             return;
@@ -628,6 +897,12 @@ impl ImportEditor {
                 })
                 .ok()
         });
+        let review = self.review_scope.as_ref().and_then(|scope| {
+            self.studio
+                .read_with(cx, |studio, _| studio.refresh_review_scope(scope))
+                .ok()
+                .zip(self.review_choice())
+        });
         self.invalidate_validation();
         self.error = None;
         self.validating = true;
@@ -636,7 +911,9 @@ impl ImportEditor {
             let result = cx
                 .background_executor()
                 .spawn(async move {
-                    if let Some(scope) = channel_scope {
+                    if let Some((scope, choice)) = review {
+                        import_review::validate(scope, layout, choice, revision)
+                    } else if let Some(scope) = channel_scope {
                         import_channels::validate(scope, layout, mapping, revision)
                     } else {
                         import_repair::validate(scope, layout, mapping, revision)
@@ -699,6 +976,12 @@ impl ImportEditor {
                         AxisConversion::AngleRadians { .. } => 4,
                     }
             })
+        } else if let Action::ReviewPrimary(index) = action {
+            self.review_scope
+                .as_ref()
+                .is_some_and(|scope| scope.primary == REVIEW_CHANNELS[index as usize])
+        } else if let Action::ReviewEdit(index) = action {
+            self.params.import.mode == REVIEW_CHANNELS[index as usize]
         } else {
             false
         };
@@ -763,7 +1046,12 @@ impl Render for ImportEditor {
                             "{} · {}",
                             self.creation
                                 .map(|mode| format!("Add {}", mode.label()))
-                                .unwrap_or("Re-map columns".into()),
+                                .unwrap_or_else(|| if self.review_scope.is_some() {
+                                    "Review import"
+                                } else {
+                                    "Re-map columns"
+                                }
+                                .into()),
                             self.target.label
                         )))
                     .child(self.button(Action::Close, "Close", true, cx)),
@@ -773,6 +1061,97 @@ impl Render for ImportEditor {
                     .text_color(t.text_muted)
                     .child(self.target.path.display().to_string()),
             );
+        if let Some(scope) = self.review_scope.clone() {
+            panel = panel.child(scope.reason.clone()).child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .items_center()
+                    .child(format!(
+                        "Layout {} of {} · representative {} of {}",
+                        scope.cluster + 1,
+                        scope.cluster_count,
+                        self.review_file + 1,
+                        scope.targets.targets.len()
+                    ))
+                    .child(self.button(
+                        Action::ReviewLayout(false),
+                        "Previous layout",
+                        scope.cluster_count > 1,
+                        cx,
+                    ))
+                    .child(self.button(
+                        Action::ReviewLayout(true),
+                        "Next layout",
+                        scope.cluster_count > 1,
+                        cx,
+                    ))
+                    .child(self.button(
+                        Action::ReviewFile(false),
+                        "Previous file",
+                        scope.targets.targets.len() > 1,
+                        cx,
+                    ))
+                    .child(self.button(
+                        Action::ReviewFile(true),
+                        "Next file",
+                        scope.targets.targets.len() > 1,
+                        cx,
+                    )),
+            );
+            let mut primary = div()
+                .flex()
+                .flex_wrap()
+                .gap_2()
+                .items_center()
+                .child("Primary channel:");
+            let mut outputs = div()
+                .flex()
+                .flex_wrap()
+                .gap_2()
+                .items_center()
+                .child("Create:");
+            let mut editing = div()
+                .flex()
+                .flex_wrap()
+                .gap_2()
+                .items_center()
+                .child("Editing channel:");
+            for (index, mode) in REVIEW_CHANNELS.into_iter().enumerate() {
+                primary = primary.child(self.button(
+                    Action::ReviewPrimary(index as u8),
+                    mode.label(),
+                    true,
+                    cx,
+                ));
+                outputs = outputs.child(self.button(
+                    Action::ReviewOutput(index as u8),
+                    format!(
+                        "{} {}",
+                        if self.review_outputs.contains(&mode) {
+                            "☑"
+                        } else {
+                            "☐"
+                        },
+                        mode.label()
+                    ),
+                    mode != scope.primary,
+                    cx,
+                ));
+                editing = editing.child(self.button(
+                    Action::ReviewEdit(index as u8),
+                    mode.label(),
+                    true,
+                    cx,
+                ));
+            }
+            panel = panel
+                .child(primary)
+                .child(outputs)
+                .child(editing)
+                .child(self.button(Action::ReviewLocate, "Locate source…", true, cx));
+        }
         if self.locked {
             panel = panel.child("Processing locked · mapping is read-only");
         }
@@ -960,7 +1339,11 @@ impl Render for ImportEditor {
             }
             panel = panel.child(div().flex().gap_3().min_h_0().child(table).child(plot));
         } else {
-            panel = panel.child("Reading source columns and full raw signal…");
+            panel = panel.child(if self.error.is_some() {
+                "Source preview unavailable."
+            } else {
+                "Reading source columns and full raw signal…"
+            });
         }
         if let Some(error) = &self.error {
             panel = panel.child(div().text_color(t.accent).child(error.clone()));
@@ -980,7 +1363,7 @@ impl Render for ImportEditor {
                     .is_some_and(|v| v.ready_count() > 0)
                     && !self.validating
             });
-        if self.batch_available {
+        if self.batch_available && self.review_scope.is_none() {
             panel = panel.child(
                 div()
                     .flex()
@@ -1015,7 +1398,7 @@ impl Render for ImportEditor {
                 "{} · {} captured {}",
                 scope.label,
                 scope.targets.len(),
-                if self.creation.is_some() {
+                if self.creation.is_some() || self.review_scope.is_some() {
                     "files"
                 } else {
                     "groups"
@@ -1025,7 +1408,18 @@ impl Render for ImportEditor {
             let summary = self
                 .validation
                 .as_ref()
-                .map(|v| v.summary())
+                .map(|v| {
+                    if self.review_scope.is_some() {
+                        format!(
+                            "{} compatible files → {} groups · {} need separate review",
+                            v.file_count(),
+                            v.file_count() * self.review_outputs.len(),
+                            v.results.len() - v.ready_count()
+                        )
+                    } else {
+                        v.summary()
+                    }
+                })
                 .unwrap_or_else(|| {
                     if self.validating {
                         "Validating every captured target…"
@@ -1089,7 +1483,22 @@ impl Render for ImportEditor {
                 .map(|v| format!("Add {} {} groups", v.ready_count(), mode.label()))
                 .unwrap_or("Add validated channels".into());
         }
-        let scope_label = if self.creation.is_some() {
+        if self.review_scope.is_some() {
+            apply_label = self
+                .validation
+                .as_ref()
+                .map(|v| {
+                    format!(
+                        "Add {} files → {} groups",
+                        v.file_count(),
+                        v.file_count() * self.review_outputs.len()
+                    )
+                })
+                .unwrap_or("Add validated files".into());
+        }
+        let scope_label = if self.review_scope.is_some() {
+            "Only accepted files are added; other sources stay pending"
+        } else if self.creation.is_some() {
             "New groups · independent processing"
         } else if self.bulk_scope.is_some() {
             "Mapping only · captured groups"
@@ -1110,7 +1519,16 @@ impl Render for ImportEditor {
                 ))
                 .child(self.button(Action::Reload, "Reload source", true, cx))
                 .child(div().flex_1().child(scope_label))
-                .child(self.button(Action::Cancel, "Cancel", true, cx))
+                .child(self.button(
+                    Action::Cancel,
+                    if self.review_scope.is_some() {
+                        "Review later"
+                    } else {
+                        "Cancel"
+                    },
+                    true,
+                    cx,
+                ))
                 .child(self.button(Action::Apply, apply_label, ready, cx)),
         );
         div()

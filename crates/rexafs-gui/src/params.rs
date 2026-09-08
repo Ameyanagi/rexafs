@@ -263,6 +263,45 @@ impl ImportDetection {
     pub fn available_channels(&self) -> Vec<DetectionMode> {
         available_channels(&self.names, self.resolved.mode)
     }
+
+    /// Only named, unambiguous detector roles are a detection fast path.
+    /// Positional fallbacks remain useful suggestions in an explicit review.
+    pub fn review_reason(&self) -> Option<String> {
+        if let Some(error) = &self.mapping_error {
+            return Some(error.clone());
+        }
+        let Some(names) = &self.names else {
+            return Some("Unnamed columns need a confirmed mapping.".into());
+        };
+        let named = |column: usize, aliases: &[&str]| {
+            names
+                .get(column)
+                .is_some_and(|name| name_matches(name, aliases))
+        };
+        let r = &self.resolved;
+        let known = named(r.energy_col, ENERGY_NAMES)
+            && match r.mode {
+                DetectionMode::Transmission => {
+                    named(r.i0_col, I0_NAMES) && named(r.it_col, IT_NAMES)
+                }
+                DetectionMode::Fluorescence => {
+                    named(r.i0_col, I0_NAMES)
+                        && !r.fluor_cols.is_empty()
+                        && r.fluor_cols
+                            .iter()
+                            .all(|&c| names.get(c).is_some_and(|n| fluorescence_name_matches(n)))
+                }
+                DetectionMode::Reference => {
+                    (named(r.it_col, IT_NAMES) && named(r.ir_col, IR_NAMES))
+                        || names.iter().any(|name| name_matches(name, REF_MU_NAMES))
+                }
+                DetectionMode::MuColumn => r
+                    .mu_col
+                    .is_some_and(|c| named(c, MU_NAMES) || named(c, REF_MU_NAMES)),
+                DetectionMode::Auto => false,
+            };
+        (!known).then(|| "Some column roles are positional guesses; confirm this layout.".into())
+    }
 }
 
 impl ImportPreview {

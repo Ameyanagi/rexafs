@@ -84,7 +84,7 @@ pub(crate) fn validate(
 }
 
 impl StudioApp {
-    fn source_has_channel(&self, path: &std::path::Path, mode: DetectionMode) -> bool {
+    pub(crate) fn source_has_channel(&self, path: &std::path::Path, mode: DetectionMode) -> bool {
         let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let path = canonical.as_path();
         self.catalog.find_by_canonical_path(path).is_some_and(|ix| {

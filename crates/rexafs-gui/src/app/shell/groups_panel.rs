@@ -555,6 +555,7 @@ impl StudioApp {
                     .child(self.data_tab_button("tab-files", "Files", DataTab::Files, cx))
                     .child(self.data_tab_button("tab-scans", "Scans", DataTab::Scans, cx)),
             )
+            .children(self.pending_imports(cx))
             .child(match self.data_tab {
                 DataTab::Files => self.file_list(cx).into_any_element(),
                 DataTab::Scans => self.scan_list(cx).into_any_element(),

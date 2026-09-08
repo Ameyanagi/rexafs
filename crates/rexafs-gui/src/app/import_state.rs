@@ -8,6 +8,7 @@ pub type BatchId = usize;
 
 #[derive(Default)]
 pub struct SourceOutcome {
+    pub pending: Option<super::import_review::PendingSource>,
     pub created: Vec<GroupId>,
     pub existing: Vec<GroupId>,
     pub changed: bool,
@@ -22,6 +23,9 @@ pub struct SourceOutcome {
 impl SourceOutcome {
     pub fn summary(&self) -> String {
         let mut clauses = Vec::new();
+        if let Some(pending) = &self.pending {
+            clauses.push(format!("Needs mapping · {}", pending.reason));
+        }
         if !self.created.is_empty() {
             clauses.push(format!("{} groups created", self.created.len()));
         }
@@ -75,6 +79,13 @@ impl IntakeBatch {
             clauses.push(format!("Added {files} files → {groups} groups"));
         }
         for (count, label) in [
+            (
+                self.sources
+                    .values()
+                    .filter(|s| s.pending.is_some())
+                    .count(),
+                "needs mapping",
+            ),
             (
                 self.sources
                     .values()
@@ -136,10 +147,12 @@ pub struct IntakeRequest {
     pub id: BatchId,
     pub restore: bool,
     pub recent_folders: Vec<PathBuf>,
+    pub reviewed_paths: Option<Vec<PathBuf>>,
 }
 
 #[derive(Default)]
 pub struct IntakeState {
+    pub approved: super::import_review::Approvals,
     pub history: Vec<IntakeBatch>,
     pub queue: VecDeque<IntakeRequest>,
     pub active: Option<BatchId>,
@@ -201,9 +214,24 @@ impl IntakeState {
             id,
             restore,
             recent_folders,
+            reviewed_paths: None,
         });
         self.receipt = Some(id);
         id
+    }
+
+    pub fn enqueue_review(&mut self, id: BatchId, paths: Vec<PathBuf>) {
+        if let Some(batch) = self.history.get_mut(id) {
+            batch.stopped = false;
+            batch.finished = false;
+            self.queue.push_back(IntakeRequest {
+                id,
+                restore: false,
+                recent_folders: vec![],
+                reviewed_paths: Some(paths),
+            });
+            self.receipt = Some(id);
+        }
     }
 
     pub fn start_next(&mut self) -> Option<IntakeRequest> {
@@ -234,6 +262,8 @@ impl IntakeState {
             .map(|r| r.id)
             .chain(self.active)
             .collect();
+        self.approved
+            .retain(|_, approval| !ids.contains(&approval.batch));
         for id in ids {
             let batch = &mut self.history[id];
             batch.stopped = true;

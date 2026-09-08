@@ -60,6 +60,7 @@ mod group_rows;
 mod import_channels;
 mod import_preview;
 mod import_repair;
+mod import_review;
 mod import_state;
 mod importing;
 mod merge;

@@ -87,17 +87,33 @@ pub struct LayoutKey {
 
 impl LayoutKey {
     pub fn from_preview(preview: &ImportPreview) -> Self {
-        let header = preview.xdi.as_ref();
+        Self::from_parts(
+            preview.column_count,
+            preview.names.as_deref(),
+            preview.xdi.as_ref(),
+        )
+    }
+
+    pub fn from_detection(detection: &crate::params::ImportDetection) -> Self {
+        Self::from_parts(
+            detection.column_count,
+            detection.names.as_deref(),
+            detection.xdi.as_ref(),
+        )
+    }
+
+    fn from_parts(
+        column_count: usize,
+        names: Option<&[String]>,
+        header: Option<&XdiHeader>,
+    ) -> Self {
         Self {
             interpretation_version: 1,
             parser: header.map_or("text-table".into(), |h| format!("XDI/{}", h.version)),
             dialect: header.map_or_else(Vec::new, |h| h.applications.clone()),
-            column_count: preview.column_count,
-            names: preview
-                .names
-                .as_ref()
-                .map(|names| names.iter().map(|name| name.trim().to_string()).collect()),
-            units: (0..preview.column_count)
+            column_count,
+            names: names.map(|names| names.iter().map(|name| name.trim().to_string()).collect()),
+            units: (0..column_count)
                 .map(|i| {
                     header
                         .and_then(|h| h.columns.get(i))
