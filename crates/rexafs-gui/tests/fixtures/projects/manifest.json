@@ -25,6 +25,11 @@
       "project": "rexafs-0.1.4-links.rxs",
       "embedded_project": "rexafs-0.1.4-embedded.rxs",
       "format_version": 1
+    },
+    "0.2.0": {
+      "project": "rexafs-0.2.0-links.rxs",
+      "embedded_project": "rexafs-0.2.0-embedded.rxs",
+      "format_version": 1
     }
   },
   "invalid_projects": [
@@ -49,6 +54,10 @@
     "rexafs-0.1.3-links.rxs": "61967f87e23f87d552dd8b4a20fa5e726ebc710a214936fddcda03bbf729f684",
     "rexafs-0.1.3-embedded.rxs": "87ad0260a400fa99c26ddde4fe93d1938cb50f5d8d58a81eb3866b67d192dfb6",
     "rexafs-0.1.4-links.rxs": "57f371b91b57cde54e50dbccde726cb6bddbb83d248b61b5e7976e000357b72a",
-    "rexafs-0.1.4-embedded.rxs": "3e04d3b47910839091bfe00e7a283e97a14a17a70e86f4642fae0e80eca77122"
+    "rexafs-0.1.4-embedded.rxs": "3e04d3b47910839091bfe00e7a283e97a14a17a70e86f4642fae0e80eca77122",
+    "rexafs-0.2.0-links.rxs": "30b6f436864eee649dafce09afe51c3b07838304892afbe44a677c6acaa4781d",
+    "rexafs-0.2.0-embedded.rxs": "03156e672abe368e9f1234db7d9c2d7bf2eb1768da8829b552ab1174e97ecdb6",
+    "data/import-Cu.xdi": "61d5d09ddde8989338e64de25459533c1738e0e0e485038bacaa93dca040bbc4",
+    "data/import-diagnostics.dat": "c1a8adbb1723c2d35fcc2e8d44cef1a6b80194b605e3e8f07a9cb1bbe28b52f4"
   }
 }

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.0
+
+- Unify Groups with durable identities, source/channel stacks, Results, independent
+  current/focus/marks, processing locks, and undoable row actions.
+- Append imports with per-file receipts and explicit pending-layout review,
+  representative selection, partial acceptance, Reload, and Locate.
+- Add a focused mapping editor with original table values, full raw μ(E) preview,
+  explicit axis conversion, validated channel roles, and unique fluorescence ROIs.
+  Apply single or frozen batch repairs as one undoable edit; create only missing
+  channels with independent processing settings.
+- Persist versioned project/optional machine recipes and exact application members.
+  Named compatible layouts import directly; conflicts, changed units, and unnamed
+  layouts require review. Saved mappings remain authoritative on reopen.
+- Explain known Merge incompatibility before running, retain declared XDI edge
+  identities and materialized provenance, and persist historical parser totals
+  and bounded line examples with their checked mapping.
+- Reuse fixed-penalty column scaling and SVD factors for compatible geometry while
+  retaining per-spectrum numerical checks and per-call condition limits.
+- Fix Assistant catalog lookup across native Windows path separators; isolate
+  FEFF and project-cache roots in storage tests.
+- Retain linked and embedded 0.2.0 compatibility fixtures covering Groups, recipes,
+  applications, pending sources, declared edges, and saved parser evidence.
+
 ## 0.1.4
 
 - Bind tools to the intended spectrum and parameter revision, refuse incompatible

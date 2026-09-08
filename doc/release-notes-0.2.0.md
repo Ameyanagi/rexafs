@@ -1,7 +1,6 @@
-# rexafs 0.2.0 — development notes
+# rexafs 0.2.0
 
-These notes describe the integrated Groups and import work being prepared for
-review. Version 0.2.0 has not been tagged or published.
+Release candidate notes. Publication and final artifact qualification are pending.
 
 The Groups panel keeps current, keyboard focus, marks, and range selection
 separate. Browsing a spectrum preserves marks. Source files and their channels
@@ -57,3 +56,10 @@ Confirmed series and explicit frame ordering, frame-range processing, the
 Spectrum/Catalog center switch, persistent LCF/PCA result rows, paired-reference
 alignment, drag reorder, Assistant proposal review, transcript search, and
 conversation export remain outside this release's current implementation scope.
+
+
+Mac release downloads will be signed and notarized from the qualified GitHub
+build. Intel validation on this host uses Rosetta; native Intel hardware and
+clean-machine installation remain unqualified. Windows/Linux remain desktop
+previews pending native interactive checks. Their build, archive, numerical,
+and installer checks are recorded separately from graphical qualification.
