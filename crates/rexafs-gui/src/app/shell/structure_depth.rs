@@ -58,6 +58,7 @@ pub(crate) struct DepthOptions {
     pub strength: f64,
     pub focus_radius: f64,
     pub path_focus: bool,
+    pub depth_cue: bool,
 }
 impl Default for DepthOptions {
     fn default() -> Self {
@@ -72,6 +73,7 @@ impl Default for DepthOptions {
             strength: 0.85,
             focus_radius: 3.,
             path_focus: false,
+            depth_cue: true,
         }
     }
 }
@@ -134,6 +136,20 @@ impl DepthFrame {
     }
     pub fn depth(self, p: [f64; 3]) -> f64 {
         dot(sub(p, self.origin), self.normal)
+    }
+    /// Camera-relative contrast, independent of radial transparency and slicing.
+    /// Use the clear sphere when focused so its near/far neighbours remain distinct.
+    pub fn fog_amount(self, p: [f64; 3]) -> f32 {
+        if !self.options.depth_cue {
+            return 0.;
+        }
+        let extent = if self.options.fade == FadeMode::Center {
+            self.options.focus_radius.max(0.5)
+        } else {
+            self.span[0].abs().max(self.span[1].abs()).max(1.)
+        };
+        let signed = (dot(sub(p, self.origin), self.view_normal) / extent).clamp(-1., 1.);
+        (0.36 * (1. - signed)) as f32
     }
     pub fn limits(self) -> [f64; 2] {
         match self.options.slice {
@@ -372,6 +388,30 @@ mod tests {
         assert!(!f.pickable([0., 0., 7.], true));
         f.options.ghost = true;
         assert!((f.display_atom_alpha([0., 0., 7.], true) - 0.06).abs() < 1e-6);
+    }
+
+    #[test]
+    fn depth_cue_separates_equal_radius_neighbours_and_follows_camera() {
+        let mut f = slab();
+        f.options.slice = SliceMode::Off;
+        f.options.fade = FadeMode::Center;
+        f.options.focus_radius = 3.;
+        f.options.strength = 0.98;
+        let front = [0., 0., 2.5];
+        let back = [0., 0., -2.5];
+        assert_eq!(f.atom_alpha(front), f.atom_alpha(back));
+        assert!(f.fog_amount(front) < 0.1);
+        assert!(f.fog_amount(back) > 0.6);
+        let before = (f.fog_amount(front), f.fog_amount(back));
+        f.view_normal = [0., 0., -1.];
+        assert_eq!((f.fog_amount(back), f.fog_amount(front)), before);
+        // Cartesian slicing must not change the camera-relative cue.
+        f.normal = [1., 0., 0.];
+        assert_eq!((f.fog_amount(back), f.fog_amount(front)), before);
+        f.options.depth_cue = false;
+        assert_eq!(f.fog_amount(front), 0.);
+        assert_eq!(f.fog_amount(back), 0.);
+        assert_eq!(f.atom_alpha(front), 1.);
     }
 
     #[test]

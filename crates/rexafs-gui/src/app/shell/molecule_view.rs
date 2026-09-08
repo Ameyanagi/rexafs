@@ -559,6 +559,16 @@ fn tint(c: Rgba, light: f32) -> Rgba {
         ..c
     }
 }
+/// Blend toward the canvas, keeping element hue and explicit alpha separate.
+/// Applied after lighting so rear silhouettes recede in either theme.
+pub(super) fn depth_cue_color(color: Rgba, backdrop: Rgba, amount: f32) -> Rgba {
+    Rgba {
+        r: color.r * (1. - amount) + backdrop.r * amount,
+        g: color.g * (1. - amount) + backdrop.g * amount,
+        b: color.b * (1. - amount) + backdrop.b * amount,
+        ..color
+    }
+}
 fn line(window: &mut Window, pts: &[[f32; 3]], color: Rgba, width: f32, closed: bool) {
     if pts.is_empty() {
         return;
@@ -615,15 +625,22 @@ fn atom_radius(z: u32, style: AtomStyle, scale: f32) -> f32 {
 
 // A single gradient quad keeps translucent spheres at their requested alpha.
 // Layering twelve translucent highlight disks would incorrectly make them opaque.
-fn translucent_ball(w: &mut Window, p: [f32; 3], r: f32, color: Rgba, shading: bool) {
+fn translucent_ball(
+    w: &mut Window,
+    p: [f32; 3],
+    r: f32,
+    color: Rgba,
+    shading: bool,
+    cue: impl Fn(Rgba) -> Rgba,
+) {
     let background = if shading {
         gpui::linear_gradient(
             135.,
-            gpui::linear_color_stop(tint(color, 1.25), 0.),
-            gpui::linear_color_stop(tint(color, 0.4), 1.),
+            gpui::linear_color_stop(cue(tint(color, 1.25)), 0.),
+            gpui::linear_color_stop(cue(tint(color, 0.4)), 1.),
         )
     } else {
-        color.into()
+        cue(color).into()
     };
     w.paint_quad(gpui::quad(
         Bounds::new(
@@ -638,6 +655,7 @@ fn translucent_ball(w: &mut Window, p: [f32; 3], r: f32, color: Rgba, shading: b
     ));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn depth_line(
     w: &mut Window,
     edge: [[f64; 3]; 2],
@@ -645,16 +663,20 @@ fn depth_line(
     project: &impl Fn([f64; 3]) -> [f32; 3],
     color: Rgba,
     width: f32,
+    backdrop: Rgba,
 ) {
     for (part, inside) in depth.segments(edge) {
-        let steps = if depth.options.fade == FadeMode::Off {
-            1
-        } else {
+        let steps = if depth.options.fade != FadeMode::Off {
             8
+        } else if depth.options.depth_cue {
+            2
+        } else {
+            1
         };
         for n in 0..steps {
             let at = |t: f64| std::array::from_fn(|a| part[0][a] + (part[1][a] - part[0][a]) * t);
-            let opacity = depth.alpha(at((n as f64 + 0.5) / steps as f64), inside) * color.a;
+            let midpoint = at((n as f64 + 0.5) / steps as f64);
+            let opacity = depth.alpha(midpoint, inside) * color.a;
             if opacity > 0.002 {
                 line(
                     w,
@@ -662,7 +684,10 @@ fn depth_line(
                         project(at(n as f64 / steps as f64)),
                         project(at((n + 1) as f64 / steps as f64)),
                     ],
-                    alpha(color, opacity),
+                    alpha(
+                        depth_cue_color(color, backdrop, depth.fog_amount(midpoint)),
+                        opacity,
+                    ),
                     width,
                     false,
                 );
@@ -871,6 +896,7 @@ fn paint_scene(
             &project,
             alpha(t.text_muted, 0.12 * context_alpha),
             0.65,
+            t.raised,
         );
     }
     // Radius guides are a true sphere cut through the absorber, not a fitted box.
@@ -893,6 +919,7 @@ fn paint_scene(
                     &project,
                     alpha(t.accent, 0.28 * context_alpha),
                     1.,
+                    t.raised,
                 );
             }
         }
@@ -968,12 +995,20 @@ fn paint_scene(
                     );
                     let edge = [pts[n], midpoint];
                     if depth.options.active() || color.a < 0.99 {
-                        depth_line(w, edge, depth, &project, color, width * 0.8);
+                        depth_line(w, edge, depth, &project, color, width * 0.8, t.raised);
                     } else {
-                        depth_line(w, edge, depth, &project, tint(color, 0.5), width);
-                        depth_line(w, edge, depth, &project, color, width * 0.67);
+                        depth_line(w, edge, depth, &project, tint(color, 0.5), width, t.raised);
+                        depth_line(w, edge, depth, &project, color, width * 0.67, t.raised);
                         if shading && style != AtomStyle::Wireframe {
-                            depth_line(w, edge, depth, &project, tint(color, 1.35), width * 0.22);
+                            depth_line(
+                                w,
+                                edge,
+                                depth,
+                                &project,
+                                tint(color, 1.35),
+                                width * 0.22,
+                                t.raised,
+                            );
                         }
                     }
                 }
@@ -1006,12 +1041,19 @@ fn paint_scene(
                         .color
                         .unwrap_or_else(|| cpk_color(face.z)),
                 );
-                let color = tint(base, light);
+                let cue = |color| depth_cue_color(color, t.raised, depth.fog_amount(center));
+                let color = cue(tint(base, light));
                 if let Ok(path) = path.build() {
                     w.paint_path(path, alpha(color, scene.poly_options.opacity * opacity));
                 }
                 if scene.poly_options.edges {
-                    line(w, &pts, alpha(tint(base, 0.3), 0.85 * opacity), 1.25, true);
+                    line(
+                        w,
+                        &pts,
+                        alpha(cue(tint(base, 0.3)), 0.85 * opacity),
+                        1.25,
+                        true,
+                    );
                 }
             }
             Primitive::Atom(i) => {
@@ -1043,6 +1085,17 @@ fn paint_scene(
                     1.
                 }) * atom_alpha(a);
                 let radius = atom_radius(a.z, style, scale);
+                let cue = |color| {
+                    depth_cue_color(
+                        color,
+                        t.raised,
+                        if a.absorber {
+                            0.
+                        } else {
+                            depth.fog_amount(a.pos)
+                        },
+                    )
+                };
                 if !a.absorber && depth.options.active() && norm(sub(a.pos, depth.origin)) < 1e-6 {
                     disk(w, p, radius + 2., alpha(t.accent, 0.4 * color.a));
                 }
@@ -1053,10 +1106,11 @@ fn paint_scene(
                         radius,
                         color,
                         shading && !outside && style != AtomStyle::Wireframe,
+                        cue,
                     );
                     continue;
                 }
-                disk(w, p, radius, tint(color, 0.48));
+                disk(w, p, radius, cue(tint(color, 0.48)));
                 if shading && !outside && style != AtomStyle::Wireframe {
                     for layer in 0..12 {
                         let f = layer as f32 / 12.;
@@ -1065,11 +1119,11 @@ fn paint_scene(
                             w,
                             q,
                             radius * (0.94 - 0.65 * f),
-                            tint(color, 0.55 + 0.85 * f),
+                            cue(tint(color, 0.55 + 0.85 * f)),
                         );
                     }
                 } else {
-                    disk(w, p, radius * 0.9, color);
+                    disk(w, p, radius * 0.9, cue(color));
                 }
             }
         }
@@ -1086,7 +1140,11 @@ fn paint_scene(
             let run = gpui::TextRun {
                 len: text.len(),
                 font: w.text_style().font(),
-                color: alpha(t.text, atom_alpha(atom)).into(),
+                color: alpha(
+                    depth_cue_color(t.text, t.raised, depth.fog_amount(atom.pos)),
+                    atom_alpha(atom),
+                )
+                .into(),
                 background_color: None,
                 underline: None,
                 strikethrough: None,
@@ -1119,7 +1177,11 @@ fn paint_scene(
             let active = leg.is_none_or(|n| n == i);
             let midpoint = std::array::from_fn(|a| (part[0][a] + part[1][a]) * 0.5);
             let color = alpha(
-                crate::plotting::trace_rgba(&t, i % 8),
+                depth_cue_color(
+                    crate::plotting::trace_rgba(&t, i % 8),
+                    t.raised,
+                    depth.fog_amount(midpoint) * 0.6,
+                ),
                 (if active { 1. } else { 0.16 }) * depth.highlight_alpha(midpoint, inside),
             );
             let (ux, uy) = (dx / len, dy / len);
@@ -1281,6 +1343,22 @@ fn paint_absorber_marker(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rear_material_has_less_contrast_without_changing_opacity_in_both_themes() {
+        let material = alpha(gpui::rgb(0xc58a42), 0.35);
+        for theme in [Theme::dark(), Theme::light()] {
+            let front = depth_cue_color(material, theme.raised, 0.);
+            let rear = depth_cue_color(material, theme.raised, 0.72);
+            let contrast = |c: Rgba| {
+                (c.r - theme.raised.r).abs()
+                    + (c.g - theme.raised.g).abs()
+                    + (c.b - theme.raised.b).abs()
+            };
+            assert!(contrast(rear) < contrast(front) * 0.3);
+            assert_eq!(rear.a, material.a);
+            assert_eq!(front, material);
+        }
+    }
     #[test]
     fn rutile_repeats_complete_titanium_oxygen_octahedra() {
         let s = core::read_cif(

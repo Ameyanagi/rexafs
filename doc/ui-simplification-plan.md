@@ -124,3 +124,9 @@ and shows only scattering legs. The inspection center defaults to the absorber;
 clicking an atom changes the inspection center. Clear radius, slicing and global
 opacity remain in Structure display. These controls never change the FEFF cluster,
 calculation radius or path geometry.
+
+Enable **Depth cue** by default beside Center focus. It lowers rear-surface
+contrast toward the canvas color while keeping nearer surfaces clear, with a
+back-to-front key. The cue follows the camera and combines with radial alpha;
+lighting, element colors, selected-path visibility and geometric clipping retain
+their separate roles. It works against both dark and light backgrounds.

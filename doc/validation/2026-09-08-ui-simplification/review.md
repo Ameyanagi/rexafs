@@ -29,6 +29,9 @@ The maintainer's original checkout and active app sessions were preserved.
   the surrounding bond network and leaves faint atom context. The shared sliders
   expose native numeric values and keyboard adjustment. These are display effects;
   global opacity and clipping still apply and calculation geometry is untouched.
+  A separate Depth cue, enabled by default, distinguishes rear and front atoms,
+  bonds and faces using camera-relative contrast, with a back/front key. It combines
+  with center fading without changing alpha and adapts to both themes.
 - Assistant keeps model, reasoning, mode and sharing/access switches visible.
   Conversation utilities and longer descriptions use Settings. Permission and
   approval behavior retain the existing backend and busy-state guards.
@@ -49,9 +52,10 @@ The maintainer's original checkout and active app sessions were preserved.
   Ignored cases include the opt-in external-folder test, run separately below.
 - Targeted tests passed for explicit selected-channel intake, replacement of the
   main channel, immutable processing previews, and complete marked identity capture.
-- After adding structure focus, eight depth tests passed, including smooth center
-  fading, highlighted-path picking and preservation of explicit clipping.
-  All four molecular-view tests also passed.
+- After adding structure focus and camera-relative contrast, nine depth tests and
+  five molecular-view tests passed, including equal-radius front/back distinction,
+  rotation, dark/light contrast, unchanged alpha, highlighted-path picking and
+  preservation of explicit clipping.
 - After correcting Assistant theme synchronization, all 47 Assistant tests passed.
 - Optimized build passed with the distributed `refeff-runner,feff10-runner` features.
 - The final optimized package at source commit `86b035c` passed the extracted Cu

@@ -1429,6 +1429,13 @@ impl StudioApp {
         let t = self.theme;
         div().w_full().flex().flex_wrap().items_center().gap_2().px_2().py_1()
             .child(self.center_focus_slider(cx))
+            .child(chip(&t, "structure-depth-cue", "Depth cue", self.structure.depth.options.depth_cue)
+                .role(accesskit::Role::CheckBox)
+                .description("Front atoms stay clear; rear atoms and bonds blend toward the background. Follows rotation and combines with Center focus.")
+                .on_click(cx.listener(|app, _, _, cx| {
+                    app.structure.depth.options.depth_cue = !app.structure.depth.options.depth_cue;
+                    cx.notify();
+                })))
             .when(self.structure.scene.as_ref().is_some_and(|s| s.route.len() > 1), |d| {
                 d.child(chip(&t, "structure-path-focus", "Path focus", self.structure.depth.options.path_focus)
                     .role(accesskit::Role::CheckBox)
@@ -1949,6 +1956,18 @@ impl StudioApp {
         legend = legend.child(swatches);
         if let Some(frame) = self.structure_depth_frame() {
             use super::structure_depth::{FadeMode, SliceMode};
+            if frame.options.depth_cue {
+                let mut key = div().flex().items_center().gap_1().child("Depth: back");
+                for fog in [0.72, 0.54, 0.36, 0.18, 0.] {
+                    key = key.child(
+                        div()
+                            .size(px(7.))
+                            .rounded_full()
+                            .bg(super::molecule_view::depth_cue_color(t.text, t.raised, fog)),
+                    );
+                }
+                legend = legend.child(key.child("front · follows rotation"));
+            }
             if frame.options.slice != SliceMode::Off {
                 let [lo, hi] = frame.limits();
                 let counts = self
