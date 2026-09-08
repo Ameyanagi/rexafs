@@ -261,6 +261,23 @@ pub struct ImportDetection {
 }
 
 impl ImportDetection {
+    pub fn resolved_config(&self, config: &ImportConfig) -> ImportConfig {
+        let preview = ImportPreview {
+            column_count: self.column_count,
+            names: self.names.clone(),
+            rows: self.rows.clone(),
+            detected: self.detected.clone(),
+            auto_mode: self.auto_mode,
+            resolved: self.resolved.clone(),
+            xdi: self.xdi.clone(),
+            diagnostics: Default::default(),
+            signal_error: self.mapping_error.clone(),
+        };
+        crate::import_mapping::MappingDraft::new(&preview.for_mapping(config), config)
+            .config()
+            .clone()
+    }
+
     pub fn available_channels(&self) -> Vec<DetectionMode> {
         available_channels(&self.names, self.resolved.mode)
     }

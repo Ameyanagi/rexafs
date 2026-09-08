@@ -324,20 +324,12 @@ impl StudioApp {
                 } else {
                     self.catalog.len() + self.derived.len()
                 };
-                let series = self.catalog.scans.len();
                 let status = if self.spectrum.is_some() {
                     StageStatus::Ok
                 } else {
                     StageStatus::Idle
                 };
-                (
-                    status,
-                    if series > 0 {
-                        format!("{groups} groups · {series} scans")
-                    } else {
-                        format!("{groups} groups")
-                    },
-                )
+                (status, format!("{groups} groups"))
             }
             Stage::Normalize => {
                 let Some(sp) = sp else {

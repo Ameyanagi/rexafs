@@ -301,6 +301,64 @@ pub struct ProjectImports {
     pub applications: Vec<ImportApplication>,
 }
 
+#[derive(Clone, Default)]
+pub struct DispatchContext {
+    pub batch: usize,
+    pub project: RecipeLibrary,
+    pub machine: RecipeLibrary,
+}
+
+pub enum Dispatch {
+    Detection,
+    Recipe(RecipeVersion),
+    Review {
+        reason: String,
+        suggestion: Option<RecipeVersion>,
+    },
+}
+
+impl DispatchContext {
+    pub fn resolve(&self, key: &LayoutKey, path: &Path, header: Option<&XdiHeader>) -> Dispatch {
+        let project = self.project.eligible(key, path, header);
+        let candidates = if project.is_empty() {
+            self.machine.eligible(key, path, header)
+        } else {
+            project
+        };
+        if let Some(first) = candidates.first() {
+            if candidates
+                .iter()
+                .any(|other| !first.same_interpretation(other))
+            {
+                return Dispatch::Review { reason: "Conflicting recipes match this layout; choose its interpretation explicitly.".into(), suggestion: None };
+            }
+            if key.names.is_none() {
+                return Dispatch::Review { reason: "Unnamed columns need one representative confirmation in each new batch; the previous mapping is a suggestion.".into(), suggestion: Some((*first).clone()) };
+            }
+            return Dispatch::Recipe((*first).clone());
+        }
+        // A familiar column structure with different units or conversion data
+        // must not silently fall back to otherwise plausible detector aliases.
+        let changed = self
+            .project
+            .versions
+            .iter()
+            .chain(&self.machine.versions)
+            .any(|recipe| {
+                recipe.reuse
+                    && recipe.scope.contains(path, header)
+                    && recipe.layout.parser == key.parser
+                    && recipe.layout.column_count == key.column_count
+                    && recipe.layout.names == key.names
+            });
+        if changed {
+            Dispatch::Review { reason: "A previous recipe uses different units, dialect or conversion metadata; confirm this layout separately.".into(), suggestion: None }
+        } else {
+            Dispatch::Detection
+        }
+    }
+}
+
 impl ProjectImports {
     pub fn application_for(&self, group: &GroupId) -> Option<&ImportApplication> {
         self.applications
@@ -321,6 +379,95 @@ pub fn mapping_revision(mapping: &ImportConfig) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dispatch_prefers_project_and_reviews_ambiguity_or_changed_interpretation() {
+        let root = std::env::temp_dir().join(new_id("dispatch"));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("sample.xdi");
+        std::fs::write(&path, "# XDI/1.0\n# Column.1: energy eV\n# Column.2: i0\n# Column.3: it\n# ---\n8900 10 5\n9000 12 5\n9100 14 5\n").unwrap();
+        let preview = crate::params::preview_import(&path, &ImportConfig::default()).unwrap();
+        let mapping = MappingDraft::new(&preview, &ImportConfig::default())
+            .config()
+            .clone();
+        let recipe = RecipeVersion::from_review(
+            "Local",
+            RecipeScope::for_source(&path, preview.xdi.as_ref()),
+            &preview,
+            mapping.mode,
+            &[mapping],
+            false,
+        )
+        .unwrap();
+        let key = recipe.layout.clone();
+        let mut context = DispatchContext::default();
+        assert!(matches!(
+            context.resolve(&key, &path, None),
+            Dispatch::Detection
+        ));
+        context.machine.remember(recipe.clone()).unwrap();
+        assert!(matches!(context.resolve(&key, &path, None), Dispatch::Recipe(r) if r == recipe));
+
+        let mut project = recipe.clone();
+        project.reference.id = new_id("project");
+        project.channels[0].it_col = Some(1);
+        project.name = "Project".into();
+        context.project.remember(project.clone()).unwrap();
+        assert!(matches!(context.resolve(&key, &path, None), Dispatch::Recipe(r) if r == project));
+        context.project.remember(recipe.clone()).unwrap();
+        assert!(matches!(
+            context.resolve(&key, &path, None),
+            Dispatch::Review {
+                suggestion: None,
+                ..
+            }
+        ));
+        context.project.stop_reusing(&project.reference.id);
+        assert!(matches!(context.resolve(&key, &path, None), Dispatch::Recipe(r) if r == recipe));
+
+        let mut changed = key.clone();
+        changed.units[0] = Some("keV".into());
+        assert!(matches!(
+            context.resolve(&changed, &path, None),
+            Dispatch::Review {
+                suggestion: None,
+                ..
+            }
+        ));
+        changed = key.clone();
+        changed
+            .conversion_and_signal_metadata
+            .insert("mono.d_spacing".into(), "3.1356".into());
+        assert!(matches!(
+            context.resolve(&changed, &path, None),
+            Dispatch::Review { .. }
+        ));
+        assert!(matches!(
+            context.resolve(&key, Path::new("/unrelated/sample.xdi"), None),
+            Dispatch::Detection
+        ));
+
+        context.project.stop_reusing(&recipe.reference.id);
+        context.machine.stop_reusing(&recipe.reference.id);
+        assert!(matches!(
+            context.resolve(&key, &path, None),
+            Dispatch::Detection
+        ));
+        assert_eq!(
+            context.project.get(&recipe.reference).unwrap().channels,
+            recipe.channels
+        );
+
+        let mut unnamed = recipe.clone();
+        unnamed.layout.names = None;
+        context.project = RecipeLibrary {
+            versions: vec![unnamed.clone()],
+        };
+        assert!(
+            matches!(context.resolve(&unnamed.layout, &path, None), Dispatch::Review { suggestion: Some(r), .. } if r == unnamed)
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn review_requires_units_confirmation_and_versions_do_not_rewrite_previous_users() {

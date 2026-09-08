@@ -150,6 +150,7 @@ fn recipes_exact_applications_and_pending_sources_survive_conflicting_machine_li
                         SourceOutcome {
                             pending: Some(PendingSource {
                                 detection: None,
+                                suggestion: None,
                                 reason: "Locate source".into(),
                             }),
                             ..Default::default()

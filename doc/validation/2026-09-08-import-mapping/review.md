@@ -72,3 +72,37 @@ tests; native qualification used project scope.
 Recipe dispatch, the compact inspector and the remaining phase acceptance
 workflows are still pending. Release signing/publication and native Intel,
 Windows and Linux interactive qualification are separate release work.
+
+## Phase 2.7 — recipe dispatch and compact inspector
+
+The full GUI suite passed **420 tests, zero failed, four ignored**. Focused
+coverage includes project-over-machine priority, same-priority conflicts,
+changed units/conversion metadata, stopped reuse, unnamed-column suggestions,
+and exact application repair excluding manual mappings and locked groups.
+The worker test verifies a shared application for two matching sources and
+review fallback for a changed-unit source. Its initial failure was a test
+fixture using a noncanonical temporary path; intake supplies canonical paths,
+and the corrected fixture exercises that same contract.
+
+Native qualification used the packaged release build, not the test harness.
+The saved project restored six groups, pending sources, recipe membership, and
+current/marks. The Data inspector displayed source, channel, formula, units,
+recipe version, full-signal point count, energy correction, and scoped actions.
+Files/Scans tabs and the old inline mapping form are removed; Groups stays unified.
+
+Review this application captured exactly two Transmission groups. After one was
+independently remapped, the same application reported one compatible and one
+changed group, and offered Apply to one file. A named four-column layout was
+accepted for two pending sources. Importing a later folder added its matching
+named source immediately, while an unnamed source stayed pending with its prior
+mapping offered as a suggestion. Existing current and its Cu mark were retained.
+
+The native save `/tmp/rexafs-dispatch-qualification.rxs` contains three distinct
+applications: original two-source/two-channel review (four members), named review
+(two members), and later named fast-path import (one member). The later source
+has not joined the earlier application. The unreadable and unnamed sources
+remain pending. No machine recipe was saved during native qualification.
+
+Logs: `/tmp/rexafs-phase27-final-tests.log`,
+`/tmp/rexafs-phase27-repair-test.log`, `/tmp/rexafs-phase27-dispatch-test2.log`,
+`/tmp/rexafs-phase27-build1.log`, and `/tmp/rexafs-phase27-package1.log`.

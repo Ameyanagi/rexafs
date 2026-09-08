@@ -4,16 +4,12 @@
 //! actions act on. Source stacks and Results share one virtualized list.
 
 use gpui::{
-    ClickEvent, Context, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, px,
-    uniform_list,
+    ClickEvent, Context, IntoElement, ParentElement, Styled, div, prelude::*, px, uniform_list,
 };
 
 use super::{MONO, PlotScope, button};
 use crate::app::group_rows::{self, Row};
-use crate::app::{
-    DERIVED_BASE, DataTab, NavDown, NavExtendDown, NavExtendUp, NavUp, ScanListRow, StudioApp,
-    scan_list_row,
-};
+use crate::app::{DERIVED_BASE, NavDown, NavExtendDown, NavExtendUp, NavUp, StudioApp};
 use crate::plotting::{middle_truncate, trace_rgba};
 
 /// Stable group colour, also used by its plot trace and legend.
@@ -206,12 +202,6 @@ impl StudioApp {
     }
 
     pub(crate) fn interaction_rows(&self) -> group_rows::Rows {
-        if self.data_tab == DataTab::Scans {
-            let scan = self.expanded_scan.and_then(|i| self.catalog.scans.get(i));
-            return self
-                .group_rows()
-                .in_catalog_range(scan.map_or(0, |s| s.start), scan.map_or(0, |s| s.len));
-        }
         self.group_rows()
     }
 
@@ -247,14 +237,12 @@ impl StudioApp {
     }
 
     fn toggle_filter_reveal(&mut self, cx: &mut Context<Self>) {
-        if let Some((expanded, tab)) = self.filter_reveal.take() {
+        if let Some(expanded) = self.filter_reveal.take() {
             self.expanded_sources = expanded;
-            self.data_tab = tab;
             self.reveal_current = None;
             self.intake.reveal.clear();
         } else {
-            self.filter_reveal = Some((self.expanded_sources.clone(), self.data_tab));
-            self.data_tab = DataTab::Files;
+            self.filter_reveal = Some(self.expanded_sources.clone());
         }
         cx.notify();
     }
@@ -335,13 +323,9 @@ impl StudioApp {
     }
 
     pub(crate) fn scroll_group_row(&mut self, ix: usize) {
-        if let Some(row) = self.interaction_rows().scroll_row(ix, self.expanded_scan) {
-            let scroll = if self.data_tab == DataTab::Scans {
-                &self.scan_scroll
-            } else {
-                &self.file_scroll
-            };
-            scroll.scroll_to_item(row, gpui::ScrollStrategy::Nearest);
+        if let Some(row) = self.interaction_rows().scroll_row(ix, None) {
+            self.file_scroll
+                .scroll_to_item(row, gpui::ScrollStrategy::Nearest);
         }
     }
 
@@ -389,11 +373,6 @@ impl StudioApp {
                         .filter(|&ix| this.interaction_rows().row_index(ix).is_some())
                     {
                         this.start_group_rename(ix, window, cx);
-                    } else if this.data_tab == DataTab::Scans
-                        && let Some(scan) = this.active_scan
-                    {
-                        this.expanded_scan = (this.expanded_scan != Some(scan)).then_some(scan);
-                        cx.notify();
                     }
                 }),
             )
@@ -547,19 +526,8 @@ impl StudioApp {
                             .on_click(cx.listener(|this, _, _, cx| this.invert_group_marks(cx))),
                     ),
             )
-            .child(
-                div()
-                    .flex()
-                    .border_b_1()
-                    .border_color(t.border)
-                    .child(self.data_tab_button("tab-files", "Files", DataTab::Files, cx))
-                    .child(self.data_tab_button("tab-scans", "Scans", DataTab::Scans, cx)),
-            )
             .children(self.pending_imports(cx))
-            .child(match self.data_tab {
-                DataTab::Files => self.file_list(cx).into_any_element(),
-                DataTab::Scans => self.scan_list(cx).into_any_element(),
-            })
+            .child(self.file_list(cx))
             .child(
                 div()
                     .px_3()
@@ -599,10 +567,8 @@ impl StudioApp {
                             d.child(
                                 button(&t, "reveal-current", "Reveal current", false).on_click(
                                     cx.listener(|this, _, _, cx| {
-                                        this.filter_reveal.get_or_insert_with(|| {
-                                            (this.expanded_sources.clone(), this.data_tab)
-                                        });
-                                        this.data_tab = DataTab::Files;
+                                        this.filter_reveal
+                                            .get_or_insert_with(|| this.expanded_sources.clone());
                                         this.reveal_current = this.current_group_index();
                                         if let Some(ix) = this.reveal_current {
                                             this.reveal_group_row(ix);
@@ -1006,167 +972,6 @@ impl StudioApp {
                     )
                     .on_click(|_, _, cx| cx.stop_propagation()),
             )
-    }
-
-    pub(crate) fn scan_list(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let t = self.theme;
-        let entity = cx.entity();
-        let active = self.active_scan;
-        let expanded_scan = self.expanded_scan;
-        let members = self.interaction_rows();
-        let expanded = expanded_scan.and_then(|scan_ix| {
-            self.catalog
-                .scans
-                .get(scan_ix)
-                .map(|_| (scan_ix, members.row_count()))
-        });
-        let count = self.catalog.scans.len() + expanded.map(|(_, len)| len).unwrap_or(0);
-        uniform_list("catalog-scans", count, move |range, _window, app| {
-            let mut rows = Vec::with_capacity(range.len());
-            for row in range {
-                let Some(item) = scan_list_row(row, entity.read(app).catalog.scans.len(), expanded)
-                else {
-                    continue;
-                };
-                match item {
-                    ScanListRow::Header(scan_ix) => {
-                        let (label, meta): (SharedString, SharedString) = {
-                            let scan = &entity.read(app).catalog.scans[scan_ix];
-                            (
-                                scan.label.clone().into(),
-                                format!("folder run · {} files", scan.len).into(),
-                            )
-                        };
-                        let is_active = active == Some(scan_ix);
-                        let is_expanded = expanded_scan == Some(scan_ix);
-                        let row_entity = entity.clone();
-                        let button_entity = entity.clone();
-                        rows.push(
-                            div()
-                                .id(("scan-header", scan_ix))
-                                .h(px(27.))
-                                .mx_1p5()
-                                .px_1p5()
-                                .gap_1p5()
-                                .flex()
-                                .items_center()
-                                .rounded_md()
-                                .overflow_hidden()
-                                .when(is_active, |d| {
-                                    d.bg(gpui::Rgba {
-                                        a: 0.16,
-                                        ..t.accent
-                                    })
-                                })
-                                .when(!is_active, |d| d.hover(|d| d.bg(t.raised)))
-                                .cursor_pointer()
-                                .on_click(move |ev: &ClickEvent, window, app| {
-                                    let modifiers = ev.modifiers();
-                                    let double = ev.click_count() >= 2;
-                                    row_entity.update(app, |this, cx| {
-                                        window.focus(&this.data_focus, cx);
-                                        this.focus_group = None;
-                                        if modifiers.shift || modifiers.platform {
-                                            this.select_scan_range(scan_ix, cx);
-                                        } else if double {
-                                            this.open_scan(scan_ix, cx);
-                                        } else {
-                                            this.active_scan = Some(scan_ix);
-                                            this.expanded_scan = (this.expanded_scan
-                                                != Some(scan_ix))
-                                            .then_some(scan_ix);
-                                            cx.notify();
-                                        }
-                                    });
-                                })
-                                .child(div().text_color(t.text_muted).child(if is_expanded {
-                                    "▾"
-                                } else {
-                                    "▸"
-                                }))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .overflow_hidden()
-                                        .whitespace_nowrap()
-                                        .text_ellipsis()
-                                        .child(label),
-                                )
-                                .child(
-                                    div()
-                                        .flex_none()
-                                        .font_family(MONO)
-                                        .text_size(px(10.5))
-                                        .text_color(t.accent)
-                                        .child(meta),
-                                )
-                                .child(
-                                    div()
-                                        .id(("scan-series", scan_ix))
-                                        .flex_none()
-                                        .px_1()
-                                        .rounded_sm()
-                                        .text_size(px(10.5))
-                                        .text_color(t.accent)
-                                        .border_1()
-                                        .border_color(t.border)
-                                        .hover(|d| d.bg(t.surface))
-                                        .cursor_pointer()
-                                        .on_click(move |_: &ClickEvent, _window, app| {
-                                            app.stop_propagation();
-                                            button_entity.update(app, |this, cx| {
-                                                this.open_scan(scan_ix, cx)
-                                            });
-                                        })
-                                        .child("open"),
-                                )
-                                .into_any_element(),
-                        );
-                    }
-                    ScanListRow::Member { offset, .. } => {
-                        if let Some(row) = members.row_at(offset) {
-                            rows.push(entity.update(app, |this, cx| {
-                                this.group_row(row, cx).into_any_element()
-                            }));
-                        }
-                    }
-                }
-            }
-            rows
-        })
-        .track_scroll(&self.scan_scroll)
-        .flex_1()
-        .min_h_0()
-    }
-
-    pub(crate) fn data_tab_button(
-        &self,
-        id: &'static str,
-        label: &'static str,
-        tab: DataTab,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement + use<> {
-        let t = self.theme;
-        let active = self.data_tab == tab;
-        div()
-            .id(id)
-            .flex_1()
-            .py_1()
-            .flex()
-            .justify_center()
-            .text_size(px(11.5))
-            .cursor_pointer()
-            .when(active, |d| {
-                d.text_color(t.accent).border_b_2().border_color(t.accent)
-            })
-            .when(!active, |d| d.text_color(t.text_muted))
-            .hover(|d| d.bg(t.raised))
-            .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                this.data_tab = tab;
-                cx.notify();
-            }))
-            .child(label)
     }
 }
 

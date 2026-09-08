@@ -8,11 +8,13 @@ use futures::{SinkExt, channel::mpsc};
 
 struct ImportFile {
     meta: FileMeta,
-    reference: bool,
+    reference: Option<ImportConfig>,
     modified: Option<std::time::SystemTime>,
     cached: bool,
     pending: Option<PendingSource>,
     approval: Option<Approval>,
+    recipe: Option<crate::import_recipes::RecipeVersion>,
+    mapping: Option<ImportConfig>,
 }
 enum ImportEvent {
     Root {
@@ -103,6 +105,7 @@ fn start_import(
         use_index,
         false,
         Approvals::new(),
+        None,
     )
 }
 
@@ -114,6 +117,7 @@ fn start_import_reviewed(
     use_index: bool,
     review_new: bool,
     approvals: Approvals,
+    dispatch: Option<crate::import_recipes::DispatchContext>,
 ) -> mpsc::Receiver<Vec<ImportEvent>> {
     let (tx, rx) = mpsc::channel(2);
     let (worker_tx, worker_rx) = std::sync::mpsc::sync_channel(2);
@@ -123,6 +127,7 @@ fn start_import_reviewed(
         let send =
             |tx: &mut std::sync::mpsc::SyncSender<ImportEvent>, event| tx.send(event).is_ok();
         let single_root = paths.len() == 1;
+        let mut applications: Vec<(crate::import_recipes::RecipeRef, String)> = vec![];
         for path in paths {
             if cancel.load(Ordering::Relaxed) {
                 break;
@@ -178,11 +183,13 @@ fn start_import_reviewed(
                                 name: catalog.name(ix).to_string().into_boxed_str(),
                                 size: catalog.entry_size(ix),
                             },
-                            reference: false,
+                            reference: None,
                             modified: None,
                             cached: true,
                             pending: None,
                             approval: None,
+                            recipe: None,
+                            mapping: None,
                         }]),
                     ) {
                         return;
@@ -245,11 +252,16 @@ fn start_import_reviewed(
                     }
                     continue;
                 }
-                let approval = approvals.get(entry.path()).cloned();
+                let mut approval = approvals.get(entry.path()).cloned();
+                let mut applied_recipe = None;
+                let mut detected_mapping = None;
+                let source_before =
+                    review_new.then(|| super::import_preview::SourceRevision::read(entry.path()));
                 let file_import = approval
                     .as_ref()
                     .and_then(|a| a.choice.primary_config())
-                    .unwrap_or(&import);
+                    .cloned()
+                    .unwrap_or_else(|| import.clone());
                 let mut pending = None;
                 let approved_unchanged = approval.as_ref().is_some_and(|approval| {
                     super::import_preview::SourceRevision::read(entry.path())
@@ -260,31 +272,93 @@ fn start_import_reviewed(
                 let reference = if detect_channels && approved_unchanged {
                     // The reviewed full source is stronger evidence than a prefix
                     // that may end inside a long header. It was validated in full.
-                    false
+                    None
                 } else if detect_channels {
-                    match detect_import(entry.path(), file_import) {
+                    match detect_import(entry.path(), &file_import) {
                         Ok(Some(preview)) => {
+                            detected_mapping = Some(preview.resolved_config(&file_import));
                             if review_new {
-                                let reason = if let Some(approved) = &approval {
-                                    (super::import_preview::SourceRevision::read(entry.path())
+                                if let Some(approved) = &approval {
+                                    if super::import_preview::SourceRevision::read(entry.path())
                                         .ok()
                                         .as_ref()
                                         != Some(&approved.source)
                                         || crate::import_mapping::LayoutKey::from_detection(
                                             &preview,
-                                        ) != approved.layout)
-                                        .then(|| {
-                                            "Source changed after review; confirm its new layout."
-                                                .into()
-                                        })
+                                        ) != approved.layout
+                                    {
+                                        pending = Some(PendingSource { detection: Some(preview.clone()), suggestion: None,
+                                            reason: "Source changed after review; confirm its new layout.".into() });
+                                    }
                                 } else {
-                                    preview.review_reason()
-                                };
-                                if let Some(reason) = reason {
-                                    pending = Some(PendingSource {
-                                        detection: Some(preview.clone()),
-                                        reason,
-                                    });
+                                    let decision = dispatch
+                                        .as_ref()
+                                        .map(|context| {
+                                            context.resolve(
+                                                &crate::import_mapping::LayoutKey::from_detection(
+                                                    &preview,
+                                                ),
+                                                entry.path(),
+                                                preview.xdi.as_ref(),
+                                            )
+                                        })
+                                        .unwrap_or(crate::import_recipes::Dispatch::Detection);
+                                    match decision {
+                                        crate::import_recipes::Dispatch::Recipe(recipe) => {
+                                            if let Some(Ok(source)) = &source_before {
+                                                let application = applications
+                                                    .iter()
+                                                    .find(|(reference, _)| {
+                                                        *reference == recipe.reference
+                                                    })
+                                                    .map(|(_, id)| id.clone())
+                                                    .unwrap_or_else(|| {
+                                                        let id = crate::import_recipes::new_id(
+                                                            "application",
+                                                        );
+                                                        applications.push((
+                                                            recipe.reference.clone(),
+                                                            id.clone(),
+                                                        ));
+                                                        id
+                                                    });
+                                                approval = Some(Approval {
+                                                    batch: dispatch.as_ref().unwrap().batch,
+                                                    choice: super::import_review::ReviewChoice {
+                                                        primary: recipe.primary,
+                                                        channels: recipe.channels.clone(),
+                                                    },
+                                                    layout: recipe.layout.clone(),
+                                                    source: source.clone(),
+                                                    recipe: Some(recipe.reference.clone()),
+                                                    application: Some(application),
+                                                });
+                                                applied_recipe = Some(recipe);
+                                            } else {
+                                                pending = Some(PendingSource { detection: Some(preview.clone()), suggestion: None,
+                                                    reason: "Cannot verify the source revision; review it before adding groups.".into() });
+                                            }
+                                        }
+                                        crate::import_recipes::Dispatch::Review {
+                                            reason,
+                                            suggestion,
+                                        } => {
+                                            pending = Some(PendingSource {
+                                                detection: Some(preview.clone()),
+                                                reason,
+                                                suggestion,
+                                            });
+                                        }
+                                        crate::import_recipes::Dispatch::Detection => {
+                                            if let Some(reason) = preview.review_reason() {
+                                                pending = Some(PendingSource {
+                                                    detection: Some(preview.clone()),
+                                                    reason,
+                                                    suggestion: None,
+                                                });
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             if !review_new
@@ -296,17 +370,23 @@ fn start_import_reviewed(
                             {
                                 return;
                             }
-                            approval.is_none()
+                            (approval.is_none()
                                 && preview.resolved.mode != DetectionMode::Reference
                                 && preview
                                     .available_channels()
-                                    .contains(&DetectionMode::Reference)
+                                    .contains(&DetectionMode::Reference))
+                            .then(|| {
+                                preview.resolved_config(&ImportConfig {
+                                    mode: DetectionMode::Reference,
+                                    ..Default::default()
+                                })
+                            })
                         }
                         Ok(None) => {
                             if review_new {
-                                pending = Some(PendingSource { detection: None, reason: "The bounded header read did not reach numeric data; review the full source.".into() });
+                                pending = Some(PendingSource { detection: None, suggestion: None, reason: "The bounded header read did not reach numeric data; review the full source.".into() });
                             }
-                            false
+                            None
                         }
                         Err(error) => {
                             if !send(
@@ -316,16 +396,16 @@ fn start_import_reviewed(
                                 return;
                             }
                             if review_new {
-                                pending = Some(PendingSource { detection: None, reason: "Source could not be parsed. Repair or locate it, then reload its preview.".into() });
+                                pending = Some(PendingSource { detection: None, suggestion: None, reason: "Source could not be parsed. Repair or locate it, then reload its preview.".into() });
                             }
                             // Retain sources that need manual mapping.
-                            false
+                            None
                         }
                     }
                 } else {
                     // Restore stays lazy. load_spectrum diagnoses each source with
                     // its effective mapping after resolve_pending_overrides.
-                    false
+                    None
                 };
                 let metadata = match entry.metadata() {
                     Ok(metadata) => metadata,
@@ -367,6 +447,8 @@ fn start_import_reviewed(
                         cached: false,
                         pending,
                         approval,
+                        recipe: applied_recipe,
+                        mapping: detected_mapping,
                     }]),
                 ) {
                     return;
@@ -528,6 +610,11 @@ impl StudioApp {
             activate_first,
             !restore,
             self.intake.approved.clone(),
+            (!restore).then(|| crate::import_recipes::DispatchContext {
+                batch: id,
+                project: self.imports.recipes.clone(),
+                machine: self.structure.settings.import_recipes.clone(),
+            }),
         );
         self.status = "Importing files and detecting reference channels…".into();
         cx.spawn(async move |this, cx| {
@@ -588,7 +675,7 @@ impl StudioApp {
                                 }) {
                                     app.intake.approved.remove(&path);
                                     app.intake.history[id].sources.entry(path).or_default().pending = Some(PendingSource {
-                                        detection: None, reason: "Source changed while adding reviewed files; reload and confirm it again.".into()
+                                        detection: None, suggestion: None, reason: "Source changed while adding reviewed files; reload and confirm it again.".into()
                                     });
                                     continue;
                                 }
@@ -596,6 +683,19 @@ impl StudioApp {
                                     app.intake.approved.remove(&path);
                                     app.intake.history[id].sources.entry(path).or_default().pending = Some(pending);
                                     continue;
+                                }
+                                if let Some(recipe) = file.recipe {
+                                    if let Err(error) = app.imports.recipes.remember(recipe.clone()) {
+                                        app.record_intake_problem(id, &path, error.clone(), ProblemSeverity::Error);
+                                        app.intake.history[id].sources.entry(path).or_default().pending = Some(PendingSource { detection: None, suggestion: None, reason: error });
+                                        continue;
+                                    }
+                                    if let Some(application_id) = file.approval.as_ref().and_then(|a| a.application.clone())
+                                        && !app.imports.applications.iter().any(|a| a.id == application_id) {
+                                        app.imports.applications.push(crate::import_recipes::ImportApplication {
+                                            id: application_id, batch: id, recipe: recipe.reference, members: vec![],
+                                        });
+                                    }
                                 }
                                 if !file.cached {
                                     app.intake.history[id].sources.entry(path.clone()).or_default().cached = false;
@@ -616,7 +716,7 @@ impl StudioApp {
                                     let mut source_params = if retained { params.clone() } else { PipelineParams::default() };
                                     if !retained {
                                         source_params.import = file.approval.as_ref()
-                                            .and_then(|a| a.choice.primary_config()).cloned().unwrap_or_default();
+                                            .and_then(|a| a.choice.primary_config()).cloned().or(file.mapping).unwrap_or_default();
                                     }
                                     app.set_custom_params(primary, (source_params != app.params).then_some(source_params));
                                 }
@@ -628,8 +728,8 @@ impl StudioApp {
                                     outcome.cached = file.cached;
                                     outcome.created.extend(primary_id);
                                 }
-                                if file.reference && existing_references.insert(path.clone()) {
-                                    let reference_params = super::import_channels::channel_params(ImportConfig { mode: DetectionMode::Reference, ..Default::default() });
+                                if let Some(mapping) = file.reference && existing_references.insert(path.clone()) {
+                                    let reference_params = super::import_channels::channel_params(mapping);
                                     let mut group = DerivedSpectrum {
                                         id: app.next_group_id(),
                                         label: path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
@@ -689,7 +789,7 @@ impl StudioApp {
                         ImportEvent::Error(path, e) => {
                             app.intake.history[id].sources.entry(path.clone()).or_default().failed = Some(e.clone());
                             if !restore && app.catalog.find_by_canonical_path(&path).is_none() {
-                                app.intake.history[id].sources.entry(path.clone()).or_default().pending.get_or_insert_with(|| PendingSource { detection: None, reason: e.clone() });
+                                app.intake.history[id].sources.entry(path.clone()).or_default().pending.get_or_insert_with(|| PendingSource { detection: None, suggestion: None, reason: e.clone() });
                             }
                             app.record_intake_problem(id, &path, e, ProblemSeverity::Error);
                         }
@@ -861,11 +961,13 @@ mod tests {
                     name: "one.dat".into(),
                     size: 1,
                 },
-                reference: false,
+                reference: None,
                 modified: None,
                 cached: false,
                 pending: None,
                 approval: None,
+                recipe: None,
+                mapping: None,
             }]))
             .unwrap();
         let (observed_tx, observed_rx) = std::sync::mpsc::channel();
@@ -1078,6 +1180,107 @@ mod tests {
     use super::*;
 
     #[test]
+    fn recipe_intake_freezes_channels_and_application_but_reviews_unit_changes() {
+        use crate::import_recipes::{DispatchContext, RecipeScope, RecipeVersion};
+        let root = std::env::temp_dir().join(crate::import_recipes::new_id("recipe-intake"));
+        std::fs::create_dir_all(&root).unwrap();
+        let root = root.canonicalize().unwrap();
+        let source = |units| {
+            format!(
+                "# XDI/1.0\n# Column.1: energy {units}\n# Column.2: a\n# Column.3: b\n# Column.4: c\n# ---\n8900 10 5 2\n9000 12 5 2\n9100 14 5 2\n"
+            )
+        };
+        for (name, units) in [
+            ("first.xdi", "eV"),
+            ("second.xdi", "eV"),
+            ("changed.xdi", "keV"),
+        ] {
+            std::fs::write(root.join(name), source(units)).unwrap();
+        }
+        let mapping = ImportConfig {
+            mode: DetectionMode::Transmission,
+            energy_col: Some(0),
+            i0_col: Some(1),
+            it_col: Some(2),
+            ..Default::default()
+        };
+        let preview = crate::params::preview_import(&root.join("first.xdi"), &mapping).unwrap();
+        let reference = ImportConfig {
+            mode: DetectionMode::Reference,
+            energy_col: Some(0),
+            it_col: Some(2),
+            ir_col: Some(3),
+            ..Default::default()
+        };
+        let recipe = RecipeVersion::from_review(
+            "Reviewed",
+            RecipeScope::FolderTree(root.clone()),
+            &preview,
+            mapping.mode,
+            &[mapping, reference],
+            false,
+        )
+        .unwrap();
+        let mut dispatch = DispatchContext {
+            batch: 42,
+            ..Default::default()
+        };
+        dispatch.project.remember(recipe.clone()).unwrap();
+        let events = futures::executor::block_on(
+            super::start_import_reviewed(
+                vec![root.clone()],
+                ImportConfig::default(),
+                true,
+                Default::default(),
+                false,
+                true,
+                Approvals::new(),
+                Some(dispatch),
+            )
+            .collect::<Vec<_>>(),
+        );
+        let files: Vec<_> = events
+            .iter()
+            .flatten()
+            .filter_map(|e| match e {
+                ImportEvent::Batch(files) => Some(files),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        assert_eq!(files.len(), 3);
+        let mut application = None;
+        for file in files {
+            if file.meta.name.as_ref() == "changed.xdi" {
+                assert!(
+                    file.pending
+                        .as_ref()
+                        .is_some_and(|p| p.reason.contains("different units")),
+                    "pending: {:?}",
+                    file.pending.as_ref().map(|p| &p.reason)
+                );
+                assert!(file.approval.is_none());
+                continue;
+            }
+            assert!(file.pending.is_none());
+            assert!(
+                file.reference.is_none(),
+                "only the explicitly reviewed output set is created"
+            );
+            let approval = file.approval.as_ref().unwrap();
+            assert_eq!(approval.batch, 42);
+            assert_eq!(approval.choice.channels, recipe.channels);
+            assert_eq!(approval.recipe.as_ref(), Some(&recipe.reference));
+            if let Some(previous) = &application {
+                assert_eq!(previous, &approval.application);
+            }
+            application = Some(approval.application.clone());
+        }
+        assert!(application.flatten().is_some());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn fresh_review_intake_keeps_guesses_pending_and_accepts_a_full_reviewed_long_header() {
         use crate::app::import_review::ReviewChoice;
         use crate::import_mapping::LayoutKey;
@@ -1100,6 +1303,7 @@ mod tests {
                 false,
                 true,
                 Approvals::new(),
+                None,
             )
             .collect::<Vec<_>>(),
         );
@@ -1160,6 +1364,7 @@ mod tests {
                 false,
                 true,
                 approvals,
+                None,
             )
             .collect::<Vec<_>>(),
         );
@@ -1214,7 +1419,7 @@ mod tests {
                                 PathBuf::from(meta.dir.as_ref()).join(meta.name.as_ref()),
                                 path.canonicalize().unwrap()
                             );
-                            assert!(*reference);
+                            assert!(reference.is_some());
                         }
                     }
                     ImportEvent::Error(_, error) => errors.push(error),
@@ -1261,7 +1466,7 @@ mod tests {
                 match event {
                     ImportEvent::Batch(files) => {
                         files_seen += files.len();
-                        assert!(files.iter().all(|file| !file.reference));
+                        assert!(files.iter().all(|file| file.reference.is_none()));
                     }
                     ImportEvent::Error(_, error) => {
                         panic!("incomplete prefix caused an error: {error}")
@@ -1294,7 +1499,7 @@ mod tests {
             match event {
                 ImportEvent::Batch(files) => {
                     sources += files.len();
-                    assert!(files.iter().all(|file| !file.reference));
+                    assert!(files.iter().all(|file| file.reference.is_none()));
                 }
                 ImportEvent::Error(_, error) => {
                     errors += 1;
@@ -1425,7 +1630,7 @@ mod tests {
             match event {
                 ImportEvent::Batch(files) => {
                     sources += files.len();
-                    assert!(files.iter().all(|f| !f.reference));
+                    assert!(files.iter().all(|f| f.reference.is_none()));
                 }
                 ImportEvent::Error(_, error) => panic!("restore previewed a source: {error}"),
                 ImportEvent::Skipped(path, _) => {
@@ -1490,7 +1695,7 @@ mod tests {
                 .flatten()
                 .collect();
             assert_eq!(files.len(), 1);
-            assert_eq!(files[0].reference, detect);
+            assert_eq!(files[0].reference.is_some(), detect);
             assert!(matches!(events.last(), Some(ImportEvent::Done)));
             assert!(!events.iter().any(|e| matches!(e, ImportEvent::Error(_, _))));
         }

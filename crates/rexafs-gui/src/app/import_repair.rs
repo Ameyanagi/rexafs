@@ -29,6 +29,24 @@ pub(crate) struct RepairScope {
     pub targets: Vec<RepairTarget>,
 }
 
+fn application_targets(
+    application: &crate::import_recipes::ImportApplication,
+    channel: DetectionMode,
+    mut resolve: impl FnMut(&crate::import_recipes::ApplicationMember) -> Option<RepairTarget>,
+) -> Vec<RepairTarget> {
+    application
+        .members
+        .iter()
+        .filter(|member| member.channel == channel)
+        .filter_map(|member| {
+            let mut target = resolve(member)?;
+            target.changed |= crate::import_recipes::mapping_revision(&target.params.import)
+                != member.mapping_revision;
+            Some(target)
+        })
+        .collect()
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Validation {
     Ready(Vec<String>),
@@ -227,6 +245,35 @@ impl StudioApp {
         target: &ToolTarget,
         channel: DetectionMode,
     ) -> Option<RepairScope> {
+        if let Some(application) = target
+            .group_id
+            .as_ref()
+            .and_then(|group| self.imports.application_for(group))
+        {
+            let targets = application_targets(application, channel, |member| {
+                let ix = self.intake_group_index(&member.path, &member.group)?;
+                self.group_id(ix);
+                let target = self.tool_target(ix)?;
+                let params = self.effective_params(ix).clone();
+                Some(RepairTarget {
+                    changed: false,
+                    source: SourceRevision::read(&target.path),
+                    target,
+                    params,
+                    locked: self.frozen.contains(&ix),
+                })
+            });
+            let label = self
+                .imports
+                .recipes
+                .get(&application.recipe)
+                .map(|recipe| recipe.label())
+                .unwrap_or_else(|| "Saved import application".into());
+            return Some(RepairScope {
+                label: format!("{} · {} · exact application", label, channel.label()),
+                targets,
+            });
+        }
         let origin = self
             .intake
             .origin(&target.path, target.group_id.as_ref()?)?;
@@ -276,9 +323,10 @@ impl StudioApp {
                 .as_ref()
                 .and_then(|id| self.menu_index(id))
                 .and_then(|ix| self.tool_target(ix));
-            entry.changed = current
-                .as_ref()
-                .is_none_or(|current| !same_revision(&entry.target, current));
+            entry.changed = entry.changed
+                || current
+                    .as_ref()
+                    .is_none_or(|current| !same_revision(&entry.target, current));
             entry.locked = current
                 .as_ref()
                 .is_some_and(|current| self.frozen.contains(&current.ix));
@@ -409,6 +457,98 @@ fn provenance_changed<'a>(
 mod tests {
     use super::*;
     use crate::import_mapping::AxisConversion;
+
+    #[test]
+    fn application_repair_uses_exact_channel_members_and_skips_manual_mappings() {
+        use crate::import_recipes::{
+            ApplicationMember, ImportApplication, RecipeRef, mapping_revision,
+        };
+        let root = std::env::temp_dir().join(crate::import_recipes::new_id("application-repair"));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("source.dat");
+        std::fs::write(&path, "# energy mu monitor\n8900 1 4\n9000 2 4\n9100 3 4\n").unwrap();
+        let preview = crate::params::preview_import(&path, &ImportConfig::default()).unwrap();
+        let mapping = MappingDraft::new(&preview, &ImportConfig::default())
+            .config()
+            .clone();
+        let mut application = ImportApplication {
+            id: "a".into(),
+            batch: 1,
+            recipe: RecipeRef {
+                id: "r".into(),
+                version: 1,
+            },
+            members: vec![],
+        };
+        let mut live = Vec::new();
+        for i in 0..6 {
+            let id = GroupId::new_result();
+            let mut params = PipelineParams {
+                import: mapping.clone(),
+                ..Default::default()
+            };
+            if i == 1 {
+                params.import.mu_col = Some(2);
+            }
+            if i == 2 {
+                params.e0 = Some(9000.);
+            }
+            live.push(RepairTarget {
+                target: ToolTarget::standalone(
+                    Some(id.clone()),
+                    path.clone(),
+                    format!("group {i}"),
+                    params.fingerprint(),
+                    1,
+                    1,
+                ),
+                params,
+                locked: i == 3,
+                changed: false,
+                source: SourceRevision::read(&path),
+            });
+            if i < 5 {
+                application.members.push(ApplicationMember {
+                    source_id: id.clone(),
+                    path: path.clone(),
+                    group: id,
+                    channel: if i == 4 {
+                        DetectionMode::Reference
+                    } else {
+                        mapping.mode
+                    },
+                    mapping_revision: mapping_revision(&mapping),
+                });
+            }
+        }
+        let targets = application_targets(&application, mapping.mode, |member| {
+            live.iter()
+                .find(|target| target.target.group_id.as_ref() == Some(&member.group))
+                .cloned()
+        });
+        assert_eq!(
+            targets.len(),
+            4,
+            "other channels and later imports stay outside the scope"
+        );
+        let result = validate(
+            RepairScope {
+                label: "exact application".into(),
+                targets,
+            },
+            LayoutKey::from_preview(&preview),
+            mapping,
+            1,
+        );
+        assert!(matches!(result.results[0], Validation::Ready(_)));
+        assert_eq!(result.results[1], Validation::Changed);
+        assert!(
+            matches!(result.results[2], Validation::Ready(_)),
+            "processing edits preserve mapping eligibility"
+        );
+        assert_eq!(result.results[3], Validation::Locked);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn input_changes_reach_materialized_descendants_and_clear_on_undo() {

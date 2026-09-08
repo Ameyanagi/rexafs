@@ -1,6 +1,6 @@
 //! Intake presentation; the ledger and receipt wording remain window-independent.
 use super::*;
-use crate::app::{DataTab, import_state::BatchId};
+use crate::app::import_state::BatchId;
 
 impl StudioApp {
     pub(crate) fn import_receipt(
@@ -63,10 +63,8 @@ impl StudioApp {
                             // Only explicitly revealed groups need registry locators.
                             app.intake.reveal =
                                 indices.iter().filter_map(|&ix| app.group_id(ix)).collect();
-                            app.filter_reveal.get_or_insert_with(|| {
-                                (app.expanded_sources.clone(), app.data_tab)
-                            });
-                            app.data_tab = DataTab::Files;
+                            app.filter_reveal
+                                .get_or_insert_with(|| app.expanded_sources.clone());
                             app.data_panel_open = true;
                             for &ix in &indices {
                                 app.expand_group_stack(ix);

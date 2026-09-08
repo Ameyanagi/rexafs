@@ -23,6 +23,7 @@ pub mod handles;
 pub(crate) mod import_editor;
 mod import_receipt;
 mod import_review;
+mod import_summary;
 pub mod inspector;
 mod joint_browser;
 pub(crate) mod joint_fit;

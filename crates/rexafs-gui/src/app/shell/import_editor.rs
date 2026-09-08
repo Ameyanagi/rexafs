@@ -145,6 +145,24 @@ impl StudioApp {
                 })
                 .collect();
             editor.review_outputs = vec![scope.primary];
+            if let Some(recipe) = &scope.suggestion {
+                for config in &recipe.channels {
+                    if let Some(slot) = editor
+                        .review_configs
+                        .iter_mut()
+                        .find(|slot| slot.mode == config.mode)
+                    {
+                        *slot = config.clone();
+                    }
+                }
+                editor.review_outputs = recipe.channels.iter().map(|c| c.mode).collect();
+                if let Some(primary) = recipe.channels.iter().find(|c| c.mode == recipe.primary) {
+                    editor.params.import = primary.clone();
+                }
+                editor
+                    .recipe_name
+                    .update(cx, |input, cx| input.set_text(recipe.name.clone(), cx));
+            }
             editor.bulk_scope = Some(scope.targets.clone());
             editor.review_scope = Some(scope);
             editor.reload(cx);
@@ -152,6 +170,48 @@ impl StudioApp {
         self.import_editor = Some(editor);
         cx.notify();
     }
+    pub(crate) fn open_application_editor(
+        &mut self,
+        ix: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(target) = self.tool_target(ix) else {
+            return;
+        };
+        let channel = self.effective_params(ix).import.mode;
+        let scope = self.capture_repair_batch(&target, channel);
+        self.open_import_editor(ix, window, cx);
+        if let Some(editor) = self.import_editor.clone() {
+            editor.update(cx, |editor, cx| {
+                editor.bulk_scope = scope;
+                cx.notify();
+            });
+        }
+    }
+
+    pub(crate) fn open_batch_channel_editor(
+        &mut self,
+        ix: usize,
+        mode: DetectionMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(target) = self.tool_target(ix) else {
+            return;
+        };
+        let scope = self.capture_channel_scope(&target, mode, true);
+        self.open_channel_editor(ix, mode, window, cx);
+        if let Some(editor) = self.import_editor.clone() {
+            editor.update(cx, |editor, cx| {
+                editor.channel_scope = scope;
+                editor.bulk_scope = editor.channel_scope.as_ref().map(|s| s.targets.clone());
+                editor.batch_selected = true;
+                cx.notify();
+            });
+        }
+    }
+
     pub(crate) fn open_channel_editor(
         &mut self,
         ix: usize,
@@ -438,7 +498,7 @@ impl ImportEditor {
                 if initial {
                     this.save_review_draft();
                 }
-                if initial && (this.creation.is_some() || this.review_scope.is_some()) {
+                if initial && this.bulk_scope.is_some() {
                     this.validate_targets(cx);
                 }
                 cx.notify();

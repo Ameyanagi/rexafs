@@ -86,13 +86,60 @@ pub(crate) fn validate(
 impl StudioApp {
     pub(crate) fn source_has_channel(&self, path: &std::path::Path, mode: DetectionMode) -> bool {
         let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        let path = canonical.as_path();
+        self.source_has_channel_canonical(&canonical, mode)
+    }
+
+    pub(crate) fn source_has_channel_canonical(
+        &self,
+        path: &std::path::Path,
+        mode: DetectionMode,
+    ) -> bool {
         self.catalog.find_by_canonical_path(path).is_some_and(|ix| {
             self.valid_group_index(ix) && self.effective_params(ix).import.mode == mode
         }) || self.derived.iter().any(|d| {
             d.source.as_deref() == Some(path)
                 && d.params.as_ref().is_some_and(|p| p.import.mode == mode)
         })
+    }
+
+    pub(crate) fn import_application_paths(&self, target: &ToolTarget) -> Vec<PathBuf> {
+        let mut paths = BTreeSet::new();
+        if let Some(application) = target
+            .group_id
+            .as_ref()
+            .and_then(|group| self.imports.application_for(group))
+        {
+            paths.extend(
+                application
+                    .members
+                    .iter()
+                    .filter(|member| {
+                        self.intake_group_index(&member.path, &member.group)
+                            .is_some()
+                    })
+                    .map(|member| member.path.clone()),
+            );
+        } else if let Some(origin) = target
+            .group_id
+            .as_ref()
+            .and_then(|group| self.intake.origin(&target.path, group))
+        {
+            if let Some(batch) = self.intake.history.get(origin.batch) {
+                paths.extend(
+                    batch
+                        .sources
+                        .iter()
+                        .filter(|(path, source)| {
+                            source
+                                .created
+                                .iter()
+                                .any(|group| self.intake_group_index(path, group).is_some())
+                        })
+                        .map(|(path, _)| path.clone()),
+                );
+            }
+        }
+        paths.into_iter().collect()
     }
 
     pub(crate) fn capture_channel_scope(
@@ -105,8 +152,23 @@ impl StudioApp {
             .group_id
             .as_ref()
             .and_then(|id| self.intake.origin(&target.path, id));
-        let batch_id = origin.map(|o| o.batch);
-        let ids = if batch {
+        let application = target
+            .group_id
+            .as_ref()
+            .and_then(|group| self.imports.application_for(group));
+        let batch_id = application
+            .map(|a| a.batch)
+            .or_else(|| origin.map(|o| o.batch));
+        let ids = if batch && let Some(application) = application {
+            application
+                .members
+                .iter()
+                .filter_map(|member| {
+                    let ix = self.intake_group_index(&member.path, &member.group)?;
+                    self.group_id(ix)
+                })
+                .collect::<Vec<_>>()
+        } else if batch {
             self.bind_intake_batch(batch_id?);
             let batch = self.intake.history.get(batch_id?)?;
             batch
@@ -152,7 +214,19 @@ impl StudioApp {
             existing,
             targets: RepairScope {
                 label: if batch {
-                    format!("Add {} · import batch {}", mode.label(), batch_id? + 1)
+                    if let Some(application) = application {
+                        format!(
+                            "Add {} · {}",
+                            mode.label(),
+                            self.imports
+                                .recipes
+                                .get(&application.recipe)
+                                .map(|r| r.label())
+                                .unwrap_or("Saved application".into())
+                        )
+                    } else {
+                        format!("Add {} · import batch {}", mode.label(), batch_id? + 1)
+                    }
                 } else {
                     format!("Add {} · this file", mode.label())
                 },

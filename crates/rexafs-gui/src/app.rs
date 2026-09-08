@@ -17,8 +17,8 @@ use std::time::{Duration, Instant};
 use futures::StreamExt;
 use gpui::{
     ClickEvent, Context, Entity, ExternalPaths, FocusHandle, Focusable, IntoElement, KeyBinding,
-    ParentElement, PathPromptOptions, Render, ScrollStrategy, SharedString, Styled,
-    UniformListScrollHandle, Window, actions, div, prelude::*, px, uniform_list,
+    ParentElement, PathPromptOptions, Render, SharedString, Styled, UniformListScrollHandle,
+    Window, actions, div, prelude::*, px, uniform_list,
 };
 use lru::LruCache;
 use rexafs::prelude::XASSpectrum;
@@ -43,8 +43,7 @@ use crate::fitting::{
 };
 use crate::params::{
     AUTOBK_SOLVERS, DerivedSpectrum, DetectionMode, FT_WINDOWS, ImportPreview, PipelineParams,
-    load_group_raw_with_diagnostics, parse_cols, preview_import, process_arrays, process_file,
-    resample_chik,
+    load_group_raw_with_diagnostics, preview_import, process_arrays, process_file, resample_chik,
 };
 use crate::plotting::{
     K_AXIS, QuadTrace, R_AXIS, SeriesSource, ViewOptions, build_fit_k, build_fit_q, build_fit_r,
@@ -80,7 +79,6 @@ type GroupLoadResult = Result<(XASSpectrum, Option<RawArrays>), String>;
 const DRAG_RECOMPUTE_TICK: Duration = Duration::from_millis(50);
 /// Import-preview column width. Wide enough for a 4-decimal energy value
 /// (`21912.2534`) so cells clip rather than wrapping a number onto two lines.
-const IMPORT_COL_W: f32 = 88.;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Workspace {
@@ -160,8 +158,6 @@ enum ImportRole {
     I0,
     It,
     Ir,
-    Fluor,
-    Mu,
 }
 
 /// Context-panel section a parameter belongs to, for the per-section
@@ -575,12 +571,6 @@ const NO_ENTRY: usize = usize::MAX;
 /// Derived (merged) spectra get virtual indices above this base so the
 /// selection/cache/compare machinery treats them like catalog entries.
 pub(crate) const DERIVED_BASE: usize = usize::MAX / 2;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DataTab {
-    Files,
-    Scans,
-}
 
 /// Frames sampled for the operando overview (heatmap stays bounded no matter
 /// how large the scan is).
@@ -1086,19 +1076,17 @@ pub struct StudioApp {
     filter_input: Option<Entity<TextInput>>,
     filter_text: String,
     /// Saved expansion while temporarily revealing marked/current groups.
-    filter_reveal: Option<(BTreeMap<crate::group_identity::GroupId, bool>, DataTab)>,
+    filter_reveal: Option<BTreeMap<crate::group_identity::GroupId, bool>>,
     reveal_current: Option<usize>,
     root_focus: FocusHandle,
     data_focus: FocusHandle,
     operando_focus: FocusHandle,
     /// Per-section "advanced parameters" fold state (Norm, Bkg, FFT, Import).
     adv_open: [bool; 4],
-    roi_input: Option<Entity<TextInput>>,
     import_preview: Option<ImportPreview>,
     import_editor: Option<Entity<shell::import_editor::ImportEditor>>,
     import_preview_error: SharedString,
     import_preview_gen: u64,
-    open_import_role: Option<ImportRole>,
     /// Which enum parameter's option list is expanded.
     open_enum: Option<EnumParam>,
     param_menu: Option<shell::parameter_actions::ParamScope>,
@@ -1170,11 +1158,9 @@ pub struct StudioApp {
     legend_entries: Vec<(SharedString, gpui::Rgba)>,
     mixed_overlay_weight: Option<f64>,
     maximized: Option<usize>,
-    data_tab: DataTab,
     file_scroll: UniformListScrollHandle,
     expanded_sources: BTreeMap<crate::group_identity::GroupId, bool>,
     groups_resize: Option<(gpui::Pixels, f32)>,
-    scan_scroll: UniformListScrollHandle,
     /// At most one scan is expanded, keeping row-to-member mapping O(1)
     /// even when that scan has a million members.
     expanded_scan: Option<usize>,
@@ -1513,44 +1499,12 @@ fn should_rebuild_explore(workspace: Workspace, dirty: &mut bool, invalidated: b
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ScanListRow {
-    Header(usize),
-    Member { scan: usize, offset: usize },
-}
-
-/// Translate a virtualized flattened Scans-tab row without allocating a
-/// per-member index vector.
-fn scan_list_row(
-    row: usize,
-    scan_count: usize,
-    expanded: Option<(usize, usize)>,
-) -> Option<ScanListRow> {
-    let Some((scan, len)) = expanded else {
-        return (row < scan_count).then_some(ScanListRow::Header(row));
-    };
-    if scan >= scan_count {
-        return None;
-    }
-    if row <= scan {
-        return Some(ScanListRow::Header(row));
-    }
-    if row <= scan.saturating_add(len) {
-        return Some(ScanListRow::Member {
-            scan,
-            offset: row - scan - 1,
-        });
-    }
-    let header = row - len;
-    (header < scan_count).then_some(ScanListRow::Header(header))
-}
-
 #[cfg(test)]
 mod thin_tests {
     use super::{
-        ChikRowKey, RetainedChikSeries, ScanListRow, Workspace, catalog_row_index,
-        frame_from_data_y, frame_from_heatmap_position, nearest_sample_pos, scan_entry_offset,
-        scan_list_row, should_rebuild_explore, thin_even,
+        ChikRowKey, RetainedChikSeries, Workspace, catalog_row_index, frame_from_data_y,
+        frame_from_heatmap_position, nearest_sample_pos, scan_entry_offset, should_rebuild_explore,
+        thin_even,
     };
 
     #[test]
@@ -1677,23 +1631,6 @@ mod thin_tests {
         assert!(!dirty);
         assert!(should_rebuild_explore(Workspace::Explore, &mut dirty, true));
         assert!(!dirty);
-    }
-
-    #[test]
-    fn expanded_scan_rows_are_flattened_without_member_storage() {
-        let expanded = Some((1, 3));
-        assert_eq!(scan_list_row(0, 3, expanded), Some(ScanListRow::Header(0)));
-        assert_eq!(scan_list_row(1, 3, expanded), Some(ScanListRow::Header(1)));
-        assert_eq!(
-            scan_list_row(2, 3, expanded),
-            Some(ScanListRow::Member { scan: 1, offset: 0 })
-        );
-        assert_eq!(
-            scan_list_row(4, 3, expanded),
-            Some(ScanListRow::Member { scan: 1, offset: 2 })
-        );
-        assert_eq!(scan_list_row(5, 3, expanded), Some(ScanListRow::Header(2)));
-        assert_eq!(scan_list_row(6, 3, expanded), None);
     }
 
     #[test]
@@ -2943,12 +2880,10 @@ impl StudioApp {
             data_focus: cx.focus_handle(),
             operando_focus: cx.focus_handle(),
             adv_open: [false; 4],
-            roi_input: None,
             import_preview: None,
             import_editor: None,
             import_preview_error: "".into(),
             import_preview_gen: 0,
-            open_import_role: None,
             open_enum: None,
             param_menu: None,
             param_context_menu: None,
@@ -2987,11 +2922,9 @@ impl StudioApp {
             legend_entries: Vec::new(),
             mixed_overlay_weight: None,
             maximized: None,
-            data_tab: DataTab::Files,
             file_scroll: UniformListScrollHandle::new(),
             expanded_sources: BTreeMap::new(),
             groups_resize: None,
-            scan_scroll: UniformListScrollHandle::new(),
             expanded_scan: None,
             active_scan: None,
             operando: None,
@@ -3113,26 +3046,6 @@ impl StudioApp {
         })
         .detach();
         app.filter_input = Some(filter_input);
-        let roi_input = cx.new(|cx| TextInput::new("e.g. 4 or 4-7", "", theme, cx));
-        cx.subscribe(&roi_input, |this: &mut Self, _input, event, cx| {
-            let InputEvent::Committed(text) = event else {
-                return;
-            };
-            let trimmed = text.trim();
-            this.edit_parameters("Set fluorescence ROI columns".into(), cx, |params| {
-                params.import.fluor_cols = if trimmed.is_empty() {
-                    None
-                } else {
-                    Some(parse_cols(trimmed).ok_or_else(|| {
-                        anyhow::anyhow!("invalid ROI columns: '{trimmed}' — expected e.g. 4 or 4-7")
-                    })?)
-                };
-                Ok(())
-            });
-            cx.notify();
-        })
-        .detach();
-        app.roi_input = Some(roi_input);
         if initial_open.is_none() {
             app.update_import_preview(cx);
         }
@@ -3376,18 +3289,6 @@ impl StudioApp {
         for (key, field) in &self.param_fields {
             let value = param_field_value(*key, &params);
             field.update(cx, |f, cx| f.set_value(value, cx));
-        }
-        if let Some(roi) = &self.roi_input {
-            let text = params
-                .import
-                .fluor_cols
-                .as_deref()
-                .unwrap_or_default()
-                .iter()
-                .map(|c| c.to_string())
-                .collect::<Vec<_>>()
-                .join(",");
-            roi.update(cx, |i, cx| i.set_text(text, cx));
         }
     }
 
@@ -3858,13 +3759,11 @@ impl StudioApp {
         self.import_preview = None;
         self.import_preview_error = "".into();
         self.import_preview_gen += 1;
-        self.open_import_role = None;
         self.quadrants.clear();
         self.quad_bindings.clear();
         self.maximized = None;
         self.file_scroll = UniformListScrollHandle::new();
         self.expanded_sources.clear();
-        self.scan_scroll = UniformListScrollHandle::new();
         self.expanded_scan = None;
         self.active_scan = None;
         self.operando = None;
@@ -4394,91 +4293,12 @@ impl StudioApp {
         }
     }
 
-    fn import_column_label(preview: Option<&ImportPreview>, column: usize) -> String {
-        preview
-            .and_then(|preview| preview.names.as_ref())
-            .and_then(|names| names.get(column))
-            .map(|name| format!("col {column} · {name}"))
-            .unwrap_or_else(|| format!("col {column}"))
-    }
-
     fn import_role_label(role: ImportRole) -> &'static str {
         match role {
             ImportRole::Energy => "energy",
             ImportRole::I0 => "I0",
             ImportRole::It => "It",
             ImportRole::Ir => "Ir",
-            ImportRole::Fluor => "SDD ROIs",
-            ImportRole::Mu => "mu",
-        }
-    }
-
-    fn import_role_current_label(&self, role: ImportRole) -> String {
-        let preview = self.import_preview.as_ref();
-        let import = &self.ui_params().import;
-        if role == ImportRole::Fluor {
-            return match &import.fluor_cols {
-                Some(columns) if columns.is_empty() => "none".into(),
-                Some(columns) => columns
-                    .iter()
-                    .map(|&column| Self::import_column_label(preview, column))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                None => self.import_role_auto_label(role),
-            };
-        }
-        let manual = match role {
-            ImportRole::Energy => import.energy_col,
-            ImportRole::I0 => import.i0_col,
-            ImportRole::It => import.it_col,
-            ImportRole::Ir => import.ir_col,
-            ImportRole::Mu => import.mu_col,
-            ImportRole::Fluor => unreachable!(),
-        };
-        if let Some(column) = manual {
-            return Self::import_column_label(preview, column);
-        }
-        self.import_role_auto_label(role)
-    }
-
-    fn import_role_auto_label(&self, role: ImportRole) -> String {
-        let preview = self.import_preview.as_ref();
-        if role == ImportRole::Fluor {
-            return preview
-                .map(|preview| {
-                    let columns = preview
-                        .detected
-                        .fluor_cols
-                        .iter()
-                        .map(|&column| Self::import_column_label(Some(preview), column))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    format!("auto ({columns})")
-                })
-                .unwrap_or_else(|| "auto (detecting…)".into());
-        }
-        let resolved = preview.and_then(|preview| match role {
-            ImportRole::Energy => Some(preview.detected.energy_col),
-            ImportRole::I0 => Some(preview.detected.i0_col),
-            ImportRole::It => Some(preview.detected.it_col),
-            ImportRole::Ir => Some(preview.detected.ir_col),
-            ImportRole::Mu => preview.detected.mu_col,
-            ImportRole::Fluor => unreachable!(),
-        });
-        resolved
-            .map(|column| format!("auto ({})", Self::import_column_label(preview, column)))
-            .unwrap_or_else(|| "auto (not found)".into())
-    }
-
-    fn import_role_manual_column(&self, role: ImportRole) -> Option<usize> {
-        let import = &self.ui_params().import;
-        match role {
-            ImportRole::Energy => import.energy_col,
-            ImportRole::I0 => import.i0_col,
-            ImportRole::It => import.it_col,
-            ImportRole::Ir => import.ir_col,
-            ImportRole::Mu => import.mu_col,
-            ImportRole::Fluor => None,
         }
     }
 
@@ -4489,7 +4309,6 @@ impl StudioApp {
         key: Option<ParamKey>,
         cx: &mut Context<Self>,
     ) {
-        self.open_import_role = None;
         self.edit_parameters_keyed(
             key,
             format!("Set {} column = {column:?}", Self::import_role_label(role)),
@@ -4501,36 +4320,12 @@ impl StudioApp {
                     ImportRole::I0 => import.i0_col = column,
                     ImportRole::It => import.it_col = column,
                     ImportRole::Ir => import.ir_col = column,
-                    ImportRole::Mu => import.mu_col = column,
-                    ImportRole::Fluor => {}
                 }
                 Ok(())
             },
         );
     }
 
-    fn toggle_import_fluor(&mut self, column: Option<usize>, cx: &mut Context<Self>) {
-        let auto = self
-            .import_preview
-            .as_ref()
-            .map(|p| p.resolved.fluor_cols.clone());
-        self.edit_parameters(
-            format!("Toggle fluorescence ROI = {column:?}"),
-            cx,
-            |params| {
-                params
-                    .import
-                    .toggle_fluor(column, auto.as_deref())
-                    .map_err(anyhow::Error::msg)
-            },
-        );
-    }
-
-    /// Debounced (~200 ms) recompute of the current spectrum after parameter
-    /// edits; only the latest epoch fires.
-    /// `REXAFS_DEBUG_STATS=1`: once per second print pointer-event rate, paint
-    /// rate, pointer→paint latency and ruviz-gpui's frame/presentation
-    /// statistics for the main stage plot to stderr.
     fn start_debug_stats(cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
             let mut prev_render = 0u64;
@@ -4934,14 +4729,6 @@ impl StudioApp {
     }
 
     // ---- operando ----------------------------------------------------------
-
-    fn open_scan(&mut self, scan_ix: usize, cx: &mut Context<Self>) {
-        self.active_scan = Some(scan_ix);
-        self.expanded_scan = Some(scan_ix);
-        self.workspace = Workspace::Operando;
-        self.ensure_operando(cx);
-        cx.notify();
-    }
 
     /// (Re)build the downsampled scan overview if the scan or parameters
     /// changed. Frames are processed in parallel on rayon.
@@ -5545,28 +5332,11 @@ impl StudioApp {
         self.select_entry(ix, cx);
     }
 
-    fn reveal_time_selection(&mut self, scan_ix: usize, offset: usize, ix: usize) {
-        match self.data_tab {
-            DataTab::Files => {
-                let visible_row = self.group_rows().row_index(ix);
-                if let Some(row) = visible_row {
-                    self.file_scroll
-                        .scroll_to_item(row, ScrollStrategy::Nearest);
-                } else {
-                    // A filter can hide the cursor frame; the expanded scan
-                    // remains an always-visible synchronized representation.
-                    self.data_tab = DataTab::Scans;
-                    self.expanded_scan = Some(scan_ix);
-                    self.scan_scroll
-                        .scroll_to_item(scan_ix + 1 + offset, ScrollStrategy::Nearest);
-                }
-            }
-            DataTab::Scans => {
-                self.expanded_scan = Some(scan_ix);
-                self.scan_scroll
-                    .scroll_to_item(scan_ix + 1 + offset, ScrollStrategy::Nearest);
-            }
+    fn reveal_time_selection(&mut self, _scan_ix: usize, _offset: usize, ix: usize) {
+        if self.group_rows().row_index(ix).is_none() {
+            self.reveal_current = Some(ix);
         }
+        self.reveal_group_row(ix);
     }
 
     fn replace_operando_chik(&mut self, key: ChikRowKey, row: Vec<f64>) -> bool {
@@ -5996,9 +5766,6 @@ impl StudioApp {
         }
         if let Some(field) = &self.view_offset_field {
             field.update(cx, |f, cx| f.set_theme(theme, cx));
-        }
-        if let Some(input) = &self.roi_input {
-            input.update(cx, |f, cx| f.set_theme(theme, cx));
         }
         if let Some(input) = &self.filter_input {
             input.update(cx, |f, cx| f.set_theme(theme, cx));
@@ -8719,7 +8486,6 @@ impl StudioApp {
         self.data_panel_open = true;
         self.last_opened_side_panel = Some(shell::assistant_shell::SidePanel::Groups);
         self.fit_assistant_layout();
-        self.data_tab = DataTab::Files;
         let input = self.filter_input.clone();
         cx.notify();
         // The panel may have been collapsed. Defer focus until the notified
@@ -9102,586 +8868,6 @@ impl StudioApp {
             rows
         })
         .h(px(160.))
-    }
-
-    /// Import section rows (detection mode, column preview, role pickers,
-    /// reference alignment) — the M1 import UI unchanged.
-    pub(crate) fn import_rows(&self, cx: &mut Context<Self>) -> Vec<gpui::AnyElement> {
-        let t = self.theme;
-        let field = |key: ParamKey| {
-            self.param_fields
-                .iter()
-                .find(|(k, _)| *k == key)
-                .map(|(_, f)| f.clone())
-        };
-        let mut sections = div().flex().flex_col();
-        // ---- Import (configure once, applies to the whole catalog) ----
-        {
-            let open = self.adv_open[3];
-            sections = sections.child(
-                div()
-                    .px_3()
-                    .pt_3()
-                    .pb_1()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().text_xs().text_color(t.accent).child("Import"))
-                    .children(self.override_chip("ovr-import".into(), ParamSection::Import, cx))
-                    .child(div().flex_1())
-                    .child(
-                        div()
-                            .id("adv-import")
-                            .px_1()
-                            .rounded_sm()
-                            .text_xs()
-                            .text_color(if open { t.accent } else { t.text_muted })
-                            .cursor_pointer()
-                            .hover(|d| d.bg(t.raised))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                this.adv_open[3] = !this.adv_open[3];
-                                cx.notify();
-                            }))
-                            .child(if open { "▾ less" } else { "▸ more" }),
-                    ),
-            );
-            // mode selector (always visible)
-            let options = self.enum_options(EnumParam::ImportMode);
-            let selected = self.enum_selected_index(EnumParam::ImportMode);
-            let expanded = self.open_enum == Some(EnumParam::ImportMode);
-            let current: SharedString = options[selected].clone().into();
-            sections = sections.child(
-                div()
-                    .px_3()
-                    .py_0p5()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .text_sm()
-                            .text_color(t.text_muted)
-                            .child("mode"),
-                    )
-                    .child(
-                        div()
-                            .id("enum-import-mode")
-                            .px_2()
-                            .py_0p5()
-                            .rounded_sm()
-                            .text_xs()
-                            .bg(t.bg)
-                            .border_1()
-                            .border_color(if expanded { t.accent } else { t.border })
-                            .text_color(t.text)
-                            .cursor_pointer()
-                            .hover(|d| d.border_color(t.accent))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                this.open_import_role = None;
-                                this.open_enum = if this.open_enum == Some(EnumParam::ImportMode) {
-                                    None
-                                } else {
-                                    Some(EnumParam::ImportMode)
-                                };
-                                cx.notify();
-                            }))
-                            .child(format!("{current} ▾")),
-                    ),
-            );
-            if expanded {
-                let mut list = div()
-                    .mx_3()
-                    .mb_1()
-                    .rounded_sm()
-                    .border_1()
-                    .border_color(t.border)
-                    .bg(t.bg)
-                    .flex()
-                    .flex_col();
-                for (i, option) in options.iter().enumerate() {
-                    let option: SharedString = option.clone().into();
-                    let is_sel = i == selected;
-                    list = list.child(
-                        div()
-                            .id(SharedString::from(format!("enum-opt-import-{i}")))
-                            .px_2()
-                            .py_0p5()
-                            .text_xs()
-                            .cursor_pointer()
-                            .when(is_sel, |d| d.bg(t.raised).text_color(t.accent))
-                            .when(!is_sel, |d| d.text_color(t.text))
-                            .hover(|d| d.bg(t.raised))
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                                this.set_enum_param(EnumParam::ImportMode, i, cx);
-                            }))
-                            .child(option),
-                    );
-                }
-                sections = sections.child(list);
-            }
-            if let Some(preview) = &self.import_preview {
-                let mut channels = div().px_3().py_1().flex().flex_wrap().gap_1();
-                for mode in preview.available_channels() {
-                    if mode == preview.resolved.mode {
-                        continue;
-                    }
-                    channels = channels.child(
-                        shell::button(
-                            &t,
-                            SharedString::from(format!("add-channel-{mode:?}")),
-                            format!("+ {}", mode.label()),
-                            false,
-                        )
-                        .on_click(cx.listener(
-                            move |this, _: &ClickEvent, window, cx| {
-                                if let Some(ix) = this.current_group_index() {
-                                    this.open_channel_editor(ix, mode, window, cx);
-                                }
-                            },
-                        )),
-                    );
-                }
-                sections = sections.child(channels).child(div().px_3().pb_1().text_xs().text_color(t.text_muted).child("Add a channel as a separate group; each group keeps its own processing settings."));
-            }
-            // The preview stays compact but shows enough real rows to verify
-            // delimiter/header detection and the role assignments at a glance.
-            if let Some(preview) = &self.import_preview {
-                if let Some(xdi) = &preview.xdi {
-                    let sample = xdi.get("sample.name").unwrap_or("XAS spectrum");
-                    let element = xdi.get("element.symbol").unwrap_or("?");
-                    let edge = xdi.get("element.edge").unwrap_or("?");
-                    sections =
-                        sections.child(div().px_3().pb_1().text_xs().text_color(t.text).child(
-                            format!("XDI {} · {sample} · {element} {edge} edge", xdi.version),
-                        ));
-                    if let Some(axis) = xdi.columns.get(preview.resolved.energy_col) {
-                        sections = sections.child(
-                            div()
-                                .px_3()
-                                .pb_1()
-                                .text_xs()
-                                .text_color(t.text_muted)
-                                .child(format!(
-                                    "{} ({}) → energy in eV",
-                                    axis.label,
-                                    axis.units.as_deref().unwrap_or("units missing")
-                                )),
-                        );
-                    }
-                    for warning in &xdi.warnings {
-                        sections = sections.child(
-                            div()
-                                .px_3()
-                                .pb_1()
-                                .text_xs()
-                                .text_color(t.warn)
-                                .child(warning.clone()),
-                        );
-                    }
-                    if open {
-                        for key in [
-                            "sample.prep",
-                            "sample.temperature",
-                            "facility.name",
-                            "beamline.name",
-                            "scan.start_time",
-                        ] {
-                            if let Some(value) = xdi.get(key) {
-                                sections = sections.child(
-                                    div()
-                                        .px_3()
-                                        .pb_1()
-                                        .text_xs()
-                                        .text_color(t.text_muted)
-                                        .child(format!("{key}: {value}")),
-                                );
-                            }
-                        }
-                        for comment in &xdi.comments {
-                            sections = sections.child(
-                                div()
-                                    .px_3()
-                                    .pb_1()
-                                    .text_xs()
-                                    .text_color(t.text_muted)
-                                    .child(comment.clone()),
-                            );
-                        }
-                    }
-                }
-                let diagnostics = self
-                    .selected
-                    .and_then(|ix| {
-                        self.raw_cache
-                            .peek(&(ix, self.effective_params(ix).raw_fingerprint()))
-                    })
-                    .map(|raw| &raw.diagnostics)
-                    .unwrap_or(&preview.diagnostics);
-                let table_width = px(preview.column_count as f32 * IMPORT_COL_W);
-                let header_status = if preview.names.is_some() {
-                    "header names found"
-                } else {
-                    "no header names"
-                };
-                sections = sections.child(
-                    div()
-                        .px_3()
-                        .pb_1()
-                        .text_xs()
-                        .text_color(t.text_muted)
-                        .child(format!(
-                            "{} · detected: {} columns · {header_status} · auto: {:?}",
-                            diagnostics.summary(),
-                            preview.column_count,
-                            preview.auto_mode
-                        )),
-                );
-                if let Some(error) = &preview.signal_error {
-                    sections = sections.child(
-                        div()
-                            .px_3()
-                            .pb_1()
-                            .text_xs()
-                            .text_color(t.error)
-                            .child(error.clone()),
-                    );
-                }
-                // The column table is a diagnostic, not a parameter — behind
-                // the disclosure it stops permanently occupying the top of the
-                // panel and pushing the actual parameters down. The one-line
-                // summary above stays visible so detection can still be
-                // sanity-checked at a glance.
-                if open {
-                    let mut header = div().flex();
-                    for column in 0..preview.column_count {
-                        let mut name = preview
-                            .names
-                            .as_ref()
-                            .and_then(|names| names.get(column))
-                            .cloned()
-                            .unwrap_or_else(|| format!("col {column}"));
-                        if let Some(unit) = preview
-                            .xdi
-                            .as_ref()
-                            .and_then(|xdi| xdi.columns.get(column))
-                            .and_then(|c| c.units.as_ref())
-                        {
-                            name.push_str(&format!(" ({unit})"));
-                        }
-                        let mut roles = Vec::new();
-                        if preview.resolved.energy_col == column {
-                            roles.push("E");
-                        }
-                        if matches!(
-                            preview.resolved.mode,
-                            DetectionMode::Transmission | DetectionMode::Fluorescence
-                        ) && preview.resolved.i0_col == column
-                        {
-                            roles.push("I0");
-                        }
-                        if matches!(
-                            preview.resolved.mode,
-                            DetectionMode::Transmission | DetectionMode::Reference
-                        ) && preview.resolved.it_col == column
-                        {
-                            roles.push("It");
-                        }
-                        if preview.resolved.mode == DetectionMode::Reference
-                            && preview.resolved.ir_col == column
-                        {
-                            roles.push("Ir");
-                        }
-                        if preview.resolved.mode == DetectionMode::Fluorescence
-                            && preview.resolved.fluor_cols.contains(&column)
-                        {
-                            roles.push("ROI");
-                        }
-                        if preview.resolved.mode == DetectionMode::MuColumn
-                            && preview.resolved.mu_col == Some(column)
-                        {
-                            roles.push("mu");
-                        }
-                        let assigned = !roles.is_empty();
-                        header = header.child(
-                            div()
-                                .w(px(IMPORT_COL_W))
-                                .flex_none()
-                                .px_1()
-                                .py_0p5()
-                                .flex()
-                                .flex_col()
-                                .border_r_1()
-                                .border_color(t.border)
-                                .when(assigned, |cell| cell.bg(t.raised))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .overflow_hidden()
-                                        .whitespace_nowrap()
-                                        .text_color(t.text)
-                                        .child(name),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(if assigned { t.accent } else { t.text_muted })
-                                        .child(if assigned {
-                                            roles.join("/")
-                                        } else {
-                                            "—".into()
-                                        }),
-                                ),
-                        );
-                    }
-                    let mut table = div()
-                        .min_w(table_width)
-                        .mb_1()
-                        .border_1()
-                        .border_color(t.border)
-                        .flex()
-                        .flex_col()
-                        .child(header);
-                    for row in &preview.rows {
-                        let mut line = div().flex().border_t_1().border_color(t.border);
-                        for value in row {
-                            line = line.child(
-                                div()
-                                    .w(px(IMPORT_COL_W))
-                                    .flex_none()
-                                    .px_1()
-                                    .py_0p5()
-                                    .text_xs()
-                                    .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .text_color(t.text_muted)
-                                    .border_r_1()
-                                    .border_color(t.border)
-                                    .child(format!("{value:.4}")),
-                            );
-                        }
-                        table = table.child(line);
-                    }
-                    sections = sections.child(
-                        div()
-                            .id("import-preview-horizontal")
-                            .mx_3()
-                            .min_w_0()
-                            .overflow_x_scroll()
-                            .child(table),
-                    );
-                }
-            } else {
-                sections = sections.child(
-                    div()
-                        .px_3()
-                        .pb_1()
-                        .text_xs()
-                        .text_color(t.text_muted)
-                        .child(self.import_preview_error.clone()),
-                );
-            }
-            if open {
-                for role in [
-                    ImportRole::Energy,
-                    ImportRole::I0,
-                    ImportRole::It,
-                    ImportRole::Ir,
-                    ImportRole::Fluor,
-                    ImportRole::Mu,
-                ] {
-                    let expanded = self.open_import_role == Some(role);
-                    sections = sections.child(
-                        div()
-                            .px_3()
-                            .py_0p5()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .text_sm()
-                                    .text_color(t.text_muted)
-                                    .child(Self::import_role_label(role)),
-                            )
-                            .child(
-                                div()
-                                    .id(SharedString::from(format!("import-role-{role:?}")))
-                                    .w(px(150.))
-                                    .px_2()
-                                    .py_0p5()
-                                    .rounded_sm()
-                                    .text_xs()
-                                    .bg(t.bg)
-                                    .border_1()
-                                    .border_color(if expanded { t.accent } else { t.border })
-                                    .text_color(t.text)
-                                    .cursor_pointer()
-                                    .hover(|picker| picker.border_color(t.accent))
-                                    .on_click(cx.listener(
-                                        move |this, _: &ClickEvent, _window, cx| {
-                                            this.open_enum = None;
-                                            this.open_import_role =
-                                                if this.open_import_role == Some(role) {
-                                                    None
-                                                } else {
-                                                    Some(role)
-                                                };
-                                            cx.notify();
-                                        },
-                                    ))
-                                    .child(format!("{} ▾", self.import_role_current_label(role))),
-                            ),
-                    );
-                    if expanded {
-                        let manual = self.import_role_manual_column(role);
-                        let fluor = self.ui_params().import.fluor_cols.as_ref();
-                        let mut list = div()
-                            .mx_3()
-                            .mb_1()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(t.border)
-                            .bg(t.bg)
-                            .flex()
-                            .flex_col();
-                        let auto_selected = if role == ImportRole::Fluor {
-                            fluor.is_none()
-                        } else {
-                            manual.is_none()
-                        };
-                        list = list.child(
-                            div()
-                                .id(SharedString::from(format!("import-role-{role:?}-auto")))
-                                .px_2()
-                                .py_0p5()
-                                .text_xs()
-                                .cursor_pointer()
-                                .when(auto_selected, |item| item.bg(t.raised).text_color(t.accent))
-                                .when(!auto_selected, |item| item.text_color(t.text))
-                                .hover(|item| item.bg(t.raised))
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                                    if role == ImportRole::Fluor {
-                                        this.toggle_import_fluor(None, cx);
-                                        this.open_import_role = None;
-                                    } else {
-                                        this.set_import_role_column(role, None, None, cx);
-                                    }
-                                }))
-                                .child(self.import_role_auto_label(role)),
-                        );
-                        let column_count = self
-                            .import_preview
-                            .as_ref()
-                            .map(|preview| preview.column_count)
-                            .unwrap_or(0);
-                        for column in 0..column_count {
-                            let is_selected = if role == ImportRole::Fluor {
-                                fluor
-                                    .or_else(|| {
-                                        self.import_preview.as_ref().map(|p| &p.resolved.fluor_cols)
-                                    })
-                                    .is_some_and(|columns| columns.contains(&column))
-                            } else {
-                                manual == Some(column)
-                            };
-                            let option =
-                                Self::import_column_label(self.import_preview.as_ref(), column);
-                            list = list.child(
-                                div()
-                                    .id(SharedString::from(format!(
-                                        "import-role-{role:?}-{column}"
-                                    )))
-                                    .px_2()
-                                    .py_0p5()
-                                    .text_xs()
-                                    .cursor_pointer()
-                                    .when(is_selected, |item| {
-                                        item.bg(t.raised).text_color(t.accent)
-                                    })
-                                    .when(!is_selected, |item| item.text_color(t.text))
-                                    .hover(|item| item.bg(t.raised))
-                                    .on_click(cx.listener(
-                                        move |this, _: &ClickEvent, _window, cx| {
-                                            if role == ImportRole::Fluor {
-                                                this.toggle_import_fluor(Some(column), cx);
-                                            } else {
-                                                this.set_import_role_column(
-                                                    role,
-                                                    Some(column),
-                                                    None,
-                                                    cx,
-                                                );
-                                            }
-                                        },
-                                    ))
-                                    .child(option),
-                            );
-                        }
-                        sections = sections.child(list);
-                    }
-                }
-                if let Some(roi) = &self.roi_input {
-                    sections = sections.child(
-                        div()
-                            .px_3()
-                            .py_0p5()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .text_sm()
-                                    .text_color(t.text_muted)
-                                    .child("type ROI cols"),
-                            )
-                            .child(div().w(px(96.)).child(roi.clone())),
-                    );
-                }
-                let align_on = self.ui_params().align_to_ref;
-                sections = sections.child(
-                    div()
-                        .px_3()
-                        .py_0p5()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .id("align-toggle")
-                                .px_1()
-                                .rounded_sm()
-                                .text_xs()
-                                .cursor_pointer()
-                                .text_color(if align_on { t.accent } else { t.text_muted })
-                                .hover(|d| d.bg(t.raised))
-                                .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                    this.edit_parameters(
-                                        "Toggle reference alignment".into(),
-                                        cx,
-                                        |p| {
-                                            p.align_to_ref = !p.align_to_ref;
-                                            Ok(())
-                                        },
-                                    );
-                                }))
-                                .child(if align_on {
-                                    "✓ align to ref"
-                                } else {
-                                    "align to ref"
-                                }),
-                        )
-                        .child(div().flex_1()),
-                );
-                if let Some(f) = field(ParamKey::AlignTarget) {
-                    sections = sections.child(f);
-                }
-            }
-        }
-
-        vec![sections.into_any_element()]
     }
 
     /// Enum parameter row with a dropdown list (0 = auto).

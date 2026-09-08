@@ -412,13 +412,7 @@ impl StudioApp {
         div()
             .flex()
             .flex_col()
-            .child(self.section("Import", Some(ParamSection::Import), self.import_rows(cx), cx))
-            .child(super::button(&self.theme, "remap-current", "Re-map columns…", false)
-                .on_click(cx.listener(|this, _, window, cx| {
-                    if let Some(ix) = this.current_group_index() {
-                        this.open_import_editor(ix, window, cx);
-                    }
-                })))
+            .child(self.import_summary(cx))
             .child(self.section(
                 "Processing tools",
                 None,

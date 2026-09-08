@@ -16,6 +16,8 @@ use gpui::Context;
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct PendingSource {
     pub detection: Option<ImportDetection>,
+    #[serde(default)]
+    pub suggestion: Option<crate::import_recipes::RecipeVersion>,
     pub reason: String,
 }
 
@@ -25,6 +27,7 @@ pub(crate) struct ReviewCluster {
     pub files: Vec<PathBuf>,
     pub reason: String,
     pub primary: DetectionMode,
+    pub suggestion: Option<crate::import_recipes::RecipeVersion>,
 }
 
 impl ReviewCluster {
@@ -67,6 +70,7 @@ pub(crate) fn clusters(
         } else {
             clusters.push(ReviewCluster {
                 key,
+                suggestion: pending.suggestion,
                 files: vec![path],
                 reason: pending.reason,
                 primary: pending
@@ -116,6 +120,7 @@ pub(crate) struct ReviewScope {
     pub targets: RepairScope,
     pub primary: DetectionMode,
     pub reason: String,
+    pub suggestion: Option<crate::import_recipes::RecipeVersion>,
 }
 
 #[derive(Clone)]
@@ -311,7 +316,11 @@ impl StudioApp {
                 ),
                 targets,
             },
-            primary: layout.primary,
+            primary: layout
+                .suggestion
+                .as_ref()
+                .map_or(layout.primary, |recipe| recipe.primary),
+            suggestion: layout.suggestion.clone(),
             reason: layout.reason.clone(),
         })
     }
@@ -449,7 +458,14 @@ mod tests {
                 .as_ref()
                 .and_then(|d| d.review_reason())
                 .unwrap_or("Unreadable".into());
-            pending.push((path, PendingSource { detection, reason }));
+            pending.push((
+                path,
+                PendingSource {
+                    detection,
+                    reason,
+                    suggestion: None,
+                },
+            ));
         }
         let grouped = clusters(pending.clone());
         assert_eq!(grouped.len(), 4);
