@@ -5,7 +5,7 @@ use crate::{
     fitting::{FitRanges, FitSpaceSpec},
     plotting::{chik_label, chir_label, trace_color},
 };
-use gpui::{Context, Entity, ParentElement, Styled, div, prelude::*, px};
+use gpui::{Context, Entity, ParentElement, Styled, div, px};
 use nalgebra::DVector;
 use rexafs::xafs::fitting::transform::{
     KweightTransform, apply_kweight_transform, validate_transform,

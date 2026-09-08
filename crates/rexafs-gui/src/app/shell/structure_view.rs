@@ -1427,16 +1427,27 @@ impl StudioApp {
 
     fn structure_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
-        super::controls::icon_button(
-            &t,
-            "structure-display-options",
-            crate::icons::Icon::Sliders,
-            "Structure display",
-            self.ui.menu == Some(super::controls::Menu::Structure),
-        )
-        .on_click(cx.listener(|app, event, window, cx| {
-            app.open_chrome_menu(super::controls::Menu::Structure, event, window, cx);
-        }))
+        div().w_full().flex().flex_wrap().items_center().gap_2().px_2().py_1()
+            .child(self.center_focus_slider(cx))
+            .when(self.structure.scene.as_ref().is_some_and(|s| s.route.len() > 1), |d| {
+                d.child(chip(&t, "structure-path-focus", "Path focus", self.structure.depth.options.path_focus)
+                    .role(accesskit::Role::CheckBox)
+                    .description("Keep the selected scattering path clear, fade surrounding atoms and hide other bonds.")
+                    .on_click(cx.listener(|app, _, _, cx| {
+                        app.structure.depth.options.path_focus = !app.structure.depth.options.path_focus;
+                        cx.notify();
+                    })))
+            })
+            .child(super::controls::icon_button(
+                &t,
+                "structure-display-options",
+                crate::icons::Icon::Sliders,
+                "Structure display",
+                self.ui.menu == Some(super::controls::Menu::Structure),
+            )
+            .on_click(cx.listener(|app, event, window, cx| {
+                app.open_chrome_menu(super::controls::Menu::Structure, event, window, cx);
+            })))
     }
 
     pub(crate) fn structure_display_menu(

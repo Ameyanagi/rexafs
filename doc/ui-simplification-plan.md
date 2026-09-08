@@ -109,3 +109,13 @@ mapping table scrolls.
 The Groups panel also has **Remove marked…**, with a captured identity list,
 hidden-mark count, stale-selection check, and one undoable removal. It never
 deletes source files.
+
+## Structure clarity
+
+Keep **Center focus** visible above the structure canvas. Increasing it smoothly
+fades atoms and bonds beyond the clear coordination radius while preserving the
+absorber and selected scattering path. **Path focus** retains faint atom context
+and shows only scattering legs. The inspection center defaults to the absorber;
+clicking an atom changes the inspection center. Clear radius, slicing and global
+opacity remain in Structure display. These controls never change the FEFF cluster,
+calculation radius or path geometry.

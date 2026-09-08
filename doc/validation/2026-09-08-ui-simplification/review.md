@@ -21,6 +21,11 @@ The maintainer's original checkout and active app sessions were preserved.
   existing scientific operation. Operand names and affected counts are explicit.
 - Fit has compact steps, contextual result controls and responsive setup panels.
   Structure appearance uses a menu; model/data identity and blocking errors remain.
+- The structure toolbar exposes Center focus: outer atoms and bonds fade smoothly
+  while the absorber and selected scattering path remain clear. Path focus hides
+  the surrounding bond network and leaves faint atom context. The shared sliders
+  expose native numeric values and keyboard adjustment. These are display effects;
+  global opacity and clipping still apply and calculation geometry is untouched.
 - Assistant keeps model, reasoning, mode and sharing/access switches visible.
   Conversation utilities and longer descriptions use Settings. Permission and
   approval behavior retain the existing backend and busy-state guards.
@@ -38,6 +43,9 @@ The maintainer's original checkout and active app sessions were preserved.
   Ignored cases include the opt-in external-folder test, run separately below.
 - Targeted tests passed for explicit selected-channel intake, replacement of the
   main channel, immutable processing previews, and complete marked identity capture.
+- After adding structure focus, eight depth tests passed, including smooth center
+  fading, highlighted-path picking and preservation of explicit clipping.
+  All four molecular-view tests also passed.
 - Optimized build passed with the distributed `refeff-runner,feff10-runner` features.
 - The earlier optimized package passed extracted Cu example/pipeline and both FEFF
   backend self-checks. The final candidate is repackaged from the final release binary.
@@ -68,8 +76,9 @@ An optimized release candidate was launched and its empty-window controls and
 platform menus were inspected. Before the revised channel-choice and Remove
 marked flows could be exercised visually, computer-use failed repeatedly with
 `Sky Computer Use native pipe startup failed`, including after reconnecting.
-The final channel-choice/footer and Remove marked layouts therefore still need
-native verification. Do not treat the data-path integration test as visual QA.
+The final channel-choice/footer, Remove marked and structure-focus layouts therefore
+still need native verification. Reconnecting for structure-focus verification failed
+with the same native-pipe error. Do not treat integration tests as visual QA.
 
 Also pending: narrow/light-theme workflows, populated Series navigation, completed
 Fit/Assistant busy and approval states, export-preview comparison, and complete

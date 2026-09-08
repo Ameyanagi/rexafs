@@ -341,6 +341,7 @@ pub(crate) struct Control {
     click: Option<Click>,
     request: Option<Request>,
     value: Option<String>,
+    numeric: Option<(f64, f64, f64, f64)>,
     description: Option<String>,
     placeholder: Option<String>,
     actions: Vec<Action>,
@@ -359,6 +360,7 @@ impl Control {
             click: None,
             request: None,
             value: None,
+            numeric: None,
             description: None,
             placeholder: None,
             actions: Vec::new(),
@@ -401,6 +403,10 @@ impl Control {
     }
     pub(crate) fn value(mut self, value: impl Into<String>) -> Self {
         self.value = Some(value.into());
+        self
+    }
+    pub(crate) fn numeric(mut self, value: f64, min: f64, max: f64, step: f64) -> Self {
+        self.numeric = Some((value, min, max, step));
         self
     }
     pub(crate) fn track_focus(mut self, focus: &FocusHandle) -> Self {
@@ -482,6 +488,7 @@ impl Element for Control {
                     | Role::MenuItem
                     | Role::DisclosureTriangle
                     | Role::ComboBox
+                    | Role::Slider
             )
         {
             if self.focus.is_none()
@@ -530,6 +537,12 @@ impl Element for Control {
             node.set_bounds(rect(clipped, window.scale_factor()));
             if let Some(value) = &self.value {
                 node.set_value(value.clone());
+            }
+            if let Some((value, min, max, step)) = self.numeric {
+                node.set_numeric_value(value);
+                node.set_min_numeric_value(min);
+                node.set_max_numeric_value(max);
+                node.set_numeric_value_step(step);
             }
             if let Some(description) = &self.description {
                 node.set_description(description.clone());

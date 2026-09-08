@@ -1,6 +1,8 @@
 use super::structure_depth::{DepthAxis, DepthFrame, DepthOptions, FadeMode, SliceMode};
 use super::{button, chip, section_label};
+use crate::accessibility::Control;
 use crate::app::StudioApp;
+use accesskit::{Action, ActionData, Role};
 use gpui::{
     Bounds, Context, IntoElement, MouseButton, Pixels, SharedString, Styled, canvas, div, point,
     prelude::*, px, size,
@@ -13,6 +15,7 @@ pub(crate) enum DepthControl {
     Opacity,
     Strength,
     Radius,
+    CenterFocus,
 }
 impl DepthControl {
     fn index(self) -> usize {
@@ -25,6 +28,7 @@ impl DepthControl {
             Self::Opacity => "Opacity",
             Self::Strength => "Fade strength",
             Self::Radius => "Clear radius",
+            Self::CenterFocus => "Center focus",
         }
     }
     fn value(self, o: DepthOptions) -> f64 {
@@ -34,6 +38,13 @@ impl DepthControl {
             Self::Opacity => o.opacity,
             Self::Strength => o.strength,
             Self::Radius => o.focus_radius,
+            Self::CenterFocus => {
+                if o.fade == FadeMode::Center {
+                    o.strength
+                } else {
+                    0.
+                }
+            }
         }
     }
     fn range(self, extent: f64) -> [f64; 2] {
@@ -41,12 +52,12 @@ impl DepthControl {
             Self::Position => [-extent, extent],
             Self::Thickness => [0.5, extent * 2.],
             Self::Opacity => [0.1, 1.],
-            Self::Strength => [0., 0.95],
+            Self::Strength | Self::CenterFocus => [0., 0.98],
             Self::Radius => [0.5, extent],
         }
     }
     fn percent(self) -> bool {
-        matches!(self, Self::Opacity | Self::Strength)
+        matches!(self, Self::Opacity | Self::Strength | Self::CenterFocus)
     }
     fn step(self) -> f64 {
         if self.percent() { 0.05 } else { 0.1 }
@@ -58,6 +69,14 @@ impl DepthControl {
             Self::Opacity => o.opacity = value,
             Self::Strength => o.strength = value,
             Self::Radius => o.focus_radius = value,
+            Self::CenterFocus => {
+                o.fade = if value > 0. {
+                    FadeMode::Center
+                } else {
+                    FadeMode::Off
+                };
+                o.strength = value;
+            }
         }
     }
 }
@@ -65,7 +84,7 @@ impl DepthControl {
 pub(crate) struct DepthControls {
     pub open: bool,
     pub options: DepthOptions,
-    tracks: [Option<Bounds<Pixels>>; 5],
+    tracks: [Option<Bounds<Pixels>>; 6],
     drag: Option<DepthControl>,
 }
 impl StudioApp {
@@ -86,6 +105,9 @@ impl StudioApp {
             .max(4.)
     }
     fn set_depth_value(&mut self, key: DepthControl, value: f64, cx: &mut Context<Self>) {
+        if !value.is_finite() {
+            return;
+        }
         let [lo, hi] = key.range(self.depth_extent());
         let value = if key.percent() {
             (value * 100.).round() / 100.
@@ -104,7 +126,7 @@ impl StudioApp {
             self.set_depth_value(key, lo + fraction * (hi - lo), cx);
         }
     }
-    fn depth_slider(&self, key: DepthControl, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn depth_slider_track(&self, key: DepthControl, cx: &mut Context<Self>) -> Control {
         let t = self.theme;
         let value = key.value(self.structure.depth.options);
         let [lo, hi] = key.range(self.depth_extent());
@@ -145,6 +167,87 @@ impl StudioApp {
             },
         )
         .size_full();
+        let weak = cx.entity().downgrade();
+        Control::new(div().id(("depth-slider", key.index())), key.label(), Role::Slider)
+            .numeric(value, lo, hi, key.step())
+            .value(if key.percent() { format!("{:.0}%", value * 100.) } else { format!("{value:.1} Å") })
+            .description(if matches!(key, DepthControl::CenterFocus) {
+                "Fade the outer cluster around the inspection center, the absorber by default. Selected scattering paths stay clear."
+            } else { key.label() })
+            .flex_1()
+            .min_w(px(72.))
+            .h(px(24.))
+            .rounded_sm()
+            .border_1()
+            .border_color(gpui::transparent_black())
+            .focus(|d| d.border_color(t.accent))
+            .cursor(gpui::CursorStyle::ResizeLeftRight)
+            .child(track)
+            .on_mouse_down(MouseButton::Left, cx.listener(move |this, ev: &gpui::MouseDownEvent, _, cx| {
+                this.structure.depth.drag = Some(key);
+                this.move_depth_slider(key, ev.position.x, cx);
+            }))
+            .on_mouse_move(cx.listener(move |this, ev: &gpui::MouseMoveEvent, _, cx| {
+                if ev.pressed_button == Some(MouseButton::Left)
+                    && this.structure.depth.drag.is_some_and(|k| k.index() == key.index()) {
+                    this.move_depth_slider(key, ev.position.x, cx);
+                    cx.stop_propagation();
+                }
+            }))
+            .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, cx| {
+                this.structure.depth.drag = None;
+                cx.stop_propagation();
+            }))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(|this, _, _, _| this.structure.depth.drag = None))
+            .on_key_down(cx.listener(move |this, event: &gpui::KeyDownEvent, _, cx| {
+                let current = key.value(this.structure.depth.options);
+                let [lo, hi] = key.range(this.depth_extent());
+                let value = match event.keystroke.key.as_str() {
+                    "left" | "down" => current - key.step(),
+                    "right" | "up" => current + key.step(),
+                    "home" => lo,
+                    "end" => hi,
+                    _ => return,
+                };
+                this.set_depth_value(key, value, cx);
+                cx.stop_propagation();
+            }))
+            .on_request(vec![Action::Increment, Action::Decrement, Action::SetValue], move |action, data, _, cx| {
+                weak.update(cx, |this, cx| {
+                    let current = key.value(this.structure.depth.options);
+                    let value = match (action, data) {
+                        (Action::Increment, _) => current + key.step(),
+                        (Action::Decrement, _) => current - key.step(),
+                        (Action::SetValue, Some(ActionData::NumericValue(value))) => value,
+                        _ => return,
+                    };
+                    this.set_depth_value(key, value, cx);
+                }).ok();
+            })
+    }
+    pub(crate) fn center_focus_slider(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let value = DepthControl::CenterFocus.value(self.structure.depth.options);
+        div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .flex_1()
+            .min_w(px(215.))
+            .max_w(px(340.))
+            .text_size(px(11.))
+            .text_color(self.theme.text_muted)
+            .child("Center focus")
+            .child(self.depth_slider_track(DepthControl::CenterFocus, cx))
+            .child(
+                div()
+                    .w(px(30.))
+                    .text_right()
+                    .child(format!("{:.0}%", value * 100.)),
+            )
+    }
+    fn depth_slider(&self, key: DepthControl, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let t = self.theme;
+        let value = key.value(self.structure.depth.options);
         div()
             .flex()
             .flex_col()
@@ -181,47 +284,7 @@ impl StudioApp {
                             )
                         })),
                     )
-                    .child(
-                        div()
-                            .id(("depth-slider", key.index()))
-                            .flex_1()
-                            .h(px(24.))
-                            .cursor(gpui::CursorStyle::ResizeLeftRight)
-                            .child(track)
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(move |this, ev: &gpui::MouseDownEvent, _, cx| {
-                                    this.structure.depth.drag = Some(key);
-                                    this.move_depth_slider(key, ev.position.x, cx);
-                                    cx.stop_propagation();
-                                }),
-                            )
-                            .on_mouse_move(cx.listener(
-                                move |this, ev: &gpui::MouseMoveEvent, _, cx| {
-                                    if ev.pressed_button == Some(MouseButton::Left)
-                                        && this
-                                            .structure
-                                            .depth
-                                            .drag
-                                            .is_some_and(|k| k.index() == key.index())
-                                    {
-                                        this.move_depth_slider(key, ev.position.x, cx);
-                                        cx.stop_propagation();
-                                    }
-                                },
-                            ))
-                            .on_mouse_up(
-                                MouseButton::Left,
-                                cx.listener(|this, _, _, cx| {
-                                    this.structure.depth.drag = None;
-                                    cx.stop_propagation();
-                                }),
-                            )
-                            .on_mouse_up_out(
-                                MouseButton::Left,
-                                cx.listener(|this, _, _, _| this.structure.depth.drag = None),
-                            ),
-                    )
+                    .child(self.depth_slider_track(key, cx))
                     .child(
                         button(
                             &t,

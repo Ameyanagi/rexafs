@@ -311,6 +311,12 @@ fn hull_faces(points: &[[f64; 3]]) -> Vec<Vec<[f64; 3]>> {
 }
 
 impl MoleculeScene {
+    fn on_route(&self, position: [f64; 3]) -> bool {
+        self.route
+            .iter()
+            .any(|point| norm(sub(*point, position)) < 1e-4)
+    }
+
     pub fn new(
         cluster: &Cluster,
         context: Option<&CrystalContext>,
@@ -795,7 +801,12 @@ impl StudioApp {
             .iter()
             .enumerate()
             .filter_map(|(index, a)| {
-                if !depth.pickable(a.pos) || !atom_in_style(scene, self.structure.atom_style, index)
+                let highlighted = a.absorber || scene.on_route(a.pos);
+                let path_focus = depth.options.path_focus && scene.route.len() > 1;
+                if !depth.pickable(a.pos, highlighted)
+                    || path_focus && !highlighted
+                    || !(atom_in_style(scene, self.structure.atom_style, index)
+                        || path_focus && highlighted)
                 {
                     return None;
                 }
@@ -843,10 +854,24 @@ fn paint_scene(
     w: &mut Window,
     cx: &mut gpui::App,
 ) {
+    let path_focus = depth.options.path_focus && scene.route.len() > 1;
+    let atom_alpha = |atom: &SceneAtom| {
+        let highlighted = atom.absorber || scene.on_route(atom.pos);
+        depth.display_atom_alpha(atom.pos, highlighted)
+            * if path_focus && !highlighted { 0.07 } else { 1. }
+    };
     let project = |p| camera.project(sub(p, scene.center), b, scene.extent);
     let scale = camera.scale(b, scene.extent);
+    let context_alpha = if path_focus { 0.2 } else { 1. };
     for edge in &scene.edges {
-        depth_line(w, *edge, depth, &project, alpha(t.text_muted, 0.12), 0.65);
+        depth_line(
+            w,
+            *edge,
+            depth,
+            &project,
+            alpha(t.text_muted, 0.12 * context_alpha),
+            0.65,
+        );
     }
     // Radius guides are a true sphere cut through the absorber, not a fitted box.
     if !scene.edges.is_empty() {
@@ -866,7 +891,7 @@ fn paint_scene(
                     [points[0], points[1]],
                     depth,
                     &project,
-                    alpha(t.accent, 0.28),
+                    alpha(t.accent, 0.28 * context_alpha),
                     1.,
                 );
             }
@@ -879,12 +904,14 @@ fn paint_scene(
     }
     let mut draw = Vec::new();
     for (i, a) in scene.atoms.iter().enumerate() {
-        if atom_in_style(scene, style, i) && depth.atom_alpha(a.pos) > 0.002 {
+        if (atom_in_style(scene, style, i) || path_focus && scene.on_route(a.pos))
+            && atom_alpha(a) > 0.002
+        {
             // Highlight changes the material color, never the geometric depth.
             draw.push((project(a.pos)[2], Primitive::Atom(i)));
         }
     }
-    for (i, ids) in scene.bonds.iter().enumerate() {
+    for (i, ids) in scene.bonds.iter().enumerate().filter(|_| !path_focus) {
         draw.push((
             (project(scene.atoms[ids[0]].pos)[2] + project(scene.atoms[ids[1]].pos)[2]) * 0.5,
             Primitive::Bond(i),
@@ -956,7 +983,7 @@ fn paint_scene(
                 let center: [f64; 3] = std::array::from_fn(|axis| {
                     vertices.iter().map(|p| p[axis]).sum::<f64>() / vertices.len() as f64
                 });
-                let opacity = depth.alpha(center, inside);
+                let opacity = depth.alpha(center, inside) * if path_focus { 0.06 } else { 1. };
                 if opacity < 0.002 {
                     continue;
                 }
@@ -988,7 +1015,9 @@ fn paint_scene(
                 }
             }
             Primitive::Atom(i) => {
-                if style == AtomStyle::Polyhedra {
+                if style == AtomStyle::Polyhedra
+                    && !(path_focus && scene.on_route(scene.atoms[i].pos))
+                {
                     match scene.poly_options.atoms {
                         PolyAtoms::None => continue,
                         PolyAtoms::Centers if !scene.poly_centers.contains(&i) => continue,
@@ -1008,7 +1037,11 @@ fn paint_scene(
                 } else {
                     gpui::rgb(cpk_color(a.z))
                 };
-                color.a = (if outside { 0.14 } else { 1. }) * depth.atom_alpha(a.pos);
+                color.a = (if outside && !(path_focus && scene.on_route(a.pos)) {
+                    0.14
+                } else {
+                    1.
+                }) * atom_alpha(a);
                 let radius = atom_radius(a.z, style, scale);
                 if !a.absorber && depth.options.active() && norm(sub(a.pos, depth.origin)) < 1e-6 {
                     disk(w, p, radius + 2., alpha(t.accent, 0.4 * color.a));
@@ -1044,16 +1077,16 @@ fn paint_scene(
     if scene.labels {
         for (_, atom) in scene.atoms.iter().enumerate().filter(|(i, a)| {
             !a.faded
-                && atom_in_style(scene, style, *i)
+                && (atom_in_style(scene, style, *i) || path_focus && scene.on_route(a.pos))
                 && depth.contains(a.pos)
-                && depth.atom_alpha(a.pos) >= 0.2
+                && atom_alpha(a) >= 0.2
         }) {
             let p = project(atom.pos);
             let text = gpui::SharedString::from(atom.label.clone());
             let run = gpui::TextRun {
                 len: text.len(),
                 font: w.text_style().font(),
-                color: alpha(t.text, depth.atom_alpha(atom.pos)).into(),
+                color: alpha(t.text, atom_alpha(atom)).into(),
                 background_color: None,
                 underline: None,
                 strikethrough: None,
@@ -1087,7 +1120,7 @@ fn paint_scene(
             let midpoint = std::array::from_fn(|a| (part[0][a] + part[1][a]) * 0.5);
             let color = alpha(
                 crate::plotting::trace_rgba(&t, i % 8),
-                (if active { 1. } else { 0.16 }) * depth.alpha(midpoint, inside),
+                (if active { 1. } else { 0.16 }) * depth.highlight_alpha(midpoint, inside),
             );
             let (ux, uy) = (dx / len, dy / len);
             let repeated = scene
