@@ -29,6 +29,14 @@ pub struct ParamOverride {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProjectFile {
+    pub parser_evidence: std::collections::BTreeMap<
+        crate::group_identity::GroupId,
+        crate::source_evidence::ParserRecord,
+    >,
+    pub imports: crate::import_recipes::ProjectImports,
+    pub import_history: Vec<crate::app::import_state::IntakeBatch>,
+    pub source_groups: Vec<crate::group_identity::SourceGroup>,
+    pub group_state: crate::group_identity::GroupState,
     pub header: Option<ProjectHeader>,
     pub version: u32,
     /// Root folder of the catalog (re-scanned on open).
@@ -71,11 +79,73 @@ impl ProjectFile {
     /// Assign identities only when a legacy project enters an editable session.
     /// Decoding/validating archives itself remains a lossless operation.
     pub fn assign_group_ids(&mut self) -> u64 {
+        // The scanner uses canonical paths. Resolve aliases and missing tails
+        // before matching saved locators; this transform cannot return an error.
+        let _ = storage::map_paths(self, &mut |p| Ok(storage::resolved_location(p)));
+        self.source_origins = std::mem::take(&mut self.source_origins)
+            .into_iter()
+            .map(|(path, origin)| {
+                (
+                    storage::resolved_location(&path),
+                    storage::resolved_location(&origin),
+                )
+            })
+            .collect();
         let mut next = self.derived.iter().map(|d| d.id).max().unwrap_or(0) + 1;
         for group in &mut self.derived {
             if group.id == 0 {
                 group.id = next;
                 next += 1;
+            }
+        }
+        let mut files: std::collections::BTreeSet<_> =
+            self.source_groups.iter().map(|s| s.path.clone()).collect();
+        files.extend(self.spectrum_file.clone());
+        files.extend(self.overrides.iter().map(|p| p.path.clone()));
+        files.extend(
+            self.derived
+                .iter()
+                .filter_map(|g| g.operation.as_ref())
+                .flat_map(|op| &op.inputs)
+                .filter(|input| input.derived_id.is_none() && !input.path.as_os_str().is_empty())
+                .map(|input| input.path.clone()),
+        );
+        let registry = crate::group_identity::GroupRegistry::rebuild(
+            files.into_iter().enumerate().map(|(ix, path)| {
+                let mode = self
+                    .overrides
+                    .iter()
+                    .find(|p| p.path == path)
+                    .map(|p| p.params.import.mode)
+                    .unwrap_or(self.params.import.mode);
+                (ix, path, mode)
+            }),
+            &mut self.derived,
+            &mut self.source_groups,
+            &self.source_origins,
+        );
+        let ids: Vec<_> = self.derived.iter().map(|g| g.id).collect();
+        for group in &mut self.derived {
+            if let Some(operation) = &mut group.operation {
+                for input in &mut operation.inputs {
+                    if input.group_id.is_none() {
+                        input.group_id = match input.derived_id {
+                            Some(id) => Some(
+                                ids.iter()
+                                    .position(|i| *i == id)
+                                    .and_then(|i| registry.id(crate::app::DERIVED_BASE + i))
+                                    .unwrap_or_else(|| {
+                                        crate::group_identity::GroupId::legacy_result(id)
+                                    }),
+                            ),
+                            None => self
+                                .source_groups
+                                .iter()
+                                .find(|g| g.path == input.path)
+                                .map(|g| g.id.clone()),
+                        };
+                    }
+                }
             }
         }
         next
@@ -134,6 +204,15 @@ pub fn save_with_storage(
 }
 
 pub fn load(path: &Path) -> Result<ProjectFile, String> {
+    load_with_cache_root(path, || {
+        crate::settings::app_dir().ok_or("Project cache directory unavailable".into())
+    })
+}
+
+pub(crate) fn load_with_cache_root(
+    path: &Path,
+    cache_root: impl FnOnce() -> Result<PathBuf, String>,
+) -> Result<ProjectFile, String> {
     if !is_project(path) {
         return Err("Open a .rxs project file.".into());
     }
@@ -142,7 +221,7 @@ pub fn load(path: &Path) -> Result<ProjectFile, String> {
     }
     let json = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     let project = parse(&json)?;
-    storage::restore(project, path, json.as_bytes())
+    storage::restore(project, path, json.as_bytes(), cache_root)
 }
 
 fn check_version(version: u32) -> Result<(), String> {
@@ -203,6 +282,17 @@ fn parse(json: &str) -> Result<ProjectFile, String> {
             return Err("Additional spectrum IDs must be unique and within range.".into());
         }
     }
+    let mut durable_ids = std::collections::BTreeSet::new();
+    for id in project
+        .source_groups
+        .iter()
+        .map(|g| &g.id)
+        .chain(project.derived.iter().filter_map(|g| g.group_id.as_ref()))
+    {
+        if !durable_ids.insert(id) {
+            return Err("Group IDs must be unique.".into());
+        }
+    }
     project.version = PROJECT_VERSION;
     Ok(project)
 }
@@ -246,4 +336,4 @@ fn replace_with(
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

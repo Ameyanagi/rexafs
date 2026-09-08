@@ -75,15 +75,13 @@ pub fn generate_inp(spec: &CrystalSpec) -> Result<String, String> {
     Ok(write_feff_inp(&cluster, &opts))
 }
 
-/// Create a workspace containing a feff.inp generated from `spec`.
-#[cfg_attr(not(test), allow(dead_code))]
-pub fn new_workspace_from_spec(spec: &CrystalSpec) -> Result<PathBuf, String> {
-    new_workspace_with(&generate_inp(spec)?)
-}
-
 /// Create a workspace containing the given feff.inp text.
 pub fn new_workspace_with(inp: &str) -> Result<PathBuf, String> {
-    let dir = workspace_dir()?;
+    new_workspace_with_at(inp, &default_workspace_root()?)
+}
+
+fn new_workspace_with_at(inp: &str, root: &Path) -> Result<PathBuf, String> {
+    let dir = workspace_dir(root)?;
     std::fs::write(dir.join("feff.inp"), inp).map_err(|e| e.to_string())?;
     Ok(dir)
 }
@@ -91,13 +89,17 @@ pub fn new_workspace_with(inp: &str) -> Result<PathBuf, String> {
 /// Each job owns its output directory, including when an invalidated calculation
 /// is still finishing on disk after its project has been closed.
 pub(crate) fn snapshot_workspace(source: &Path) -> Result<PathBuf, String> {
+    snapshot_workspace_at(source, &default_workspace_root()?)
+}
+
+fn snapshot_workspace_at(source: &Path, root: &Path) -> Result<PathBuf, String> {
     let input = std::fs::read_to_string(source.join("feff.inp")).map_err(|e| e.to_string())?;
     let crystal = match std::fs::read(source.join("crystal.json")) {
         Ok(bytes) => Some(bytes),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(e.to_string()),
     };
-    let target = new_workspace_with(&input)?;
+    let target = new_workspace_with_at(&input, root)?;
     if let Some(bytes) = crystal {
         if let Err(e) = std::fs::write(target.join("crystal.json"), bytes) {
             let _ = std::fs::remove_dir_all(&target);
@@ -107,21 +109,19 @@ pub(crate) fn snapshot_workspace(source: &Path) -> Result<PathBuf, String> {
     Ok(target)
 }
 
-fn workspace_dir() -> Result<PathBuf, String> {
-    // Tests create real FEFF outputs, but must not write into the user's home.
-    let workspace_root = if cfg!(test) {
-        std::env::temp_dir().join(format!("rexafs-feff-tests-{}", std::process::id()))
-    } else {
-        crate::settings::home_dir().ok_or("User home directory unavailable")?
-    };
+fn default_workspace_root() -> Result<PathBuf, String> {
+    Ok(crate::settings::home_dir()
+        .ok_or("User home directory unavailable")?
+        .join(".rexafs")
+        .join("feff"))
+}
+
+fn workspace_dir(root: &Path) -> Result<PathBuf, String> {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?
         .as_nanos();
-    let dir = workspace_root
-        .join(".rexafs")
-        .join("feff")
-        .join(format!("ws-{stamp}"));
+    let dir = root.join(format!("ws-{stamp}"));
     std::fs::create_dir_all(dir.parent().expect("workspace parent")).map_err(|e| e.to_string())?;
     std::fs::create_dir(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
@@ -177,9 +177,7 @@ fn template() -> String {
 
 /// Create `~/.rexafs/feff/ws-<stamp>/feff.inp` from the template.
 pub fn new_workspace() -> Result<PathBuf, String> {
-    let dir = workspace_dir()?;
-    std::fs::write(dir.join("feff.inp"), template()).map_err(|e| e.to_string())?;
-    Ok(dir)
+    new_workspace_with(&template())
 }
 
 /// Compatibility entry point used by the GUI background executor.
@@ -361,9 +359,26 @@ pub(crate) fn feff_test_lock() -> std::sync::MutexGuard<'static, ()> {
 mod tests {
     use super::*;
 
+    fn test_root() -> PathBuf {
+        std::env::temp_dir().join(format!("rexafs-feff-tests-{}", std::process::id()))
+    }
+    fn new_workspace_with(inp: &str) -> Result<PathBuf, String> {
+        new_workspace_with_at(inp, &test_root())
+    }
+    fn new_workspace() -> Result<PathBuf, String> {
+        new_workspace_with(&template())
+    }
+    fn new_workspace_from_spec(spec: &CrystalSpec) -> Result<PathBuf, String> {
+        new_workspace_with(&generate_inp(spec)?)
+    }
+    fn snapshot_workspace(source: &Path) -> Result<PathBuf, String> {
+        snapshot_workspace_at(source, &test_root())
+    }
+
     #[test]
     fn concurrent_workspace_snapshots_do_not_share_outputs() {
         let source = new_workspace_with("test input").unwrap();
+        assert!(source.starts_with(test_root()));
         std::fs::write(source.join("crystal.json"), b"test crystal context").unwrap();
         std::fs::write(source.join("feff0001.dat"), b"old result").unwrap();
         let a = snapshot_workspace(&source).unwrap();

@@ -18,6 +18,13 @@ pub const PLOT_CHIK: usize = 2;
 pub const PLOT_CHIR: usize = 3;
 pub const PLOT_CHIQ: usize = 4;
 
+fn current_label(
+    selected: Option<usize>,
+    entry_label: impl FnOnce(usize) -> String,
+) -> SharedString {
+    entry_label(selected.unwrap_or(crate::app::NO_ENTRY)).into()
+}
+
 impl StudioApp {
     pub(crate) fn stage_center(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
@@ -32,6 +39,9 @@ impl StudioApp {
         if let Some(weight) = self.mixed_overlay_weight {
             column = column.child(div().px_3().py_1().text_size(px(11.5)).text_color(t.warn)
                 .child(format!("Mixed FT weights: χ(k) uses k^{weight} for all curves. R/q curves retain each group's weight (shown in the legend).")));
+        }
+        if !ready && self.current_path.as_os_str().is_empty() && !self.catalog.scanning {
+            return column.child(self.empty_drop_target(cx));
         }
         if !ready {
             return column.child(
@@ -139,7 +149,7 @@ impl StudioApp {
                         segment(
                             &t,
                             "scope-current",
-                            "current",
+                            "Current",
                             v.scope == PlotScope::Current,
                             true,
                         )
@@ -154,7 +164,7 @@ impl StudioApp {
                         segment(
                             &t,
                             "scope-marked",
-                            format!("current + marked ({marked})"),
+                            "Compare",
                             v.scope == PlotScope::Marked,
                             false,
                         )
@@ -165,6 +175,15 @@ impl StudioApp {
                             },
                         )),
                     ),
+            )
+            .child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child(format!(
+                        "current + {marked} marked · {} spectra",
+                        self.compare_count()
+                    )),
             )
             .child(div().w(px(1.)).h(px(18.)).bg(t.border));
         if self.stage.is_processing() && !self.spectrum_quantity.is_absorption() {
@@ -443,6 +462,24 @@ impl StudioApp {
                     .child(div().font_weight(gpui::FontWeight::MEDIUM).child(title))
                     .child(div().text_color(t.text_muted).child(label)),
             )
+            .when(
+                self.stage_view.scope == PlotScope::Marked && self.stage != Stage::Fit,
+                |d| {
+                    d.children(
+                        self.plot_coverage
+                            .get(index)
+                            .and_then(|coverage| coverage.disclosure())
+                            .map(|text| {
+                                div()
+                                    .px_3()
+                                    .pt_1()
+                                    .text_size(px(11.5))
+                                    .text_color(t.warn)
+                                    .child(text)
+                            }),
+                    )
+                },
+            )
             .child(
                 div()
                     .flex_1()
@@ -458,10 +495,7 @@ impl StudioApp {
     }
 
     pub(crate) fn current_group_label(&self) -> SharedString {
-        match self.selected {
-            Some(ix) if ix != crate::app::NO_ENTRY => self.entry_label(ix).into(),
-            _ => self.spectrum_label.clone(),
-        }
+        current_label(self.selected, |ix| self.entry_label(ix))
     }
 
     /// Clicking a thumbnail opens exactly its current-data quantity.
@@ -602,6 +636,32 @@ pub(crate) fn stage_plot_selection(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn current_header_resolves_standalone_and_catalog_display_labels() {
+        use crate::app::NO_ENTRY;
+        use crate::group_identity::{GroupId, GroupState};
+        let standalone = GroupId::new_result();
+        let catalog = GroupId::new_result();
+        let mut state = GroupState::default();
+        state.labels.insert(standalone.clone(), "Cu foil".into());
+        state.labels.insert(catalog.clone(), "Cu standard".into());
+        for (selected, expected) in [
+            (None, "Cu foil"),
+            (Some(NO_ENTRY), "Cu foil"),
+            (Some(0), "Cu standard"),
+        ] {
+            let label = super::current_label(selected, |ix| {
+                let id = if ix == NO_ENTRY {
+                    &standalone
+                } else {
+                    &catalog
+                };
+                state.display_label(Some(id), || "load-time label".into())
+            });
+            assert_eq!(label.as_ref(), expected);
+        }
+    }
+
     use super::*;
     use crate::app::shell::StageView;
 
@@ -632,6 +692,7 @@ mod tests {
             assert!(spectrum.norm().is_none() && spectrum.flat().is_none());
             let specs = quantity_quadrant_specs(
                 &[QuadTrace {
+                    color_index: 0,
                     label: group.display_label(),
                     sp: spectrum,
                     active: true,

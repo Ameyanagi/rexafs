@@ -30,6 +30,11 @@ pub fn home_dir() -> Option<PathBuf> {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UserSettings {
+    pub import_recipes: crate::import_recipes::RecipeLibrary,
+    pub recent_projects: Vec<PathBuf>,
+    pub recent_import_folders: Vec<PathBuf>,
+    /// Width of the Groups sidebar in logical pixels. None uses 280 px.
+    pub groups_panel_width: Option<f32>,
     /// Folder scanned for `*.cif` files (the "CIF library" structure source).
     pub cif_library: Option<PathBuf>,
     /// Local copy of the AMCSD SQLite database.
@@ -55,6 +60,10 @@ pub struct UserSettings {
 impl Default for UserSettings {
     fn default() -> Self {
         Self {
+            import_recipes: Default::default(),
+            groups_panel_width: None,
+            recent_import_folders: Vec::new(),
+            recent_projects: Vec::new(),
             cif_library: None,
             amcsd_db: None,
             mp_api_key: String::new(),
@@ -153,7 +162,30 @@ pub fn default_amcsd_path() -> Option<PathBuf> {
     })
 }
 
+pub fn clamp_groups_panel_width(width: f32) -> f32 {
+    if width.is_finite() {
+        width.clamp(240., 400.)
+    } else {
+        280.
+    }
+}
+
+/// Most recent first, without duplicate paths. Callers resolve paths before recording.
+pub fn push_recent(list: &mut Vec<PathBuf>, path: PathBuf, cap: usize) {
+    list.retain(|entry| entry != &path);
+    list.insert(0, path);
+    list.truncate(cap);
+}
+
+pub fn remove_recent(list: &mut Vec<PathBuf>, path: &Path) {
+    list.retain(|entry| entry != path);
+}
+
 impl UserSettings {
+    pub fn groups_panel_width(&self) -> f32 {
+        clamp_groups_panel_width(self.groups_panel_width.unwrap_or(280.))
+    }
+
     pub fn load() -> Self {
         settings_path()
             .and_then(|p| {
@@ -303,11 +335,77 @@ mod tests {
     }
 
     #[test]
+    fn recent_locations_dedupe_order_and_cap() {
+        let mut list = Vec::new();
+        for n in 0..10 {
+            push_recent(&mut list, PathBuf::from(format!("/{n}")), 8);
+        }
+        assert_eq!(
+            list,
+            (2..10)
+                .rev()
+                .map(|n| PathBuf::from(format!("/{n}")))
+                .collect::<Vec<_>>()
+        );
+        push_recent(&mut list, "/5".into(), 8);
+        assert_eq!(list[0], PathBuf::from("/5"));
+        assert_eq!(list.len(), 8);
+        assert_eq!(
+            list.iter()
+                .filter(|p| p.as_path() == Path::new("/5"))
+                .count(),
+            1
+        );
+        push_recent(&mut list, "/empty".into(), 0);
+        assert!(list.is_empty());
+    }
+
+    #[test]
+    fn recent_project_load_failure_prunes_duplicates_and_preserves_other_entries() {
+        let mut list = vec![
+            "/good.rxs".into(),
+            "/bad.rxs".into(),
+            "/other.rxs".into(),
+            "/bad.rxs".into(),
+        ];
+        remove_recent(&mut list, Path::new("/bad.rxs"));
+        assert_eq!(
+            list,
+            vec![PathBuf::from("/good.rxs"), PathBuf::from("/other.rxs")]
+        );
+        let remaining = list.clone();
+        remove_recent(&mut list, Path::new("/missing.rxs"));
+        assert_eq!(list, remaining);
+    }
+
+    #[test]
+    fn groups_panel_width_defaults_and_bounds() {
+        for (input, expected) in [
+            (None, 280.),
+            (Some(10.), 240.),
+            (Some(500.), 400.),
+            (Some(320.), 320.),
+            (Some(f32::NAN), 280.),
+            (Some(f32::INFINITY), 280.),
+        ] {
+            assert_eq!(
+                UserSettings {
+                    groups_panel_width: input,
+                    ..Default::default()
+                }
+                .groups_panel_width(),
+                expected
+            );
+        }
+    }
+
+    #[test]
     fn settings_round_trip_and_defaults() {
         let dir = std::env::temp_dir().join(format!("xts-settings-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("settings.json");
         let s = UserSettings {
+            import_recipes: Default::default(),
             cif_library: Some(PathBuf::from("/tmp/cifs")),
             amcsd_db: None,
             mp_api_key: "abc".into(),
@@ -320,9 +418,16 @@ mod tests {
             assistant_docked: false,
             assistant_panel_width: 512.,
             assistant_history_limit: 3,
+            groups_panel_width: Some(347.),
+            recent_projects: vec!["/tmp/project.rxs".into()],
+            recent_import_folders: vec!["/tmp/data".into()],
         };
         s.save_to(&path).unwrap();
         assert_eq!(UserSettings::load_from(&path).unwrap(), s);
+        assert_eq!(
+            UserSettings::load_from(&path).unwrap().groups_panel_width(),
+            347.
+        );
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

@@ -148,11 +148,14 @@ impl StudioApp {
             return Some(reason);
         }
         let scan = &self.catalog.scans[self.active_scan.unwrap()];
-        if (scan.start..scan.start + scan.len).any(|ix| {
-            self.fit_ranges
-                .validate_background(self.effective_params(ix).rbkg.unwrap_or(1.0))
-                .is_err()
-        }) {
+        if (scan.start..scan.start + scan.len)
+            .filter(|&ix| !self.group_registry.index_excluded(ix))
+            .any(|ix| {
+                self.fit_ranges
+                    .validate_background(self.effective_params(ix).rbkg.unwrap_or(1.0))
+                    .is_err()
+            })
+        {
             return Some("Fit R min must be at least Rbkg for every spectrum in the batch.");
         }
         None

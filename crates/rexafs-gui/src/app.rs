@@ -6,7 +6,7 @@
 //! results are dropped) with an LRU cache of processed spectra. The Explore
 //! center is the 2x2 quadrant grid from M0.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -16,8 +16,8 @@ use std::time::{Duration, Instant};
 
 use futures::StreamExt;
 use gpui::{
-    ClickEvent, Context, Entity, FocusHandle, Focusable, IntoElement, KeyBinding, ParentElement,
-    PathPromptOptions, Render, ScrollStrategy, SharedString, Styled, UniformListScrollHandle,
+    ClickEvent, Context, Entity, ExternalPaths, FocusHandle, Focusable, IntoElement, KeyBinding,
+    ParentElement, PathPromptOptions, Render, SharedString, Styled, UniformListScrollHandle,
     Window, actions, div, prelude::*, px, uniform_list,
 };
 use lru::LruCache;
@@ -43,8 +43,7 @@ use crate::fitting::{
 };
 use crate::params::{
     AUTOBK_SOLVERS, DerivedSpectrum, DetectionMode, FT_WINDOWS, ImportPreview, PipelineParams,
-    load_group_raw_with_diagnostics, parse_cols, preview_import, process_arrays, process_file,
-    resample_chik,
+    load_group_raw_with_diagnostics, preview_import, process_arrays, process_file, resample_chik,
 };
 use crate::plotting::{
     K_AXIS, QuadTrace, R_AXIS, SeriesSource, ViewOptions, build_fit_k, build_fit_q, build_fit_r,
@@ -56,6 +55,12 @@ use crate::theme::Theme;
 use crate::widgets::numeric_field::{FieldEvent, FieldKind, NumericField};
 use crate::widgets::text_input::{InputEvent, TextInput};
 
+mod group_rows;
+mod import_channels;
+mod import_preview;
+mod import_repair;
+pub(crate) mod import_review;
+pub(crate) mod import_state;
 mod importing;
 mod merge;
 mod shell;
@@ -69,11 +74,11 @@ const JOB_ERROR_CAPACITY: usize = 200;
 const RAW_CACHE_CAPACITY: usize = 256;
 /// Raw (energy, mu) of one file after import math.
 type RawArrays = Arc<crate::params::RawData>;
+type GroupLoadResult = Result<(XASSpectrum, Option<RawArrays>), String>;
 /// Live-follow recompute cadence while dragging a plot handle.
 const DRAG_RECOMPUTE_TICK: Duration = Duration::from_millis(50);
 /// Import-preview column width. Wide enough for a 4-decimal energy value
 /// (`21912.2534`) so cells clip rather than wrapping a number onto two lines.
-const IMPORT_COL_W: f32 = 88.;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Workspace {
@@ -153,8 +158,6 @@ enum ImportRole {
     I0,
     It,
     Ir,
-    Fluor,
-    Mu,
 }
 
 /// Context-panel section a parameter belongs to, for the per-section
@@ -334,6 +337,7 @@ fn section_differs(a: &PipelineParams, b: &PipelineParams, section: ParamSection
 fn scan_fingerprint(
     global: &PipelineParams,
     overrides: &BTreeMap<usize, PipelineParams>,
+    registry: &crate::group_identity::GroupRegistry,
     start: usize,
     len: usize,
 ) -> u64 {
@@ -342,6 +346,12 @@ fn scan_fingerprint(
     for (ix, params) in overrides.range(start..start.saturating_add(len)) {
         ix.hash(&mut hasher);
         params.fingerprint().hash(&mut hasher);
+    }
+    for ix in registry
+        .excluded_indices()
+        .range(start..start.saturating_add(len))
+    {
+        ix.hash(&mut hasher);
     }
     hasher.finish()
 }
@@ -420,6 +430,14 @@ actions!(
         MarkAllGroups,
         InvertGroupMarks,
         ClearCompare,
+        ToggleFocusedMark,
+        CollapseFocusedStack,
+        ExpandFocusedStack,
+        LeaveFilter,
+        EscapeFilter,
+        RenameGroup,
+        CommitGroupRename,
+        DismissGroupEditor,
         FramePrev,
         FrameNext,
         FrameJumpBack,
@@ -436,6 +454,9 @@ actions!(
         ToggleContextPanel,
         FocusFilter,
         ExploreEscape,
+        OpenProject,
+        ImportPaths,
+        DismissPathRoute,
         PaletteOpen,
         PaletteClose,
         Undo,
@@ -463,18 +484,35 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
             AssistantPreviousControl,
             Some("Assistant && !TextInput"),
         ),
-        KeyBinding::new("up", NavUp, Some("DataPanel")),
-        KeyBinding::new("down", NavDown, Some("DataPanel")),
-        KeyBinding::new("shift-up", NavExtendUp, Some("DataPanel")),
-        KeyBinding::new("shift-down", NavExtendDown, Some("DataPanel")),
+        KeyBinding::new("cmd-o", OpenProject, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-shift-o", ImportPaths, Some("Studio && !Assistant")),
+        KeyBinding::new("escape", DismissPathRoute, Some("PathRoute")),
+        KeyBinding::new("f2", RenameGroup, Some("DataPanel && !TextInput")),
+        KeyBinding::new("enter", RenameGroup, Some("DataPanel && !TextInput")),
+        KeyBinding::new("enter", CommitGroupRename, Some("GroupRename > TextInput")),
+        KeyBinding::new(
+            "escape",
+            DismissGroupEditor,
+            Some("GroupRename > TextInput"),
+        ),
+        KeyBinding::new("escape", DismissGroupEditor, Some("GroupMenu")),
+        KeyBinding::new("up", NavUp, Some("DataPanel && !TextInput")),
+        KeyBinding::new("down", NavDown, Some("DataPanel && !TextInput")),
+        KeyBinding::new("shift-up", NavExtendUp, Some("DataPanel && !TextInput")),
+        KeyBinding::new("shift-down", NavExtendDown, Some("DataPanel && !TextInput")),
         KeyBinding::new("cmd-a", MarkAllGroups, Some("DataPanel && !TextInput")),
         KeyBinding::new("cmd-shift-a", ClearCompare, Some("DataPanel && !TextInput")),
         KeyBinding::new("cmd-i", InvertGroupMarks, Some("DataPanel && !TextInput")),
+        KeyBinding::new("space", ToggleFocusedMark, Some("DataPanel && !TextInput")),
         KeyBinding::new(
-            "escape",
-            ClearCompare,
-            Some("DataPanel && !Explore && !TextInput"),
+            "left",
+            CollapseFocusedStack,
+            Some("DataPanel && !TextInput"),
         ),
+        KeyBinding::new("right", ExpandFocusedStack, Some("DataPanel && !TextInput")),
+        KeyBinding::new("down", LeaveFilter, Some("GroupFilter > TextInput")),
+        KeyBinding::new("enter", LeaveFilter, Some("GroupFilter > TextInput")),
+        KeyBinding::new("escape", EscapeFilter, Some("GroupFilter > TextInput")),
         KeyBinding::new("left", FramePrev, Some("Operando && !TextInput")),
         KeyBinding::new("right", FrameNext, Some("Operando && !TextInput")),
         KeyBinding::new("shift-left", FrameJumpBack, Some("Operando && !TextInput")),
@@ -532,13 +570,7 @@ const NO_ENTRY: usize = usize::MAX;
 
 /// Derived (merged) spectra get virtual indices above this base so the
 /// selection/cache/compare machinery treats them like catalog entries.
-const DERIVED_BASE: usize = usize::MAX / 2;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DataTab {
-    Files,
-    Scans,
-}
+pub(crate) const DERIVED_BASE: usize = usize::MAX / 2;
 
 /// Frames sampled for the operando overview (heatmap stays bounded no matter
 /// how large the scan is).
@@ -550,6 +582,7 @@ const K_GRID_MAX: f64 = 15.0;
 pub(crate) struct OperandoData {
     pub(crate) scan: usize,
     pub(crate) scan_len: usize,
+    sample_frames: Vec<usize>,
     pub(crate) fingerprint: u64,
     /// k grid and k-weighted χ(k) rows (sampled frames × grid).
     pub(crate) grid: Vec<f64>,
@@ -567,6 +600,14 @@ pub(crate) struct OperandoData {
 }
 
 impl OperandoData {
+    fn sample_pos(&self, frame: usize) -> usize {
+        self.sample_frames
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, p)| p.abs_diff(frame))
+            .map_or(0, |(i, _)| i)
+    }
+
     /// Grid and matrix of a series space.
     pub(crate) fn space(&self, space: SeriesSpace) -> (&[f64], &[Vec<f64>]) {
         match space {
@@ -699,6 +740,7 @@ enum ProblemSeverity {
 
 #[derive(Debug, Clone, PartialEq)]
 struct JobError {
+    batch: Option<import_state::BatchId>,
     severity: ProblemSeverity,
     label: String,
     message: String,
@@ -707,6 +749,7 @@ struct JobError {
 impl JobError {
     fn warning(path: &std::path::Path, message: String) -> Self {
         Self {
+            batch: None,
             severity: ProblemSeverity::Warning,
             label: path.display().to_string(),
             message,
@@ -716,19 +759,23 @@ impl JobError {
 
 fn push_problem(problems: &mut Vec<JobError>, problem: JobError) {
     // Browsing/reprocessing a cached source should not flood recent problems.
-    if problem.severity == ProblemSeverity::Warning && problems.contains(&problem) {
+    if (problem.batch.is_some() || problem.severity == ProblemSeverity::Warning)
+        && problems.contains(&problem)
+    {
         return;
     }
-    if problems.len() == JOB_ERROR_CAPACITY {
+    if problem.batch.is_none()
+        && problems.iter().filter(|p| p.batch.is_none()).count() >= JOB_ERROR_CAPACITY
+    {
         if let Some(index) = problems
             .iter()
-            .position(|p| p.severity == ProblemSeverity::Warning)
+            .position(|p| p.batch.is_none() && p.severity == ProblemSeverity::Warning)
         {
             problems.remove(index);
         } else if problem.severity == ProblemSeverity::Warning {
             return;
-        } else {
-            problems.remove(0);
+        } else if let Some(index) = problems.iter().position(|p| p.batch.is_none()) {
+            problems.remove(index);
         }
     }
     problems.push(problem);
@@ -989,8 +1036,13 @@ pub struct StudioApp {
     analysis: shell::tools::AnalysisState,
     journal: shell::journal::JournalState,
     palette: Option<shell::palette::PaletteState>,
+    path_route: Option<shell::path_routing::RoutingCard>,
+    pending_routed_import: VecDeque<shell::path_routing::RoutedImport>,
     /// Inspector scroll position (tools reveal their form on open).
     inspector_scroll: gpui::ScrollHandle,
+    /// Durable identities backing the compact index-based UI.
+    group_registry: crate::group_identity::GroupRegistry,
+    group_state: crate::group_identity::GroupState,
     /// Groups skipped by bulk operations (Athena's frozen groups).
     frozen: BTreeSet<usize>,
     data_panel_open: bool,
@@ -1005,7 +1057,12 @@ pub struct StudioApp {
     verify_running: bool,
     /// Active spectrum (drives params/fit/status).
     selected: Option<usize>,
-    /// Compare set; the active spectrum is implicitly included.
+    /// Keyboard row focus and stable range anchor, independent of current.
+    focus_group: Option<usize>,
+    group_menu: Option<shell::group_menu::GroupMenu>,
+    group_rename: Option<shell::group_menu::RenameState>,
+    mark_anchor: Option<usize>,
+    /// Marks are project-wide; visibility and navigation never remove them.
     selection: BTreeSet<usize>,
     /// Merged/averaged spectra (virtual indices DERIVED_BASE + i).
     derived: Vec<DerivedSpectrum>,
@@ -1013,20 +1070,23 @@ pub struct StudioApp {
     pending_derived: Option<u64>,
     compare_gen: u64,
     compare_running: bool,
+    plot_coverage: [crate::plotting::PlotCoverage; 5],
     view: ViewOptions,
     view_offset_field: Option<Entity<NumericField>>,
     filter_input: Option<Entity<TextInput>>,
     filter_text: String,
+    /// Saved expansion while temporarily revealing marked/current groups.
+    filter_reveal: Option<BTreeMap<crate::group_identity::GroupId, bool>>,
+    reveal_current: Option<usize>,
     root_focus: FocusHandle,
     data_focus: FocusHandle,
     operando_focus: FocusHandle,
     /// Per-section "advanced parameters" fold state (Norm, Bkg, FFT, Import).
     adv_open: [bool; 4],
-    roi_input: Option<Entity<TextInput>>,
     import_preview: Option<ImportPreview>,
+    import_editor: Option<Entity<shell::import_editor::ImportEditor>>,
     import_preview_error: SharedString,
     import_preview_gen: u64,
-    open_import_role: Option<ImportRole>,
     /// Which enum parameter's option list is expanded.
     open_enum: Option<EnumParam>,
     param_menu: Option<shell::parameter_actions::ParamScope>,
@@ -1054,8 +1114,8 @@ pub struct StudioApp {
     recompute_epoch: u64,
     params: PipelineParams,
     /// Per-spectrum parameter overrides (copy-on-write of the full param
-    /// set), keyed by catalog index. Indices are only stable within one
-    /// scan session; persistence re-keys by file path (`ParamOverride`).
+    /// set), keyed by the registry’s current catalog indices. The central
+    /// catalog adapter and project persistence bind them to durable IDs.
     overrides: BTreeMap<usize, PipelineParams>,
     /// Path-keyed overrides from a loaded project, resolved to catalog
     /// indices once the folder scan / index restore materializes entries.
@@ -1077,6 +1137,7 @@ pub struct StudioApp {
     spectrum_fingerprint: u64,
     /// Identity of the data retained in `spectrum`, independent of selection.
     spectrum_group: Option<shell::tools::ToolTarget>,
+    standalone_source: Option<(PathBuf, SharedString, crate::group_identity::GroupId)>,
     /// Scientific quantity captured with the loaded data, including stale plots.
     spectrum_quantity: crate::params::Quantity,
     spectrum: Option<Arc<XASSpectrum>>,
@@ -1097,10 +1158,9 @@ pub struct StudioApp {
     legend_entries: Vec<(SharedString, gpui::Rgba)>,
     mixed_overlay_weight: Option<f64>,
     maximized: Option<usize>,
-    data_tab: DataTab,
     file_scroll: UniformListScrollHandle,
-    derived_scroll: UniformListScrollHandle,
-    scan_scroll: UniformListScrollHandle,
+    expanded_sources: BTreeMap<crate::group_identity::GroupId, bool>,
+    groups_resize: Option<(gpui::Pixels, f32)>,
     /// At most one scan is expanded, keeping row-to-member mapping O(1)
     /// even when that scan has a million members.
     expanded_scan: Option<usize>,
@@ -1110,6 +1170,8 @@ pub struct StudioApp {
     operando_gen: u64,
     operando_running: bool,
     operando_cancel: Option<Arc<AtomicBool>>,
+    // Operando, batch, merge, fit, LCF operands captured when each job starts.
+    job_inputs: [BTreeSet<crate::group_identity::GroupId>; 5],
     /// Trend plotted against frame in the Series stage.
     series_trend: TrendSource,
     series_lcf: Option<SeriesLcf>,
@@ -1178,6 +1240,13 @@ pub struct StudioApp {
     merge_cancel: Option<Arc<AtomicBool>>,
     status: SharedString,
     job_errors: Vec<JobError>,
+    parser_evidence: BTreeMap<crate::group_identity::GroupId, crate::source_evidence::ParserRecord>,
+    imports: crate::import_recipes::ProjectImports,
+    intake: import_state::IntakeState,
+    intake_cancel: Option<Arc<AtomicBool>>,
+    problems_batch: Option<import_state::BatchId>,
+    problems_page: usize,
+    group_diagnostics: group_rows::Diagnostics,
     problems_open: bool,
     /// Measured plot-container sizes (logical px) keyed by plot id, so a
     /// figure is built with the aspect of the card it fills.
@@ -1206,13 +1275,104 @@ fn thin_even(all: &[usize], cap: usize, keep: Option<usize>) -> Vec<usize> {
 }
 
 fn sample_scan_indices(start: usize, len: usize, cap: usize) -> Vec<usize> {
-    if len <= cap {
+    if cap == 0 {
+        Vec::new()
+    } else if cap == 1 {
+        (len > 0).then_some(start).into_iter().collect()
+    } else if len <= cap {
         (start..start + len).collect()
     } else {
         (0..cap)
             .map(|i| start + i * (len - 1) / (cap - 1))
             .collect()
     }
+}
+
+/// Sample surviving frames, retaining original catalog coordinates.
+fn active_scan_indices(
+    registry: &crate::group_identity::GroupRegistry,
+    start: usize,
+    len: usize,
+    cap: usize,
+) -> Vec<usize> {
+    let excluded = registry.excluded_indices();
+    let excluded: Vec<_> = excluded
+        .range(start..start.saturating_add(len))
+        .copied()
+        .collect();
+    let ordinals = sample_scan_indices(0, len.saturating_sub(excluded.len()), cap);
+    let mut skipped = 0;
+    ordinals
+        .into_iter()
+        .map(|ordinal| {
+            let mut ix = start + ordinal + skipped;
+            while excluded.get(skipped).is_some_and(|&skip| skip <= ix) {
+                skipped += 1;
+                ix += 1;
+            }
+            ix
+        })
+        .collect()
+}
+
+/// Heatmaps need a regular frame grid; removed positions remain blank while
+/// cursor spectra and trends use the surviving samples' exact coordinates.
+fn overview_heatmap_rows(
+    matrix: &[Vec<f64>],
+    sample_frames: &[usize],
+    registry: &crate::group_identity::GroupRegistry,
+    start: usize,
+    len: usize,
+) -> Vec<Vec<f64>> {
+    sample_scan_indices(0, len, MAX_FRAMES)
+        .into_iter()
+        .map(|frame| {
+            let row = sample_frames
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, p)| p.abs_diff(frame))
+                .and_then(|(i, _)| matrix.get(i));
+            match row.filter(|_| !registry.index_excluded(start + frame)) {
+                Some(row) => row.clone(),
+                None => vec![f64::NAN; matrix.first().map_or(0, Vec::len)],
+            }
+        })
+        .collect()
+}
+
+fn surviving_frame(
+    registry: &crate::group_identity::GroupRegistry,
+    start: usize,
+    len: usize,
+    pos: usize,
+    backwards: bool,
+) -> Option<usize> {
+    let pos = pos.min(len.saturating_sub(1));
+    let before = || {
+        (0..=pos)
+            .rev()
+            .find(|&p| p < len && !registry.index_excluded(start + p))
+    };
+    let after = || (pos..len).find(|&p| !registry.index_excluded(start + p));
+    if backwards {
+        before().or_else(after)
+    } else {
+        after().or_else(before)
+    }
+}
+
+/// Signal workers before retiring their callbacks. Retained results use this
+/// return value to distinguish interrupted computations from completed ones.
+fn retire_job(
+    generation: &mut u64,
+    running: &mut bool,
+    cancellation: Option<&mut Option<Arc<AtomicBool>>>,
+) -> bool {
+    if let Some(Some(cancel)) = cancellation.map(Option::take) {
+        cancel.store(true, Ordering::Relaxed);
+    }
+    *generation += 1;
+    std::mem::replace(running, false)
 }
 
 fn short_duration(duration: Duration) -> String {
@@ -1340,44 +1500,12 @@ fn should_rebuild_explore(workspace: Workspace, dirty: &mut bool, invalidated: b
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ScanListRow {
-    Header(usize),
-    Member { scan: usize, offset: usize },
-}
-
-/// Translate a virtualized flattened Scans-tab row without allocating a
-/// per-member index vector.
-fn scan_list_row(
-    row: usize,
-    scan_count: usize,
-    expanded: Option<(usize, usize)>,
-) -> Option<ScanListRow> {
-    let Some((scan, len)) = expanded else {
-        return (row < scan_count).then_some(ScanListRow::Header(row));
-    };
-    if scan >= scan_count {
-        return None;
-    }
-    if row <= scan {
-        return Some(ScanListRow::Header(row));
-    }
-    if row <= scan.saturating_add(len) {
-        return Some(ScanListRow::Member {
-            scan,
-            offset: row - scan - 1,
-        });
-    }
-    let header = row - len;
-    (header < scan_count).then_some(ScanListRow::Header(header))
-}
-
 #[cfg(test)]
 mod thin_tests {
     use super::{
-        ChikRowKey, RetainedChikSeries, ScanListRow, Workspace, catalog_row_index,
-        frame_from_data_y, frame_from_heatmap_position, nearest_sample_pos, scan_entry_offset,
-        scan_list_row, should_rebuild_explore, thin_even,
+        ChikRowKey, RetainedChikSeries, Workspace, catalog_row_index, frame_from_data_y,
+        frame_from_heatmap_position, nearest_sample_pos, scan_entry_offset, should_rebuild_explore,
+        thin_even,
     };
 
     #[test]
@@ -1507,23 +1635,6 @@ mod thin_tests {
     }
 
     #[test]
-    fn expanded_scan_rows_are_flattened_without_member_storage() {
-        let expanded = Some((1, 3));
-        assert_eq!(scan_list_row(0, 3, expanded), Some(ScanListRow::Header(0)));
-        assert_eq!(scan_list_row(1, 3, expanded), Some(ScanListRow::Header(1)));
-        assert_eq!(
-            scan_list_row(2, 3, expanded),
-            Some(ScanListRow::Member { scan: 1, offset: 0 })
-        );
-        assert_eq!(
-            scan_list_row(4, 3, expanded),
-            Some(ScanListRow::Member { scan: 1, offset: 2 })
-        );
-        assert_eq!(scan_list_row(5, 3, expanded), Some(ScanListRow::Header(2)));
-        assert_eq!(scan_list_row(6, 3, expanded), None);
-    }
-
-    #[test]
     fn reconciled_catalog_rejects_stale_filtered_indices() {
         let stale = [0, 4, 9];
         assert_eq!(catalog_row_index(Some(&stale), 0, 2), Some(0));
@@ -1542,10 +1653,453 @@ mod thin_tests {
 
 #[cfg(test)]
 mod override_tests {
+
+    #[test]
+    fn removal_scan_operands_fingerprint_and_cursor_follow_survivors() {
+        use super::*;
+        let registry = crate::group_identity::GroupRegistry::default();
+        let ids: Vec<_> = (100..106)
+            .map(|ix| {
+                registry.register_source(
+                    Some(ix),
+                    format!("/data/{ix}.dat").into(),
+                    DetectionMode::Auto,
+                    &Default::default(),
+                )
+            })
+            .collect();
+        let params = PipelineParams::default();
+        let stamp = || scan_fingerprint(&params, &BTreeMap::new(), &registry, 100, 6);
+        let original = stamp();
+        let outside = registry.register_source(
+            Some(99),
+            "/data/99.dat".into(),
+            DetectionMode::Auto,
+            &Default::default(),
+        );
+        registry.set_excluded(&BTreeSet::from([outside.clone()]));
+        assert_eq!(stamp(), original);
+        registry.set_excluded(&BTreeSet::from([
+            outside,
+            ids[0].clone(),
+            ids[2].clone(),
+            ids[5].clone(),
+        ]));
+        assert_ne!(stamp(), original);
+        assert_eq!(
+            active_scan_indices(&registry, 100, 6, usize::MAX),
+            vec![101, 103, 104]
+        );
+        assert_eq!(active_scan_indices(&registry, 100, 6, 2), vec![101, 104]);
+        assert_eq!(active_scan_indices(&registry, 100, 6, 1), vec![101]);
+        assert_eq!(surviving_frame(&registry, 100, 6, 0, false), Some(1));
+        assert_eq!(surviving_frame(&registry, 100, 6, 2, false), Some(3));
+        assert_eq!(surviving_frame(&registry, 100, 6, 2, true), Some(1));
+        assert_eq!(surviving_frame(&registry, 100, 6, 5, false), Some(4));
+        let heatmap = overview_heatmap_rows(
+            &[vec![1.], vec![3.], vec![4.]],
+            &[1, 3, 4],
+            &registry,
+            100,
+            6,
+        );
+        assert_eq!(heatmap.len(), 6);
+        assert!(heatmap[0][0].is_nan() && heatmap[2][0].is_nan() && heatmap[5][0].is_nan());
+        assert_eq!(heatmap[3], vec![3.]);
+        registry.set_excluded(&ids.into_iter().collect());
+        assert!(active_scan_indices(&registry, 100, 6, MAX_FRAMES).is_empty());
+        assert_eq!(surviving_frame(&registry, 100, 6, 0, false), None);
+        registry.set_excluded(&BTreeSet::new());
+        assert_eq!(stamp(), original);
+        assert_eq!(
+            active_scan_indices(&registry, 100, 6, usize::MAX),
+            (100..106).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn removal_jobs_cancel_only_bound_inputs_and_finalize_partial_results() {
+        use super::*;
+        use crate::group_identity::GroupId;
+        let source = GroupId::source(std::path::Path::new("/data/a.dat"), DetectionMode::Auto);
+        let unrelated = GroupId::new_result();
+        let inputs = [
+            BTreeSet::new(),
+            BTreeSet::from([source.clone()]),
+            BTreeSet::new(),
+            BTreeSet::from([source.clone()]),
+            BTreeSet::from([source.clone()]),
+        ];
+        let mut generations = [10; 6];
+        let mut running = [true; 5];
+        let tokens = std::array::from_fn::<_, 4, _>(|_| Arc::new(AtomicBool::new(false)));
+        let mut cancellations = tokens.clone().map(Some);
+        let mut filtered = Some(Arc::new(vec![0, 1]));
+        let unrelated_result = CatalogBindings {
+            generations: generations.each_mut(),
+            running: running.each_mut(),
+            cancellations: cancellations.each_mut(),
+            filtered: &mut filtered,
+        }
+        .remove(&inputs, &BTreeSet::from([unrelated]));
+        assert_eq!(unrelated_result, [false; 5]);
+        assert_eq!(generations, [10; 6]);
+        assert_eq!(running, [true; 5]);
+        assert!(tokens.iter().all(|t| !t.load(Ordering::Relaxed)));
+        let interrupted = CatalogBindings {
+            generations: generations.each_mut(),
+            running: running.each_mut(),
+            cancellations: cancellations.each_mut(),
+            filtered: &mut filtered,
+        }
+        .remove(&inputs, &BTreeSet::from([source]));
+        assert_eq!(interrupted, [false, true, false, true, true]);
+        assert_eq!(generations, [10, 11, 10, 11, 11, 10]);
+        assert_eq!(running, [true, false, true, false, false]);
+        assert_eq!(
+            tokens.map(|t| t.load(Ordering::Relaxed)),
+            [false, true, false, true]
+        );
+        assert_eq!(filtered.as_deref(), Some(&vec![0, 1]));
+        let mut batch = BatchFitData {
+            scan: 0,
+            fingerprint: 0,
+            model_fingerprint: 0,
+            rows: [3, 0]
+                .map(|frame| BatchFitRow {
+                    frame,
+                    entry_ix: frame,
+                    r_factor: 0.1,
+                    reduced_chi_square: 1.,
+                    values: vec![],
+                    solver_report: None,
+                })
+                .into(),
+            frame_labels: BTreeMap::new(),
+            problems: vec![BatchFitProblem {
+                frame: 1,
+                label: "a".into(),
+                error: "bad scan".into(),
+            }],
+            problems_open: false,
+            preview: false,
+            total: 500,
+            cancelled: false,
+            varying_names: vec![],
+            trend_param: 0,
+        };
+        let mut lcf = SeriesLcf {
+            scan: 0,
+            fingerprint: 0,
+            names: vec!["standard".into()],
+            rows: BTreeMap::from([(1, vec![0.5])]),
+            total: 500,
+            cancelled: false,
+        };
+        finish_interrupted_results(Some(&mut batch), Some(&mut lcf), interrupted);
+        assert!(batch.cancelled && lcf.cancelled);
+        assert_eq!(batch.problems.len(), 1);
+        assert_eq!(
+            batch.rows.iter().map(|r| r.frame).collect::<Vec<_>>(),
+            vec![0, 3]
+        );
+        assert_eq!(lcf.rows[&1], vec![0.5]);
+        assert_eq!((batch.total, lcf.total), (500, 500));
+    }
+
+    #[test]
+    fn removal_lcf_bindings_include_only_loaded_standards() {
+        use super::*;
+        let mut cache = LruCache::new(NonZeroUsize::new(8).unwrap());
+        let spectrum = Arc::new(XASSpectrum::default());
+        cache.put((1, 10), spectrum.clone());
+        cache.put((2, 9), spectrum.clone()); // outdated processing
+        cache.put((NO_ENTRY, 10), spectrum);
+        let marked = BTreeSet::from([0, 1, 2, NO_ENTRY]);
+        assert_eq!(
+            cached_marked_indices(&marked, &cache, |_| 10).collect::<Vec<_>>(),
+            vec![1]
+        );
+        assert_eq!(
+            cached_marked_spectra(&marked, &cache, |_| 10, |ix| ix.to_string()).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn removal_cache_eviction_keeps_unrelated_catalog_entries() {
+        use super::*;
+        let mut cache = LruCache::new(NonZeroUsize::new(8).unwrap());
+        for key in [(0, 1), (0, 2), (1, 1), (DERIVED_BASE, 1)] {
+            cache.put(key, key.0);
+        }
+        evict_group_keys(&mut cache, &BTreeSet::from([0]), false);
+        assert_eq!(cache.len(), 2);
+        assert_eq!(cache.peek(&(1, 1)), Some(&1));
+        assert!(cache.contains(&(DERIVED_BASE, 1)));
+        evict_group_keys(&mut cache, &BTreeSet::new(), true);
+        assert_eq!(cache.len(), 1);
+        assert_eq!(cache.peek(&(1, 1)), Some(&1));
+    }
+
     use std::collections::BTreeMap;
 
     use super::{ParamSection, copy_section, scan_fingerprint, section_differs};
     use crate::params::PipelineParams;
+
+    #[test]
+    fn compare_excludes_pending_current_and_retains_other_marked_loads() {
+        use super::*;
+        let request = |ix| CompareLoad {
+            ix,
+            fingerprint: 1,
+            source: Ok("/data/scan.dat".into()),
+            params: Default::default(),
+        };
+        let mut loads = vec![request(0), request(1), request(NO_ENTRY)];
+        exclude_pending_current(&mut loads, Some(1));
+        assert_eq!(
+            loads.iter().map(|load| load.ix).collect::<Vec<_>>(),
+            vec![0, NO_ENTRY]
+        );
+        exclude_pending_current(&mut loads, Some(NO_ENTRY));
+        assert_eq!(loads.len(), 1);
+        exclude_pending_current(&mut loads, None);
+        assert_eq!(loads.len(), 1);
+        exclude_pending_current(&mut loads, Some(0));
+        assert!(
+            loads.is_empty(),
+            "plain navigation needs no overlay batch or diagnostic ticket"
+        );
+    }
+
+    #[test]
+    fn compare_processing_preserves_parser_diagnostics_for_cached_current() {
+        use super::*;
+        let path = std::env::temp_dir().join(format!(
+            "rexafs-compare-warnings-{}.xmu",
+            std::process::id()
+        ));
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/projects/data/cu_150k.xmu");
+        let mut text = std::fs::read_to_string(fixture).unwrap();
+        text.push_str("\nnot a numeric data row\n");
+        std::fs::write(&path, text).unwrap();
+        let request = CompareLoad {
+            ix: 0,
+            fingerprint: 0,
+            source: Ok(path.clone()),
+            params: Default::default(),
+        };
+        let (_, _, result) = request.process();
+        let (_, raw) = result.unwrap();
+        let warnings = raw.unwrap().diagnostics.warnings();
+        assert!(!warnings.is_empty());
+        assert!(warnings.iter().any(|w| w.contains("malformed")));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn derived_only_index_shift_keeps_batch_fit_and_active_filter() {
+        use super::{CatalogBindings, IndexChange};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+        let mut generations = [10; 6];
+        let mut running = [true; 5];
+        let batch = Arc::new(AtomicBool::new(false));
+        let mut cancellations = [
+            Some(Arc::new(AtomicBool::new(false))),
+            Some(batch.clone()),
+            None,
+            Some(Arc::new(AtomicBool::new(false))),
+        ];
+        let matches = Arc::new(vec![2, 5, 8]);
+        let mut filtered = Some(matches.clone());
+        CatalogBindings {
+            generations: generations.each_mut(),
+            running: running.each_mut(),
+            cancellations: cancellations.each_mut(),
+            filtered: &mut filtered,
+        }
+        .invalidate(IndexChange::DerivedOnly);
+        assert_eq!(generations, [10; 6]);
+        assert_eq!(running, [true; 5]);
+        assert!(!batch.load(Ordering::Relaxed));
+        assert!(cancellations[1].is_some());
+        assert!(Arc::ptr_eq(filtered.as_ref().unwrap(), &matches));
+        // A genuine catalog swap still retires all catalog jobs and filtering.
+        CatalogBindings {
+            generations: generations.each_mut(),
+            running: running.each_mut(),
+            cancellations: cancellations.each_mut(),
+            filtered: &mut filtered,
+        }
+        .invalidate(IndexChange::Catalog);
+        assert_eq!(generations, [11; 6]);
+        assert_eq!(running, [false; 5]);
+        assert!(batch.load(Ordering::Relaxed));
+        assert!(filtered.is_none());
+    }
+
+    #[test]
+    fn reopen_marked_channels_and_result_loads_comparison_and_lcf_cache() {
+        use super::*;
+        use crate::group_identity::{GroupId, GroupRegistry};
+        use crate::params::{ImportConfig, Quantity};
+        let root = std::env::temp_dir().join(format!(
+            "rexafs-reopen-compare-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let source = root.join("multi.dat");
+        std::fs::copy(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../rexafs/tests/testfiles/Ru_QAS.dat"),
+            &source,
+        )
+        .unwrap();
+        let source = source.canonicalize().unwrap();
+        let mut project = ProjectFile {
+            version: PROJECT_VERSION,
+            spectrum_file: Some(source.clone()),
+            raw_files: vec![source.clone()],
+            ..Default::default()
+        };
+        project.derived = [DetectionMode::Transmission, DetectionMode::Reference]
+            .into_iter()
+            .enumerate()
+            .map(|(i, mode)| DerivedSpectrum {
+                id: i as u64 + 1,
+                source: Some(source.clone()),
+                params: Some(PipelineParams {
+                    import: ImportConfig {
+                        mode,
+                        ..Default::default()
+                    },
+                    fft_kweight: Some(2.),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .collect();
+        project.derived.push(DerivedSpectrum {
+            id: 3,
+            group_id: Some(GroupId::new_result()),
+            quantity: Quantity::NormalizedDifference,
+            energy: vec![22000., 22001., 22002.],
+            mu: vec![0.1, 0.2, 0.1],
+            ..Default::default()
+        });
+        project.assign_group_ids();
+        let registry = GroupRegistry::rebuild(
+            [(0, source.clone(), DetectionMode::Auto)],
+            &mut project.derived,
+            &mut project.source_groups,
+            &project.source_origins,
+        );
+        project.group_state.capture(
+            &registry,
+            &BTreeSet::from([DERIVED_BASE, DERIVED_BASE + 1, DERIVED_BASE + 2]),
+            &BTreeSet::new(),
+            &BTreeMap::from([(
+                0,
+                PipelineParams {
+                    fft_kweight: Some(1.),
+                    ..Default::default()
+                },
+            )]),
+            Some(0),
+        );
+        let path = root.join("session.rxs");
+        crate::project::save(&path, &project).unwrap();
+        let mut reopened = crate::project::tests::load(&path).unwrap();
+        reopened.assign_group_ids();
+        let mut catalog = Catalog::default();
+        catalog.extend(vec![crate::catalog::FileMeta {
+            dir: Arc::from(source.parent().unwrap().to_str().unwrap()),
+            name: "multi.dat".into(),
+            size: 1,
+        }]);
+        let registry = GroupRegistry::from_sources(reopened.source_groups.clone());
+        registry.replace_catalog(GroupRegistry::prepare_catalog(
+            &catalog,
+            &reopened.source_groups,
+        ));
+        registry.replace_derived(&reopened.derived);
+        let selection = registry.indices(&reopened.group_state.marked);
+        let overrides = reopened.group_state.resolved_overrides(&registry);
+        let active = registry
+            .index(reopened.group_state.current.as_ref().unwrap())
+            .unwrap();
+        let mut cache = LruCache::new(NonZeroUsize::new(16).unwrap());
+        // Reopening first loads the active file. The remaining marks require the
+        // same comparison scheduling used by restore/import completion.
+        for request in missing_compare_loads(
+            &catalog,
+            &reopened.derived,
+            &reopened.params,
+            &overrides,
+            &[active],
+            &cache,
+        ) {
+            let (ix, fingerprint, result) = request.process();
+            cache.put((ix, fingerprint), Arc::new(result.unwrap().0));
+        }
+        let indices: Vec<_> = selection.iter().copied().chain([active]).collect();
+        let missing = missing_compare_loads(
+            &catalog,
+            &reopened.derived,
+            &reopened.params,
+            &overrides,
+            &indices,
+            &cache,
+        );
+        assert_eq!(missing.len(), 3);
+        let fingerprints: BTreeMap<_, _> = missing.iter().map(|r| (r.ix, r.fingerprint)).collect();
+        for request in missing {
+            let (ix, fingerprint, result) = request.process();
+            cache.put((ix, fingerprint), Arc::new(result.unwrap().0));
+        }
+        assert!(
+            missing_compare_loads(
+                &catalog,
+                &reopened.derived,
+                &reopened.params,
+                &overrides,
+                &indices,
+                &cache
+            )
+            .is_empty()
+        );
+        let standards = cached_marked_spectra(
+            &selection,
+            &cache,
+            |ix| fingerprints[&ix],
+            |ix| format!("{ix}"),
+        );
+        assert_eq!(standards.len(), 3);
+        assert!(
+            standards
+                .iter()
+                .all(|(_, sp)| sp.raw_mu.as_ref().is_some_and(|mu| !mu.is_empty()))
+        );
+        assert_eq!(
+            cache
+                .peek(&(active, overrides[&active].fingerprint()))
+                .unwrap()
+                .raw_mu
+                .as_ref()
+                .unwrap()
+                .len(),
+            standards[0].1.raw_mu.as_ref().unwrap().len()
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn mapping_edit_preparation_skips_noops_and_rejects_partial_edits() {
@@ -1681,21 +2235,33 @@ mod override_tests {
     fn scan_fingerprint_tracks_overrides_inside_the_range_only() {
         let global = PipelineParams::default();
         let mut overrides = BTreeMap::new();
-        let base = scan_fingerprint(&global, &overrides, 100, 50);
-        assert_eq!(base, scan_fingerprint(&global, &overrides, 100, 50));
+        let base = scan_fingerprint(&global, &overrides, &Default::default(), 100, 50);
+        assert_eq!(
+            base,
+            scan_fingerprint(&global, &overrides, &Default::default(), 100, 50)
+        );
 
         let ov = PipelineParams {
             rbkg: Some(1.3),
             ..Default::default()
         };
         overrides.insert(10, ov.clone()); // outside [100, 150)
-        assert_eq!(base, scan_fingerprint(&global, &overrides, 100, 50));
+        assert_eq!(
+            base,
+            scan_fingerprint(&global, &overrides, &Default::default(), 100, 50)
+        );
 
         overrides.insert(120, ov); // inside
-        assert_ne!(base, scan_fingerprint(&global, &overrides, 100, 50));
+        assert_ne!(
+            base,
+            scan_fingerprint(&global, &overrides, &Default::default(), 100, 50)
+        );
 
         overrides.remove(&120);
-        assert_eq!(base, scan_fingerprint(&global, &overrides, 100, 50));
+        assert_eq!(
+            base,
+            scan_fingerprint(&global, &overrides, &Default::default(), 100, 50)
+        );
     }
 }
 
@@ -1782,6 +2348,121 @@ mod keybinding_tests {
             .iter()
             .find(|binding| binding.action().as_any().is::<A>())
             .expect("action must have a key binding")
+    }
+
+    #[test]
+    fn project_and_import_shortcuts_are_distinct_and_yield_to_routing_card() {
+        let bindings = studio_keybindings();
+        let open = binding::<super::OpenProject>(&bindings);
+        let import = binding::<super::ImportPaths>(&bindings);
+        assert_eq!(
+            open.keystrokes(),
+            KeyBinding::new("cmd-o", super::OpenProject, None).keystrokes()
+        );
+        assert_eq!(
+            import.keystrokes(),
+            KeyBinding::new("cmd-shift-o", super::ImportPaths, None).keystrokes()
+        );
+        let text_bindings = crate::widgets::text_input::text_input_keybindings();
+        for target in [open, import] {
+            assert_eq!(
+                bindings
+                    .iter()
+                    .chain(text_bindings.iter())
+                    .filter(|b| b.keystrokes() == target.keystrokes())
+                    .count(),
+                1
+            );
+            let predicate = target.predicate().unwrap();
+            assert!(
+                predicate
+                    .depth_of(&[KeyContext::parse("Studio Explore").unwrap()])
+                    .is_some()
+            );
+            assert!(
+                predicate
+                    .depth_of(&[KeyContext::parse("PathRoute").unwrap()])
+                    .is_none()
+            );
+        }
+        assert!(
+            binding::<super::DismissPathRoute>(&bindings)
+                .predicate()
+                .unwrap()
+                .depth_of(&[KeyContext::parse("PathRoute").unwrap()])
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn list_keys_yield_to_text_editing_and_escape_preserves_marks() {
+        use super::{
+            ClearCompare, CollapseFocusedStack, ExpandFocusedStack, InvertGroupMarks,
+            MarkAllGroups, NavDown, NavExtendDown, NavExtendUp, NavUp, ToggleFocusedMark,
+        };
+        let bindings = studio_keybindings();
+        let list = KeyContext::parse("DataPanel").unwrap();
+        let input = KeyContext::parse("TextInput").unwrap();
+        for b in [
+            binding::<NavUp>(&bindings),
+            binding::<NavDown>(&bindings),
+            binding::<NavExtendUp>(&bindings),
+            binding::<NavExtendDown>(&bindings),
+            binding::<MarkAllGroups>(&bindings),
+            binding::<ClearCompare>(&bindings),
+            binding::<InvertGroupMarks>(&bindings),
+            binding::<ToggleFocusedMark>(&bindings),
+            binding::<CollapseFocusedStack>(&bindings),
+            binding::<ExpandFocusedStack>(&bindings),
+        ] {
+            let p = b.predicate().unwrap();
+            assert!(p.depth_of(std::slice::from_ref(&list)).is_some());
+            assert!(p.depth_of(&[list.clone(), input.clone()]).is_none());
+        }
+        assert_eq!(
+            bindings
+                .iter()
+                .filter(|b| b.action().as_any().is::<ClearCompare>())
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn group_rename_keys_belong_only_to_the_inline_editor() {
+        let bindings = studio_keybindings();
+        let list = KeyContext::parse("DataPanel").unwrap();
+        let rename = KeyContext::parse("GroupRename").unwrap();
+        let input = KeyContext::parse("TextInput").unwrap();
+        let start = binding::<super::RenameGroup>(&bindings)
+            .predicate()
+            .unwrap();
+        assert!(start.depth_of(std::slice::from_ref(&list)).is_some());
+        assert!(
+            start
+                .depth_of(&[list.clone(), rename.clone(), input.clone()])
+                .is_none()
+        );
+        let commit = binding::<super::CommitGroupRename>(&bindings)
+            .predicate()
+            .unwrap();
+        assert!(commit.depth_of(&[list, rename, input.clone()]).is_some());
+        assert!(commit.depth_of(&[input]).is_none());
+    }
+
+    #[test]
+    fn filter_exit_keys_only_match_the_filter_editor() {
+        let bindings = studio_keybindings();
+        let filter = KeyContext::parse("GroupFilter").unwrap();
+        let input = KeyContext::parse("TextInput").unwrap();
+        for binding in [
+            binding::<super::LeaveFilter>(&bindings),
+            binding::<super::EscapeFilter>(&bindings),
+        ] {
+            let p = binding.predicate().unwrap();
+            assert_eq!(p.depth_of(&[filter.clone(), input.clone()]), Some(2));
+            assert!(p.depth_of(std::slice::from_ref(&input)).is_none());
+        }
     }
 
     #[test]
@@ -1908,6 +2589,188 @@ fn default_for(param: PathParam) -> f64 {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum IndexChange {
+    DerivedOnly,
+    Catalog,
+}
+
+/// Catalog jobs and filters share the catalog's index lifetime. Keeping their
+/// invalidation together makes the derived-only boundary testable without GPUI.
+struct CatalogBindings<'a> {
+    generations: [&'a mut u64; 6],
+    running: [&'a mut bool; 5],
+    cancellations: [&'a mut Option<Arc<AtomicBool>>; 4],
+    filtered: &'a mut Option<Arc<Vec<usize>>>,
+}
+
+impl CatalogBindings<'_> {
+    fn remove(
+        self,
+        inputs: &[BTreeSet<crate::group_identity::GroupId>; 5],
+        removed: &BTreeSet<crate::group_identity::GroupId>,
+    ) -> [bool; 5] {
+        let [operando, batch, merge, fit, lcf, _] = self.generations;
+        let [oc, bc, mc, lc] = self.cancellations;
+        let mut interrupted = [false; 5];
+        for (i, ((generation, running), cancel)) in [operando, batch, merge, fit, lcf]
+            .into_iter()
+            .zip(self.running)
+            .zip([Some(oc), Some(bc), Some(mc), None, Some(lc)])
+            .enumerate()
+        {
+            if !inputs[i].is_disjoint(removed) {
+                interrupted[i] = retire_job(generation, running, cancel);
+            }
+        }
+        interrupted
+    }
+
+    fn invalidate(self, change: IndexChange) {
+        if change == IndexChange::DerivedOnly {
+            return;
+        }
+        let [operando, batch, merge, fit, lcf, filter] = self.generations;
+        for generation in [operando, batch, merge, fit, lcf] {
+            *generation += 1;
+        }
+        if change == IndexChange::Catalog {
+            *filter += 1;
+            *self.filtered = None;
+        }
+        for running in self.running {
+            *running = false;
+        }
+        for cancellation in self.cancellations {
+            if let Some(cancel) = cancellation.take() {
+                cancel.store(true, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+fn evict_group_keys<T>(
+    cache: &mut LruCache<(usize, u64), T>,
+    removed: &BTreeSet<usize>,
+    derived_changed: bool,
+) {
+    let keys: Vec<_> = cache
+        .iter()
+        .filter(|(key, _)| removed.contains(&key.0) || (derived_changed && key.0 >= DERIVED_BASE))
+        .map(|(key, _)| *key)
+        .collect();
+    for key in keys {
+        cache.pop(&key);
+    }
+}
+
+fn finish_interrupted_results(
+    batch: Option<&mut BatchFitData>,
+    lcf: Option<&mut SeriesLcf>,
+    interrupted: [bool; 5],
+) {
+    if interrupted[1]
+        && let Some(batch) = batch
+    {
+        batch.cancelled = true;
+        batch.rows.sort_by_key(|row| row.frame);
+    }
+    if interrupted[4]
+        && let Some(lcf) = lcf
+    {
+        lcf.cancelled = true;
+    }
+}
+
+/// A window-independent comparison request, shared by reopen and normal marks.
+struct CompareLoad {
+    ix: usize,
+    fingerprint: u64,
+    source: Result<PathBuf, DerivedSpectrum>,
+    params: PipelineParams,
+}
+
+impl CompareLoad {
+    fn process(&self) -> (usize, u64, GroupLoadResult) {
+        let result = (|| {
+            let (path, derived) = match &self.source {
+                Ok(path) => (path.as_path(), None),
+                Err(group) => {
+                    if group.processing_block_reason().is_some() {
+                        return group.for_display(&self.params).map(|sp| (sp, None));
+                    }
+                    (std::path::Path::new(""), Some(group))
+                }
+            };
+            let raw = load_group_raw_with_diagnostics(path, &self.params, derived)?;
+            let sp = process_arrays(raw.energy.clone(), raw.mu.clone(), &self.params)?;
+            Ok((sp, Some(Arc::new(raw))))
+        })();
+        (self.ix, self.fingerprint, result)
+    }
+}
+
+fn exclude_pending_current(loads: &mut Vec<CompareLoad>, pending: Option<usize>) {
+    loads.retain(|load| Some(load.ix) != pending);
+}
+
+fn cached_marked_indices<'a>(
+    selection: &'a BTreeSet<usize>,
+    cache: &'a LruCache<(usize, u64), Arc<XASSpectrum>>,
+    fingerprint: impl Fn(usize) -> u64 + 'a,
+) -> impl Iterator<Item = usize> + 'a {
+    selection
+        .iter()
+        .copied()
+        .filter(move |&ix| ix != NO_ENTRY && cache.contains(&(ix, fingerprint(ix))))
+}
+
+fn cached_marked_spectra(
+    selection: &BTreeSet<usize>,
+    cache: &LruCache<(usize, u64), Arc<XASSpectrum>>,
+    fingerprint: impl Fn(usize) -> u64,
+    label: impl Fn(usize) -> String,
+) -> Vec<(String, Arc<XASSpectrum>)> {
+    cached_marked_indices(selection, cache, &fingerprint)
+        .filter_map(|ix| {
+            cache
+                .peek(&(ix, fingerprint(ix)))
+                .map(|sp| (label(ix), sp.clone()))
+        })
+        .collect()
+}
+
+fn missing_compare_loads(
+    catalog: &Catalog,
+    derived: &[DerivedSpectrum],
+    params: &PipelineParams,
+    overrides: &BTreeMap<usize, PipelineParams>,
+    indices: &[usize],
+    cache: &LruCache<(usize, u64), Arc<XASSpectrum>>,
+) -> Vec<CompareLoad> {
+    indices
+        .iter()
+        .filter_map(|&ix| {
+            let (source, effective, fingerprint) = if ix >= DERIVED_BASE {
+                let group = derived.get(ix - DERIVED_BASE)?;
+                let effective = group.params.as_ref().unwrap_or(params);
+                (Err(group.clone()), effective, group.fingerprint(effective))
+            } else if ix < catalog.len() {
+                let effective = overrides.get(&ix).unwrap_or(params);
+                (Ok(catalog.path(ix)), effective, effective.fingerprint())
+            } else {
+                return None;
+            };
+            (!cache.contains(&(ix, fingerprint))).then(|| CompareLoad {
+                ix,
+                fingerprint,
+                source,
+                params: effective.clone(),
+            })
+        })
+        .collect()
+}
+
 fn spectrum_status(label: &SharedString, sp: &XASSpectrum) -> SharedString {
     format!(
         "{} · {} points · E0 {:.1} eV",
@@ -1940,15 +2803,10 @@ impl StudioApp {
             }
             true
         });
-        let initial_project = initial_open
-            .as_ref()
-            .filter(|path| crate::project::is_project(path))
-            .cloned();
-        let initial_dir = initial_open.as_ref().filter(|p| p.is_dir()).cloned();
-        let path = if initial_dir.is_some() || initial_project.is_some() {
-            default_data_file()
+        let path = if initial_open.is_some() {
+            PathBuf::new()
         } else {
-            initial_open.unwrap_or_else(default_data_file)
+            default_data_file()
         };
         let label: SharedString = path
             .file_name()
@@ -1986,7 +2844,11 @@ impl StudioApp {
             analysis: shell::tools::AnalysisState::default(),
             journal: shell::journal::JournalState::default(),
             palette: None,
+            path_route: None,
+            pending_routed_import: VecDeque::new(),
             inspector_scroll: gpui::ScrollHandle::new(),
+            group_registry: Default::default(),
+            group_state: Default::default(),
             frozen: BTreeSet::new(),
             data_panel_open: true,
             context_panel_open: true,
@@ -1997,26 +2859,32 @@ impl StudioApp {
             verify_running: false,
             selected: None,
             selection: BTreeSet::new(),
+            focus_group: None,
+            group_menu: None,
+            group_rename: None,
+            mark_anchor: None,
             derived: Vec::new(),
             next_derived_id: 1,
             pending_derived: None,
             compare_gen: 0,
             compare_running: false,
+            plot_coverage: Default::default(),
             view: ViewOptions::default(),
             view_offset_field: None,
             filter_input: None,
             filter_text: String::new(),
+            filter_reveal: None,
+            reveal_current: None,
             filtered: None,
             filter_gen: 0,
             root_focus: cx.focus_handle(),
             data_focus: cx.focus_handle(),
             operando_focus: cx.focus_handle(),
             adv_open: [false; 4],
-            roi_input: None,
             import_preview: None,
+            import_editor: None,
             import_preview_error: "".into(),
             import_preview_gen: 0,
-            open_import_role: None,
             open_enum: None,
             param_menu: None,
             param_context_menu: None,
@@ -2044,6 +2912,7 @@ impl StudioApp {
             spectrum_path: path.clone(),
             spectrum_fingerprint: 0,
             spectrum_group: None,
+            standalone_source: None,
             spectrum_quantity: crate::params::Quantity::RawMu,
             spectrum: None,
             spectrum_label: label.clone(),
@@ -2054,10 +2923,9 @@ impl StudioApp {
             legend_entries: Vec::new(),
             mixed_overlay_weight: None,
             maximized: None,
-            data_tab: DataTab::Files,
             file_scroll: UniformListScrollHandle::new(),
-            derived_scroll: UniformListScrollHandle::new(),
-            scan_scroll: UniformListScrollHandle::new(),
+            expanded_sources: BTreeMap::new(),
+            groups_resize: None,
             expanded_scan: None,
             active_scan: None,
             operando: None,
@@ -2065,6 +2933,7 @@ impl StudioApp {
             operando_gen: 0,
             operando_running: false,
             operando_cancel: None,
+            job_inputs: Default::default(),
             series_trend: TrendSource::E0,
             series_lcf: None,
             lcf_running: false,
@@ -2122,6 +2991,13 @@ impl StudioApp {
             merge_cancel: None,
             status: "loading...".into(),
             job_errors: Vec::new(),
+            parser_evidence: Default::default(),
+            imports: Default::default(),
+            intake: Default::default(),
+            intake_cancel: None,
+            problems_batch: None,
+            problems_page: 0,
+            group_diagnostics: Default::default(),
             problems_open: false,
             card_px: BTreeMap::new(),
             viewport_w: 1440.0,
@@ -2172,27 +3048,9 @@ impl StudioApp {
         })
         .detach();
         app.filter_input = Some(filter_input);
-        let roi_input = cx.new(|cx| TextInput::new("e.g. 4 or 4-7", "", theme, cx));
-        cx.subscribe(&roi_input, |this: &mut Self, _input, event, cx| {
-            let InputEvent::Committed(text) = event else {
-                return;
-            };
-            let trimmed = text.trim();
-            this.edit_parameters("Set fluorescence ROI columns".into(), cx, |params| {
-                params.import.fluor_cols = if trimmed.is_empty() {
-                    None
-                } else {
-                    Some(parse_cols(trimmed).ok_or_else(|| {
-                        anyhow::anyhow!("invalid ROI columns: '{trimmed}' — expected e.g. 4 or 4-7")
-                    })?)
-                };
-                Ok(())
-            });
-            cx.notify();
-        })
-        .detach();
-        app.roi_input = Some(roi_input);
-        app.update_import_preview(cx);
+        if initial_open.is_none() {
+            app.update_import_preview(cx);
+        }
         // Scripted launches: REXAFS_STRUCTURE_SOURCE=builtin|cif|mp|amcsd|cod,
         // REXAFS_IMPORT_CIF=<file>, REXAFS_SETTINGS=<settings.json>.
         if let Ok(src) = crate::settings::env_var("STRUCTURE_SOURCE") {
@@ -2217,8 +3075,8 @@ impl StudioApp {
         if let Ok(file) = crate::settings::env_var("IMPORT_CIF") {
             app.structure_import_cif_path(PathBuf::from(file), cx);
         }
-        if let Some(path) = initial_project {
-            app.load_project_path(path, cx);
+        if let Some(path) = initial_open {
+            app.route_paths(vec![path], false, cx);
             return app;
         }
         match process_file(&path, &app.params) {
@@ -2231,9 +3089,6 @@ impl StudioApp {
                 app.record_job_error(path.display().to_string(), e.to_string());
             }
         }
-        if let Some(dir) = initial_dir {
-            app.scan_folder(dir, cx);
-        }
         app
     }
 
@@ -2245,6 +3100,7 @@ impl StudioApp {
         push_problem(
             &mut self.job_errors,
             JobError {
+                batch: None,
                 severity: ProblemSeverity::Error,
                 label: label.into(),
                 message: message.into(),
@@ -2252,13 +3108,88 @@ impl StudioApp {
         );
     }
 
+    fn intake_origin(
+        &self,
+        ix: usize,
+        path: &std::path::Path,
+    ) -> Option<import_state::IntakeOrigin> {
+        self.peek_group_id(ix)
+            .and_then(|group| self.intake.origin(path, &group))
+    }
+
     fn record_source_warnings(
         &mut self,
+        ix: usize,
+        origin: Option<&import_state::IntakeOrigin>,
         path: &std::path::Path,
         diagnostics: &crate::params::ParserDiagnostics,
+        declared_edge: Option<crate::source_evidence::DeclaredEdge>,
+        channel: DetectionMode,
     ) {
+        if let Some(group) = self.group_id(ix) {
+            self.parser_evidence.insert(
+                group,
+                crate::source_evidence::ParserRecord {
+                    path: path.to_path_buf(),
+                    channel,
+                    mapping_revision: crate::import_recipes::mapping_revision(
+                        &self.effective_params(ix).import,
+                    ),
+                    diagnostics: diagnostics.clone(),
+                    declared_edge,
+                },
+            );
+        }
         for message in diagnostics.warnings() {
-            push_problem(&mut self.job_errors, JobError::warning(path, message));
+            if let Some(origin) = origin.filter(|o| self.intake.outcome(o).is_some()) {
+                if let Some(outcome) = self.intake.outcome(origin)
+                    && !outcome.warnings.contains(&message)
+                {
+                    outcome.warnings.push(message.clone());
+                }
+                self.record_intake_problem(origin.batch, path, message, ProblemSeverity::Warning);
+            } else {
+                push_problem(&mut self.job_errors, JobError::warning(path, message));
+            }
+        }
+    }
+
+    fn saved_parser_record(&self, ix: usize) -> Option<&crate::source_evidence::ParserRecord> {
+        self.parser_evidence
+            .get(&self.peek_group_id(ix)?)
+            .filter(|record| record.matches(&self.effective_params(ix).import))
+    }
+
+    fn group_declared_edge(&self, ix: usize) -> Option<crate::source_evidence::DeclaredEdge> {
+        if let Some(group) = ix
+            .checked_sub(DERIVED_BASE)
+            .and_then(|i| self.derived.get(i))
+            && group.source.is_none()
+        {
+            return group.declared_edge.clone();
+        }
+        self.raw_cache
+            .peek(&(ix, self.effective_params(ix).raw_fingerprint()))
+            .and_then(|raw| raw.declared_edge.clone())
+            .or_else(|| {
+                self.saved_parser_record(ix)
+                    .and_then(|record| record.declared_edge.clone())
+            })
+    }
+
+    fn record_source_error(
+        &mut self,
+        origin: Option<&import_state::IntakeOrigin>,
+        label: String,
+        message: String,
+    ) {
+        if let Some(origin) = origin.filter(|o| self.intake.outcome(o).is_some()) {
+            if let Some(outcome) = self.intake.outcome(origin) {
+                outcome.failed = Some(message.clone());
+            }
+            self.record_intake_problem(origin.batch, &origin.path, message, ProblemSeverity::Error);
+        } else {
+            self.record_job_error(label, message);
         }
     }
 
@@ -2283,7 +3214,9 @@ impl StudioApp {
     }
 
     fn valid_group_index(&self, ix: usize) -> bool {
-        ix < self.catalog.len() || (ix >= DERIVED_BASE && ix - DERIVED_BASE < self.derived.len())
+        !self.group_registry.index_excluded(ix)
+            && (ix < self.catalog.len()
+                || (ix >= DERIVED_BASE && ix - DERIVED_BASE < self.derived.len()))
     }
 
     fn custom_params(&self, ix: usize) -> Option<&PipelineParams> {
@@ -2399,18 +3332,6 @@ impl StudioApp {
             let value = param_field_value(*key, &params);
             field.update(cx, |f, cx| f.set_value(value, cx));
         }
-        if let Some(roi) = &self.roi_input {
-            let text = params
-                .import
-                .fluor_cols
-                .as_deref()
-                .unwrap_or_default()
-                .iter()
-                .map(|c| c.to_string())
-                .collect::<Vec<_>>()
-                .join(",");
-            roi.update(cx, |i, cx| i.set_text(text, cx));
-        }
     }
 
     /// Attach path-keyed overrides from a loaded project to the freshly
@@ -2443,6 +3364,11 @@ impl StudioApp {
     }
 
     fn restore_project_selection(&mut self, cx: &mut Context<Self>) {
+        self.restore_active_project_group(cx);
+        self.ensure_compare_loaded(cx);
+    }
+
+    fn restore_active_project_group(&mut self, cx: &mut Context<Self>) {
         if let Some(id) = self.pending_derived.take() {
             if let Some(i) = self.derived.iter().position(|d| d.id == id) {
                 self.select_entry(DERIVED_BASE + i, cx);
@@ -2450,6 +3376,9 @@ impl StudioApp {
             }
         }
         let Some(path) = self.pending_project_spectrum.take() else {
+            if let Some(ix) = self.selected {
+                self.select_entry(ix, cx);
+            }
             return;
         };
         if let Some(ix) = self.catalog.find_by_path(&path) {
@@ -2536,34 +3465,321 @@ impl StudioApp {
             .is_some_and(|batch| batch.model_fingerprint != self.fit_model_fingerprint())
     }
 
-    /// Reset every state that is indexed by the current catalog before a new
-    /// folder starts streaming. Generation bumps also make old async arrivals
-    /// harmless while their receivers/workers wind down.
-    fn reset_catalog_state(&mut self, cx: &mut Context<Self>) {
+    fn standalone_path(&self) -> Option<&std::path::Path> {
+        self.standalone_source
+            .as_ref()
+            .filter(|(_, _, id)| self.catalog.is_empty() && !self.group_registry.is_excluded(id))
+            .map(|(path, _, _)| path.as_path())
+    }
+
+    fn peek_group_id(&self, ix: usize) -> Option<crate::group_identity::GroupId> {
+        if self.group_registry.index_excluded(ix) {
+            return None;
+        }
+        if ix == NO_ENTRY {
+            return self
+                .standalone_source
+                .as_ref()
+                .filter(|(_, _, id)| !self.group_registry.is_excluded(id))
+                .map(|(_, _, id)| id.clone());
+        }
+        self.group_registry.id(ix).or_else(|| {
+            (ix < self.catalog.len()).then(|| {
+                self.group_registry.peek_source(
+                    &self.catalog.path(ix),
+                    self.effective_params(ix).import.mode,
+                    &self.project_source_origins,
+                )
+            })
+        })
+    }
+
+    /// Materialize a durable source identity only when a caller references it.
+    fn group_id(&self, ix: usize) -> Option<crate::group_identity::GroupId> {
+        if self.group_registry.index_excluded(ix) {
+            return None;
+        }
+        if ix == NO_ENTRY {
+            return self.peek_group_id(ix);
+        }
+        self.group_registry.id(ix).or_else(|| {
+            (ix < self.catalog.len()).then(|| {
+                self.group_registry.register_source(
+                    Some(ix),
+                    self.catalog.path(ix),
+                    self.effective_params(ix).import.mode,
+                    &self.project_source_origins,
+                )
+            })
+        })
+    }
+
+    fn standalone_group_id(&self, path: &std::path::Path) -> crate::group_identity::GroupId {
+        self.group_registry.register_source(
+            None,
+            path.canonicalize().unwrap_or_else(|_| path.to_path_buf()),
+            self.params.import.mode,
+            &self.project_source_origins,
+        )
+    }
+
+    fn capture_group_state(&self, state: &mut crate::group_identity::GroupState) {
+        for ix in self
+            .selection
+            .iter()
+            .chain(&self.frozen)
+            .chain(self.overrides.keys())
+            .copied()
+            .chain(self.selected)
+        {
+            self.group_id(ix);
+        }
+        state.capture(
+            &self.group_registry,
+            &self.selection,
+            &self.frozen,
+            &self.overrides,
+            self.selected,
+        );
+        if let Some((_, _, id)) = &self.standalone_source {
+            if self.selection.contains(&NO_ENTRY) {
+                state.marked.insert(id.clone());
+            } else if self.group_registry.index(id).is_none() {
+                state.marked.remove(id);
+            }
+            state.capture_standalone_lock(
+                &self.group_registry,
+                id,
+                self.frozen.contains(&NO_ENTRY),
+            );
+            if self.current_group_index() == Some(NO_ENTRY) {
+                state.current = Some(id.clone());
+            }
+        }
+    }
+
+    fn capture_groups(&mut self) -> group_rows::InteractionIds {
+        let interaction = group_rows::InteractionIds::capture(
+            [self.focus_group, self.mark_anchor, self.reveal_current],
+            |ix| self.group_id(ix),
+        );
+        let mut state = std::mem::take(&mut self.group_state);
+        self.capture_group_state(&mut state);
+        self.group_state = state;
+        interaction
+    }
+
+    fn resolve_interaction(&mut self, interaction: group_rows::InteractionIds) {
+        [self.focus_group, self.mark_anchor, self.reveal_current] = interaction.resolve(|id| {
+            self.group_registry.index(id).or_else(|| {
+                self.standalone_path()
+                    .and(self.standalone_source.as_ref())
+                    .filter(|(_, _, standalone)| standalone == id)
+                    .map(|_| NO_ENTRY)
+            })
+        });
+    }
+
+    fn resolve_group_state(&mut self) {
+        self.selection = self.group_registry.indices(&self.group_state.marked);
+        self.frozen = self.group_registry.indices(&self.group_state.frozen);
+        self.overrides = self.group_state.resolved_overrides(&self.group_registry);
+        self.selected = self
+            .group_state
+            .current
+            .as_ref()
+            .and_then(|id| self.group_registry.index(id));
+        if let Some((_, _, id)) = self
+            .standalone_source
+            .as_ref()
+            .filter(|(_, _, id)| self.catalog.is_empty() && !self.group_registry.is_excluded(id))
+        {
+            if self.group_state.marked.contains(id) {
+                self.selection.insert(NO_ENTRY);
+            }
+            shell::groups_panel::restore_standalone_lock(&mut self.frozen, &self.group_state, id);
+        }
+        self.migrate_catalog_standalone();
+    }
+
+    /// Central adapter for derived insert/remove/reorder. Catalog indices did
+    /// not move: catalog jobs, filters, thumbnails and caches remain valid.
+    fn rekey_after_catalog_change(&mut self) {
+        let interaction = self.capture_groups();
+        self.group_registry.reserve_groups(&self.derived);
+        for group in &mut self.derived {
+            self.group_registry
+                .assign_group(group, &self.project_source_origins);
+        }
+        for group in &self.derived {
+            if let Some(id) = &group.group_id {
+                self.group_state
+                    .colors
+                    .entry(id.clone())
+                    .or_insert_with(|| group_rows::color_index(id) as u8);
+            }
+        }
+        if self.group_registry.replace_derived(&self.derived) {
+            self.invalidate_index_bindings(IndexChange::DerivedOnly);
+        }
+        self.resolve_group_state();
+        self.resolve_interaction(interaction);
+    }
+
+    fn invalidate_index_bindings(&mut self, change: IndexChange) {
         self.tools.invalidate_bindings();
-        self.catalog_gen += 1;
         self.generation += 1;
         self.compare_gen += 1;
-        self.operando_gen += 1;
-        self.batch_gen += 1;
-        self.merge_gen += 1;
-        if let Some(cancel) = self.operando_cancel.take() {
+        self.load_running = false;
+        self.compare_running = false;
+        if change == IndexChange::Catalog {
+            finish_interrupted_results(
+                self.batch_fit.as_mut(),
+                self.series_lcf.as_mut(),
+                [false, self.batch_running, false, false, self.lcf_running],
+            );
+        }
+        CatalogBindings {
+            generations: [
+                &mut self.operando_gen,
+                &mut self.batch_gen,
+                &mut self.merge_gen,
+                &mut self.fit_gen,
+                &mut self.lcf_gen,
+                &mut self.filter_gen,
+            ],
+            running: [
+                &mut self.operando_running,
+                &mut self.batch_running,
+                &mut self.merge_running,
+                &mut self.fit_running,
+                &mut self.lcf_running,
+            ],
+            cancellations: [
+                &mut self.operando_cancel,
+                &mut self.batch_cancel,
+                &mut self.merge_cancel,
+                &mut self.lcf_cancel,
+            ],
+            filtered: &mut self.filtered,
+        }
+        .invalidate(change);
+        if change == IndexChange::Catalog {
+            self.cache.clear();
+            self.raw_cache.clear();
+            self.thumbs = None;
+        } else {
+            // Only shifted derived slots can now refer to another group.
+            evict_group_keys(&mut self.cache, &BTreeSet::new(), true);
+            evict_group_keys(&mut self.raw_cache, &BTreeSet::new(), true);
+        }
+    }
+
+    /// Retire the standalone adapter once its durable source has a catalog slot.
+    fn migrate_catalog_standalone(&mut self) {
+        if let Some((_, _, id)) = &self.standalone_source
+            && let Some(ix) = self.group_registry.index(id)
+        {
+            shell::groups_panel::migrate_standalone_lock(&mut self.frozen, ix);
+            group_rows::migrate_standalone(
+                &mut self.selection,
+                &mut self.focus_group,
+                &mut self.mark_anchor,
+                &mut self.reveal_current,
+                ix,
+            );
+            if self.selected.is_none()
+                && self
+                    .spectrum_group
+                    .as_ref()
+                    .and_then(|t| t.group_id.as_ref())
+                    == Some(id)
+            {
+                self.selected = Some(ix);
+            }
+            if let Some(target) = &mut self.spectrum_group
+                && target.group_id.as_ref() == Some(id)
+            {
+                target.ix = ix;
+            }
+            self.standalone_source = None;
+            let aliases: Vec<_> = self
+                .cache
+                .iter()
+                .filter(|(key, _)| key.0 == NO_ENTRY)
+                .map(|(key, _)| *key)
+                .collect();
+            for key in aliases {
+                if let Some(sp) = self.cache.pop(&key) {
+                    self.cache.put((ix, key.1), sp);
+                }
+            }
+        }
+    }
+
+    /// Append keeps existing catalog indices and workers, migrating a newly
+    /// cataloged standalone source through its durable identity.
+    fn register_appended_groups(&mut self, catalog_start: usize, derived_start: usize) {
+        self.group_registry
+            .append_catalog(&self.catalog, catalog_start);
+        self.group_registry
+            .append_derived(&self.derived, derived_start);
+        self.migrate_catalog_standalone();
+        let appended = |ix: &usize| {
+            (*ix < DERIVED_BASE && *ix >= catalog_start) || *ix >= DERIVED_BASE + derived_start
+        };
+        self.selection.extend(
+            self.group_registry
+                .indices(&self.group_state.marked)
+                .into_iter()
+                .filter(appended),
+        );
+        self.frozen.extend(
+            self.group_registry
+                .indices(&self.group_state.frozen)
+                .into_iter()
+                .filter(appended),
+        );
+        for (ix, params) in self.group_state.resolved_overrides(&self.group_registry) {
+            if appended(&ix) {
+                self.overrides.entry(ix).or_insert(params);
+            }
+        }
+        if self.selected.is_none() {
+            self.selected = self
+                .group_state
+                .current
+                .as_ref()
+                .and_then(|id| self.group_registry.index(id))
+                .filter(appended);
+        }
+    }
+
+    /// Retire workers and clear catalog presentation before a folder streams.
+    /// Durable state remains pending until its groups resolve again.
+    fn reset_catalog_state(&mut self, cx: &mut Context<Self>) {
+        self.intake.stop();
+        if let Some(cancel) = self.intake_cancel.take() {
             cancel.store(true, Ordering::Relaxed);
         }
-        if let Some(cancel) = self.batch_cancel.take() {
-            cancel.store(true, Ordering::Relaxed);
+        if let Some(id) = self.intake.active {
+            self.intake.finish(id);
         }
-        if let Some(cancel) = self.merge_cancel.take() {
-            cancel.store(true, Ordering::Relaxed);
-        }
+        self.intake.reveal.clear();
+        self.catalog_gen += 1;
+        self.invalidate_index_bindings(IndexChange::Catalog);
+        let interaction = self.capture_groups();
+        self.standalone_source = None;
         self.catalog = Catalog::default();
+        self.group_registry.replace_catalog(Default::default());
+        self.group_registry.replace_derived(&self.derived);
+        self.resolve_group_state();
+        self.resolve_interaction(interaction);
         self.catalog_index_path = None;
         self.verify_running = false;
         self.load_running = false;
         self.compare_running = false;
         self.merge_running = false;
-        self.selected = None;
-        self.selection.clear();
         self.filtered = None;
         self.filter_gen += 1;
         self.filter_text.clear();
@@ -2571,31 +3787,26 @@ impl StudioApp {
             input.update(cx, |input, cx| input.set_text("", cx));
         }
         self.cache.clear();
-        // Overrides are keyed by catalog index; a new catalog orphans them.
         self.raw_cache.clear();
-        self.frozen.clear();
         self.thumbs = None;
         self.stale_plots = None;
-        // Persisted copies live in the project file, keyed by path.
-        self.overrides.clear();
-        self.pending_overrides.clear();
         self.pending_project_spectrum = None;
         self.current_path = PathBuf::new();
         self.spectrum_path = PathBuf::new();
         self.spectrum_fingerprint = 0;
         self.spectrum_group = None;
         self.spectrum = None;
+        self.group_diagnostics = Default::default();
+        self.parser_evidence.clear();
         self.spectrum_label = "no spectrum".into();
         self.import_preview = None;
         self.import_preview_error = "".into();
         self.import_preview_gen += 1;
-        self.open_import_role = None;
         self.quadrants.clear();
         self.quad_bindings.clear();
         self.maximized = None;
         self.file_scroll = UniformListScrollHandle::new();
-        self.derived_scroll = UniformListScrollHandle::new();
-        self.scan_scroll = UniformListScrollHandle::new();
+        self.expanded_sources.clear();
         self.expanded_scan = None;
         self.active_scan = None;
         self.operando = None;
@@ -2610,8 +3821,17 @@ impl StudioApp {
     }
 
     fn cancel_long_jobs(&mut self, cx: &mut Context<Self>) {
+        self.pending_routed_import.clear();
         let mut cancelled = false;
-        if self.catalog.scanning || self.verify_running {
+        self.intake.stop();
+        if let Some(cancel) = &self.intake_cancel {
+            cancel.store(true, Ordering::Relaxed);
+            // Save the accepted source list; reopening must not rediscover the cancelled remainder.
+            self.source_dir = None;
+            self.catalog_index_path = None;
+            cancelled = true;
+        }
+        if (self.catalog.scanning && self.intake_cancel.is_none()) || self.verify_running {
             self.catalog_gen += 1;
             self.catalog.scanning = false;
             self.verify_running = false;
@@ -2779,11 +3999,8 @@ impl StudioApp {
 
     /// Shared lock gate for parameter editors; restore rejected field text too.
     fn refuse_frozen_edit(&mut self, cx: &mut Context<Self>) -> bool {
-        if self
-            .override_target()
-            .is_some_and(|ix| self.frozen.contains(&ix))
-        {
-            self.status = "This group is frozen — thaw it to edit its parameters.".into();
+        if shell::groups_panel::processing_locked(self.current_group_index(), &self.frozen) {
+            self.status = "Processing is locked — unlock it to edit its parameters.".into();
             self.restore_param_field_text(cx);
             cx.notify();
             return true;
@@ -3119,91 +4336,12 @@ impl StudioApp {
         }
     }
 
-    fn import_column_label(preview: Option<&ImportPreview>, column: usize) -> String {
-        preview
-            .and_then(|preview| preview.names.as_ref())
-            .and_then(|names| names.get(column))
-            .map(|name| format!("col {column} · {name}"))
-            .unwrap_or_else(|| format!("col {column}"))
-    }
-
     fn import_role_label(role: ImportRole) -> &'static str {
         match role {
             ImportRole::Energy => "energy",
             ImportRole::I0 => "I0",
             ImportRole::It => "It",
             ImportRole::Ir => "Ir",
-            ImportRole::Fluor => "SDD ROIs",
-            ImportRole::Mu => "mu",
-        }
-    }
-
-    fn import_role_current_label(&self, role: ImportRole) -> String {
-        let preview = self.import_preview.as_ref();
-        let import = &self.ui_params().import;
-        if role == ImportRole::Fluor {
-            return match &import.fluor_cols {
-                Some(columns) if columns.is_empty() => "none".into(),
-                Some(columns) => columns
-                    .iter()
-                    .map(|&column| Self::import_column_label(preview, column))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                None => self.import_role_auto_label(role),
-            };
-        }
-        let manual = match role {
-            ImportRole::Energy => import.energy_col,
-            ImportRole::I0 => import.i0_col,
-            ImportRole::It => import.it_col,
-            ImportRole::Ir => import.ir_col,
-            ImportRole::Mu => import.mu_col,
-            ImportRole::Fluor => unreachable!(),
-        };
-        if let Some(column) = manual {
-            return Self::import_column_label(preview, column);
-        }
-        self.import_role_auto_label(role)
-    }
-
-    fn import_role_auto_label(&self, role: ImportRole) -> String {
-        let preview = self.import_preview.as_ref();
-        if role == ImportRole::Fluor {
-            return preview
-                .map(|preview| {
-                    let columns = preview
-                        .detected
-                        .fluor_cols
-                        .iter()
-                        .map(|&column| Self::import_column_label(Some(preview), column))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    format!("auto ({columns})")
-                })
-                .unwrap_or_else(|| "auto (detecting…)".into());
-        }
-        let resolved = preview.and_then(|preview| match role {
-            ImportRole::Energy => Some(preview.detected.energy_col),
-            ImportRole::I0 => Some(preview.detected.i0_col),
-            ImportRole::It => Some(preview.detected.it_col),
-            ImportRole::Ir => Some(preview.detected.ir_col),
-            ImportRole::Mu => preview.detected.mu_col,
-            ImportRole::Fluor => unreachable!(),
-        });
-        resolved
-            .map(|column| format!("auto ({})", Self::import_column_label(preview, column)))
-            .unwrap_or_else(|| "auto (not found)".into())
-    }
-
-    fn import_role_manual_column(&self, role: ImportRole) -> Option<usize> {
-        let import = &self.ui_params().import;
-        match role {
-            ImportRole::Energy => import.energy_col,
-            ImportRole::I0 => import.i0_col,
-            ImportRole::It => import.it_col,
-            ImportRole::Ir => import.ir_col,
-            ImportRole::Mu => import.mu_col,
-            ImportRole::Fluor => None,
         }
     }
 
@@ -3214,7 +4352,6 @@ impl StudioApp {
         key: Option<ParamKey>,
         cx: &mut Context<Self>,
     ) {
-        self.open_import_role = None;
         self.edit_parameters_keyed(
             key,
             format!("Set {} column = {column:?}", Self::import_role_label(role)),
@@ -3226,36 +4363,12 @@ impl StudioApp {
                     ImportRole::I0 => import.i0_col = column,
                     ImportRole::It => import.it_col = column,
                     ImportRole::Ir => import.ir_col = column,
-                    ImportRole::Mu => import.mu_col = column,
-                    ImportRole::Fluor => {}
                 }
                 Ok(())
             },
         );
     }
 
-    fn toggle_import_fluor(&mut self, column: Option<usize>, cx: &mut Context<Self>) {
-        let auto = self
-            .import_preview
-            .as_ref()
-            .map(|p| p.resolved.fluor_cols.clone());
-        self.edit_parameters(
-            format!("Toggle fluorescence ROI = {column:?}"),
-            cx,
-            |params| {
-                params
-                    .import
-                    .toggle_fluor(column, auto.as_deref())
-                    .map_err(anyhow::Error::msg)
-            },
-        );
-    }
-
-    /// Debounced (~200 ms) recompute of the current spectrum after parameter
-    /// edits; only the latest epoch fires.
-    /// `REXAFS_DEBUG_STATS=1`: once per second print pointer-event rate, paint
-    /// rate, pointer→paint latency and ruviz-gpui's frame/presentation
-    /// statistics for the main stage plot to stderr.
     fn start_debug_stats(cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
             let mut prev_render = 0u64;
@@ -3370,7 +4483,9 @@ impl StudioApp {
     }
 
     fn reprocess_current(&mut self, cx: &mut Context<Self>) {
-        let ix = self.selected.unwrap_or(NO_ENTRY);
+        let Some(ix) = self.current_group_index() else {
+            return;
+        };
         let label: SharedString = self
             .selected
             .map(|selected| self.entry_label(selected).into())
@@ -3393,9 +4508,45 @@ impl StudioApp {
         label: SharedString,
         cx: &mut Context<Self>,
     ) {
+        if ix != NO_ENTRY && !self.valid_group_index(ix) {
+            return;
+        }
+        if ix == NO_ENTRY
+            && (path.as_os_str().is_empty()
+                || self
+                    .group_registry
+                    .is_excluded(&self.standalone_group_id(&path)))
+        {
+            return;
+        }
+        if ix == NO_ENTRY {
+            if self
+                .standalone_source
+                .as_ref()
+                .is_some_and(|(old, _, _)| old != &path)
+            {
+                let keys: Vec<_> = self
+                    .cache
+                    .iter()
+                    .filter(|(key, _)| key.0 == NO_ENTRY)
+                    .map(|(key, _)| *key)
+                    .collect();
+                for key in keys {
+                    self.cache.pop(&key);
+                }
+            }
+            let id = self.standalone_group_id(&path);
+            shell::groups_panel::restore_standalone_lock(&mut self.frozen, &self.group_state, &id);
+            self.standalone_source = Some((path.clone(), label.clone(), id));
+        } else {
+            self.group_id(ix);
+        }
         self.generation += 1;
         let generation = self.generation;
         let key = (ix, self.effective_fingerprint(ix));
+        let diagnostics = self
+            .group_id(ix)
+            .map(|id| self.group_diagnostics.begin(id, key.1));
         self.recompute_last = Some(Instant::now());
         self.recompute_dirty = false;
 
@@ -3405,6 +4556,20 @@ impl StudioApp {
         {
             self.load_running = false;
             let sp = sp.clone();
+            let warnings = self
+                .raw_cache
+                .peek(&(ix, self.effective_params(ix).raw_fingerprint()))
+                .map(|raw| {
+                    raw.diagnostics
+                        .warnings()
+                        .into_iter()
+                        .map(|message| JobError::warning(&path, message))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if let Some(ticket) = &diagnostics {
+                self.group_diagnostics.finish(ticket, warnings);
+            }
             self.set_processed(ix, label, path, key.1, sp, cx);
             cx.notify();
             return;
@@ -3415,6 +4580,7 @@ impl StudioApp {
         cx.notify();
         let raw_key = (ix, self.effective_params(ix).raw_fingerprint());
         let processed_path = path.clone();
+        let intake_origin = self.intake_origin(ix, &path);
         let load = self.process_group_job(ix, path, cx);
         cx.spawn(async move |this, cx| {
             let result = load.await;
@@ -3423,10 +4589,41 @@ impl StudioApp {
                     return; // a newer selection/edit superseded this load
                 }
                 app.load_running = false;
+                // Import can assign a catalog index while a standalone load is
+                // running. Its completion must use the durable source's new slot.
+                let ix = if ix == NO_ENTRY {
+                    app.catalog
+                        .find_by_canonical_path(&processed_path)
+                        .unwrap_or(ix)
+                } else {
+                    ix
+                };
+                let key = (ix, key.1);
+                let raw_key = (ix, raw_key.1);
                 match result {
                     Ok((sp, raw)) => {
+                        if let Some(ticket) = &diagnostics {
+                            let warnings = raw
+                                .as_ref()
+                                .map(|raw| {
+                                    raw.diagnostics
+                                        .warnings()
+                                        .into_iter()
+                                        .map(|message| JobError::warning(&processed_path, message))
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+                            app.group_diagnostics.finish(ticket, warnings);
+                        }
                         if let Some(raw) = raw {
-                            app.record_source_warnings(&processed_path, &raw.diagnostics);
+                            app.record_source_warnings(
+                                ix,
+                                intake_origin.as_ref(),
+                                &processed_path,
+                                &raw.diagnostics,
+                                raw.declared_edge.clone(),
+                                raw.channel,
+                            );
                             if ix != NO_ENTRY {
                                 app.raw_cache.put(raw_key, raw);
                             }
@@ -3444,7 +4641,22 @@ impl StudioApp {
                     }
                     Err(e) => {
                         app.status = format!("failed to process {label}: {e}").into();
-                        app.record_job_error(label.to_string(), e.to_string());
+                        app.record_source_error(
+                            intake_origin.as_ref(),
+                            label.to_string(),
+                            e.to_string(),
+                        );
+                        if let Some(ticket) = &diagnostics {
+                            app.group_diagnostics.finish(
+                                ticket,
+                                vec![JobError {
+                                    batch: None,
+                                    severity: ProblemSeverity::Error,
+                                    label: label.to_string(),
+                                    message: e.to_string(),
+                                }],
+                            );
+                        }
                         // Retain the plot and its identity. Tool readiness rejects
                         // this failed selection even if the old data is present.
                         app.stale_plots = Some(StalePlots {
@@ -3505,6 +4717,12 @@ impl StudioApp {
         sp: Arc<XASSpectrum>,
         cx: &mut Context<Self>,
     ) {
+        if ix == NO_ENTRY {
+            let id = self.standalone_group_id(&path);
+            shell::groups_panel::restore_standalone_lock(&mut self.frozen, &self.group_state, &id);
+            self.standalone_source = Some((path.clone(), label.clone(), id));
+            self.cache.put((ix, fingerprint), sp.clone());
+        }
         self.status = spectrum_status(&label, &sp);
         if ix >= DERIVED_BASE
             && let Some(reason) = self
@@ -3558,14 +4776,6 @@ impl StudioApp {
 
     // ---- operando ----------------------------------------------------------
 
-    fn open_scan(&mut self, scan_ix: usize, cx: &mut Context<Self>) {
-        self.active_scan = Some(scan_ix);
-        self.expanded_scan = Some(scan_ix);
-        self.workspace = Workspace::Operando;
-        self.ensure_operando(cx);
-        cx.notify();
-    }
-
     /// (Re)build the downsampled scan overview if the scan or parameters
     /// changed. Frames are processed in parallel on rayon.
     fn ensure_operando(&mut self, cx: &mut Context<Self>) {
@@ -3577,7 +4787,18 @@ impl StudioApp {
         };
         let scan_start = scan.start;
         let scan_len = scan.len;
-        let fingerprint = scan_fingerprint(&self.params, &self.overrides, scan_start, scan_len);
+        let fingerprint = scan_fingerprint(
+            &self.params,
+            &self.overrides,
+            &self.group_registry,
+            scan_start,
+            scan_len,
+        );
+        if active_scan_indices(&self.group_registry, scan_start, scan_len, 1).is_empty() {
+            self.operando = None;
+            self.operando_plots = None;
+            return;
+        }
         if scan_len == 0
             || self.operando.as_ref().is_some_and(|o| {
                 o.scan == scan_ix && o.scan_len == scan_len && o.fingerprint == fingerprint
@@ -3596,7 +4817,12 @@ impl StudioApp {
         self.operando_cancel = Some(cancel.clone());
         self.operando_running = true;
         // Even sampling across the scan; first and last frames included.
-        let sample_ixs = sample_scan_indices(scan_start, scan_len, MAX_FRAMES);
+        let sample_ixs =
+            active_scan_indices(&self.group_registry, scan_start, scan_len, MAX_FRAMES);
+        self.job_inputs[0] = sample_ixs
+            .iter()
+            .filter_map(|&ix| self.group_id(ix))
+            .collect();
         let frames: Vec<(usize, PathBuf, String)> = sample_ixs
             .iter()
             .map(|&ix| (ix, self.catalog.path(ix), self.catalog.name(ix).to_string()))
@@ -3620,6 +4846,18 @@ impl StudioApp {
         )
         .into();
 
+        let mut diagnostics: BTreeMap<_, _> = frames
+            .iter()
+            .filter_map(|(ix, _, _)| {
+                self.peek_group_id(*ix).map(|id| {
+                    (
+                        *ix,
+                        self.group_diagnostics
+                            .begin(id, self.effective_fingerprint(*ix)),
+                    )
+                })
+            })
+            .collect();
         let job_grid = grid.clone();
         let job_cancel = cancel.clone();
         let job = cx.background_executor().spawn(async move {
@@ -3633,7 +4871,7 @@ impl StudioApp {
                     let result = process_file(path, params)
                         .map_err(|error| error.to_string())
                         .and_then(|sp| frame_sample(&sp, &job_grid));
-                    Some((label.clone(), result))
+                    Some((*ix, label.clone(), result))
                 })
                 .collect::<Vec<_>>()
         });
@@ -3653,7 +4891,22 @@ impl StudioApp {
                 let samples: Vec<Result<FrameSample, String>> = rows
                     .into_iter()
                     .flatten()
-                    .map(|(label, result)| {
+                    .map(|(ix, label, result)| {
+                        if let Some(ticket) = diagnostics.remove(&ix) {
+                            let problems = result
+                                .as_ref()
+                                .err()
+                                .map(|error| {
+                                    vec![JobError {
+                                        batch: None,
+                                        severity: ProblemSeverity::Error,
+                                        label: label.clone(),
+                                        message: error.to_string(),
+                                    }]
+                                })
+                                .unwrap_or_default();
+                            app.group_diagnostics.finish(&ticket, problems);
+                        }
                         result.inspect_err(|error| {
                             app.record_job_error(label, error.clone());
                         })
@@ -3706,6 +4959,7 @@ impl StudioApp {
                 app.operando = Some(OperandoData {
                     scan: scan_ix,
                     scan_len,
+                    sample_frames: sample_ixs.iter().map(|ix| ix - scan_start).collect(),
                     fingerprint,
                     grid,
                     matrix,
@@ -3730,6 +4984,14 @@ impl StudioApp {
                             0
                         }
                     });
+                app.time_pos = surviving_frame(
+                    &app.group_registry,
+                    scan_start,
+                    scan_len,
+                    app.time_pos,
+                    false,
+                )
+                .unwrap_or(0);
                 app.rebuild_operando_plots(cx);
                 app.status = if failed == 0 {
                     "scan overview ready".into()
@@ -3753,7 +5015,7 @@ impl StudioApp {
         };
         let scan_ix = data.scan;
         let scan_len = data.scan_len.min(scan.len);
-        let sample_pos = nearest_sample_pos(self.time_pos, scan_len, data.matrix.len());
+        let sample_pos = data.sample_pos(self.time_pos);
         let cursor_ix = scan.start + self.time_pos.min(scan_len.saturating_sub(1));
         let cursor_fingerprint = self.effective_fingerprint(cursor_ix);
         let exact_row = self
@@ -3785,8 +5047,15 @@ impl StudioApp {
             SeriesSpace::K => (K_AXIS.into(), chik_label(data.kweight)),
             SeriesSpace::R => (R_AXIS.into(), chir_label(data.kweight)),
         };
-        let heatmap =
-            build_heatmap(matrix, grid, data.scan_len, &xlabel, &self.theme).size_px(700, 900);
+        let heatmap_rows = overview_heatmap_rows(
+            matrix,
+            &data.sample_frames,
+            &self.group_registry,
+            scan.start,
+            data.scan_len,
+        );
+        let heatmap = build_heatmap(&heatmap_rows, grid, data.scan_len, &xlabel, &self.theme)
+            .size_px(700, 900);
         let chik = match space {
             SeriesSpace::K => build_frame_chik_source(
                 &data.grid,
@@ -4005,13 +5274,19 @@ impl StudioApp {
         let scan_ix = data.scan;
         let scan_start = scan.start;
         let scan_len = data.scan_len.min(scan.len);
-        let pos = pos.min(scan_len.saturating_sub(1));
+        let pos = surviving_frame(
+            &self.group_registry,
+            scan_start,
+            scan_len,
+            pos,
+            pos < self.time_pos,
+        )?;
         let ix = scan_start + pos;
         if pos == self.time_pos {
             return Some((scan_ix, ix));
         }
         self.time_pos = pos;
-        let sample_pos = nearest_sample_pos(pos, scan_len, data.matrix.len());
+        let sample_pos = data.sample_pos(pos);
         let fingerprint = self.effective_fingerprint(ix);
         let current_key = self
             .operando_plots
@@ -4087,38 +5362,27 @@ impl StudioApp {
             .filter(|data| data.scan == scan_ix)
             .map(|data| data.scan_len.min(scan.len))
             .unwrap_or(scan.len);
-        let offset = self.time_pos.min(scan_len.saturating_sub(1));
+        let Some(offset) = surviving_frame(
+            &self.group_registry,
+            scan.start,
+            scan_len,
+            self.time_pos,
+            false,
+        ) else {
+            return;
+        };
+        self.time_pos = offset;
         let ix = scan.start + offset;
         self.reveal_time_selection(scan_ix, offset, ix);
         self.selection.clear();
         self.select_entry(ix, cx);
     }
 
-    fn reveal_time_selection(&mut self, scan_ix: usize, offset: usize, ix: usize) {
-        match self.data_tab {
-            DataTab::Files => {
-                let visible_row = match &self.filtered {
-                    Some(filtered) => filtered.binary_search(&ix).ok(),
-                    None => Some(ix),
-                };
-                if let Some(row) = visible_row {
-                    self.file_scroll
-                        .scroll_to_item(row, ScrollStrategy::Nearest);
-                } else {
-                    // A filter can hide the cursor frame; the expanded scan
-                    // remains an always-visible synchronized representation.
-                    self.data_tab = DataTab::Scans;
-                    self.expanded_scan = Some(scan_ix);
-                    self.scan_scroll
-                        .scroll_to_item(scan_ix + 1 + offset, ScrollStrategy::Nearest);
-                }
-            }
-            DataTab::Scans => {
-                self.expanded_scan = Some(scan_ix);
-                self.scan_scroll
-                    .scroll_to_item(scan_ix + 1 + offset, ScrollStrategy::Nearest);
-            }
+    fn reveal_time_selection(&mut self, _scan_ix: usize, _offset: usize, ix: usize) {
+        if self.group_rows().row_index(ix).is_none() {
+            self.reveal_current = Some(ix);
         }
+        self.reveal_group_row(ix);
     }
 
     fn replace_operando_chik(&mut self, key: ChikRowKey, row: Vec<f64>) -> bool {
@@ -4136,7 +5400,14 @@ impl StudioApp {
         let Some(scan) = self.catalog.scans.get(data.scan) else {
             return;
         };
-        if data.fingerprint != scan_fingerprint(&self.params, &self.overrides, scan.start, scan.len)
+        if data.fingerprint
+            != scan_fingerprint(
+                &self.params,
+                &self.overrides,
+                &self.group_registry,
+                scan.start,
+                scan.len,
+            )
             || ix != scan.start + self.time_pos.min(scan.len.saturating_sub(1))
         {
             return;
@@ -4158,16 +5429,35 @@ impl StudioApp {
         self.replace_operando_chik(key, row);
     }
 
+    fn current_group_index(&self) -> Option<usize> {
+        self.selected.or_else(|| {
+            self.standalone_path()
+                .filter(|p| *p == self.current_path)
+                .map(|_| NO_ENTRY)
+        })
+    }
+
+    fn compare_count(&self) -> usize {
+        self.selection.len()
+            + usize::from(
+                self.current_group_index()
+                    .is_some_and(|g| !self.selection.contains(&g)),
+            )
+    }
+
+    fn compare_groups(&self) -> BTreeSet<usize> {
+        group_rows::compare_set(self.current_group_index(), &self.selection)
+    }
+
     /// Selection (plus active) thinned evenly to MAX_OVERLAY, active always
     /// kept. Returns (indices, total_before_thinning).
     fn compare_indices(&self) -> (Vec<usize>, usize) {
-        let mut set: BTreeSet<usize> = self.selection.clone();
-        if let Some(active) = self.selected {
-            set.insert(active);
-        }
-        let all: Vec<usize> = set.into_iter().collect();
+        let all: Vec<usize> = self.compare_groups().into_iter().collect();
         let total = all.len();
-        (thin_even(&all, MAX_OVERLAY, self.selected), total)
+        (
+            thin_even(&all, MAX_OVERLAY, self.current_group_index()),
+            total,
+        )
     }
 
     /// Process any compare-set members missing from the cache (rayon batch),
@@ -4175,26 +5465,33 @@ impl StudioApp {
     /// its own effective params.
     fn ensure_compare_loaded(&mut self, cx: &mut Context<Self>) {
         let (indices, _) = self.compare_indices();
-        let mut missing: Vec<(usize, u64, Result<PathBuf, DerivedSpectrum>, PipelineParams)> =
-            Vec::new();
-        for &ix in &indices {
-            if ix == NO_ENTRY {
-                continue;
+        let mut missing = missing_compare_loads(
+            &self.catalog,
+            &self.derived,
+            &self.params,
+            &self.overrides,
+            &indices,
+            &self.cache,
+        );
+        if indices.contains(&NO_ENTRY)
+            && let Some(path) = self.standalone_path()
+        {
+            let fingerprint = self.params.fingerprint();
+            if !self.cache.contains(&(NO_ENTRY, fingerprint)) {
+                missing.push(CompareLoad {
+                    ix: NO_ENTRY,
+                    fingerprint,
+                    source: Ok(path.to_path_buf()),
+                    params: self.params.clone(),
+                });
             }
-            let fingerprint = self.effective_fingerprint(ix);
-            if self.cache.contains(&(ix, fingerprint)) {
-                continue;
-            }
-            let source = if ix >= DERIVED_BASE {
-                match self.derived.get(ix - DERIVED_BASE) {
-                    Some(d) => Err(d.clone()),
-                    None => continue,
-                }
-            } else {
-                Ok(self.catalog.path(ix))
-            };
-            missing.push((ix, fingerprint, source, self.effective_params(ix).clone()));
         }
+        exclude_pending_current(
+            &mut missing,
+            self.load_running
+                .then(|| self.current_group_index())
+                .flatten(),
+        );
         if missing.is_empty() {
             self.invalidate_explore_plots(cx);
             cx.notify();
@@ -4205,16 +5502,24 @@ impl StudioApp {
         self.compare_running = true;
         self.status = format!("processing {} spectra for overlay ...", missing.len()).into();
         cx.notify();
+        let mut diagnostics: BTreeMap<_, _> = missing
+            .iter()
+            .filter_map(|load| {
+                self.group_id(load.ix)
+                    .map(|id| (load.ix, self.group_diagnostics.begin(id, load.fingerprint)))
+            })
+            .collect();
+        let origins: BTreeMap<_, _> = missing
+            .iter()
+            .filter_map(|load| {
+                let path = load.source.as_ref().ok()?;
+                Some((load.ix, (path.clone(), self.intake_origin(load.ix, path))))
+            })
+            .collect();
         let job = cx.background_executor().spawn(async move {
             missing
                 .par_iter()
-                .map(|(ix, fingerprint, source, params)| {
-                    let result = match source {
-                        Ok(path) => process_file(path, params),
-                        Err(d) => d.for_display(params),
-                    };
-                    (*ix, *fingerprint, result)
-                })
+                .map(CompareLoad::process)
                 .collect::<Vec<_>>()
         });
         cx.spawn(async move |this, cx| {
@@ -4226,13 +5531,54 @@ impl StudioApp {
                 app.compare_running = false;
                 let mut failed = 0usize;
                 for (ix, fingerprint, result) in results {
+                    if let Some(ticket) = diagnostics.remove(&ix) {
+                        let problems = match &result {
+                            Ok((_, Some(raw))) => raw
+                                .diagnostics
+                                .warnings()
+                                .into_iter()
+                                .map(|message| JobError {
+                                    batch: None,
+                                    severity: ProblemSeverity::Warning,
+                                    label: app.entry_label(ix),
+                                    message,
+                                })
+                                .collect(),
+                            Ok((_, None)) => Vec::new(),
+                            Err(error) => vec![JobError {
+                                batch: None,
+                                severity: ProblemSeverity::Error,
+                                label: app.entry_label(ix),
+                                message: error.to_string(),
+                            }],
+                        };
+                        app.group_diagnostics.finish(&ticket, problems);
+                    }
                     match result {
-                        Ok(sp) => {
+                        Ok((sp, raw)) => {
+                            if let Some(raw) = raw {
+                                if let Some((path, origin)) = origins.get(&ix) {
+                                    app.record_source_warnings(
+                                        ix,
+                                        origin.as_ref(),
+                                        path,
+                                        &raw.diagnostics,
+                                        raw.declared_edge.clone(),
+                                        raw.channel,
+                                    );
+                                }
+                                app.raw_cache
+                                    .put((ix, app.effective_params(ix).raw_fingerprint()), raw);
+                            }
                             app.cache.put((ix, fingerprint), Arc::new(sp));
                         }
                         Err(error) => {
                             failed += 1;
-                            app.record_job_error(app.entry_label(ix), error.to_string());
+                            app.record_source_error(
+                                origins.get(&ix).and_then(|(_, origin)| origin.as_ref()),
+                                app.entry_label(ix),
+                                error.to_string(),
+                            );
                         }
                     }
                 }
@@ -4269,17 +5615,30 @@ impl StudioApp {
         self.view.show_bkg = self.stage_view.show_bkg && self.stage == Stage::Background;
         let (indices, total) = self.compare_indices();
         let mut traces: Vec<QuadTrace> = Vec::new();
-        for ix in indices {
-            if ix == NO_ENTRY {
-                continue;
-            }
+
+        let current = self.current_group_index();
+        let current_only =
+            self.stage == Stage::Fit || self.stage_view.scope == shell::PlotScope::Current;
+        let sampled = if current_only {
+            usize::from(current.is_some())
+        } else {
+            indices.len()
+        };
+        let total = if current_only { sampled } else { total };
+        self.plot_coverage = [crate::plotting::PlotCoverage::new(total, sampled, 0, 0); 5];
+        for ix in indices
+            .into_iter()
+            .filter(|&ix| !current_only || Some(ix) == current)
+        {
             let label = self.entry_label(ix);
             let fingerprint = self.effective_fingerprint(ix);
+            let color_index = self.group_color_index(ix);
             if let Some(sp) = self.cache.get(&(ix, fingerprint)) {
                 traces.push(QuadTrace {
+                    color_index,
                     label,
                     sp: sp.clone(),
-                    active: Some(ix) == self.selected,
+                    active: Some(ix) == current,
                 });
             }
         }
@@ -4290,7 +5649,25 @@ impl StudioApp {
                 return;
             };
             traces.push(QuadTrace {
-                label: self.spectrum_label.to_string(),
+                color_index: self
+                    .spectrum_group
+                    .as_ref()
+                    .and_then(|t| t.group_id.as_ref())
+                    .map(|id| {
+                        self.group_state
+                            .colors
+                            .get(id)
+                            .map(|c| usize::from(*c % 8))
+                            .unwrap_or_else(|| group_rows::color_index(id))
+                    })
+                    .unwrap_or(0),
+                label: self
+                    .spectrum_group
+                    .as_ref()
+                    .and_then(|t| t.group_id.as_ref())
+                    .and_then(|id| self.group_state.labels.get(id))
+                    .cloned()
+                    .unwrap_or_else(|| self.spectrum_label.to_string()),
                 sp: sp.clone(),
                 active: true,
             });
@@ -4300,12 +5677,10 @@ impl StudioApp {
         {
             traces.retain(|t| t.active);
         }
-        if total > MAX_OVERLAY && self.stage_view.scope == shell::PlotScope::Marked {
-            self.status = format!(
-                "showing {} of {total} marked — the Series heatmap shows the full set",
-                traces.len()
-            )
-            .into();
+        let colors =
+            group_rows::overlay_colors(&traces.iter().map(|t| t.color_index).collect::<Vec<_>>());
+        for (trace, color) in traces.iter_mut().zip(colors) {
+            trace.color_index = color;
         }
         // The grid uses one shared legend strip; per-plot legends only when a
         // quadrant is maximized.
@@ -4321,8 +5696,7 @@ impl StudioApp {
         self.legend_entries = if traces.len() > 1 {
             traces
                 .iter()
-                .enumerate()
-                .map(|(i, trace)| {
+                .map(|trace| {
                     (
                         SharedString::from(middle_truncate(
                             &if self.mixed_overlay_weight.is_some() {
@@ -4332,7 +5706,7 @@ impl StudioApp {
                             },
                             36,
                         )),
-                        trace_rgba(&self.theme, i),
+                        trace_rgba(&self.theme, trace.color_index),
                     )
                 })
                 .collect()
@@ -4347,6 +5721,8 @@ impl StudioApp {
             in_plot_legend,
             self.spectrum_quantity,
         );
+        self.plot_coverage =
+            std::array::from_fn(|i| specs[i].coverage(total, sampled, traces.len()));
         if self.stage == Stage::Background
             && let Some((_, hi)) = self
                 .spectrum
@@ -4440,9 +5816,6 @@ impl StudioApp {
         if let Some(field) = &self.view_offset_field {
             field.update(cx, |f, cx| f.set_theme(theme, cx));
         }
-        if let Some(input) = &self.roi_input {
-            input.update(cx, |f, cx| f.set_theme(theme, cx));
-        }
         if let Some(input) = &self.filter_input {
             input.update(cx, |f, cx| f.set_theme(theme, cx));
         }
@@ -4456,28 +5829,35 @@ impl StudioApp {
     // ---- catalog -----------------------------------------------------------
 
     fn open_folder(&mut self, cx: &mut Context<Self>) {
-        let rx = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: true,
-            multiple: true,
-            prompt: Some("Import files or folders".into()),
-        });
-        cx.spawn(async move |this, cx| {
-            if let Ok(Ok(Some(paths))) = rx.await {
-                this.update(cx, |app, cx| app.append_import(paths, false, cx))
-                    .ok();
-            }
-        })
-        .detach();
+        let folder = self
+            .structure
+            .settings
+            .recent_import_folders
+            .first()
+            .cloned();
+        self.open_import_picker(folder, cx);
     }
 
     /// Open a folder: restore the persisted index instantly when one exists
     /// (doc: "reopening a million-file project is < 1 s"), falling back to a
     /// streaming walk. Either way the tree is (re)walked in the background —
     /// as the primary scan or as the freshness re-check.
-    fn scan_folder(&mut self, root: PathBuf, cx: &mut Context<Self>) {
+    fn scan_folder(&mut self, root: PathBuf, restore: bool, cx: &mut Context<Self>) {
+        if !restore {
+            self.bind_joint_sources();
+            let root = root.canonicalize().unwrap_or(root.clone());
+            for source in self.group_registry.sources() {
+                if source.path.starts_with(&root)
+                    && source.path.is_file()
+                    && let Some(id) = self.group_registry.reimport_source(&source.path, None)
+                {
+                    self.record_reimport(BTreeSet::from([id]));
+                }
+            }
+        }
         self.reset_catalog_state(cx);
         self.source_dir = Some(root.clone());
+        self.catalog.scanning = true;
         self.status = format!("checking catalog index for {} ...", root.display()).into();
         let catalog_gen = self.catalog_gen;
         let probe_root = root.clone();
@@ -4510,9 +5890,16 @@ impl StudioApp {
     fn load_catalog_index(&mut self, root: PathBuf, index_path: PathBuf, cx: &mut Context<Self>) {
         let catalog_gen = self.catalog_gen;
         self.status = format!("loading index for {} ...", root.display()).into();
+        let sources = self.group_registry.sources();
         let job = cx.background_executor().spawn({
             let root = root.clone();
-            async move { load_index(&index_path, &root) }
+            async move {
+                load_index(&index_path, &root).map(|catalog| {
+                    let entries =
+                        crate::group_identity::GroupRegistry::prepare_catalog(&catalog, &sources);
+                    (catalog, entries)
+                })
+            }
         });
         cx.spawn(async move |this, cx| {
             let result = job.await;
@@ -4521,10 +5908,15 @@ impl StudioApp {
                     return;
                 }
                 match result {
-                    Ok(catalog) => {
+                    Ok((catalog, mut entries)) => {
                         let total = catalog.len();
                         app.tools.invalidate_bindings();
+                        let interaction = app.capture_groups();
+                        entries.include_recent(&catalog, &app.group_registry);
                         app.catalog = catalog;
+                        app.group_registry.replace_catalog(entries);
+                        app.resolve_group_state();
+                        app.resolve_interaction(interaction);
                         app.resolve_pending_overrides(cx);
                         app.restore_project_selection(cx);
                         app.status =
@@ -4579,6 +5971,7 @@ impl StudioApp {
                         this.update(cx, |app, cx| {
                             app.verify_running = false;
                             app.record_job_error("index freshness check", e);
+                            app.finish_routed_import(cx);
                             cx.notify();
                         })
                         .ok();
@@ -4587,16 +5980,21 @@ impl StudioApp {
                 }
             }
             let Ok(Some(live_parts)) = this.update(cx, |app, _| {
-                (app.catalog_gen == catalog_gen).then(|| app.catalog.index_parts())
+                (app.catalog_gen == catalog_gen).then(|| {
+                    app.capture_groups();
+                    (app.catalog.index_parts(), app.group_registry.sources())
+                })
             }) else {
                 return;
             };
             // Million-entry comparison stays off the UI thread.
             let compare = cx.background_executor().spawn(async move {
-                let unchanged = live_parts.same_index(&shadow.index_parts());
-                (unchanged, shadow)
+                let unchanged = live_parts.0.same_index(&shadow.index_parts());
+                let entries =
+                    crate::group_identity::GroupRegistry::prepare_catalog(&shadow, &live_parts.1);
+                (unchanged, shadow, entries)
             });
-            let (unchanged, shadow) = compare.await;
+            let (unchanged, shadow, entries) = compare.await;
             this.update(cx, |app, cx| {
                 if app.catalog_gen != catalog_gen {
                     return;
@@ -4606,7 +6004,7 @@ impl StudioApp {
                     app.status = format!("index verified · {} files", app.catalog.len()).into();
                 } else {
                     let before = app.catalog.len();
-                    app.install_refreshed_catalog(shadow, cx);
+                    app.install_refreshed_catalog(shadow, entries, cx);
                     app.status = format!(
                         "index refreshed · {} files (was {before})",
                         app.catalog.len()
@@ -4614,6 +6012,7 @@ impl StudioApp {
                     .into();
                     app.persist_catalog_index(cx);
                 }
+                app.finish_routed_import(cx);
                 cx.notify();
             })
             .ok();
@@ -4624,68 +6023,19 @@ impl StudioApp {
     /// Swap in a freshly walked catalog after the index diverged. Everything
     /// keyed by catalog indices is invalidated; the active spectrum is
     /// re-located by path so the plots keep their subject when it survived.
-    fn install_refreshed_catalog(&mut self, catalog: Catalog, cx: &mut Context<Self>) {
-        self.tools.invalidate_bindings();
-        let remap = |indices: &BTreeSet<usize>| -> BTreeSet<usize> {
-            indices
-                .iter()
-                .filter_map(|&ix| {
-                    if ix >= DERIVED_BASE {
-                        Some(ix)
-                    } else if ix < self.catalog.len() {
-                        catalog.find_by_path(&self.catalog.path(ix))
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        };
-        let selection = remap(&self.selection);
-        let frozen = remap(&self.frozen);
-        let derived_selected = self
-            .selected
-            .filter(|&ix| ix >= DERIVED_BASE && ix != NO_ENTRY);
-        self.generation += 1;
-        self.compare_gen += 1;
-        self.operando_gen += 1;
-        self.batch_gen += 1;
-        self.merge_gen += 1;
-        // Filter results contain catalog indices. Invalidate them before the
-        // catalog swap so no render can observe old indices with new entries.
-        self.filter_gen += 1;
-        self.filtered = None;
-        for cancel in [
-            self.operando_cancel.take(),
-            self.batch_cancel.take(),
-            self.merge_cancel.take(),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            cancel.store(true, Ordering::Relaxed);
-        }
-        self.load_running = false;
-        self.compare_running = false;
-        self.merge_running = false;
-        self.operando_running = false;
-        self.batch_running = false;
-        // Indices shift under a refreshed walk; re-key overrides by path so
-        // surviving files keep their per-spectrum params.
-        let path_overrides: Vec<(PathBuf, PipelineParams)> = self
-            .overrides
-            .iter()
-            .filter(|&(&ix, _)| ix < self.catalog.len())
-            .map(|(&ix, params)| (self.catalog.path(ix), params.clone()))
-            .collect();
+    fn install_refreshed_catalog(
+        &mut self,
+        catalog: Catalog,
+        mut entries: crate::group_identity::PreparedCatalog,
+        cx: &mut Context<Self>,
+    ) {
+        self.invalidate_index_bindings(IndexChange::Catalog);
+        let interaction = self.capture_groups();
+        entries.include_recent(&catalog, &self.group_registry);
         self.catalog = catalog;
-        self.overrides = path_overrides
-            .into_iter()
-            .filter_map(|(path, params)| self.catalog.find_by_path(&path).map(|ix| (ix, params)))
-            .collect();
-        self.selection = selection;
-        self.frozen = frozen;
-        self.cache.clear();
-        self.raw_cache.clear();
+        self.group_registry.replace_catalog(entries);
+        self.resolve_group_state();
+        self.resolve_interaction(interaction);
         self.expanded_scan = None;
         self.active_scan = None;
         self.operando = None;
@@ -4693,7 +6043,6 @@ impl StudioApp {
         self.time_pos = 0;
         self.pending_time_pos = None;
         self.batch_fit = None;
-        self.selected = derived_selected.or_else(|| self.catalog.find_by_path(&self.current_path));
         self.resolve_pending_overrides(cx);
         if self.pending_project_spectrum.is_some() {
             self.restore_project_selection(cx);
@@ -4708,6 +6057,7 @@ impl StudioApp {
             let label = self.entry_label(ix);
             self.load_spectrum(ix, path, label.into(), cx);
         }
+        self.ensure_compare_loaded(cx);
         if !self.filter_text.is_empty() {
             self.apply_filter(cx);
         }
@@ -4766,7 +6116,9 @@ impl StudioApp {
                                 .active_scan
                                 .and_then(|scan_ix| app.catalog.scans.get(scan_ix))
                                 .map(|scan| scan.len);
+                            let start = app.catalog.len();
                             app.catalog.extend(batch);
+                            app.register_appended_groups(start, app.derived.len());
                             let active_extended = app.active_scan.is_some_and(|scan_ix| {
                                 let new_len = app.catalog.scans.get(scan_ix).map(|scan| scan.len);
                                 old_active_len.is_some() && new_len > old_active_len
@@ -4798,6 +6150,7 @@ impl StudioApp {
                                         scan_fingerprint(
                                             &app.params,
                                             &app.overrides,
+                                            &app.group_registry,
                                             scan.start,
                                             scan.len,
                                         ) ^ 1
@@ -4820,6 +6173,9 @@ impl StudioApp {
                             app.record_job_error("catalog scan", e);
                         }
                     }
+                    if done {
+                        app.finish_routed_import(cx);
+                    }
                     cx.notify();
                     done
                 });
@@ -4831,85 +6187,55 @@ impl StudioApp {
         .detach();
     }
 
-    /// Modifier-aware list click: plain = activate (clears compare set),
-    /// shift = extend range from the active row, cmd = toggle membership.
+    /// Current, keyboard focus, marks and anchor have independent lifetimes.
     fn click_entry(&mut self, ix: usize, modifiers: gpui::Modifiers, cx: &mut Context<Self>) {
-        if modifiers.shift
-            && let Some(anchor) = self.selected
-            && anchor < DERIVED_BASE
-            && ix < DERIVED_BASE
-        {
-            match &self.filtered {
-                None => {
-                    let (lo, hi) = (anchor.min(ix), anchor.max(ix));
-                    self.selection.extend(lo..=hi);
-                }
-                Some(filtered) => {
-                    // range over the *visible* rows
-                    if let (Ok(a), Ok(b)) =
-                        (filtered.binary_search(&anchor), filtered.binary_search(&ix))
-                    {
-                        let (lo, hi) = (a.min(b), a.max(b));
-                        self.selection.extend(filtered[lo..=hi].iter().copied());
-                    } else {
-                        self.selection.insert(ix);
-                    }
-                }
-            }
-            self.ensure_compare_loaded(cx);
+        let gesture = if modifiers.shift {
+            group_rows::Gesture::Range
         } else if modifiers.platform {
-            if !self.selection.remove(&ix) {
-                self.selection.insert(ix);
-            }
-            self.ensure_compare_loaded(cx);
+            group_rows::Gesture::Toggle
         } else {
-            self.selection.clear();
+            group_rows::Gesture::Current
+        };
+        let rows = self.interaction_rows();
+        if group_rows::interact(
+            &rows,
+            &mut self.focus_group,
+            &mut self.mark_anchor,
+            &mut self.selection,
+            ix,
+            gesture,
+        ) {
             self.select_entry(ix, cx);
+        } else {
+            self.ensure_compare_loaded(cx);
         }
-        // Selection-count changes can flip the panel between a spectrum's
-        // override and the globals.
         self.sync_param_fields(cx);
+        self.sync_handles(cx);
         cx.notify();
-    }
-
-    /// Neighbor of the active row within the visible (filtered) list.
-    fn visible_neighbor(&self, delta: isize) -> Option<usize> {
-        let active = self.selected?;
-        match &self.filtered {
-            None => {
-                let next = active as isize + delta;
-                (next >= 0 && (next as usize) < self.catalog.len()).then_some(next as usize)
-            }
-            Some(filtered) => {
-                let pos = filtered.binary_search(&active).ok()? as isize + delta;
-                (pos >= 0).then(|| filtered.get(pos as usize).copied())?
-            }
-        }
     }
 
     fn nav_move(&mut self, delta: isize, extend: bool, cx: &mut Context<Self>) {
-        let Some(next) = self.visible_neighbor(delta) else {
+        let Some(next) = self.interaction_rows().neighbor(self.focus_group, delta) else {
             return;
         };
-        if extend {
-            if let Some(active) = self.selected {
-                self.selection.insert(active);
-            }
-            self.selection.insert(next);
-        } else {
-            self.selection.clear();
-        }
-        self.select_entry(next, cx);
-        if extend {
-            self.ensure_compare_loaded(cx);
-        }
-        cx.notify();
+        self.click_entry(
+            next,
+            gpui::Modifiers {
+                shift: extend,
+                ..Default::default()
+            },
+            cx,
+        );
+        self.scroll_group_row(next);
     }
 
     /// Add a whole scan to the compare set (shift/cmd-click on a scan row).
     fn select_scan_range(&mut self, scan_ix: usize, cx: &mut Context<Self>) {
         if let Some(scan) = self.catalog.scans.get(scan_ix) {
-            self.selection.extend(scan.start..scan.start + scan.len);
+            self.selection.extend(
+                (scan.start..scan.start + scan.len)
+                    .filter(|&ix| !self.group_registry.index_excluded(ix)),
+            );
             self.ensure_compare_loaded(cx);
             self.sync_param_fields(cx);
             cx.notify();
@@ -4917,6 +6243,7 @@ impl StudioApp {
     }
 
     fn clear_selection(&mut self, cx: &mut Context<Self>) {
+        self.group_state.marked.clear();
         if !self.selection.is_empty() {
             self.selection.clear();
             self.invalidate_explore_plots(cx);
@@ -4994,27 +6321,35 @@ impl StudioApp {
     }
 
     fn remove_derived(&mut self, i: usize, cx: &mut Context<Self>) {
-        let Some(spectrum) = self.take_derived(i, cx) else {
-            return;
-        };
-        self.record(
-            format!("remove {}", spectrum.label),
-            Some(shell::journal::UndoOp::DerivedRemove { index: i, spectrum }),
-        );
-        cx.notify();
-    }
-
-    /// Add all filter results to the compare set.
-    fn select_filter_results(&mut self, cx: &mut Context<Self>) {
-        if let Some(filtered) = &self.filtered {
-            self.selection.extend(filtered.iter().copied());
-            self.ensure_compare_loaded(cx);
-            self.sync_param_fields(cx);
-            cx.notify();
+        if let Some(id) = self.group_id(DERIVED_BASE + i) {
+            self.remove_groups(
+                BTreeSet::from([id]),
+                format!("remove {}", self.entry_label(DERIVED_BASE + i)),
+                cx,
+            );
         }
     }
 
+    /// Same displayed scope as the toolbar and keyboard command.
+    fn select_filter_results(&mut self, cx: &mut Context<Self>) {
+        self.mark_all(true, cx);
+    }
+
     fn entry_label(&self, ix: usize) -> String {
+        self.group_state
+            .display_label(self.peek_group_id(ix).as_ref(), || {
+                self.default_entry_label(ix)
+            })
+    }
+
+    fn default_entry_label(&self, ix: usize) -> String {
+        if ix == NO_ENTRY {
+            return self
+                .standalone_source
+                .as_ref()
+                .map(|(_, label, _)| label.to_string())
+                .unwrap_or_else(|| self.spectrum_label.to_string());
+        }
         if ix >= DERIVED_BASE {
             self.derived
                 .get(ix - DERIVED_BASE)
@@ -5036,15 +6371,29 @@ impl StudioApp {
     }
 
     fn select_entry(&mut self, ix: usize, cx: &mut Context<Self>) {
+        if self.group_id(ix).is_none() {
+            return;
+        }
+        self.focus_group = Some(ix);
+        self.mark_anchor = Some(ix);
         self.pending_project_spectrum = None;
         self.pending_derived = None;
+        if ix == NO_ENTRY {
+            if let Some((path, label, _)) = self.standalone_source.clone() {
+                self.selected = None;
+                self.current_path = path.clone();
+                self.reveal_group_row(ix);
+                self.sync_param_fields(cx);
+                self.load_spectrum(ix, path, label, cx);
+            }
+            return;
+        }
         if ix >= DERIVED_BASE {
             if ix - DERIVED_BASE >= self.derived.len() {
                 return;
             }
             self.selected = Some(ix);
-            self.derived_scroll
-                .scroll_to_item(ix - DERIVED_BASE, ScrollStrategy::Nearest);
+            self.reveal_group_row(ix);
             let label: SharedString = self.entry_label(ix).into();
             self.current_path = self.derived[ix - DERIVED_BASE]
                 .source
@@ -5058,6 +6407,7 @@ impl StudioApp {
         if ix >= self.catalog.len() {
             return;
         }
+        self.reveal_group_row(ix);
         self.selected = Some(ix);
         self.sync_operando_cursor_to_entry(ix, cx);
         let label: SharedString = self.catalog.name(ix).to_string().into();
@@ -5085,6 +6435,7 @@ impl StudioApp {
         }
         let generation = self.import_preview_gen;
         let import = self.ui_params().import.clone();
+        let intake_origin = self.intake_origin(self.selected.unwrap_or(NO_ENTRY), &path);
         let job = cx.background_executor().spawn({
             let path = path.clone();
             async move { preview_import(&path, &import) }
@@ -5101,7 +6452,29 @@ impl StudioApp {
                 ) {
                     if let Some(preview) = &app.import_preview {
                         let diagnostics = preview.diagnostics.clone();
-                        app.record_source_warnings(&path, &diagnostics);
+                        let channel = preview.resolved.mode;
+                        let edge =
+                            crate::source_evidence::DeclaredEdge::from_header(preview.xdi.as_ref());
+                        app.record_source_warnings(
+                            app.selected.unwrap_or(NO_ENTRY),
+                            intake_origin.as_ref(),
+                            &path,
+                            &diagnostics,
+                            edge,
+                            channel,
+                        );
+                        if let Some(id) = app.peek_group_id(app.selected.unwrap_or(NO_ENTRY)) {
+                            let warnings = diagnostics
+                                .warnings()
+                                .into_iter()
+                                .map(|message| JobError::warning(&path, message))
+                                .collect();
+                            app.group_diagnostics.set_warnings(
+                                id,
+                                app.active_fingerprint(),
+                                warnings,
+                            );
+                        }
                     }
                     cx.notify();
                 }
@@ -5534,6 +6907,11 @@ impl StudioApp {
             model_fingerprint: self.fit_model_fingerprint(),
         };
         self.fit_error = None;
+        self.job_inputs[3] = self
+            .current_group_index()
+            .and_then(|ix| self.group_id(ix))
+            .into_iter()
+            .collect();
         self.fit_running = true;
         self.status = format!("fitting {} ...", provenance.label).into();
         cx.notify();
@@ -5845,11 +7223,17 @@ impl StudioApp {
         let Some(scan) = self.catalog.scans.get(scan_ix) else {
             return "selected scan is unavailable".into();
         };
-        let count = if self.batch_preview {
-            scan.len.min(MAX_FRAMES)
-        } else {
-            scan.len
-        };
+        let count = active_scan_indices(
+            &self.group_registry,
+            scan.start,
+            scan.len,
+            if self.batch_preview {
+                MAX_FRAMES
+            } else {
+                usize::MAX
+            },
+        )
+        .len();
         let threads = rayon::current_num_threads().max(1);
         let waves = count.div_ceil(threads);
         let (per_fit, basis) = self
@@ -5908,14 +7292,21 @@ impl StudioApp {
         };
         let scan_start = scan.start;
         let scan_len = scan.len;
-        let fingerprint = scan_fingerprint(&self.params, &self.overrides, scan_start, scan_len);
+        let fingerprint = scan_fingerprint(
+            &self.params,
+            &self.overrides,
+            &self.group_registry,
+            scan_start,
+            scan_len,
+        );
         let model_fingerprint = self.fit_model_fingerprint();
         let preview = self.batch_preview;
         let indices = if preview {
-            sample_scan_indices(scan_start, scan_len, MAX_FRAMES)
+            active_scan_indices(&self.group_registry, scan_start, scan_len, MAX_FRAMES)
         } else {
-            (scan_start..scan_start + scan_len).collect()
+            active_scan_indices(&self.group_registry, scan_start, scan_len, usize::MAX)
         };
+        self.job_inputs[1] = indices.iter().filter_map(|&ix| self.group_id(ix)).collect();
         let frames: Vec<(usize, usize, PathBuf, String)> = indices
             .into_iter()
             .map(|ix| {
@@ -6143,17 +7534,12 @@ impl StudioApp {
 
     /// Marked groups whose processed spectra are cached, as LCF standards.
     pub(crate) fn lcf_standards(&self) -> Vec<(String, Arc<XASSpectrum>)> {
-        let mut out = Vec::new();
-        for &ix in &self.selection {
-            if ix == NO_ENTRY {
-                continue;
-            }
-            let fp = self.effective_fingerprint(ix);
-            if let Some(sp) = self.cache.peek(&(ix, fp)) {
-                out.push((self.entry_label(ix), sp.clone()));
-            }
-        }
-        out
+        cached_marked_spectra(
+            &self.selection,
+            &self.cache,
+            |ix| self.effective_fingerprint(ix),
+            |ix| self.entry_label(ix),
+        )
     }
 
     /// LCF weights of every frame of the active scan against the marked
@@ -6178,12 +7564,26 @@ impl StudioApp {
         };
         let scan_start = scan.start;
         let scan_len = scan.len;
-        let fingerprint = scan_fingerprint(&self.params, &self.overrides, scan_start, scan_len);
+        let fingerprint = scan_fingerprint(
+            &self.params,
+            &self.overrides,
+            &self.group_registry,
+            scan_start,
+            scan_len,
+        );
         let indices: Vec<usize> = if self.batch_preview {
-            sample_scan_indices(scan_start, scan_len, MAX_FRAMES)
+            active_scan_indices(&self.group_registry, scan_start, scan_len, MAX_FRAMES)
         } else {
-            (scan_start..scan_start + scan_len).collect()
+            active_scan_indices(&self.group_registry, scan_start, scan_len, usize::MAX)
         };
+        self.job_inputs[4] = indices
+            .iter()
+            .copied()
+            .chain(cached_marked_indices(&self.selection, &self.cache, |ix| {
+                self.effective_fingerprint(ix)
+            }))
+            .filter_map(|ix| self.group_id(ix))
+            .collect();
         let frames: Vec<(usize, usize, PathBuf, String)> = indices
             .into_iter()
             .map(|ix| {
@@ -6411,7 +7811,11 @@ impl StudioApp {
                     .map(|data| data.whitelines.clone())
                     .unwrap_or_default();
                 return TrendSnapshot {
-                    frames: trend_frames(TrendDomain::Sampled, values.len(), scan_len),
+                    frames: self
+                        .operando
+                        .as_ref()
+                        .map(|data| data.sample_frames.iter().map(|&p| p as f64).collect())
+                        .unwrap_or_default(),
                     values,
                     name: "white line (norm. μ)".to_string(),
                     domain: TrendDomain::Sampled,
@@ -6425,7 +7829,11 @@ impl StudioApp {
             .map(|data| data.e0s.clone())
             .unwrap_or_default();
         TrendSnapshot {
-            frames: trend_frames(TrendDomain::Sampled, values.len(), scan_len),
+            frames: self
+                .operando
+                .as_ref()
+                .map(|data| data.sample_frames.iter().map(|&p| p as f64).collect())
+                .unwrap_or_default(),
             values,
             name: "E₀ (eV)".to_string(),
             domain: TrendDomain::Sampled,
@@ -6473,7 +7881,7 @@ impl StudioApp {
                 }
             }
         }
-        let sample_pos = nearest_sample_pos(self.time_pos, data.scan_len, matrix.len());
+        let sample_pos = data.sample_pos(self.time_pos);
         matrix.get(sample_pos).cloned().unwrap_or_default()
     }
 
@@ -6762,7 +8170,14 @@ impl StudioApp {
             })
             .collect();
         overrides.extend(self.pending_overrides.iter().cloned());
+        let mut group_state = self.group_state.clone();
+        self.capture_group_state(&mut group_state);
         ProjectFile {
+            parser_evidence: self.parser_evidence.clone(),
+            imports: self.imports.clone(),
+            import_history: self.intake.history.clone(),
+            source_groups: self.group_registry.sources(),
+            group_state,
             header: self.project_header.clone(),
             version: PROJECT_VERSION,
             source_dir: self.source_dir.clone(),
@@ -6865,6 +8280,7 @@ impl StudioApp {
                                 }
                             }
                             app.status = format!("Saved {}", path.display()).into();
+                            app.remember_project(path.clone());
                         }
                         Err(error) => {
                             app.status = format!("Save failed: {error}").into();
@@ -6891,7 +8307,7 @@ impl StudioApp {
             files: true,
             directories: false,
             multiple: false,
-            prompt: None,
+            prompt: Some("Open project (.rxs)".into()),
         });
         cx.spawn(async move |this, cx| {
             if let Ok(Ok(Some(paths))) = rx.await
@@ -6905,12 +8321,35 @@ impl StudioApp {
     }
 
     fn load_project_path(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        self.load_project_then_import(path, None, cx);
+    }
+
+    fn load_project_then_import(
+        &mut self,
+        path: PathBuf,
+        data: Option<shell::path_routing::RoutedImport>,
+        cx: &mut Context<Self>,
+    ) {
+        if !crate::project::is_project(&path) || path.is_dir() {
+            self.status =
+                "Choose a .rxs project file; use Import… for data files or folders.".into();
+            cx.notify();
+            return;
+        }
+        self.pending_routed_import.clear();
         self.project_load_generation += 1;
         let generation = self.project_load_generation;
         self.status = "Opening project…".into();
-        let job = cx
-            .background_executor()
-            .spawn(async move { crate::project::load(&path) });
+        let recent_path = path.clone();
+        let job = cx.background_executor().spawn(async move {
+            crate::project::load(&path).map(|mut project| {
+                let next = project.assign_group_ids();
+                let registry = crate::group_identity::GroupRegistry::from_sources(std::mem::take(
+                    &mut project.source_groups,
+                ));
+                (project, next, registry)
+            })
+        });
         cx.spawn(async move |this, cx| {
             let result = job.await;
             this.update(cx, |app, cx| {
@@ -6918,10 +8357,22 @@ impl StudioApp {
                     return;
                 }
                 match result {
-                    Ok(project) => app.apply_project(project, cx),
+                    Ok((project, next, registry)) => {
+                        app.apply_project(project, next, registry, cx);
+                        app.remember_project(recent_path);
+                        app.pending_routed_import.extend(data);
+                        app.finish_routed_import(cx);
+                    }
                     Err(error) => {
                         app.status = format!("Open failed: {error}").into();
                         app.record_job_error("open project", error);
+                        crate::settings::remove_recent(
+                            &mut app.structure.settings.recent_projects,
+                            &recent_path,
+                        );
+                        app.persist_recent_locations();
+                        app.path_route =
+                            shell::path_routing::RoutingCard::after_failed_project(data);
                     }
                 }
                 cx.notify();
@@ -6932,8 +8383,34 @@ impl StudioApp {
         cx.notify();
     }
 
-    fn apply_project(&mut self, mut project: ProjectFile, cx: &mut Context<Self>) {
-        self.next_derived_id = project.assign_group_ids();
+    fn apply_project(
+        &mut self,
+        project: ProjectFile,
+        next_derived_id: u64,
+        registry: crate::group_identity::GroupRegistry,
+        cx: &mut Context<Self>,
+    ) {
+        self.reset_catalog_state(cx);
+        self.intake = import_state::IntakeState::from_history(project.import_history.clone());
+        self.imports = project.imports.clone();
+        self.parser_evidence = project.parser_evidence.clone();
+        self.next_derived_id = next_derived_id;
+        self.group_state = Default::default();
+        self.group_registry = registry;
+        self.group_registry
+            .set_excluded(&project.group_state.excluded);
+        self.selection.clear();
+        self.frozen.clear();
+        self.overrides.clear();
+        self.pending_overrides.clear();
+        self.selected = None;
+        self.focus_group = None;
+        self.group_menu = None;
+        self.group_rename = None;
+        self.tools.alignment_standard = None;
+        self.mark_anchor = None;
+        self.filter_reveal = None;
+        self.reveal_current = None;
         self.project_generation += 1;
         self.assistant_history = project.assistant.clone();
         self.assistant_history_revision = 0;
@@ -7013,13 +8490,14 @@ impl StudioApp {
         self.fit_history_results.clear();
         self.sync_range_fields(cx);
         self.derived = project.derived;
+        self.group_registry.reserve_groups(&self.derived);
         self.pending_derived = project.active_derived;
 
         // Reopen the data source. Per-spectrum overrides wait path-keyed
         // until the (re)scanned catalog can resolve them to indices; with
         // no source there is no catalog for them to attach to.
         if let Some(dir) = project.source_dir.clone() {
-            self.scan_folder(dir, cx);
+            self.scan_folder(dir, true, cx);
             self.pending_overrides = project.overrides;
             self.pending_project_spectrum = project.spectrum_file;
         } else {
@@ -7035,6 +8513,12 @@ impl StudioApp {
                 self.append_import(files, true, cx);
             }
         }
+        let restored_current = self.selected.and_then(|ix| self.group_id(ix));
+        self.group_state = project.group_state;
+        self.group_state.current = self.group_state.current.take().or(restored_current);
+        self.selected = None;
+        self.resolve_group_state();
+        self.ensure_compare_loaded(cx);
         if !self.fit_paths.is_empty() {
             self.set_fit_step(shell::fit_workspace::FitStep::Model, cx);
         }
@@ -7063,7 +8547,6 @@ impl StudioApp {
         self.data_panel_open = true;
         self.last_opened_side_panel = Some(shell::assistant_shell::SidePanel::Groups);
         self.fit_assistant_layout();
-        self.data_tab = DataTab::Files;
         let input = self.filter_input.clone();
         cx.notify();
         // The panel may have been collapsed. Defer focus until the notified
@@ -7071,6 +8554,7 @@ impl StudioApp {
         cx.defer_in(window, move |_this, window, cx| {
             if let Some(input) = input {
                 input.read(cx).focus_handle(cx).focus(window, cx);
+                input.update(cx, |input, cx| input.select_all_text(cx));
             }
         });
     }
@@ -7091,8 +8575,6 @@ impl StudioApp {
             cx.notify();
         } else if self.maximized.is_some() {
             self.set_maximized(None, cx);
-        } else {
-            self.clear_selection(cx);
         }
     }
 
@@ -7449,582 +8931,6 @@ impl StudioApp {
         .h(px(160.))
     }
 
-    /// Import section rows (detection mode, column preview, role pickers,
-    /// reference alignment) — the M1 import UI unchanged.
-    pub(crate) fn import_rows(&self, cx: &mut Context<Self>) -> Vec<gpui::AnyElement> {
-        let t = self.theme;
-        let field = |key: ParamKey| {
-            self.param_fields
-                .iter()
-                .find(|(k, _)| *k == key)
-                .map(|(_, f)| f.clone())
-        };
-        let mut sections = div().flex().flex_col();
-        // ---- Import (configure once, applies to the whole catalog) ----
-        {
-            let open = self.adv_open[3];
-            sections = sections.child(
-                div()
-                    .px_3()
-                    .pt_3()
-                    .pb_1()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().text_xs().text_color(t.accent).child("Import"))
-                    .children(self.override_chip("ovr-import".into(), ParamSection::Import, cx))
-                    .child(div().flex_1())
-                    .child(
-                        div()
-                            .id("adv-import")
-                            .px_1()
-                            .rounded_sm()
-                            .text_xs()
-                            .text_color(if open { t.accent } else { t.text_muted })
-                            .cursor_pointer()
-                            .hover(|d| d.bg(t.raised))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                this.adv_open[3] = !this.adv_open[3];
-                                cx.notify();
-                            }))
-                            .child(if open { "▾ less" } else { "▸ more" }),
-                    ),
-            );
-            // mode selector (always visible)
-            let options = self.enum_options(EnumParam::ImportMode);
-            let selected = self.enum_selected_index(EnumParam::ImportMode);
-            let expanded = self.open_enum == Some(EnumParam::ImportMode);
-            let current: SharedString = options[selected].clone().into();
-            sections = sections.child(
-                div()
-                    .px_3()
-                    .py_0p5()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .text_sm()
-                            .text_color(t.text_muted)
-                            .child("mode"),
-                    )
-                    .child(
-                        div()
-                            .id("enum-import-mode")
-                            .px_2()
-                            .py_0p5()
-                            .rounded_sm()
-                            .text_xs()
-                            .bg(t.bg)
-                            .border_1()
-                            .border_color(if expanded { t.accent } else { t.border })
-                            .text_color(t.text)
-                            .cursor_pointer()
-                            .hover(|d| d.border_color(t.accent))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                this.open_import_role = None;
-                                this.open_enum = if this.open_enum == Some(EnumParam::ImportMode) {
-                                    None
-                                } else {
-                                    Some(EnumParam::ImportMode)
-                                };
-                                cx.notify();
-                            }))
-                            .child(format!("{current} ▾")),
-                    ),
-            );
-            if expanded {
-                let mut list = div()
-                    .mx_3()
-                    .mb_1()
-                    .rounded_sm()
-                    .border_1()
-                    .border_color(t.border)
-                    .bg(t.bg)
-                    .flex()
-                    .flex_col();
-                for (i, option) in options.iter().enumerate() {
-                    let option: SharedString = option.clone().into();
-                    let is_sel = i == selected;
-                    list = list.child(
-                        div()
-                            .id(SharedString::from(format!("enum-opt-import-{i}")))
-                            .px_2()
-                            .py_0p5()
-                            .text_xs()
-                            .cursor_pointer()
-                            .when(is_sel, |d| d.bg(t.raised).text_color(t.accent))
-                            .when(!is_sel, |d| d.text_color(t.text))
-                            .hover(|d| d.bg(t.raised))
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                                this.set_enum_param(EnumParam::ImportMode, i, cx);
-                            }))
-                            .child(option),
-                    );
-                }
-                sections = sections.child(list);
-            }
-            if let Some(preview) = &self.import_preview {
-                let mut channels = div().px_3().py_1().flex().flex_wrap().gap_1();
-                for mode in preview.available_channels() {
-                    if mode == preview.resolved.mode {
-                        continue;
-                    }
-                    channels = channels.child(
-                        shell::button(
-                            &t,
-                            SharedString::from(format!("add-channel-{mode:?}")),
-                            format!("+ {}", mode.label()),
-                            false,
-                        )
-                        .on_click(cx.listener(
-                            move |this, _: &ClickEvent, _, cx| this.add_import_channel(mode, cx),
-                        )),
-                    );
-                }
-                sections = sections.child(channels).child(div().px_3().pb_1().text_xs().text_color(t.text_muted).child("Add a channel as a separate group; each group keeps its own processing settings."));
-            }
-            // The preview stays compact but shows enough real rows to verify
-            // delimiter/header detection and the role assignments at a glance.
-            if let Some(preview) = &self.import_preview {
-                if let Some(xdi) = &preview.xdi {
-                    let sample = xdi.get("sample.name").unwrap_or("XAS spectrum");
-                    let element = xdi.get("element.symbol").unwrap_or("?");
-                    let edge = xdi.get("element.edge").unwrap_or("?");
-                    sections =
-                        sections.child(div().px_3().pb_1().text_xs().text_color(t.text).child(
-                            format!("XDI {} · {sample} · {element} {edge} edge", xdi.version),
-                        ));
-                    if let Some(axis) = xdi.columns.get(preview.resolved.energy_col) {
-                        sections = sections.child(
-                            div()
-                                .px_3()
-                                .pb_1()
-                                .text_xs()
-                                .text_color(t.text_muted)
-                                .child(format!(
-                                    "{} ({}) → energy in eV",
-                                    axis.label,
-                                    axis.units.as_deref().unwrap_or("units missing")
-                                )),
-                        );
-                    }
-                    for warning in &xdi.warnings {
-                        sections = sections.child(
-                            div()
-                                .px_3()
-                                .pb_1()
-                                .text_xs()
-                                .text_color(t.warn)
-                                .child(warning.clone()),
-                        );
-                    }
-                    if open {
-                        for key in [
-                            "sample.prep",
-                            "sample.temperature",
-                            "facility.name",
-                            "beamline.name",
-                            "scan.start_time",
-                        ] {
-                            if let Some(value) = xdi.get(key) {
-                                sections = sections.child(
-                                    div()
-                                        .px_3()
-                                        .pb_1()
-                                        .text_xs()
-                                        .text_color(t.text_muted)
-                                        .child(format!("{key}: {value}")),
-                                );
-                            }
-                        }
-                        for comment in &xdi.comments {
-                            sections = sections.child(
-                                div()
-                                    .px_3()
-                                    .pb_1()
-                                    .text_xs()
-                                    .text_color(t.text_muted)
-                                    .child(comment.clone()),
-                            );
-                        }
-                    }
-                }
-                let diagnostics = self
-                    .selected
-                    .and_then(|ix| {
-                        self.raw_cache
-                            .peek(&(ix, self.effective_params(ix).raw_fingerprint()))
-                    })
-                    .map(|raw| &raw.diagnostics)
-                    .unwrap_or(&preview.diagnostics);
-                let table_width = px(preview.column_count as f32 * IMPORT_COL_W);
-                let header_status = if preview.names.is_some() {
-                    "header names found"
-                } else {
-                    "no header names"
-                };
-                sections = sections.child(
-                    div()
-                        .px_3()
-                        .pb_1()
-                        .text_xs()
-                        .text_color(t.text_muted)
-                        .child(format!(
-                            "{} · detected: {} columns · {header_status} · auto: {:?}",
-                            diagnostics.summary(),
-                            preview.column_count,
-                            preview.auto_mode
-                        )),
-                );
-                if let Some(error) = &preview.signal_error {
-                    sections = sections.child(
-                        div()
-                            .px_3()
-                            .pb_1()
-                            .text_xs()
-                            .text_color(t.error)
-                            .child(error.clone()),
-                    );
-                }
-                // The column table is a diagnostic, not a parameter — behind
-                // the disclosure it stops permanently occupying the top of the
-                // panel and pushing the actual parameters down. The one-line
-                // summary above stays visible so detection can still be
-                // sanity-checked at a glance.
-                if open {
-                    let mut header = div().flex();
-                    for column in 0..preview.column_count {
-                        let mut name = preview
-                            .names
-                            .as_ref()
-                            .and_then(|names| names.get(column))
-                            .cloned()
-                            .unwrap_or_else(|| format!("col {column}"));
-                        if let Some(unit) = preview
-                            .xdi
-                            .as_ref()
-                            .and_then(|xdi| xdi.columns.get(column))
-                            .and_then(|c| c.units.as_ref())
-                        {
-                            name.push_str(&format!(" ({unit})"));
-                        }
-                        let mut roles = Vec::new();
-                        if preview.resolved.energy_col == column {
-                            roles.push("E");
-                        }
-                        if matches!(
-                            preview.resolved.mode,
-                            DetectionMode::Transmission | DetectionMode::Fluorescence
-                        ) && preview.resolved.i0_col == column
-                        {
-                            roles.push("I0");
-                        }
-                        if matches!(
-                            preview.resolved.mode,
-                            DetectionMode::Transmission | DetectionMode::Reference
-                        ) && preview.resolved.it_col == column
-                        {
-                            roles.push("It");
-                        }
-                        if preview.resolved.mode == DetectionMode::Reference
-                            && preview.resolved.ir_col == column
-                        {
-                            roles.push("Ir");
-                        }
-                        if preview.resolved.mode == DetectionMode::Fluorescence
-                            && preview.resolved.fluor_cols.contains(&column)
-                        {
-                            roles.push("ROI");
-                        }
-                        if preview.resolved.mode == DetectionMode::MuColumn
-                            && preview.resolved.mu_col == Some(column)
-                        {
-                            roles.push("mu");
-                        }
-                        let assigned = !roles.is_empty();
-                        header = header.child(
-                            div()
-                                .w(px(IMPORT_COL_W))
-                                .flex_none()
-                                .px_1()
-                                .py_0p5()
-                                .flex()
-                                .flex_col()
-                                .border_r_1()
-                                .border_color(t.border)
-                                .when(assigned, |cell| cell.bg(t.raised))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .overflow_hidden()
-                                        .whitespace_nowrap()
-                                        .text_color(t.text)
-                                        .child(name),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(if assigned { t.accent } else { t.text_muted })
-                                        .child(if assigned {
-                                            roles.join("/")
-                                        } else {
-                                            "—".into()
-                                        }),
-                                ),
-                        );
-                    }
-                    let mut table = div()
-                        .min_w(table_width)
-                        .mb_1()
-                        .border_1()
-                        .border_color(t.border)
-                        .flex()
-                        .flex_col()
-                        .child(header);
-                    for row in &preview.rows {
-                        let mut line = div().flex().border_t_1().border_color(t.border);
-                        for value in row {
-                            line = line.child(
-                                div()
-                                    .w(px(IMPORT_COL_W))
-                                    .flex_none()
-                                    .px_1()
-                                    .py_0p5()
-                                    .text_xs()
-                                    .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .text_color(t.text_muted)
-                                    .border_r_1()
-                                    .border_color(t.border)
-                                    .child(format!("{value:.4}")),
-                            );
-                        }
-                        table = table.child(line);
-                    }
-                    sections = sections.child(
-                        div()
-                            .id("import-preview-horizontal")
-                            .mx_3()
-                            .min_w_0()
-                            .overflow_x_scroll()
-                            .child(table),
-                    );
-                }
-            } else {
-                sections = sections.child(
-                    div()
-                        .px_3()
-                        .pb_1()
-                        .text_xs()
-                        .text_color(t.text_muted)
-                        .child(self.import_preview_error.clone()),
-                );
-            }
-            if open {
-                for role in [
-                    ImportRole::Energy,
-                    ImportRole::I0,
-                    ImportRole::It,
-                    ImportRole::Ir,
-                    ImportRole::Fluor,
-                    ImportRole::Mu,
-                ] {
-                    let expanded = self.open_import_role == Some(role);
-                    sections = sections.child(
-                        div()
-                            .px_3()
-                            .py_0p5()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .text_sm()
-                                    .text_color(t.text_muted)
-                                    .child(Self::import_role_label(role)),
-                            )
-                            .child(
-                                div()
-                                    .id(SharedString::from(format!("import-role-{role:?}")))
-                                    .w(px(150.))
-                                    .px_2()
-                                    .py_0p5()
-                                    .rounded_sm()
-                                    .text_xs()
-                                    .bg(t.bg)
-                                    .border_1()
-                                    .border_color(if expanded { t.accent } else { t.border })
-                                    .text_color(t.text)
-                                    .cursor_pointer()
-                                    .hover(|picker| picker.border_color(t.accent))
-                                    .on_click(cx.listener(
-                                        move |this, _: &ClickEvent, _window, cx| {
-                                            this.open_enum = None;
-                                            this.open_import_role =
-                                                if this.open_import_role == Some(role) {
-                                                    None
-                                                } else {
-                                                    Some(role)
-                                                };
-                                            cx.notify();
-                                        },
-                                    ))
-                                    .child(format!("{} ▾", self.import_role_current_label(role))),
-                            ),
-                    );
-                    if expanded {
-                        let manual = self.import_role_manual_column(role);
-                        let fluor = self.ui_params().import.fluor_cols.as_ref();
-                        let mut list = div()
-                            .mx_3()
-                            .mb_1()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(t.border)
-                            .bg(t.bg)
-                            .flex()
-                            .flex_col();
-                        let auto_selected = if role == ImportRole::Fluor {
-                            fluor.is_none()
-                        } else {
-                            manual.is_none()
-                        };
-                        list = list.child(
-                            div()
-                                .id(SharedString::from(format!("import-role-{role:?}-auto")))
-                                .px_2()
-                                .py_0p5()
-                                .text_xs()
-                                .cursor_pointer()
-                                .when(auto_selected, |item| item.bg(t.raised).text_color(t.accent))
-                                .when(!auto_selected, |item| item.text_color(t.text))
-                                .hover(|item| item.bg(t.raised))
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                                    if role == ImportRole::Fluor {
-                                        this.toggle_import_fluor(None, cx);
-                                        this.open_import_role = None;
-                                    } else {
-                                        this.set_import_role_column(role, None, None, cx);
-                                    }
-                                }))
-                                .child(self.import_role_auto_label(role)),
-                        );
-                        let column_count = self
-                            .import_preview
-                            .as_ref()
-                            .map(|preview| preview.column_count)
-                            .unwrap_or(0);
-                        for column in 0..column_count {
-                            let is_selected = if role == ImportRole::Fluor {
-                                fluor
-                                    .or_else(|| {
-                                        self.import_preview.as_ref().map(|p| &p.resolved.fluor_cols)
-                                    })
-                                    .is_some_and(|columns| columns.contains(&column))
-                            } else {
-                                manual == Some(column)
-                            };
-                            let option =
-                                Self::import_column_label(self.import_preview.as_ref(), column);
-                            list = list.child(
-                                div()
-                                    .id(SharedString::from(format!(
-                                        "import-role-{role:?}-{column}"
-                                    )))
-                                    .px_2()
-                                    .py_0p5()
-                                    .text_xs()
-                                    .cursor_pointer()
-                                    .when(is_selected, |item| {
-                                        item.bg(t.raised).text_color(t.accent)
-                                    })
-                                    .when(!is_selected, |item| item.text_color(t.text))
-                                    .hover(|item| item.bg(t.raised))
-                                    .on_click(cx.listener(
-                                        move |this, _: &ClickEvent, _window, cx| {
-                                            if role == ImportRole::Fluor {
-                                                this.toggle_import_fluor(Some(column), cx);
-                                            } else {
-                                                this.set_import_role_column(
-                                                    role,
-                                                    Some(column),
-                                                    None,
-                                                    cx,
-                                                );
-                                            }
-                                        },
-                                    ))
-                                    .child(option),
-                            );
-                        }
-                        sections = sections.child(list);
-                    }
-                }
-                if let Some(roi) = &self.roi_input {
-                    sections = sections.child(
-                        div()
-                            .px_3()
-                            .py_0p5()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .text_sm()
-                                    .text_color(t.text_muted)
-                                    .child("type ROI cols"),
-                            )
-                            .child(div().w(px(96.)).child(roi.clone())),
-                    );
-                }
-                let align_on = self.ui_params().align_to_ref;
-                sections = sections.child(
-                    div()
-                        .px_3()
-                        .py_0p5()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .id("align-toggle")
-                                .px_1()
-                                .rounded_sm()
-                                .text_xs()
-                                .cursor_pointer()
-                                .text_color(if align_on { t.accent } else { t.text_muted })
-                                .hover(|d| d.bg(t.raised))
-                                .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                    this.edit_parameters(
-                                        "Toggle reference alignment".into(),
-                                        cx,
-                                        |p| {
-                                            p.align_to_ref = !p.align_to_ref;
-                                            Ok(())
-                                        },
-                                    );
-                                }))
-                                .child(if align_on {
-                                    "✓ align to ref"
-                                } else {
-                                    "align to ref"
-                                }),
-                        )
-                        .child(div().flex_1()),
-                );
-                if let Some(f) = field(ParamKey::AlignTarget) {
-                    sections = sections.child(f);
-                }
-            }
-        }
-
-        vec![sections.into_any_element()]
-    }
-
     /// Enum parameter row with a dropdown list (0 = auto).
     pub(crate) fn enum_row(
         &self,
@@ -8131,14 +9037,48 @@ impl StudioApp {
 
     fn problems_panel(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
-        let (errors, warnings) = problem_counts(&self.job_errors);
+        let visible: Vec<_> = self
+            .job_errors
+            .iter()
+            .filter(|p| self.problems_batch.is_none() || p.batch == self.problems_batch)
+            .cloned()
+            .collect();
+        let (errors, warnings) = problem_counts(&visible);
+        const PAGE_SIZE: usize = 100;
+        let source_count = self
+            .problems_batch
+            .map_or(0, |id| self.intake.history[id].sources.len());
+        let pages = (source_count + visible.len()).div_ceil(PAGE_SIZE).max(1);
+        let page = self.problems_page.min(pages - 1);
+        let start = page * PAGE_SIZE;
         let mut list = div()
             .id("recent-problems-list")
             .flex_1()
             .min_h_0()
             .min_w_0()
             .overflow_y_scroll();
-        for error in self.job_errors.iter().rev() {
+        if let Some(id) = self.problems_batch {
+            let batch = &self.intake.history[id];
+            list = list.child(div().px_3().py_1().child(format!(
+                "Import #{} · {} · Full signal checks run when groups are loaded",
+                id + 1,
+                batch.receipt()
+            )));
+            for (path, outcome) in batch.sources.iter().skip(start).take(PAGE_SIZE) {
+                list = list.child(div().px_3().py_1().child(format!(
+                    "{} · {}",
+                    path.display(),
+                    outcome.summary()
+                )));
+            }
+        }
+        let shown_sources = source_count.saturating_sub(start).min(PAGE_SIZE);
+        for error in visible
+            .iter()
+            .rev()
+            .skip(start.saturating_sub(source_count))
+            .take(PAGE_SIZE - shown_sources)
+        {
             list = list.child(
                 div()
                     .px_3()
@@ -8192,9 +9132,30 @@ impl StudioApp {
                     .text_xs()
                     .text_color(t.text)
                     .child(div().flex_1().child(format!(
-                        "Recent problems · {errors} errors · {warnings} warnings ({}/{JOB_ERROR_CAPACITY})",
-                        self.job_errors.len()
+                        "{} · {errors} errors · {warnings} warnings",
+                        self.problems_batch.map_or_else(
+                            || "Recent problems".into(),
+                            |id| format!("Import #{} details", id + 1)
+                        )
                     )))
+                    .when(pages > 1, |header| {
+                        header
+                            .child(
+                                shell::button(&t, "problems-prev", "Previous", false).on_click(
+                                    cx.listener(move |app, _, _, cx| {
+                                        app.problems_page = page.saturating_sub(1);
+                                        cx.notify();
+                                    }),
+                                ),
+                            )
+                            .child(format!("{} / {pages}", page + 1))
+                            .child(shell::button(&t, "problems-next", "Next", false).on_click(
+                                cx.listener(move |app, _, _, cx| {
+                                    app.problems_page = (page + 1).min(pages - 1);
+                                    cx.notify();
+                                }),
+                            ))
+                    })
                     .child(
                         div()
                             .id("clear-problems")
@@ -8203,11 +9164,11 @@ impl StudioApp {
                             .cursor_pointer()
                             .hover(|d| d.bg(t.raised))
                             .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                this.job_errors.clear();
+                                this.job_errors.retain(|p| p.batch.is_some());
                                 this.problems_open = false;
                                 cx.notify();
                             }))
-                            .child("clear"),
+                            .child("Clear recent / close"),
                     ),
             )
             .child(list)
@@ -8215,7 +9176,7 @@ impl StudioApp {
 
     /// Banner shown when the selected entry failed to load and the plots are
     /// therefore showing a *different* spectrum than the one selected.
-    fn stale_plots_banner(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
+    fn stale_plots_banner(&self, _cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
         let t = self.theme;
         let stale = self.stale_plots.as_ref()?;
         let headline: SharedString = format!(
@@ -8252,22 +9213,6 @@ impl StudioApp {
                         .text_xs()
                         .text_color(t.text_muted)
                         .child(detail),
-                )
-                .child(
-                    div()
-                        .id("stale-dismiss")
-                        .flex_none()
-                        .px_1()
-                        .rounded_sm()
-                        .text_xs()
-                        .text_color(t.text_muted)
-                        .cursor_pointer()
-                        .hover(|d| d.text_color(t.text))
-                        .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                            this.stale_plots = None;
-                            cx.notify();
-                        }))
-                        .child("✕"),
                 ),
         )
     }
@@ -8315,6 +9260,7 @@ impl StudioApp {
                     .cursor_pointer()
                     .hover(|d| d.bg(t.raised))
                     .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
+                        this.problems_batch = None;
                         this.problems_open = !this.problems_open;
                         cx.notify();
                     }))
@@ -8375,7 +9321,11 @@ impl Render for StudioApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.viewport_w = f32::from(window.viewport_size().width);
         self.fit_assistant_layout();
-        let key_context = if self.updates.open {
+        let key_context = if self.import_editor.is_some() {
+            "ImportEditor"
+        } else if self.path_route.is_some() {
+            "PathRoute"
+        } else if self.updates.open {
             "UpdateDialog"
         } else if self.palette.is_some() {
             "Palette"
@@ -8390,6 +9340,20 @@ impl Render for StudioApp {
             .id("root")
             .track_focus(&self.root_focus)
             .key_context(key_context)
+            .border_2()
+            .border_color(self.theme.bg)
+            .drag_over::<ExternalPaths>({
+                let accent = self.theme.accent;
+                move |style, _, _, _| style.border_color(accent)
+            })
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
+                this.route_paths(paths.paths().to_vec(), false, cx);
+            }))
+            .on_action(cx.listener(|this, _: &OpenProject, _, cx| this.open_project(cx)))
+            .on_action(cx.listener(|this, _: &ImportPaths, _, cx| this.open_folder(cx)))
+            .on_action(cx.listener(|this, _: &DismissPathRoute, window, cx| {
+                this.dismiss_path_route(window, cx);
+            }))
             .on_action(cx.listener(|this: &mut Self, _: &StageData, _window, cx| {
                 this.set_stage(Stage::Data, cx);
             }))

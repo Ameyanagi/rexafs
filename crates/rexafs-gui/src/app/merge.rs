@@ -4,7 +4,7 @@ use super::shell::tools::{ToolTarget, marked_group_indices};
 use super::{DERIVED_BASE, NO_ENTRY, StudioApp, shell};
 use crate::params::{
     DerivedSpectrum, DetectionMode, Operation, PipelineParams, Quantity, StreamingAverage,
-    load_group_raw, preview_import,
+    load_group_raw_with_diagnostics, preview_import,
 };
 use gpui::Context;
 use rexafs::prelude::XASSpectrum;
@@ -24,10 +24,8 @@ fn collect_inputs(
     mut resolve: impl FnMut(usize) -> Option<ToolTarget>,
 ) -> Result<Vec<ToolTarget>, String> {
     let unavailable = |ix| format!("merge refused: marked group {ix} is no longer available");
-    if marks.contains(&NO_ENTRY) {
-        return Err(unavailable(NO_ENTRY));
-    }
     let inputs = marked_group_indices(marks)
+        .chain(marks.contains(&NO_ENTRY).then_some(NO_ENTRY))
         .map(|ix| resolve(ix).ok_or_else(|| unavailable(ix)))
         .collect::<Result<Vec<_>, _>>()?;
     if inputs.len() < 2 {
@@ -88,6 +86,7 @@ struct Compatibility {
     lo: f64,
     hi: f64,
     e0: f64,
+    declared_edge: Option<crate::source_evidence::DeclaredEdge>,
 }
 
 impl Compatibility {
@@ -114,6 +113,7 @@ impl Compatibility {
             lo: energy[0],
             hi: energy[energy.len() - 1],
             e0,
+            declared_edge: input.derived.as_ref().and_then(|d| d.declared_edge.clone()),
         })
     }
 
@@ -149,6 +149,15 @@ fn compatible(a: &Compatibility, b: &Compatibility) -> Result<(), String> {
         )
     } else if a.lo.max(b.lo) >= a.hi.min(b.hi) {
         "no overlapping energy range".into()
+    } else if let (Some(left), Some(right)) = (&a.declared_edge, &b.declared_edge) {
+        if left == right {
+            return Ok(());
+        }
+        format!(
+            "different declared edges: {} and {}",
+            left.label(),
+            right.label()
+        )
     } else if (a.e0 - b.e0).abs() > 50.0 {
         format!(
             "different edges (E0 {:.1} eV and {:.1} eV; tolerance 50 eV)",
@@ -182,11 +191,16 @@ fn run_merge(inputs: Vec<MergeInput>, cancel: &AtomicBool) -> Result<DerivedSpec
             return Err("merge cancelled".into());
         }
         input.validate_quantity()?;
-        let (energy, mu) =
-            load_group_raw(&input.target.path, &input.params, input.derived.as_ref())
-                .map_err(|e| format!("merge refused: {:?}: {e}", input.target.label))?;
-        let info = Compatibility::from_raw(&input, &energy, &mu)
+        let raw = load_group_raw_with_diagnostics(
+            &input.target.path,
+            &input.params,
+            input.derived.as_ref(),
+        )
+        .map_err(|e| format!("merge refused: {:?}: {e}", input.target.label))?;
+        let (energy, mu) = (raw.energy, raw.mu);
+        let mut info = Compatibility::from_raw(&input, &energy, &mu)
             .map_err(|e| format!("merge refused: {:?}: {e}", input.target.label))?;
+        info.declared_edge = raw.declared_edge;
         for previous in &seen {
             compatible(previous, &info)?;
         }
@@ -208,6 +222,7 @@ fn run_merge(inputs: Vec<MergeInput>, cancel: &AtomicBool) -> Result<DerivedSpec
         .finish()
         .map_err(|e| format!("merge refused ({label}): {e}"))?;
     Ok(DerivedSpectrum {
+        declared_edge: seen.first().and_then(|info| info.declared_edge.clone()),
         label,
         energy,
         mu,
@@ -226,6 +241,106 @@ fn keep_current(
 }
 
 impl StudioApp {
+    /// Check facts already available to the UI; disk reads and full validation
+    /// stay in the merge worker. Unknown inputs can still be checked on click.
+    pub(crate) fn merge_disabled_reason(&self) -> Option<String> {
+        if self.merge_running {
+            return Some("A merge is already running.".into());
+        }
+        let targets = match collect_inputs(&self.selection, |ix| self.tool_target(ix)) {
+            Ok(targets) => targets,
+            Err(reason) => return Some(reason),
+        };
+        let mut known = Vec::new();
+        let mut modes: Vec<(String, DetectionMode)> = Vec::new();
+        let mut edges: Vec<(String, crate::source_evidence::DeclaredEdge)> = Vec::new();
+        for target in targets {
+            let params = self.effective_params(target.ix);
+            let derived = target
+                .ix
+                .checked_sub(DERIVED_BASE)
+                .and_then(|ix| self.derived.get(ix));
+            let quantity = derived.map_or(Quantity::RawMu, |d| d.quantity);
+            if let Some(reason) = derived.and_then(DerivedSpectrum::processing_block_reason) {
+                return Some(format!("{}: {reason}", target.label));
+            }
+            if !quantity.is_absorption() {
+                return Some(format!(
+                    "{} has quantity {}; Merge needs μ(E).",
+                    target.label,
+                    quantity.label()
+                ));
+            }
+            let mode = self
+                .raw_cache
+                .peek(&(target.ix, params.raw_fingerprint()))
+                .map(|raw| raw.channel)
+                .or_else(|| {
+                    self.saved_parser_record(target.ix)
+                        .map(|record| record.channel)
+                })
+                .unwrap_or(params.import.mode);
+            if mode != DetectionMode::Auto {
+                if let Some((label, other)) = modes.iter().find(|(_, other)| {
+                    (*other == DetectionMode::Reference) != (mode == DetectionMode::Reference)
+                }) {
+                    return Some(format!(
+                        "Different channel kinds: {label} ({}) and {} ({}).",
+                        other.label(),
+                        target.label,
+                        mode.label()
+                    ));
+                }
+                modes.push((target.label.clone(), mode));
+            }
+            let edge = self.group_declared_edge(target.ix);
+            if let Some(edge) = &edge {
+                if let Some((label, other)) = edges.iter().find(|(_, other)| other != edge) {
+                    return Some(format!(
+                        "Different declared edges: {label} ({}) and {} ({}).",
+                        other.label(),
+                        target.label,
+                        edge.label()
+                    ));
+                }
+                edges.push((target.label.clone(), edge.clone()));
+            }
+            let spectrum = self
+                .cache
+                .peek(&(target.ix, target.fingerprint))
+                .or_else(|| {
+                    (self.spectrum_group.as_ref() == Some(&target)
+                        && self.spectrum_fingerprint == target.fingerprint
+                        && !self.load_running
+                        && self.stale_plots.is_none())
+                    .then_some(self.spectrum.as_ref())
+                    .flatten()
+                });
+            if mode != DetectionMode::Auto
+                && let Some(spectrum) = spectrum
+                && let (Some(energy), Some(e0)) = (&spectrum.energy, spectrum.e0())
+                && energy.len() >= 2
+            {
+                let info = Compatibility {
+                    label: target.label,
+                    quantity,
+                    mode,
+                    lo: energy[0],
+                    hi: energy[energy.len() - 1],
+                    e0,
+                    declared_edge: edge,
+                };
+                for previous in &known {
+                    if let Err(reason) = compatible(previous, &info) {
+                        return Some(reason);
+                    }
+                }
+                known.push(info);
+            }
+        }
+        None
+    }
+
     /// Find the original target source for Auto on a materialized tool result.
     /// Bound traversal also makes malformed/cyclic imported provenance harmless.
     fn merge_mode_source(&self, target: &ToolTarget) -> PathBuf {
@@ -249,7 +364,12 @@ impl StudioApp {
     }
 
     pub(super) fn merge_selection(&mut self, cx: &mut Context<Self>) {
-        let current = self.tool_target(self.selected.unwrap_or(NO_ENTRY));
+        if let Some(reason) = self.merge_disabled_reason() {
+            self.status = reason.into();
+            cx.notify();
+            return;
+        }
+        let current = self.current_tool_target();
         let mut targets = match collect_inputs(&self.selection, |ix| self.tool_target(ix)) {
             Ok(inputs) => inputs,
             Err(e) => {
@@ -289,6 +409,10 @@ impl StudioApp {
         let generation = self.merge_gen;
         let cancel = Arc::new(AtomicBool::new(false));
         self.merge_cancel = Some(cancel.clone());
+        self.job_inputs[2] = inputs
+            .iter()
+            .filter_map(|input| input.target.group_id.clone())
+            .collect();
         self.merge_running = true;
         self.status = format!(
             "merging {} spectra · Grid and settings from {:?}",
@@ -318,6 +442,7 @@ impl StudioApp {
                             suffix += 1;
                         }
                         merged.id = app.next_group_id();
+                        merged.group_id = Some(crate::group_identity::GroupId::new_result());
                         let label = merged.label.clone();
                         app.record(
                             format!("merge → {label}"),
@@ -327,11 +452,12 @@ impl StudioApp {
                             }),
                         );
                         app.derived.push(merged);
+                        app.rekey_after_catalog_change();
                         if keep_current(
                             (selected, current.as_ref(), current_generation),
                             (
                                 app.selected,
-                                app.tool_target(app.selected.unwrap_or(NO_ENTRY)).as_ref(),
+                                app.current_tool_target().as_ref(),
                                 app.generation,
                             ),
                         ) {
@@ -362,6 +488,7 @@ mod tests {
 
     fn target(ix: usize, label: &str) -> ToolTarget {
         ToolTarget {
+            group_id: Some(crate::group_identity::GroupId::legacy_result(ix as u64)),
             ix,
             label: label.into(),
             path: PathBuf::new(),
@@ -406,6 +533,69 @@ mod tests {
             lo: 8000.,
             hi: 9500.,
             e0,
+            declared_edge: None,
+        }
+    }
+
+    #[test]
+    fn declared_edges_take_precedence_with_e0_fallback_when_missing() {
+        use crate::source_evidence::DeclaredEdge;
+        let edge = |element: &str| DeclaredEdge {
+            element: element.into(),
+            edge: "K".into(),
+        };
+        let mut a = info("first", 8979.);
+        let mut b = info("second", 8980.);
+        a.declared_edge = Some(edge("Cu"));
+        b.declared_edge = Some(edge("Ni"));
+        assert!(
+            compatible(&a, &b)
+                .unwrap_err()
+                .contains("different declared edges")
+        );
+        b.declared_edge = Some(edge("Cu"));
+        b.e0 = 9090.;
+        compatible(&a, &b).unwrap();
+        b.declared_edge = None;
+        assert!(compatible(&a, &b).unwrap_err().contains("tolerance 50 eV"));
+        b.e0 = a.e0;
+        compatible(&a, &b).unwrap();
+        b.quantity = Quantity::NormalizedDifference;
+        assert!(compatible(&a, &b).is_err());
+    }
+
+    #[test]
+    fn raw_xdi_reads_retain_declared_edge_for_merge() {
+        let path = std::env::temp_dir()
+            .join(crate::import_recipes::new_id("edge").replace(':', "-"))
+            .with_extension("xdi");
+        std::fs::write(&path, "# XDI/1.0\n# Element.symbol: cU\n# Element.edge: k\n# Column.1: energy eV\n# Column.2: mutrans\n# ---\n8900 1\n9000 2\n9100 3\n").unwrap();
+        let raw = crate::params::load_mu_with_diagnostics(&path, &Default::default()).unwrap();
+        assert_eq!(raw.declared_edge.unwrap().label(), "Cu K");
+        assert_eq!(raw.channel, DetectionMode::MuColumn);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn materialized_merge_preserves_and_checks_declared_edges() {
+        use crate::source_evidence::DeclaredEdge;
+        for element in ["Ni", "Cu"] {
+            let mut a = input(DERIVED_BASE, "declared Cu", 0.);
+            let mut b = input(DERIVED_BASE + 1, "second", 0.1);
+            a.derived.as_mut().unwrap().declared_edge = Some(DeclaredEdge {
+                element: "Cu".into(),
+                edge: "K".into(),
+            });
+            b.derived.as_mut().unwrap().declared_edge = Some(DeclaredEdge {
+                element: element.into(),
+                edge: "K".into(),
+            });
+            let result = run_merge(vec![a, b], &AtomicBool::new(false));
+            if element == "Ni" {
+                assert!(result.err().unwrap().contains("different declared edges"));
+            } else {
+                assert_eq!(result.unwrap().declared_edge.unwrap().label(), "Cu K");
+            }
         }
     }
 
@@ -427,11 +617,21 @@ mod tests {
         );
         assert!(collect_inputs(&BTreeSet::from([0]), |ix| Some(target(ix, "one"))).is_err());
         assert!(
-            collect_inputs(&BTreeSet::from([0, NO_ENTRY]), |ix| Some(target(
-                ix, "invalid"
-            )))
+            collect_inputs(&BTreeSet::from([0, NO_ENTRY]), |ix| (ix != NO_ENTRY)
+                .then(|| target(ix, "invalid")))
             .is_err()
         );
+    }
+
+    #[test]
+    fn merge_uses_marks_independently_of_current() {
+        let marks = BTreeSet::from([0, DERIVED_BASE]);
+        for current in [0, 1] {
+            let inputs = collect_inputs(&marks, |ix| Some(target(ix, "input"))).unwrap();
+            assert_eq!(inputs.iter().map(|t| t.ix).collect::<BTreeSet<_>>(), marks);
+            let compare = crate::app::group_rows::compare_set(Some(current), &marks);
+            assert_eq!(compare.len(), if current == 0 { 2 } else { 3 });
+        }
     }
 
     #[test]

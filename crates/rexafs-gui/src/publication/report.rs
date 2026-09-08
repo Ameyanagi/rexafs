@@ -332,7 +332,7 @@ mod tests {
     use super::*;
     #[test]
     fn historical_fit_tables_have_numbered_captions_units_and_error_definitions() {
-        let project = crate::project::load(
+        let project = crate::project::tests::load(
             &Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests/fixtures/projects/rexafs-0.1.0-links.rxs"),
         )

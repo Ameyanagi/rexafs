@@ -370,6 +370,7 @@ pub(crate) fn spectrum_figures(sp: Arc<XASSpectrum>, label: &str) -> Vec<FigureD
         ..Default::default()
     };
     let traces = [plotting::QuadTrace {
+        color_index: 0,
         label: label.into(),
         sp,
         active: true,

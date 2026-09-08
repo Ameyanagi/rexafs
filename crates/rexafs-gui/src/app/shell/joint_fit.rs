@@ -39,6 +39,45 @@ impl Default for JointState {
         }
     }
 }
+/// Resolve identity first. A reused file path must not repair historical inputs.
+fn joint_source_index(
+    dataset: &JointDataset,
+    catalog: &crate::catalog::Catalog,
+    derived: &[crate::params::DerivedSpectrum],
+    registry: &crate::group_identity::GroupRegistry,
+) -> Result<Option<usize>, ()> {
+    if let Some(id) = &dataset.source_id {
+        if registry.is_excluded(id) {
+            return Err(());
+        }
+        if let Some(ix) = registry.index(id) {
+            return Ok(Some(ix));
+        }
+        return registry
+            .source(&dataset.file)
+            .filter(|s| &s.id == id)
+            .map(|_| None)
+            .ok_or(());
+    }
+    if let Some(id) = dataset.group_id {
+        return derived
+            .iter()
+            .position(|d| d.id == id)
+            .map(|i| Some(crate::app::DERIVED_BASE + i))
+            .ok_or(());
+    }
+    if let Some(ix) = catalog.find_by_path(&dataset.file) {
+        return (!registry.index_excluded(ix)).then_some(Some(ix)).ok_or(());
+    }
+    if registry
+        .source(&dataset.file)
+        .is_some_and(|s| registry.is_excluded(&s.id))
+    {
+        return Err(());
+    }
+    Ok(None)
+}
+
 impl StudioApp {
     pub(super) fn joint_plotted_dataset_id(&self) -> Option<usize> {
         if self.stage_view.fit_step == FitStep::Model {
@@ -69,15 +108,52 @@ impl StudioApp {
             .clone()
     }
     pub(crate) fn joint_dataset_params(&self, dataset: &JointDataset) -> Option<PipelineParams> {
-        match dataset.group_id {
-            Some(id) => self
-                .derived
-                .iter()
-                .find(|d| d.id == id)
-                .map(|d| d.params.as_ref().unwrap_or(&self.params).clone()),
-            None => Some(self.joint_params(&dataset.file)),
+        let ix =
+            joint_source_index(dataset, &self.catalog, &self.derived, &self.group_registry).ok()?;
+        Some(
+            ix.map(|ix| self.effective_params(ix))
+                .unwrap_or(&self.params)
+                .clone(),
+        )
+    }
+
+    pub(crate) fn bind_joint_sources(&mut self) {
+        let identities: Vec<_> = self
+            .joint
+            .config
+            .datasets
+            .iter()
+            .map(|d| {
+                d.source_id.clone().or_else(|| {
+                    if let Some(id) = d.group_id {
+                        return Some(
+                            self.derived
+                                .iter()
+                                .find(|g| g.id == id)
+                                .and_then(|g| g.group_id.clone())
+                                .unwrap_or_else(|| {
+                                    crate::group_identity::GroupId::legacy_result(id)
+                                }),
+                        );
+                    }
+                    let ix = self.catalog.find_by_path(&d.file);
+                    let path = ix
+                        .map(|ix| self.catalog.path(ix))
+                        .unwrap_or_else(|| d.file.clone());
+                    Some(self.group_registry.register_source(
+                        ix,
+                        path,
+                        crate::params::DetectionMode::Auto,
+                        &self.project_source_origins,
+                    ))
+                })
+            })
+            .collect();
+        for (dataset, id) in self.joint.config.datasets.iter_mut().zip(identities) {
+            dataset.source_id = id;
         }
     }
+
     pub(crate) fn joint_dataset_input(
         &self,
         dataset: &JointDataset,
@@ -187,6 +263,7 @@ impl StudioApp {
                 ..Default::default()
             });
         }
+        self.bind_joint_sources();
         self.joint.setup = true;
         self.fit_model_changed(cx);
         cx.notify();
@@ -342,6 +419,7 @@ impl StudioApp {
         bar
     }
     pub(crate) fn run_joint_fit_now(&mut self, cx: &mut Context<Self>) {
+        self.bind_joint_sources();
         if let Some(reason) = self.joint_blocker() {
             self.status = reason.into();
             self.joint.setup = true;
@@ -375,6 +453,11 @@ impl StudioApp {
         };
         self.fit_gen += 1;
         let generation = self.fit_gen;
+        self.job_inputs[3] = config
+            .datasets
+            .iter()
+            .filter_map(|d| d.source_id.clone())
+            .collect();
         self.fit_running = true;
         self.fit_error = None;
         self.status = "Preparing spectra…".into();
@@ -449,5 +532,64 @@ impl StudioApp {
             .ok();
         })
         .detach();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn joint_catalog_source_stays_missing_after_explicit_reimport() {
+        let mut catalog = crate::catalog::Catalog::default();
+        catalog.extend(vec![crate::catalog::FileMeta {
+            dir: "/data".into(),
+            name: "a.dat".into(),
+            size: 0,
+        }]);
+        let registry = crate::group_identity::GroupRegistry::default();
+        let path = catalog.path(0);
+        let id = registry.register_source(
+            Some(0),
+            path.clone(),
+            Default::default(),
+            &Default::default(),
+        );
+        let mut dataset = JointDataset {
+            file: path.clone(),
+            source_id: Some(id.clone()),
+            ..Default::default()
+        };
+        assert_eq!(
+            joint_source_index(&dataset, &catalog, &[], &registry),
+            Ok(Some(0))
+        );
+        registry.set_excluded(&std::collections::BTreeSet::from([id.clone()]));
+        assert!(joint_source_index(&dataset, &catalog, &[], &registry).is_err());
+        dataset.source_id = None; // legacy projects also flag excluded primary sources
+        assert!(joint_source_index(&dataset, &catalog, &[], &registry).is_err());
+        dataset.source_id = Some(id.clone());
+        let fresh = registry.reimport_source(&path, Some(0)).unwrap();
+        assert_ne!(fresh, id);
+        let saved = serde_json::to_value(&dataset).unwrap();
+        let dataset: JointDataset = serde_json::from_value(saved).unwrap();
+        assert!(joint_source_index(&dataset, &catalog, &[], &registry).is_err());
+        registry.restore_source(
+            crate::group_identity::SourceGroup {
+                id,
+                path,
+                channel: Default::default(),
+            },
+            0,
+        );
+        registry.set_excluded(&Default::default());
+        assert_eq!(
+            joint_source_index(&dataset, &catalog, &[], &registry),
+            Ok(Some(0))
+        );
+        let mut legacy = serde_json::to_value(&dataset).unwrap();
+        legacy.as_object_mut().unwrap().remove("source_id");
+        let legacy: JointDataset = serde_json::from_value(legacy).unwrap();
+        assert!(legacy.source_id.is_none());
     }
 }

@@ -418,7 +418,9 @@ impl StudioApp {
                 continue;
             }
             self.set_custom_params(ix, after.clone());
-            changes.push((ix, before, after));
+            if let Some(id) = self.group_id(ix) {
+                changes.push((id.clone(), before, after));
+            }
         }
         let n = changes.len();
         if n > 0 {
@@ -595,7 +597,7 @@ impl StudioApp {
                                     self.entry_label(ix),
                                     if current { " · current" } else { "" },
                                     if self.frozen.contains(&ix) {
-                                        " · frozen"
+                                        " · Processing locked"
                                     } else {
                                         ""
                                     }
@@ -846,6 +848,8 @@ mod tests {
         use rexafs::prelude::{AUTOBKClampScalePolicy, AUTOBKSolver, FTWindow};
         PipelineParams {
             import: crate::params::ImportConfig {
+                axis: crate::import_mapping::AxisConversion::EnergyKev,
+                reference_mu_col: Some(8),
                 mode,
                 energy_col: Some(1),
                 i0_col: Some(2),

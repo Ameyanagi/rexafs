@@ -28,6 +28,18 @@ pub(crate) fn marked_group_indices(marks: &BTreeSet<usize>) -> impl Iterator<Ite
         .copied()
 }
 
+fn analysis_marks(
+    marks: &BTreeSet<usize>,
+    current: Option<&crate::group_identity::GroupId>,
+    identity: impl Fn(usize) -> Option<crate::group_identity::GroupId>,
+) -> BTreeSet<usize> {
+    marks
+        .iter()
+        .copied()
+        .filter(|&ix| current.is_none() || identity(ix).as_ref() != current)
+        .collect()
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tool {
     Align,
@@ -195,6 +207,7 @@ pub struct ToolState {
     pub message: SharedString,
     target: Option<ToolTarget>,
     standard: Option<ToolTarget>,
+    pub(crate) alignment_standard: Option<crate::group_identity::GroupId>,
     standard_load: StandardLoad,
     standard_request: u64,
     standard_picker_open: bool,
@@ -213,9 +226,10 @@ pub struct ToolState {
 }
 
 /// Session-local identity: indices alone can be reused after a catalog walk
-/// or a derived-group removal. Keep source/name and derived id as well.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// or a derived-group removal. Keep source locator and derived id as well.
+#[derive(Clone, Debug, Eq)]
 pub(crate) struct ToolTarget {
+    pub group_id: Option<crate::group_identity::GroupId>,
     pub ix: usize,
     pub fingerprint: u64,
     pub label: String,
@@ -226,9 +240,24 @@ pub(crate) struct ToolTarget {
     pub size: Option<u64>,
 }
 
+// Display metadata is not part of operand readiness or scientific identity.
+impl PartialEq for ToolTarget {
+    fn eq(&self, other: &Self) -> bool {
+        self.group_id == other.group_id
+            && self.ix == other.ix
+            && self.fingerprint == other.fingerprint
+            && self.path == other.path
+            && self.derived_id == other.derived_id
+            && self.project_generation == other.project_generation
+            && self.catalog_generation == other.catalog_generation
+            && self.size == other.size
+    }
+}
+
 impl ToolTarget {
     pub(crate) fn operation_input(&self) -> OperationInput {
         OperationInput {
+            group_id: self.group_id.clone(),
             label: self.label.clone(),
             path: self.path.clone(),
             derived_id: self.derived_id,
@@ -238,6 +267,7 @@ impl ToolTarget {
     }
 
     pub(crate) fn standalone(
+        group_id: Option<crate::group_identity::GroupId>,
         path: PathBuf,
         label: String,
         fingerprint: u64,
@@ -245,6 +275,7 @@ impl ToolTarget {
         catalog_generation: u64,
     ) -> Self {
         Self {
+            group_id,
             ix: NO_ENTRY,
             path,
             label,
@@ -454,6 +485,17 @@ impl LcfSpaceChoice {
 }
 
 impl ToolState {
+    pub(crate) fn pin_alignment_standard(&mut self, id: crate::group_identity::GroupId) -> bool {
+        self.alignment_standard = Some(id);
+        self.open == Some(Tool::Align)
+    }
+
+    fn remember_standard_choice(&mut self, standard: Option<&ToolTarget>) {
+        if self.open == Some(Tool::Align) {
+            self.alignment_standard = standard.and_then(|s| s.group_id.clone());
+        }
+    }
+
     pub(crate) fn invalidate_bindings(&mut self) {
         self.generation += 1;
         self.standard_request += 1;
@@ -556,7 +598,7 @@ impl StudioApp {
         }
         self.tools.open = Some(tool);
         self.tools.message = SharedString::default();
-        self.tools.target = self.tool_target(self.selected.unwrap_or(NO_ENTRY));
+        self.tools.target = self.current_tool_target();
         self.tools.standard_picker_open = false;
         self.tools.standard_filter_request += 1;
         self.tools.standard_matches = None;
@@ -571,12 +613,26 @@ impl StudioApp {
         let standard = tool
             .needs_standard()
             .then(|| {
-                default_standard(
-                    tool,
-                    self.tools.target.as_ref(),
-                    self.tool_groups(),
-                    &self.selection,
-                )
+                let pinned = (tool == Tool::Align)
+                    .then_some(self.tools.alignment_standard.as_ref())
+                    .flatten()
+                    .and_then(|id| {
+                        self.group_registry.index(id).or_else(|| {
+                            self.standalone_source
+                                .as_ref()
+                                .filter(|(_, _, sid)| sid == id)
+                                .map(|_| NO_ENTRY)
+                        })
+                    })
+                    .and_then(|ix| self.tool_target(ix));
+                pinned.or_else(|| {
+                    default_standard(
+                        tool,
+                        self.tools.target.as_ref(),
+                        self.tool_groups(),
+                        &self.selection,
+                    )
+                })
             })
             .flatten();
         self.choose_tool_standard(standard, cx);
@@ -593,14 +649,14 @@ impl StudioApp {
     /// Standards / training set: every marked group other than the current
     /// one whose processed spectrum is cached.
     fn marked_spectra(&self) -> Vec<(String, std::sync::Arc<XASSpectrum>)> {
-        let current = self.selected;
-        self.lcf_standards()
-            .into_iter()
-            .filter(|_| true)
-            .filter(|(label, _)| {
-                Some(label.as_str()) != current.map(|ix| self.entry_label(ix)).as_deref()
-            })
-            .collect()
+        let current = self.current_group_index().and_then(|ix| self.group_id(ix));
+        let marks = analysis_marks(&self.selection, current.as_ref(), |ix| self.group_id(ix));
+        crate::app::cached_marked_spectra(
+            &marks,
+            &self.cache,
+            |ix| self.effective_fingerprint(ix),
+            |ix| self.entry_label(ix),
+        )
     }
 
     /// Run the LCF / PCA tool on the current group (synchronous: both are
@@ -741,17 +797,23 @@ impl StudioApp {
             .and_then(|(_, e)| e.read(cx).value())
     }
 
+    pub(crate) fn current_tool_target(&self) -> Option<ToolTarget> {
+        self.current_group_index()
+            .and_then(|ix| self.tool_target(ix))
+    }
+
     pub(crate) fn tool_target(&self, ix: usize) -> Option<ToolTarget> {
         if ix == NO_ENTRY {
-            return (!self.current_path.as_os_str().is_empty()).then(|| {
-                ToolTarget::standalone(
-                    self.current_path.clone(),
-                    self.spectrum_label.to_string(),
-                    self.params.fingerprint(),
-                    self.project_generation,
-                    self.tools.generation,
-                )
-            });
+            self.group_id(ix)?;
+            let (path, label, id) = self.standalone_source.as_ref()?;
+            return Some(ToolTarget::standalone(
+                Some(id.clone()),
+                path.clone(),
+                label.to_string(),
+                self.params.fingerprint(),
+                self.project_generation,
+                self.tools.generation,
+            ));
         }
         if !self.valid_group_index(ix) {
             return None;
@@ -760,6 +822,7 @@ impl StudioApp {
             .checked_sub(DERIVED_BASE)
             .and_then(|i| self.derived.get(i));
         Some(ToolTarget {
+            group_id: self.group_id(ix),
             ix,
             fingerprint: self.effective_fingerprint(ix),
             label: self.entry_label(ix),
@@ -779,7 +842,11 @@ impl StudioApp {
         marked_group_indices(&self.selection).filter_map(|ix| self.tool_target(ix))
     }
 
-    fn choose_tool_standard(&mut self, standard: Option<ToolTarget>, cx: &mut Context<Self>) {
+    pub(crate) fn choose_tool_standard(
+        &mut self,
+        standard: Option<ToolTarget>,
+        cx: &mut Context<Self>,
+    ) {
         self.tools.standard_request += 1;
         let request = self.tools.standard_request;
         self.tools.standard = standard.clone();
@@ -810,6 +877,7 @@ impl StudioApp {
             standard.ix,
             self.effective_params(standard.ix).raw_fingerprint(),
         );
+        let intake_origin = self.intake_origin(standard.ix, &standard.path);
         let job = self.process_group_job(standard.ix, standard.path.clone(), cx);
         cx.spawn(async move |this, cx| {
             let result = job.await;
@@ -826,7 +894,14 @@ impl StudioApp {
                 match result {
                     Ok((sp, raw)) => {
                         if let Some(raw) = raw {
-                            app.record_source_warnings(&standard.path, &raw.diagnostics);
+                            app.record_source_warnings(
+                                standard.ix,
+                                intake_origin.as_ref(),
+                                &standard.path,
+                                &raw.diagnostics,
+                                raw.declared_edge.clone(),
+                                raw.channel,
+                            );
                             app.raw_cache.put(raw_key, raw);
                         }
                         let sp = Arc::new(sp);
@@ -836,7 +911,11 @@ impl StudioApp {
                         app.tools.standard_load = StandardLoad::Ready(sp);
                     }
                     Err(error) => {
-                        app.record_job_error(standard.label.clone(), error.clone());
+                        app.record_source_error(
+                            intake_origin.as_ref(),
+                            standard.label.clone(),
+                            error.clone(),
+                        );
                         app.tools.standard_load = StandardLoad::Failed(error);
                     }
                 }
@@ -848,7 +927,7 @@ impl StudioApp {
     }
 
     fn tool_readiness(&self, tool: Tool) -> Result<(), ReadinessReason> {
-        let current = self.tool_target(self.selected.unwrap_or(NO_ENTRY));
+        let current = self.current_tool_target();
         let standard = tool.needs_standard().then(|| {
             let current = self
                 .tools
@@ -1014,7 +1093,22 @@ impl StudioApp {
                     operation,
                 ) {
                     Ok(mut derived) => {
+                        derived.declared_edge = self
+                            .tools
+                            .target
+                            .as_ref()
+                            .and_then(|target| self.group_declared_edge(target.ix));
+                        if let Some(record) = self
+                            .tools
+                            .target
+                            .as_ref()
+                            .and_then(|target| self.saved_parser_record(target.ix))
+                            && let Some(params) = &mut derived.params
+                        {
+                            params.import.mode = record.channel;
+                        }
                         derived.id = self.next_group_id();
+                        derived.group_id = Some(crate::group_identity::GroupId::new_result());
                         derived
                     }
                     Err(error) => {
@@ -1031,6 +1125,7 @@ impl StudioApp {
                     }),
                 );
                 self.derived.push(derived);
+                self.rekey_after_catalog_change();
                 let ix = DERIVED_BASE + self.derived.len() - 1;
                 self.tools.message = format!("created {label}").into();
                 self.tools.open = None;
@@ -1279,6 +1374,7 @@ impl StudioApp {
                         self.tools.standard.is_none(),
                     )
                     .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
+                        this.tools.remember_standard_choice(None);
                         this.choose_tool_standard(None, cx)
                     })),
                 )
@@ -1322,6 +1418,9 @@ impl StudioApp {
                                             d.on_click(cx.listener(
                                                 move |this, _: &ClickEvent, _, cx| {
                                                     let standard = this.tool_target(ix);
+                                                    this.tools.remember_standard_choice(
+                                                        standard.as_ref(),
+                                                    );
                                                     this.choose_tool_standard(standard, cx);
                                                 },
                                             ))
@@ -1515,6 +1614,105 @@ mod tool_readiness_tests {
     use std::{collections::BTreeSet, num::NonZeroUsize};
 
     #[test]
+    fn analysis_excludes_current_identity_before_duplicate_display_labels() {
+        use crate::group_identity::GroupId;
+        let current = GroupId::new_result();
+        let others = [GroupId::new_result(), GroupId::new_result()];
+        let marks = BTreeSet::from([0, 1, 2]);
+        let identity = |ix: usize| {
+            Some(if ix == 0 {
+                current.clone()
+            } else {
+                others[ix - 1].clone()
+            })
+        };
+        let filtered = analysis_marks(&marks, Some(&current), identity);
+        let mut cache = lru::LruCache::new(NonZeroUsize::new(3).unwrap());
+        let spectra: Vec<_> = (0..3).map(|_| Arc::new(XASSpectrum::new())).collect();
+        for (ix, spectrum) in spectra.iter().enumerate() {
+            cache.put((ix, 0), spectrum.clone());
+        }
+        let inputs =
+            crate::app::cached_marked_spectra(&filtered, &cache, |_| 0, |_| "Cu foil".into());
+        assert_eq!(inputs.len(), 2);
+        assert!(inputs.iter().all(|(label, _)| label == "Cu foil"));
+        assert!(Arc::ptr_eq(&inputs[0].1, &spectra[1]));
+        assert!(Arc::ptr_eq(&inputs[1].1, &spectra[2]));
+        assert_eq!(analysis_marks(&marks, None, identity), marks);
+    }
+
+    #[test]
+    fn alignment_pin_only_requests_loading_for_an_open_align_tool() {
+        use crate::group_identity::GroupId;
+        for open in [
+            None,
+            Some(Tool::Difference),
+            Some(Tool::Calibrate),
+            Some(Tool::Align),
+        ] {
+            let mut state = ToolState {
+                open,
+                standard: Some(group(1)),
+                ..Default::default()
+            };
+            let original = state.standard.clone();
+            let id = GroupId::new_result();
+            assert_eq!(
+                state.pin_alignment_standard(id.clone()),
+                open == Some(Tool::Align)
+            );
+            assert_eq!(state.alignment_standard, Some(id));
+            assert_eq!(state.standard, original);
+            assert_eq!(state.standard_request, 0);
+        }
+    }
+
+    #[test]
+    fn explicit_align_picker_choices_replace_or_clear_the_pin() {
+        use crate::group_identity::GroupId;
+        let mut state = ToolState {
+            open: Some(Tool::Align),
+            ..Default::default()
+        };
+        state.pin_alignment_standard(GroupId::new_result());
+        let mut chosen = group(2);
+        chosen.group_id = Some(GroupId::new_result());
+        state.remember_standard_choice(Some(&chosen));
+        assert_eq!(state.alignment_standard, chosen.group_id);
+        state.remember_standard_choice(None);
+        assert_eq!(state.alignment_standard, None);
+        let pinned = GroupId::new_result();
+        state.pin_alignment_standard(pinned.clone());
+        for open in [Some(Tool::Difference), Some(Tool::Calibrate)] {
+            state.open = open;
+            state.remember_standard_choice(Some(&chosen));
+            state.remember_standard_choice(None);
+            assert_eq!(state.alignment_standard, Some(pinned.clone()));
+        }
+    }
+
+    #[test]
+    fn display_rename_does_not_invalidate_tool_operand_readiness() {
+        let target = ToolTarget::standalone(None, "/cu.dat".into(), "Cu".into(), 1, 2, 3);
+        let mut renamed = target.clone();
+        renamed.label = "Cu foil".into();
+        assert_eq!(target, renamed);
+        assert_eq!(
+            readiness(
+                Some(&target),
+                Some(&renamed),
+                Some(&target),
+                false,
+                false,
+                None
+            ),
+            Ok(())
+        );
+        renamed.fingerprint += 1;
+        assert_ne!(target, renamed);
+    }
+
+    #[test]
     fn typed_outputs_materialize_quantity_and_bound_operation_inputs() {
         let params = PipelineParams {
             e0: Some(110.0),
@@ -1577,6 +1775,7 @@ mod tool_readiness_tests {
 
     fn group(ix: usize) -> ToolTarget {
         ToolTarget {
+            group_id: Some(crate::group_identity::GroupId::legacy_result(ix as u64)),
             ix,
             fingerprint: 42,
             label: format!("group {ix}"),
@@ -1713,7 +1912,7 @@ mod tool_readiness_tests {
         let mut mutations = vec![target.clone(); 8];
         mutations[0].ix += 1;
         mutations[1].fingerprint += 1;
-        mutations[2].label = "renamed".into();
+        mutations[2].group_id = Some(crate::group_identity::GroupId::new_result());
         mutations[3].path = "/different/same-name.dat".into();
         mutations[4].derived_id = Some(999);
         mutations[5].project_generation += 1;
@@ -1917,8 +2116,101 @@ mod tool_readiness_tests {
     }
 
     #[test]
+    fn standalone_target_identity_roundtrip_after_relocation_uses_actual_channel() {
+        use crate::group_identity::GroupRegistry;
+        use crate::params::DetectionMode;
+        use crate::project::{DataStorage, ProjectFile, load, save_with_storage};
+        use std::collections::BTreeMap;
+        let root = std::env::temp_dir().join(format!(
+            "rexafs-standalone-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        for mode in [DetectionMode::Transmission, DetectionMode::Reference] {
+            let old = root.join(format!("old-{mode:?}"));
+            std::fs::create_dir_all(&old).unwrap();
+            let source = old.join("source.xmu");
+            std::fs::copy(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/projects/data/cu_150k.xmu"),
+                &source,
+            )
+            .unwrap();
+            let source = source.canonicalize().unwrap();
+            let registry = GroupRegistry::default();
+            let params = PipelineParams {
+                import: crate::params::ImportConfig {
+                    mode,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            // An independently added channel may already own the base ID.
+            let mut channel = DerivedSpectrum {
+                id: 1,
+                source: Some(source.clone()),
+                params: Some(params.clone()),
+                ..Default::default()
+            };
+            registry.assign_group(&mut channel, &BTreeMap::new());
+            let id = registry.register_source(None, source.clone(), mode, &BTreeMap::new());
+            assert_ne!(Some(id.clone()), channel.group_id);
+            let target = ToolTarget::standalone(
+                Some(id.clone()),
+                source.clone(),
+                "source".into(),
+                params.fingerprint(),
+                1,
+                1,
+            );
+            let output = DerivedSpectrum {
+                id: 2,
+                group_id: Some(crate::group_identity::GroupId::new_result()),
+                energy: vec![1., 2.],
+                mu: vec![3., 4.],
+                operation: Some(Operation {
+                    tool: "smooth".into(),
+                    parameters: serde_json::json!({}),
+                    inputs: vec![target.operation_input()],
+                    applied_energy_shift_ev: 0.,
+                }),
+                ..Default::default()
+            };
+            let project = ProjectFile {
+                version: crate::project::PROJECT_VERSION,
+                params,
+                spectrum_file: Some(source),
+                source_groups: registry.sources(),
+                derived: vec![channel, output],
+                ..Default::default()
+            };
+            assert_eq!(project.source_groups[0].channel, mode);
+            save_with_storage(&old.join("session.rxs"), &project, DataStorage::Paths).unwrap();
+            let moved = root.join(format!("moved-{mode:?}"));
+            std::fs::rename(&old, &moved).unwrap();
+            let mut reopened = load(&moved.join("session.rxs")).unwrap();
+            reopened.assign_group_ids();
+            let relocated = reopened.spectrum_file.clone().unwrap();
+            assert!(relocated.starts_with(moved.canonicalize().unwrap()));
+            let registry = GroupRegistry::from_sources(reopened.source_groups.clone());
+            let imported_id =
+                registry.register_source(Some(0), relocated.clone(), mode, &BTreeMap::new());
+            let input = &reopened.derived[1].operation.as_ref().unwrap().inputs[0];
+            assert_eq!(input.group_id, Some(id.clone()));
+            assert_eq!(imported_id, id);
+            assert_eq!(input.path, relocated);
+            assert_eq!(registry.index(input.group_id.as_ref().unwrap()), Some(0));
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn standalone_readiness_checks_path_parameters_and_load_state() {
         let target = ToolTarget::standalone(
+            None,
             "/outside/project.dat".into(),
             "project.dat".into(),
             42,

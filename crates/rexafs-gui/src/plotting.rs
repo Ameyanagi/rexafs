@@ -22,6 +22,7 @@ fn vecs(v: &nalgebra::DVector<f64>) -> Vec<f64> {
 
 /// One spectrum in a comparison overlay.
 pub struct QuadTrace {
+    pub color_index: usize,
     pub label: String,
     pub sp: std::sync::Arc<XASSpectrum>,
     pub active: bool,
@@ -215,7 +216,58 @@ pub struct QuadrantSpec {
     pub xlim: Option<(f64, f64)>,
 }
 
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+pub(crate) struct PlotCoverage {
+    plotted: usize,
+    total: usize,
+    sampled_out: usize,
+    unavailable: usize,
+    incompatible: usize,
+}
+
+impl PlotCoverage {
+    pub fn new(total: usize, sampled: usize, loaded: usize, plotted: usize) -> Self {
+        Self {
+            plotted,
+            total,
+            sampled_out: total.saturating_sub(sampled),
+            unavailable: sampled.saturating_sub(loaded),
+            incompatible: loaded.saturating_sub(plotted),
+        }
+    }
+
+    pub fn disclosure(self) -> Option<String> {
+        if self.plotted == self.total {
+            return None;
+        }
+        let mut text = format!("{} of {} spectra plotted", self.plotted, self.total);
+        for (count, reason) in [
+            (self.sampled_out, "omitted by sampling"),
+            (self.incompatible, "without data for this plot"),
+            (self.unavailable, "failed or not loaded"),
+        ] {
+            if count > 0 {
+                text.push_str(&format!(" · {count} {reason}"));
+            }
+        }
+        Some(text)
+    }
+}
+
 impl QuadrantSpec {
+    pub(crate) fn coverage(&self, total: usize, sampled: usize, loaded: usize) -> PlotCoverage {
+        let plotted = self
+            .series
+            .iter()
+            .filter_map(|s| match s.key {
+                SeriesKey::Trace(i) if !s.x.is_empty() && !s.y.is_empty() => Some(i),
+                _ => None,
+            })
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+        PlotCoverage::new(total, sampled, loaded, plotted)
+    }
+
     /// Hash of the structure only (never the values). Two specs with equal
     /// keys can share one ruviz session: a refresh just replaces the
     /// observables. `salt` folds in host-side structure (figure size, theme).
@@ -410,7 +462,7 @@ fn build_multi(
             x,
             y,
             width: if trace.active && n > 1 { 2.2 } else { 1.4 },
-            color: trace_color(theme, i),
+            color: trace_color(theme, trace.color_index),
             dashed: false,
             label: with_legend.then(|| middle_truncate(&trace.label, 24)),
         })
@@ -546,6 +598,7 @@ pub fn build_quadrant_specs(
                 label: ft_trace_label(trace),
                 sp: trace.sp.clone(),
                 active: trace.active,
+                color_index: trace.color_index,
             })
             .collect()
     } else {
@@ -1203,6 +1256,55 @@ mod tests {
     use super::{chik_label, chir_label, heatmap_y_extent, middle_truncate};
 
     #[test]
+    fn compare_coverage_counts_extracted_spectra_per_plot_and_separates_sampling() {
+        use super::*;
+        use crate::params::{DerivedSpectrum, PipelineParams, Quantity, process_file};
+        use std::{path::Path, sync::Arc};
+        let params = PipelineParams::default();
+        let file =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/projects/data/cu_150k.xmu");
+        let current = Arc::new(process_file(&file, &params).unwrap());
+        let difference = DerivedSpectrum {
+            energy: current.energy.as_ref().unwrap().as_slice().to_vec(),
+            mu: vec![0.0; current.energy.as_ref().unwrap().len()],
+            quantity: Quantity::NormalizedDifference,
+            ..Default::default()
+        };
+        let difference = Arc::new(difference.for_display(&params).unwrap());
+        let traces = (0..12)
+            .map(|i| QuadTrace {
+                color_index: i,
+                label: i.to_string(),
+                sp: if i == 0 {
+                    current.clone()
+                } else {
+                    difference.clone()
+                },
+                active: i == 0,
+            })
+            .collect::<Vec<_>>();
+        let specs = quantity_quadrant_specs(
+            &traces,
+            &ViewOptions::default(),
+            &Theme::dark(),
+            false,
+            Quantity::default(),
+        );
+        assert_eq!(specs[0].coverage(13, 12, 12).plotted, 12);
+        let coverage = specs[2].coverage(13, 12, 12);
+        assert_eq!(coverage, PlotCoverage::new(13, 12, 12, 1));
+        assert_eq!(
+            coverage.disclosure().unwrap(),
+            "1 of 13 spectra plotted · 1 omitted by sampling · 11 without data for this plot"
+        );
+        assert_eq!(
+            PlotCoverage::new(13, 12, 10, 1).disclosure().unwrap(),
+            "1 of 13 spectra plotted · 1 omitted by sampling · 9 without data for this plot · 2 failed or not loaded"
+        );
+        assert_eq!(PlotCoverage::new(1, 1, 1, 1).disclosure(), None);
+    }
+
+    #[test]
     fn mixed_weight_overlays_share_the_k_axis_and_identify_fourier_weights() {
         use super::*;
         use crate::params::{PipelineParams, process_file};
@@ -1235,6 +1337,7 @@ mod tests {
                     label: format!("same spectrum {i}"),
                     sp: sp.clone(),
                     active: i == active,
+                    color_index: i + 4,
                 })
                 .collect();
             let specs =
@@ -1254,11 +1357,13 @@ mod tests {
                     .map(|(k, chi)| chi * k.powf(weight))
                     .collect();
                 assert_eq!(plotted.y, expected);
+                assert_eq!(plotted.color, trace_color(&Theme::dark(), index + 4));
                 let fourier = specs[3]
                     .series
                     .iter()
                     .find(|s| s.key == SeriesKey::Trace(index))
                     .unwrap();
+                assert_eq!(fourier.color, trace_color(&Theme::dark(), index + 4));
                 assert_eq!(
                     fourier.y,
                     original_r[index].iter().copied().collect::<Vec<_>>()

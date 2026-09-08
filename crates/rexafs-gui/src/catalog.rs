@@ -250,6 +250,12 @@ impl Catalog {
         self.entries[ix].size
     }
 
+    pub(crate) fn update_size(&mut self, ix: usize, size: u64) {
+        if self.entries[ix].size != size {
+            Arc::make_mut(&mut self.entries)[ix].size = size;
+        }
+    }
+
     /// Locate an entry by its full path (parent dir + file name) — used to
     /// re-key path-persisted per-spectrum overrides onto the current index.
     /// Scans are per-directory, so only the matching directory's members

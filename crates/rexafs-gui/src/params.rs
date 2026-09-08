@@ -4,6 +4,7 @@
 
 use rexafs::prelude::AUTOBKClampScalePolicy;
 use std::hash::{Hash, Hasher};
+use std::io::Read;
 
 use rexafs::prelude::*;
 use rexafs::xafs::background::AUTOBK;
@@ -40,10 +41,11 @@ impl DetectionMode {
 
 /// Configure-once import applied to every file in the catalog. `None` and
 /// [`DetectionMode::Auto`] resolve independently from each file's content.
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ImportConfig {
     pub mode: DetectionMode,
+    pub axis: crate::import_mapping::AxisConversion,
     pub energy_col: Option<usize>,
     pub i0_col: Option<usize>,
     pub it_col: Option<usize>,
@@ -52,18 +54,22 @@ pub struct ImportConfig {
     pub fluor_cols: Option<Vec<usize>>,
     /// Precomputed mu(E), used by [`DetectionMode::MuColumn`].
     pub mu_col: Option<usize>,
+    /// Explicit precomputed reference μ, independent of the sample μ column.
+    pub reference_mu_col: Option<usize>,
 }
 
 impl Default for ImportConfig {
     fn default() -> Self {
         Self {
             mode: DetectionMode::Auto,
+            axis: Default::default(),
             energy_col: None,
             i0_col: None,
             it_col: None,
             ir_col: None,
             fluor_cols: None,
             mu_col: None,
+            reference_mu_col: None,
         }
     }
 }
@@ -102,7 +108,7 @@ impl ImportConfig {
 }
 
 /// File-derived import assignments after applying any manual overrides.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResolvedImport {
     pub mode: DetectionMode,
     pub energy_col: usize,
@@ -114,7 +120,7 @@ pub struct ResolvedImport {
 }
 
 /// Count every occurrence while retaining bounded, 1-based source locations.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DiagnosticCategory {
     pub count: usize,
     pub examples: Vec<usize>,
@@ -132,7 +138,7 @@ impl DiagnosticCategory {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ParserDiagnostics {
     pub malformed_rows: DiagnosticCategory,
     pub short_rows: DiagnosticCategory,
@@ -210,12 +216,14 @@ impl ParserDiagnostics {
 /// Raw arrays and their diagnostics travel together, including through caches.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RawData {
+    pub channel: DetectionMode,
+    pub declared_edge: Option<crate::source_evidence::DeclaredEdge>,
     pub energy: Vec<f64>,
     pub mu: Vec<f64>,
     pub diagnostics: ParserDiagnostics,
 }
 
-/// Bounded data shown in the Import panel.
+/// Three original rows and complete diagnostics shown in the Import panel.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ImportPreview {
     pub column_count: usize,
@@ -234,32 +242,132 @@ pub struct ImportPreview {
     pub signal_error: Option<String>,
 }
 
-impl ImportPreview {
-    /// Only named detector channels are offered automatically. Positional
-    /// fallbacks for unnamed data are not evidence of a reference detector.
-    pub fn available_channels(&self) -> Vec<DetectionMode> {
-        let Some(names) = &self.names else {
-            return vec![self.resolved.mode];
+/// Prefix-only layout evidence. Deliberately has no row/point diagnostics or
+/// signal validation result: even a short source is not validated at intake.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ImportDetection {
+    pub column_count: usize,
+    pub names: Option<Vec<String>>,
+    #[serde(skip)]
+    pub rows: Vec<Vec<f64>>,
+    /// Fully automatic assignments, used for role-picker auto labels.
+    pub detected: ResolvedImport,
+    /// Mode that Auto would choose while retaining current manual columns.
+    pub auto_mode: DetectionMode,
+    /// Current assignments after applying all manual overrides.
+    pub resolved: ResolvedImport,
+    /// Original XDI metadata, comments and units for the import inspector.
+    pub xdi: Option<XdiHeader>,
+    /// Only mapping errors decidable from the prefix; no signal construction.
+    pub mapping_error: Option<String>,
+}
+
+impl ImportDetection {
+    pub fn resolved_config(&self, config: &ImportConfig) -> ImportConfig {
+        let preview = ImportPreview {
+            column_count: self.column_count,
+            names: self.names.clone(),
+            rows: self.rows.clone(),
+            detected: self.detected.clone(),
+            auto_mode: self.auto_mode,
+            resolved: self.resolved.clone(),
+            xdi: self.xdi.clone(),
+            diagnostics: Default::default(),
+            signal_error: self.mapping_error.clone(),
         };
-        let named = |synonyms: &[&str]| names.iter().any(|n| name_matches(n, synonyms));
-        let mut channels = Vec::new();
-        if named(I0_NAMES) && named(IT_NAMES) {
-            channels.push(DetectionMode::Transmission);
-        }
-        if named(I0_NAMES) && names.iter().any(|n| fluorescence_name_matches(n)) {
-            channels.push(DetectionMode::Fluorescence);
-        }
-        if (named(IT_NAMES) && named(IR_NAMES)) || named(REF_MU_NAMES) {
-            channels.push(DetectionMode::Reference);
-        }
-        if named(MU_NAMES) {
-            channels.push(DetectionMode::MuColumn);
-        }
-        if channels.is_empty() {
-            channels.push(self.resolved.mode);
-        }
-        channels
+        crate::import_mapping::MappingDraft::new(&preview.for_mapping(config), config)
+            .config()
+            .clone()
     }
+
+    pub fn available_channels(&self) -> Vec<DetectionMode> {
+        available_channels(&self.names, self.resolved.mode)
+    }
+
+    /// Only named, unambiguous detector roles are a detection fast path.
+    /// Positional fallbacks remain useful suggestions in an explicit review.
+    pub fn review_reason(&self) -> Option<String> {
+        if let Some(error) = &self.mapping_error {
+            return Some(error.clone());
+        }
+        let Some(names) = &self.names else {
+            return Some("Unnamed columns need a confirmed mapping.".into());
+        };
+        let named = |column: usize, aliases: &[&str]| {
+            names
+                .get(column)
+                .is_some_and(|name| name_matches(name, aliases))
+        };
+        let r = &self.resolved;
+        let known = named(r.energy_col, ENERGY_NAMES)
+            && match r.mode {
+                DetectionMode::Transmission => {
+                    named(r.i0_col, I0_NAMES) && named(r.it_col, IT_NAMES)
+                }
+                DetectionMode::Fluorescence => {
+                    named(r.i0_col, I0_NAMES)
+                        && !r.fluor_cols.is_empty()
+                        && r.fluor_cols
+                            .iter()
+                            .all(|&c| names.get(c).is_some_and(|n| fluorescence_name_matches(n)))
+                }
+                DetectionMode::Reference => {
+                    (named(r.it_col, IT_NAMES) && named(r.ir_col, IR_NAMES))
+                        || names.iter().any(|name| name_matches(name, REF_MU_NAMES))
+                }
+                DetectionMode::MuColumn => r
+                    .mu_col
+                    .is_some_and(|c| named(c, MU_NAMES) || named(c, REF_MU_NAMES)),
+                DetectionMode::Auto => false,
+            };
+        (!known).then(|| "Some column roles are positional guesses; confirm this layout.".into())
+    }
+}
+
+impl ImportPreview {
+    /// Resolve a different channel against the retained original table.
+    pub fn for_mapping(&self, config: &ImportConfig) -> Self {
+        let data = ParsedData {
+            names: self.names.clone(),
+            rows: self.rows.clone(),
+            xdi: self.xdi.clone(),
+            source_lines: vec![],
+            diagnostics: self.diagnostics.clone(),
+        };
+        let mut preview = self.clone();
+        preview.resolved = resolve_import(&data, config);
+        preview
+    }
+
+    pub fn available_channels(&self) -> Vec<DetectionMode> {
+        available_channels(&self.names, self.resolved.mode)
+    }
+}
+
+/// Only named detector channels are offered automatically. Positional
+/// fallbacks for unnamed data are not evidence of a reference detector.
+fn available_channels(names: &Option<Vec<String>>, mode: DetectionMode) -> Vec<DetectionMode> {
+    let Some(names) = names else {
+        return vec![mode];
+    };
+    let named = |synonyms: &[&str]| names.iter().any(|n| name_matches(n, synonyms));
+    let mut channels = Vec::new();
+    if named(I0_NAMES) && named(IT_NAMES) {
+        channels.push(DetectionMode::Transmission);
+    }
+    if named(I0_NAMES) && names.iter().any(|n| fluorescence_name_matches(n)) {
+        channels.push(DetectionMode::Fluorescence);
+    }
+    if (named(IT_NAMES) && named(IR_NAMES)) || named(REF_MU_NAMES) {
+        channels.push(DetectionMode::Reference);
+    }
+    if named(MU_NAMES) {
+        channels.push(DetectionMode::MuColumn);
+    }
+    if channels.is_empty() {
+        channels.push(mode);
+    }
+    channels
 }
 
 #[derive(Debug)]
@@ -591,32 +699,132 @@ pub fn parse_cols(text: &str) -> Option<Vec<usize>> {
     (!out.is_empty()).then(|| unique_columns(out))
 }
 
+const DETECTION_BYTES: u64 = 64 * 1024;
+
+/// Detect layout from at most 64 KiB. Full diagnostics and signal validation
+/// belong to preview_import/load_mu_with_diagnostics, never to intake.
+/// None means the prefix ended before data; channel detection is undetermined.
+pub fn detect_import(
+    path: &std::path::Path,
+    import: &ImportConfig,
+) -> Result<Option<ImportDetection>, String> {
+    let file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    detect_import_reader(file, path, import)
+}
+
+fn detect_import_reader(
+    reader: impl Read,
+    path: &std::path::Path,
+    import: &ImportConfig,
+) -> Result<Option<ImportDetection>, String> {
+    let mut bytes = Vec::new();
+    reader
+        .take(DETECTION_BYTES)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let exhausted = bytes.len() == DETECTION_BYTES as usize;
+    if exhausted {
+        // Do not probe one byte past the limit, or parse a cut row/token/UTF-8
+        // sequence. Keep a complete final line if the bound ends at a newline.
+        let end = bytes
+            .iter()
+            .rposition(|b| matches!(b, b'\n' | b'\r'))
+            .map_or(0, |i| i + 1);
+        bytes.truncate(end);
+    }
+    let text = std::str::from_utf8(&bytes).map_err(|e| {
+        format!(
+            "{}: stream did not contain valid UTF-8: {e}",
+            path.display()
+        )
+    })?;
+    // A single cut line leaves no evidence, including an XDI signature.
+    if exhausted && text.is_empty() {
+        return Ok(None);
+    }
+    let data = match parse_file_data(text, path) {
+        Ok(data) => data,
+        Err(error)
+            if exhausted
+                && [
+                    "no numeric data rows",
+                    "XDI: no numeric data rows",
+                    "XDI: missing '# ---' header-end separator",
+                ]
+                .iter()
+                .any(|message| error == format!("{}: {message}", path.display())) =>
+        {
+            // These parser failures mean the prefix has no data yet. Other
+            // failures (including malformed XDI rows) remain intake errors.
+            return Ok(None);
+        }
+        Err(error) => return Err(error),
+    };
+    Ok(Some(import_detection(&data, path, import)))
+}
+
+fn import_detection(
+    data: &ParsedData,
+    path: &std::path::Path,
+    import: &ImportConfig,
+) -> ImportDetection {
+    let detected = resolve_import(data, &ImportConfig::default());
+    let mut auto_import = import.clone();
+    auto_import.mode = DetectionMode::Auto;
+    let auto_mode = resolve_import(data, &auto_import).mode;
+    let resolved = resolve_import(data, import);
+    let mapping_error = validate_mapping(data, path, import, &resolved).err();
+    ImportDetection {
+        column_count: data.rows[0].len(),
+        names: data.names.clone(),
+        rows: data.rows.iter().take(3).cloned().collect(),
+        detected,
+        auto_mode,
+        resolved,
+        xdi: data.xdi.clone(),
+        mapping_error,
+    }
+}
+
 /// Column metadata, three original rows, and full-source diagnostics. Runs on
 /// the background executor; totals must include rows beyond a header prefix.
 pub fn preview_import(
     path: &std::path::Path,
     import: &ImportConfig,
 ) -> Result<ImportPreview, String> {
+    Ok(preview_import_raw(path, import)?.0)
+}
+
+/// Read once: the table retains source values while the plot uses converted eV.
+pub fn preview_import_raw(
+    path: &std::path::Path,
+    import: &ImportConfig,
+) -> Result<(ImportPreview, Result<RawData, String>), String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut data = parse_file_data(&text, path)?;
-    let detected = resolve_import(&data, &ImportConfig::default());
-    let mut auto_import = import.clone();
-    auto_import.mode = DetectionMode::Auto;
-    let auto_mode = resolve_import(&data, &auto_import).mode;
-    let resolved = resolve_import(&data, import);
-    let rows = data.rows.iter().take(3).cloned().collect();
-    let signal_error = construct_mu(&mut data, path, import).err();
-    Ok(ImportPreview {
-        diagnostics: data.diagnostics,
-        signal_error,
-        column_count: data.rows[0].len(),
-        names: data.names,
-        rows,
-        detected,
-        auto_mode,
-        resolved,
-        xdi: data.xdi,
-    })
+    let detection = import_detection(&data, path, import);
+    let raw = construct_mu(&mut data, path, import).map(|(energy, mu)| RawData {
+        channel: resolve_import(&data, import).mode,
+        declared_edge: crate::source_evidence::DeclaredEdge::from_header(data.xdi.as_ref()),
+        energy,
+        mu,
+        diagnostics: data.diagnostics.clone(),
+    });
+    let signal_error = raw.as_ref().err().cloned();
+    Ok((
+        ImportPreview {
+            diagnostics: data.diagnostics,
+            signal_error,
+            column_count: detection.column_count,
+            names: detection.names,
+            rows: detection.rows,
+            detected: detection.detected,
+            auto_mode: detection.auto_mode,
+            resolved: detection.resolved,
+            xdi: detection.xdi,
+        },
+        raw,
+    ))
 }
 
 /// Energy and mu(E) for one file under the import configuration. Rows whose
@@ -638,33 +846,35 @@ pub fn load_mu_with_diagnostics(
     let mut data = parse_file_data(&text, path)?;
     let (energy, mu) = construct_mu(&mut data, path, import)?;
     Ok(RawData {
+        channel: resolve_import(&data, import).mode,
+        declared_edge: crate::source_evidence::DeclaredEdge::from_header(data.xdi.as_ref()),
         energy,
         mu,
         diagnostics: data.diagnostics,
     })
 }
 
-fn construct_mu(
-    data: &mut ParsedData,
+/// Explicit reference-μ assignment takes precedence over named detection.
+pub(crate) fn reference_mu_column(
+    names: Option<&[String]>,
+    import: &ImportConfig,
+) -> Option<usize> {
+    import.reference_mu_col.or_else(|| {
+        names
+            .and_then(|names| names.iter().position(|n| name_matches(n, REF_MU_NAMES)))
+            .filter(|_| import.it_col.is_none() && import.ir_col.is_none())
+    })
+}
+
+/// Validate only column assignments, independently of finite point counts or
+/// axis conversion. The optional return value is a named reference-mu column.
+fn validate_mapping(
+    data: &ParsedData,
     path: &std::path::Path,
     import: &ImportConfig,
-) -> Result<(Vec<f64>, Vec<f64>), String> {
-    let resolved = resolve_import(data, import);
-    if let Some(header) = &data.xdi {
-        for row in &mut data.rows {
-            let value = row
-                .get_mut(resolved.energy_col)
-                .ok_or_else(|| format!("{}: energy column out of range", path.display()))?;
-            *value = header
-                .energy_ev(resolved.energy_col, *value)
-                .map_err(|e| format!("{}: {e}", path.display()))?;
-        }
-    }
-    let ref_mu_col = data
-        .names
-        .as_ref()
-        .and_then(|names| names.iter().position(|n| name_matches(n, REF_MU_NAMES)))
-        .filter(|_| import.it_col.is_none() && import.ir_col.is_none());
+    resolved: &ResolvedImport,
+) -> Result<Option<usize>, String> {
+    let ref_mu_col = reference_mu_column(data.names.as_deref(), import);
     let rows = &data.rows;
     let width = rows[0].len();
     let need = |col: usize, name: &str| -> Result<usize, String> {
@@ -677,78 +887,74 @@ fn construct_mu(
             ))
         }
     };
-    let e = need(resolved.energy_col, "energy")?;
-    let mut energy = Vec::with_capacity(rows.len());
-    let mut mu = Vec::with_capacity(rows.len());
+    need(resolved.energy_col, "energy")?;
     match resolved.mode {
-        DetectionMode::Auto => unreachable!("auto mode is resolved before import math"),
+        DetectionMode::Auto => unreachable!("auto mode is resolved before mapping validation"),
         DetectionMode::Transmission => {
-            let (i0, it) = (need(resolved.i0_col, "I0")?, need(resolved.it_col, "It")?);
-            for (row, &line) in rows.iter().zip(&data.source_lines) {
-                let m = (row[i0] / row[it]).ln();
-                if m.is_finite() && row[e].is_finite() {
-                    energy.push(row[e]);
-                    mu.push(m);
-                } else {
-                    data.diagnostics.excluded_signal_points.record(Some(line));
-                }
-            }
+            need(resolved.i0_col, "I0")?;
+            need(resolved.it_col, "It")?;
         }
         DetectionMode::Fluorescence => {
-            let i0 = need(resolved.i0_col, "I0")?;
-            let mut cols = Vec::new();
-            for &c in &resolved.fluor_cols {
-                cols.push(need(c, "ROI")?);
+            need(resolved.i0_col, "I0")?;
+            for &col in &resolved.fluor_cols {
+                need(col, "ROI")?;
             }
-            if cols.is_empty() {
+            if resolved.fluor_cols.is_empty() {
                 return Err("no fluorescence ROI columns configured".into());
             }
-            for (row, &line) in rows.iter().zip(&data.source_lines) {
-                let m = cols.iter().map(|&c| row[c]).sum::<f64>() / row[i0];
-                if m.is_finite() && row[e].is_finite() {
-                    energy.push(row[e]);
-                    mu.push(m);
-                } else {
-                    data.diagnostics.excluded_signal_points.record(Some(line));
-                }
-            }
+        }
+        DetectionMode::Reference if ref_mu_col.is_none() => {
+            need(resolved.it_col, "It")?;
+            need(resolved.ir_col, "Ir")?;
         }
         DetectionMode::Reference => {
-            if let Some(col) = ref_mu_col {
-                for (row, &line) in rows.iter().zip(&data.source_lines) {
-                    if row[col].is_finite() && row[e].is_finite() {
-                        energy.push(row[e]);
-                        mu.push(row[col]);
-                    } else {
-                        data.diagnostics.excluded_signal_points.record(Some(line));
-                    }
-                }
-            } else {
-                let (it, ir) = (need(resolved.it_col, "It")?, need(resolved.ir_col, "Ir")?);
-                for (row, &line) in rows.iter().zip(&data.source_lines) {
-                    let m = (row[it] / row[ir]).ln();
-                    if m.is_finite() && row[e].is_finite() {
-                        energy.push(row[e]);
-                        mu.push(m);
-                    } else {
-                        data.diagnostics.excluded_signal_points.record(Some(line));
-                    }
-                }
-            }
+            need(ref_mu_col.unwrap(), "reference μ")?;
         }
         DetectionMode::MuColumn => {
-            let mu_col = resolved
+            let col = resolved
                 .mu_col
                 .ok_or_else(|| format!("{}: no precomputed mu column detected", path.display()))?;
-            let mu_col = need(mu_col, "mu")?;
-            for (row, &line) in rows.iter().zip(&data.source_lines) {
-                if row[mu_col].is_finite() && row[e].is_finite() {
-                    energy.push(row[e]);
-                    mu.push(row[mu_col]);
-                } else {
-                    data.diagnostics.excluded_signal_points.record(Some(line));
-                }
+            need(col, "mu")?;
+        }
+    }
+    Ok(ref_mu_col)
+}
+
+fn construct_mu(
+    data: &mut ParsedData,
+    path: &std::path::Path,
+    import: &ImportConfig,
+) -> Result<(Vec<f64>, Vec<f64>), String> {
+    let resolved = resolve_import(data, import);
+    let ref_mu_col = validate_mapping(data, path, import, &resolved)?;
+    let mut energy = Vec::with_capacity(data.rows.len());
+    let mut mu = Vec::with_capacity(data.rows.len());
+    for (row, &line) in data.rows.iter().zip(&data.source_lines) {
+        let e = import
+            .axis
+            .energy_ev(
+                data.xdi.as_ref(),
+                resolved.energy_col,
+                row[resolved.energy_col],
+            )
+            .map_err(|error| format!("{}: {error}", path.display()))?;
+        let m = match resolved.mode {
+            DetectionMode::Auto => unreachable!("auto mode is resolved before import math"),
+            DetectionMode::Transmission => (row[resolved.i0_col] / row[resolved.it_col]).ln(),
+            DetectionMode::Fluorescence => {
+                resolved.fluor_cols.iter().map(|&c| row[c]).sum::<f64>() / row[resolved.i0_col]
             }
+            DetectionMode::Reference => match ref_mu_col {
+                Some(column) => row[column],
+                None => (row[resolved.it_col] / row[resolved.ir_col]).ln(),
+            },
+            DetectionMode::MuColumn => row[resolved.mu_col.unwrap()],
+        };
+        if e.is_finite() && m.is_finite() {
+            energy.push(e);
+            mu.push(m);
+        } else {
+            data.diagnostics.excluded_signal_points.record(Some(line));
         }
     }
     data.diagnostics.valid_points = energy.len();
@@ -960,6 +1166,7 @@ impl PipelineParams {
 
     fn hash_raw_fields(&self, hasher: &mut std::hash::DefaultHasher) {
         format!("{:?}", self.import.mode).hash(hasher);
+        self.import.axis.fingerprint().hash(hasher);
         self.align_to_ref.hash(hasher);
         self.align_target.map(f64::to_bits).hash(hasher);
         self.import.energy_col.hash(hasher);
@@ -968,6 +1175,7 @@ impl PipelineParams {
         self.import.ir_col.hash(hasher);
         self.import.fluor_cols.hash(hasher);
         self.import.mu_col.hash(hasher);
+        self.import.reference_mu_col.hash(hasher);
     }
 
     pub fn fingerprint(&self) -> u64 {
@@ -1078,15 +1286,6 @@ pub fn load_raw_with_diagnostics(
 }
 
 /// Shared uncached access for file channels and materialized results.
-pub(crate) fn load_group_raw(
-    path: &std::path::Path,
-    params: &PipelineParams,
-    derived: Option<&DerivedSpectrum>,
-) -> Result<(Vec<f64>, Vec<f64>), String> {
-    let raw = load_group_raw_with_diagnostics(path, params, derived)?;
-    Ok((raw.energy, raw.mu))
-}
-
 pub(crate) fn load_group_raw_with_diagnostics(
     path: &std::path::Path,
     params: &PipelineParams,
@@ -1096,6 +1295,8 @@ pub(crate) fn load_group_raw_with_diagnostics(
         Some(group) => match &group.source {
             Some(source) => load_raw_with_diagnostics(source, params),
             None => Ok(RawData {
+                channel: params.import.mode,
+                declared_edge: group.declared_edge.clone(),
                 energy: group.energy.clone(),
                 mu: group.mu.clone(),
                 diagnostics: ParserDiagnostics {
@@ -1113,6 +1314,10 @@ pub(crate) fn load_group_raw_with_diagnostics(
 /// be retained until the group is viewed or analyzed.
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct DerivedSpectrum {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declared_edge: Option<crate::source_evidence::DeclaredEdge>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<crate::group_identity::GroupId>,
     pub label: String,
     pub energy: Vec<f64>,
     pub mu: Vec<f64>,
@@ -1160,6 +1365,8 @@ impl Quantity {
 /// durable identities; preserve the source path or derived id and revision.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OperationInput {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<crate::group_identity::GroupId>,
     pub label: String,
     pub path: std::path::PathBuf,
     pub derived_id: Option<u64>,
@@ -1183,6 +1390,7 @@ impl DerivedSpectrum {
         let mut hasher = std::hash::DefaultHasher::new();
         params.fingerprint().hash(&mut hasher);
         self.quantity.hash(&mut hasher);
+        self.declared_edge.hash(&mut hasher);
         self.quantity_unconfirmed.hash(&mut hasher);
         hasher.finish()
     }
@@ -2317,6 +2525,273 @@ mod tests {
         category.record(None);
         assert_eq!(category.count, 1);
         assert!(category.examples.is_empty());
+    }
+
+    #[test]
+    fn bounded_detection_reads_at_most_64_kib_and_keeps_layout_only() {
+        let path = std::env::temp_dir().join("rexafs-bounded-detection.dat");
+        let mut text = String::from("# energy i0 it ir roi1\n");
+        for i in 0..50_000 {
+            text.push_str(&format!("{} 100.0 50.0 25.0 10.0\n", 1000 + i));
+        }
+        assert!(text.len() > 1_000_000);
+        text.push_str("51000 malformed 50 25 10\n");
+        std::fs::write(&path, &text).unwrap();
+        let mut reader = std::io::Cursor::new(text.as_bytes());
+        let detection = detect_import_reader(&mut reader, &path, &ImportConfig::default())
+            .unwrap()
+            .unwrap();
+        assert_eq!(reader.position(), DETECTION_BYTES);
+        assert_eq!(
+            detect_import(&path, &ImportConfig::default())
+                .unwrap()
+                .unwrap(),
+            detection
+        );
+        // Exhaustive destructuring pins the absence of any diagnostics/totals
+        // or full-signal result on the intake API.
+        let ImportDetection {
+            column_count,
+            names,
+            rows,
+            detected,
+            auto_mode,
+            resolved,
+            xdi,
+            mapping_error,
+        } = detection;
+        assert_eq!(column_count, 5);
+        assert_eq!(names.unwrap(), ["energy", "i0", "it", "ir", "roi1"]);
+        assert_eq!(
+            rows,
+            (1000..1003)
+                .map(|e| vec![e as f64, 100., 50., 25., 10.])
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(detected.mode, DetectionMode::Transmission);
+        assert_eq!(auto_mode, DetectionMode::Transmission);
+        assert_eq!(resolved.mode, DetectionMode::Transmission);
+        assert!(xdi.is_none());
+        assert!(mapping_error.is_none());
+        let bounded = detect_import(&path, &ImportConfig::default())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            bounded.available_channels(),
+            vec![
+                DetectionMode::Transmission,
+                DetectionMode::Fluorescence,
+                DetectionMode::Reference
+            ]
+        );
+        let full = preview_import(&path, &ImportConfig::default()).unwrap();
+        assert_eq!(full.diagnostics.valid_points, 50_000);
+        assert_eq!(full.diagnostics.malformed_rows.count, 1);
+        assert_eq!(full.diagnostics.malformed_rows.examples, vec![50_002]);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn bounded_detection_and_full_reads_reject_latin1_header_comments() {
+        let path = std::env::temp_dir().join("rexafs-latin1-detection.dat");
+        for byte in [0xb5, 0xb0] {
+            let mut bytes = b"# units: ".to_vec();
+            bytes.push(byte);
+            bytes.extend_from_slice(b"\n# energy i0 it ir\n100 10 5 2\n101 10 4 2\n");
+            // Check both a short file and a complete header line within a
+            // bounded prefix of a larger file.
+            for large in [false, true] {
+                if large {
+                    bytes.resize(DETECTION_BYTES as usize + 100, b' ');
+                }
+                std::fs::write(&path, &bytes).unwrap();
+                let import = ImportConfig::default();
+                assert!(detect_import(&path, &import).unwrap_err().contains("UTF-8"));
+                assert!(
+                    preview_import(&path, &import)
+                        .unwrap_err()
+                        .contains("UTF-8")
+                );
+                assert!(load_mu_with_diagnostics(&path, &import).is_err());
+            }
+        }
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn bounded_detection_is_undetermined_when_headers_exhaust_the_prefix() {
+        for (extension, header, tail) in [
+            ("dat", "", "# energy i0 it ir\n100 10 5 2\n101 10 4 2\n"),
+            (
+                "xdi",
+                "# XDI/1.0\n# Column.1: energy eV\n# Column.2: i0\n# Column.3: it\n# Column.4: ir\n# ///\n",
+                "# ---\n100 10 5 2\n101 10 4 2\n",
+            ),
+        ] {
+            let path = std::env::temp_dir().join(format!("rexafs-long-header.{extension}"));
+            let text = format!("{header}{}{tail}", "# metadata\n".repeat(7000));
+            std::fs::write(&path, &text).unwrap();
+            let import = ImportConfig::default();
+            let mut reader = std::io::Cursor::new(text.as_bytes());
+            assert!(
+                detect_import_reader(&mut reader, &path, &import)
+                    .unwrap()
+                    .is_none()
+            );
+            assert_eq!(reader.position(), DETECTION_BYTES);
+            assert!(detect_import(&path, &import).unwrap().is_none());
+            let full = preview_import(&path, &import).unwrap();
+            assert_eq!(full.diagnostics.valid_points, 2);
+            assert!(
+                full.available_channels()
+                    .contains(&DetectionMode::Reference)
+            );
+            assert!(load_mu_with_diagnostics(&path, &import).is_ok());
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn bounded_detection_defers_only_incomplete_prefix_errors() {
+        let import = ImportConfig::default();
+        for name in ["empty.dat", "empty.xdi"] {
+            let path = std::path::Path::new(name);
+            // Short, genuinely empty inputs remain errors; a cut first line
+            // has no complete evidence and must be undetermined.
+            assert!(detect_import_reader(b"".as_slice(), path, &import).is_err());
+            let bytes = vec![b'#'; DETECTION_BYTES as usize + 100];
+            assert!(
+                detect_import_reader(bytes.as_slice(), path, &import)
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        for prefix in [
+            "# metadata\n",
+            "metadata without numeric rows\n",
+            "# XDI/1.0\n# ---\n",
+        ] {
+            let path = std::path::Path::new("no-rows.dat");
+            assert!(detect_import_reader(prefix.as_bytes(), path, &import).is_err());
+            let text = format!("{prefix}{}", " \n".repeat(DETECTION_BYTES as usize));
+            assert!(
+                detect_import_reader(text.as_bytes(), path, &import)
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        for prefix in [
+            "# XDI/9.0\n",
+            "# XDI/1.0\n# ---\n100 invalid\n",
+            "# missing signature\n100 1\n",
+        ] {
+            let text = format!("{prefix}{}", "# metadata\n".repeat(7000));
+            assert!(
+                detect_import_reader(
+                    text.as_bytes(),
+                    std::path::Path::new("invalid.xdi"),
+                    &import
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn bounded_detection_drops_cut_lines_and_utf8_without_probing_tail() {
+        let path = std::path::Path::new("bounded.dat");
+        for newline in ["\n", "\r\n"] {
+            // Only one complete data row: detection must not demand two points.
+            let mut bytes = format!("# energy i0 it{newline}100 10 5{newline}# ").into_bytes();
+            bytes.resize(DETECTION_BYTES as usize - 1, b' ');
+            bytes.extend_from_slice("é".as_bytes());
+            bytes.extend_from_slice(b"\n101 10 5\n");
+            let mut reader = std::io::Cursor::new(bytes);
+            let detection = detect_import_reader(&mut reader, path, &ImportConfig::default())
+                .unwrap()
+                .unwrap();
+            assert_eq!(reader.position(), DETECTION_BYTES);
+            assert_eq!(detection.rows, vec![vec![100., 10., 5.]]);
+            assert!(detection.mapping_error.is_none());
+        }
+        // Short files retain their final unterminated row.
+        let mut reader = std::io::Cursor::new(b"# energy i0 it\n100 10 5");
+        let detection = detect_import_reader(&mut reader, path, &ImportConfig::default())
+            .unwrap()
+            .unwrap();
+        assert_eq!(reader.position(), reader.get_ref().len() as u64);
+        assert_eq!(detection.rows.len(), 1);
+        // A complete line exactly at the limit is retained; a numeric partial
+        // row that could otherwise alter column detection is dropped.
+        for complete in [true, false] {
+            let suffix = if complete { "100 10 5\n" } else { "100 10 5" };
+            let mut bytes = b"# energy i0 it\n100 10 5\n#".to_vec();
+            bytes.resize(DETECTION_BYTES as usize - suffix.len() - 1, b' ');
+            bytes.push(b'\n');
+            bytes.extend_from_slice(suffix.as_bytes());
+            let detection = detect_import_reader(bytes.as_slice(), path, &ImportConfig::default())
+                .unwrap()
+                .unwrap();
+            assert_eq!(detection.rows.len(), if complete { 2 } else { 1 });
+        }
+    }
+
+    #[test]
+    fn bounded_detection_reports_mapping_errors_but_defers_signal_validation() {
+        let path = std::path::Path::new("mapping.dat");
+        let text = b"# energy i0 it\n100 10 0\n101 10 0\n";
+        for import in [
+            ImportConfig {
+                energy_col: Some(9),
+                ..Default::default()
+            },
+            ImportConfig {
+                i0_col: Some(9),
+                ..Default::default()
+            },
+            ImportConfig {
+                mode: DetectionMode::Reference,
+                ..Default::default()
+            },
+            ImportConfig {
+                mode: DetectionMode::Fluorescence,
+                fluor_cols: Some(vec![]),
+                ..Default::default()
+            },
+            ImportConfig {
+                mode: DetectionMode::MuColumn,
+                ..Default::default()
+            },
+        ] {
+            let detection = detect_import_reader(text.as_slice(), path, &import)
+                .unwrap()
+                .unwrap();
+            let mut data = parse_file_data(std::str::from_utf8(text).unwrap(), path).unwrap();
+            assert!(detection.mapping_error.is_some());
+            assert_eq!(
+                detection.mapping_error,
+                construct_mu(&mut data, path, &import).err()
+            );
+        }
+        assert!(
+            detect_import_reader(text.as_slice(), path, &ImportConfig::default())
+                .unwrap()
+                .unwrap()
+                .mapping_error
+                .is_none()
+        );
+        let xdi = b"# XDI/1.0\n# Column.1: energy joules\n# Column.2: mutrans\n# ---\n100 1\n";
+        let detection = detect_import_reader(
+            xdi.as_slice(),
+            std::path::Path::new("mapping.xdi"),
+            &ImportConfig::default(),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(detection.resolved.mode, DetectionMode::MuColumn);
+        // Axis conversion/units errors also remain with full signal validation.
+        assert!(detection.mapping_error.is_none());
+        assert!(detection.xdi.is_some());
     }
 
     #[test]

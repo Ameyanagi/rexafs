@@ -190,9 +190,34 @@ pub(super) fn map_paths(
         }
         Ok(())
     }
+    for record in project.parser_evidence.values_mut() {
+        record.path = f(&record.path)?;
+    }
+    for recipe in &mut project.imports.recipes.versions {
+        if let crate::import_recipes::RecipeScope::FolderTree(root) = &mut recipe.scope {
+            *root = f(root)?;
+        }
+    }
+    for application in &mut project.imports.applications {
+        for member in &mut application.members {
+            member.path = f(&member.path)?;
+        }
+    }
+    for batch in &mut project.import_history {
+        for path in &mut batch.paths {
+            *path = f(path)?;
+        }
+        batch.sources = std::mem::take(&mut batch.sources)
+            .into_iter()
+            .map(|(path, source)| Ok((f(&path)?, source)))
+            .collect::<Result<_, String>>()?;
+    }
     option(&mut project.source_dir, f)?;
     option(&mut project.spectrum_file, f)?;
     option(&mut project.feff_workspace, f)?;
+    for group in &mut project.source_groups {
+        group.path = f(&group.path)?;
+    }
     for p in &mut project.overrides {
         p.path = f(&p.path)?;
     }
@@ -523,6 +548,7 @@ pub(super) fn restore(
     mut project: ProjectFile,
     path: &Path,
     json: &[u8],
+    cache_root: impl FnOnce() -> Result<PathBuf, String>,
 ) -> Result<ProjectFile, String> {
     let header = project
         .header
@@ -544,13 +570,7 @@ pub(super) fn restore(
         .map(|f| absolute(&folder.join(&f.path)))
         .collect::<Result<_, _>>()?;
     if header.storage == DataStorage::Embedded {
-        // Fixture tests must not create or chmod the user's settings directory.
-        let cache = if cfg!(test) {
-            std::env::temp_dir().join(format!("rexafs-project-test-cache-{}", std::process::id()))
-        } else {
-            crate::settings::app_dir().ok_or("Project cache directory unavailable")?
-        };
-        let root = cache.join("project-data").join(digest(json));
+        let root = cache_root()?.join("project-data").join(digest(json));
         restore_embedded(&mut project, &header, &folder, &root)?;
     } else if !project.embedded.is_empty() {
         return Err("A paths-only project contains unexpected embedded payloads.".into());

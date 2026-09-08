@@ -18,6 +18,20 @@ pub(crate) struct ModelSettings {
     pub variables: Vec<FitVarSpec>,
     pub joint: JointConfig,
 }
+fn spectrum_index(
+    catalog: &crate::catalog::Catalog,
+    registry: &crate::group_identity::GroupRegistry,
+    file: &str,
+) -> Result<usize, String> {
+    let ix = (0..catalog.len())
+        .find(|&ix| catalog.path(ix) == std::path::Path::new(file))
+        .ok_or("Spectrum must already be in the open catalog")?;
+    if registry.index_excluded(ix) {
+        return Err("group was removed".into());
+    }
+    Ok(ix)
+}
+
 impl StudioApp {
     pub(crate) fn assistant_navigate(
         &mut self,
@@ -68,6 +82,7 @@ impl StudioApp {
             let catalog_index =
                 (0..self.catalog.len()).find(|&ix| self.catalog.path(ix).to_string_lossy() == file);
             if let Some(ix) = navigation_target(file, &self.current_path, catalog_index)? {
+                spectrum_index(&self.catalog, &self.group_registry, file)?;
                 self.select_entry(ix, cx);
             }
         }
@@ -497,6 +512,41 @@ fn proposed_ranges(old: &FitRanges, patch: &Value) -> Result<FitRanges, String> 
 }
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn assistant_spectrum_lookup_reports_removed_group() {
+        let mut catalog = crate::catalog::Catalog::default();
+        catalog.extend(vec![crate::catalog::FileMeta {
+            dir: "/data".into(),
+            name: "a.dat".into(),
+            size: 0,
+        }]);
+        let registry = crate::group_identity::GroupRegistry::default();
+        let id = registry.register_source(
+            Some(0),
+            catalog.path(0),
+            Default::default(),
+            &Default::default(),
+        );
+        // Path components compare native and forward slashes consistently on
+        // Windows without performing filesystem I/O or resolving other files.
+        let native = catalog.path(0).to_string_lossy().into_owned();
+        for file in [native.as_str(), "/data/a.dat"] {
+            assert_eq!(spectrum_index(&catalog, &registry, file), Ok(0));
+        }
+        assert_eq!(
+            spectrum_index(&catalog, &registry, "/data/b.dat"),
+            Err("Spectrum must already be in the open catalog".into())
+        );
+        registry.set_excluded(&std::collections::BTreeSet::from([id]));
+        for file in [native.as_str(), "/data/a.dat"] {
+            assert_eq!(
+                spectrum_index(&catalog, &registry, file),
+                Err("group was removed".into())
+            );
+        }
+    }
+
     use super::*;
     #[test]
     fn fit_range_patch_preserves_individual_weights() {

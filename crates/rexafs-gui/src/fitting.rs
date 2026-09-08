@@ -910,7 +910,7 @@ mod tests {
     #[ignore = "requires REXAFS_COMPARE_PROJECT with local paths and a standalone spectrum"]
     fn diagnose_saved_fit() {
         let file = crate::settings::env_var("COMPARE_PROJECT").expect("REXAFS_COMPARE_PROJECT");
-        let project = crate::project::load(std::path::Path::new(&file)).unwrap();
+        let project = crate::project::tests::load(std::path::Path::new(&file)).unwrap();
         let spectrum =
             process_file(project.spectrum_file.as_ref().unwrap(), &project.params).unwrap();
         let mut vars = project.fit_vars.clone();
@@ -951,7 +951,7 @@ mod tests {
     fn compare_saved_project_backends() {
         let _guard = crate::feffgen::feff_test_lock();
         let file = crate::settings::env_var("COMPARE_PROJECT").expect("REXAFS_COMPARE_PROJECT");
-        let project = crate::project::load(std::path::Path::new(&file)).unwrap();
+        let project = crate::project::tests::load(std::path::Path::new(&file)).unwrap();
         let input =
             std::fs::read(project.feff_workspace.as_ref().unwrap().join("feff.inp")).unwrap();
         let spectrum =

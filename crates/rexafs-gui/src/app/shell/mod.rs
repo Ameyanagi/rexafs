@@ -17,8 +17,13 @@ mod depth_controls;
 pub mod fit;
 pub(crate) mod fit_preview;
 pub mod fit_workspace;
+pub(crate) mod group_menu;
 pub mod groups_panel;
 pub mod handles;
+pub(crate) mod import_editor;
+mod import_receipt;
+mod import_review;
+mod import_summary;
 pub mod inspector;
 mod joint_browser;
 pub(crate) mod joint_fit;
@@ -29,6 +34,7 @@ pub mod palette;
 pub(crate) mod parameter_actions;
 mod path_diagnostics;
 pub mod path_picker;
+pub(crate) mod path_routing;
 pub(crate) mod publish;
 pub mod series;
 pub mod stage_strip;
@@ -380,6 +386,7 @@ impl StudioApp {
             .text_size(px(12.5))
             .child(self.top_bar(cx))
             .child(self.stage_strip(cx))
+            .children(self.import_receipt(cx))
             .child(
                 div()
                     .flex_1()
@@ -410,6 +417,7 @@ impl StudioApp {
                     .then(|| self.journal_panel(cx).into_any_element()),
             )
             .child(self.status_bar(cx))
+            .children(self.group_menu_overlay(cx))
             .children(self.palette_overlay(cx))
             .children(self.parameter_menu_overlay(cx))
             .children(self.parameter_context_overlay(cx))
@@ -431,6 +439,8 @@ impl StudioApp {
                         ),
                 )
             })
+            .children(self.path_route_overlay(cx))
+            .children(self.import_editor.clone())
     }
 
     /// Brand · project · actions (open folder / project, theme).
