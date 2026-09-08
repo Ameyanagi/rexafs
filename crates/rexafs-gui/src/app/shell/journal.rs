@@ -24,6 +24,13 @@ pub enum UndoOp {
         before: Option<u8>,
         after: Option<u8>,
     },
+    SpectrumColors {
+        changes: Vec<(
+            GroupId,
+            Option<crate::spectrum_colors::Assignment>,
+            Option<crate::spectrum_colors::Assignment>,
+        )>,
+    },
     FitModel {
         before: super::assistant_actions::ModelSettings,
         after: super::assistant_actions::ModelSettings,
@@ -75,6 +82,7 @@ impl RemovalSnapshot {
         let mut saved = state.clone();
         saved.labels.retain(|id, _| ids.contains(id));
         saved.colors.retain(|id, _| ids.contains(id));
+        saved.plot_colors.retain(|id, _| ids.contains(id));
         saved.marked.retain(|id| ids.contains(id));
         saved.frozen.retain(|id| ids.contains(id));
         saved.overrides.retain(|(id, _)| ids.contains(id));
@@ -94,6 +102,7 @@ impl RemovalSnapshot {
         derived.retain(|d| d.group_id.as_ref().is_none_or(|id| !ids.contains(id)));
         state.labels.retain(|id, _| !ids.contains(id));
         state.colors.retain(|id, _| !ids.contains(id));
+        state.plot_colors.retain(|id, _| !ids.contains(id));
         state.marked.retain(|id| !ids.contains(id));
         state.frozen.retain(|id| !ids.contains(id));
         state.overrides.retain(|(id, _)| !ids.contains(id));
@@ -153,6 +162,7 @@ impl RemovalSnapshot {
         state.excluded.retain(|id| !self.ids.contains(id));
         state.labels.extend(self.state.labels.clone());
         state.colors.extend(self.state.colors.clone());
+        state.plot_colors.extend(self.state.plot_colors.clone());
         state.marked.extend(self.state.marked.clone());
         state.frozen.extend(self.state.frozen.clone());
         state.overrides.extend(self.state.overrides.clone());
@@ -183,6 +193,15 @@ impl UndoOp {
             }
             Self::Color { id, before, after } => {
                 set(&mut state.colors, id, if forward { after } else { before })
+            }
+            Self::SpectrumColors { changes } => {
+                for (id, before, after) in changes {
+                    set(
+                        &mut state.plot_colors,
+                        id,
+                        if forward { after } else { before },
+                    );
+                }
             }
             _ => {}
         }
@@ -622,7 +641,7 @@ impl StudioApp {
             self.after_param_undo(cx);
         }
         let inverse = match op {
-            op @ (UndoOp::Label { .. } | UndoOp::Color { .. }) => {
+            op @ (UndoOp::Label { .. } | UndoOp::Color { .. } | UndoOp::SpectrumColors { .. }) => {
                 op.apply_metadata(&mut self.group_state, false);
                 self.invalidate_explore_plots(cx);
                 op
@@ -697,7 +716,7 @@ impl StudioApp {
             self.after_param_undo(cx);
         }
         let forward = match op {
-            op @ (UndoOp::Label { .. } | UndoOp::Color { .. }) => {
+            op @ (UndoOp::Label { .. } | UndoOp::Color { .. } | UndoOp::SpectrumColors { .. }) => {
                 op.apply_metadata(&mut self.group_state, true);
                 self.invalidate_explore_plots(cx);
                 op
@@ -1268,6 +1287,72 @@ mod tests {
         snapshot.restore(&registry, &mut derived, &mut state);
         assert_eq!(registry.index(&id), Some(1));
         assert!(registry.id(0).is_none());
+    }
+
+    #[test]
+    fn palette_assignments_persist_and_undo_as_one_identity_transaction() {
+        use crate::spectrum_colors::{Assignment, Palette};
+        let first = GroupId::legacy_result(8);
+        let second = GroupId::legacy_result(9);
+        let untouched = GroupId::legacy_result(10);
+        let before = Assignment {
+            palette: Palette::Tab10,
+            index: 3,
+            count: 4,
+            reversed: false,
+        };
+        let mut state = GroupState {
+            current: Some(second.clone()),
+            marked: [first.clone()].into(),
+            ..Default::default()
+        };
+        state.plot_colors.insert(first.clone(), before);
+        state.plot_colors.insert(untouched.clone(), before);
+        let op = UndoOp::SpectrumColors {
+            changes: vec![
+                (
+                    first.clone(),
+                    Some(before),
+                    Some(Assignment {
+                        palette: Palette::Viridis,
+                        index: 0,
+                        count: 2,
+                        reversed: true,
+                    }),
+                ),
+                (
+                    second.clone(),
+                    None,
+                    Some(Assignment {
+                        palette: Palette::Viridis,
+                        index: 1,
+                        count: 2,
+                        reversed: true,
+                    }),
+                ),
+            ],
+        };
+        op.apply_metadata(&mut state, true);
+        let project = crate::project::ProjectFile {
+            group_state: state,
+            ..Default::default()
+        };
+        let encoded = serde_json::to_vec(&project).unwrap();
+        let restored: crate::project::ProjectFile = serde_json::from_slice(&encoded).unwrap();
+        let mut state = restored.group_state;
+        assert_eq!(state.plot_colors[&first].palette, Palette::Viridis);
+        assert_eq!(state.plot_colors[&second].index, 1);
+        op.apply_metadata(&mut state, false);
+        assert_eq!(state.plot_colors[&first], before);
+        assert!(!state.plot_colors.contains_key(&second));
+        op.apply_metadata(&mut state, true);
+        assert_eq!(state.plot_colors[&first].index, 0);
+        assert_eq!(state.plot_colors[&second].index, 1);
+        assert_eq!(state.plot_colors[&untouched], before);
+        assert_eq!(state.current, Some(second));
+        assert_eq!(state.marked, [first].into());
+        let legacy: GroupState = serde_json::from_str("{}").unwrap();
+        assert!(legacy.plot_colors.is_empty());
     }
 
     #[test]

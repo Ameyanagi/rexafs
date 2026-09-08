@@ -34,6 +34,11 @@ settings![
     (bkg_kmin, "Background k min (Å⁻¹)", "AUTOBK"),
     (bkg_kmax, "Background k max (Å⁻¹)", "AUTOBK"),
     (bkg_kweight, "Background k-weight", "AUTOBK"),
+    (
+        bkg_kweight_linked,
+        "Background k-weight linked to FFT",
+        "AUTOBK"
+    ),
     (bkg_nknots, "Spline knots", "AUTOBK"),
     (bkg_clamp_lo, "Clamp low", "Clamps & window"),
     (bkg_clamp_hi, "Clamp high", "Clamps & window"),
@@ -872,6 +877,7 @@ mod tests {
             bkg_kmin: Some(1.),
             bkg_kmax: Some(12.),
             bkg_kweight: Some(2),
+            bkg_kweight_linked: true,
             bkg_nknots: Some(7),
             bkg_clamp_lo: Some(1),
             bkg_clamp_hi: Some(2),
@@ -967,6 +973,7 @@ mod tests {
                     "bkg_kmin",
                     "bkg_kmax",
                     "bkg_kweight",
+                    "bkg_kweight_linked",
                     "bkg_nknots",
                     "bkg_clamp_lo",
                     "bkg_clamp_hi",

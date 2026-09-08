@@ -533,14 +533,18 @@ impl StudioApp {
             Item::Mark => self.toggle_mark(ix, cx),
             Item::Rename => self.start_group_rename(ix, window, cx),
             Item::Color(color) => {
-                let before = self.group_state.colors.insert(id.clone(), color);
-                if before != Some(color) {
+                let after = crate::spectrum_colors::Assignment {
+                    palette: crate::spectrum_colors::Palette::Theme,
+                    index: usize::from(color),
+                    count: 8,
+                    reversed: false,
+                };
+                let before = self.group_state.plot_colors.insert(id.clone(), after);
+                if before != Some(after) {
                     self.record(
                         "change group color",
-                        Some(UndoOp::Color {
-                            id,
-                            before,
-                            after: Some(color),
+                        Some(UndoOp::SpectrumColors {
+                            changes: vec![(id, before, Some(after))],
                         }),
                     );
                 }

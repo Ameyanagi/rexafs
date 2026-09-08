@@ -82,15 +82,25 @@ impl StudioApp {
                 options.height,
                 format!("Auto ({:.1})", config.figure.height),
             ),
-            (
-                "DPI",
-                options.dpi,
-                format!("Auto ({:.0})", config.figure.dpi),
-            ),
+            ("DPI", options.dpi, "Auto (300)".into()),
             ("Font size (pt)", options.font_size, "Auto".into()),
             ("Line width (pt)", options.line_width, "Auto".into()),
-            ("X min", options.xmin, "Auto".into()),
-            ("X max", options.xmax, "Auto".into()),
+            (
+                "X min",
+                options.xmin,
+                figure
+                    .default_xlim
+                    .map(|(min, _)| format!("Auto ({min:.2})"))
+                    .unwrap_or("Auto".into()),
+            ),
+            (
+                "X max",
+                options.xmax,
+                figure
+                    .default_xlim
+                    .map(|(_, max)| format!("Auto ({max:.2})"))
+                    .unwrap_or("Auto".into()),
+            ),
             ("Y min", options.ymin, "Auto".into()),
             ("Y max", options.ymax, "Auto".into()),
         ];
@@ -128,9 +138,9 @@ impl StudioApp {
         let caption = figure.caption(&options);
         let table_defaults = crate::publication::report::TABLE_CAPTIONS;
         for (index, (placeholder, value)) in [
-            ("No title".to_string(), options.title),
-            (figure.xlabel.clone(), options.xlabel),
-            (figure.ylabel.clone(), options.ylabel),
+            ("No title".to_string(), options.title.clone()),
+            (figure.math_xlabel().into(), options.xlabel.clone()),
+            (figure.math_ylabel(&options).into(), options.ylabel.clone()),
             (caption, options.caption),
             (
                 table_defaults[0].2.into(),
@@ -473,20 +483,80 @@ impl StudioApp {
                 .text_size(px(12.))
                 .child("Figure · current spectrum / fit"),
         );
-        for (index, figure) in self.publish.figures.iter().enumerate() {
-            controls = controls.child(
-                chip(
-                    &t,
-                    SharedString::from(format!("publication-figure-{index}")),
-                    figure.label.clone(),
-                    index == self.publish.selected,
-                )
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.publish.selected = index;
-                    this.publication_fields(cx);
-                    this.refresh_publication_preview(cx);
-                })),
-            );
+        let more_figures = self.ui.sections.contains("Publication more figures");
+        for common in [true, false] {
+            if !common {
+                controls = controls.child(
+                    disclosure(
+                        &t,
+                        "publication-more-figures",
+                        "More figures",
+                        more_figures,
+                        false,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if !this.ui.sections.remove("Publication more figures") {
+                            this.ui.sections.insert("Publication more figures");
+                        }
+                        cx.notify();
+                    })),
+                );
+                if !more_figures {
+                    continue;
+                }
+            }
+            for (index, figure) in self
+                .publish
+                .figures
+                .iter()
+                .enumerate()
+                .filter(|(_, f)| f.common() == common)
+            {
+                controls = controls.child(
+                    chip(
+                        &t,
+                        SharedString::from(format!("publication-figure-{index}")),
+                        figure.label.clone(),
+                        index == self.publish.selected,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.publish.selected = index;
+                        this.publication_fields(cx);
+                        this.refresh_publication_preview(cx);
+                    })),
+                );
+            }
+        }
+        if self
+            .publish
+            .figures
+            .get(self.publish.selected)
+            .is_some_and(|f| f.normalized_series.is_some())
+        {
+            let mut modes = div().flex().flex_wrap().gap_1();
+            for (normalized, label) in [(false, "Flattened"), (true, "Normalized")] {
+                modes = modes.child(
+                    chip(
+                        &t,
+                        SharedString::from(format!("publication-energy-{normalized}")),
+                        label,
+                        options.normalized == normalized,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(f) = this.publish.figures.get(this.publish.selected) {
+                            this.publish
+                                .settings
+                                .figures
+                                .entry(f.key.into())
+                                .or_default()
+                                .normalized = normalized;
+                            this.publication_fields(cx);
+                            this.refresh_publication_preview(cx);
+                        }
+                    })),
+                );
+            }
+            controls = controls.child(modes);
         }
         controls = controls.child(
             disclosure(
@@ -503,6 +573,7 @@ impl StudioApp {
                     || options.guides
                     || !options.legend
                     || !options.hidden.is_empty()
+                    || !options.shown.is_empty()
                     || options.xmin.is_some()
                     || options.ymin.is_some(),
             )
@@ -539,28 +610,19 @@ impl StudioApp {
                         ),
                     )
                     .child(
-                        chip(
-                            &t,
-                            "publication-grid",
-                            "Grid",
-                            options
-                                .grid
-                                .unwrap_or(ruviz::core::GridStyle::default().visible),
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            if let Some(f) = this.publish.figures.get(this.publish.selected) {
-                                let o = this
-                                    .publish
-                                    .settings
-                                    .figures
-                                    .entry(f.key.into())
-                                    .or_default();
-                                o.grid = Some(
-                                    !o.grid.unwrap_or(ruviz::core::GridStyle::default().visible),
-                                );
-                                this.refresh_publication_preview(cx);
-                            }
-                        })),
+                        chip(&t, "publication-grid", "Grid", options.grid.unwrap_or(true))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(f) = this.publish.figures.get(this.publish.selected) {
+                                    let o = this
+                                        .publish
+                                        .settings
+                                        .figures
+                                        .entry(f.key.into())
+                                        .or_default();
+                                    o.grid = Some(!o.grid.unwrap_or(true));
+                                    this.refresh_publication_preview(cx);
+                                }
+                            })),
                     )
                     .child(
                         chip(&t, "publication-guides", "Guides", options.guides).on_click(
@@ -579,7 +641,7 @@ impl StudioApp {
                         ),
                     ),
             );
-            for (label, field) in ["Title", "X label", "Y label"]
+            for (label, field) in ["Title · Typst", "X label · Typst", "Y label · Typst"]
                 .into_iter()
                 .zip(self.publish.labels.iter().take(3))
             {
@@ -592,6 +654,12 @@ impl StudioApp {
                     )
                     .child(field.clone());
             }
+            controls = controls.child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child("Use $…$ for math, e.g. $k^2 chi(k)$."),
+            );
             controls = controls.child(
                 div()
                     .mt_2()
@@ -610,14 +678,15 @@ impl StudioApp {
                     .child("Visible curves"),
             );
             if let Some(figure) = self.publish.figures.get(self.publish.selected) {
-                for series in &figure.series {
+                for series in figure.series(&options) {
                     let key = series.key.clone();
+                    let visible = series.visible(&options);
                     controls = controls.child(
                         chip(
                             &t,
                             SharedString::from(format!("publication-series-{key}")),
                             series.label.clone(),
-                            !options.hidden.contains(&key),
+                            visible,
                         )
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if let Some(f) = this.publish.figures.get(this.publish.selected) {
@@ -627,8 +696,12 @@ impl StudioApp {
                                     .figures
                                     .entry(f.key.into())
                                     .or_default();
-                                if !o.hidden.remove(&key) {
+                                if visible {
+                                    o.shown.remove(&key);
                                     o.hidden.insert(key.clone());
+                                } else {
+                                    o.hidden.remove(&key);
+                                    o.shown.insert(key.clone());
                                 }
                                 this.refresh_publication_preview(cx);
                             }

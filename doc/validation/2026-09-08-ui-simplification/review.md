@@ -36,6 +36,10 @@ The maintainer's original checkout and active app sessions were preserved.
   the projected atom centers; repeated traversals separate between those centers
   and their arrowheads follow the curve. Structure path/cutoff inputs and the
   processing standard filter now update with the application theme.
+  Center fading now retains atom and cylinder lighting at fractional opacity.
+  Sphere tessellation is cached as non-overlapping bands; bonds subdivide only
+  when depth effects vary. Camera interaction repaints a retained viewport rather
+  than rebuilding the structure controls for every wheel/drag event.
 - Assistant keeps model, reasoning, mode and sharing/access switches visible.
   Conversation utilities and longer descriptions use Settings. Permission and
   approval behavior retain the existing backend and busy-state guards.
@@ -45,6 +49,21 @@ The maintainer's original checkout and active app sessions were preserved.
 - Series opens the actual scan selector, suppresses invalid frame/run UI and
   preserves marks during frame navigation. Publish has one export area, explicit
   format/scope and a large preview; Style remains open by default.
+- Publish provides XANES/full-energy flattened views with a Normalized toggle,
+  weighted χ(k) to FFT k-max + 1, |χ(R)| and R-space fits over 0–6 Å (expanded for
+  wider fit ranges). Common views come first, FFT windows are hidden, and defaults
+  are 300 DPI with legends, grid and Typst title/axis labels. Optional components
+  remain available, and CSV arrays retain their full measured/computed grids.
+- Auto normalization maximum now follows the spectrum endpoint instead of the
+  library constructor's 2000 eV value. Explicit limits stay explicit. Background
+  k-weight has a default-off Link to FFT that preserves the independent setting,
+  and participates in project persistence, cache invalidation, copy/reset and undo.
+- Colors offers three cycles and three gradients, swatch previews, reverse and
+  reset. Assignments cover the plot scope and persist per group, including colors
+  of members beyond the display sampling cap. Group swatches, all processing
+  quadrants and legends share the assignment; changing current cannot reshuffle
+  colors. Batch color changes undo as one action. The theme toggle follows Save
+  Project, and Help is rightmost.
 - AccessKit connects rendered controls, focus handles and actual callbacks to
   native accessibility. Main icons, navigation, inputs, dialogs and disclosure
   controls expose names and states. Adapters are included for macOS, Windows and
@@ -65,7 +84,7 @@ The maintainer's original checkout and active app sessions were preserved.
   repeated legs, clipping continuity and arrow tangent alignment.
 - After correcting Assistant theme synchronization, all 47 Assistant tests passed.
 - Optimized build passed with the distributed `refeff-runner,feff10-runner` features.
-- The final optimized package at source commit `cb4838d` passed the extracted Cu
+- The earlier optimized package at source commit `cb4838d` passed the extracted Cu
   example/pipeline and both FEFF backend self-checks. Its build metadata records a
   clean source tree and the same commit as the embedded build identity.
 - `cargo fmt --all` and `git diff --check` passed.
@@ -120,3 +139,22 @@ Also pending: narrow/light-theme workflows, populated Series navigation, complet
 Fit/Assistant busy and approval states, export-preview comparison, and complete
 keyboard/screen-reader coverage. Windows/Linux native adapters are not runtime
 qualified in this macOS session.
+
+
+## Follow-up qualification (2026-09-09 JST)
+
+`cargo test -p rexafs-gui` passed **449 tests, 0 failures, 5 ignored** (119.76 s).
+The follow-up suite covers publication presets/Typst output, normalization Auto
+on both complete and truncated spectra, the actual AUTOBK/FFT link on/off pipeline,
+non-overlapping sphere opacity and adaptive bond subdivision, palette repetition
+and gradient reversal, cross-quadrant colors with mixed FFT weights, and saved
+identity-based palette undo/redo. Rendered publication PNGs were visually inspected
+for XANES (flattened and normalized), full flattened energy, χ(k), |χ(R)| and the
+R-fit layout. The R-fit layout uses a synthetic internal fixture; it is not an
+experimental fit result. Legends with punctuation remain literal while axis math
+uses Typst.
+
+Native access was retried for these changes and again failed with
+`Sky Computer Use native pipe startup failed`. Color-menu/inspector layout and
+interactive shading/zoom smoothness therefore remain pending native QA; no frame
+rate or responsiveness measurement is claimed.

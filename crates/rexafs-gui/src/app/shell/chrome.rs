@@ -18,6 +18,9 @@ impl StudioApp {
             self.close_chrome_menu(window, cx);
             return;
         }
+        if menu == Menu::Colors {
+            self.sync_spectrum_colors_menu();
+        }
         self.ui.return_focus = window.focused(cx);
         self.ui.menu_position = event.position();
         self.ui.menu = Some(menu);
@@ -116,6 +119,7 @@ impl StudioApp {
                 Menu::Project => "Project",
                 Menu::Save => "Save project",
                 Menu::Plot => "Plot options",
+                Menu::Colors => "Spectrum colors",
                 Menu::Groups => "Groups",
                 Menu::Structure => "Structure appearance",
                 Menu::Merge => "Merge preview",
@@ -289,6 +293,7 @@ impl StudioApp {
                 body
             }
             Menu::Plot => body.child(self.plot_options(cx)),
+            Menu::Colors => body.child(self.spectrum_colors_menu(cx)),
             Menu::Groups => body
                 .child(
                     self.menu_entry(

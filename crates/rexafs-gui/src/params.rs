@@ -1056,6 +1056,9 @@ pub struct PipelineParams {
     pub bkg_kstep: Option<f64>,
     pub bkg_nknots: Option<i32>,
     pub bkg_kweight: Option<i32>,
+    /// Opt-in: follow the effective forward-transform weight without replacing
+    /// the independent background setting, so unlinking restores it.
+    pub bkg_kweight_linked: bool,
     pub bkg_clamp_lo: Option<i32>,
     pub bkg_clamp_hi: Option<i32>,
     /// Number of points at each active clamp endpoint (default 3).
@@ -1136,6 +1139,15 @@ fn legacy_bkg_clamp_policy() -> AUTOBKClampScalePolicy {
 }
 
 impl PipelineParams {
+    pub fn effective_bkg_kweight(&self) -> i32 {
+        if self.bkg_kweight_linked {
+            // XrayFFTF::fill_parameter uses the same nonnegative integer weight.
+            self.fft_kweight.unwrap_or(2.).max(0.).floor() as i32
+        } else {
+            self.bkg_kweight.unwrap_or(1)
+        }
+    }
+
     /// Inherit settings for already materialized, energy-shifted arrays.
     /// Pre/post-edge ranges are relative to E0; only the two absolute edge
     /// overrides move. Reference alignment belongs to the input read, not replay.
@@ -1181,6 +1193,7 @@ impl PipelineParams {
     pub fn fingerprint(&self) -> u64 {
         let mut hasher = std::hash::DefaultHasher::new();
         self.hash_raw_fields(&mut hasher);
+        self.bkg_kweight_linked.hash(&mut hasher);
         for v in [
             self.e0,
             self.edge_step,
@@ -1601,7 +1614,17 @@ pub fn process_arrays(
     ppe.pre_edge_start = params.pre_edge_start.or(defaults.pre_edge_start);
     ppe.pre_edge_end = params.pre_edge_end.or(defaults.pre_edge_end);
     ppe.norm_start = params.norm_start.or(defaults.norm_start);
-    ppe.norm_end = params.norm_end.or(defaults.norm_end);
+    // Auto follows this spectrum's measured endpoint (relative to E0), rather
+    // than inheriting the library's fixed 2000 eV constructor default.
+    ppe.norm_end = params.norm_end.or_else(|| {
+        sp.energy
+            .as_ref()?
+            .iter()
+            .copied()
+            .reduce(f64::max)
+            .zip(sp.e0())
+            .map(|(end, e0)| end - e0)
+    });
     ppe.norm_polyorder = params.norm_polyorder.or(defaults.norm_polyorder);
     ppe.n_victoreen = params.n_victoreen.or(defaults.n_victoreen);
     sp.set_normalization_method(Some(NormalizationMethod::PrePostEdge(ppe)))
@@ -1642,9 +1665,7 @@ pub fn process_arrays(
     if params.bkg_nknots.is_some() {
         autobk.nknots = params.bkg_nknots;
     }
-    if params.bkg_kweight.is_some() {
-        autobk.kweight = params.bkg_kweight;
-    }
+    autobk.kweight = Some(params.effective_bkg_kweight());
     if params.bkg_clamp_lo.is_some() {
         autobk.clamp_lo = params.bkg_clamp_lo;
     }
@@ -1756,6 +1777,85 @@ pub fn resample_chik(sp: &XASSpectrum, grid: &[f64]) -> Option<Vec<f64>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalization_auto_uses_each_spectrum_endpoint_and_preserves_explicit_limits() {
+        let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../rexafs/tests/testfiles/xraylarch_d867/xafsdata/cu_150k.xmu");
+        let full = process_file(&file, &PipelineParams::default()).unwrap();
+        let e0 = full.e0().unwrap();
+        for upper in [e0 + 450., f64::INFINITY] {
+            let raw: Vec<_> = full
+                .energy
+                .as_ref()
+                .unwrap()
+                .iter()
+                .zip(full.mu.as_ref().unwrap())
+                .filter(|(e, _)| **e <= upper)
+                .map(|(&e, &m)| (e, m))
+                .collect();
+            let (energy, mu): (Vec<_>, Vec<_>) = raw.into_iter().unzip();
+            let end = *energy.last().unwrap();
+            for requested in [None, Some(300.)] {
+                let params = PipelineParams {
+                    e0: Some(e0),
+                    norm_end: requested,
+                    ..Default::default()
+                };
+                let spectrum = process_arrays(energy.clone(), mu.clone(), &params).unwrap();
+                let Some(NormalizationMethod::PrePostEdge(ppe)) = spectrum.normalization else {
+                    panic!("normalization")
+                };
+                assert_eq!(ppe.norm_end, Some(requested.unwrap_or(end - e0)));
+            }
+        }
+    }
+
+    #[test]
+    fn background_weight_link_tracks_fft_and_restores_independent_setting() {
+        let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../rexafs/tests/testfiles/xraylarch_d867/xafsdata/cu_150k.xmu");
+        let mut p = PipelineParams {
+            bkg_kweight: Some(1),
+            fft_kweight: Some(3.),
+            ..Default::default()
+        };
+        assert!(!p.bkg_kweight_linked);
+        let independent = p.fingerprint();
+        let raw = p.raw_fingerprint();
+        for (linked, fft, expected) in [
+            (false, Some(3.), 1),
+            (true, Some(3.), 3),
+            (true, Some(2.), 2),
+            (true, None, 2),
+            (false, Some(3.), 1),
+        ] {
+            p.bkg_kweight_linked = linked;
+            p.fft_kweight = fft;
+            let spectrum = process_file(&file, &p).unwrap();
+            let Some(BackgroundMethod::AUTOBK(bkg)) = &spectrum.background else {
+                panic!("background")
+            };
+            assert_eq!(bkg.kweight, Some(expected));
+            if linked {
+                assert_eq!(spectrum.kweight().copied(), Some(expected as f64));
+            }
+            assert_eq!(p.bkg_kweight, Some(1));
+            assert_eq!(p.raw_fingerprint(), raw);
+            if linked {
+                assert_ne!(p.fingerprint(), independent);
+            }
+        }
+        assert_eq!(p.fingerprint(), independent);
+        p.bkg_kweight_linked = true;
+        let restored: PipelineParams =
+            serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+        assert!(restored.bkg_kweight_linked);
+        assert_eq!(restored.bkg_kweight, Some(1));
+        let legacy: PipelineParams = serde_json::from_str("{}").unwrap();
+        assert!(!legacy.bkg_kweight_linked);
+        assert_eq!(legacy.effective_bkg_kweight(), 1);
+    }
 
     #[test]
     fn typed_outputs_refuse_processing_but_preserve_display_arrays() {

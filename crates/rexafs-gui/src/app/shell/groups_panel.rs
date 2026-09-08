@@ -155,6 +155,13 @@ impl StudioApp {
         cx.notify();
     }
 
+    pub(crate) fn group_plot_color(&self, ix: usize) -> Option<ruviz::render::Color> {
+        self.peek_group_id(ix)
+            .as_ref()
+            .and_then(|id| self.group_state.plot_colors.get(id))
+            .map(|c| c.color(&self.theme))
+    }
+
     pub(crate) fn group_color_index(&self, ix: usize) -> usize {
         self.peek_group_id(ix)
             .as_ref()
@@ -939,7 +946,11 @@ impl StudioApp {
             }))
             .child(checkbox(&t, self.selection.contains(&ix))),
         )
-        .child(swatch(trace_rgba(&t, self.group_color_index(ix))))
+        .child(swatch(
+            self.group_plot_color(ix)
+                .map(crate::spectrum_colors::rgba)
+                .unwrap_or_else(|| trace_rgba(&t, self.group_color_index(ix))),
+        ))
         .child(self.group_label_editor(ix, label, cx))
         .child(
             div()

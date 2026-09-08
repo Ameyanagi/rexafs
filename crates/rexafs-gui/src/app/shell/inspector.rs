@@ -331,6 +331,53 @@ impl StudioApp {
             })
     }
 
+    fn bkg_weight_control(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let t = self.theme;
+        let p = self.ui_params();
+        let linked = p.bkg_kweight_linked;
+        let field = if linked {
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(t.text_muted)
+                        .child("bkg k-weight"),
+                )
+                .child(
+                    div()
+                        .text_color(t.text)
+                        .child(format!("{} · from FFT", p.effective_bkg_kweight())),
+                )
+                .into_any_element()
+        } else {
+            div()
+                .children(self.field(ParamKey::BkgKweight, cx))
+                .into_any_element()
+        };
+        let toggle = super::chip(&t, "bkg-kweight-link", "Link to FFT", linked)
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.edit_parameters("Toggle background k-weight link to FFT".into(), cx, |p| {
+                    p.bkg_kweight_linked = !p.bkg_kweight_linked;
+                    Ok(())
+                });
+            }))
+            .into_any_element();
+        div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .child(div().flex_1().min_w_0().child(field))
+            .child(self.parameter_context(
+                super::parameter_actions::ParamScope::Field("bkg_kweight_linked"),
+                toggle,
+                cx,
+            ))
+            .into_any_element()
+    }
+
     /// Section: uppercase label, optional override chip, then rows.
     pub(crate) fn section(
         &self,
@@ -745,7 +792,7 @@ impl StudioApp {
                     self.field(ParamKey::BkgKmin, cx),
                     self.field(ParamKey::BkgKmax, cx),
                     None,
-                    self.field(ParamKey::BkgKweight, cx),
+                    Some(self.bkg_weight_control(cx)),
 
                 ]
                 .into_iter()

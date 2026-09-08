@@ -24,6 +24,7 @@ mod project;
 mod publication;
 mod settings;
 mod source_evidence;
+mod spectrum_colors;
 mod spectrum_interest;
 mod structure;
 mod theme;

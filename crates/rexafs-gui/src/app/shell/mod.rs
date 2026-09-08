@@ -41,6 +41,7 @@ pub mod path_picker;
 pub(crate) mod path_routing;
 pub(crate) mod publish;
 pub mod series;
+mod spectrum_colors;
 pub mod stage_strip;
 mod structure_depth;
 pub mod structure_view;
@@ -558,6 +559,21 @@ impl StudioApp {
                 self.project_saving,
                 |a, c| a.save_project(c),
             ))
+            .child(action(
+                "switch-theme",
+                if t.mode == crate::theme::ThemeMode::Dark {
+                    Icon::Sun
+                } else {
+                    Icon::Moon
+                },
+                if t.mode == crate::theme::ThemeMode::Dark {
+                    "Switch to light theme"
+                } else {
+                    "Switch to dark theme"
+                },
+                false,
+                |a, c| a.toggle_theme(c),
+            ))
             .child(div().w(px(1.)).h(px(18.)).mx_1().bg(t.border))
             .child(
                 icon_button(
@@ -615,20 +631,5 @@ impl StudioApp {
             .child(action("help", Icon::Help, "Help", false, |a, c| {
                 a.open_help(c)
             }))
-            .child(action(
-                "switch-theme",
-                if t.mode == crate::theme::ThemeMode::Dark {
-                    Icon::Sun
-                } else {
-                    Icon::Moon
-                },
-                if t.mode == crate::theme::ThemeMode::Dark {
-                    "Switch to light theme"
-                } else {
-                    "Switch to dark theme"
-                },
-                false,
-                |a, c| a.toggle_theme(c),
-            ))
     }
 }

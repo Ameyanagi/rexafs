@@ -135,3 +135,35 @@ Horizontal and vertical orbit dragging follow the pointer. Scattering legs meet
 the projected atom centers; only repeated traversals bow apart between those
 centers, with arrowheads following each curve. Clipping preserves the full-leg
 position. Structure filters and numeric inputs follow theme changes immediately.
+
+
+## Publication, processing and color follow-ups
+
+Publication puts five common views first: flattened XANES (E₀ − 20 to E₀ + 80 eV),
+full flattened energy through the normalization endpoint, weighted χ(k) through
+FFT k-max + 1 Å⁻¹, |χ(R)| over 0–6 Å, and the R-space fit. Energy views have a
+Normalized toggle. A fit above 6 Å expands its default R limit. FFT windows are
+hidden, the effective transform weight supplies χ(k)/χ(R) units, and defaults are
+300 DPI, legend and grid. Title and axis labels accept Typst math. Extra diagnostics
+and fit components remain available; CSV exports retain complete arrays.
+
+GUI Auto normalization maximum resolves to each spectrum's last measured energy,
+relative to E₀. Explicit limits are preserved. Background k-weight has an opt-in
+**Link to FFT** switch, off by default; unlinking restores its independent value.
+The link participates in processing invalidation, project persistence, copy/reset
+and undo. The theme switch is immediately after Save Project; Help is rightmost.
+
+**Colors** in the plot bar assigns Theme, Tab10 or Okabe–Ito cycles, or Viridis,
+Plasma or Inferno gradients, to the current plot scope. In Marked scope this covers
+marked groups plus current, including groups omitted by the display sampling cap.
+Gradients span that set in group order and may be reversed. Assignments remain
+with group identities across selection changes, save/open and removal/undo; the
+same colors identify group swatches, all processing plots and their legends.
+Okabe–Ito's neutral swatch follows the text color for readability in both themes.
+Reset restores the existing group colors; each assignment is one undoable action.
+
+Center fading preserves atom and cylindrical bond lighting at every opacity.
+Cached, non-overlapping sphere bands avoid repeated alpha compositing and repeated
+path tessellation. Bond subdivision follows actual depth variation. Orbit and zoom
+repaint a retained structure viewport; inspector zoom readouts update after a short
+scroll pause. Native perceived smoothness still requires interactive qualification.

@@ -195,6 +195,7 @@ pub(crate) fn spectrum_plots(
     };
     let traces = [plotting::QuadTrace {
         color_index: 0,
+        color: None,
         label: label.into(),
         sp,
         active: true,
@@ -494,7 +495,10 @@ mod tests {
             let default = if asset["kind"] == "chi-k" {
                 (800, 600)
             } else {
-                ruviz::prelude::Plot::new().get_config().canvas_size()
+                ruviz::prelude::Plot::new()
+                    .dpi(300)
+                    .get_config()
+                    .canvas_size()
             };
             assert_eq!(
                 u32::from_be_bytes(bytes[16..20].try_into().unwrap()),

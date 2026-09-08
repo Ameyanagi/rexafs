@@ -282,6 +282,7 @@ fn copy_section(dst: &mut PipelineParams, src: &PipelineParams, section: ParamSe
             dst.bkg_kstep = src.bkg_kstep;
             dst.bkg_nknots = src.bkg_nknots;
             dst.bkg_kweight = src.bkg_kweight;
+            dst.bkg_kweight_linked = src.bkg_kweight_linked;
             dst.bkg_clamp_lo = src.bkg_clamp_lo;
             dst.bkg_clamp_hi = src.bkg_clamp_hi;
             dst.bkg_nclamp = src.bkg_nclamp;
@@ -3901,7 +3902,12 @@ impl StudioApp {
                 FLOAT,
             ),
             (ParamKey::NormStart, "fit minimum (eV)", "auto (150)", FLOAT),
-            (ParamKey::NormEnd, "fit maximum (eV)", "auto (2000)", FLOAT),
+            (
+                ParamKey::NormEnd,
+                "fit maximum (eV)",
+                "auto (spectrum end)",
+                FLOAT,
+            ),
             (ParamKey::NormPolyorder, "poly order", "auto (2)", INT),
             (ParamKey::NVictoreen, "victoreen n", "auto (0)", INT),
             (ParamKey::Rbkg, "rbkg (Å)", "auto (1.0)", FLOAT),
@@ -5624,9 +5630,11 @@ impl StudioApp {
             let label = self.entry_label(ix);
             let fingerprint = self.effective_fingerprint(ix);
             let color_index = self.group_color_index(ix);
+            let color = self.group_plot_color(ix);
             if let Some(sp) = self.cache.get(&(ix, fingerprint)) {
                 traces.push(QuadTrace {
                     color_index,
+                    color,
                     label,
                     sp: sp.clone(),
                     active: Some(ix) == current,
@@ -5640,6 +5648,12 @@ impl StudioApp {
                 return;
             };
             traces.push(QuadTrace {
+                color: self
+                    .spectrum_group
+                    .as_ref()
+                    .and_then(|t| t.group_id.as_ref())
+                    .and_then(|id| self.group_state.plot_colors.get(id))
+                    .map(|c| c.color(&self.theme)),
                 color_index: self
                     .spectrum_group
                     .as_ref()
@@ -5697,7 +5711,10 @@ impl StudioApp {
                             },
                             36,
                         )),
-                        trace_rgba(&self.theme, trace.color_index),
+                        trace
+                            .color
+                            .map(crate::spectrum_colors::rgba)
+                            .unwrap_or_else(|| trace_rgba(&self.theme, trace.color_index)),
                     )
                 })
                 .collect()

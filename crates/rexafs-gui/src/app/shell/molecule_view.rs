@@ -2,7 +2,7 @@
 //! the projected bounding box; only the wheel and explicit reset change zoom.
 use super::bond_geometry::{BondMode, contacts, nearest_bonds};
 use super::molecular_geometry::{MolecularComponent, complete_molecule};
-use super::structure_depth::{DepthFrame, FadeMode};
+use super::structure_depth::DepthFrame;
 use super::structure_view::AtomPick;
 use crate::{
     app::StudioApp,
@@ -157,13 +157,22 @@ impl ViewCamera {
         [x, ce * p[2] - se * y, se * p[2] + ce * y]
     }
     fn project(self, p: [f64; 3], bounds: Bounds<Pixels>, extent: f64) -> [f32; 3] {
-        let q = self.rotate(p);
+        self.projector(bounds, extent)(p)
+    }
+    fn projector(self, bounds: Bounds<Pixels>, extent: f64) -> impl Fn([f64; 3]) -> [f32; 3] {
         let scale = self.scale(bounds, extent);
-        [
-            f32::from(bounds.center().x) + q[0] as f32 * scale,
-            f32::from(bounds.center().y) - q[1] as f32 * scale,
-            q[2] as f32,
-        ]
+        let (sa, ca) = self.az.sin_cos();
+        let (se, ce) = self.el.sin_cos();
+        let origin = [f32::from(bounds.center().x), f32::from(bounds.center().y)];
+        move |p| {
+            let x = ca * p[0] - sa * p[1];
+            let y = sa * p[0] + ca * p[1];
+            [
+                origin[0] + x as f32 * scale,
+                origin[1] - (ce * p[2] - se * y) as f32 * scale,
+                (se * p[2] + ce * y) as f32,
+            ]
+        }
     }
     fn scale(self, b: Bounds<Pixels>, extent: f64) -> f32 {
         f32::from(b.size.width.min(b.size.height)) * 0.42 * self.zoom as f32 / extent.max(1.) as f32
@@ -708,36 +717,169 @@ fn atom_radius(z: u32, style: AtomStyle, scale: f32) -> f32 {
     }
 }
 
-// A single gradient quad keeps translucent spheres at their requested alpha.
-// Layering twelve translucent highlight disks would incorrectly make them opaque.
-fn translucent_ball(
+// Non-overlapping lighting bands preserve the same spherical shading at every
+// alpha. Cache tessellation once; frames only position the triangles.
+fn sphere_lighting() -> &'static [(gpui::Path<Pixels>, f32)] {
+    static LAYERS: std::sync::OnceLock<Vec<(gpui::Path<Pixels>, f32)>> = std::sync::OnceLock::new();
+    LAYERS.get_or_init(|| {
+        let mut circles = vec![(0., 0., 24., 0.48)];
+        for layer in 0..12 {
+            let f = layer as f32 / 12.;
+            circles.push((
+                -24. * 0.23 * f,
+                -24. * 0.26 * f,
+                24. * (0.94 - 0.65 * f),
+                0.55 + 0.85 * f,
+            ));
+        }
+        let circle = |path: &mut gpui::PathBuilder, (x, y, r, _), sweep| {
+            path.move_to(point(px(x + r), px(y)));
+            path.arc_to(
+                point(px(r), px(r)),
+                px(0.),
+                false,
+                sweep,
+                point(px(x - r), px(y)),
+            );
+            path.arc_to(
+                point(px(r), px(r)),
+                px(0.),
+                false,
+                sweep,
+                point(px(x + r), px(y)),
+            );
+            path.close();
+        };
+        circles
+            .iter()
+            .enumerate()
+            .map(|(i, &outer)| {
+                let mut path = gpui::PathBuilder::fill();
+                circle(&mut path, outer, true);
+                if let Some(&inner) = circles.get(i + 1) {
+                    circle(&mut path, inner, false);
+                }
+                (path.build().expect("valid sphere lighting bands"), outer.3)
+            })
+            .collect()
+    })
+}
+
+fn shaded_ball(w: &mut Window, p: [f32; 3], r: f32, color: Rgba, cue: impl Fn(Rgba) -> Rgba) {
+    for (template, brightness) in sphere_lighting() {
+        let mut path = template.clone();
+        let scale = r / 24.;
+        let transform = |q: Point<Pixels>| {
+            point(
+                px(p[0] + f32::from(q.x) * scale),
+                px(p[1] + f32::from(q.y) * scale),
+            )
+        };
+        for vertex in &mut path.vertices {
+            vertex.xy_position = transform(vertex.xy_position);
+        }
+        path.bounds = Bounds::new(
+            transform(path.bounds.origin),
+            path.bounds.size.map(|v| v * scale),
+        );
+        w.paint_path(path, cue(tint(color, *brightness)));
+    }
+}
+
+fn depth_steps(depth: DepthFrame, edge: [[f64; 3]; 2], inside: bool) -> usize {
+    let mid = std::array::from_fn(|a| (edge[0][a] + edge[1][a]) * 0.5);
+    let a = depth.alpha(edge[0], inside);
+    let b = depth.alpha(edge[1], inside);
+    let bend = (depth.alpha(mid, inside) - (a + b) * 0.5).abs() * 2.;
+    let variation =
+        (a - b).abs().max(bend) + (depth.fog_amount(edge[0]) - depth.fog_amount(edge[1])).abs();
+    (variation / 0.12).ceil().clamp(1., 8.) as usize
+}
+
+// Two adjacent gradients give sticks a cylindrical highlight without stacking
+// translucent strokes. Each pixel receives the requested alpha once.
+fn shaded_stick(w: &mut Window, points: [[f32; 3]; 2], width: f32, dark: Rgba, light: Rgba) {
+    let [a, b] = points;
+    let dx = b[0] - a[0];
+    let dy = b[1] - a[1];
+    let length = dx.hypot(dy);
+    if length < 0.1 {
+        return;
+    }
+    let normal = [-dy / length, dx / length];
+    let angle = normal[0].atan2(-normal[1]).to_degrees().rem_euclid(360.);
+    for (lo, hi, from, to) in [
+        (-width * 0.5, 0., dark, light),
+        (0., width * 0.5, light, dark),
+    ] {
+        let at = |p: [f32; 3], offset| {
+            point(px(p[0] + normal[0] * offset), px(p[1] + normal[1] * offset))
+        };
+        let mut path = gpui::PathBuilder::fill();
+        path.move_to(at(a, lo));
+        path.line_to(at(a, hi));
+        path.line_to(at(b, hi));
+        path.line_to(at(b, lo));
+        path.close();
+        if let Ok(path) = path.build() {
+            let span = f32::from(path.bounds.size.width) * normal[0].abs()
+                + f32::from(path.bounds.size.height) * normal[1].abs();
+            let fraction = ((hi - lo) / span.max(hi - lo)).clamp(0., 1.);
+            w.paint_path(
+                path,
+                gpui::linear_gradient(
+                    angle,
+                    gpui::linear_color_stop(from, 0.5 - fraction * 0.5),
+                    gpui::linear_color_stop(to, 0.5 + fraction * 0.5),
+                ),
+            );
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn depth_bond(
     w: &mut Window,
-    p: [f32; 3],
-    r: f32,
+    edge: [[f64; 3]; 2],
+    depth: DepthFrame,
+    project: &impl Fn([f64; 3]) -> [f32; 3],
     color: Rgba,
+    width: f32,
+    backdrop: Rgba,
     shading: bool,
-    cue: impl Fn(Rgba) -> Rgba,
 ) {
-    let background = if shading {
-        gpui::linear_gradient(
-            135.,
-            gpui::linear_color_stop(cue(tint(color, 1.25)), 0.),
-            gpui::linear_color_stop(cue(tint(color, 0.4)), 1.),
-        )
-    } else {
-        cue(color).into()
-    };
-    w.paint_quad(gpui::quad(
-        Bounds::new(
-            point(px(p[0] - r), px(p[1] - r)),
-            size(px(2. * r), px(2. * r)),
-        ),
-        gpui::Corners::all(px(r)),
-        background,
-        gpui::Edges::all(px(0.)),
-        color,
-        gpui::BorderStyle::Solid,
-    ));
+    for (part, inside) in depth.segments(edge) {
+        let steps = depth_steps(depth, part, inside);
+        let at = |t: f64| std::array::from_fn(|a| part[0][a] + (part[1][a] - part[0][a]) * t);
+        for n in 0..steps {
+            let midpoint = at((n as f64 + 0.5) / steps as f64);
+            let opacity = depth.alpha(midpoint, inside) * color.a;
+            if opacity <= 0.002 {
+                continue;
+            }
+            let points = [
+                project(at(n as f64 / steps as f64)),
+                project(at((n + 1) as f64 / steps as f64)),
+            ];
+            let cue = |color| {
+                alpha(
+                    depth_cue_color(color, backdrop, depth.fog_amount(midpoint)),
+                    opacity,
+                )
+            };
+            if shading {
+                shaded_stick(
+                    w,
+                    points,
+                    width,
+                    cue(tint(color, 0.5)),
+                    cue(tint(color, 1.35)),
+                );
+            } else {
+                line(w, &points, cue(color), width, false);
+            }
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -751,13 +893,7 @@ fn depth_line(
     backdrop: Rgba,
 ) {
     for (part, inside) in depth.segments(edge) {
-        let steps = if depth.options.fade != FadeMode::Off {
-            8
-        } else if depth.options.depth_cue {
-            2
-        } else {
-            1
-        };
+        let steps = depth_steps(depth, part, inside);
         for n in 0..steps {
             let at = |t: f64| std::array::from_fn(|a| part[0][a] + (part[1][a] - part[0][a]) * t);
             let midpoint = at((n as f64 + 0.5) / steps as f64);
@@ -799,99 +935,43 @@ impl StudioApp {
             cx.notify();
         }
     }
-    pub(crate) fn molecule_canvas(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let scene = self.structure.scene.clone().unwrap_or_default();
-        let camera = self.structure.camera;
-        let style = self.structure.atom_style;
-        let shading = self.structure.shading;
-        let shells = self.structure.color_by_shell;
-        let step = self.structure.path_leg;
-        let highlight_absorber = self.structure.highlight_absorber;
-        let absorber_label = self.structure.absorber_label;
-        let depth = DepthFrame::new(
-            self.structure.depth.options,
-            &scene,
-            camera,
-            self.structure.pick.as_ref().map(|p| p.atom),
-        );
-        let theme = self.theme;
-        let weak = cx.entity().downgrade();
-        let view = canvas(
-            move |bounds, _, cx| {
-                weak.update(cx, |this, _| this.structure.view_bounds = Some(bounds))
-                    .ok();
-            },
-            move |bounds, _, window, cx| {
-                paint_scene(
-                    &scene,
-                    camera,
-                    style,
-                    shading,
-                    shells,
-                    step,
-                    depth,
-                    highlight_absorber,
-                    absorber_label,
-                    theme,
-                    bounds,
-                    window,
-                    cx,
-                )
-            },
-        )
-        .size_full();
-        div()
-            .id("molecular-canvas")
-            .size_full()
-            .cursor_grab()
-            .child(view)
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, ev: &gpui::MouseDownEvent, _, cx| {
-                    this.structure.drag = Some((ev.position, ev.position, false));
-                    cx.stop_propagation();
-                }),
-            )
-            .on_mouse_move(cx.listener(|this, ev: &gpui::MouseMoveEvent, _, cx| {
-                if ev.pressed_button != Some(MouseButton::Left) {
-                    return;
+    pub(crate) fn molecule_canvas(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> gpui::Entity<MoleculeViewport> {
+        let state = MoleculePaintState {
+            scene: self.structure.scene.clone().unwrap_or_default(),
+            camera: self.structure.camera,
+            style: self.structure.atom_style,
+            shading: self.structure.shading,
+            shells: self.structure.color_by_shell,
+            step: self.structure.path_leg,
+            highlight_absorber: self.structure.highlight_absorber,
+            absorber_label: self.structure.absorber_label,
+            depth: self.structure.depth.options,
+            picked: self.structure.pick.as_ref().map(|p| p.atom),
+            theme: self.theme,
+        };
+        if let Some(view) = self.structure.viewport.clone() {
+            view.update(cx, |view, cx| {
+                if !std::sync::Arc::ptr_eq(&view.state.scene, &state.scene) {
+                    view.drag = None;
                 }
-                if let Some((start, last, moved)) = this.structure.drag {
-                    let dx = f32::from(ev.position.x - last.x);
-                    let dy = f32::from(ev.position.y - last.y);
-                    let distance = f32::from(ev.position.x - start.x)
-                        .hypot(f32::from(ev.position.y - start.y));
-                    if moved || distance > 4. {
-                        this.structure.camera.orbit_drag(dx, dy);
-                        this.structure.drag = Some((start, ev.position, true));
-                        cx.notify();
-                    }
-                }
-            }))
-            .on_mouse_up(
-                MouseButton::Left,
-                cx.listener(|this, ev: &gpui::MouseUpEvent, _, cx| {
-                    if let Some((_, _, false)) = this.structure.drag.take() {
-                        this.pick_molecule_atom(ev.position, cx);
-                    }
-                    cx.stop_propagation();
-                }),
-            )
-            .on_mouse_up_out(
-                MouseButton::Left,
-                cx.listener(|this, _, _, _| {
-                    this.structure.drag = None;
-                }),
-            )
-            .on_scroll_wheel(cx.listener(|this, ev: &gpui::ScrollWheelEvent, _, cx| {
-                if this.structure.drag.is_some() {
-                    cx.stop_propagation();
-                    return;
-                }
-                this.structure.camera.scroll_zoom(ev.delta);
-                cx.stop_propagation();
+                view.state = state;
                 cx.notify();
-            }))
+            });
+            view
+        } else {
+            let owner = cx.entity().downgrade();
+            let view = cx.new(|_| MoleculeViewport {
+                owner,
+                state,
+                drag: None,
+                scroll_generation: 0,
+            });
+            self.structure.viewport = Some(view.clone());
+            view
+        }
     }
     fn pick_molecule_atom(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
         let (Some(scene), Some(bounds)) = (&self.structure.scene, self.structure.view_bounds)
@@ -946,6 +1026,153 @@ impl StudioApp {
     }
 }
 
+#[derive(Clone)]
+struct MoleculePaintState {
+    scene: std::sync::Arc<MoleculeScene>,
+    camera: ViewCamera,
+    style: AtomStyle,
+    shading: bool,
+    shells: bool,
+    step: Option<usize>,
+    highlight_absorber: bool,
+    absorber_label: bool,
+    depth: super::structure_depth::DepthOptions,
+    picked: Option<usize>,
+    theme: Theme,
+}
+
+/// Camera events invalidate only this view, avoiding re-layout of the group,
+/// path and inspector controls for every high-resolution scroll event.
+pub(crate) struct MoleculeViewport {
+    owner: gpui::WeakEntity<StudioApp>,
+    state: MoleculePaintState,
+    drag: Option<(Point<Pixels>, Point<Pixels>, bool)>,
+    scroll_generation: u64,
+}
+impl MoleculeViewport {
+    fn sync_camera(&self, cx: &mut Context<Self>) {
+        self.owner
+            .update(cx, |app, _| app.structure.camera = self.state.camera)
+            .ok();
+    }
+
+    fn refresh_zoom_readout_after_scroll(&mut self, cx: &mut Context<Self>) {
+        self.scroll_generation += 1;
+        let generation = self.scroll_generation;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(120))
+                .await;
+            this.update(cx, |this, cx| {
+                if generation == this.scroll_generation {
+                    this.owner.update(cx, |_, cx| cx.notify()).ok();
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+}
+impl gpui::Render for MoleculeViewport {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let state = self.state.clone();
+        let depth = DepthFrame::new(state.depth, &state.scene, state.camera, state.picked);
+        let owner = self.owner.clone();
+        let view = canvas(
+            move |bounds, _, cx| {
+                owner
+                    .update(cx, |app, _| app.structure.view_bounds = Some(bounds))
+                    .ok();
+            },
+            move |bounds, _, window, cx| {
+                paint_scene(
+                    &state.scene,
+                    state.camera,
+                    state.style,
+                    state.shading,
+                    state.shells,
+                    state.step,
+                    depth,
+                    state.highlight_absorber,
+                    state.absorber_label,
+                    state.theme,
+                    bounds,
+                    window,
+                    cx,
+                )
+            },
+        )
+        .size_full();
+        div()
+            .id("molecular-canvas")
+            .size_full()
+            .cursor_grab()
+            .child(view)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, ev: &gpui::MouseDownEvent, _, cx| {
+                    this.drag = Some((ev.position, ev.position, false));
+                    cx.stop_propagation();
+                }),
+            )
+            .on_mouse_move(cx.listener(|this, ev: &gpui::MouseMoveEvent, _, cx| {
+                if ev.pressed_button != Some(MouseButton::Left) {
+                    return;
+                }
+                if let Some((start, last, moved)) = this.drag {
+                    let dx = f32::from(ev.position.x - last.x);
+                    let dy = f32::from(ev.position.y - last.y);
+                    let distance = f32::from(ev.position.x - start.x)
+                        .hypot(f32::from(ev.position.y - start.y));
+                    if moved || distance > 4. {
+                        this.state.camera.orbit_drag(dx, dy);
+                        this.drag = Some((start, ev.position, true));
+                        this.sync_camera(cx);
+                        cx.notify();
+                    }
+                }
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, ev: &gpui::MouseUpEvent, _, cx| {
+                    if let Some((_, _, moved)) = this.drag.take() {
+                        this.owner
+                            .update(cx, |app, cx| {
+                                if moved {
+                                    cx.notify();
+                                } else {
+                                    app.pick_molecule_atom(ev.position, cx);
+                                }
+                            })
+                            .ok();
+                    }
+                    cx.stop_propagation();
+                }),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    if this.drag.take().is_some() {
+                        this.owner.update(cx, |_, cx| cx.notify()).ok();
+                    }
+                }),
+            )
+            .on_scroll_wheel(cx.listener(|this, ev: &gpui::ScrollWheelEvent, _, cx| {
+                cx.stop_propagation();
+                if this.drag.is_some() {
+                    return;
+                }
+                let before = this.state.camera.zoom;
+                this.state.camera.scroll_zoom(ev.delta);
+                if this.state.camera.zoom != before {
+                    this.sync_camera(cx);
+                    this.refresh_zoom_readout_after_scroll(cx);
+                    cx.notify();
+                }
+            }))
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn paint_scene(
     scene: &MoleculeScene,
@@ -968,7 +1195,8 @@ fn paint_scene(
         depth.display_atom_alpha(atom.pos, highlighted)
             * if path_focus && !highlighted { 0.07 } else { 1. }
     };
-    let project = |p| camera.project(sub(p, scene.center), b, scene.extent);
+    let projection = camera.projector(b, scene.extent);
+    let project = |p| projection(sub(p, scene.center));
     let scale = camera.scale(b, scene.extent);
     let context_alpha = if path_focus { 0.2 } else { 1. };
     for edge in &scene.edges {
@@ -1077,23 +1305,16 @@ fn paint_scene(
                         if atom.faded { 0.14 } else { 1. },
                     );
                     let edge = [pts[n], midpoint];
-                    if depth.options.active() || color.a < 0.99 {
-                        depth_line(w, edge, depth, &project, color, width * 0.8, t.raised);
-                    } else {
-                        depth_line(w, edge, depth, &project, tint(color, 0.5), width, t.raised);
-                        depth_line(w, edge, depth, &project, color, width * 0.67, t.raised);
-                        if shading && style != AtomStyle::Wireframe {
-                            depth_line(
-                                w,
-                                edge,
-                                depth,
-                                &project,
-                                tint(color, 1.35),
-                                width * 0.22,
-                                t.raised,
-                            );
-                        }
-                    }
+                    depth_bond(
+                        w,
+                        edge,
+                        depth,
+                        &project,
+                        color,
+                        width,
+                        t.raised,
+                        shading && style != AtomStyle::Wireframe,
+                    );
                 }
             }
             Primitive::Face(i, vertices, inside) => {
@@ -1182,31 +1403,10 @@ fn paint_scene(
                 if !a.absorber && depth.options.active() && norm(sub(a.pos, depth.origin)) < 1e-6 {
                     disk(w, p, radius + 2., alpha(t.accent, 0.4 * color.a));
                 }
-                if color.a < 0.99 {
-                    translucent_ball(
-                        w,
-                        p,
-                        radius,
-                        color,
-                        shading && !outside && style != AtomStyle::Wireframe,
-                        cue,
-                    );
-                    continue;
-                }
-                disk(w, p, radius, cue(tint(color, 0.48)));
                 if shading && !outside && style != AtomStyle::Wireframe {
-                    for layer in 0..12 {
-                        let f = layer as f32 / 12.;
-                        let q = [p[0] - radius * 0.23 * f, p[1] - radius * 0.26 * f, p[2]];
-                        disk(
-                            w,
-                            q,
-                            radius * (0.94 - 0.65 * f),
-                            cue(tint(color, 0.55 + 0.85 * f)),
-                        );
-                    }
+                    shaded_ball(w, p, radius, color, cue);
                 } else {
-                    disk(w, p, radius * 0.9, cue(color));
+                    disk(w, p, radius, cue(color));
                 }
             }
         }
@@ -1428,6 +1628,71 @@ fn paint_absorber_marker(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn translucent_sphere_lighting_covers_one_disk_without_stacking_opacity() {
+        let layers = sphere_lighting();
+        assert_eq!(layers.len(), 13);
+        assert!(
+            std::ptr::eq(layers, sphere_lighting()),
+            "lighting mesh is reused"
+        );
+        let area: f32 = layers
+            .iter()
+            .flat_map(|(path, _)| path.vertices.chunks_exact(3))
+            .map(|triangle| {
+                let p = triangle
+                    .iter()
+                    .map(|v| [f32::from(v.xy_position.x), f32::from(v.xy_position.y)])
+                    .collect::<Vec<_>>();
+                ((p[1][0] - p[0][0]) * (p[2][1] - p[0][1])
+                    - (p[1][1] - p[0][1]) * (p[2][0] - p[0][0]))
+                    .abs()
+                    * 0.5
+            })
+            .sum();
+        let disk_area = std::f32::consts::PI * 24_f32.powi(2);
+        assert!(
+            (area / disk_area - 1.).abs() < 0.08,
+            "annular mesh area {area} vs disk {disk_area}"
+        );
+        for opacity in [1., 0.99, 0.98, 0.5, 0.02] {
+            for theme in [Theme::dark(), Theme::light()] {
+                let color = alpha(gpui::rgb(0xc58a42), opacity);
+                let light =
+                    depth_cue_color(tint(color, layers.last().unwrap().1), theme.raised, 0.36);
+                let dark = depth_cue_color(tint(color, layers[0].1), theme.raised, 0.36);
+                assert_eq!((light.a, dark.a), (opacity, opacity));
+                assert!(
+                    light.r - dark.r > 0.25,
+                    "lighting must survive a small fade"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn uniform_faded_bonds_avoid_eight_unnecessary_subdivisions() {
+        use super::super::structure_depth::{DepthOptions, FadeMode};
+        let camera = ViewCamera {
+            az: 0.,
+            el: 0.,
+            zoom: 1.,
+        };
+        let depth = DepthFrame::new(
+            DepthOptions {
+                fade: FadeMode::Center,
+                strength: 0.98,
+                ..Default::default()
+            },
+            &MoleculeScene::default(),
+            camera,
+            None,
+        );
+        assert_eq!(depth_steps(depth, [[8., 0., 0.], [10., 0., 0.]], true), 1);
+        assert!(depth_steps(depth, [[2., 0., 0.], [5., 0., 0.]], true) > 1);
+    }
+
     #[test]
     fn distinct_path_legs_connect_atom_centers_at_every_view_angle() {
         let route = [[0., 0., 0.], [-2., 1., 1.], [1., 2., -1.], [0., 0., 0.]];

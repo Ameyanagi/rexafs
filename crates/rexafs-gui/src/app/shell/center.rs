@@ -337,6 +337,17 @@ impl StudioApp {
         bar = bar
             .child(div().flex_1())
             .child(
+                chip(
+                    &t,
+                    "spectrum-colors",
+                    "Colors",
+                    self.ui.menu == Some(Menu::Colors),
+                )
+                .on_click(cx.listener(|app, event, window, cx| {
+                    app.open_chrome_menu(Menu::Colors, event, window, cx);
+                })),
+            )
+            .child(
                 icon_button(
                     &t,
                     "plot-overview",
@@ -740,6 +751,7 @@ mod tests {
             let specs = quantity_quadrant_specs(
                 &[QuadTrace {
                     color_index: 0,
+                    color: None,
                     label: group.display_label(),
                     sp: spectrum,
                     active: true,
