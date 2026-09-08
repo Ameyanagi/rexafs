@@ -37,3 +37,10 @@ GitHub runs these checks across release platforms. A version bump without both
 fixture modes fails the release gate.
 
 The 0.1.2 reference source `data/Ru_QAS.dat` is copied unchanged from the repository public test fixture `crates/rexafs/tests/testfiles/Ru_QAS.dat`. Its channel is linked by group ID 27. The embedded χ standard is a synthetic persistence example, not a recommended background standard.
+
+The 0.1.4 pair adds per-path coordination number N and two synthetic saved
+Assistant conversations, including thinking, tool activity, receipts and status
+entries. It was saved through the 0.1.4 writer. To generate a new pair explicitly,
+set `REXAFS_FIXTURE_OUTPUT` and run `cargo test -p rexafs-gui
+write_release_compatibility_fixtures -- --ignored`; the maintainer test refuses
+to overwrite existing fixtures. Review and checksum the new files afterward.

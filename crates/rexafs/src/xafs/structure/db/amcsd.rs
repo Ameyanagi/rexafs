@@ -70,7 +70,9 @@ pub fn decode_farray(text: &str) -> Vec<Option<f64>> {
         Err(_) => return Vec::new(),
     };
     bytes
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|c| {
             let v = i32::from_le_bytes([c[0], c[1], c[2], c[3]]) as f64 / FARRAY_SCALE;
             if (v - 2.0).abs() < 1e-5 || (v - 3.0).abs() < 1e-5 {

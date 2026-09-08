@@ -10,8 +10,6 @@ use ndarray::{
 use num_complex::Complex64;
 use serde::{Deserialize, Serialize};
 
-use derivative::Derivative;
-
 // load dependencies
 use super::errors::FFTError;
 
@@ -20,8 +18,7 @@ use super::mathutils::MathUtils;
 use super::xafsutils::ftwindow;
 use crate::xafs::xafsutils::FTWindow;
 
-#[derive(Derivative, Debug, Clone, Serialize, Deserialize)]
-#[derivative(PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct XrayFFTF {
     pub rmax_out: Option<f64>,
@@ -35,10 +32,27 @@ pub struct XrayFFTF {
     pub kstep: Option<f64>,
     pub r: Option<ArrayBase<OwnedRepr<f64>, Ix1>>,
     // currently asking for serde support in the easyfft crate
-    #[derivative(PartialEq = "ignore")]
     pub chir: Option<DynRealDft<f64>>,
     pub chir_mag: Option<ArrayBase<OwnedRepr<f64>, Ix1>>,
     pub kwin: Option<ArrayBase<OwnedRepr<f64>, Ix1>>,
+}
+
+// Preserve the original equality contract: the complex FFT cache is omitted.
+impl PartialEq for XrayFFTF {
+    fn eq(&self, other: &Self) -> bool {
+        self.rmax_out == other.rmax_out
+            && self.window == other.window
+            && self.dk == other.dk
+            && self.dk2 == other.dk2
+            && self.kmin == other.kmin
+            && self.kmax == other.kmax
+            && self.kweight == other.kweight
+            && self.nfft == other.nfft
+            && self.kstep == other.kstep
+            && self.r == other.r
+            && self.chir_mag == other.chir_mag
+            && self.kwin == other.kwin
+    }
 }
 
 impl Default for XrayFFTF {

@@ -118,6 +118,72 @@ fn assistant_conversations_roundtrip_in_both_storage_modes_and_limit_at_save() {
     }
 }
 
+/// Explicit maintainer operation; never modifies a retained fixture by default.
+#[test]
+#[ignore = "requires REXAFS_FIXTURE_OUTPUT; writes a new release fixture pair"]
+fn write_release_compatibility_fixtures() {
+    use super::assistant::{Conversation, ConversationEntry, SavedActivityState};
+    let output = std::env::var_os("REXAFS_FIXTURE_OUTPUT")
+        .map(PathBuf::from)
+        .expect("set REXAFS_FIXTURE_OUTPUT to an empty fixture output directory");
+    std::fs::create_dir_all(&output).unwrap();
+    let mut project = load(&fixture("rexafs-0.1.3-links.rxs")).unwrap();
+    if let Some(path) = project.fit_paths.first_mut() {
+        path.degen = "4".into();
+    }
+    for (index, edit) in [false, true].into_iter().enumerate() {
+        let mut conversation = Conversation::new("Synthetic saved-conversation fixture", edit);
+        conversation.id = format!("fixture-conversation-{index}");
+        conversation.started_at = "2026-09-08T00:00:00Z".into();
+        conversation.updated_at = format!("2026-09-08T00:0{index}:00Z");
+        conversation.entries = vec![
+            ConversationEntry::User {
+                text: "Demonstrate retained transcript entries.".into(),
+                edit,
+            },
+            ConversationEntry::Thinking {
+                id: "thinking-1".into(),
+                text: "Synthetic persistence example.".into(),
+            },
+            ConversationEntry::Activity {
+                id: "activity-1".into(),
+                label: "Read project state".into(),
+                tool: "xray_get_state".into(),
+                state: SavedActivityState::Done,
+            },
+            ConversationEntry::Receipt {
+                header: "Synthetic recorded change".into(),
+                lines: vec!["N = 4 (persistence example)".into()],
+                scope: "This spectrum".into(),
+                state: "Recorded".into(),
+                navigation: json!({}),
+            },
+            ConversationEntry::Assistant {
+                id: "answer-1".into(),
+                text: "This is fixture content, not a scientific fit recommendation.".into(),
+            },
+            ConversationEntry::Status {
+                text: "Completed".into(),
+            },
+        ];
+        project.assistant.upsert(conversation);
+    }
+    for (suffix, mode) in [
+        ("links", DataStorage::Paths),
+        ("embedded", DataStorage::Embedded),
+    ] {
+        let path = output.join(format!("rexafs-{}-{suffix}.rxs", env!("CARGO_PKG_VERSION")));
+        assert!(!path.exists(), "never overwrite a retained release fixture");
+        save_with_storage(&path, &project, mode).unwrap();
+        let restored = load(&path).unwrap();
+        assert_eq!(
+            restored.assistant.conversations,
+            project.assistant.conversations
+        );
+        assert_eq!(restored.fit_paths[0].degen, "4");
+    }
+}
+
 #[test]
 fn format_one_defaults_keep_their_released_meaning() {
     fn preserved(expected: &Value, actual: &Value) -> bool {

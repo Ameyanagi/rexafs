@@ -2013,17 +2013,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 
 [[package]]
-name = "derivative"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "derive_more"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6637,7 +6626,7 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
 name = "py-rexafs"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "ndarray",
  "numpy",
@@ -7234,7 +7223,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "apex-solver",
  "approx",
@@ -7242,7 +7231,6 @@ dependencies = [
  "bson",
  "criterion",
  "data_reader",
- "derivative",
  "easyfft",
  "enterpolation",
  "errorfunctions",
@@ -7274,7 +7262,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs-gui"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -7302,7 +7290,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs-wasm"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "js-sys",
  "rexafs",

@@ -1,18 +1,60 @@
-# Experimental assistant
+# Experimental Assistant
 
-Open **Assistant** in the top bar. It is a separate, optional window. Reopening Assistant brings the existing conversation forward. Connect to the installed Codex CLI using its existing account, or choose **Device login**. rexafs does not read or copy the Codex credential file. The integration uses the [Codex app-server protocol](https://learn.chatgpt.com/docs/app-server), including experimental dynamic tools.
+Open **Assistant** in the top bar. It connects automatically to an installed
+Codex CLI and uses the signed-in Codex account. If connection or sign-in is
+needed, the panel provides Retry and login controls. rexafs does not store a
+separate model API key. Choose the model and reasoning effort in the panel;
+availability comes from the connected server.
 
-- **Plots** includes rendered spectra with the current state when you send a message.
-- **Allow changes** enables processing edits, reference selection, path calculation and fitting. It starts off. Navigation and panel changes are available in review mode.
-- **Show app** focuses the analysis window. **Focus plots** hides the file browser and inspector.
-- **Stop** interrupts the assistant turn. A calculation already running in the analysis engine can finish independently.
+The Assistant opens at the right of the analysis. Drag its left border to resize
+between 320 and 640 px. **Pop out** moves the same conversation to a separate
+window; **Dock**, or closing that window, brings it back. Closing the docked panel
+keeps its connection and transcript. **Hide side panels / Restore side panels**
+controls Groups and the inspector, which can also collapse automatically to
+leave room for plots. Width and preferred host are computer settings.
 
-Example: “Fit this metallic copper foil. Inspect the processing, use the Cu reference and fit the first shell.” The assistant is instructed to show Data → Normalize → Background → Transform → Structure → Calculate → Paths → Model → Results. Each spectrum's current processing must be inspected before an assistant fit can run. Plot access is evidence for the model to assess; it is not an automatic scientific quality certification.
+- **Review** permits inspection and navigation. **Edit analysis** enables the
+  supported analysis edits for the current turn. App-authored receipts describe
+  what changed and provide View/Undo when those operations are still valid.
+- **Enter** sends; **Shift+Enter** inserts a newline. **Stop** interrupts the
+  assistant turn. A calculation already running in the analysis engine can
+  finish independently.
+- Thinking is folded initially. Tool activity, processing progress, permission
+  decisions and completed answers remain in the transcript. **Copy conversation**
+  includes the transcript text.
+- **Web search** can be toggled. Structure retrieval validates destinations and
+  the returned structure before importing it. **Extended access** starts off;
+  turning it on requires session consent, and command approvals remain explicit.
+  It does not silently enable arbitrary analysis edits.
 
-The app tools expose exact spectrum paths, parameter names, dataset ids, per-spectrum ranges and path assignments. Processing proposals are validated by the actual pipeline before they are applied. Processing and model edits enter the normal undo history. Existing bounds and expressions are preserved when changing a parameter value.
+**Conversations** lists the project's saved conversations, their relative update
+time and turn count. **New** starts a fresh conversation on the next Send. Choose
+a saved entry to read it, then **Resume** to continue. A connected client first
+tries the stored server thread. An unavailable thread or unsupported resume
+method falls back to a new thread with the last ten entries as labelled previous
+context. The transcript states which route was used. Resuming applies the current
+session's access policy.
 
-Presentation controls can select stages, spectra, fit steps and k/R/q views, toggle panels, focus the analysis window, resize it and restore its previous size. Arbitrary desktop-window positioning is not exposed by the current GPUI API.
+Project Save keeps the newest five completed conversations by default. Set
+**Conversations kept per project** in the picker to another count, or zero to
+disable saving. An asterisk in the project label indicates unsaved conversation
+changes. A turn still running is not serialized; the latest completed snapshot
+is retained. Restored thinking starts folded, and saved receipts contain no live
+approval or undo tokens. Older projects start with no conversation history.
 
-Only sending a message shares the analysis context and enabled plots through the configured Codex account. Context contains source paths, bounded source comments, effective requested settings, model inputs, fit history, additional analyses and the action journal. Imported comments are treated as data. Results remain distinct from the currently edited model. This is an experimental assistant: verify its chosen phase, path list, ranges and scientific interpretation.
+Sending shares the current analysis context and enabled plots through the
+configured Codex account. Context includes spectrum names, source paths and
+bounded source comments, requested processing settings, model inputs, fit
+history, additional analyses and the action journal. Imported comments and
+previous-conversation content are labelled as data. Verify the chosen phase,
+paths, ranges and scientific interpretation before relying on a fit.
 
-Implementation: `codex_client.rs` owns the subprocess/protocol; `app/shell/assistant.rs` owns the window and guarded tool dispatch; `assistant_actions.rs` applies semantic app actions; `assistant_workflow.md` contains the versioned workflow instructions. No application credential storage or separate model API key is required when an existing Codex login is available.
+The Assistant follows the app's Data → Normalize → Background → Transform →
+Structure → Calculate → Paths → Model → Results workflow. Each assigned spectrum's
+current processing must be inspected before an Assistant fit can run. Plot access
+lets the model assess the result; it does not certify scientific quality.
+
+Protocol: [Codex App Server lifecycle and thread resume](https://learn.chatgpt.com/docs/app-server).
+`codex_client.rs` owns transport and protocol parsing; `app/shell/assistant.rs`
+and its history module own conversation behavior; `assistant_actions.rs` applies
+semantic actions; `assistant_workflow.md` contains the workflow instructions.
