@@ -27,7 +27,7 @@ pub fn home_dir() -> Option<PathBuf> {
     home.filter(|value| !value.is_empty()).map(PathBuf::from)
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UserSettings {
     /// Folder scanned for `*.cif` files (the "CIF library" structure source).
@@ -47,6 +47,26 @@ pub struct UserSettings {
     pub assistant_web_search: Option<bool>,
     /// Preference only: activation always requires a click in this app session.
     pub assistant_extended_access: bool,
+    pub assistant_docked: bool,
+    pub assistant_panel_width: f32,
+}
+
+impl Default for UserSettings {
+    fn default() -> Self {
+        Self {
+            cif_library: None,
+            amcsd_db: None,
+            mp_api_key: String::new(),
+            update_channel: Default::default(),
+            check_updates_on_startup: None,
+            assistant_model: None,
+            assistant_effort: None,
+            assistant_web_search: None,
+            assistant_extended_access: false,
+            assistant_docked: true,
+            assistant_panel_width: 380.,
+        }
+    }
 }
 
 /// `~/.rexafs` (created on demand, owner-only on Unix because it
@@ -295,6 +315,8 @@ mod tests {
             assistant_effort: Some("xhigh".into()),
             assistant_web_search: Some(false),
             assistant_extended_access: true,
+            assistant_docked: false,
+            assistant_panel_width: 512.,
         };
         s.save_to(&path).unwrap();
         assert_eq!(UserSettings::load_from(&path).unwrap(), s);
@@ -306,6 +328,8 @@ mod tests {
         }
         assert!(!UserSettings::default().assistant_extended_access);
         assert!(UserSettings::default().assistant_web_search.unwrap_or(true));
+        assert!(UserSettings::default().assistant_docked);
+        assert_eq!(UserSettings::default().assistant_panel_width, 380.);
         // Missing keys fall back to defaults.
         std::fs::write(&path, "{}").unwrap();
         assert_eq!(

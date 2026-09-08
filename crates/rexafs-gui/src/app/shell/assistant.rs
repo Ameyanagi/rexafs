@@ -1,10 +1,11 @@
-//! Optional separate assistant window; app actions use the same pipeline as manual edits.
+//! Shared Assistant view with docked and optional native-window hosts; app actions use the same pipeline as manual edits.
 use super::assistant_receipts::{
     Receipt, changes_allowed, completion, diff, processing_scope_label, requires_edit,
 };
 use super::assistant_shell::{
-    ANALYSIS_CLOSED, ControlState, EscapeTarget, PanelMemory, account_disclosure, account_status,
-    control_key_activates, empty_state_message, escape_target, model_picker_handles_key,
+    ANALYSIS_CLOSED, AssistantHost, ControlState, EscapeTarget, HostAction, PanelMemory, SidePanel,
+    account_disclosure, account_status, clamp_assistant_width, control_key_activates,
+    empty_state_message, escape_target, fit_assistant_panels, model_picker_handles_key,
     task_starters,
 };
 use super::{
@@ -185,58 +186,255 @@ pub(crate) struct AssistantWindow {
     focus_composer: bool,
     controls_focus: std::collections::HashMap<gpui::ElementId, gpui::FocusHandle>,
 }
+/// A native window is only a host. StudioApp retains the conversation entity
+/// even when neither host is visible.
+struct AssistantPopout {
+    assistant: Entity<AssistantWindow>,
+    studio: WeakEntity<StudioApp>,
+}
+impl Render for AssistantPopout {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let active = self
+            .studio
+            .read_with(cx, |app, _| app.assistant_host == AssistantHost::PoppedOut)
+            .unwrap_or(true);
+        div()
+            .size_full()
+            .when(active, |d| d.child(self.assistant.clone()))
+    }
+}
 impl StudioApp {
     pub(crate) fn open_assistant(&mut self, cx: &mut Context<Self>) {
-        let studio = cx.entity().downgrade();
-        let theme = self.theme;
-        let bounds = gpui::Bounds::centered(
-            None,
-            gpui::Size {
-                width: px(820.),
-                height: px(740.),
+        self.request_assistant_host(
+            HostAction::Toggle {
+                prefer_docked: self.structure.settings.assistant_docked,
             },
             cx,
         );
-        // Opening a native window can synchronously render its root. Defer it
-        // until this StudioApp update has released the entity borrow.
-        cx.spawn(async move |this, cx| {
-            // Read at execution time so two queued open actions share a window.
-            let existing = this
-                .read_with(cx, |app, _| app.assistant_window)
-                .ok()
-                .flatten();
-            if let Some(handle) = existing {
-                if handle
-                    .update(cx, |_, window, _| window.activate_window())
-                    .is_ok()
-                {
-                    return;
+    }
+
+    pub(crate) fn request_assistant_host(&mut self, action: HostAction, cx: &mut Context<Self>) {
+        let studio = cx.weak_entity();
+        // Release both the calling view and StudioApp before moving hosts or
+        // constructing a view that reads StudioApp during its first render.
+        cx.defer(move |cx| {
+            let Some(app) = studio.upgrade() else {
+                return;
+            };
+            let next = app.read(cx).assistant_host.transition(action);
+            let assistant = app.read(cx).assistant.clone().unwrap_or_else(|| {
+                let theme = app.read(cx).theme;
+                cx.new(|cx| AssistantWindow::new(studio.clone(), theme, cx))
+            });
+            let old_window = app.update(cx, |app, cx| {
+                app.assistant = Some(assistant.clone());
+                app.assistant_host = next;
+                app.assistant_resizing = None;
+                if next != AssistantHost::Closed {
+                    app.structure.settings.assistant_docked = next == AssistantHost::Docked;
+                    app.save_assistant_host_settings();
                 }
-            }
-            let opened = cx.open_window(
-                gpui::WindowOptions {
-                    window_bounds: Some(gpui::WindowBounds::Windowed(bounds)),
-                    titlebar: Some(gpui::TitlebarOptions {
-                        title: Some("rexafs Assistant".into()),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-                move |window, cx| cx.new(|cx| AssistantWindow::new(studio, theme, window, cx)),
-            );
-            this.update(cx, |app, cx| {
-                match opened {
-                    Ok(handle) => app.assistant_window = Some(handle.into()),
-                    Err(e) => app.status = format!("Assistant: {e}").into(),
-                }
+                app.fit_assistant_layout();
                 cx.notify();
-            })
-            .ok();
-        })
-        .detach();
+                app.assistant_window.take()
+            });
+            assistant.update(cx, |view, cx| {
+                view.model_picker_open = false;
+                view.account_expanded = false;
+                view.focus_composer = next != AssistantHost::Closed;
+                cx.notify();
+            });
+            if let Some(handle) = old_window {
+                handle
+                    .update(cx, |_, window, _| window.remove_window())
+                    .ok();
+            }
+            if next == AssistantHost::PoppedOut {
+                let close_studio = studio.clone();
+                let bounds = gpui::Bounds::centered(None, gpui::size(px(820.), px(740.)), cx);
+                let opened = cx.open_window(
+                    gpui::WindowOptions {
+                        window_bounds: Some(gpui::WindowBounds::Windowed(bounds)),
+                        titlebar: Some(gpui::TitlebarOptions {
+                            title: Some("rexafs Assistant".into()),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                    move |window, cx| {
+                        window.on_window_should_close(cx, move |_, cx| {
+                            close_studio
+                                .update(cx, |app, cx| {
+                                    app.assistant_window = None;
+                                    app.request_assistant_host(HostAction::Close, cx);
+                                })
+                                .ok();
+                            true
+                        });
+                        cx.new(|cx: &mut Context<AssistantPopout>| {
+                            cx.observe_window_activation(window, |host, window, cx| {
+                                if window.is_window_active() {
+                                    host.assistant.update(cx, |view, cx| {
+                                        if view.controls().composer
+                                            && !view.model_picker_open
+                                            && !view.account_expanded
+                                        {
+                                            view.input.read(cx).focus_handle(cx).focus(window, cx);
+                                        }
+                                    });
+                                }
+                            })
+                            .detach();
+                            AssistantPopout { assistant, studio }
+                        })
+                    },
+                );
+                app.update(cx, |app, cx| {
+                    match opened {
+                        Ok(handle) => app.assistant_window = Some(handle.into()),
+                        Err(error) => {
+                            app.assistant_host = AssistantHost::Docked;
+                            app.structure.settings.assistant_docked = true;
+                            app.save_assistant_host_settings();
+                            app.fit_assistant_layout();
+                            app.status =
+                                format!("Assistant window could not open; docked instead: {error}")
+                                    .into();
+                        }
+                    }
+                    cx.notify();
+                });
+            } else {
+                let handle = app.read(cx).main_window;
+                handle
+                    .update(cx, |_, window, cx| {
+                        if next == AssistantHost::Docked {
+                            window.activate_window();
+                        } else {
+                            let focus = app.read(cx).root_focus.clone();
+                            focus.focus(window, cx);
+                        }
+                    })
+                    .ok();
+            }
+        });
+    }
+
+    fn save_assistant_host_settings(&mut self) {
+        if let Err(error) = self.structure.settings.save() {
+            self.status = format!("Assistant settings: {error}").into();
+        }
+    }
+
+    pub(crate) fn fit_assistant_layout(&mut self) {
+        if self.assistant_host != AssistantHost::Docked {
+            return;
+        }
+        let inspector_visible = !matches!(self.stage, super::Stage::Fit | super::Stage::Publish);
+        let current = PanelMemory {
+            file_browser: self.data_panel_open,
+            inspector: self.context_panel_open && inspector_visible,
+        };
+        let next = fit_assistant_panels(
+            self.viewport_w,
+            self.structure.settings.assistant_panel_width,
+            current,
+            self.last_opened_side_panel,
+        );
+        let mut collapsed = Vec::new();
+        if current.file_browser && !next.file_browser {
+            self.data_panel_open = false;
+            collapsed.push("groups");
+        }
+        if current.inspector && !next.inspector {
+            self.context_panel_open = false;
+            collapsed.push("inspector");
+        }
+        if !collapsed.is_empty() {
+            self.status = format!(
+                "Collapsed {} to keep at least 360 px for plots beside Assistant",
+                collapsed.join(" and ")
+            )
+            .into();
+        }
+    }
+
+    pub(crate) fn assistant_panel(&self, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+        if self.assistant_host != AssistantHost::Docked {
+            return None;
+        }
+        let assistant = self.assistant.clone()?;
+        Some(
+            div()
+                .relative()
+                .w(px(clamp_assistant_width(
+                    self.structure.settings.assistant_panel_width,
+                )))
+                .h_full()
+                .min_h_0()
+                .min_w_0()
+                .flex_shrink_0()
+                .border_l_1()
+                .border_color(self.theme.border)
+                .child(assistant)
+                .child(
+                    div()
+                        .id("assistant-resize")
+                        .absolute()
+                        .left_0()
+                        .top_0()
+                        .bottom_0()
+                        .w(px(5.))
+                        .cursor(gpui::CursorStyle::ResizeLeftRight)
+                        .on_mouse_down(
+                            gpui::MouseButton::Left,
+                            cx.listener(|this, event: &gpui::MouseDownEvent, _, cx| {
+                                this.assistant_resizing = Some((
+                                    f32::from(event.position.x),
+                                    clamp_assistant_width(
+                                        this.structure.settings.assistant_panel_width,
+                                    ),
+                                ));
+                                cx.stop_propagation();
+                                cx.notify();
+                            }),
+                        ),
+                )
+                .into_any_element(),
+        )
+    }
+
+    pub(crate) fn resize_assistant(
+        &mut self,
+        event: &gpui::MouseMoveEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some((start_x, start_width)) = self.assistant_resizing {
+            if event.pressed_button != Some(gpui::MouseButton::Left) {
+                self.finish_assistant_resize(cx);
+                return;
+            }
+            self.structure.settings.assistant_panel_width =
+                clamp_assistant_width(start_width + start_x - f32::from(event.position.x));
+            self.fit_assistant_layout();
+            cx.stop_propagation();
+            cx.notify();
+        }
+    }
+    pub(crate) fn finish_assistant_resize(&mut self, cx: &mut Context<Self>) {
+        if self.assistant_resizing.take().is_some() {
+            self.save_assistant_host_settings();
+            cx.notify();
+        }
     }
 }
 impl AssistantWindow {
+    fn move_host(&self, action: HostAction, cx: &mut Context<Self>) {
+        self.studio
+            .update(cx, |app, cx| app.request_assistant_host(action, cx))
+            .ok();
+    }
+
     fn controls(&self) -> ControlState {
         ControlState::derive(
             !self.analysis_closed,
@@ -288,6 +486,8 @@ impl AssistantWindow {
     // notified. Rendering only borrows handles; hidden controls leave the ring.
     fn sync_control_focus(&mut self, cx: &mut Context<Self>) {
         let mut ids: Vec<gpui::ElementId> = [
+            "assistant-host",
+            "assistant-panel-close",
             "assistant-connect",
             "assistant-login",
             "assistant-account",
@@ -413,12 +613,7 @@ impl AssistantWindow {
         };
         self.control(id.clone(), button(t, id, label, primary), enabled, on_click)
     }
-    fn new(
-        studio: WeakEntity<StudioApp>,
-        theme: Theme,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    fn new(studio: WeakEntity<StudioApp>, theme: Theme, cx: &mut Context<Self>) -> Self {
         let input = cx.new(|cx| {
             TextInput::new("Ask about this analysis…", "", theme, cx).with_style(InputStyle {
                 multiline: true,
@@ -429,16 +624,6 @@ impl AssistantWindow {
         cx.subscribe(&input, |this, _, event, cx| {
             if let InputEvent::Committed(_) = event {
                 this.run(cx);
-            }
-        })
-        .detach();
-        cx.observe_window_activation(window, |this, window, cx| {
-            if window.is_window_active()
-                && this.controls().composer
-                && !this.model_picker_open
-                && !this.account_expanded
-            {
-                this.input.read(cx).focus_handle(cx).focus(window, cx);
             }
         })
         .detach();
@@ -635,7 +820,12 @@ impl AssistantWindow {
             _ => {}
         }
     }
-    fn model_controls(&self, catalog_settled: bool, cx: &mut Context<Self>) -> gpui::Div {
+    fn model_controls(
+        &self,
+        catalog_settled: bool,
+        narrow: bool,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
         let t = self.theme;
         let busy = !self.controls().preferences;
         let (current, warning) =
@@ -664,7 +854,7 @@ impl AssistantWindow {
             .button(
                 &t,
                 "assistant-model",
-                current,
+                "",
                 false,
                 cx.listener(|this, _: &ClickEvent, window, cx| {
                     if !this.controls().preferences {
@@ -676,6 +866,16 @@ impl AssistantWindow {
                         this.open_model_picker(window, cx);
                     }
                 }),
+            )
+            .min_w_0()
+            .max_w_full()
+            .child(
+                div()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
+                    .child(current),
             )
             .when(!busy, |d| {
                 d.track_focus(&self.model_picker_focus)
@@ -706,6 +906,8 @@ impl AssistantWindow {
                 .flex_shrink_0(),
             );
         let trigger = div()
+            .min_w_0()
+            .flex_1()
             .child(trigger)
             .on_children_prepainted(move |children, window, _| {
                 if let Some(trigger) = children.first() {
@@ -718,42 +920,48 @@ impl AssistantWindow {
                     }
                 }
             });
-        let mut controls = div().flex().flex_col().gap_1().child(
+        let model_row = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .min_w_0()
+            .when(narrow, |d| d.w_full())
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(t.text_muted)
+                    .child("Model"),
+            )
+            .child(trigger);
+        let reasoning_row = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_1()
+            .min_w_0()
+            .when(narrow, |d| d.w_full())
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(t.text_muted)
+                    .child("Reasoning"),
+            )
+            .child(
+                efforts
+                    .id("assistant-efforts")
+                    .when(self.transcript.busy, |d| {
+                        d.tooltip(move |_, cx| cx.new(|_| ModelControlsBusyTip(t)).into())
+                    }),
+            );
+        let mut controls = div().flex().flex_col().gap_1().min_w_0().child(
             div()
                 .flex()
                 .flex_wrap()
-                .items_center()
                 .gap_2()
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(t.text_muted)
-                        .child("Model"),
-                )
-                .child(trigger)
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_2()
-                        .min_w_0()
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(t.text_muted)
-                                .child("Reasoning"),
-                        )
-                        .child(
-                            efforts
-                                .id("assistant-efforts")
-                                .when(self.transcript.busy, |d| {
-                                    d.tooltip(move |_, cx| {
-                                        cx.new(|_| ModelControlsBusyTip(t)).into()
-                                    })
-                                }),
-                        ),
-                ),
+                .min_w_0()
+                .when(narrow, |d| d.flex_col())
+                .child(model_row)
+                .child(reasoning_row),
         );
         if let Some(warning) = warning.filter(|_| catalog_settled) {
             controls = controls.child(
@@ -1452,14 +1660,18 @@ impl AssistantWindow {
         if !self.controls().navigation {
             return Err("The analysis window is closed".into());
         }
+        if args["focus_app"].as_bool() == Some(true) {
+            self.show_analysis(cx);
+        }
         self.studio.update(cx, |app, cx| {
-            if let Some(show) = args["file_browser"].as_bool() { app.data_panel_open = show; }
-            if let Some(show) = args["inspector"].as_bool() { app.context_panel_open = show; }
+            if let Some(show) = args["file_browser"].as_bool() { app.data_panel_open = show; if show { app.last_opened_side_panel = Some(SidePanel::Groups); } }
+            if let Some(show) = args["inspector"].as_bool() { app.context_panel_open = show; if show { app.last_opened_side_panel = Some(SidePanel::Inspector); } }
             if let Some(scope) = args["plot_scope"].as_str() {
                 app.stage_view.scope = if scope == "marked" { super::PlotScope::Marked } else { super::PlotScope::Current };
                 app.stage_view_changed(cx);
             }
             cx.notify();
+            app.fit_assistant_layout();
             json!({"panels":{"file_browser":app.data_panel_open,"inspector":app.context_panel_open,"stage":app.stage.name()}})
         }).map_err(|e| e.to_string())
     }
@@ -1487,6 +1699,7 @@ impl AssistantWindow {
                 });
                 app.data_panel_open = next.file_browser;
                 app.context_panel_open = next.inspector;
+                app.fit_assistant_layout();
                 cx.notify();
             })
             .ok();
@@ -2334,103 +2547,188 @@ impl Render for AssistantWindow {
                 )
             })
             .unwrap_or_default();
+        let docked = self
+            .studio
+            .read_with(cx, |app, _| app.assistant_host == AssistantHost::Docked)
+            .unwrap_or(false);
+        let width = if docked {
+            self.studio
+                .read_with(cx, |app, _| {
+                    clamp_assistant_width(app.structure.settings.assistant_panel_width)
+                })
+                .unwrap_or(380.)
+        } else {
+            f32::from(window.viewport_size().width)
+        };
+        let narrow = width < 460.;
+        let compact_header = docked || width < 640.;
         let t = self.theme;
         let mut header = div()
             .h(px(28.))
             .flex_shrink_0()
             .flex()
             .items_center()
-            .gap_2()
+            .gap_1()
+            .min_w_0()
             .child(
                 div()
-                    .text_size(px(16.))
+                    .text_size(px(if compact_header { 14. } else { 16. }))
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .child("Assistant"),
             )
             .child(
                 div()
-                    .px_2()
-                    .py_1()
+                    .px_1()
                     .rounded_md()
                     .bg(t.raised)
-                    .text_size(px(12.))
+                    .text_size(px(if compact_header { 10. } else { 12. }))
                     .text_color(t.text_muted)
                     .child("Experimental"),
             )
-            .child(div().flex_1());
-        if self.connecting {
-            header = header.child(
+            .child(div().flex_1())
+            .child(
                 div()
-                    .text_size(px(12.))
-                    .text_color(t.text_muted)
-                    .child("Connecting…"),
+                    .size(px(6.))
+                    .flex_shrink_0()
+                    .rounded_full()
+                    .bg(if self.connecting {
+                        t.warn
+                    } else if self.account {
+                        t.success
+                    } else {
+                        t.text_muted
+                    }),
             );
+        if self.connecting {
+            header = header.child(div().text_size(px(11.)).text_color(t.text_muted).child(
+                if compact_header {
+                    "…"
+                } else {
+                    "Connecting…"
+                },
+            ));
         } else if let Some(label) = &self.account_label {
             let bounds = self.account_trigger_bounds.clone();
             let expanded = self.account_expanded;
             let entity = cx.entity().downgrade();
-            header = header
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .child(div().size(px(6.)).rounded_full().bg(t.success))
-                        .child(div().text_size(px(12.)).child(account_status(label))),
-                )
-                .child(
-                    div()
-                        .child(self.button(
+            if !compact_header {
+                header = header.child(div().text_size(px(12.)).child(account_status(label)));
+            }
+            header = header.child(
+                div()
+                    .min_w_0()
+                    .child(
+                        self.button(
                             &t,
                             "assistant-account",
-                            account_disclosure(label, false).to_owned(),
+                            if compact_header {
+                                "Account".to_owned()
+                            } else {
+                                account_disclosure(label, false).to_owned()
+                            },
                             false,
                             cx.listener(|this, _: &ClickEvent, _, cx| {
                                 this.account_expanded = !this.account_expanded;
                                 cx.notify();
                             }),
-                        ))
-                        .on_children_prepainted(move |children, window, _| {
-                            if let Some(trigger) = children.first() {
-                                let previous = bounds.replace(*trigger);
-                                if expanded && previous != *trigger {
-                                    let entity = entity.clone();
-                                    window.on_next_frame(move |_, cx| {
-                                        entity.update(cx, |_, cx| cx.notify()).ok();
-                                    });
-                                }
+                        )
+                        .px_1()
+                        .text_size(px(11.)),
+                    )
+                    .on_children_prepainted(move |children, window, _| {
+                        if let Some(trigger) = children.first() {
+                            let previous = bounds.replace(*trigger);
+                            if expanded && previous != *trigger {
+                                let entity = entity.clone();
+                                window.on_next_frame(move |_, cx| {
+                                    entity.update(cx, |_, cx| cx.notify()).ok();
+                                });
                             }
-                        }),
-                );
+                        }
+                    }),
+            );
         }
         if controls.navigation && self.client.is_none() && !self.connecting {
-            header = header.child(self.button(
-                &t,
-                "assistant-connect",
-                "Retry connection",
-                true,
-                cx.listener(|this, _: &ClickEvent, _, cx| this.connect(cx)),
-            ));
+            header = header.child(
+                self.button(
+                    &t,
+                    "assistant-connect",
+                    if compact_header {
+                        "Retry"
+                    } else {
+                        "Retry connection"
+                    },
+                    true,
+                    cx.listener(|this, _: &ClickEvent, _, cx| this.connect(cx)),
+                )
+                .px_1()
+                .text_size(px(11.)),
+            );
         } else if controls.navigation
             && self.client.is_some()
             && !self.connecting
             && !self.account
             && self.login.is_none()
         {
-            header = header.child(self.button(
-                &t,
-                "assistant-login",
-                "Device login",
-                true,
-                cx.listener(|this, _: &ClickEvent, _, cx| {
-                    if let Err(e) =
-                        this.request("account/login/start", json!({"type":"chatgptDeviceCode"}))
-                    {
-                        this.error = Some(e);
-                    }
-                    cx.notify();
-                }),
-            ));
+            header = header.child(
+                self.button(
+                    &t,
+                    "assistant-login",
+                    if compact_header {
+                        "Login"
+                    } else {
+                        "Device login"
+                    },
+                    true,
+                    cx.listener(|this, _: &ClickEvent, _, cx| {
+                        if let Err(e) =
+                            this.request("account/login/start", json!({"type":"chatgptDeviceCode"}))
+                        {
+                            this.error = Some(e);
+                        }
+                        cx.notify();
+                    }),
+                )
+                .px_1()
+                .text_size(px(11.)),
+            );
+        }
+        if controls.navigation {
+            header = header.child(
+                self.button(
+                    &t,
+                    "assistant-host",
+                    if docked { "Pop out" } else { "Dock" },
+                    false,
+                    cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.move_host(
+                            if docked {
+                                HostAction::PopOut
+                            } else {
+                                HostAction::Dock
+                            },
+                            cx,
+                        )
+                    }),
+                )
+                .px_1()
+                .text_size(px(11.)),
+            );
+            if docked {
+                header = header.child(
+                    self.button(
+                        &t,
+                        "assistant-panel-close",
+                        "×",
+                        false,
+                        cx.listener(|this, _: &ClickEvent, _, cx| {
+                            this.move_host(HostAction::Close, cx)
+                        }),
+                    )
+                    .px_1()
+                    .text_size(px(11.)),
+                );
+            }
         }
         let now = Instant::now();
         let revision = self.transcript.revision();
@@ -2605,6 +2903,7 @@ impl Render for AssistantWindow {
                         .child(
                             div()
                                 .flex()
+                                .flex_wrap()
                                 .gap_2()
                                 .text_size(px(12.))
                                 .text_color(t.text_muted)
@@ -2623,6 +2922,7 @@ impl Render for AssistantWindow {
                             d.child(
                                 div()
                                     .flex()
+                                    .flex_wrap()
                                     .gap_2()
                                     .child(self.control(
                                         ("receipt-view", i),
@@ -2805,6 +3105,7 @@ impl Render for AssistantWindow {
             body = body.child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .gap_2()
                     .items_center()
                     .p_3()
@@ -2860,7 +3161,8 @@ impl Render for AssistantWindow {
             .relative()
             .size_full()
             .min_h_0()
-            .px(px(16.))
+            .min_w_0()
+            .px(px(if narrow { 8. } else { 16. }))
             .py(px(12.))
             .key_context("Assistant")
             .on_action(cx.listener(|this, _: &AssistantSend, _, cx| this.run(cx)))
@@ -2928,13 +3230,15 @@ impl Render for AssistantWindow {
                                     )]),
                             ),
                     )
-                    .child(self.button(
-                        &t,
-                        "assistant-show-app",
-                        "Show analysis",
-                        false,
-                        cx.listener(|this, _: &ClickEvent, _, cx| this.show_analysis(cx)),
-                    ))
+                    .when(!docked, |d| {
+                        d.child(self.button(
+                            &t,
+                            "assistant-show-app",
+                            "Show analysis",
+                            false,
+                            cx.listener(|this, _: &ClickEvent, _, cx| this.show_analysis(cx)),
+                        ))
+                    })
                     .child(self.button(
                         &t,
                         "assistant-focus-plots",
@@ -2959,7 +3263,7 @@ impl Render for AssistantWindow {
         }
         let catalog_settled = catalog_settled(self.account, self.models_requested, &self.pending);
         root = root
-            .child(self.model_controls(catalog_settled, cx))
+            .child(self.model_controls(catalog_settled, narrow, cx))
             .child(
                 div()
                     .flex().flex_wrap()
@@ -3036,7 +3340,7 @@ impl Render for AssistantWindow {
                     .snap_to_window()
                     .child(
                         div()
-                            .max_w(px(560.))
+                            .max_w(px((width - 16.).min(560.)))
                             .h(px(36.))
                             .px_2()
                             .flex()

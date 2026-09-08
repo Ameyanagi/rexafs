@@ -1,4 +1,80 @@
 //! State decisions for the Assistant shell, independent of GPUI.
+pub(crate) const DEFAULT_ASSISTANT_WIDTH: f32 = 380.;
+pub(crate) fn clamp_assistant_width(width: f32) -> f32 {
+    if width.is_finite() {
+        width.clamp(320., 640.)
+    } else {
+        DEFAULT_ASSISTANT_WIDTH
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum AssistantHost {
+    #[default]
+    Closed,
+    Docked,
+    PoppedOut,
+}
+#[derive(Clone, Copy)]
+pub(crate) enum HostAction {
+    Toggle { prefer_docked: bool },
+    PopOut,
+    Dock,
+    Close,
+}
+impl AssistantHost {
+    pub(crate) fn transition(self, action: HostAction) -> Self {
+        match action {
+            HostAction::Toggle { prefer_docked } => match self {
+                Self::Closed if !prefer_docked => Self::PoppedOut,
+                Self::Closed | Self::PoppedOut => Self::Docked,
+                Self::Docked => Self::Closed,
+            },
+            HostAction::PopOut => Self::PoppedOut,
+            HostAction::Dock => Self::Docked,
+            HostAction::Close => match self {
+                Self::PoppedOut => Self::Docked,
+                _ => Self::Closed,
+            },
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SidePanel {
+    Groups,
+    Inspector,
+}
+
+/// Collapse older panels first, and both when one is insufficient. The dock's
+/// requested width remains intact; the centre retains at least 360 px at 1000 px.
+pub(super) fn fit_assistant_panels(
+    available: f32,
+    width: f32,
+    mut panels: PanelMemory,
+    just_opened: Option<SidePanel>,
+) -> PanelMemory {
+    let order = if just_opened == Some(SidePanel::Inspector) {
+        [SidePanel::Groups, SidePanel::Inspector]
+    } else {
+        [SidePanel::Inspector, SidePanel::Groups]
+    };
+    for panel in order {
+        let center = available
+            - clamp_assistant_width(width)
+            - if panels.file_browser { 248. } else { 0. }
+            - if panels.inspector { 312. } else { 0. };
+        if center >= 360. {
+            break;
+        }
+        match panel {
+            SidePanel::Groups => panels.file_browser = false,
+            SidePanel::Inspector => panels.inspector = false,
+        }
+    }
+    panels
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct PanelMemory {
     pub file_browser: bool,
@@ -311,5 +387,95 @@ mod tests {
             "ChatGPT"
         );
         assert_eq!(account_disclosure("API key", false), "API key");
+    }
+}
+
+#[cfg(test)]
+mod host_tests {
+    use super::*;
+    #[test]
+    fn assistant_width_clamps() {
+        for (input, expected) in [
+            (0., 320.),
+            (320., 320.),
+            (380., 380.),
+            (640., 640.),
+            (900., 640.),
+            (f32::NAN, 380.),
+            (f32::INFINITY, 380.),
+        ] {
+            assert_eq!(clamp_assistant_width(input), expected);
+        }
+    }
+    #[test]
+    fn assistant_host_transitions() {
+        use AssistantHost::*;
+        assert_eq!(
+            Closed.transition(HostAction::Toggle {
+                prefer_docked: true
+            }),
+            Docked
+        );
+        assert_eq!(
+            Closed.transition(HostAction::Toggle {
+                prefer_docked: false
+            }),
+            PoppedOut
+        );
+        assert_eq!(Docked.transition(HostAction::PopOut), PoppedOut);
+        assert_eq!(PoppedOut.transition(HostAction::Dock), Docked);
+        assert_eq!(PoppedOut.transition(HostAction::Close), Docked);
+        assert_eq!(Docked.transition(HostAction::Close), Closed);
+        assert_eq!(
+            Docked.transition(HostAction::Toggle {
+                prefer_docked: true
+            }),
+            Closed
+        );
+        assert_eq!(
+            PoppedOut.transition(HostAction::Toggle {
+                prefer_docked: false
+            }),
+            Docked
+        );
+        assert_eq!(Closed.transition(HostAction::Close), Closed);
+    }
+    #[test]
+    fn assistant_auto_collapse_preserves_recent_panel_when_possible() {
+        let both = PanelMemory {
+            file_browser: true,
+            inspector: true,
+        };
+        assert_eq!(fit_assistant_panels(1400., 380., both, None), both);
+        assert_eq!(
+            fit_assistant_panels(1000., 380., both, Some(SidePanel::Groups)),
+            PanelMemory {
+                file_browser: true,
+                inspector: false
+            }
+        );
+        assert_eq!(
+            fit_assistant_panels(1100., 380., both, Some(SidePanel::Inspector)),
+            PanelMemory {
+                file_browser: false,
+                inspector: true
+            }
+        );
+        // At 1000 even the inspector alone leaves only 308 px: collapse both.
+        assert_eq!(
+            fit_assistant_panels(1000., 380., both, Some(SidePanel::Inspector)),
+            PanelMemory::default()
+        );
+        assert_eq!(
+            fit_assistant_panels(1000., 640., both, None),
+            PanelMemory::default()
+        );
+        assert_eq!(
+            fit_assistant_panels(1000., 320., both, Some(SidePanel::Inspector)),
+            PanelMemory {
+                file_browser: false,
+                inspector: true
+            }
+        );
     }
 }

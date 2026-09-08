@@ -481,21 +481,45 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
         KeyBinding::new("shift-right", FrameJumpFwd, Some("Operando && !TextInput")),
         KeyBinding::new("home", FrameFirst, Some("Operando && !TextInput")),
         KeyBinding::new("end", FrameLast, Some("Operando && !TextInput")),
-        KeyBinding::new("cmd-1", StageData, Some("Studio")),
-        KeyBinding::new("cmd-2", StageNormalize, Some("Studio")),
-        KeyBinding::new("cmd-3", StageBackground, Some("Studio")),
-        KeyBinding::new("cmd-4", StageTransform, Some("Studio")),
-        KeyBinding::new("cmd-5", StageFit, Some("Studio")),
-        KeyBinding::new("cmd-6", StageSeries, Some("Studio")),
-        KeyBinding::new("cmd-b", ToggleDataPanel, Some("Studio && !TextInput")),
-        KeyBinding::new("cmd-j", ToggleContextPanel, Some("Studio && !TextInput")),
-        KeyBinding::new("cmd-p", FocusFilter, Some("Studio && !TextInput")),
-        KeyBinding::new("escape", ExploreEscape, Some("Explore && !TextInput")),
-        KeyBinding::new("cmd-k", PaletteOpen, Some("Studio")),
+        KeyBinding::new("cmd-1", StageData, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-2", StageNormalize, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-3", StageBackground, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-4", StageTransform, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-5", StageFit, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-6", StageSeries, Some("Studio && !Assistant")),
+        KeyBinding::new(
+            "cmd-b",
+            ToggleDataPanel,
+            Some("Studio && !TextInput && !Assistant"),
+        ),
+        KeyBinding::new(
+            "cmd-j",
+            ToggleContextPanel,
+            Some("Studio && !TextInput && !Assistant"),
+        ),
+        KeyBinding::new(
+            "cmd-p",
+            FocusFilter,
+            Some("Studio && !TextInput && !Assistant"),
+        ),
+        KeyBinding::new(
+            "escape",
+            ExploreEscape,
+            Some("Explore && !TextInput && !Assistant"),
+        ),
+        KeyBinding::new("cmd-k", PaletteOpen, Some("Studio && !Assistant")),
         KeyBinding::new("escape", PaletteClose, Some("Palette")),
-        KeyBinding::new("cmd-z", Undo, Some("Studio && !TextInput")),
-        KeyBinding::new("cmd-shift-z", Redo, Some("Studio && !TextInput")),
-        KeyBinding::new("cmd-shift-j", JournalToggle, Some("Studio && !TextInput")),
+        KeyBinding::new("cmd-z", Undo, Some("Studio && !TextInput && !Assistant")),
+        KeyBinding::new(
+            "cmd-shift-z",
+            Redo,
+            Some("Studio && !TextInput && !Assistant"),
+        ),
+        KeyBinding::new(
+            "cmd-shift-j",
+            JournalToggle,
+            Some("Studio && !TextInput && !Assistant"),
+        ),
     ]
 }
 
@@ -1013,6 +1037,10 @@ pub struct StudioApp {
     publish: shell::publish::PublishState,
     main_window: gpui::AnyWindowHandle,
     assistant_window: Option<gpui::AnyWindowHandle>,
+    assistant: Option<Entity<shell::assistant::AssistantWindow>>,
+    assistant_host: shell::assistant_shell::AssistantHost,
+    assistant_resizing: Option<(f32, f32)>,
+    last_opened_side_panel: Option<shell::assistant_shell::SidePanel>,
     /// Catalog indices passing the filter (ascending); None = no filter.
     filtered: Option<Arc<Vec<usize>>>,
     /// Bumped per filter edit; stale background match results are dropped.
@@ -1789,6 +1817,44 @@ mod keybinding_tests {
     }
 
     #[test]
+    fn assistant_prompt_context_blocks_main_shortcuts() {
+        let contexts = [
+            KeyContext::parse("Studio Explore").unwrap(),
+            KeyContext::parse("Assistant").unwrap(),
+            KeyContext::parse("TextInput MultilineTextInput").unwrap(),
+        ];
+        for binding in studio_keybindings() {
+            let Some(predicate) = binding.predicate() else {
+                continue;
+            };
+            if binding.action().as_any().is::<super::AssistantSend>()
+                || binding.action().as_any().is::<super::AssistantStop>()
+                || binding.action().as_any().is::<super::AssistantEscape>()
+            {
+                assert!(predicate.depth_of(&contexts).is_some());
+            } else {
+                assert!(
+                    predicate.depth_of(&contexts).is_none(),
+                    "main shortcut matched Assistant prompt: {:?}",
+                    binding.keystrokes()
+                );
+            }
+        }
+        // The groups panel is a sibling of Assistant, never its ancestor.
+        let groups = [
+            KeyContext::parse("Studio Explore").unwrap(),
+            KeyContext::parse("DataPanel").unwrap(),
+        ];
+        assert!(
+            binding::<super::MarkAllGroups>(&studio_keybindings())
+                .predicate()
+                .unwrap()
+                .depth_of(&groups)
+                .is_some()
+        );
+    }
+
+    #[test]
     fn operando_extreme_keys_yield_to_nested_text_input() {
         let bindings = studio_keybindings();
         let studio = KeyContext::parse("Studio OperandoWorkspace").unwrap();
@@ -1862,16 +1928,12 @@ impl StudioApp {
     ) -> Self {
         let studio = cx.weak_entity();
         _window.on_window_should_close(cx, move |_, cx| {
-            let assistant = studio
-                .read_with(cx, |app, _| app.assistant_window)
+            if let Some(assistant) = studio
+                .read_with(cx, |app, _| app.assistant.clone())
                 .ok()
-                .flatten();
-            if let Some(handle) =
-                assistant.and_then(|handle| handle.downcast::<shell::assistant::AssistantWindow>())
+                .flatten()
             {
-                handle
-                    .update(cx, |assistant, _, cx| assistant.analysis_closed(cx))
-                    .ok();
+                assistant.update(cx, |assistant, cx| assistant.analysis_closed(cx));
             }
             true
         });
@@ -1958,6 +2020,10 @@ impl StudioApp {
             publish: Default::default(),
             main_window: _window.window_handle(),
             assistant_window: None,
+            assistant: None,
+            assistant_host: Default::default(),
+            assistant_resizing: None,
+            last_opened_side_panel: None,
             generation: 0,
             load_running: false,
             recompute_epoch: 0,
@@ -6969,6 +7035,8 @@ impl StudioApp {
 
     fn focus_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.data_panel_open = true;
+        self.last_opened_side_panel = Some(shell::assistant_shell::SidePanel::Groups);
+        self.fit_assistant_layout();
         self.data_tab = DataTab::Files;
         let input = self.filter_input.clone();
         cx.notify();
@@ -8280,6 +8348,7 @@ impl StudioApp {
 impl Render for StudioApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.viewport_w = f32::from(window.viewport_size().width);
+        self.fit_assistant_layout();
         let key_context = if self.updates.open {
             "UpdateDialog"
         } else if self.palette.is_some() {
@@ -8324,12 +8393,22 @@ impl Render for StudioApp {
             .on_action(
                 cx.listener(|this: &mut Self, _: &ToggleDataPanel, _window, cx| {
                     this.data_panel_open = !this.data_panel_open;
+                    if this.data_panel_open {
+                        this.last_opened_side_panel =
+                            Some(shell::assistant_shell::SidePanel::Groups);
+                    }
+                    this.fit_assistant_layout();
                     cx.notify();
                 }),
             )
             .on_action(
                 cx.listener(|this: &mut Self, _: &ToggleContextPanel, _window, cx| {
                     this.context_panel_open = !this.context_panel_open;
+                    if this.context_panel_open {
+                        this.last_opened_side_panel =
+                            Some(shell::assistant_shell::SidePanel::Inspector);
+                    }
+                    this.fit_assistant_layout();
                     cx.notify();
                 }),
             )
