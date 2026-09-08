@@ -2016,7 +2016,7 @@ mod override_tests {
         );
         let path = root.join("session.rxs");
         crate::project::save(&path, &project).unwrap();
-        let mut reopened = crate::project::load(&path).unwrap();
+        let mut reopened = crate::project::tests::load(&path).unwrap();
         reopened.assign_group_ids();
         let mut catalog = Catalog::default();
         catalog.extend(vec![crate::catalog::FileMeta {

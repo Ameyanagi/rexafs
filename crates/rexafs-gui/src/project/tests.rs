@@ -1,4 +1,11 @@
 use super::*;
+
+pub(crate) fn load(path: &Path) -> Result<ProjectFile, String> {
+    super::load_with_cache_root(path, || {
+        Ok(std::env::temp_dir().join(format!("rexafs-project-test-cache-{}", std::process::id())))
+    })
+}
+
 use serde_json::{Value, json};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -42,6 +49,31 @@ fn specimen(dir: &Path) -> ProjectFile {
     copy_inputs(dir);
     std::fs::copy(fixture("rexafs-0.1.0-links.rxs"), dir.join("session.rxs")).unwrap();
     load(&dir.join("session.rxs")).unwrap()
+}
+
+#[test]
+fn embedded_restore_uses_the_injected_cache_and_links_need_no_cache() {
+    let temp = Temp::new();
+    let project = specimen(&temp.join("source"));
+    super::load_with_cache_root(&temp.join("source/session.rxs"), || {
+        panic!("linked projects must not initialize a cache")
+    })
+    .unwrap();
+    let portable = temp.join("portable.rxs");
+    save_with_storage(&portable, &project, DataStorage::Embedded).unwrap();
+    let mut restored_paths = Vec::new();
+    for name in ["cache-a", "cache-b"] {
+        let root = temp.join(name);
+        let restored = super::load_with_cache_root(&portable, || Ok(root.clone())).unwrap();
+        let source = restored.spectrum_file.unwrap();
+        assert!(source.starts_with(root));
+        assert_eq!(
+            std::fs::read(&source).unwrap(),
+            std::fs::read(project.spectrum_file.as_ref().unwrap()).unwrap()
+        );
+        restored_paths.push(source);
+    }
+    assert_ne!(restored_paths[0], restored_paths[1]);
 }
 fn state(project: &ProjectFile) -> Value {
     let mut project = project.clone();

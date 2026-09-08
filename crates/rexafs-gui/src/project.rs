@@ -200,6 +200,15 @@ pub fn save_with_storage(
 }
 
 pub fn load(path: &Path) -> Result<ProjectFile, String> {
+    load_with_cache_root(path, || {
+        crate::settings::app_dir().ok_or("Project cache directory unavailable".into())
+    })
+}
+
+pub(crate) fn load_with_cache_root(
+    path: &Path,
+    cache_root: impl FnOnce() -> Result<PathBuf, String>,
+) -> Result<ProjectFile, String> {
     if !is_project(path) {
         return Err("Open a .rxs project file.".into());
     }
@@ -208,7 +217,7 @@ pub fn load(path: &Path) -> Result<ProjectFile, String> {
     }
     let json = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     let project = parse(&json)?;
-    storage::restore(project, path, json.as_bytes())
+    storage::restore(project, path, json.as_bytes(), cache_root)
 }
 
 fn check_version(version: u32) -> Result<(), String> {
@@ -323,4 +332,4 @@ fn replace_with(
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

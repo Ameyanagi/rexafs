@@ -545,6 +545,7 @@ pub(super) fn restore(
     mut project: ProjectFile,
     path: &Path,
     json: &[u8],
+    cache_root: impl FnOnce() -> Result<PathBuf, String>,
 ) -> Result<ProjectFile, String> {
     let header = project
         .header
@@ -566,13 +567,7 @@ pub(super) fn restore(
         .map(|f| absolute(&folder.join(&f.path)))
         .collect::<Result<_, _>>()?;
     if header.storage == DataStorage::Embedded {
-        // Fixture tests must not create or chmod the user's settings directory.
-        let cache = if cfg!(test) {
-            std::env::temp_dir().join(format!("rexafs-project-test-cache-{}", std::process::id()))
-        } else {
-            crate::settings::app_dir().ok_or("Project cache directory unavailable")?
-        };
-        let root = cache.join("project-data").join(digest(json));
+        let root = cache_root()?.join("project-data").join(digest(json));
         restore_embedded(&mut project, &header, &folder, &root)?;
     } else if !project.embedded.is_empty() {
         return Err("A paths-only project contains unexpected embedded payloads.".into());

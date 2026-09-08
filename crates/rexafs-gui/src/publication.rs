@@ -439,7 +439,7 @@ mod tests {
             serde_json::from_slice(&fs::read(folder.join("manifest.json")).unwrap()).unwrap();
         assert_eq!(manifest["figures"].as_array().unwrap().len(), 6);
         assert_eq!(manifest["project_storage"], "embedded");
-        let restored = crate::project::load(&folder.join("project.rxs")).unwrap();
+        let restored = crate::project::tests::load(&folder.join("project.rxs")).unwrap();
         assert_eq!(restored.data_storage, crate::project::DataStorage::Embedded);
         assert_eq!(
             fs::read(restored.spectrum_file.unwrap()).unwrap(),
