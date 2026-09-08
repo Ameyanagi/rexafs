@@ -20,6 +20,7 @@ pub mod fit_workspace;
 pub(crate) mod group_menu;
 pub mod groups_panel;
 pub mod handles;
+mod import_receipt;
 pub mod inspector;
 mod joint_browser;
 pub(crate) mod joint_fit;
@@ -382,6 +383,7 @@ impl StudioApp {
             .text_size(px(12.5))
             .child(self.top_bar(cx))
             .child(self.stage_strip(cx))
+            .children(self.import_receipt(cx))
             .child(
                 div()
                     .flex_1()

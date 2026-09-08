@@ -98,17 +98,13 @@ impl StudioApp {
             DropRoute::Nothing => return,
             DropRoute::OpenProject(path) => self.load_project_path(path, cx),
             DropRoute::ImportFolder(path) => {
-                // Preserve indexed folder startup until slice 1.7 makes intake index-aware.
-                self.scan_folder(path.clone(), false, cx);
-                if remember {
-                    let path = path.canonicalize().unwrap_or(path);
-                    crate::settings::push_recent(
-                        &mut self.structure.settings.recent_import_folders,
-                        path,
-                        8,
-                    );
-                    self.persist_recent_locations();
-                }
+                self.import_routed_data(
+                    RoutedImport {
+                        paths: vec![path],
+                        remember,
+                    },
+                    cx,
+                );
             }
             DropRoute::ImportData(paths) => {
                 self.import_routed_data(RoutedImport { paths, remember }, cx)
@@ -146,22 +142,6 @@ impl StudioApp {
     }
 
     pub(crate) fn import_routed_data(&mut self, data: RoutedImport, cx: &mut Context<Self>) {
-        self.pending_routed_import.push_back(data);
-        if self.catalog.scanning || self.verify_running {
-            self.status = "Import queued until catalog scanning and verification finish.".into();
-            cx.notify();
-        }
-        self.finish_routed_import(cx);
-    }
-
-    pub(crate) fn finish_routed_import(&mut self, cx: &mut Context<Self>) {
-        let Some(data) = take_ready_import(
-            &mut self.pending_routed_import,
-            self.catalog.scanning,
-            self.verify_running,
-        ) else {
-            return;
-        };
         if data.remember {
             let folders = data
                 .paths
@@ -179,6 +159,17 @@ impl StudioApp {
         } else {
             self.append_import(data.paths, false, cx);
         }
+    }
+
+    pub(crate) fn finish_routed_import(&mut self, cx: &mut Context<Self>) {
+        if let Some(data) = take_ready_import(
+            &mut self.pending_routed_import,
+            self.catalog.scanning,
+            self.verify_running,
+        ) {
+            self.import_routed_data(data, cx);
+        }
+        self.start_queued_import(cx);
     }
 
     pub(crate) fn remember_project(&mut self, path: PathBuf) {

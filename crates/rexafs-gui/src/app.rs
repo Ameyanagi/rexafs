@@ -57,6 +57,7 @@ use crate::widgets::numeric_field::{FieldEvent, FieldKind, NumericField};
 use crate::widgets::text_input::{InputEvent, TextInput};
 
 mod group_rows;
+mod import_state;
 mod importing;
 mod merge;
 mod shell;
@@ -745,6 +746,7 @@ enum ProblemSeverity {
 
 #[derive(Debug, Clone, PartialEq)]
 struct JobError {
+    batch: Option<import_state::BatchId>,
     severity: ProblemSeverity,
     label: String,
     message: String,
@@ -753,6 +755,7 @@ struct JobError {
 impl JobError {
     fn warning(path: &std::path::Path, message: String) -> Self {
         Self {
+            batch: None,
             severity: ProblemSeverity::Warning,
             label: path.display().to_string(),
             message,
@@ -762,19 +765,23 @@ impl JobError {
 
 fn push_problem(problems: &mut Vec<JobError>, problem: JobError) {
     // Browsing/reprocessing a cached source should not flood recent problems.
-    if problem.severity == ProblemSeverity::Warning && problems.contains(&problem) {
+    if (problem.batch.is_some() || problem.severity == ProblemSeverity::Warning)
+        && problems.contains(&problem)
+    {
         return;
     }
-    if problems.len() == JOB_ERROR_CAPACITY {
+    if problem.batch.is_none()
+        && problems.iter().filter(|p| p.batch.is_none()).count() >= JOB_ERROR_CAPACITY
+    {
         if let Some(index) = problems
             .iter()
-            .position(|p| p.severity == ProblemSeverity::Warning)
+            .position(|p| p.batch.is_none() && p.severity == ProblemSeverity::Warning)
         {
             problems.remove(index);
         } else if problem.severity == ProblemSeverity::Warning {
             return;
-        } else {
-            problems.remove(0);
+        } else if let Some(index) = problems.iter().position(|p| p.batch.is_none()) {
+            problems.remove(index);
         }
     }
     problems.push(problem);
@@ -1242,6 +1249,10 @@ pub struct StudioApp {
     merge_cancel: Option<Arc<AtomicBool>>,
     status: SharedString,
     job_errors: Vec<JobError>,
+    intake: import_state::IntakeState,
+    intake_cancel: Option<Arc<AtomicBool>>,
+    problems_batch: Option<import_state::BatchId>,
+    problems_page: usize,
     group_diagnostics: group_rows::Diagnostics,
     problems_open: bool,
     /// Measured plot-container sizes (logical px) keyed by plot id, so a
@@ -3039,6 +3050,10 @@ impl StudioApp {
             merge_cancel: None,
             status: "loading...".into(),
             job_errors: Vec::new(),
+            intake: Default::default(),
+            intake_cancel: None,
+            problems_batch: None,
+            problems_page: 0,
             group_diagnostics: Default::default(),
             problems_open: false,
             card_px: BTreeMap::new(),
@@ -3162,6 +3177,7 @@ impl StudioApp {
         push_problem(
             &mut self.job_errors,
             JobError {
+                batch: None,
                 severity: ProblemSeverity::Error,
                 label: label.into(),
                 message: message.into(),
@@ -3169,13 +3185,48 @@ impl StudioApp {
         );
     }
 
+    fn intake_origin(
+        &self,
+        ix: usize,
+        path: &std::path::Path,
+    ) -> Option<import_state::IntakeOrigin> {
+        self.peek_group_id(ix)
+            .and_then(|group| self.intake.origin(path, &group))
+    }
+
     fn record_source_warnings(
         &mut self,
+        origin: Option<&import_state::IntakeOrigin>,
         path: &std::path::Path,
         diagnostics: &crate::params::ParserDiagnostics,
     ) {
         for message in diagnostics.warnings() {
-            push_problem(&mut self.job_errors, JobError::warning(path, message));
+            if let Some(origin) = origin.filter(|o| self.intake.outcome(o).is_some()) {
+                if let Some(outcome) = self.intake.outcome(origin)
+                    && !outcome.warnings.contains(&message)
+                {
+                    outcome.warnings.push(message.clone());
+                }
+                self.record_intake_problem(origin.batch, path, message, ProblemSeverity::Warning);
+            } else {
+                push_problem(&mut self.job_errors, JobError::warning(path, message));
+            }
+        }
+    }
+
+    fn record_source_error(
+        &mut self,
+        origin: Option<&import_state::IntakeOrigin>,
+        label: String,
+        message: String,
+    ) {
+        if let Some(origin) = origin.filter(|o| self.intake.outcome(o).is_some()) {
+            if let Some(outcome) = self.intake.outcome(origin) {
+                outcome.failed = Some(message.clone());
+            }
+            self.record_intake_problem(origin.batch, &origin.path, message, ProblemSeverity::Error);
+        } else {
+            self.record_job_error(label, message);
         }
     }
 
@@ -3756,6 +3807,14 @@ impl StudioApp {
     /// Retire workers and clear catalog presentation before a folder streams.
     /// Durable state remains pending until its groups resolve again.
     fn reset_catalog_state(&mut self, cx: &mut Context<Self>) {
+        self.intake.stop();
+        if let Some(cancel) = self.intake_cancel.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        if let Some(id) = self.intake.active {
+            self.intake.finish(id);
+        }
+        self.intake.reveal.clear();
         self.catalog_gen += 1;
         self.invalidate_index_bindings(IndexChange::Catalog);
         let interaction = self.capture_groups();
@@ -3814,7 +3873,15 @@ impl StudioApp {
     fn cancel_long_jobs(&mut self, cx: &mut Context<Self>) {
         self.pending_routed_import.clear();
         let mut cancelled = false;
-        if self.catalog.scanning || self.verify_running {
+        self.intake.stop();
+        if let Some(cancel) = &self.intake_cancel {
+            cancel.store(true, Ordering::Relaxed);
+            // Save the accepted source list; reopening must not rediscover the cancelled remainder.
+            self.source_dir = None;
+            self.catalog_index_path = None;
+            cancelled = true;
+        }
+        if (self.catalog.scanning && self.intake_cancel.is_none()) || self.verify_running {
             self.catalog_gen += 1;
             self.catalog.scanning = false;
             self.verify_running = false;
@@ -4667,6 +4734,7 @@ impl StudioApp {
         cx.notify();
         let raw_key = (ix, self.effective_params(ix).raw_fingerprint());
         let processed_path = path.clone();
+        let intake_origin = self.intake_origin(ix, &path);
         let load = self.process_group_job(ix, path, cx);
         cx.spawn(async move |this, cx| {
             let result = load.await;
@@ -4702,7 +4770,11 @@ impl StudioApp {
                             app.group_diagnostics.finish(ticket, warnings);
                         }
                         if let Some(raw) = raw {
-                            app.record_source_warnings(&processed_path, &raw.diagnostics);
+                            app.record_source_warnings(
+                                intake_origin.as_ref(),
+                                &processed_path,
+                                &raw.diagnostics,
+                            );
                             if ix != NO_ENTRY {
                                 app.raw_cache.put(raw_key, raw);
                             }
@@ -4720,11 +4792,16 @@ impl StudioApp {
                     }
                     Err(e) => {
                         app.status = format!("failed to process {label}: {e}").into();
-                        app.record_job_error(label.to_string(), e.to_string());
+                        app.record_source_error(
+                            intake_origin.as_ref(),
+                            label.to_string(),
+                            e.to_string(),
+                        );
                         if let Some(ticket) = &diagnostics {
                             app.group_diagnostics.finish(
                                 ticket,
                                 vec![JobError {
+                                    batch: None,
                                     severity: ProblemSeverity::Error,
                                     label: label.to_string(),
                                     message: e.to_string(),
@@ -4980,6 +5057,7 @@ impl StudioApp {
                                 .err()
                                 .map(|error| {
                                     vec![JobError {
+                                        batch: None,
                                         severity: ProblemSeverity::Error,
                                         label: label.clone(),
                                         message: error.to_string(),
@@ -5607,6 +5685,13 @@ impl StudioApp {
                     .map(|id| (load.ix, self.group_diagnostics.begin(id, load.fingerprint)))
             })
             .collect();
+        let origins: BTreeMap<_, _> = missing
+            .iter()
+            .filter_map(|load| {
+                let path = load.source.as_ref().ok()?;
+                Some((load.ix, (path.clone(), self.intake_origin(load.ix, path))))
+            })
+            .collect();
         let job = cx.background_executor().spawn(async move {
             missing
                 .par_iter()
@@ -5629,6 +5714,7 @@ impl StudioApp {
                                 .warnings()
                                 .into_iter()
                                 .map(|message| JobError {
+                                    batch: None,
                                     severity: ProblemSeverity::Warning,
                                     label: app.entry_label(ix),
                                     message,
@@ -5636,6 +5722,7 @@ impl StudioApp {
                                 .collect(),
                             Ok((_, None)) => Vec::new(),
                             Err(error) => vec![JobError {
+                                batch: None,
                                 severity: ProblemSeverity::Error,
                                 label: app.entry_label(ix),
                                 message: error.to_string(),
@@ -5646,6 +5733,13 @@ impl StudioApp {
                     match result {
                         Ok((sp, raw)) => {
                             if let Some(raw) = raw {
+                                if let Some((path, origin)) = origins.get(&ix) {
+                                    app.record_source_warnings(
+                                        origin.as_ref(),
+                                        path,
+                                        &raw.diagnostics,
+                                    );
+                                }
                                 app.raw_cache
                                     .put((ix, app.effective_params(ix).raw_fingerprint()), raw);
                             }
@@ -5653,7 +5747,11 @@ impl StudioApp {
                         }
                         Err(error) => {
                             failed += 1;
-                            app.record_job_error(app.entry_label(ix), error.to_string());
+                            app.record_source_error(
+                                origins.get(&ix).and_then(|(_, origin)| origin.as_ref()),
+                                app.entry_label(ix),
+                                error.to_string(),
+                            );
                         }
                     }
                 }
@@ -6513,6 +6611,7 @@ impl StudioApp {
         }
         let generation = self.import_preview_gen;
         let import = self.ui_params().import.clone();
+        let intake_origin = self.intake_origin(self.selected.unwrap_or(NO_ENTRY), &path);
         let job = cx.background_executor().spawn({
             let path = path.clone();
             async move { preview_import(&path, &import) }
@@ -6529,7 +6628,7 @@ impl StudioApp {
                 ) {
                     if let Some(preview) = &app.import_preview {
                         let diagnostics = preview.diagnostics.clone();
-                        app.record_source_warnings(&path, &diagnostics);
+                        app.record_source_warnings(intake_origin.as_ref(), &path, &diagnostics);
                         if let Some(id) = app.peek_group_id(app.selected.unwrap_or(NO_ENTRY)) {
                             let warnings = diagnostics
                                 .warnings()
@@ -9674,14 +9773,48 @@ impl StudioApp {
 
     fn problems_panel(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
-        let (errors, warnings) = problem_counts(&self.job_errors);
+        let visible: Vec<_> = self
+            .job_errors
+            .iter()
+            .filter(|p| self.problems_batch.is_none() || p.batch == self.problems_batch)
+            .cloned()
+            .collect();
+        let (errors, warnings) = problem_counts(&visible);
+        const PAGE_SIZE: usize = 100;
+        let source_count = self
+            .problems_batch
+            .map_or(0, |id| self.intake.history[id].sources.len());
+        let pages = (source_count + visible.len()).div_ceil(PAGE_SIZE).max(1);
+        let page = self.problems_page.min(pages - 1);
+        let start = page * PAGE_SIZE;
         let mut list = div()
             .id("recent-problems-list")
             .flex_1()
             .min_h_0()
             .min_w_0()
             .overflow_y_scroll();
-        for error in self.job_errors.iter().rev() {
+        if let Some(id) = self.problems_batch {
+            let batch = &self.intake.history[id];
+            list = list.child(div().px_3().py_1().child(format!(
+                "Import #{} · {} · Full signal checks run when groups are loaded",
+                id + 1,
+                batch.receipt()
+            )));
+            for (path, outcome) in batch.sources.iter().skip(start).take(PAGE_SIZE) {
+                list = list.child(div().px_3().py_1().child(format!(
+                    "{} · {}",
+                    path.display(),
+                    outcome.summary()
+                )));
+            }
+        }
+        let shown_sources = source_count.saturating_sub(start).min(PAGE_SIZE);
+        for error in visible
+            .iter()
+            .rev()
+            .skip(start.saturating_sub(source_count))
+            .take(PAGE_SIZE - shown_sources)
+        {
             list = list.child(
                 div()
                     .px_3()
@@ -9735,9 +9868,30 @@ impl StudioApp {
                     .text_xs()
                     .text_color(t.text)
                     .child(div().flex_1().child(format!(
-                        "Recent problems · {errors} errors · {warnings} warnings ({}/{JOB_ERROR_CAPACITY})",
-                        self.job_errors.len()
+                        "{} · {errors} errors · {warnings} warnings",
+                        self.problems_batch.map_or_else(
+                            || "Recent problems".into(),
+                            |id| format!("Import #{} details", id + 1)
+                        )
                     )))
+                    .when(pages > 1, |header| {
+                        header
+                            .child(
+                                shell::button(&t, "problems-prev", "Previous", false).on_click(
+                                    cx.listener(move |app, _, _, cx| {
+                                        app.problems_page = page.saturating_sub(1);
+                                        cx.notify();
+                                    }),
+                                ),
+                            )
+                            .child(format!("{} / {pages}", page + 1))
+                            .child(shell::button(&t, "problems-next", "Next", false).on_click(
+                                cx.listener(move |app, _, _, cx| {
+                                    app.problems_page = (page + 1).min(pages - 1);
+                                    cx.notify();
+                                }),
+                            ))
+                    })
                     .child(
                         div()
                             .id("clear-problems")
@@ -9746,11 +9900,11 @@ impl StudioApp {
                             .cursor_pointer()
                             .hover(|d| d.bg(t.raised))
                             .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                this.job_errors.clear();
+                                this.job_errors.retain(|p| p.batch.is_some());
                                 this.problems_open = false;
                                 cx.notify();
                             }))
-                            .child("clear"),
+                            .child("Clear recent / close"),
                     ),
             )
             .child(list)
@@ -9842,6 +9996,7 @@ impl StudioApp {
                     .cursor_pointer()
                     .hover(|d| d.bg(t.raised))
                     .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
+                        this.problems_batch = None;
                         this.problems_open = !this.problems_open;
                         cx.notify();
                     }))

@@ -224,6 +224,12 @@ impl StudioApp {
         if reveal {
             marks.clone_from(&self.selection);
             marks.extend(self.reveal_current);
+            marks.extend(
+                self.intake
+                    .reveal
+                    .iter()
+                    .filter_map(|id| self.group_registry.index(id)),
+            );
         }
         group_rows::build_rows_active(
             &self.catalog,
@@ -245,6 +251,7 @@ impl StudioApp {
             self.expanded_sources = expanded;
             self.data_tab = tab;
             self.reveal_current = None;
+            self.intake.reveal.clear();
         } else {
             self.filter_reveal = Some((self.expanded_sources.clone(), self.data_tab));
             self.data_tab = DataTab::Files;
@@ -298,6 +305,11 @@ impl StudioApp {
     }
 
     pub(crate) fn reveal_group_row(&mut self, ix: usize) {
+        self.expand_group_stack(ix);
+        self.scroll_group_row(ix);
+    }
+
+    pub(crate) fn expand_group_stack(&mut self, ix: usize) {
         if let Some(path) = ix
             .checked_sub(DERIVED_BASE)
             .and_then(|i| self.derived.get(i))
@@ -320,7 +332,6 @@ impl StudioApp {
                 self.expanded_sources.insert(id, true);
             }
         }
-        self.scroll_group_row(ix);
     }
 
     pub(crate) fn scroll_group_row(&mut self, ix: usize) {

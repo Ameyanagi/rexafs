@@ -877,6 +877,7 @@ impl StudioApp {
             standard.ix,
             self.effective_params(standard.ix).raw_fingerprint(),
         );
+        let intake_origin = self.intake_origin(standard.ix, &standard.path);
         let job = self.process_group_job(standard.ix, standard.path.clone(), cx);
         cx.spawn(async move |this, cx| {
             let result = job.await;
@@ -893,7 +894,11 @@ impl StudioApp {
                 match result {
                     Ok((sp, raw)) => {
                         if let Some(raw) = raw {
-                            app.record_source_warnings(&standard.path, &raw.diagnostics);
+                            app.record_source_warnings(
+                                intake_origin.as_ref(),
+                                &standard.path,
+                                &raw.diagnostics,
+                            );
                             app.raw_cache.put(raw_key, raw);
                         }
                         let sp = Arc::new(sp);
@@ -903,7 +908,11 @@ impl StudioApp {
                         app.tools.standard_load = StandardLoad::Ready(sp);
                     }
                     Err(error) => {
-                        app.record_job_error(standard.label.clone(), error.clone());
+                        app.record_source_error(
+                            intake_origin.as_ref(),
+                            standard.label.clone(),
+                            error.clone(),
+                        );
                         app.tools.standard_load = StandardLoad::Failed(error);
                     }
                 }

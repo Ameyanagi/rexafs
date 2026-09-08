@@ -1626,6 +1626,7 @@ mod tests {
             DetectionMode::Reference,
         );
         let error = JobError {
+            batch: None,
             severity: ProblemSeverity::Error,
             label: "scan.dat".into(),
             message: "failed".into(),
