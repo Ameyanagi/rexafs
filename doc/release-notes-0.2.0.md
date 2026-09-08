@@ -1,7 +1,5 @@
 # rexafs 0.2.0
 
-Release candidate notes. Publication and final artifact qualification are pending.
-
 The Groups panel keeps current, keyboard focus, marks, and range selection
 separate. Browsing a spectrum preserves marks. Source files and their channels
 share collapsible stacks; materialized outputs appear in Results. Group names,
@@ -57,9 +55,41 @@ Spectrum/Catalog center switch, persistent LCF/PCA result rows, paired-reference
 alignment, drag reorder, Assistant proposal review, transcript search, and
 conversation export remain outside this release's current implementation scope.
 
-
-Mac release downloads will be signed and notarized from the qualified GitHub
+Mac ZIP and DMG downloads are signed and notarized from the qualified GitHub
 build. Intel validation on this host uses Rosetta; native Intel hardware and
 clean-machine installation remain unqualified. Windows/Linux remain desktop
 previews pending native interactive checks. Their build, archive, numerical,
 and installer checks are recorded separately from graphical qualification.
+
+## Build and qualification
+
+These assets come from [release build 34204231697](https://github.com/Ameyanagi/rexafs/actions/runs/34204231697),
+which passed all 29 jobs at commit `7278be4ce91b80de235ce785782b46e7f5647447`.
+Both macOS ZIPs and DMGs were signed and notarized by
+[signing run 34208785388](https://github.com/Ameyanagi/rexafs/actions/runs/34208785388).
+The original executables were signed without rebuilding. `SHA256SUMS` covers
+all final release files, including the signed replacements.
+
+Fresh app and DMG downloads passed signature, stapling, and Gatekeeper checks;
+both app architectures passed build-identity and numerical checks. Apple Silicon
+passed ReFEFF/FEFF10 checks, native launch and plots, seven-group embedded project
+restoration, exact recipe-application/raw preview, parser diagnostics, and saved
+Assistant transcript restoration. Intel passed launch, plots, and the same
+project restoration under Rosetta.
+
+See the [qualification report](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-09-08-release-0.2.0/review.md)
+for the recorded evidence and remaining platform and upstream dependency limits.
+
+## Package publication
+
+[crates.io](https://crates.io/crates/rexafs/0.2.0),
+[PyPI](https://pypi.org/project/rexafs/0.2.0/), and
+[npm](https://www.npmjs.com/package/rexafs/v/0.2.0) now publish 0.2.0 as the
+stable version. The Rust crate, npm tarball, all 20 Python wheels, and Python
+source archive match the qualified build's SHA-256 hashes.
+
+Publication used the unchanged source tag and build with reviewed publisher
+maintenance from `v0.2.0-publish-tools.1`:
+[Rust](https://github.com/Ameyanagi/rexafs/actions/runs/34211846925),
+[npm](https://github.com/Ameyanagi/rexafs/actions/runs/34211849827), and
+[PyPI](https://github.com/Ameyanagi/rexafs/actions/runs/34211852979).

@@ -1,12 +1,16 @@
 # Remaining work plan — 2026-09-08
 
-The 0.1.4 release is published. Phase 1, Phase 2.1–2.7, and concrete follow-up
-gaps D1–D4 are implemented and locally qualified on
-`feature/import-groups-phase2`. Integration is tracked in [PR #41](https://github.com/Ameyanagi/rexafs/pull/41);
-its CI/review status and the platform checks listed below remain to be closed; the explicitly deferred features are still backlog.
-Release 0.2.0 preparation is committed and locally qualified, including 22
-retained compatibility samples and 427 GUI tests. It has not been tagged or
-published; final CI, signing, and publication remain.
+Releases 0.1.4 and [0.2.0](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.0)
+are published on GitHub and all three package registries. Phase 1, Phase 2.1–2.7,
+and concrete follow-up
+gaps D1–D4 are implemented and merged in [PR #41](https://github.com/Ameyanagi/rexafs/pull/41).
+Release preparation [PR #42](https://github.com/Ameyanagi/rexafs/pull/42) passed all
+34 checks and merged. Tag `v0.2.0` points to
+`7278be4ce91b80de235ce785782b46e7f5647447`, whose tree exactly matches that tested
+candidate. The final [manual build 34204231697](https://github.com/Ameyanagi/rexafs/actions/runs/34204231697)
+passed all 29 jobs. Signed downloads are qualified, all 42 public asset digests
+verify, and every published package matches that build. Hardware qualification,
+upstream advisories, and the explicitly deferred features remain as listed below.
 
 This replaces the earlier overlapping progress entries. The original Groups
 UX design and implementation specification remain local design references in
@@ -52,7 +56,7 @@ packages, 20 Python wheels, and the source archive match that same build.
 See [release qualification](validation/2026-09-08-release-0.1.4/review.md) and
 [release notes](release-notes-0.1.4.md).
 
-## C. Groups and Phase 2 — implemented, integration review next
+## C. Groups and Phase 2 — merged; 0.2.0 published
 
 The integration branch contains Phase 1's durable identities, source stacks,
 Results, current/focus/mark separation, filters, row actions, locks, undoable
@@ -80,30 +84,41 @@ and marks remained intact. Unreadable sources remain pending and do not expose
 another group's spectrum to tools. Declared Cu/Ni merge refusal was exercised
 with identical numeric spectra.
 
-Final GUI suite: **426 passed, zero failed, four ignored**. Formatting, diff
+Integration GUI suite: **426 passed, zero failed, four ignored**. Formatting, diff
 checks, release build, packaged numerical/ReFEFF/FEFF10 self-checks, and all 18
 retained compatibility samples passed. GUI clippy exits successfully with
 warnings. Core/default, ndarray, trust-region, and strict core clippy were also
 rerun successfully on the integrated branch. See [mapping and follow-up qualification](validation/2026-09-08-import-mapping/review.md)
-and [0.2.0 development notes](release-notes-0.2.0.md).
+and [0.2.0 release notes](release-notes-0.2.0.md).
 
 - [x] Integrate Phase 1 and Phase 2 implementation in an isolated worktree.
 - [x] Rebase the integration branch onto published main (`6041c78`); the rebase
   preserved the tested tree exactly.
-- [ ] Complete integration PR CI/review and merge. The review is
-  [PR #41](https://github.com/Ameyanagi/rexafs/pull/41), with all implementation
-  commits pushed on `feature/import-groups-phase2`. Its live checks are the
-  authoritative CI status. The first matrix found five Windows path-related
-  failures; the correction and local regression pass are pushed in the PR,
-  awaiting confirmation on Windows.
+- [x] Complete integration review and merge [PR #41](https://github.com/Ameyanagi/rexafs/pull/41).
+  The Windows path correction passed the actual Windows matrix. All 34 checks
+  passed on the final 0.2.0 tree in PR #42, including Intel DMG installation.
+  The integration run 34196413430 also passed all 29 release jobs on retry; its
+  earlier Intel failure was a busy-volume eject after numerical and FEFF checks.
+  All 34 integration checks are green.
 
 - [x] Prepare coordinated 0.2.0 versions, release notes, writer-generated linked
   and embedded fixtures, full local release gates, Python 3.10–3.14 consumers,
   source rebuild, JavaScript/Chromium/TypeScript consumers, and native Apple
-  Silicon qualification. See [0.2.0 qualification](validation/2026-09-08-release-0.2.0/review.md).
-- [ ] Complete release-preparation CI/review, tag the reviewed commit, run the
-  final manual GitHub build, sign and qualify its actual downloads, and publish
-  the verified artifacts to GitHub and all three registries.
+  Silicon qualification. The release GUI suite passed 427 tests and verified all
+  22 retained compatibility samples. See [0.2.0 qualification](validation/2026-09-08-release-0.2.0/review.md).
+- [x] Complete release-preparation CI/review and tag the reviewed merge. PR #42
+  passed Release builds 34198489189, Rust 34198489183, and Larch 34198489209.
+- [x] Finish the final manual GitHub build and signing; qualify the actual signed
+  ZIPs/DMGs, native Apple Silicon app and Intel app under Rosetta. All 42 public
+  asset digests match the final manifest.
+- [x] Repair publisher downloads in [PR #43](https://github.com/Ameyanagi/rexafs/pull/43)
+  after repeated unrelated desktop artifact transfer failures. Registry channels
+  now verify only their complete required package set against the original build;
+  `v0.2.0-publish-tools.1` resumes the unchanged source tag/build.
+- [x] Publish all registries, verify their exact hashes, and make the
+  [GitHub release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.0) public
+  as latest. Rust, npm, all 20 Python wheels, and the source archive match the
+  qualified build. All three registries select 0.2.0 as the default stable version.
 
 ## D. Follow-up gaps and deferred work
 
@@ -136,7 +151,8 @@ The following remain deliberate product decisions or explicitly deferred scope:
 
 Implementation worktree: `/private/tmp/rexafs-import-phase2`, branch
 `feature/import-groups-phase2`. Release preparation: `/private/tmp/rexafs-release-020`,
-branch `release/0.2.0`. The main checkout at
+branch `release/0.2.0`. Post-release evidence is recorded in
+`/private/tmp/rexafs-release-020-evidence`, branch `docs/release-020-evidence`. The main checkout at
 `/Users/ryuichi/dev/rexafs` remains on `feature/import-groups-phase1`; its unrelated
 dirty README, documentation, benchmark, and experiment files are preserved.
 Only this plan is synchronized back to that checkout. Build/test logs and

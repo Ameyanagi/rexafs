@@ -1,11 +1,11 @@
 # Releasing rexafs
 
 The coordinated release process is described below. The published stable release
-is [0.1.4](https://github.com/Ameyanagi/rexafs/releases/tag/v0.1.4);
-[its qualification report](validation/2026-09-08-release-0.1.4/review.md) records
-the completed registry, signing, artifact, and available-host checks. Release
-0.2.0 is in preparation. Windows/Linux remain desktop previews until native
-interactive qualification is available.
+is [0.2.0](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.0);
+[its qualification report](validation/2026-09-08-release-0.2.0/review.md) records
+the completed registry, signing, artifact, and available-host checks. All three
+registries publish 0.2.0 as stable. Windows/Linux remain desktop previews until
+native interactive qualification is available.
 The [rebranding plan](rebranding-plan.md) defines scope; [dependency notes](dependencies.md)
 record the Rust 1.98.1 toolchain and compatibility constraints.
 
