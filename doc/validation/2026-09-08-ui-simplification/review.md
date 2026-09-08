@@ -32,6 +32,10 @@ The maintainer's original checkout and active app sessions were preserved.
   A separate Depth cue, enabled by default, distinguishes rear and front atoms,
   bonds and faces using camera-relative contrast, with a back/front key. It combines
   with center fading without changing alpha and adapts to both themes.
+  Orbit dragging follows the pointer in both directions. Scattering legs join
+  the projected atom centers; repeated traversals separate between those centers
+  and their arrowheads follow the curve. Structure path/cutoff inputs and the
+  processing standard filter now update with the application theme.
 - Assistant keeps model, reasoning, mode and sharing/access switches visible.
   Conversation utilities and longer descriptions use Settings. Permission and
   approval behavior retain the existing backend and busy-state guards.
@@ -56,6 +60,9 @@ The maintainer's original checkout and active app sessions were preserved.
   five molecular-view tests passed, including equal-radius front/back distinction,
   rotation, dark/light contrast, unchanged alpha, highlighted-path picking and
   preservation of explicit clipping.
+- After the drag/path follow-up, all nine molecular-view tests passed, including
+  pointer direction across camera angles, exact path endpoints, separation of
+  repeated legs, clipping continuity and arrow tangent alignment.
 - After correcting Assistant theme synchronization, all 47 Assistant tests passed.
 - Optimized build passed with the distributed `refeff-runner,feff10-runner` features.
 - The final optimized package at source commit `cb4838d` passed the extracted Cu

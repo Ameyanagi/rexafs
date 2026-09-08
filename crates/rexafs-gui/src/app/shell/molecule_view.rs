@@ -127,6 +127,12 @@ impl Default for ViewCamera {
     }
 }
 impl ViewCamera {
+    fn orbit_drag(&mut self, dx: f32, dy: f32) {
+        // Grab the structure: its front surface follows the pointer on screen.
+        self.az -= f64::from(dx) * 0.008;
+        self.el = (self.el + f64::from(dy) * 0.008).clamp(-1.55, 1.55);
+    }
+
     pub(crate) fn zoom_by(&mut self, log_delta: f64) {
         if log_delta.is_finite() {
             self.zoom = (self.zoom * log_delta.exp()).clamp(0.25, 5.);
@@ -163,6 +169,85 @@ impl ViewCamera {
         f32::from(b.size.width.min(b.size.height)) * 0.42 * self.zoom as f32 / extent.max(1.) as f32
     }
 }
+/// Screen-only separation for coincident traversals; unique legs stay straight.
+fn route_lane_offset(route: &[[f64; 3]], index: usize) -> f32 {
+    let pair = &route[index..=index + 1];
+    let same = |a: [f64; 3], b: [f64; 3]| norm(sub(a, b)) < 1e-6;
+    let coincident = route
+        .windows(2)
+        .filter(|edge| {
+            same(edge[0], pair[0]) && same(edge[1], pair[1])
+                || same(edge[0], pair[1]) && same(edge[1], pair[0])
+        })
+        .count();
+    if coincident < 2 {
+        return 0.;
+    }
+    let repeated = route
+        .windows(2)
+        .take(index)
+        .filter(|edge| same(edge[0], pair[0]) && same(edge[1], pair[1]))
+        .count();
+    4. + repeated as f32 * 6.
+}
+
+/// The lane bows only between atoms. Its endpoints remain at their projected
+/// centers, and arrowheads follow the local tangent of the same curve.
+struct PathStroke {
+    start: [f32; 3],
+    end: [f32; 3],
+    direction: [f32; 2],
+    length: f32,
+    offset: f32,
+}
+impl PathStroke {
+    fn new(start: [f32; 3], end: [f32; 3], offset: f32) -> Option<Self> {
+        let dx = end[0] - start[0];
+        let dy = end[1] - start[1];
+        let length = dx.hypot(dy);
+        if length < 1. {
+            return None;
+        }
+        Some(Self {
+            start,
+            end,
+            direction: [dx / length, dy / length],
+            length,
+            offset,
+        })
+    }
+
+    fn point(&self, t: f32) -> [f32; 3] {
+        if t <= 0. {
+            return self.start;
+        }
+        if t >= 1. {
+            return self.end;
+        }
+        let mut p = std::array::from_fn(|a| self.start[a] + (self.end[a] - self.start[a]) * t);
+        let bow = self.offset * 4. * t * (1. - t);
+        p[0] -= self.direction[1] * bow;
+        p[1] += self.direction[0] * bow;
+        p
+    }
+
+    fn tangent(&self, t: f32) -> [f32; 2] {
+        let slope = self.offset * 4. * (1. - 2. * t);
+        let [ux, uy] = self.direction;
+        let x = ux * self.length - uy * slope;
+        let y = uy * self.length + ux * slope;
+        let length = x.hypot(y);
+        [x / length, y / length]
+    }
+
+    fn points(&self, from: f32, to: f32) -> Vec<[f32; 3]> {
+        let steps = if self.offset == 0. { 1 } else { 16 };
+        (0..=steps)
+            .map(|i| self.point(from + (to - from) * i as f32 / steps as f32))
+            .collect()
+    }
+}
+
 fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     std::array::from_fn(|i| a[i] - b[i])
 }
@@ -777,9 +862,7 @@ impl StudioApp {
                     let distance = f32::from(ev.position.x - start.x)
                         .hypot(f32::from(ev.position.y - start.y));
                     if moved || distance > 4. {
-                        this.structure.camera.az += dx as f64 * 0.008;
-                        this.structure.camera.el =
-                            (this.structure.camera.el + dy as f64 * 0.008).clamp(-1.55, 1.55);
+                        this.structure.camera.orbit_drag(dx, dy);
                         this.structure.drag = Some((start, ev.position, true));
                         cx.notify();
                     }
@@ -1162,18 +1245,21 @@ fn paint_scene(
                 .ok();
         }
     }
-    // Each traversal gets a parallel lane. Opposite legs remain distinguishable
-    // even when they connect the same two atoms. All coordinates remain exact.
+    // Anchor legs at atom centers; only coincident traversals bow apart.
     for (i, pair) in scene.route.windows(2).enumerate() {
+        let Some(stroke) = PathStroke::new(
+            project(pair[0]),
+            project(pair[1]),
+            route_lane_offset(&scene.route, i),
+        ) else {
+            continue;
+        };
+        let vector = sub(pair[1], pair[0]);
+        let length_squared = dot(vector, vector);
+        let parameter =
+            |pos| (dot(sub(pos, pair[0]), vector) / length_squared).clamp(0., 1.) as f32;
         for (part, inside) in depth.segments([pair[0], pair[1]]) {
-            let p = project(part[0]);
-            let q = project(part[1]);
-            let dx = q[0] - p[0];
-            let dy = q[1] - p[1];
-            let len = dx.hypot(dy);
-            if len < 1. {
-                continue;
-            }
+            let (from, to) = (parameter(part[0]), parameter(part[1]));
             let active = leg.is_none_or(|n| n == i);
             let midpoint = std::array::from_fn(|a| (part[0][a] + part[1][a]) * 0.5);
             let color = alpha(
@@ -1184,21 +1270,20 @@ fn paint_scene(
                 ),
                 (if active { 1. } else { 0.16 }) * depth.highlight_alpha(midpoint, inside),
             );
-            let (ux, uy) = (dx / len, dy / len);
-            let repeated = scene
-                .route
-                .windows(2)
-                .take(i)
-                .filter(|edge| {
-                    norm(sub(edge[0], pair[0])) < 1e-6 && norm(sub(edge[1], pair[1])) < 1e-6
-                })
-                .count();
-            let offset = 4. + repeated as f32 * 6.;
-            let a = [p[0] - uy * offset, p[1] + ux * offset, p[2]];
-            let z = [q[0] - uy * offset, q[1] + ux * offset, q[2]];
-            line(w, &[a, z], color, if active { 2.5 } else { 1. }, false);
-            let tip = [a[0] + dx * 0.67, a[1] + dy * 0.67, 0.];
-            let head = 7_f32.min(len * 0.2);
+            line(
+                w,
+                &stroke.points(from, to),
+                color,
+                if active { 2.5 } else { 1. },
+                false,
+            );
+            // A clipped leg still has one arrow, at the same full-leg position.
+            if !(from..to).contains(&0.67) {
+                continue;
+            }
+            let tip = stroke.point(0.67);
+            let [ux, uy] = stroke.tangent(0.67);
+            let head = 7_f32.min(stroke.length * 0.2);
             line(
                 w,
                 &[
@@ -1344,6 +1429,64 @@ fn paint_absorber_marker(
 mod tests {
     use super::*;
     #[test]
+    fn distinct_path_legs_connect_atom_centers_at_every_view_angle() {
+        let route = [[0., 0., 0.], [-2., 1., 1.], [1., 2., -1.], [0., 0., 0.]];
+        let bounds = Bounds::new(point(px(0.), px(0.)), size(px(600.), px(400.)));
+        for az in [-0.6, 0., 1.7] {
+            for el in [-0.8, 0., 0.45, 0.9] {
+                let camera = ViewCamera { az, el, zoom: 1. };
+                for (i, pair) in route.windows(2).enumerate() {
+                    let offset = route_lane_offset(&route, i);
+                    assert_eq!(offset, 0.);
+                    let start = camera.project(pair[0], bounds, 8.);
+                    let end = camera.project(pair[1], bounds, 8.);
+                    let stroke = PathStroke::new(start, end, offset).unwrap();
+                    assert_eq!(stroke.points(0., 1.), vec![start, end]);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeated_legs_separate_between_shared_atom_centers() {
+        let route = [[0., 0., 0.], [1., 0., 0.], [0., 0., 0.], [1., 0., 0.]];
+        let a = [20., 30., -2.];
+        let b = [180., 130., 3.];
+        let forward = PathStroke::new(a, b, route_lane_offset(&route, 0)).unwrap();
+        let reverse = PathStroke::new(b, a, route_lane_offset(&route, 1)).unwrap();
+        let repeat = PathStroke::new(a, b, route_lane_offset(&route, 2)).unwrap();
+        for (stroke, start, end) in [(&forward, a, b), (&reverse, b, a), (&repeat, a, b)] {
+            let points = stroke.points(0., 1.);
+            assert_eq!(points.first(), Some(&start));
+            assert_eq!(points.last(), Some(&end));
+        }
+        let [x, y, _] = forward.point(0.5);
+        let [rx, ry, _] = reverse.point(0.5);
+        assert!(((x - rx).hypot(y - ry) - 8.).abs() < 1e-4);
+        let [tx, ty, _] = repeat.point(0.5);
+        assert!(((x - tx).hypot(y - ty) - 6.).abs() < 1e-4);
+    }
+
+    #[test]
+    fn curved_leg_clipping_and_arrow_tangents_follow_the_same_curve() {
+        for offset in [-10., 0., 4., 10.] {
+            let stroke = PathStroke::new([20., 30., -2.], [180., 130., 3.], offset).unwrap();
+            let first = stroke.points(0., 0.4);
+            let second = stroke.points(0.4, 0.8);
+            assert_eq!(first.last(), second.first());
+            assert_eq!(second.last(), Some(&stroke.point(0.8)));
+            let before = stroke.point(0.669);
+            let after = stroke.point(0.671);
+            let delta = [after[0] - before[0], after[1] - before[1]];
+            let length = delta[0].hypot(delta[1]);
+            let tangent = stroke.tangent(0.67);
+            for axis in 0..2 {
+                assert!((delta[axis] / length - tangent[axis]).abs() < 1e-4);
+            }
+        }
+    }
+
+    #[test]
     fn rear_material_has_less_contrast_without_changing_opacity_in_both_themes() {
         let material = alpha(gpui::rgb(0xc58a42), 0.35);
         for theme in [Theme::dark(), Theme::light()] {
@@ -1448,6 +1591,33 @@ mod tests {
         camera.zoom_by(1.2_f64.ln());
         assert!((camera.zoom - 1.2).abs() < 1e-12);
         assert_eq!((camera.az, camera.el), (before.az, before.el));
+    }
+
+    #[test]
+    fn dragging_follows_the_pointer_in_both_screen_directions() {
+        let bounds = Bounds::new(point(px(0.), px(0.)), size(px(600.), px(400.)));
+        for az in [-0.6, 0., 1.7] {
+            for el in [-0.8, 0., 0.45, 0.9] {
+                let camera = ViewCamera { az, el, zoom: 1. };
+                let front = super::super::structure_depth::DepthAxis::View.normal(camera);
+                let before = camera.project(front, bounds, 8.);
+                for delta in [-10., 10.] {
+                    let mut horizontal = camera;
+                    horizontal.orbit_drag(delta, 0.);
+                    let after = horizontal.project(front, bounds, 8.);
+                    assert!((after[0] - before[0]) * delta > 0.);
+                    assert_eq!(horizontal.el, camera.el);
+                    assert_eq!(horizontal.zoom, camera.zoom);
+
+                    let mut vertical = camera;
+                    vertical.orbit_drag(0., delta);
+                    let after = vertical.project(front, bounds, 8.);
+                    assert!((after[1] - before[1]) * delta > 0.);
+                    assert_eq!(vertical.az, camera.az);
+                    assert_eq!(vertical.zoom, camera.zoom);
+                }
+            }
+        }
     }
 
     #[test]

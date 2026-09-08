@@ -5777,9 +5777,7 @@ impl StudioApp {
         for (_, field) in &self.param_fields {
             field.update(cx, |f, cx| f.set_theme(theme, cx));
         }
-        for (_, field) in &self.tools.fields {
-            field.update(cx, |f, cx| f.set_theme(theme, cx));
-        }
+        self.tools.set_theme(theme, cx);
         for (_, field) in &self.fit_range_fields {
             field.update(cx, |f, cx| f.set_theme(theme, cx));
         }
@@ -5801,6 +5799,8 @@ impl StudioApp {
             &self.structure.radius,
             &self.structure.max_reff_input,
             &self.structure.mp_key,
+            &self.structure.path_filter,
+            &self.structure.poly_cutoff_input,
         ] {
             field.update(cx, |f, cx| f.set_theme(theme, cx));
         }

@@ -130,3 +130,8 @@ contrast toward the canvas color while keeping nearer surfaces clear, with a
 back-to-front key. The cue follows the camera and combines with radial alpha;
 lighting, element colors, selected-path visibility and geometric clipping retain
 their separate roles. It works against both dark and light backgrounds.
+
+Horizontal and vertical orbit dragging follow the pointer. Scattering legs meet
+the projected atom centers; only repeated traversals bow apart between those
+centers, with arrowheads following each curve. Clipping preserves the full-leg
+position. Structure filters and numeric inputs follow theme changes immediately.

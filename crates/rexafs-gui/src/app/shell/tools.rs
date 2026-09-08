@@ -596,6 +596,15 @@ impl LcfSpaceChoice {
 }
 
 impl ToolState {
+    pub(crate) fn set_theme(&self, theme: crate::theme::Theme, cx: &mut gpui::App) {
+        for (_, field) in &self.fields {
+            field.update(cx, |field, cx| field.set_theme(theme, cx));
+        }
+        if let Some(input) = &self.standard_filter {
+            input.update(cx, |input, cx| input.set_theme(theme, cx));
+        }
+    }
+
     pub(crate) fn pin_alignment_standard(&mut self, id: crate::group_identity::GroupId) -> bool {
         self.alignment_standard = Some(id);
         self.open == Some(Tool::Align)
