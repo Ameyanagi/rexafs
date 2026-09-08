@@ -26,8 +26,9 @@ fn check_target(
 use crate::app::{
     NO_ENTRY, StudioApp,
     import_preview::{self, PreviewKey, PreviewState, SourceRevision},
+    import_repair::{self, RepairScope, RepairValidation},
 };
-use crate::import_mapping::{AxisConversion, ColumnRole, MappingDraft};
+use crate::import_mapping::{AxisConversion, ColumnRole, LayoutKey, MappingDraft};
 use crate::params::{DetectionMode, PipelineParams};
 use crate::theme::Theme;
 use crate::widgets::text_input::{InputEvent, NextField, PrevField, TextInput};
@@ -44,6 +45,11 @@ enum Action {
     Pick(usize),
     Roi(usize),
     ReferenceRatio,
+    ThisGroup,
+    Batch,
+    Validate,
+    Targets,
+    Details,
 }
 
 pub(crate) struct ImportEditor {
@@ -65,6 +71,13 @@ pub(crate) struct ImportEditor {
     generation: u64,
     open_role: Option<ColumnRole>,
     spacing: Entity<TextInput>,
+    bulk_scope: Option<RepairScope>,
+    validation: Option<RepairValidation>,
+    validation_generation: u64,
+    validating: bool,
+    show_targets: bool,
+    show_details: bool,
+    batch_available: bool,
 }
 
 impl StudioApp {
@@ -153,6 +166,13 @@ impl ImportEditor {
             source_revision: None,
             generation: 0,
             open_role: None,
+            bulk_scope: None,
+            validation: None,
+            validation_generation: 0,
+            validating: false,
+            show_targets: false,
+            show_details: false,
+            batch_available: false,
         }
     }
 
@@ -167,6 +187,7 @@ impl ImportEditor {
     }
 
     fn reload(&mut self, cx: &mut Context<Self>) {
+        self.invalidate_validation();
         self.generation += 1;
         self.draft = None;
         self.table = None;
@@ -189,6 +210,7 @@ impl ImportEditor {
     }
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
+        self.invalidate_validation();
         self.generation += 1;
         self.preview.invalidate();
         self.plot = None;
@@ -239,6 +261,16 @@ impl ImportEditor {
                     if initial {
                         this.table = Some(result.table.clone());
                         this.draft = Some(MappingDraft::new(&result.table, &config));
+                        this.batch_available = this
+                            .studio
+                            .read_with(cx, |studio, _| {
+                                this.target
+                                    .group_id
+                                    .as_ref()
+                                    .and_then(|id| studio.intake.origin(&this.target.path, id))
+                                    .is_some()
+                            })
+                            .unwrap_or(false);
                         let spacing = match config.axis {
                             AxisConversion::AngleDegrees { d_spacing }
                             | AxisConversion::AngleRadians { d_spacing } => d_spacing.to_string(),
@@ -286,6 +318,7 @@ impl ImportEditor {
     }
 
     fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.invalidate_validation();
         self.generation += 1;
         self.preview.invalidate();
         self.studio
@@ -314,6 +347,29 @@ impl ImportEditor {
             self.preview.invalidate();
             self.plot = None;
             cx.notify();
+            return;
+        }
+        if self.bulk_scope.is_some() {
+            let Some(validation) = &self.validation else {
+                return;
+            };
+            let mapping = draft.config().clone();
+            let revision = draft.revision;
+            let result = self.studio.update(cx, |studio, cx| {
+                studio.apply_repair(validation, &mapping, revision, cx)
+            });
+            match result {
+                Ok(Ok(_)) => self.close(window, cx),
+                result => {
+                    self.error = Some(match result {
+                        Ok(Err(e)) => e,
+                        Err(e) => e.to_string(),
+                        _ => unreachable!(),
+                    });
+                    self.invalidate_validation();
+                    cx.notify();
+                }
+            }
             return;
         }
         let mapping = draft.config().clone();
@@ -366,6 +422,42 @@ impl ImportEditor {
 
     fn activate(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
         match action {
+            Action::Details => {
+                self.show_details = !self.show_details;
+                cx.notify();
+                return;
+            }
+            Action::Targets => {
+                self.show_targets = !self.show_targets;
+                cx.notify();
+                return;
+            }
+            Action::ThisGroup => {
+                self.bulk_scope = None;
+                self.invalidate_validation();
+                cx.notify();
+                return;
+            }
+            Action::Batch => {
+                if self.bulk_scope.is_none()
+                    && let Some(draft) = &self.draft
+                {
+                    self.bulk_scope = self
+                        .studio
+                        .read_with(cx, |studio, _| {
+                            studio.capture_repair_batch(&self.target, draft.channel())
+                        })
+                        .ok()
+                        .flatten();
+                }
+                self.invalidate_validation();
+                self.validate_targets(cx);
+                return;
+            }
+            Action::Validate => {
+                self.validate_targets(cx);
+                return;
+            }
             Action::Close | Action::Cancel => {
                 self.close(window, cx);
                 return;
@@ -413,6 +505,60 @@ impl ImportEditor {
             _ => {}
         }
         self.refresh(cx);
+    }
+
+    fn invalidate_validation(&mut self) {
+        self.validation_generation += 1;
+        self.validation = None;
+        self.validating = false;
+    }
+
+    fn validate_targets(&mut self, cx: &mut Context<Self>) {
+        let Some(draft) = &self.draft else {
+            return;
+        };
+        let Some(table) = &self.table else {
+            return;
+        };
+        let Some(scope) = &self.bulk_scope else {
+            return;
+        };
+        if draft.validate().is_err()
+            || !self
+                .key(draft.revision)
+                .is_some_and(|key| self.preview.ready(&key))
+        {
+            return;
+        }
+        let Ok(scope) = self
+            .studio
+            .read_with(cx, |studio, _| studio.refresh_repair_scope(scope))
+        else {
+            return;
+        };
+        let mapping = draft.config().clone();
+        let revision = draft.revision;
+        let layout = LayoutKey::from_preview(table);
+        self.invalidate_validation();
+        self.error = None;
+        self.validating = true;
+        let generation = self.validation_generation;
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { import_repair::validate(scope, layout, mapping, revision) })
+                .await;
+            this.update(cx, |this, cx| {
+                if this.validation_generation == generation {
+                    this.validation = Some(result);
+                    this.validating = false;
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
     }
 
     fn focus_next(&self, backward: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -692,10 +838,21 @@ impl Render for ImportEditor {
                 }
             }
             if let Some(Ok(result)) = &self.preview.result {
-                panel = panel.child(div().text_color(t.text_muted).child(format!(
-                    "Full source · {}",
-                    result.table.diagnostics.summary()
-                )));
+                let summary = result.table.diagnostics.summary();
+                let warnings = result.table.diagnostics.warnings();
+                panel = panel.child(
+                    div()
+                        .flex()
+                        .gap_2()
+                        .items_center()
+                        .text_color(t.text_muted)
+                        .child(format!("Full source · {summary}"))
+                        .child(self.button(Action::Details, "Details", !warnings.is_empty(), cx)),
+                );
+                if self.show_details {
+                    panel =
+                        panel.children(warnings.into_iter().map(|warning| div().child(warning)));
+                }
             }
             let mut plot = div().w(px(420.)).h(px(280.)).min_w_0();
             if let Some(entity) = &self.plot {
@@ -711,13 +868,105 @@ impl Render for ImportEditor {
         if let Some(error) = &self.error {
             panel = panel.child(div().text_color(t.accent).child(error.clone()));
         }
-        let ready = self
+        let raw_ready = self
             .draft
             .as_ref()
             .and_then(|d| self.key(d.revision))
             .is_some_and(|key| self.preview.ready(&key))
-            && self.error.is_none()
             && !self.locked;
+        let ready = raw_ready
+            && self.error.is_none()
+            && self.bulk_scope.as_ref().is_none_or(|_| {
+                self.validation
+                    .as_ref()
+                    .is_some_and(|v| v.ready_count() > 0)
+                    && !self.validating
+            });
+        if self.batch_available {
+            panel = panel.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .items_center()
+                    .child("Target:")
+                    .child(self.button(Action::ThisGroup, "This group", true, cx))
+                    .child(self.button(
+                        Action::Batch,
+                        "This channel in its import batch…",
+                        self.draft.is_some() && !self.locked,
+                        cx,
+                    )),
+            );
+        }
+        if let Some(scope) = &self.bulk_scope {
+            let label = format!("{} · {} captured groups", scope.label, scope.targets.len());
+            panel = panel.child(label);
+            let summary = self
+                .validation
+                .as_ref()
+                .map(|v| v.summary())
+                .unwrap_or_else(|| {
+                    if self.validating {
+                        "Validating every captured target…"
+                    } else {
+                        "Validate this draft to see compatible, locked and changed counts."
+                    }
+                    .into()
+                });
+            panel = panel.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .child(summary)
+                    .child(self.button(
+                        Action::Validate,
+                        "Revalidate",
+                        raw_ready && !self.validating,
+                        cx,
+                    ))
+                    .child(self.button(Action::Targets, "View target files…", true, cx)),
+            );
+            if self.show_targets {
+                let scope = self.bulk_scope.as_ref().unwrap();
+                let mut list = div()
+                    .id("mapping-target-files")
+                    .max_h(px(150.))
+                    .overflow_y_scroll();
+                for (index, target) in scope.targets.iter().enumerate() {
+                    let status = self
+                        .validation
+                        .as_ref()
+                        .and_then(|v| v.results.get(index))
+                        .map(|v| v.description())
+                        .unwrap_or("Not validated for this draft".into());
+                    list = list.child(div().py_1().child(format!(
+                        "{} · {} · {status}",
+                        target.target.label,
+                        target.target.path.display()
+                    )));
+                }
+                panel = panel.child(list);
+            }
+        }
+        let apply_label = self
+            .validation
+            .as_ref()
+            .map(|v| format!("Apply to {} files", v.file_count()))
+            .unwrap_or_else(|| {
+                if self.bulk_scope.is_some() {
+                    "Apply to validated files".into()
+                } else {
+                    "Apply to 1 file".into()
+                }
+            });
+        let scope_label = if self.bulk_scope.is_some() {
+            "Mapping only · captured groups"
+        } else {
+            "Target: this group · 1 file"
+        };
         panel = panel.child(
             div()
                 .flex()
@@ -731,9 +980,9 @@ impl Render for ImportEditor {
                     cx,
                 ))
                 .child(self.button(Action::Reload, "Reload source", true, cx))
-                .child(div().flex_1().child("Target: this group · 1 file"))
+                .child(div().flex_1().child(scope_label))
                 .child(self.button(Action::Cancel, "Cancel", true, cx))
-                .child(self.button(Action::Apply, "Apply to 1 file", ready, cx)),
+                .child(self.button(Action::Apply, apply_label, ready, cx)),
         );
         div()
             .id("import-mapping-modal")

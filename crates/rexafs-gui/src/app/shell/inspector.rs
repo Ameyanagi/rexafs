@@ -95,6 +95,7 @@ impl StudioApp {
                         crate::app::group_rows::input_missing(d, |id| {
                             self.group_registry.is_excluded(id)
                         })
+                        .or_else(|| self.inputs_changed(d))
                     })
                     .map(|message| div().p_3().text_size(px(12.)).child(message)),
             )

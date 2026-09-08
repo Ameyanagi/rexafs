@@ -58,6 +58,7 @@ use crate::widgets::text_input::{InputEvent, TextInput};
 
 mod group_rows;
 mod import_preview;
+mod import_repair;
 mod import_state;
 mod importing;
 mod merge;

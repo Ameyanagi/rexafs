@@ -72,6 +72,65 @@ pub enum ColumnRole {
     Mu,
 }
 
+/// Equality describes interpretation, never a filename or a detection alias.
+/// Kept serializable for the versioned recipe library.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LayoutKey {
+    pub interpretation_version: u32,
+    pub parser: String,
+    pub dialect: Vec<String>,
+    pub column_count: usize,
+    pub names: Option<Vec<String>>,
+    pub units: Vec<Option<String>>,
+    pub conversion_and_signal_metadata: std::collections::BTreeMap<String, String>,
+}
+
+impl LayoutKey {
+    pub fn from_preview(preview: &ImportPreview) -> Self {
+        let header = preview.xdi.as_ref();
+        Self {
+            interpretation_version: 1,
+            parser: header.map_or("text-table".into(), |h| format!("XDI/{}", h.version)),
+            dialect: header.map_or_else(Vec::new, |h| h.applications.clone()),
+            column_count: preview.column_count,
+            names: preview
+                .names
+                .as_ref()
+                .map(|names| names.iter().map(|name| name.trim().to_string()).collect()),
+            units: (0..preview.column_count)
+                .map(|i| {
+                    header
+                        .and_then(|h| h.columns.get(i))
+                        .and_then(|c| c.units.as_deref())
+                        .map(canonical_unit)
+                })
+                .collect(),
+            conversion_and_signal_metadata: header.map_or_else(Default::default, |h| {
+                h.metadata
+                    .iter()
+                    .filter(|(key, _)| {
+                        ["mono.", "detector.", "signal.", "correction."]
+                            .iter()
+                            .any(|prefix| key.starts_with(prefix))
+                    })
+                    .map(|(key, value)| (key.clone(), value.trim().to_string()))
+                    .collect()
+            }),
+        }
+    }
+}
+
+fn canonical_unit(unit: &str) -> String {
+    match unit.trim().to_ascii_lowercase().as_str() {
+        "ev" => "eV".into(),
+        "kev" => "keV".into(),
+        "deg" | "degree" | "degrees" => "degrees".into(),
+        "rad" | "radian" | "radians" => "radians".into(),
+        "count" | "counts" => "counts".into(),
+        _ => unit.trim().to_string(),
+    }
+}
+
 /// The channel is frozen at opening. Add channel is a separate operation.
 #[derive(Clone)]
 pub struct MappingDraft {
@@ -282,6 +341,49 @@ impl MappingDraft {
 mod tests {
     use super::*;
     use crate::params::{PipelineParams, preview_import_raw};
+
+    #[test]
+    fn layout_equality_preserves_units_order_duplicates_and_conversion_metadata() {
+        let (mut table, _) = preview("# energy mu\n8900 1\n9000 2\n", &ImportConfig::default());
+        table.xdi = Some(XdiHeader {
+            version: "1.0".into(),
+            applications: vec!["QAS/1.0".into()],
+            metadata: Default::default(),
+            comments: vec![],
+            warnings: vec![],
+            columns: vec![
+                rexafs::xafs::io::xdi::XdiColumn {
+                    label: "energy".into(),
+                    units: Some("eV".into()),
+                },
+                rexafs::xafs::io::xdi::XdiColumn {
+                    label: "mu".into(),
+                    units: None,
+                },
+            ],
+        });
+        let baseline = LayoutKey::from_preview(&table);
+        table.xdi.as_mut().unwrap().columns[0].units = Some(" EV ".into());
+        assert_eq!(baseline, LayoutKey::from_preview(&table));
+        for units in [None, Some("keV".into())] {
+            table.xdi.as_mut().unwrap().columns[0].units = units;
+            assert_ne!(baseline, LayoutKey::from_preview(&table));
+        }
+        table.xdi.as_mut().unwrap().columns[0].units = Some("eV".into());
+        table.names.as_mut().unwrap().swap(0, 1);
+        assert_ne!(baseline, LayoutKey::from_preview(&table));
+        table.names.as_mut().unwrap().swap(0, 1);
+        table.names = Some(vec!["mu".into(), "mu".into()]);
+        assert_ne!(baseline, LayoutKey::from_preview(&table));
+        table.names = baseline.names.clone();
+        table
+            .xdi
+            .as_mut()
+            .unwrap()
+            .metadata
+            .insert("mono.d_spacing".into(), "3.1356".into());
+        assert_ne!(baseline, LayoutKey::from_preview(&table));
+    }
 
     fn preview(
         text: &str,

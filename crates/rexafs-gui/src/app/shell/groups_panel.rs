@@ -834,7 +834,8 @@ impl StudioApp {
             .unwrap_or_default();
         let missing = derived
             .and_then(|d| group_rows::input_missing(d, |id| self.group_registry.is_excluded(id)));
-        let has_problems = !problems.is_empty() || missing.is_some();
+        let changed = derived.and_then(|d| self.inputs_changed(d));
+        let has_problems = !problems.is_empty() || missing.is_some() || changed.is_some();
         let error = problems
             .iter()
             .any(|p| p.severity == crate::app::ProblemSeverity::Error);
@@ -845,6 +846,9 @@ impl StudioApp {
         }
         if let Some(missing) = &missing {
             detail.push_str(&format!("\n{missing}"));
+        }
+        if let Some(changed) = &changed {
+            detail.push_str(&format!("\n{changed}"));
         }
         if locked {
             detail.push_str("\nProcessing locked");
