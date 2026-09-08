@@ -204,6 +204,11 @@ These are the only implementation changes requested after the 0.2.0 release.
 The feature and broader UI work above remains a handoff for later delegation.
 The startup and Help changes passed 428 GUI tests and native packaged-app
 checks; they are not part of the already-published 0.2.0 binaries.
+Review: [PR #45](https://github.com/Ameyanagi/rexafs/pull/45), branch
+`fix/startup-help-release`, worktree `/private/tmp/rexafs-startup-help`.
+Its CI/review and a future app release remain separate from the completed
+0.2.0 download-page cleanup. Do not reimplement this polish when delegating F1–F10
+or U1–U7; incorporate the reviewed PR first.
 
 ## Workspace handoff
 
