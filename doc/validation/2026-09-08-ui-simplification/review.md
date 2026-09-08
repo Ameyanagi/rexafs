@@ -58,7 +58,7 @@ The maintainer's original checkout and active app sessions were preserved.
   preservation of explicit clipping.
 - After correcting Assistant theme synchronization, all 47 Assistant tests passed.
 - Optimized build passed with the distributed `refeff-runner,feff10-runner` features.
-- The final optimized package at source commit `86b035c` passed the extracted Cu
+- The final optimized package at source commit `cb4838d` passed the extracted Cu
   example/pipeline and both FEFF backend self-checks. Its build metadata records a
   clean source tree and the same commit as the embedded build identity.
 - `cargo fmt --all` and `git diff --check` passed.
@@ -104,6 +104,10 @@ include the empty Groups panel and Source/tools inspector. The shell had still
 hidden those panels until an import existed; that gate was removed. The updated
 optimized build was launched for testing and its exact executable confirmed
 running. Its archive also passed the extracted example and FEFF checks above.
+
+The subsequent camera-depth cue build was launched and its executable confirmed
+running as well. Native inspection still failed at the same connection, so the
+new depth cue has automated contrast/geometry coverage but awaits visual QA.
 
 Also pending: narrow/light-theme workflows, populated Series navigation, completed
 Fit/Assistant busy and approval states, export-preview comparison, and complete
