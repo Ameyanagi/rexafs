@@ -120,7 +120,7 @@ pub struct ResolvedImport {
 }
 
 /// Count every occurrence while retaining bounded, 1-based source locations.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DiagnosticCategory {
     pub count: usize,
     pub examples: Vec<usize>,
@@ -138,7 +138,7 @@ impl DiagnosticCategory {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ParserDiagnostics {
     pub malformed_rows: DiagnosticCategory,
     pub short_rows: DiagnosticCategory,
@@ -216,6 +216,8 @@ impl ParserDiagnostics {
 /// Raw arrays and their diagnostics travel together, including through caches.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RawData {
+    pub channel: DetectionMode,
+    pub declared_edge: Option<crate::source_evidence::DeclaredEdge>,
     pub energy: Vec<f64>,
     pub mu: Vec<f64>,
     pub diagnostics: ParserDiagnostics,
@@ -802,6 +804,8 @@ pub fn preview_import_raw(
     let mut data = parse_file_data(&text, path)?;
     let detection = import_detection(&data, path, import);
     let raw = construct_mu(&mut data, path, import).map(|(energy, mu)| RawData {
+        channel: resolve_import(&data, import).mode,
+        declared_edge: crate::source_evidence::DeclaredEdge::from_header(data.xdi.as_ref()),
         energy,
         mu,
         diagnostics: data.diagnostics.clone(),
@@ -842,6 +846,8 @@ pub fn load_mu_with_diagnostics(
     let mut data = parse_file_data(&text, path)?;
     let (energy, mu) = construct_mu(&mut data, path, import)?;
     Ok(RawData {
+        channel: resolve_import(&data, import).mode,
+        declared_edge: crate::source_evidence::DeclaredEdge::from_header(data.xdi.as_ref()),
         energy,
         mu,
         diagnostics: data.diagnostics,
@@ -1280,15 +1286,6 @@ pub fn load_raw_with_diagnostics(
 }
 
 /// Shared uncached access for file channels and materialized results.
-pub(crate) fn load_group_raw(
-    path: &std::path::Path,
-    params: &PipelineParams,
-    derived: Option<&DerivedSpectrum>,
-) -> Result<(Vec<f64>, Vec<f64>), String> {
-    let raw = load_group_raw_with_diagnostics(path, params, derived)?;
-    Ok((raw.energy, raw.mu))
-}
-
 pub(crate) fn load_group_raw_with_diagnostics(
     path: &std::path::Path,
     params: &PipelineParams,
@@ -1298,6 +1295,8 @@ pub(crate) fn load_group_raw_with_diagnostics(
         Some(group) => match &group.source {
             Some(source) => load_raw_with_diagnostics(source, params),
             None => Ok(RawData {
+                channel: params.import.mode,
+                declared_edge: group.declared_edge.clone(),
                 energy: group.energy.clone(),
                 mu: group.mu.clone(),
                 diagnostics: ParserDiagnostics {
@@ -1315,6 +1314,8 @@ pub(crate) fn load_group_raw_with_diagnostics(
 /// be retained until the group is viewed or analyzed.
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct DerivedSpectrum {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declared_edge: Option<crate::source_evidence::DeclaredEdge>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_id: Option<crate::group_identity::GroupId>,
     pub label: String,
@@ -1389,6 +1390,7 @@ impl DerivedSpectrum {
         let mut hasher = std::hash::DefaultHasher::new();
         params.fingerprint().hash(&mut hasher);
         self.quantity.hash(&mut hasher);
+        self.declared_edge.hash(&mut hasher);
         self.quantity_unconfirmed.hash(&mut hasher);
         hasher.finish()
     }

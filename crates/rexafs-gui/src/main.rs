@@ -20,6 +20,7 @@ mod plotting;
 mod project;
 mod publication;
 mod settings;
+mod source_evidence;
 mod spectrum_interest;
 mod structure;
 mod theme;

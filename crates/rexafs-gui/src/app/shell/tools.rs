@@ -895,9 +895,12 @@ impl StudioApp {
                     Ok((sp, raw)) => {
                         if let Some(raw) = raw {
                             app.record_source_warnings(
+                                standard.ix,
                                 intake_origin.as_ref(),
                                 &standard.path,
                                 &raw.diagnostics,
+                                raw.declared_edge.clone(),
+                                raw.channel,
                             );
                             app.raw_cache.put(raw_key, raw);
                         }
@@ -1090,6 +1093,20 @@ impl StudioApp {
                     operation,
                 ) {
                     Ok(mut derived) => {
+                        derived.declared_edge = self
+                            .tools
+                            .target
+                            .as_ref()
+                            .and_then(|target| self.group_declared_edge(target.ix));
+                        if let Some(record) = self
+                            .tools
+                            .target
+                            .as_ref()
+                            .and_then(|target| self.saved_parser_record(target.ix))
+                            && let Some(params) = &mut derived.params
+                        {
+                            params.import.mode = record.channel;
+                        }
                         derived.id = self.next_group_id();
                         derived.group_id = Some(crate::group_identity::GroupId::new_result());
                         derived

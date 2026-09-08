@@ -75,6 +75,56 @@ fn embedded_restore_uses_the_injected_cache_and_links_need_no_cache() {
     }
     assert_ne!(restored_paths[0], restored_paths[1]);
 }
+
+#[test]
+fn parser_totals_and_line_examples_survive_linked_and_embedded_reopen() {
+    let temp = Temp::new();
+    let mut project = specimen(&temp.join("source"));
+    project.assign_group_ids();
+    let path = project.spectrum_file.clone().unwrap();
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str(&"\nmalformed row".repeat(9));
+    std::fs::write(&path, text).unwrap();
+    let preview = crate::params::preview_import(&path, &project.params.import).unwrap();
+    assert_eq!(preview.diagnostics.malformed_rows.count, 9);
+    assert_eq!(preview.diagnostics.malformed_rows.examples.len(), 5);
+    let group = project
+        .source_groups
+        .iter()
+        .find(|g| g.path == path)
+        .unwrap()
+        .id
+        .clone();
+    project.parser_evidence.insert(
+        group.clone(),
+        crate::source_evidence::ParserRecord {
+            path: path.clone(),
+            channel: preview.resolved.mode,
+            mapping_revision: crate::import_recipes::mapping_revision(&project.params.import),
+            diagnostics: preview.diagnostics.clone(),
+            declared_edge: None,
+        },
+    );
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let saved = temp.join(if mode == DataStorage::Paths {
+            "linked.rxs"
+        } else {
+            "embedded.rxs"
+        });
+        save_with_storage(&saved, &project, mode).unwrap();
+        let restored = load(&saved).unwrap();
+        let record = &restored.parser_evidence[&group];
+        assert_eq!(record.diagnostics, preview.diagnostics);
+        assert_eq!(record.path, *restored.spectrum_file.as_ref().unwrap());
+        assert!(record.matches(&restored.params.import));
+        let mut edited = restored.params.import.clone();
+        edited.axis = crate::import_mapping::AxisConversion::EnergyKev;
+        assert!(
+            !record.matches(&edited),
+            "old diagnostics cannot describe another mapping"
+        );
+    }
+}
 fn state(project: &ProjectFile) -> Value {
     let mut project = project.clone();
     let origins = project.source_origins.clone();

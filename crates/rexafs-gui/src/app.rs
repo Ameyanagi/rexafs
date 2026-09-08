@@ -1240,6 +1240,7 @@ pub struct StudioApp {
     merge_cancel: Option<Arc<AtomicBool>>,
     status: SharedString,
     job_errors: Vec<JobError>,
+    parser_evidence: BTreeMap<crate::group_identity::GroupId, crate::source_evidence::ParserRecord>,
     imports: crate::import_recipes::ProjectImports,
     intake: import_state::IntakeState,
     intake_cancel: Option<Arc<AtomicBool>>,
@@ -2990,6 +2991,7 @@ impl StudioApp {
             merge_cancel: None,
             status: "loading...".into(),
             job_errors: Vec::new(),
+            parser_evidence: Default::default(),
             imports: Default::default(),
             intake: Default::default(),
             intake_cancel: None,
@@ -3117,10 +3119,27 @@ impl StudioApp {
 
     fn record_source_warnings(
         &mut self,
+        ix: usize,
         origin: Option<&import_state::IntakeOrigin>,
         path: &std::path::Path,
         diagnostics: &crate::params::ParserDiagnostics,
+        declared_edge: Option<crate::source_evidence::DeclaredEdge>,
+        channel: DetectionMode,
     ) {
+        if let Some(group) = self.group_id(ix) {
+            self.parser_evidence.insert(
+                group,
+                crate::source_evidence::ParserRecord {
+                    path: path.to_path_buf(),
+                    channel,
+                    mapping_revision: crate::import_recipes::mapping_revision(
+                        &self.effective_params(ix).import,
+                    ),
+                    diagnostics: diagnostics.clone(),
+                    declared_edge,
+                },
+            );
+        }
         for message in diagnostics.warnings() {
             if let Some(origin) = origin.filter(|o| self.intake.outcome(o).is_some()) {
                 if let Some(outcome) = self.intake.outcome(origin)
@@ -3133,6 +3152,29 @@ impl StudioApp {
                 push_problem(&mut self.job_errors, JobError::warning(path, message));
             }
         }
+    }
+
+    fn saved_parser_record(&self, ix: usize) -> Option<&crate::source_evidence::ParserRecord> {
+        self.parser_evidence
+            .get(&self.peek_group_id(ix)?)
+            .filter(|record| record.matches(&self.effective_params(ix).import))
+    }
+
+    fn group_declared_edge(&self, ix: usize) -> Option<crate::source_evidence::DeclaredEdge> {
+        if let Some(group) = ix
+            .checked_sub(DERIVED_BASE)
+            .and_then(|i| self.derived.get(i))
+            && group.source.is_none()
+        {
+            return group.declared_edge.clone();
+        }
+        self.raw_cache
+            .peek(&(ix, self.effective_params(ix).raw_fingerprint()))
+            .and_then(|raw| raw.declared_edge.clone())
+            .or_else(|| {
+                self.saved_parser_record(ix)
+                    .and_then(|record| record.declared_edge.clone())
+            })
     }
 
     fn record_source_error(
@@ -3755,6 +3797,7 @@ impl StudioApp {
         self.spectrum_group = None;
         self.spectrum = None;
         self.group_diagnostics = Default::default();
+        self.parser_evidence.clear();
         self.spectrum_label = "no spectrum".into();
         self.import_preview = None;
         self.import_preview_error = "".into();
@@ -4574,9 +4617,12 @@ impl StudioApp {
                         }
                         if let Some(raw) = raw {
                             app.record_source_warnings(
+                                ix,
                                 intake_origin.as_ref(),
                                 &processed_path,
                                 &raw.diagnostics,
+                                raw.declared_edge.clone(),
+                                raw.channel,
                             );
                             if ix != NO_ENTRY {
                                 app.raw_cache.put(raw_key, raw);
@@ -5513,9 +5559,12 @@ impl StudioApp {
                             if let Some(raw) = raw {
                                 if let Some((path, origin)) = origins.get(&ix) {
                                     app.record_source_warnings(
+                                        ix,
                                         origin.as_ref(),
                                         path,
                                         &raw.diagnostics,
+                                        raw.declared_edge.clone(),
+                                        raw.channel,
                                     );
                                 }
                                 app.raw_cache
@@ -6403,7 +6452,17 @@ impl StudioApp {
                 ) {
                     if let Some(preview) = &app.import_preview {
                         let diagnostics = preview.diagnostics.clone();
-                        app.record_source_warnings(intake_origin.as_ref(), &path, &diagnostics);
+                        let channel = preview.resolved.mode;
+                        let edge =
+                            crate::source_evidence::DeclaredEdge::from_header(preview.xdi.as_ref());
+                        app.record_source_warnings(
+                            app.selected.unwrap_or(NO_ENTRY),
+                            intake_origin.as_ref(),
+                            &path,
+                            &diagnostics,
+                            edge,
+                            channel,
+                        );
                         if let Some(id) = app.peek_group_id(app.selected.unwrap_or(NO_ENTRY)) {
                             let warnings = diagnostics
                                 .warnings()
@@ -8114,6 +8173,7 @@ impl StudioApp {
         let mut group_state = self.group_state.clone();
         self.capture_group_state(&mut group_state);
         ProjectFile {
+            parser_evidence: self.parser_evidence.clone(),
             imports: self.imports.clone(),
             import_history: self.intake.history.clone(),
             source_groups: self.group_registry.sources(),
@@ -8333,6 +8393,7 @@ impl StudioApp {
         self.reset_catalog_state(cx);
         self.intake = import_state::IntakeState::from_history(project.import_history.clone());
         self.imports = project.imports.clone();
+        self.parser_evidence = project.parser_evidence.clone();
         self.next_derived_id = next_derived_id;
         self.group_state = Default::default();
         self.group_registry = registry;

@@ -43,7 +43,7 @@ and marks remained intact throughout.
 
 ## Recipe and persistence qualification
 
-The final GUI suite passed 418 tests (zero failures, four ignored), including
+The Phase 2.6 GUI suite passed 418 tests (zero failures, four ignored), including
 linked and embedded project round trips on a simulated machine with a
 conflicting reusable recipe. Saved effective mappings, recipe versions, group
 identities, application members and deferred sources remained authoritative.
@@ -69,9 +69,9 @@ not replace the saved import receipt.
 Machine-wide remembering was exercised through isolated settings serialization
 tests; native qualification used project scope.
 
-Recipe dispatch, the compact inspector and the remaining phase acceptance
-workflows are still pending. Release signing/publication and native Intel,
-Windows and Linux interactive qualification are separate release work.
+Recipe dispatch and the compact inspector are covered below. Release 0.1.4
+qualification is recorded separately in
+[its release report](../2026-09-08-release-0.1.4/review.md).
 
 ## Phase 2.7 — recipe dispatch and compact inspector
 
@@ -106,3 +106,47 @@ remain pending. No machine recipe was saved during native qualification.
 Logs: `/tmp/rexafs-phase27-final-tests.log`,
 `/tmp/rexafs-phase27-repair-test.log`, `/tmp/rexafs-phase27-dispatch-test2.log`,
 `/tmp/rexafs-phase27-build1.log`, and `/tmp/rexafs-phase27-package1.log`.
+
+
+## Follow-up gaps D1–D4
+
+Merge now disables its toolbar and row-menu actions when available evidence
+shows an incompatible quantity, channel, energy range, or edge, and presents
+the reason. The worker still loads and validates every source before producing
+a result. Declared XDI element/edge headers are normalized and retained; matching
+declared identities take precedence over the 50 eV fallback used when either
+identity is absent. Materialized tool and merge outputs retain edge provenance.
+
+Full parser records are persisted by durable group identity and mapping revision.
+They retain every occurrence count and at most five source-line examples per
+category. Source Details and row warnings identify restored records as a previous
+parser check until the current source is checked. Linked and embedded round-trip
+tests verify identical diagnostics, translated paths, and rejection of evidence
+for a different mapping.
+
+The final packaged Apple Silicon candidate was operated through native computer
+use. Two synthetic XDI sources contain identical 618-point numeric spectra but
+declare Ni K and Cu K. Marking both disabled Merge and displayed both declared
+identities, despite their matching numerical edge positions. A generic text
+source with nine malformed tail rows displayed all nine occurrences and source
+examples 620–624. Native Save and Open restored all four groups, the two marks,
+parser diagnostics, and the declared-edge refusal. The disposable native writer
+output is `/tmp/rexafs-edge-qualification-valid/evidence-qualification.rxs`.
+A deliberately malformed XDI fixture remained pending; it was not accepted as a
+valid source to obtain this result.
+
+The two production `cfg!(test)` storage redirects are removed. Project extraction
+and FEFF workspace creation accept injected roots; normal entry points retain the
+standard user directories. Tests prove that linked projects do not initialize a
+cache, the same embedded archive restores into distinct injected roots, and
+concurrent FEFF snapshots remain isolated.
+
+Final validation: **426 GUI tests passed, zero failed, four ignored**. Formatting,
+diff checks, the release build, packaged numerical/ReFEFF/FEFF10 self-checks, and
+all 18 retained compatibility fixtures passed. GUI clippy completed successfully
+with warnings; strict core clippy had already passed for the unchanged core.
+Native Windows/Linux and native Intel hardware qualification remain outstanding.
+
+Logs: `/tmp/rexafs-gaps-final-tests.log`, `/tmp/rexafs-gaps-build.log`,
+`/tmp/rexafs-gaps-package.log`, `/tmp/rexafs-gaps-clippy.log`,
+`/tmp/rexafs-roots-project-tests.log`, and `/tmp/rexafs-roots-feff-tests.log`.

@@ -29,6 +29,10 @@ pub struct ParamOverride {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProjectFile {
+    pub parser_evidence: std::collections::BTreeMap<
+        crate::group_identity::GroupId,
+        crate::source_evidence::ParserRecord,
+    >,
     pub imports: crate::import_recipes::ProjectImports,
     pub import_history: Vec<crate::app::import_state::IntakeBatch>,
     pub source_groups: Vec<crate::group_identity::SourceGroup>,

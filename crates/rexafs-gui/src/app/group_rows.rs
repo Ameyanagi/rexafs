@@ -778,6 +778,7 @@ mod tests {
         let mut params = PipelineParams::default();
         params.import.mode = mode;
         DerivedSpectrum {
+            declared_edge: None,
             group_id: None,
             id: 0,
             label: "output".into(),

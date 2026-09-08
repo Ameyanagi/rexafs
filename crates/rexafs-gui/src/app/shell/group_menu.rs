@@ -45,6 +45,7 @@ pub(crate) struct MenuContext {
     absorption: bool,
     marked_absorption: usize,
     incompatible_marks: bool,
+    merge_reason: Option<String>,
     source_exists: bool,
     compare: bool,
     channels: Vec<(DetectionMode, Option<&'static str>)>,
@@ -52,7 +53,7 @@ pub(crate) struct MenuContext {
 pub(crate) struct MenuItem {
     item: Item,
     enabled: bool,
-    reason: Option<&'static str>,
+    reason: Option<String>,
     label: String,
 }
 pub(crate) fn menu_items(c: &MenuContext) -> Vec<MenuItem> {
@@ -100,6 +101,13 @@ pub(crate) fn menu_items(c: &MenuContext) -> Vec<MenuItem> {
             Align if c.marked_absorption == 0 => Some("Mark an absorption spectrum"),
             Compare if !c.compare => Some("Requires two compatible spectra"),
             _ => None,
+        };
+        let reason = if item == Merge {
+            c.merge_reason
+                .clone()
+                .or_else(|| reason.map(str::to_string))
+        } else {
+            reason.map(str::to_string)
         };
         MenuItem {
             item,
@@ -312,6 +320,7 @@ impl StudioApp {
             absorption: self.group_absorption(ix),
             marked_absorption,
             incompatible_marks: marked_absorption != self.selection.len(),
+            merge_reason: self.merge_disabled_reason(),
             source_exists: target.path.is_file(),
             compare: union.len() >= 2 && union.iter().all(|&i| self.group_absorption(i)),
             channels: [
@@ -725,7 +734,7 @@ impl StudioApp {
                 .map(|&(mode, reason)| MenuItem {
                     item: Item::Channel(mode),
                     enabled: reason.is_none(),
-                    reason,
+                    reason: reason.map(str::to_string),
                     label: mode.label().into(),
                 })
                 .collect();
@@ -986,6 +995,21 @@ mod tests {
             Ok("Cu foil 日本語".into())
         );
         assert_eq!(validate_label("Cu foil"), validate_label("Cu foil"));
+    }
+    #[test]
+    fn merge_menu_explains_the_known_edge_conflict() {
+        let reason = "Different declared edges: Cu K and Ni K.";
+        let context = MenuContext {
+            marks: 2,
+            merge_reason: Some(reason.into()),
+            ..Default::default()
+        };
+        let item = menu_items(&context)
+            .into_iter()
+            .find(|entry| entry.item == Item::Merge)
+            .unwrap();
+        assert!(!item.enabled);
+        assert_eq!(item.reason.as_deref(), Some(reason));
     }
     #[test]
     fn menu_rules_distinguish_target_capabilities_from_project_marks() {

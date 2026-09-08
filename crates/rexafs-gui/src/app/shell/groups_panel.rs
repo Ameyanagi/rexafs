@@ -356,6 +356,7 @@ impl StudioApp {
     }
 
     pub(crate) fn groups_panel(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let merge_reason = self.merge_disabled_reason();
         let t = self.theme;
         let (marked, hidden, collapsed) = self.interaction_rows().mark_counts(&self.selection);
         let footer = format!(
@@ -590,11 +591,21 @@ impl StudioApp {
                     .border_t_1()
                     .border_color(t.border)
                     .child(
-                        button(&t, "merge-marked", format!("Merge {marked}…"), false).on_click(
-                            cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                this.merge_selection(cx);
+                        button(&t, "merge-marked", format!("Merge {marked}…"), false)
+                            .when_some(merge_reason.clone(), |d, reason| {
+                                let tip = RowTooltip {
+                                    text: reason,
+                                    theme: t,
+                                };
+                                d.opacity(0.45)
+                                    .cursor_default()
+                                    .tooltip(move |_, cx| cx.new(|_| tip.clone()).into())
+                            })
+                            .when(merge_reason.is_none(), |d| {
+                                d.on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
+                                    this.merge_selection(cx);
+                                }))
                             }),
-                        ),
                     )
                     .child(
                         button(&t, "align-marked", "Align…", false).on_click(cx.listener(
@@ -612,6 +623,15 @@ impl StudioApp {
                         )),
                     ),
             )
+            .children(merge_reason.filter(|_| marked >= 2).map(|reason| {
+                div()
+                    .flex_none()
+                    .px_2()
+                    .pb_1()
+                    .text_size(px(10.))
+                    .text_color(t.warn)
+                    .child(reason)
+            }))
             .child(if self.catalog.is_empty() {
                 div().into_any_element()
             } else {
@@ -802,7 +822,17 @@ impl StudioApp {
         let missing = derived
             .and_then(|d| group_rows::input_missing(d, |id| self.group_registry.is_excluded(id)));
         let changed = derived.and_then(|d| self.inputs_changed(d));
-        let has_problems = !problems.is_empty() || missing.is_some() || changed.is_some();
+        let saved_warnings = if problems.is_empty() {
+            self.saved_parser_record(ix)
+                .map(|record| record.diagnostics.warnings())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let has_problems = !problems.is_empty()
+            || !saved_warnings.is_empty()
+            || missing.is_some()
+            || changed.is_some();
         let error = problems
             .iter()
             .any(|p| p.severity == crate::app::ProblemSeverity::Error);
@@ -810,6 +840,9 @@ impl StudioApp {
         let mut detail = format!("{full_label}\n{path_label}\n{}", mode.label());
         for problem in problems {
             detail.push_str(&format!("\n{}", problem.message));
+        }
+        for warning in &saved_warnings {
+            detail.push_str(&format!("\nPrevious parser check: {warning}"));
         }
         if let Some(missing) = &missing {
             detail.push_str(&format!("\n{missing}"));

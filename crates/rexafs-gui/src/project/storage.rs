@@ -190,6 +190,9 @@ pub(super) fn map_paths(
         }
         Ok(())
     }
+    for record in project.parser_evidence.values_mut() {
+        record.path = f(&record.path)?;
+    }
     for recipe in &mut project.imports.recipes.versions {
         if let crate::import_recipes::RecipeScope::FolderTree(root) = &mut recipe.scope {
             *root = f(root)?;

@@ -198,6 +198,16 @@ impl StudioApp {
         );
         if self.adv_open[3] {
             card = card.child(target.path.display().to_string());
+            if preview.is_none()
+                && let Some(record) = self.saved_parser_record(target.ix)
+            {
+                card = card
+                    .child(format!(
+                        "Previous full parser check · {} points; current source not yet checked",
+                        record.diagnostics.valid_points
+                    ))
+                    .children(record.diagnostics.warnings());
+            }
             if let Some(preview) = preview {
                 if let Some(header) = &preview.xdi {
                     for key in [
