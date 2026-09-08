@@ -91,7 +91,9 @@ and [0.2.0 development notes](release-notes-0.2.0.md).
 - [ ] Complete integration PR CI/review and merge. The review is
   [PR #41](https://github.com/Ameyanagi/rexafs/pull/41), with all implementation
   commits pushed on `feature/import-groups-phase2`. Its live checks are the
-  authoritative CI status.
+  authoritative CI status. The first matrix found five Windows path-related
+  failures; the correction and local regression pass are pushed in the PR,
+  awaiting confirmation on Windows.
 
 A future 0.2.0 release needs its own version, compatibility fixtures, qualification,
 and publication pass after integration. The development candidate still reports

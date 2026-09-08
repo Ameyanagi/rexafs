@@ -1182,7 +1182,8 @@ mod tests {
     #[test]
     fn recipe_intake_freezes_channels_and_application_but_reviews_unit_changes() {
         use crate::import_recipes::{DispatchContext, RecipeScope, RecipeVersion};
-        let root = std::env::temp_dir().join(crate::import_recipes::new_id("recipe-intake"));
+        let root = std::env::temp_dir()
+            .join(crate::import_recipes::new_id("recipe-intake").replace(':', "-"));
         std::fs::create_dir_all(&root).unwrap();
         let root = root.canonicalize().unwrap();
         let source = |units| {

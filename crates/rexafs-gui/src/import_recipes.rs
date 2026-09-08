@@ -382,7 +382,7 @@ mod tests {
 
     #[test]
     fn dispatch_prefers_project_and_reviews_ambiguity_or_changed_interpretation() {
-        let root = std::env::temp_dir().join(new_id("dispatch"));
+        let root = std::env::temp_dir().join(new_id("dispatch").replace(':', "-"));
         std::fs::create_dir_all(&root).unwrap();
         let path = root.join("sample.xdi");
         std::fs::write(&path, "# XDI/1.0\n# Column.1: energy eV\n# Column.2: i0\n# Column.3: it\n# ---\n8900 10 5\n9000 12 5\n9100 14 5\n").unwrap();

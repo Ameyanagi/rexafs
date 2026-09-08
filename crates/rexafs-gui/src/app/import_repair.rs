@@ -463,7 +463,8 @@ mod tests {
         use crate::import_recipes::{
             ApplicationMember, ImportApplication, RecipeRef, mapping_revision,
         };
-        let root = std::env::temp_dir().join(crate::import_recipes::new_id("application-repair"));
+        let root = std::env::temp_dir()
+            .join(crate::import_recipes::new_id("application-repair").replace(':', "-"));
         std::fs::create_dir_all(&root).unwrap();
         let path = root.join("source.dat");
         std::fs::write(&path, "# energy mu monitor\n8900 1 4\n9000 2 4\n9100 3 4\n").unwrap();

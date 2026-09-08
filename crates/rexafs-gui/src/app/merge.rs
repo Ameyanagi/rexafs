@@ -567,7 +567,7 @@ mod tests {
     #[test]
     fn raw_xdi_reads_retain_declared_edge_for_merge() {
         let path = std::env::temp_dir()
-            .join(crate::import_recipes::new_id("edge"))
+            .join(crate::import_recipes::new_id("edge").replace(':', "-"))
             .with_extension("xdi");
         std::fs::write(&path, "# XDI/1.0\n# Element.symbol: cU\n# Element.edge: k\n# Column.1: energy eV\n# Column.2: mutrans\n# ---\n8900 1\n9000 2\n9100 3\n").unwrap();
         let raw = crate::params::load_mu_with_diagnostics(&path, &Default::default()).unwrap();

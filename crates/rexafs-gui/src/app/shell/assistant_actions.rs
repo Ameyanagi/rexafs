@@ -24,7 +24,7 @@ fn spectrum_index(
     file: &str,
 ) -> Result<usize, String> {
     let ix = (0..catalog.len())
-        .find(|&ix| catalog.path(ix).to_string_lossy() == file)
+        .find(|&ix| catalog.path(ix) == std::path::Path::new(file))
         .ok_or("Spectrum must already be in the open catalog")?;
     if registry.index_excluded(ix) {
         return Err("group was removed".into());
@@ -528,12 +528,23 @@ mod tests {
             Default::default(),
             &Default::default(),
         );
-        assert_eq!(spectrum_index(&catalog, &registry, "/data/a.dat"), Ok(0));
-        registry.set_excluded(&std::collections::BTreeSet::from([id]));
+        // Path components compare native and forward slashes consistently on
+        // Windows without performing filesystem I/O or resolving other files.
+        let native = catalog.path(0).to_string_lossy().into_owned();
+        for file in [native.as_str(), "/data/a.dat"] {
+            assert_eq!(spectrum_index(&catalog, &registry, file), Ok(0));
+        }
         assert_eq!(
-            spectrum_index(&catalog, &registry, "/data/a.dat"),
-            Err("group was removed".into())
+            spectrum_index(&catalog, &registry, "/data/b.dat"),
+            Err("Spectrum must already be in the open catalog".into())
         );
+        registry.set_excluded(&std::collections::BTreeSet::from([id]));
+        for file in [native.as_str(), "/data/a.dat"] {
+            assert_eq!(
+                spectrum_index(&catalog, &registry, file),
+                Err("group was removed".into())
+            );
+        }
     }
 
     use super::*;

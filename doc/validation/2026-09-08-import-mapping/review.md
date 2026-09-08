@@ -175,3 +175,19 @@ Integrated core logs: `/tmp/rexafs-integration-core.log`,
 `/tmp/rexafs-integration-ndarray.log`, `/tmp/rexafs-integration-trust.log`, and
 `/tmp/rexafs-integration-strict.log`; every command exited zero.
 Integration review and live CI: [PR #41](https://github.com/Ameyanagi/rexafs/pull/41).
+
+
+## Windows CI correction
+
+The first integration matrix exposed five Windows failures: four tests attempted
+to create temporary names containing the colon-delimited recipe ID, and Assistant
+spectrum lookup compared strings with different native/forward slash separators.
+Only temporary fixture names now replace colons with hyphens; saved recipe IDs
+retain their existing format. Assistant lookup compares native path components,
+without filesystem I/O, and still rejects absent and removed catalog entries.
+
+The five affected tests and the local GUI suite with the Windows feature set
+(`--no-default-features --features refeff-runner`) passed: **425 passed, zero
+failed, three ignored** on macOS. The Windows runner has its own platform test
+count and remains the required verification of the fix. Log:
+`/tmp/rexafs-pr41-windows-fixes-tests.log`.
