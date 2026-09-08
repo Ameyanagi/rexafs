@@ -41,3 +41,28 @@ interactive qualification; Windows also has a per-user setup installer with
 automated installation checks. Release build, signing and validation provenance
 are retained with the published artifacts. Python, npm and Rust retain their
 analysis APIs.
+
+
+## Build and qualification
+
+These assets come from [release build 34184418160](https://github.com/Ameyanagi/rexafs/actions/runs/34184418160),
+which passed all 29 jobs at commit `6041c78824b18c54e6ffc932000411bfc6a19382`.
+Both macOS ZIPs and DMGs were signed and notarized by
+[signing run 34189680533](https://github.com/Ameyanagi/rexafs/actions/runs/34189680533).
+The original executables were signed without rebuilding. `SHA256SUMS` covers the
+final release files, including the signed replacements.
+
+Fresh extractions of both macOS ZIPs passed signature, stapling, Gatekeeper, and
+numerical self-checks. Apple Silicon passed launch, plot rendering, embedded
+project restoration, saved Assistant transcript/receipt restoration, and ReFEFF
+and FEFF10 checks. Intel passed launch, plots, project restoration, and numerical
+checks under Rosetta on Apple Silicon. Native Intel hardware and a clean-machine
+installation were not tested locally. Windows/Linux remain desktop previews;
+the build and installer checks passed, while native interactive qualification
+remains pending.
+
+[Rust publication](https://github.com/Ameyanagi/rexafs/actions/runs/34190269699),
+[npm publication](https://github.com/Ameyanagi/rexafs/actions/runs/34190271206), and
+[PyPI publication](https://github.com/Ameyanagi/rexafs/actions/runs/34190273012)
+used that same build. The published Rust crate, npm tarball, all 20 Python wheels,
+and Python source archive match its hashes.
