@@ -14,6 +14,7 @@ manipulation, short labels, and familiar icons to instructional paragraphs.
 Icons need accessible names; scientific units and ambiguous actions still need labels.
 Import keeps its word label. Source mapping, common plot toggles, Assistant model,
 reasoning, permissions and mode, and publication style remain visible.
+The theme sun/moon button remains directly available in the top bar.
 
 Keep errors, unsaved changes, named operands, affected counts, active overrides,
 and permission scope visible when they affect a decision. Put detailed provenance,

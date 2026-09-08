@@ -620,5 +620,20 @@ impl StudioApp {
             .child(action("help", Icon::Help, "Help", false, |a, c| {
                 a.open_help(c)
             }))
+            .child(action(
+                "switch-theme",
+                if t.mode == crate::theme::ThemeMode::Dark {
+                    Icon::Sun
+                } else {
+                    Icon::Moon
+                },
+                if t.mode == crate::theme::ThemeMode::Dark {
+                    "Switch to light theme"
+                } else {
+                    "Switch to dark theme"
+                },
+                false,
+                |a, c| a.toggle_theme(c),
+            ))
     }
 }

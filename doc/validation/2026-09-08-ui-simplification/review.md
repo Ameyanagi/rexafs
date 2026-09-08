@@ -8,6 +8,7 @@ The maintainer's original checkout and active app sessions were preserved.
 - Compact shell and scientific stage navigation; named SVG icons and platform menus.
   Import retains a visible label. Overview plots are optional. Everyday plot
   controls remain visible after maintainer feedback.
+  A sun/moon button keeps theme switching directly available in the top bar.
 - Common inspector parameters stay open; advanced controls have disclosure panels
   and override indicators. Source mapping is visible at the top of Data unless
   an explicitly opened tool takes that position.
