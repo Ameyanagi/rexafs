@@ -4,7 +4,9 @@ The 0.1.4 release is published. Phase 1, Phase 2.1–2.7, and concrete follow-up
 gaps D1–D4 are implemented and locally qualified on
 `feature/import-groups-phase2`. Integration is tracked in [PR #41](https://github.com/Ameyanagi/rexafs/pull/41);
 its CI/review status and the platform checks listed below remain to be closed; the explicitly deferred features are still backlog.
-Version 0.2.0 has not been tagged or published.
+Release 0.2.0 preparation is committed and locally qualified, including 22
+retained compatibility samples and 427 GUI tests. It has not been tagged or
+published; final CI, signing, and publication remain.
 
 This replaces the earlier overlapping progress entries. The original Groups
 UX design and implementation specification remain local design references in
@@ -95,9 +97,13 @@ and [0.2.0 development notes](release-notes-0.2.0.md).
   failures; the correction and local regression pass are pushed in the PR,
   awaiting confirmation on Windows.
 
-A future 0.2.0 release needs its own version, compatibility fixtures, qualification,
-and publication pass after integration. The development candidate still reports
-package version 0.1.4 and is not the tagged artifact.
+- [x] Prepare coordinated 0.2.0 versions, release notes, writer-generated linked
+  and embedded fixtures, full local release gates, Python 3.10–3.14 consumers,
+  source rebuild, JavaScript/Chromium/TypeScript consumers, and native Apple
+  Silicon qualification. See [0.2.0 qualification](validation/2026-09-08-release-0.2.0/review.md).
+- [ ] Complete release-preparation CI/review, tag the reviewed commit, run the
+  final manual GitHub build, sign and qualify its actual downloads, and publish
+  the verified artifacts to GitHub and all three registries.
 
 ## D. Follow-up gaps and deferred work
 
@@ -129,7 +135,8 @@ The following remain deliberate product decisions or explicitly deferred scope:
 ## Workspace handoff
 
 Implementation worktree: `/private/tmp/rexafs-import-phase2`, branch
-`feature/import-groups-phase2`. The main checkout at
+`feature/import-groups-phase2`. Release preparation: `/private/tmp/rexafs-release-020`,
+branch `release/0.2.0`. The main checkout at
 `/Users/ryuichi/dev/rexafs` remains on `feature/import-groups-phase1`; its unrelated
 dirty README, documentation, benchmark, and experiment files are preserved.
 Only this plan is synchronized back to that checkout. Build/test logs and

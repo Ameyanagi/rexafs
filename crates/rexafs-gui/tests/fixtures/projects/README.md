@@ -12,6 +12,7 @@ are not supported or retained as compatibility fixtures.
 | `rexafs-0.1.1-links.rxs`, `rexafs-0.1.1-embedded.rxs` | Saved and reopened through the 0.1.1 writer from the 0.1.0 linked fixture; same format and complete state in both storage modes |
 | `rexafs-0.1.2-links.rxs`, `rexafs-0.1.2-embedded.rxs` | Saved and reopened through the 0.1.2 writer; stable reference-group identity, independent processing, embedded synthetic χ standard and explicit inverse grid |
 | `rexafs-0.1.3-links.rxs`, `rexafs-0.1.3-embedded.rxs` | Saved and reopened through the 0.1.3 writer from the 0.1.2 linked fixture; same format and preserved reference/standard/inverse-grid state |
+| `rexafs-0.2.0-links.rxs`, `rexafs-0.2.0-embedded.rxs` | Groups and locks, two immutable recipe versions, an application retaining version 1, pending source, declared Cu K identity and full parser diagnostics |
 | `future-version.rxs` | Future format: reject without modification |
 | `truncated.rxs` | Corrupt/incomplete input: reject without modification |
 | `data/*.xmu`, `feff/*.dat` | Real inputs for relocation, byte recovery and processing checks |
@@ -44,3 +45,15 @@ entries. It was saved through the 0.1.4 writer. To generate a new pair explicitl
 set `REXAFS_FIXTURE_OUTPUT` and run `cargo test -p rexafs-gui
 write_release_compatibility_fixtures -- --ignored`; the maintainer test refuses
 to overwrite existing fixtures. Review and checksum the new files afterward.
+
+
+The 0.2.0 pair retains the 0.1.4 state and adds two import samples.
+`data/import-Cu.xdi` and `data/import-diagnostics.dat` contain the exact decoded
+energy/μ values from `data/cu_150k.xmu`, serialized with round-trip precision.
+The XDI wrapper declares Cu K; the generic wrapper adds nine deliberately
+malformed tail rows to exercise saved counts and bounded line examples. These
+wrappers are persistence test fixtures. `data/unavailable-pending.dat` is an
+intentionally absent source in the pending-import ledger, not an embedded asset.
+The saved application refers to stopped recipe version 1 while version 2 is
+eligible for future reuse. Both new sources are marked; the diagnostics group
+also has a saved processing lock. All older fixture bytes and hashes are retained.

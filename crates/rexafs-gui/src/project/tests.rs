@@ -358,65 +358,236 @@ fn assistant_conversations_roundtrip_in_both_storage_modes_and_limit_at_save() {
 #[test]
 #[ignore = "requires REXAFS_FIXTURE_OUTPUT; writes a new release fixture pair"]
 fn write_release_compatibility_fixtures() {
-    use super::assistant::{Conversation, ConversationEntry, SavedActivityState};
+    use crate::{
+        app::{
+            import_review::PendingSource,
+            import_state::{IntakeBatch, SourceOutcome},
+        },
+        group_identity::{GroupId, SourceGroup},
+        import_recipes::{
+            ApplicationMember, ImportApplication, RecipeScope, RecipeVersion, mapping_revision,
+        },
+        params::{DetectionMode, ImportConfig},
+        source_evidence::{DeclaredEdge, ParserRecord},
+    };
+    use std::io::Write;
     let output = std::env::var_os("REXAFS_FIXTURE_OUTPUT")
         .map(PathBuf::from)
-        .expect("set REXAFS_FIXTURE_OUTPUT to an empty fixture output directory");
-    std::fs::create_dir_all(&output).unwrap();
-    let mut project = load(&fixture("rexafs-0.1.3-links.rxs")).unwrap();
-    if let Some(path) = project.fit_paths.first_mut() {
-        path.degen = "4".into();
+        .expect("set REXAFS_FIXTURE_OUTPUT to the retained fixture directory");
+    std::fs::create_dir_all(output.join("data")).unwrap();
+    let version = env!("CARGO_PKG_VERSION");
+    for name in [
+        format!("rexafs-{version}-links.rxs"),
+        format!("rexafs-{version}-embedded.rxs"),
+        "data/import-Cu.xdi".into(),
+        "data/import-diagnostics.dat".into(),
+    ] {
+        assert!(
+            !output.join(name).exists(),
+            "never overwrite a retained release fixture"
+        );
     }
-    for (index, edit) in [false, true].into_iter().enumerate() {
-        let mut conversation = Conversation::new("Synthetic saved-conversation fixture", edit);
-        conversation.id = format!("fixture-conversation-{index}");
-        conversation.started_at = "2026-09-08T00:00:00Z".into();
-        conversation.updated_at = format!("2026-09-08T00:0{index}:00Z");
-        conversation.entries = vec![
-            ConversationEntry::User {
-                text: "Demonstrate retained transcript entries.".into(),
-                edit,
+    let mut project = load(&fixture("rexafs-0.1.4-links.rxs")).unwrap();
+    project.assign_group_ids();
+    let raw = crate::params::load_mu_with_diagnostics(
+        &fixture("data/cu_150k.xmu"),
+        &ImportConfig::default(),
+    )
+    .unwrap();
+    let rows = raw
+        .energy
+        .iter()
+        .zip(&raw.mu)
+        .map(|(energy, mu)| format!("{energy} {mu}\n"))
+        .collect::<String>();
+    let mut outcomes = std::collections::BTreeMap::new();
+    for (name, text) in [
+        (
+            "import-Cu.xdi",
+            format!(
+                "# XDI/1.0\n# Element.symbol: Cu\n# Element.edge: K\n# Column.1: energy eV\n# Column.2: mutrans\n# ---\n{rows}"
+            ),
+        ),
+        (
+            "import-diagnostics.dat",
+            format!("# energy mu\n{rows}{}", "malformed row\n".repeat(9)),
+        ),
+    ] {
+        let path = output.join("data").join(name);
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap()
+            .write_all(text.as_bytes())
+            .unwrap();
+        let path = path.canonicalize().unwrap();
+        let preview = crate::params::preview_import(&path, &ImportConfig::default()).unwrap();
+        let mut recipe = RecipeVersion::from_review(
+            "Retained Cu mapping",
+            RecipeScope::for_source(&path, preview.xdi.as_ref()),
+            &preview,
+            DetectionMode::MuColumn,
+            &[ImportConfig::default()],
+            true,
+        )
+        .unwrap();
+        recipe.reference.id = "fixture:recipe:0.2.0".into();
+        let params = PipelineParams {
+            import: recipe.channels[0].clone(),
+            ..Default::default()
+        };
+        let checked = crate::params::load_mu_with_diagnostics(&path, &params.import).unwrap();
+        assert_eq!(checked.energy, raw.energy);
+        assert_eq!(checked.mu, raw.mu);
+        let group = GroupId::source(&path, DetectionMode::MuColumn);
+        project.raw_files.push(path.clone());
+        project.source_groups.push(SourceGroup {
+            id: group.clone(),
+            path: path.clone(),
+            channel: DetectionMode::MuColumn,
+        });
+        project.overrides.push(ParamOverride {
+            path: path.clone(),
+            params: params.clone(),
+        });
+        project
+            .group_state
+            .overrides
+            .push((group.clone(), params.clone()));
+        project.group_state.marked.insert(group.clone());
+        project
+            .group_state
+            .labels
+            .insert(group.clone(), format!("Fixture {name}"));
+        project.group_state.colors.insert(group.clone(), 4);
+        project.parser_evidence.insert(
+            group.clone(),
+            ParserRecord {
+                path: path.clone(),
+                channel: checked.channel,
+                mapping_revision: mapping_revision(&params.import),
+                diagnostics: checked.diagnostics.clone(),
+                declared_edge: checked.declared_edge,
             },
-            ConversationEntry::Thinking {
-                id: "thinking-1".into(),
-                text: "Synthetic persistence example.".into(),
+        );
+        outcomes.insert(
+            path.clone(),
+            SourceOutcome {
+                created: vec![group.clone()],
+                warnings: checked.diagnostics.warnings(),
+                ..Default::default()
             },
-            ConversationEntry::Activity {
-                id: "activity-1".into(),
-                label: "Read project state".into(),
-                tool: "xray_get_state".into(),
-                state: SavedActivityState::Done,
-            },
-            ConversationEntry::Receipt {
-                header: "Synthetic recorded change".into(),
-                lines: vec!["N = 4 (persistence example)".into()],
-                scope: "This spectrum".into(),
-                state: "Recorded".into(),
-                navigation: json!({}),
-            },
-            ConversationEntry::Assistant {
-                id: "answer-1".into(),
-                text: "This is fixture content, not a scientific fit recommendation.".into(),
-            },
-            ConversationEntry::Status {
-                text: "Completed".into(),
-            },
-        ];
-        project.assistant.upsert(conversation);
+        );
+        if name.ends_with(".xdi") {
+            project.imports.recipes.remember(recipe.clone()).unwrap();
+            project.imports.applications.push(ImportApplication {
+                id: "fixture:application:0.2.0".into(),
+                batch: 0,
+                recipe: recipe.reference.clone(),
+                members: vec![ApplicationMember {
+                    source_id: group.clone(),
+                    path,
+                    group,
+                    channel: params.import.mode,
+                    mapping_revision: mapping_revision(&params.import),
+                }],
+            });
+            // Re-enable a stopped recipe as a new version; the saved application
+            // must continue referring to version 1 after version 2 is introduced.
+            project.imports.recipes.stop_reusing(&recipe.reference.id);
+            let next = project.imports.recipes.commit_review(recipe);
+            assert_eq!(next.reference.version, 2);
+        } else {
+            assert_eq!(checked.diagnostics.malformed_rows.count, 9);
+            project.group_state.frozen.insert(group);
+        }
     }
+    let pending = output.join("data/unavailable-pending.dat");
+    outcomes.insert(
+        pending,
+        SourceOutcome {
+            pending: Some(PendingSource {
+                detection: None,
+                suggestion: None,
+                reason: "Synthetic missing-source persistence example".into(),
+            }),
+            ..Default::default()
+        },
+    );
+    project.import_history = vec![IntakeBatch {
+        paths: vec![output.join("data")],
+        sources: outcomes,
+        stopped: false,
+        finished: true,
+        dropped_queue: 0,
+    }];
+    project
+        .derived
+        .iter_mut()
+        .find(|group| group.source.is_none())
+        .unwrap()
+        .declared_edge = Some(DeclaredEdge {
+        element: "Cu".into(),
+        edge: "K".into(),
+    });
     for (suffix, mode) in [
         ("links", DataStorage::Paths),
         ("embedded", DataStorage::Embedded),
     ] {
-        let path = output.join(format!("rexafs-{}-{suffix}.rxs", env!("CARGO_PKG_VERSION")));
-        assert!(!path.exists(), "never overwrite a retained release fixture");
+        let path = output.join(format!("rexafs-{version}-{suffix}.rxs"));
         save_with_storage(&path, &project, mode).unwrap();
         let restored = load(&path).unwrap();
-        assert_eq!(
-            restored.assistant.conversations,
-            project.assistant.conversations
-        );
+        assert_eq!(state(&restored), state(&project));
+        assert_eq!(restored.assistant.conversations.len(), 2);
         assert_eq!(restored.fit_paths[0].degen, "4");
+    }
+}
+
+#[test]
+fn released_020_fixtures_retain_import_state_and_historical_evidence() {
+    for suffix in ["links", "embedded"] {
+        let project = load(&fixture(&format!("rexafs-0.2.0-{suffix}.rxs"))).unwrap();
+        assert_eq!(project.imports.recipes.versions.len(), 2);
+        let application = &project.imports.applications[0];
+        assert_eq!(application.recipe.version, 1);
+        assert_eq!(application.members.len(), 1);
+        let member = &application.members[0];
+        let recipe = project.imports.recipes.get(&application.recipe).unwrap();
+        assert!(!recipe.reuse);
+        assert!(project.imports.recipes.versions[1].reuse);
+        assert!(recipe.scope.contains(&member.path, None));
+        assert_eq!(
+            member.mapping_revision,
+            crate::import_recipes::mapping_revision(&recipe.channels[0])
+        );
+        let record = &project.parser_evidence[&member.group];
+        assert_eq!(record.path, member.path);
+        assert_eq!(record.declared_edge.as_ref().unwrap().label(), "Cu K");
+        assert!(record.matches(&recipe.channels[0]));
+        let (group, warning) = project
+            .parser_evidence
+            .iter()
+            .find(|(_, record)| record.diagnostics.malformed_rows.count == 9)
+            .unwrap();
+        assert_eq!(warning.diagnostics.malformed_rows.examples.len(), 5);
+        assert!(project.group_state.marked.contains(group));
+        assert!(project.group_state.frozen.contains(group));
+        assert_eq!(
+            project.import_history[0]
+                .sources
+                .values()
+                .filter(|s| s.pending.is_some())
+                .count(),
+            1
+        );
+        assert!(
+            project
+                .derived
+                .iter()
+                .any(|d| d.source.is_none() && d.declared_edge.is_some())
+        );
+        assert_eq!(project.assistant.conversations.len(), 2);
     }
 }
 

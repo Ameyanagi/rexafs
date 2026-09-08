@@ -1,13 +1,19 @@
 # Releasing rexafs
 
-The first coordinated 0.1.0 release is published. The status below records
-the completed channels and remaining platform qualification.
+The coordinated release process is described below. The published stable release
+is [0.1.4](https://github.com/Ameyanagi/rexafs/releases/tag/v0.1.4);
+[its qualification report](validation/2026-09-08-release-0.1.4/review.md) records
+the completed registry, signing, artifact, and available-host checks. Release
+0.2.0 is in preparation. Windows/Linux remain desktop previews until native
+interactive qualification is available.
 The [rebranding plan](rebranding-plan.md) defines scope; [dependency notes](dependencies.md)
 record the Rust 1.98.1 toolchain and compatibility constraints.
 
-## Current launch status
+## Historical 0.1.0 launch record
 
-Checked 2026-09-06:
+The following records the initial launch as checked on 2026-09-06. Later releases
+completed trusted publishing and added Windows/Linux previews; use the linked
+release reports for current status.
 
 - The public repository is now [`Ameyanagi/rexafs`](https://github.com/Ameyanagi/rexafs),
   and this checkout's `origin` and current package metadata use that name.
@@ -44,9 +50,10 @@ Checked 2026-09-06:
   for `rexafs`, repository `Ameyanagi/rexafs`, workflow `publish.yml`, environment
   `release`. Registry authentication will be exercised by the first tagged upload.
 
-Next, qualify Windows/Linux desktop launches before adding those downloads.
-The [release notes](release-notes-0.1.0.md) record the published distributions and
-the exact scope of desktop validation. Website/domain deployment remains separate.
+The [0.1.0 release notes](release-notes-0.1.0.md) preserve the original launch
+scope. Windows/Linux preview distribution began with 0.1.3, and native
+interactive qualification remains outstanding. Website/domain deployment is
+separate from the package release process.
 
 ## Local checks
 

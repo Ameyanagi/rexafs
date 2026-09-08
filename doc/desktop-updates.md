@@ -8,6 +8,14 @@ Choose **Download** to fetch the matching Mac archive and verify its size and SH
 
 A Nightly label includes the immutable build tag. `rexafs --build-info` reports the library version, channel, release tag, source commit and optional nightly build time. Each packaged archive contains the same identity and signing/notarization provenance in `build.json`.
 
+## Updating to 0.2.0
+
+Save the project before updating. Version 0.2.0 adds persistent group identities,
+marks, labels, locks, import recipes and applications, pending sources, and parser
+evidence to format-1 projects. Existing mappings remain authoritative on reopen;
+computer recipes apply only to new imports. Original source files are unchanged.
+Keep the previous-save backup when moving an ongoing analysis to this version.
+
 ## Updating to 0.1.4
 
 Save the project before quitting for an update. Version 0.1.4 adds optional
