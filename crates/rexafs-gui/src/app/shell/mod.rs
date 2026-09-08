@@ -20,6 +20,7 @@ pub mod fit_workspace;
 pub(crate) mod group_menu;
 pub mod groups_panel;
 pub mod handles;
+pub(crate) mod import_editor;
 mod import_receipt;
 pub mod inspector;
 mod joint_browser;
@@ -437,6 +438,7 @@ impl StudioApp {
                 )
             })
             .children(self.path_route_overlay(cx))
+            .children(self.import_editor.clone())
     }
 
     /// Brand · project · actions (open folder / project, theme).

@@ -1092,6 +1092,7 @@ pub struct StudioApp {
     adv_open: [bool; 4],
     roi_input: Option<Entity<TextInput>>,
     import_preview: Option<ImportPreview>,
+    import_editor: Option<Entity<shell::import_editor::ImportEditor>>,
     import_preview_error: SharedString,
     import_preview_gen: u64,
     open_import_role: Option<ImportRole>,
@@ -2940,6 +2941,7 @@ impl StudioApp {
             adv_open: [false; 4],
             roi_input: None,
             import_preview: None,
+            import_editor: None,
             import_preview_error: "".into(),
             import_preview_gen: 0,
             open_import_role: None,
@@ -10058,7 +10060,9 @@ impl Render for StudioApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.viewport_w = f32::from(window.viewport_size().width);
         self.fit_assistant_layout();
-        let key_context = if self.path_route.is_some() {
+        let key_context = if self.import_editor.is_some() {
+            "ImportEditor"
+        } else if self.path_route.is_some() {
             "PathRoute"
         } else if self.updates.open {
             "UpdateDialog"

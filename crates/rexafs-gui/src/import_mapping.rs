@@ -63,7 +63,7 @@ impl AxisConversion {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ColumnRole {
     Energy,
     I0,

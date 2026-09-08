@@ -1,5 +1,5 @@
 //! Row commands use a durable menu target, independently of current and marks.
-use super::{MONO, Stage, journal::UndoOp, tools::Tool};
+use super::{MONO, journal::UndoOp, tools::Tool};
 use crate::app::{DERIVED_BASE, StudioApp};
 use crate::group_identity::GroupId;
 use crate::params::{DerivedSpectrum, DetectionMode, PipelineParams};
@@ -558,10 +558,7 @@ impl StudioApp {
             }
             Item::Lock => self.toggle_group_lock(ix, cx),
             Item::Remap => {
-                self.select_entry(ix, cx);
-                self.set_stage(Stage::Data, cx);
-                self.context_panel_open = true;
-                self.adv_open[3] = true;
+                self.open_import_editor(ix, window, cx);
             }
             Item::Channel(mode) => self.add_import_channel_for(ix, mode, false, cx),
             Item::Standard => {

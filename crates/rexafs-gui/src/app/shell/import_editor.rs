@@ -1,0 +1,799 @@
+//! A modal owns a draft and immutable target; focus/current/marks are independent.
+use std::collections::HashMap;
+
+use gpui::{
+    AppContext, ClickEvent, Context, Entity, FocusHandle, Focusable, IntoElement, ParentElement,
+    Render, Styled, WeakEntity, Window, div, prelude::*, px,
+};
+use ruviz::prelude::Plot;
+use ruviz_gpui::{RuvizPlot, plot_builder};
+
+use super::tools::ToolTarget;
+
+fn check_target(
+    expected: &ToolTarget,
+    current: Option<&ToolTarget>,
+    locked: bool,
+) -> Result<(), String> {
+    if current != Some(expected) {
+        return Err("The target changed; close and reopen its mapping editor.".into());
+    }
+    if locked {
+        return Err("Processing is now locked.".into());
+    }
+    Ok(())
+}
+use crate::app::{
+    NO_ENTRY, StudioApp,
+    import_preview::{self, PreviewKey, PreviewState, SourceRevision},
+};
+use crate::import_mapping::{AxisConversion, ColumnRole, MappingDraft};
+use crate::params::{DetectionMode, PipelineParams};
+use crate::theme::Theme;
+use crate::widgets::text_input::{InputEvent, NextField, PrevField, TextInput};
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum Action {
+    Close,
+    Cancel,
+    Reset,
+    Apply,
+    Reload,
+    Axis(u8),
+    Role(ColumnRole),
+    Pick(usize),
+    Roi(usize),
+    ReferenceRatio,
+}
+
+pub(crate) struct ImportEditor {
+    studio: WeakEntity<StudioApp>,
+    target: ToolTarget,
+    params: PipelineParams,
+    theme: Theme,
+    opener: Option<FocusHandle>,
+    focus: FocusHandle,
+    controls: HashMap<Action, FocusHandle>,
+    visible_focus: Vec<FocusHandle>,
+    locked: bool,
+    draft: Option<MappingDraft>,
+    table: Option<crate::params::ImportPreview>,
+    preview: PreviewState,
+    plot: Option<Entity<RuvizPlot>>,
+    error: Option<String>,
+    source_revision: Option<SourceRevision>,
+    generation: u64,
+    open_role: Option<ColumnRole>,
+    spacing: Entity<TextInput>,
+}
+
+impl StudioApp {
+    pub(crate) fn open_import_editor(
+        &mut self,
+        ix: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(target) = self
+            .tool_target(ix)
+            .filter(|t| !t.path.as_os_str().is_empty())
+        else {
+            self.status = "This result has no source columns to re-map.".into();
+            cx.notify();
+            return;
+        };
+        let studio = cx.weak_entity();
+        let params = self.effective_params(ix).clone();
+        let theme = self.theme;
+        let locked = self.frozen.contains(&ix);
+        let editor =
+            cx.new(|cx| ImportEditor::new(studio, target, params, theme, locked, window, cx));
+        self.import_editor = Some(editor.clone());
+        editor.update(cx, |editor, cx| editor.reload(cx));
+        cx.notify();
+    }
+}
+
+impl ImportEditor {
+    fn new(
+        studio: WeakEntity<StudioApp>,
+        target: ToolTarget,
+        params: PipelineParams,
+        theme: Theme,
+        locked: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let opener = window.focused(cx);
+        let focus = cx.focus_handle();
+        window.focus(&focus, cx);
+        let spacing = cx.new(|cx| TextInput::new("d spacing (Å)", "", theme, cx));
+        spacing.update(cx, |input, cx| input.set_enabled(!locked, cx));
+        cx.subscribe(&spacing, |this, _, event, cx| {
+            if let InputEvent::Edited(text) = event {
+                let value = text
+                    .parse::<f64>()
+                    .ok()
+                    .filter(|v| v.is_finite() && *v > 0.);
+                if let Some(draft) = &mut this.draft {
+                    match draft.config().axis {
+                        AxisConversion::AngleDegrees { .. } => {
+                            draft.set_axis(AxisConversion::AngleDegrees {
+                                d_spacing: value.unwrap_or(0.),
+                            })
+                        }
+                        AxisConversion::AngleRadians { .. } => {
+                            draft.set_axis(AxisConversion::AngleRadians {
+                                d_spacing: value.unwrap_or(0.),
+                            })
+                        }
+                        _ => return,
+                    }
+                    this.refresh(cx);
+                }
+            }
+        })
+        .detach();
+        Self {
+            studio,
+            target,
+            params,
+            theme,
+            opener,
+            focus,
+            spacing,
+            locked,
+            controls: HashMap::new(),
+            visible_focus: Vec::new(),
+            draft: None,
+            table: None,
+            preview: PreviewState::default(),
+            plot: None,
+            error: None,
+            source_revision: None,
+            generation: 0,
+            open_role: None,
+        }
+    }
+
+    fn key(&self, revision: u64) -> Option<PreviewKey> {
+        Some(PreviewKey {
+            group: self.target.group_id.clone()?,
+            path: self.target.path.clone(),
+            target_revision: self.target.fingerprint,
+            draft_revision: revision,
+            source_revision: self.source_revision.clone()?,
+        })
+    }
+
+    fn reload(&mut self, cx: &mut Context<Self>) {
+        self.generation += 1;
+        self.draft = None;
+        self.table = None;
+        self.plot = None;
+        self.preview.invalidate();
+        self.error = None;
+        self.open_role = None;
+        self.source_revision = match SourceRevision::read(&self.target.path) {
+            Ok(revision) => Some(revision),
+            Err(error) => {
+                self.error = Some(error);
+                cx.notify();
+                return;
+            }
+        };
+        let Some(key) = self.key(0) else {
+            return;
+        };
+        self.start_preview(key, self.params.import.clone(), true, cx);
+    }
+
+    fn refresh(&mut self, cx: &mut Context<Self>) {
+        self.generation += 1;
+        self.preview.invalidate();
+        self.plot = None;
+        self.error = self.draft.as_ref().and_then(|d| d.validate().err());
+        if self.error.is_none()
+            && let Some(draft) = &self.draft
+            && let Some(key) = self.key(draft.revision)
+        {
+            self.start_preview(key, draft.config().clone(), false, cx);
+        }
+        cx.notify();
+    }
+
+    fn start_preview(
+        &mut self,
+        key: PreviewKey,
+        config: crate::params::ImportConfig,
+        initial: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.preview.begin(key.clone());
+        let generation = self.generation;
+        cx.spawn(async move |this, cx| {
+            if !initial {
+                cx.background_executor()
+                    .timer(import_preview::DEBOUNCE)
+                    .await;
+            }
+            if this
+                .read_with(cx, |this, _| this.generation != generation)
+                .unwrap_or(true)
+            {
+                return;
+            }
+            let result = cx
+                .background_executor()
+                .spawn({
+                    let key = key.clone();
+                    let config = config.clone();
+                    async move { import_preview::load(&key, &config) }
+                })
+                .await;
+            this.update(cx, |this, cx| {
+                if generation != this.generation || !this.preview.finish(&key, result) {
+                    return;
+                }
+                if let Some(Ok(result)) = &this.preview.result {
+                    if initial {
+                        this.table = Some(result.table.clone());
+                        this.draft = Some(MappingDraft::new(&result.table, &config));
+                        let spacing = match config.axis {
+                            AxisConversion::AngleDegrees { d_spacing }
+                            | AxisConversion::AngleRadians { d_spacing } => d_spacing.to_string(),
+                            _ => result
+                                .table
+                                .xdi
+                                .as_ref()
+                                .and_then(|h| h.get("mono.d_spacing"))
+                                .unwrap_or("")
+                                .to_string(),
+                        };
+                        this.spacing
+                            .update(cx, |input, cx| input.set_text(spacing, cx));
+                    }
+                    this.error = this
+                        .draft
+                        .as_ref()
+                        .and_then(|d| d.validate().err())
+                        .or_else(|| result.raw.as_ref().err().cloned());
+                    if this.error.is_none()
+                        && let Ok(raw) = &result.raw
+                    {
+                        let plot: Plot = Plot::new()
+                            .theme(this.theme.plot_theme())
+                            .line(&raw.energy, &raw.mu)
+                            .label("Raw μ(E)")
+                            .into();
+                        this.plot = Some(
+                            plot_builder(
+                                plot.xlabel("Energy (eV)").ylabel("μ(E)").size_px(420, 280),
+                            )
+                            .interactive()
+                            .build(cx),
+                        );
+                    }
+                } else if let Some(Err(error)) = &this.preview.result {
+                    this.error = Some(error.clone());
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.generation += 1;
+        self.preview.invalidate();
+        self.studio
+            .update(cx, |studio, cx| {
+                studio.import_editor = None;
+                cx.notify();
+            })
+            .ok();
+        if let Some(opener) = &self.opener {
+            window.focus(opener, cx);
+        }
+    }
+
+    fn apply(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(draft) = &self.draft else {
+            return;
+        };
+        let Some(key) = self.key(draft.revision) else {
+            return;
+        };
+        if self.locked || draft.validate().is_err() || !self.preview.ready(&key) {
+            return;
+        }
+        if SourceRevision::read(&key.path).ok().as_ref() != Some(&key.source_revision) {
+            self.error = Some("Source changed; reload the preview before applying.".into());
+            self.preview.invalidate();
+            self.plot = None;
+            cx.notify();
+            return;
+        }
+        let mapping = draft.config().clone();
+        let target = self.target.clone();
+        let result = self.studio.update(cx, |studio, cx| -> Result<(), String> {
+            let ix = target
+                .group_id
+                .as_ref()
+                .and_then(|id| studio.menu_index(id))
+                .ok_or("The target group was removed or the project changed.")?;
+            check_target(
+                &target,
+                studio.tool_target(ix).as_ref(),
+                studio.frozen.contains(&ix),
+            )?;
+            let before = studio.effective_params(ix).clone();
+            let mut after = before.clone();
+            after.import = mapping;
+            let scope = (ix != NO_ENTRY).then_some(ix);
+            if before != after {
+                studio.apply_params_to(scope, after.clone());
+                studio.record_param_edit(
+                    scope,
+                    None,
+                    before,
+                    after,
+                    format!("re-map columns: {}", target.label),
+                );
+                studio.schedule_recompute(cx);
+                studio.invalidate_explore_plots(cx);
+                studio.sync_param_fields(cx);
+                studio.sync_handles(cx);
+            }
+            studio.status = format!("Updated mapping for {}", target.label).into();
+            cx.notify();
+            Ok(())
+        });
+        match result {
+            Ok(Ok(())) => self.close(window, cx),
+            result => {
+                self.error = Some(match result {
+                    Ok(Err(error)) => error,
+                    Err(error) => error.to_string(),
+                    _ => unreachable!(),
+                });
+                cx.notify();
+            }
+        }
+    }
+
+    fn activate(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
+        match action {
+            Action::Close | Action::Cancel => {
+                self.close(window, cx);
+                return;
+            }
+            Action::Apply => {
+                self.apply(window, cx);
+                return;
+            }
+            Action::Reload => {
+                self.reload(cx);
+                return;
+            }
+            Action::Role(role) => {
+                self.open_role = (self.open_role != Some(role)).then_some(role);
+                cx.notify();
+                return;
+            }
+            _ if self.locked => return,
+            _ => {}
+        }
+        let Some(draft) = &mut self.draft else {
+            return;
+        };
+        match action {
+            Action::Reset => draft.use_detected(),
+            Action::Axis(unit) => {
+                let d_spacing = self.spacing.read(cx).text().parse().unwrap_or(0.);
+                draft.set_axis(match unit {
+                    0 => AxisConversion::Auto,
+                    1 => AxisConversion::EnergyEv,
+                    2 => AxisConversion::EnergyKev,
+                    3 => AxisConversion::AngleDegrees { d_spacing },
+                    _ => AxisConversion::AngleRadians { d_spacing },
+                });
+            }
+            Action::Pick(column) => {
+                if let Some(role) = self.open_role.take() {
+                    draft.set_column(role, column);
+                }
+            }
+            Action::Roi(column) => draft.toggle_roi(column),
+            Action::ReferenceRatio => {
+                draft.set_column(ColumnRole::It, draft.config().it_col.unwrap_or(2))
+            }
+            _ => {}
+        }
+        self.refresh(cx);
+    }
+
+    fn focus_next(&self, backward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let len = self.visible_focus.len();
+        if len == 0 {
+            return;
+        }
+        let index = self.visible_focus.iter().position(|f| f.is_focused(window));
+        let next = match index {
+            Some(i) if backward => (i + len - 1) % len,
+            Some(i) => (i + 1) % len,
+            None if backward => len - 1,
+            None => 0,
+        };
+        window.focus(&self.visible_focus[next], cx);
+        cx.stop_propagation();
+    }
+
+    fn button(
+        &mut self,
+        action: Action,
+        label: impl Into<gpui::SharedString>,
+        enabled: bool,
+        cx: &mut Context<Self>,
+    ) -> gpui::Stateful<gpui::Div> {
+        let focus = self
+            .controls
+            .entry(action)
+            .or_insert_with(|| cx.focus_handle().tab_stop(true))
+            .clone();
+        if enabled {
+            self.visible_focus.push(focus.clone());
+        }
+        let theme = self.theme;
+        let selected = if let Action::Axis(index) = action {
+            self.draft.as_ref().is_some_and(|draft| {
+                index
+                    == match draft.config().axis {
+                        AxisConversion::Auto => 0,
+                        AxisConversion::EnergyEv => 1,
+                        AxisConversion::EnergyKev => 2,
+                        AxisConversion::AngleDegrees { .. } => 3,
+                        AxisConversion::AngleRadians { .. } => 4,
+                    }
+            })
+        } else {
+            false
+        };
+        div()
+            .id(gpui::SharedString::from(format!("mapping-{action:?}")))
+            .px_2()
+            .py_1()
+            .rounded_sm()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.surface)
+            .when(selected, |d| d.bg(theme.accent).text_color(theme.bg))
+            .child(label.into())
+            .when(!enabled, |d| d.opacity(0.45))
+            .when(enabled, |d| {
+                d.cursor_pointer()
+                    .track_focus(&focus)
+                    .focus(|s| s.border_color(theme.accent))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                        this.activate(action, window, cx)
+                    }))
+                    .on_key_down(cx.listener(
+                        move |this, event: &gpui::KeyDownEvent, window, cx| {
+                            if focus.is_focused(window)
+                                && matches!(event.keystroke.key.as_str(), "enter" | "space")
+                            {
+                                window.prevent_default();
+                                cx.stop_propagation();
+                                this.activate(action, window, cx);
+                            }
+                        },
+                    ))
+            })
+    }
+}
+
+impl Render for ImportEditor {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.visible_focus.clear();
+        let t = self.theme;
+        let mut panel = div()
+            .id("mapping-editor-panel")
+            .overflow_y_scroll()
+            .w_full()
+            .max_w(px(1120.))
+            .max_h_full()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .p_4()
+            .rounded_lg()
+            .border_1()
+            .border_color(t.border)
+            .bg(t.bg)
+            .child(
+                div()
+                    .flex()
+                    .justify_between()
+                    .items_center()
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(format!("Re-map columns · {}", self.target.label)),
+                    )
+                    .child(self.button(Action::Close, "Close", true, cx)),
+            )
+            .child(
+                div()
+                    .text_color(t.text_muted)
+                    .child(self.target.path.display().to_string()),
+            );
+        if self.locked {
+            panel = panel.child("Processing locked · mapping is read-only");
+        }
+        if let Some(draft) = self.draft.clone() {
+            panel = panel.child(div().text_size(px(16.)).child(draft.formula()));
+            let mut axes = div()
+                .flex()
+                .flex_wrap()
+                .gap_2()
+                .items_center()
+                .child("Axis units:");
+            for (i, label) in [
+                "Detected",
+                "eV",
+                "keV",
+                "Angle · degrees",
+                "Angle · radians",
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                axes = axes.child(self.button(Action::Axis(i as u8), label, !self.locked, cx));
+            }
+            if matches!(
+                draft.config().axis,
+                AxisConversion::AngleDegrees { .. } | AxisConversion::AngleRadians { .. }
+            ) {
+                self.visible_focus
+                    .push(self.spacing.read(cx).focus_handle(cx));
+                axes = axes
+                    .child("d spacing (Å):")
+                    .child(div().w(px(110.)).child(self.spacing.clone()))
+                    .child("First-order Bragg conversion");
+            }
+            panel = panel.child(axes);
+            let mut roles = div().flex().flex_wrap().gap_2();
+            for (role, col) in draft.roles().into_iter().filter(|(role, _)| role != "ROI") {
+                let key = match role.as_str() {
+                    "Energy" => ColumnRole::Energy,
+                    "I0" => ColumnRole::I0,
+                    "It" => ColumnRole::It,
+                    "Ir" => ColumnRole::Ir,
+                    _ => ColumnRole::Mu,
+                };
+                let label = format!(
+                    "{role}: {} ▾",
+                    col.map(|c| draft.column_label(c))
+                        .unwrap_or("Choose…".into())
+                );
+                roles = roles.child(self.button(Action::Role(key), label, !self.locked, cx));
+            }
+            if draft.channel() == DetectionMode::Reference {
+                if draft.config().reference_mu_col.is_none() {
+                    roles = roles.child(self.button(
+                        Action::Role(ColumnRole::Mu),
+                        "Reference μ column…",
+                        !self.locked,
+                        cx,
+                    ));
+                }
+                roles = roles.child(self.button(
+                    Action::ReferenceRatio,
+                    "Use It / Ir",
+                    !self.locked,
+                    cx,
+                ));
+            }
+            panel = panel.child(roles);
+            if draft.channel() == DetectionMode::Fluorescence {
+                let mut rois = div()
+                    .id("mapping-rois")
+                    .max_h(px(90.))
+                    .overflow_y_scroll()
+                    .flex()
+                    .flex_wrap()
+                    .gap_1()
+                    .child("ROIs:");
+                for column in 0..draft.column_count {
+                    let checked = draft
+                        .config()
+                        .fluor_cols
+                        .as_ref()
+                        .is_some_and(|c| c.contains(&column));
+                    rois = rois.child(self.button(
+                        Action::Roi(column),
+                        format!(
+                            "{} {}",
+                            if checked { "☑" } else { "☐" },
+                            draft.column_label(column)
+                        ),
+                        !self.locked,
+                        cx,
+                    ));
+                }
+                panel = panel
+                    .child(rois)
+                    .child("Detector correction: none applied by rexafs");
+            }
+            if self.open_role.is_some() {
+                let mut choices = div()
+                    .id("mapping-column-picker")
+                    .max_h(px(120.))
+                    .overflow_y_scroll()
+                    .flex()
+                    .flex_wrap()
+                    .gap_1();
+                for column in 0..draft.column_count {
+                    choices = choices.child(self.button(
+                        Action::Pick(column),
+                        draft.column_label(column),
+                        !self.locked,
+                        cx,
+                    ));
+                }
+                panel = panel.child(choices);
+            }
+            let mut table = div()
+                .id("mapping-original-table")
+                .flex_1()
+                .min_w_0()
+                .overflow_x_scroll()
+                .font_family(super::MONO)
+                .text_size(px(11.))
+                .flex()
+                .flex_col();
+            if let Some(original) = &self.table {
+                let row = |values: Vec<String>| {
+                    div().flex().children(
+                        values
+                            .into_iter()
+                            .map(|value| div().w(px(115.)).flex_shrink_0().p_1().child(value)),
+                    )
+                };
+                table = table.child(row((0..draft.column_count)
+                    .map(|c| draft.column_label(c))
+                    .collect()));
+                table = table.child(row((0..draft.column_count)
+                    .map(|c| {
+                        draft
+                            .xdi
+                            .as_ref()
+                            .and_then(|h| h.columns.get(c))
+                            .and_then(|c| c.units.clone())
+                            .unwrap_or("—".into())
+                    })
+                    .collect()));
+                table = table.child(row((0..draft.column_count)
+                    .map(|col| {
+                        draft
+                            .roles()
+                            .into_iter()
+                            .filter(|(_, index)| *index == Some(col))
+                            .map(|(role, _)| role)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    })
+                    .collect()));
+                for values in &original.rows {
+                    table = table.child(row(values.iter().map(|v| format!("{v:.6}")).collect()));
+                }
+            }
+            if let Some(Ok(result)) = &self.preview.result {
+                panel = panel.child(div().text_color(t.text_muted).child(format!(
+                    "Full source · {}",
+                    result.table.diagnostics.summary()
+                )));
+            }
+            let mut plot = div().w(px(420.)).h(px(280.)).min_w_0();
+            if let Some(entity) = &self.plot {
+                plot = plot.child(entity.clone());
+            } else {
+                plot = plot
+                    .child("Raw μ(E) preview unavailable while the draft is invalid or updating.");
+            }
+            panel = panel.child(div().flex().gap_3().min_h_0().child(table).child(plot));
+        } else {
+            panel = panel.child("Reading source columns and full raw signal…");
+        }
+        if let Some(error) = &self.error {
+            panel = panel.child(div().text_color(t.accent).child(error.clone()));
+        }
+        let ready = self
+            .draft
+            .as_ref()
+            .and_then(|d| self.key(d.revision))
+            .is_some_and(|key| self.preview.ready(&key))
+            && self.error.is_none()
+            && !self.locked;
+        panel = panel.child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap_2()
+                .items_center()
+                .child(self.button(
+                    Action::Reset,
+                    "Use detected columns",
+                    self.draft.is_some() && !self.locked,
+                    cx,
+                ))
+                .child(self.button(Action::Reload, "Reload source", true, cx))
+                .child(div().flex_1().child("Target: this group · 1 file"))
+                .child(self.button(Action::Cancel, "Cancel", true, cx))
+                .child(self.button(Action::Apply, "Apply to 1 file", ready, cx)),
+        );
+        div()
+            .id("import-mapping-modal")
+            .key_context("ImportEditor")
+            .track_focus(&self.focus)
+            .absolute()
+            .inset_0()
+            .occlude()
+            .bg(gpui::rgba(0x00000099))
+            .flex()
+            .items_center()
+            .justify_center()
+            .p_4()
+            .text_size(px(12.))
+            .text_color(t.text)
+            .capture_action(
+                cx.listener(|this, _: &NextField, window, cx| this.focus_next(false, window, cx)),
+            )
+            .capture_action(
+                cx.listener(|this, _: &PrevField, window, cx| this.focus_next(true, window, cx)),
+            )
+            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
+                if event.keystroke.key == "escape" {
+                    this.close(window, cx);
+                    cx.stop_propagation();
+                } else if !this.spacing.read(cx).focus_handle(cx).is_focused(window) {
+                    // Unhandled keys must reach the native input handler while a
+                    // text field has focus. The ImportEditor context already
+                    // excludes the surrounding Studio shortcuts.
+                    cx.stop_propagation();
+                }
+            }))
+            .child(panel)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn apply_refuses_removed_replaced_edited_and_newly_locked_targets() {
+        let target = ToolTarget::standalone(
+            Some(crate::group_identity::GroupId::new_result()),
+            "/source.dat".into(),
+            "Source".into(),
+            11,
+            2,
+            3,
+        );
+        assert!(check_target(&target, Some(&target), false).is_ok());
+        assert!(check_target(&target, None, false).is_err());
+        assert!(check_target(&target, Some(&target), true).is_err());
+        let mut changed = target.clone();
+        changed.fingerprint += 1;
+        assert!(check_target(&target, Some(&changed), false).is_err());
+        changed = target.clone();
+        changed.project_generation += 1;
+        assert!(check_target(&target, Some(&changed), false).is_err());
+        changed = target.clone();
+        changed.group_id = Some(crate::group_identity::GroupId::new_result());
+        assert!(check_target(&target, Some(&changed), false).is_err());
+    }
+}
