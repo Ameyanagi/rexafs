@@ -219,6 +219,19 @@ pub(crate) fn access_thread_params(directory: &Path, extended: bool) -> Value {
             "exclude_tmpdir_env_var":true,"exclude_slash_tmp":true}}})
 }
 
+/// v2 ThreadResumeParams: threadId plus the same explicit access overrides as
+/// thread/start. In particular, a saved thread cannot restore Extended access
+/// without the current session's consent. Generated with Codex app-server.
+pub(crate) fn resume_thread_params(directory: &Path, extended: bool, thread: &str) -> Value {
+    let mut params = access_thread_params(directory, extended);
+    if let Some(object) = params.as_object_mut() {
+        object.remove("ephemeral");
+        object.remove("selectedCapabilityRoots");
+        object.insert("threadId".into(), thread.into());
+    }
+    params
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CommandApproval {
     pub id: Value,
@@ -424,6 +437,22 @@ pub(crate) fn dynamic_tools() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn assistant_resume_preserves_current_access_policy_without_start_only_fields() {
+        let params =
+            resume_thread_params(std::path::Path::new("/workspace"), false, "saved-thread");
+        assert_eq!(params["threadId"], "saved-thread");
+        assert_eq!(params["sandbox"], "read-only");
+        assert_eq!(params["approvalPolicy"], "never");
+        assert!(params.get("ephemeral").is_none());
+        assert!(params.get("selectedCapabilityRoots").is_none());
+        assert_eq!(
+            params["config"]["sandbox_workspace_write"]["network_access"],
+            false
+        );
+    }
+
     #[test]
     fn assistant_command_approval_protocol() {
         let fixture = json!({"id":"approval-4","method":"item/commandExecution/requestApproval","params":{

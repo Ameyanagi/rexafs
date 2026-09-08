@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::fitting::{FitHistoryEntry, FitPathSpec, FitRanges, FitVarSpec};
 use crate::params::DerivedSpectrum;
 use crate::params::PipelineParams;
+pub mod assistant;
 mod compact;
 mod storage;
 pub use storage::{DataStorage, ProjectHeader};
@@ -48,6 +49,7 @@ pub struct ProjectFile {
     pub fit_history: Vec<FitHistoryEntry>,
     pub joint: crate::joint_fitting::JointConfig,
     pub(crate) publication: crate::publication::figures::FigureSettings,
+    pub assistant: assistant::AssistantHistory,
     /// Preserve additive top-level metadata during open/edit/save.
     #[serde(flatten)]
     pub extensions: std::collections::BTreeMap<String, serde_json::Value>,
@@ -103,7 +105,8 @@ pub fn save_with_storage(
         return Err("Save rexafs projects with the .rxs extension.".into());
     }
     check_version(project.version.max(1))?;
-    let prepared = storage::prepare(project, path, mode)?;
+    let mut prepared = storage::prepare(project, path, mode)?;
+    prepared.assistant.prune_for_save();
     let mut value = serde_json::to_value(&prepared).map_err(|e| e.to_string())?;
     value["version"] = PROJECT_VERSION.into();
     let json = compact::encode(value)?;

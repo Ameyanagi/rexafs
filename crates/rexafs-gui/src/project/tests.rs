@@ -63,6 +63,62 @@ fn state(project: &ProjectFile) -> Value {
 }
 
 #[test]
+fn assistant_conversations_roundtrip_in_both_storage_modes_and_limit_at_save() {
+    use super::assistant::{Conversation, ConversationEntry, ConversationMode};
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let dir = Temp::new();
+        let mut project = specimen(&dir.0);
+        for n in 0..2 {
+            let mut conversation = Conversation::new(&format!("Check fit {n}"), n == 1);
+            conversation.id = format!("conversation-{n}");
+            conversation.updated_at = format!("2026-09-08T00:0{n}:00Z");
+            conversation.thread_id = Some(format!("server-thread-{n}"));
+            conversation.entries = vec![
+                ConversationEntry::User {
+                    text: format!("Check fit {n}"),
+                    edit: n == 1,
+                },
+                ConversationEntry::Thinking {
+                    id: "reason".into(),
+                    text: "Inspect normalization first.".into(),
+                },
+                ConversationEntry::Assistant {
+                    id: "answer".into(),
+                    text: "The ranges are consistent.".into(),
+                },
+            ];
+            project.assistant.upsert(conversation);
+        }
+        let path = dir.join("conversations.rxs");
+        save_with_storage(&path, &project, mode).unwrap();
+        let restored = load(&path).unwrap();
+        assert_eq!(
+            restored.assistant.conversations,
+            project.assistant.conversations
+        );
+        assert_eq!(
+            restored.assistant.conversations[0].mode,
+            ConversationMode::Edit
+        );
+        assert_eq!(
+            json_file(&path)["assistant"]["conversations"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        project.assistant.limit = Some(1);
+        save_with_storage(&path, &project, mode).unwrap();
+        let restored = load(&path).unwrap();
+        assert_eq!(restored.assistant.conversations.len(), 1);
+        assert_eq!(restored.assistant.conversations[0].id, "conversation-1");
+        project.assistant.limit = Some(0);
+        save_with_storage(&path, &project, mode).unwrap();
+        assert!(load(&path).unwrap().assistant.conversations.is_empty());
+    }
+}
+
+#[test]
 fn format_one_defaults_keep_their_released_meaning() {
     fn preserved(expected: &Value, actual: &Value) -> bool {
         match expected.as_object() {

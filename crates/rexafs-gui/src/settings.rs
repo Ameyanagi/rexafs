@@ -49,6 +49,7 @@ pub struct UserSettings {
     pub assistant_extended_access: bool,
     pub assistant_docked: bool,
     pub assistant_panel_width: f32,
+    pub assistant_history_limit: u32,
 }
 
 impl Default for UserSettings {
@@ -65,6 +66,7 @@ impl Default for UserSettings {
             assistant_extended_access: false,
             assistant_docked: true,
             assistant_panel_width: 380.,
+            assistant_history_limit: crate::project::assistant::DEFAULT_HISTORY_LIMIT,
         }
     }
 }
@@ -317,6 +319,7 @@ mod tests {
             assistant_extended_access: true,
             assistant_docked: false,
             assistant_panel_width: 512.,
+            assistant_history_limit: 3,
         };
         s.save_to(&path).unwrap();
         assert_eq!(UserSettings::load_from(&path).unwrap(), s);

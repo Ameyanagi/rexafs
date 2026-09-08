@@ -1154,6 +1154,9 @@ pub struct StudioApp {
     project_raw_files: Vec<PathBuf>,
     project_source_origins: BTreeMap<PathBuf, PathBuf>,
     project_generation: u64,
+    assistant_history: crate::project::assistant::AssistantHistory,
+    assistant_history_revision: u64,
+    assistant_history_saved_revision: u64,
     project_load_generation: u64,
     project_saving: bool,
     updates: shell::updates_view::UpdateState,
@@ -2098,6 +2101,9 @@ impl StudioApp {
             project_raw_files: Vec::new(),
             project_source_origins: BTreeMap::new(),
             project_generation: 0,
+            assistant_history: Default::default(),
+            assistant_history_revision: 0,
+            assistant_history_saved_revision: 0,
             project_load_generation: 0,
             project_saving: false,
             updates: Default::default(),
@@ -6778,6 +6784,10 @@ impl StudioApp {
             fit_history: self.fit_history.clone(),
             joint: self.joint.config.clone(),
             publication: self.publish.settings.clone(),
+            assistant: crate::project::assistant::AssistantHistory {
+                conversations: self.assistant_history.conversations.clone(),
+                limit: Some(self.structure.settings.assistant_history_limit),
+            },
             extensions: self.project_extensions.clone(),
             embedded: Default::default(),
             raw_files: (0..self.catalog.len())
@@ -6803,6 +6813,7 @@ impl StudioApp {
             return;
         }
         let project = self.project_file();
+        let history_revision = self.assistant_history_revision;
         let generation = self.project_generation;
         let mode = self.project_storage;
         let folder = self
@@ -6846,6 +6857,12 @@ impl StudioApp {
                             if app.project_generation == generation {
                                 app.project_path = Some(path.clone());
                                 app.project_header = Some(header);
+                                app.assistant_history_saved_revision = history_revision;
+                                if app.assistant_history_revision == history_revision {
+                                    app.assistant_history.limit =
+                                        Some(app.structure.settings.assistant_history_limit);
+                                    app.assistant_history.prune_for_save();
+                                }
                             }
                             app.status = format!("Saved {}", path.display()).into();
                         }
@@ -6918,6 +6935,15 @@ impl StudioApp {
     fn apply_project(&mut self, mut project: ProjectFile, cx: &mut Context<Self>) {
         self.next_derived_id = project.assign_group_ids();
         self.project_generation += 1;
+        self.assistant_history = project.assistant.clone();
+        self.assistant_history_revision = 0;
+        self.assistant_history_saved_revision = 0;
+        if let Some(assistant) = self.assistant.clone() {
+            let generation = self.project_generation;
+            cx.defer(move |cx| {
+                assistant.update(cx, |view, cx| view.replace_project(generation, cx))
+            });
+        }
         self.tools.invalidate_bindings();
         self.journal = Default::default();
         self.project_path = project.origin.clone();

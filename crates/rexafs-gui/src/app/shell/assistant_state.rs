@@ -16,6 +16,7 @@ pub(super) enum Status {
     Stopped,
     Error(String),
     Reconnected,
+    Note(String),
 }
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum Entry {
@@ -99,6 +100,124 @@ pub(super) struct Transcript {
     revision: u64,
 }
 impl Transcript {
+    pub fn persisted_entries(&self) -> Vec<crate::project::assistant::ConversationEntry> {
+        use crate::project::assistant::{ConversationEntry as Saved, SavedActivityState as State};
+        self.entries
+            .iter()
+            .filter_map(|entry| {
+                Some(match entry {
+                    Entry::User(text, edit) => Saved::User {
+                        text: text.clone(),
+                        edit: *edit,
+                    },
+                    Entry::Assistant { id, text } => Saved::Assistant {
+                        id: id.clone(),
+                        text: text.clone(),
+                    },
+                    Entry::Thinking { id, text } => Saved::Thinking {
+                        id: id.clone(),
+                        text: text.clone(),
+                    },
+                    Entry::Activity {
+                        id,
+                        label,
+                        tool,
+                        state,
+                    } => Saved::Activity {
+                        id: id.clone(),
+                        label: label.clone(),
+                        tool: tool.clone(),
+                        state: match state {
+                            ActivityState::Done => State::Done,
+                            ActivityState::Running | ActivityState::Stopped => State::Stopped,
+                            ActivityState::Failed(error) => State::Failed(error.clone()),
+                        },
+                    },
+                    Entry::Receipt(receipt) => Saved::Receipt {
+                        header: receipt.header.clone(),
+                        lines: receipt.lines.clone(),
+                        scope: receipt.scope.clone(),
+                        state: if receipt.processing.is_some() || receipt.state == "Recalculating…"
+                        {
+                            "Change recorded".into()
+                        } else {
+                            receipt.state.clone()
+                        },
+                        navigation: receipt.navigation.clone(),
+                    },
+                    Entry::Status(Status::Preparing | Status::Waiting { .. }) => return None,
+                    Entry::Status(_) => Saved::Status {
+                        text: entry.text(Instant::now()),
+                    },
+                })
+            })
+            .collect()
+    }
+
+    pub fn restore(entries: &[crate::project::assistant::ConversationEntry]) -> Self {
+        use crate::project::assistant::{ConversationEntry as Saved, SavedActivityState as State};
+        Self {
+            entries: entries
+                .iter()
+                .map(|entry| match entry {
+                    Saved::User { text, edit } => Entry::User(text.clone(), *edit),
+                    Saved::Assistant { id, text } => Entry::Assistant {
+                        id: id.clone(),
+                        text: text.clone(),
+                    },
+                    Saved::Thinking { id, text } => Entry::Thinking {
+                        id: id.clone(),
+                        text: text.clone(),
+                    },
+                    Saved::Activity {
+                        id,
+                        label,
+                        tool,
+                        state,
+                    } => Entry::Activity {
+                        id: id.clone(),
+                        label: label.clone(),
+                        tool: tool.clone(),
+                        state: match state {
+                            State::Done => ActivityState::Done,
+                            State::Stopped => ActivityState::Stopped,
+                            State::Failed(error) => ActivityState::Failed(error.clone()),
+                        },
+                    },
+                    Saved::Receipt {
+                        header,
+                        lines,
+                        scope,
+                        state,
+                        navigation,
+                    } => Entry::Receipt(Receipt {
+                        header: header.clone(),
+                        lines: lines.clone(),
+                        scope: scope.clone(),
+                        state: state.clone(),
+                        navigation: navigation.clone(),
+                        // A saved receipt is evidence, never a live approval or an
+                        // undo token that could accidentally match a later edit.
+                        permission: None,
+                        journal: None,
+                        processing: None,
+                        history: None,
+                        model: 0,
+                        undo_retired: true,
+                    }),
+                    Saved::Status { text } => Entry::Status(Status::Note(text.clone())),
+                })
+                .collect(),
+            revision: 1,
+            ..Default::default()
+        }
+    }
+
+    pub fn note(&mut self, text: impl Into<String>) {
+        self.entries.push(Entry::Status(Status::Note(text.into())));
+        self.revision = self.revision.wrapping_add(1);
+    }
+
     pub fn accepts(&self, turn: &str) -> bool {
         self.busy && self.turn.as_deref() == Some(turn)
     }
@@ -390,6 +509,7 @@ impl Entry {
                 }
                 Status::Stopped => "Stopped".into(),
                 Status::Error(error) => format!("Error: {error}"),
+                Status::Note(text) => text.clone(),
                 Status::Reconnected => {
                     "Connection restored. The next message starts a new conversation.".into()
                 }
@@ -417,6 +537,57 @@ pub(super) fn should_follow(offset: f32, max_offset: f32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn assistant_restored_transcript_retains_content_without_live_approval_or_undo() {
+        let now = Instant::now();
+        let mut original = Transcript::default();
+        original.entries = vec![
+            Entry::User("Inspect the fit".into(), true),
+            Entry::Thinking {
+                id: "reason".into(),
+                text: "Check the ranges.".into(),
+            },
+            Entry::Activity {
+                id: "tool".into(),
+                label: "Read state".into(),
+                tool: "xray_get_state".into(),
+                state: ActivityState::Done,
+            },
+            Entry::Assistant {
+                id: "reply".into(),
+                text: "Ranges checked.".into(),
+            },
+            Entry::Receipt(Receipt::change(
+                "copper.dat",
+                super::super::Stage::Fit,
+                vec!["range changed".into()],
+                7,
+            )),
+            Entry::Status(Status::Waiting { started: now }),
+        ];
+        let saved = original.persisted_entries();
+        let json = serde_json::to_string(&saved).unwrap();
+        assert!(!json.contains("Waiting"));
+        let mut restored = Transcript::restore(&serde_json::from_str::<Vec<_>>(&json).unwrap());
+        assert!(!restored.busy && !restored.stop_pending && restored.turn.is_none());
+        assert!(restored.conversation(now).contains("Check the ranges."));
+        assert!(restored.conversation(now).contains("Read state"));
+        let Entry::Receipt(receipt) = &restored.entries[4] else {
+            panic!("receipt missing")
+        };
+        assert!(receipt.journal.is_none() && receipt.permission.is_none() && receipt.undo_retired);
+        assert!(restored.apply(Event::Send("Continue".into(), false), now));
+        assert!(restored.apply(Event::TurnStarted("new-turn".into()), now));
+        assert!(!restored.apply(
+            Event::TurnCompleted {
+                turn: "old-turn".into(),
+                error: None
+            },
+            now
+        ));
+        assert!(restored.busy);
+    }
     fn active(now: Instant) -> Transcript {
         let mut t = Transcript::default();
         assert!(t.apply(Event::Send("hello".into(), false), now));

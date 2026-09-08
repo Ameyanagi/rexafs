@@ -436,12 +436,15 @@ impl StudioApp {
     /// Brand · project · actions (open folder / project, theme).
     fn top_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
-        let project: SharedString = self
+        let mut project: SharedString = self
             .source_dir
             .as_ref()
             .and_then(|d| d.file_name().map(|n| n.to_string_lossy().into_owned()))
             .unwrap_or_else(|| self.spectrum_label.to_string())
             .into();
+        if self.assistant_history_revision != self.assistant_history_saved_revision {
+            project = format!("{project} *").into();
+        }
         let action = |id: &'static str,
                       label: &'static str,
                       f: fn(&mut Self, &mut Context<Self>)|
