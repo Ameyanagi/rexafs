@@ -2,8 +2,8 @@
 
 The 0.1.4 release is published. Phase 1, Phase 2.1–2.7, and concrete follow-up
 gaps D1–D4 are implemented and locally qualified on
-`feature/import-groups-phase2`. Integration review/CI and the platform checks
-listed below remain; the explicitly deferred features are still backlog.
+`feature/import-groups-phase2`. Integration is tracked in [PR #41](https://github.com/Ameyanagi/rexafs/pull/41);
+its CI/review status and the platform checks listed below remain to be closed; the explicitly deferred features are still backlog.
 Version 0.2.0 has not been tagged or published.
 
 This replaces the earlier overlapping progress entries. The original Groups
@@ -54,7 +54,9 @@ See [release qualification](validation/2026-09-08-release-0.1.4/review.md) and
 
 The integration branch contains Phase 1's durable identities, source stacks,
 Results, current/focus/mark separation, filters, row actions, locks, undoable
-removal/duplication, drag-and-drop intake, and receipts, followed by these
+removal/duplication, drag-and-drop intake, and receipts. The inherited Phase 1.2
+commit also carries fixed-penalty SVD-factor caching and its numerical/concurrency
+regression tests. Phase 2 follows in these
 separate implementation commits:
 
 | Slice | Completed scope |
@@ -67,7 +69,9 @@ separate implementation commits:
 | 2.6 | Immutable recipe versions, strict layout/units, explicit missing-unit confirmation, project and opt-in machine scope, exact application membership, persistence |
 | 2.7 | Project-over-machine dispatch, conflicts/changed units to review, unnamed-layout confirmation per batch, compact Data inspector, exact application repair, Stop reuse |
 
-Native workflows covered mixed layouts, raw previews, bulk channel creation and
+Native workflows covered six-scan fluorescence navigation, named-target alignment,
+and a six-input merge with saved provenance, plus mixed layouts, raw previews,
+bulk channel creation and
 Undo, partial review, repaired sources, recipe persistence, named fast-path
 imports, unnamed review fallback, and repairs excluding manual remaps. Current
 and marks remained intact. Unreadable sources remain pending and do not expose
@@ -77,14 +81,17 @@ with identical numeric spectra.
 Final GUI suite: **426 passed, zero failed, four ignored**. Formatting, diff
 checks, release build, packaged numerical/ReFEFF/FEFF10 self-checks, and all 18
 retained compatibility samples passed. GUI clippy exits successfully with
-warnings. See [mapping and follow-up qualification](validation/2026-09-08-import-mapping/review.md)
+warnings. Core/default, ndarray, trust-region, and strict core clippy were also
+rerun successfully on the integrated branch. See [mapping and follow-up qualification](validation/2026-09-08-import-mapping/review.md)
 and [0.2.0 development notes](release-notes-0.2.0.md).
 
 - [x] Integrate Phase 1 and Phase 2 implementation in an isolated worktree.
 - [x] Rebase the integration branch onto published main (`6041c78`); the rebase
   preserved the tested tree exactly.
-- [ ] Complete integration PR CI/review and merge. The review branch is
-  [`feature/import-groups-phase2`](https://github.com/Ameyanagi/rexafs/tree/feature/import-groups-phase2).
+- [ ] Complete integration PR CI/review and merge. The review is
+  [PR #41](https://github.com/Ameyanagi/rexafs/pull/41), with all implementation
+  commits pushed on `feature/import-groups-phase2`. Its live checks are the
+  authoritative CI status.
 
 A future 0.2.0 release needs its own version, compatibility fixtures, qualification,
 and publication pass after integration. The development candidate still reports

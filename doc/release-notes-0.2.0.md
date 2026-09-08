@@ -45,6 +45,10 @@ edge provenance. Parser totals and bounded source-line examples are saved with
 the mapping they checked; historical evidence is identified separately from
 current readiness.
 
+The integrated Phase 1 work also reuses fixed-penalty column scaling and SVD
+factors for compatible geometry, while checking each spectrum and its requested
+condition limit independently.
+
 Older projects remain readable. The project format gains additive recipe,
 application, intake-history, edge, and parser-evidence fields. Existing mappings
 are retained on reopen, even when machine recipes differ.

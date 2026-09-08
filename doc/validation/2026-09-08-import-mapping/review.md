@@ -144,9 +144,34 @@ concurrent FEFF snapshots remain isolated.
 Final validation: **426 GUI tests passed, zero failed, four ignored**. Formatting,
 diff checks, the release build, packaged numerical/ReFEFF/FEFF10 self-checks, and
 all 18 retained compatibility fixtures passed. GUI clippy completed successfully
-with warnings; strict core clippy had already passed for the unchanged core.
+with warnings. Core/default, ndarray, trust-region, and strict core clippy were
+also rerun successfully on the integrated branch, including the fixed-penalty
+SVD-cache change carried by the existing Phase 1.2 commit.
 Native Windows/Linux and native Intel hardware qualification remain outstanding.
 
 Logs: `/tmp/rexafs-gaps-final-tests.log`, `/tmp/rexafs-gaps-build.log`,
 `/tmp/rexafs-gaps-package.log`, `/tmp/rexafs-gaps-clippy.log`,
 `/tmp/rexafs-roots-project-tests.log`, and `/tmp/rexafs-roots-feff-tests.log`.
+
+
+## Integrated six-scan acceptance
+
+The final candidate imported six 645-point fluorescence scans and retained the
+current Cu spectrum. Marking the six scans and arrowing to the third kept all
+six marks. Align to reference named the third scan as target and the first scan
+as standard; Apply created a RawMu result with a measured −0.9999997 eV shift
+(the synthetic input offset was exactly 1 eV). Replacing the third source's mark
+with its aligned result and merging created a second RawMu result from exactly
+six inputs. Five source scans and the aligned result remained marked.
+
+The native writer saved
+`/tmp/rexafs-six-scan-qualification/six-scan-qualification.rxs`. Inspection
+confirmed the alignment's two identity-bound operands, the six exact merge
+inputs, retained fluorescence mappings, and separate materialized result IDs.
+This exercises single-target alignment; operation-specific bulk tool execution
+remains explicitly deferred.
+
+Integrated core logs: `/tmp/rexafs-integration-core.log`,
+`/tmp/rexafs-integration-ndarray.log`, `/tmp/rexafs-integration-trust.log`, and
+`/tmp/rexafs-integration-strict.log`; every command exited zero.
+Integration review and live CI: [PR #41](https://github.com/Ameyanagi/rexafs/pull/41).
