@@ -166,6 +166,7 @@ pub(crate) fn resolve_params(
 ) -> Result<PathParams, FittingError> {
     let mut locals = BTreeMap::new();
     locals.insert("reff".to_string(), path.feff.reff);
+    locals.insert("degen".to_string(), path.feff.degen);
 
     Ok(PathParams {
         degen: resolve_path_param(&path.degen, path.feff.degen, globals, &locals)?,
@@ -246,6 +247,27 @@ mod tests {
 
         assert_eq!(chi.len(), k.len());
         assert!(chi.iter().all(|value| value.is_finite()));
+    }
+
+    #[test]
+    fn degen_defaults_to_feff_and_is_a_path_local_in_expressions() {
+        let pathfile = format!("{TOP_DIR}/tests/testfiles/feffcu01.dat");
+        let path = feffpath(pathfile, FeffFlavor::Feff85L).unwrap();
+        let feff_degen = path.feff.degen;
+        assert!(feff_degen > 0.0);
+        let globals = BTreeMap::new();
+        let params = resolve_params(&path, &globals).unwrap();
+        assert_abs_diff_eq!(params.degen, feff_degen, epsilon = 1e-12);
+
+        let halved = path
+            .clone()
+            .set_degen(PathParamSpec::Expression("degen / 2".into()));
+        let params = resolve_params(&halved, &globals).unwrap();
+        assert_abs_diff_eq!(params.degen, feff_degen / 2.0, epsilon = 1e-12);
+
+        let fixed = path.set_degen(PathParamSpec::Value(1.0));
+        let params = resolve_params(&fixed, &globals).unwrap();
+        assert_abs_diff_eq!(params.degen, 1.0, epsilon = 1e-12);
     }
 
     #[test]

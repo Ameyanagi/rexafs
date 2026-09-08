@@ -108,12 +108,17 @@ pub(crate) fn snapshot_workspace(source: &Path) -> Result<PathBuf, String> {
 }
 
 fn workspace_dir() -> Result<PathBuf, String> {
-    let home = crate::settings::home_dir().ok_or("User home directory unavailable")?;
+    // Tests create real FEFF outputs, but must not write into the user's home.
+    let workspace_root = if cfg!(test) {
+        std::env::temp_dir().join(format!("rexafs-feff-tests-{}", std::process::id()))
+    } else {
+        crate::settings::home_dir().ok_or("User home directory unavailable")?
+    };
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?
         .as_nanos();
-    let dir = home
+    let dir = workspace_root
         .join(".rexafs")
         .join("feff")
         .join(format!("ws-{stamp}"));

@@ -21,6 +21,15 @@ pub(crate) struct SpectrumInput {
     pub data: Option<Arc<XASSpectrum>>,
 }
 impl SpectrumInput {
+    pub fn for_display(&self) -> Result<Arc<XASSpectrum>, String> {
+        if self.source_error.is_none()
+            && let Some(group) = &self.group
+        {
+            return group.for_display(&self.params).map(Arc::new);
+        }
+        self.process()
+    }
+
     pub fn label(&self) -> String {
         if self.label.is_empty() {
             self.path
@@ -35,6 +44,13 @@ impl SpectrumInput {
     pub fn process(&self) -> Result<Arc<XASSpectrum>, String> {
         if let Some(error) = &self.source_error {
             return Err(error.clone());
+        }
+        if let Some(reason) = self
+            .group
+            .as_ref()
+            .and_then(|g| g.processing_block_reason())
+        {
+            return Err(reason);
         }
         if let Some(data) = &self.data {
             return Ok(data.clone());
@@ -251,7 +267,7 @@ pub(crate) fn export(mut snapshot: Snapshot, destination: &Path) -> Result<PathB
     );
     for (i, s) in snapshot.spectra.iter_mut().enumerate() {
         let id = format!("spectrum-{:03}", i + 1);
-        let result = s.process();
+        let result = s.for_display();
         match result {
             Ok(sp) => {
                 s.data = Some(sp.clone());
@@ -270,7 +286,9 @@ pub(crate) fn export(mut snapshot: Snapshot, destination: &Path) -> Result<PathB
                     "```json\n{}\n```\n\n",
                     serde_json::to_string_pretty(&resolved_settings(&sp)).unwrap()
                 ));
-                for figure in figures::spectrum_figures(sp, &s.label()) {
+                for figure in
+                    figures::quantity_figures(sp, &s.label(), s.group.as_ref().map(|g| g.quantity))
+                {
                     let filename = format!("{id}-{}.png", figure.key);
                     match save_figure(&figure,&snapshot.project.publication,&figs.join(&filename)) {Ok(())=>assets.push(json!({"file":format!("figures/{filename}"),"svg":format!("figures/{}",filename.replace(".png",".svg")),"csv":format!("figures/{}",filename.replace(".png",".csv")),"source":s.path,"group":s.label(),"group_id":s.group.as_ref().map(|g|g.id),"kind":figure.key,"number":assets.len()+1,"caption":format!("Spectrum {} ({}). {}",i+1,s.label(),figure.caption(&snapshot.project.publication.options(figure.key)))})),Err(e)=>errors.push(format!("{filename}: {e}"))}
                 }

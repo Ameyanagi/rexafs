@@ -63,6 +63,128 @@ fn state(project: &ProjectFile) -> Value {
 }
 
 #[test]
+fn assistant_conversations_roundtrip_in_both_storage_modes_and_limit_at_save() {
+    use super::assistant::{Conversation, ConversationEntry, ConversationMode};
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let dir = Temp::new();
+        let mut project = specimen(&dir.0);
+        for n in 0..2 {
+            let mut conversation = Conversation::new(&format!("Check fit {n}"), n == 1);
+            conversation.id = format!("conversation-{n}");
+            conversation.updated_at = format!("2026-09-08T00:0{n}:00Z");
+            conversation.thread_id = Some(format!("server-thread-{n}"));
+            conversation.entries = vec![
+                ConversationEntry::User {
+                    text: format!("Check fit {n}"),
+                    edit: n == 1,
+                },
+                ConversationEntry::Thinking {
+                    id: "reason".into(),
+                    text: "Inspect normalization first.".into(),
+                },
+                ConversationEntry::Assistant {
+                    id: "answer".into(),
+                    text: "The ranges are consistent.".into(),
+                },
+            ];
+            project.assistant.upsert(conversation);
+        }
+        let path = dir.join("conversations.rxs");
+        save_with_storage(&path, &project, mode).unwrap();
+        let restored = load(&path).unwrap();
+        assert_eq!(
+            restored.assistant.conversations,
+            project.assistant.conversations
+        );
+        assert_eq!(
+            restored.assistant.conversations[0].mode,
+            ConversationMode::Edit
+        );
+        assert_eq!(
+            json_file(&path)["assistant"]["conversations"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        project.assistant.limit = Some(1);
+        save_with_storage(&path, &project, mode).unwrap();
+        let restored = load(&path).unwrap();
+        assert_eq!(restored.assistant.conversations.len(), 1);
+        assert_eq!(restored.assistant.conversations[0].id, "conversation-1");
+        project.assistant.limit = Some(0);
+        save_with_storage(&path, &project, mode).unwrap();
+        assert!(load(&path).unwrap().assistant.conversations.is_empty());
+    }
+}
+
+/// Explicit maintainer operation; never modifies a retained fixture by default.
+#[test]
+#[ignore = "requires REXAFS_FIXTURE_OUTPUT; writes a new release fixture pair"]
+fn write_release_compatibility_fixtures() {
+    use super::assistant::{Conversation, ConversationEntry, SavedActivityState};
+    let output = std::env::var_os("REXAFS_FIXTURE_OUTPUT")
+        .map(PathBuf::from)
+        .expect("set REXAFS_FIXTURE_OUTPUT to an empty fixture output directory");
+    std::fs::create_dir_all(&output).unwrap();
+    let mut project = load(&fixture("rexafs-0.1.3-links.rxs")).unwrap();
+    if let Some(path) = project.fit_paths.first_mut() {
+        path.degen = "4".into();
+    }
+    for (index, edit) in [false, true].into_iter().enumerate() {
+        let mut conversation = Conversation::new("Synthetic saved-conversation fixture", edit);
+        conversation.id = format!("fixture-conversation-{index}");
+        conversation.started_at = "2026-09-08T00:00:00Z".into();
+        conversation.updated_at = format!("2026-09-08T00:0{index}:00Z");
+        conversation.entries = vec![
+            ConversationEntry::User {
+                text: "Demonstrate retained transcript entries.".into(),
+                edit,
+            },
+            ConversationEntry::Thinking {
+                id: "thinking-1".into(),
+                text: "Synthetic persistence example.".into(),
+            },
+            ConversationEntry::Activity {
+                id: "activity-1".into(),
+                label: "Read project state".into(),
+                tool: "xray_get_state".into(),
+                state: SavedActivityState::Done,
+            },
+            ConversationEntry::Receipt {
+                header: "Synthetic recorded change".into(),
+                lines: vec!["N = 4 (persistence example)".into()],
+                scope: "This spectrum".into(),
+                state: "Recorded".into(),
+                navigation: json!({}),
+            },
+            ConversationEntry::Assistant {
+                id: "answer-1".into(),
+                text: "This is fixture content, not a scientific fit recommendation.".into(),
+            },
+            ConversationEntry::Status {
+                text: "Completed".into(),
+            },
+        ];
+        project.assistant.upsert(conversation);
+    }
+    for (suffix, mode) in [
+        ("links", DataStorage::Paths),
+        ("embedded", DataStorage::Embedded),
+    ] {
+        let path = output.join(format!("rexafs-{}-{suffix}.rxs", env!("CARGO_PKG_VERSION")));
+        assert!(!path.exists(), "never overwrite a retained release fixture");
+        save_with_storage(&path, &project, mode).unwrap();
+        let restored = load(&path).unwrap();
+        assert_eq!(
+            restored.assistant.conversations,
+            project.assistant.conversations
+        );
+        assert_eq!(restored.fit_paths[0].degen, "4");
+    }
+}
+
+#[test]
 fn format_one_defaults_keep_their_released_meaning() {
     fn preserved(expected: &Value, actual: &Value) -> bool {
         match expected.as_object() {
@@ -602,4 +724,206 @@ fn invalid_channel_ids_are_rejected_and_legacy_groups_get_stable_ids() {
         bad["derived"][1]["id"] = id.into();
         assert!(parse(&bad.to_string()).is_err());
     }
+}
+
+#[test]
+fn typed_outputs_difference_calibration_and_merge_roundtrip_linked_and_embedded() {
+    use crate::params::{Operation, OperationInput, Quantity, process_file};
+    use crate::publication::{SpectrumInput, figures};
+    let temp = Temp::new();
+    let mut project = specimen(&temp.join("original"));
+    let source = project.spectrum_file.clone().unwrap();
+    let params = PipelineParams {
+        e0: Some(8979.0),
+        bkg_ek0: Some(8979.0),
+        ..Default::default()
+    };
+    let sp = process_file(&source, &params).unwrap();
+    let difference =
+        rexafs::xafs::tools::difference(&sp, &sp, rexafs::xafs::tools::DiffSpace::Norm).unwrap();
+    let baseline = DerivedSpectrum {
+        id: 1,
+        label: "baseline".into(),
+        energy: sp.energy.as_ref().unwrap().as_slice().to_vec(),
+        mu: sp.mu.as_ref().unwrap().as_slice().to_vec(),
+        params: Some(params.clone()),
+        ..Default::default()
+    };
+    let input = OperationInput {
+        label: "Cu".into(),
+        path: source,
+        derived_id: None,
+        fingerprint: params.fingerprint(),
+        size: Some(20737),
+    };
+    let diff = DerivedSpectrum {
+        id: 2,
+        label: "arbitrary renamed result".into(),
+        energy: difference.energy.unwrap().as_slice().to_vec(),
+        mu: difference.mu.unwrap().as_slice().to_vec(),
+        quantity: Quantity::NormalizedDifference,
+        params: Some(params.clone()),
+        operation: Some(Operation {
+            tool: "Difference spectrum".into(),
+            parameters: json!({"space": "NormalizedMu"}),
+            inputs: vec![
+                input.clone(),
+                OperationInput {
+                    label: "baseline".into(),
+                    path: PathBuf::new(),
+                    derived_id: Some(1),
+                    fingerprint: baseline.fingerprint(&params),
+                    size: None,
+                },
+            ],
+            applied_energy_shift_ev: 0.0,
+        }),
+        ..Default::default()
+    };
+    let mut shifted = sp.clone();
+    shifted.shift_energy(3.25);
+    let calibrated = DerivedSpectrum {
+        id: 3,
+        label: "calibrated Cu".into(),
+        energy: shifted.energy.unwrap().as_slice().to_vec(),
+        mu: shifted.mu.unwrap().as_slice().to_vec(),
+        params: Some(params.for_materialized(3.25)),
+        operation: Some(Operation {
+            tool: "Calibrate energy".into(),
+            parameters: json!({"expected_energy_ev": 8982.25}),
+            inputs: vec![input],
+            applied_energy_shift_ev: 3.25,
+        }),
+        ..Default::default()
+    };
+    project.derived = vec![baseline, diff.clone(), calibrated.clone()];
+    let mut merged = calibrated.clone();
+    merged.id = 4;
+    merged.label = "calibrated Cu · merge 2".into();
+    merged.operation = Some(Operation {
+        tool: "merge".into(),
+        parameters: json!({"template": "calibrated Cu", "count": 2}),
+        inputs: [2, 0]
+            .map(|i| OperationInput {
+                label: project.derived[i].label.clone(),
+                path: PathBuf::new(),
+                derived_id: Some(project.derived[i].id),
+                fingerprint: project.derived[i].fingerprint(&params),
+                size: None,
+            })
+            .to_vec(),
+        applied_energy_shift_ev: 0.0,
+    });
+    project.derived.push(merged.clone());
+    project.active_derived = Some(2);
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let saved = temp.join(&format!("typed-{mode:?}.rxs"));
+        save_with_storage(&saved, &project, mode).unwrap();
+        let loaded = load(&saved).unwrap();
+        assert_eq!(state(&project), state(&loaded));
+        let mean = &loaded.derived[3];
+        assert_eq!(mean.quantity, Quantity::RawMu);
+        assert_eq!(mean.operation, merged.operation);
+        assert_eq!(mean.params.as_ref().unwrap().e0, Some(8982.25));
+        assert_eq!(
+            mean.raw(mean.params.as_ref().unwrap()).unwrap(),
+            (merged.energy.clone(), merged.mu.clone())
+        );
+        let result = &loaded.derived[1];
+        assert_eq!(result.quantity, Quantity::NormalizedDifference);
+        assert!(!result.quantity_unconfirmed);
+        assert!(result.display_label().contains("Δμnorm"));
+        assert!(
+            result
+                .process(&params)
+                .unwrap_err()
+                .contains("normalization/AUTOBK disabled")
+        );
+        let display = result.for_display(&params).unwrap();
+        assert_eq!(display.mu.as_ref().unwrap().as_slice(), diff.mu);
+        assert!(display.normalization.is_none() && display.background.is_none());
+        let input = SpectrumInput {
+            group: Some(result.clone()),
+            params: params.clone(),
+            data: Some(std::sync::Arc::new(display)),
+            ..Default::default()
+        };
+        assert!(
+            input.process().is_err(),
+            "cached display data cannot enter fitting"
+        );
+        let plots = figures::quantity_figures(
+            input.for_display().unwrap(),
+            &result.display_label(),
+            Some(result.quantity),
+        );
+        assert_eq!(plots.len(), 1);
+        assert_eq!(plots[0].series[0].x, diff.energy);
+        assert_eq!(plots[0].series[0].y, diff.mu);
+        let csv = plots[0].csv(&Default::default()).unwrap();
+        assert!(
+            csv.lines()
+                .next()
+                .unwrap()
+                .contains("Δμnorm (dimensionless)")
+        );
+        assert_eq!(csv.lines().count(), diff.energy.len() + 1);
+        let result = &loaded.derived[2];
+        let settings = result.params.as_ref().unwrap();
+        assert_eq!(settings.e0, Some(8982.25));
+        assert_eq!(settings.bkg_ek0, Some(8982.25));
+        assert_eq!(
+            result.operation.as_ref().unwrap().applied_energy_shift_ev,
+            3.25
+        );
+        for _ in 0..2 {
+            let processed = result.process(settings).unwrap();
+            assert_eq!(processed.energy.unwrap().as_slice(), calibrated.energy);
+            assert_eq!(processed.e0, settings.e0);
+        }
+        // A second save/reopen must preserve provenance and never add ΔE again.
+        save(&saved, &loaded).unwrap();
+        assert_eq!(state(&loaded), state(&load(&saved).unwrap()));
+    }
+}
+
+#[test]
+fn typed_outputs_legacy_quantity_hints_require_explicit_confirmation() {
+    use crate::params::Quantity;
+    for invalid in [json!(5), json!("invalid"), json!(null)] {
+        assert!(parse(&json!({"version": 1, "derived": [invalid]}).to_string()).is_err());
+    }
+    for (label, expected) in [
+        ("unknown", Quantity::RawMu),
+        ("diff: A − B", Quantity::NormalizedDifference),
+        ("A − B · Δμnorm", Quantity::NormalizedDifference),
+    ] {
+        let value = json!({"version": 1, "derived": [{"label": label, "energy": [1., 2.], "mu": [0., 0.]}]});
+        let mut project = parse(&value.to_string()).unwrap();
+        let group = &mut project.derived[0];
+        assert_eq!(group.quantity, expected);
+        assert!(group.quantity_unconfirmed);
+        assert!(
+            group
+                .process(&PipelineParams::default())
+                .unwrap_err()
+                .contains("Quantity unconfirmed")
+        );
+        group.label = "renamed again".into();
+        let encoded = compact::encode(serde_json::to_value(&project).unwrap()).unwrap();
+        let mut reopened = parse(std::str::from_utf8(&encoded).unwrap()).unwrap();
+        assert_eq!(reopened.derived[0].quantity, expected);
+        assert!(reopened.derived[0].quantity_unconfirmed);
+        reopened.derived[0].confirm_quantity(Quantity::NormalizedDifference);
+        let encoded = compact::encode(serde_json::to_value(&reopened).unwrap()).unwrap();
+        let confirmed = parse(std::str::from_utf8(&encoded).unwrap()).unwrap();
+        assert!(!confirmed.derived[0].quantity_unconfirmed);
+        assert_eq!(
+            confirmed.derived[0].quantity,
+            Quantity::NormalizedDifference
+        );
+    }
+    let channel = parse(r#"{"version":1,"derived":[{"label":"diff: editable name","source":"scan.dat","energy":[],"mu":[]}]}"#).unwrap();
+    assert_eq!(channel.derived[0].quantity, Quantity::RawMu);
+    assert!(!channel.derived[0].quantity_unconfirmed);
 }

@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.1.4
+
+- Bind tools to the intended spectrum and parameter revision, refuse incompatible
+  merges, preserve channel mapping when copying stage settings, and journal
+  mapping edits with lock checks and undo. Record result quantities and inputs;
+  report parser diagnostics and excluded rows.
+- Expose coordination number N for each fitting path and copy fit reports as
+  Markdown with parameters, uncertainties and fit statistics.
+- Add the experimental Assistant: automatic Codex connection, model/reasoning
+  choices, typed transcript with thinking and tool activity, app-authored
+  permissions/receipts, web search and structure fetching. Extended access is
+  off by default and requires explicit session consent.
+- Dock Assistant beside the analysis, resize or pop it out while retaining its
+  conversation. Save the newest five conversations per project by default, with
+  a configurable limit and saved-thread resume or previous-context fallback.
+- Remove the unmaintained derivative macro dependency, pin GitHub Actions to
+  commit SHAs, and enable scheduled dependency update PRs.
+- Retain linked and embedded 0.1.4 project fixtures covering saved conversations
+  and per-path coordination number. Existing format-1 projects remain readable.
+
+## 0.1.3
+
+- Include ReFEFF 0.3.0 and FEFF10 0.2.3 in Mac and Linux builds, retain separate
+  calculation sources, and honor cooperative ReFEFF timeouts. Windows uses
+  ReFEFF; its MSVC build cannot link the current MinGW FEFF10 prebuilt.
+- Verify compiled engines and calculations after archive extraction. Retain
+  linked/embedded fixtures and signed, notarized Mac ZIPs and DMG installers.
+- Make portable Windows/Linux desktop previews available for platform testing;
+  add a per-user Windows setup installer with Unicode-path, payload, shortcut,
+  reinstall and uninstall-preservation checks. Native interactive qualification
+  for Windows/Linux remains pending.
+
 ## 0.1.2
 
 - Use a common χ(k) display weight for comparison overlays and explicitly label

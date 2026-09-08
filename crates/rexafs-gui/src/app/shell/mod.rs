@@ -8,6 +8,9 @@
 
 pub(crate) mod assistant;
 pub(crate) mod assistant_actions;
+mod assistant_receipts;
+pub(crate) mod assistant_shell;
+mod assistant_state;
 mod bond_geometry;
 pub mod center;
 mod depth_controls;
@@ -352,7 +355,20 @@ impl StudioApp {
         let inspector = (self.context_panel_open
             && !matches!(self.stage, Stage::Fit | Stage::Publish))
         .then(|| self.inspector(cx).into_any_element());
+        let assistant = self.assistant_panel(cx);
         div()
+            .id("studio-shell")
+            .on_mouse_move(cx.listener(|this, event: &gpui::MouseMoveEvent, _, cx| {
+                this.resize_assistant(event, cx)
+            }))
+            .on_mouse_up(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _, _, cx| this.finish_assistant_resize(cx)),
+            )
+            .on_mouse_up_out(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _, _, cx| this.finish_assistant_resize(cx)),
+            )
             .size_full()
             .min_h_0()
             .min_w_0()
@@ -381,7 +397,8 @@ impl StudioApp {
                             .children(self.stale_plots_banner(cx))
                             .child(center),
                     )
-                    .children(inspector),
+                    .children(inspector)
+                    .children(assistant),
             )
             .children(
                 self.problems_open
@@ -397,17 +414,37 @@ impl StudioApp {
             .children(self.parameter_menu_overlay(cx))
             .children(self.parameter_context_overlay(cx))
             .children(self.updates_overlay(cx))
+            .when(self.assistant_resizing.is_some(), |d| {
+                d.child(
+                    div()
+                        .id("assistant-resize-capture")
+                        .absolute()
+                        .inset_0()
+                        .cursor(gpui::CursorStyle::ResizeLeftRight)
+                        .occlude()
+                        .on_mouse_move(cx.listener(|this, event: &gpui::MouseMoveEvent, _, cx| {
+                            this.resize_assistant(event, cx)
+                        }))
+                        .on_mouse_up(
+                            gpui::MouseButton::Left,
+                            cx.listener(|this, _, _, cx| this.finish_assistant_resize(cx)),
+                        ),
+                )
+            })
     }
 
     /// Brand · project · actions (open folder / project, theme).
     fn top_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
-        let project: SharedString = self
+        let mut project: SharedString = self
             .source_dir
             .as_ref()
             .and_then(|d| d.file_name().map(|n| n.to_string_lossy().into_owned()))
             .unwrap_or_else(|| self.spectrum_label.to_string())
             .into();
+        if self.assistant_history_revision != self.assistant_history_saved_revision {
+            project = format!("{project} *").into();
+        }
         let action = |id: &'static str,
                       label: &'static str,
                       f: fn(&mut Self, &mut Context<Self>)|

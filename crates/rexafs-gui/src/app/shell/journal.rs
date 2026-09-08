@@ -7,7 +7,7 @@ use gpui::{ClickEvent, Context, IntoElement, ParentElement, Styled, div, prelude
 
 use super::MONO;
 use crate::app::{DERIVED_BASE, ParamKey, StudioApp};
-use crate::params::{DerivedSpectrum, PipelineParams};
+use crate::params::{DerivedSpectrum, PipelineParams, Quantity};
 
 /// Inverse of a recorded change.
 #[allow(clippy::large_enum_variant)]
@@ -26,6 +26,12 @@ pub enum UndoOp {
         before: PipelineParams,
         after: PipelineParams,
     },
+    DerivedQuantity {
+        index: usize,
+        id: u64,
+        before: (Quantity, bool),
+        after: (Quantity, bool),
+    },
     /// A derived group was created at `index`.
     DerivedAdd {
         index: usize,
@@ -38,6 +44,41 @@ pub enum UndoOp {
     },
 }
 
+impl UndoOp {
+    fn remap_quantity_index(&mut self, derived: &[DerivedSpectrum]) {
+        if let Self::DerivedQuantity { index, id, .. } = self
+            && let Some(current) = derived.iter().position(|g| g.id == *id)
+        {
+            *index = current;
+        }
+    }
+
+    fn apply_quantity(&self, derived: &mut [DerivedSpectrum], forward: bool) {
+        if let Self::DerivedQuantity {
+            index,
+            id,
+            before,
+            after,
+        } = self
+            && let Some(group) = derived.get_mut(*index).filter(|g| g.id == *id)
+        {
+            (group.quantity, group.quantity_unconfirmed) = if forward { *after } else { *before };
+        }
+    }
+
+    fn param_snapshot(&self, forward: bool) -> Option<(Option<usize>, PipelineParams)> {
+        match self {
+            Self::Param {
+                target,
+                before,
+                after,
+                ..
+            } => Some((*target, if forward { after } else { before }.clone())),
+            _ => None,
+        }
+    }
+}
+
 pub struct JournalEntry {
     pub text: String,
 }
@@ -48,21 +89,60 @@ pub struct JournalState {
     pub undo: Vec<UndoOp>,
     pub redo: Vec<UndoOp>,
     pub open: bool,
+    pub(crate) receipt_revision: u64,
 }
 
 const JOURNAL_CAPACITY: usize = 500;
 
-impl StudioApp {
+impl JournalState {
+    fn changed(&mut self) {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        self.receipt_revision = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub(crate) fn take_history(&mut self, redo: bool) -> Option<UndoOp> {
+        let op = if redo {
+            self.redo.pop()
+        } else {
+            self.undo.pop()
+        }?;
+        self.changed();
+        Some(op)
+    }
+
+    pub(crate) fn confirm_quantity(
+        &mut self,
+        index: usize,
+        group: &mut DerivedSpectrum,
+        quantity: Quantity,
+    ) -> bool {
+        let before = (group.quantity, group.quantity_unconfirmed);
+        if !group.confirm_quantity(quantity) {
+            return false;
+        }
+        self.record(
+            format!("Confirm quantity: {}", group.display_label()),
+            Some(UndoOp::DerivedQuantity {
+                index,
+                id: group.id,
+                before,
+                after: (group.quantity, group.quantity_unconfirmed),
+            }),
+        );
+        true
+    }
+
     /// Append a journal line, optionally with its inverse.
     pub(crate) fn record(&mut self, text: impl Into<String>, op: Option<UndoOp>) {
+        self.changed();
         let text = text.into();
-        self.journal.entries.push(JournalEntry { text });
-        if self.journal.entries.len() > JOURNAL_CAPACITY {
-            self.journal.entries.remove(0);
+        self.entries.push(JournalEntry { text });
+        if self.entries.len() > JOURNAL_CAPACITY {
+            self.entries.remove(0);
         }
         if let Some(op) = op {
-            self.journal.undo.push(op);
-            self.journal.redo.clear();
+            self.undo.push(op);
+            self.redo.clear();
         }
     }
 
@@ -84,16 +164,17 @@ impl StudioApp {
             key: k,
             after: a,
             ..
-        }) = self.journal.undo.last_mut()
+        }) = self.undo.last_mut()
             && *t == target
             && key.is_some()
             && *k == key
         {
             *a = after;
-            if let Some(last) = self.journal.entries.last_mut() {
+            if let Some(last) = self.entries.last_mut() {
                 last.text = text;
             }
-            self.journal.redo.clear();
+            self.redo.clear();
+            self.changed();
             return;
         }
         self.record(
@@ -106,8 +187,26 @@ impl StudioApp {
             }),
         );
     }
+}
 
-    fn apply_params_to(&mut self, target: Option<usize>, params: PipelineParams) {
+impl StudioApp {
+    pub(crate) fn record(&mut self, text: impl Into<String>, op: Option<UndoOp>) {
+        self.journal.record(text, op);
+    }
+
+    pub(crate) fn record_param_edit(
+        &mut self,
+        target: Option<usize>,
+        key: Option<ParamKey>,
+        before: PipelineParams,
+        after: PipelineParams,
+        text: String,
+    ) {
+        self.journal
+            .record_param_edit(target, key, before, after, text);
+    }
+
+    pub(crate) fn apply_params_to(&mut self, target: Option<usize>, params: PipelineParams) {
         match target {
             Some(ix) => {
                 self.set_custom_params(ix, (params != self.params).then_some(params));
@@ -128,6 +227,9 @@ impl StudioApp {
                 Some(ix - 1)
             }
         };
+        for op in self.journal.undo.iter_mut().chain(&mut self.journal.redo) {
+            op.remap_quantity_index(&self.derived);
+        }
         self.selection = self.selection.iter().copied().filter_map(map).collect();
         self.frozen = self.frozen.iter().copied().filter_map(map).collect();
         self.selected = self.selected.and_then(map);
@@ -143,8 +245,8 @@ impl StudioApp {
     }
     fn insert_derived(&mut self, index: usize, spectrum: DerivedSpectrum, cx: &mut Context<Self>) {
         let index = index.min(self.derived.len());
-        self.remap_derived_indices(index, true);
         self.derived.insert(index, spectrum);
+        self.remap_derived_indices(index, true);
         self.select_entry(DERIVED_BASE + index, cx);
         self.sync_param_fields(cx);
     }
@@ -158,8 +260,8 @@ impl StudioApp {
             return None;
         }
         let was_active = self.selected == Some(DERIVED_BASE + index);
-        self.remap_derived_indices(index, false);
         let spectrum = self.derived.remove(index);
+        self.remap_derived_indices(index, false);
         if was_active {
             self.current_path.clear();
             self.spectrum_path.clear();
@@ -185,31 +287,26 @@ impl StudioApp {
     }
 
     pub(crate) fn undo(&mut self, cx: &mut Context<Self>) {
-        let Some(op) = self.journal.undo.pop() else {
+        let Some(op) = self.journal.take_history(false) else {
             self.status = "nothing to undo".into();
             cx.notify();
             return;
         };
+        if let Some((target, params)) = op.param_snapshot(false) {
+            self.apply_params_to(target, params);
+            self.after_param_undo(cx);
+        }
         let inverse = match op {
+            op @ UndoOp::DerivedQuantity { .. } => {
+                op.apply_quantity(&mut self.derived, false);
+                self.after_param_undo(cx);
+                op
+            }
             UndoOp::FitModel { before, after } => {
                 self.restore_model_settings(&before, cx);
                 UndoOp::FitModel { before, after }
             }
-            UndoOp::Param {
-                target,
-                key,
-                before,
-                after,
-            } => {
-                self.apply_params_to(target, before.clone());
-                self.after_param_undo(cx);
-                UndoOp::Param {
-                    target,
-                    key,
-                    before,
-                    after,
-                }
-            }
+            op @ UndoOp::Param { .. } => op,
             UndoOp::Params { changes } => {
                 for (ix, before, _) in &changes {
                     self.set_custom_params(*ix, before.clone());
@@ -235,31 +332,26 @@ impl StudioApp {
     }
 
     pub(crate) fn redo(&mut self, cx: &mut Context<Self>) {
-        let Some(op) = self.journal.redo.pop() else {
+        let Some(op) = self.journal.take_history(true) else {
             self.status = "nothing to redo".into();
             cx.notify();
             return;
         };
+        if let Some((target, params)) = op.param_snapshot(true) {
+            self.apply_params_to(target, params);
+            self.after_param_undo(cx);
+        }
         let forward = match op {
+            op @ UndoOp::DerivedQuantity { .. } => {
+                op.apply_quantity(&mut self.derived, true);
+                self.after_param_undo(cx);
+                op
+            }
             UndoOp::FitModel { before, after } => {
                 self.restore_model_settings(&after, cx);
                 UndoOp::FitModel { before, after }
             }
-            UndoOp::Param {
-                target,
-                key,
-                before,
-                after,
-            } => {
-                self.apply_params_to(target, after.clone());
-                self.after_param_undo(cx);
-                UndoOp::Param {
-                    target,
-                    key,
-                    before,
-                    after,
-                }
-            }
+            op @ UndoOp::Param { .. } => op,
             UndoOp::Params { changes } => {
                 for (ix, _, before) in &changes {
                     self.set_custom_params(*ix, before.clone());
@@ -358,5 +450,167 @@ impl StudioApp {
                     ),
             )
             .child(list)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::params::DetectionMode;
+
+    #[test]
+    fn quantity_confirmation_undo_redo_and_reconfirmation_follow_identity() {
+        let params = PipelineParams::default();
+        let mut groups = vec![DerivedSpectrum {
+            id: 7,
+            quantity_unconfirmed: true,
+            ..Default::default()
+        }];
+        let original = groups[0].fingerprint(&params);
+        let mut journal = JournalState::default();
+        journal.record("earlier edit", Some(UndoOp::Params { changes: vec![] }));
+        assert!(journal.confirm_quantity(0, &mut groups[0], Quantity::ChiK));
+        let confirmed = groups[0].fingerprint(&params);
+        assert_ne!(original, confirmed);
+        assert_eq!(journal.undo.len(), 2);
+        let op = journal.undo.pop().unwrap();
+        op.apply_quantity(&mut groups, false);
+        journal.redo.push(op);
+        assert_eq!(groups[0].fingerprint(&params), original);
+        assert!(groups[0].quantity_unconfirmed);
+        assert!(matches!(journal.undo.last(), Some(UndoOp::Params { .. })));
+
+        // Re-key while the confirmation sits in redo, then restore by identity.
+        groups.insert(
+            0,
+            DerivedSpectrum {
+                id: 8,
+                ..Default::default()
+            },
+        );
+        for op in &mut journal.redo {
+            op.remap_quantity_index(&groups);
+        }
+        let op = journal.redo.pop().unwrap();
+        op.apply_quantity(&mut groups, true);
+        journal.undo.push(op);
+        assert_eq!(groups[1].fingerprint(&params), confirmed);
+        assert_eq!(groups[0].quantity, Quantity::RawMu);
+
+        // Removing and reinserting this group must not retarget its history.
+        let saved = groups.remove(1);
+        for op in &mut journal.undo {
+            op.remap_quantity_index(&groups);
+        }
+        groups.insert(0, saved);
+        for op in &mut journal.undo {
+            op.remap_quantity_index(&groups);
+        }
+        assert!(journal.confirm_quantity(0, &mut groups[0], Quantity::RawMu));
+        assert!(groups[0].processing_block_reason().is_none());
+        assert!(!journal.confirm_quantity(0, &mut groups[0], Quantity::RawMu));
+        let correction = journal.undo.pop().unwrap();
+        correction.apply_quantity(&mut groups, false);
+        assert_eq!(groups[0].fingerprint(&params), confirmed);
+        correction.apply_quantity(&mut groups, true);
+        assert_eq!(groups[0].quantity, Quantity::RawMu);
+        assert!(!groups[0].quantity_unconfirmed);
+        let confirmation = journal.undo.pop().unwrap();
+        confirmation.apply_quantity(&mut groups, false);
+        assert_eq!(groups[0].fingerprint(&params), original);
+    }
+
+    #[test]
+    fn mapping_column_steps_coalesce_and_alignment_round_trips() {
+        for target in [Some(0), Some(DERIVED_BASE), None] {
+            let mut journal = JournalState::default();
+            let mut initial = PipelineParams::default();
+            initial.import.i0_col = Some(1);
+            let mut before = initial.clone();
+            for column in 2..=6 {
+                let mut after = before.clone();
+                after.import.i0_col = Some(column);
+                journal.record_param_edit(
+                    target,
+                    Some(ParamKey::ImpI0Col),
+                    before,
+                    after.clone(),
+                    format!("I0 = {column}"),
+                );
+                before = after;
+            }
+            assert_eq!(journal.entries.len(), 1);
+            assert_eq!(journal.entries[0].text, "I0 = 6");
+            assert_eq!(journal.undo.len(), 1);
+            let op = journal.undo.last().unwrap();
+            assert!(op.param_snapshot(false).unwrap().1 == initial);
+            assert!(op.param_snapshot(true).unwrap().1 == before);
+            let after = crate::app::prepare_parameter_edit(&before, |p| {
+                p.align_to_ref = !p.align_to_ref;
+                Ok(())
+            })
+            .unwrap()
+            .unwrap();
+            journal.record_param_edit(
+                target,
+                None,
+                before.clone(),
+                after.clone(),
+                "Toggle reference alignment".into(),
+            );
+            assert_eq!(journal.undo.len(), 2);
+            let op = journal.undo.last().unwrap();
+            assert!(op.param_snapshot(false).unwrap().1 == before);
+            assert!(op.param_snapshot(true).unwrap().1 == after);
+        }
+    }
+
+    #[test]
+    fn mapping_journal_round_trip_keeps_catalog_channel_and_global_targets() {
+        for target in [Some(0), Some(DERIVED_BASE), None] {
+            let mut journal = JournalState::default();
+            let mut before = PipelineParams::default();
+            before.import.mode = DetectionMode::Reference;
+            let mut after = before.clone();
+            after.import.ir_col = Some(7);
+            journal.record_param_edit(
+                target,
+                None,
+                before.clone(),
+                after.clone(),
+                "Reference mapping".into(),
+            );
+            assert_eq!(journal.entries[0].text, "Reference mapping");
+            let op = journal.undo.pop().unwrap();
+            let (restored_target, restored) = op.param_snapshot(false).unwrap();
+            assert_eq!(restored_target, target);
+            assert!(restored == before);
+            journal.redo.push(op);
+            let op = journal.redo.pop().unwrap();
+            let (restored_target, restored) = op.param_snapshot(true).unwrap();
+            assert_eq!(restored_target, target);
+            assert!(restored == after);
+            journal.undo.push(op);
+            // Separate mapping commands do not coalesce; a new edit retires redo.
+            journal.record_param_edit(
+                target,
+                None,
+                after.clone(),
+                before.clone(),
+                "Reset mapping".into(),
+            );
+            assert_eq!(journal.undo.len(), 2);
+            journal.redo.push(journal.undo.pop().unwrap());
+            journal.record_param_edit(
+                target,
+                None,
+                after.clone(),
+                after.clone(),
+                "No change".into(),
+            );
+            assert_eq!(journal.redo.len(), 1);
+            journal.record_param_edit(target, None, after, before, "New mapping".into());
+            assert!(journal.redo.is_empty());
+        }
     }
 }

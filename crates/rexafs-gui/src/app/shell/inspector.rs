@@ -6,8 +6,19 @@ use gpui::{
     ClickEvent, Context, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, px,
 };
 
-use super::{MONO, Stage, button, section_label};
+use super::{MONO, Stage, button, parameter_actions::ParamScope, section_label};
 use crate::app::{EnumParam, ParamKey, ParamSection, StudioApp};
+use crate::params::Quantity;
+
+fn apply_hint(marked: usize, locked: usize) -> Option<String> {
+    if marked == 0 && locked == 0 {
+        None
+    } else if locked == 0 {
+        Some("excludes current".into())
+    } else {
+        Some(format!("excludes current · {locked} locked"))
+    }
+}
 
 impl StudioApp {
     pub(crate) fn inspector(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -19,6 +30,50 @@ impl StudioApp {
             Stage::Transform => self.transform_inspector(cx).into_any_element(),
             Stage::Series => self.series_inspector(cx).into_any_element(),
             Stage::Fit | Stage::Publish => div().into_any_element(),
+        };
+        let body = if self.stage.is_processing()
+            && let Some(group) = self
+                .selected
+                .filter(|&ix| ix >= crate::app::DERIVED_BASE)
+                .and_then(|ix| self.derived.get(ix - crate::app::DERIVED_BASE))
+        {
+            // Only legacy groups whose stored quantity is unknown get the
+            // confirmation prompt; a blocked quantity (Δμnorm) gets the plain
+            // notice; every other derived group renders the normal body.
+            let blocked = group.processing_block_reason();
+            if !group.quantity_unconfirmed && blocked.is_none() {
+                body
+            } else {
+                let mut notice = div()
+                    .p_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(group.display_label());
+                if let Some(reason) = &blocked {
+                    notice = notice.child(reason.clone());
+                }
+                if group.quantity_unconfirmed {
+                    notice = notice.child("Confirm what the stored arrays represent:");
+                    for quantity in [
+                        Quantity::RawMu,
+                        Quantity::NormalizedMu,
+                        Quantity::NormalizedDifference,
+                        Quantity::ChiK,
+                    ] {
+                        notice = notice.child(
+                            button(&t, quantity.label(), quantity.label(), false).on_click(
+                                cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                    this.confirm_current_quantity(quantity, cx);
+                                }),
+                            ),
+                        );
+                    }
+                }
+                notice.into_any_element()
+            }
+        } else {
+            body
         };
         div()
             .w(px(312.))
@@ -47,17 +102,35 @@ impl StudioApp {
             .into_any_element()
     }
 
+    fn confirm_current_quantity(&mut self, quantity: Quantity, cx: &mut Context<Self>) {
+        if self.refuse_frozen_edit(cx) {
+            return;
+        }
+        let Some(index) = self
+            .selected
+            .and_then(|ix| ix.checked_sub(crate::app::DERIVED_BASE))
+        else {
+            return;
+        };
+        let Some(group) = self.derived.get_mut(index) else {
+            return;
+        };
+        if self.journal.confirm_quantity(index, group, quantity) {
+            self.reprocess_current(cx);
+            cx.notify();
+        }
+    }
+
     fn inspector_header(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         if self.stage == Stage::Series {
             return self.series_inspector_header(cx).into_any_element();
         }
         let t = self.theme;
         let label = self.current_group_label();
-        let marked = self
-            .selection
-            .iter()
-            .filter(|&&ix| self.valid_group_index(ix) && Some(ix) != self.selected)
-            .count();
+        let copy_scope = ParamScope::default_for_stage(self.stage);
+        let targets = self.copy_targets(ParamScope::Stage(self.stage));
+        let marked = targets.indices.len();
+        let hint = copy_scope.and_then(|_| apply_hint(marked, targets.locked));
         let mut header = div()
             .flex_none()
             .px_3()
@@ -87,17 +160,31 @@ impl StudioApp {
             );
         if self.stage.is_processing() {
             header = header
-                .child(
-                    button(
-                        &t,
-                        "apply-marked",
-                        format!("Apply to marked ({marked})"),
-                        false,
-                    )
-                    .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
-                        this.apply_params_to_marked(cx);
-                    })),
-                )
+                .when(copy_scope.is_some() && marked > 0, |header| {
+                    header
+                        .child(
+                            button(
+                                &t,
+                                "apply-marked",
+                                format!("Apply {} to {marked}", self.stage.name()),
+                                false,
+                            )
+                            .on_click(cx.listener(
+                                |this, _: &ClickEvent, _w, cx| {
+                                    this.apply_params_to_marked(cx);
+                                },
+                            )),
+                        )
+                        .when_some(hint.clone(), |header, hint| {
+                            header.child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(t.text_muted)
+                                    .whitespace_nowrap()
+                                    .child(hint),
+                            )
+                        })
+                })
                 .child(
                     div()
                         .id("reset-params")
@@ -123,6 +210,18 @@ impl StudioApp {
             .flex()
             .flex_col()
             .child(header)
+            // With no eligible recipients there is no Apply button to sit next
+            // to, so the lock explanation gets its own line.
+            .when_some(hint.filter(|_| marked == 0), |d, hint| {
+                d.child(
+                    div()
+                        .px_3()
+                        .py_1()
+                        .text_size(px(10.))
+                        .text_color(t.text_muted)
+                        .child(hint),
+                )
+            })
             .when(
                 self.stage_view.scope == super::PlotScope::Marked && count > 0,
                 |d| {
@@ -153,29 +252,16 @@ impl StudioApp {
             .into_any_element()
     }
 
-    /// Copy the displayed parameter set onto every marked catalog group.
+    /// Copy only the current processing stage to eligible marked groups.
     pub(crate) fn apply_params_to_marked(&mut self, cx: &mut Context<Self>) {
-        self.apply_scope_to_marked(super::parameter_actions::ParamScope::All, cx);
+        if let Some(scope) = ParamScope::default_for_stage(self.stage) {
+            self.apply_scope_to_marked(scope, cx);
+        }
     }
 
-    /// Drop the current group's override (or reset the globals to defaults).
+    /// Restore the displayed stage from project defaults for every group kind.
     pub(crate) fn reset_params(&mut self, cx: &mut Context<Self>) {
-        let target = self.override_target();
-        let before = self.ui_params().clone();
-        match target {
-            Some(ix) => {
-                self.overrides.remove(&ix);
-            }
-            None => {
-                self.params = crate::params::PipelineParams::default();
-            }
-        }
-        let after = self.ui_params().clone();
-        self.record_param_edit(target, None, before, after, "reset parameters".into());
-        self.sync_param_fields(cx);
-        self.schedule_recompute(cx);
-        self.sync_handles(cx);
-        cx.notify();
+        self.reset_scope(ParamScope::Stage(self.stage), cx);
     }
 
     pub(crate) fn field(&self, key: ParamKey, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
@@ -623,5 +709,36 @@ impl StudioApp {
                 ],
                 cx,
             ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_hint;
+
+    #[test]
+    fn apply_hint_is_hidden_without_recipients_or_locks() {
+        assert_eq!(apply_hint(0, 0), None);
+    }
+
+    #[test]
+    fn apply_hint_omits_zero_locks() {
+        assert_eq!(apply_hint(2, 0).as_deref(), Some("excludes current"));
+    }
+
+    #[test]
+    fn apply_hint_explains_locked_recipients() {
+        assert_eq!(
+            apply_hint(2, 3).as_deref(),
+            Some("excludes current · 3 locked")
+        );
+    }
+
+    #[test]
+    fn apply_hint_explains_locks_without_eligible_recipients() {
+        assert_eq!(
+            apply_hint(0, 1).as_deref(),
+            Some("excludes current · 1 locked")
+        );
     }
 }

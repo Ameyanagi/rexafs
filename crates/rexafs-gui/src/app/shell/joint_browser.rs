@@ -15,13 +15,14 @@ enum Edit {
     Range(usize, usize),
     Expression(usize, PathBuf, usize),
 }
-fn terms(p: &FitPathSpec) -> [&str; 7] {
+fn terms(p: &FitPathSpec) -> [&str; 8] {
     [
-        &p.s02, &p.e0, &p.deltar, &p.sigma2, &p.ei, &p.third, &p.fourth,
+        &p.s02, &p.degen, &p.e0, &p.deltar, &p.sigma2, &p.ei, &p.third, &p.fourth,
     ]
 }
-const TERMS: [&str; 7] = [
+const TERMS: [&str; 8] = [
     "S₀²",
+    "N",
     "ΔE₀ (eV)",
     "ΔR (Å)",
     "σ² (Å²)",
@@ -32,11 +33,12 @@ const TERMS: [&str; 7] = [
 fn term_mut(p: &mut FitPathSpec, i: usize) -> &mut String {
     match i {
         0 => &mut p.s02,
-        1 => &mut p.e0,
-        2 => &mut p.deltar,
-        3 => &mut p.sigma2,
-        4 => &mut p.ei,
-        5 => &mut p.third,
+        1 => &mut p.degen,
+        2 => &mut p.e0,
+        3 => &mut p.deltar,
+        4 => &mut p.sigma2,
+        5 => &mut p.ei,
+        6 => &mut p.third,
         _ => &mut p.fourth,
     }
 }

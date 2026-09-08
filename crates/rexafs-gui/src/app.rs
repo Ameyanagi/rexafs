@@ -43,13 +43,13 @@ use crate::fitting::{
 };
 use crate::params::{
     AUTOBK_SOLVERS, DerivedSpectrum, DetectionMode, FT_WINDOWS, ImportPreview, PipelineParams,
-    StreamingAverage, load_raw, parse_cols, preview_import, process_arrays, process_file,
+    load_group_raw_with_diagnostics, parse_cols, preview_import, process_arrays, process_file,
     resample_chik,
 };
 use crate::plotting::{
     K_AXIS, QuadTrace, R_AXIS, SeriesSource, ViewOptions, build_fit_k, build_fit_q, build_fit_r,
     build_fit_residual_k, build_fit_residual_r, build_frame_chik_source, build_heatmap,
-    build_quadrant_specs, build_trend, chik_label, chir_label, middle_truncate, trace_rgba,
+    build_trend, chik_label, chir_label, middle_truncate, trace_rgba,
 };
 use crate::project::{PROJECT_VERSION, ParamOverride, ProjectFile};
 use crate::theme::Theme;
@@ -57,6 +57,7 @@ use crate::widgets::numeric_field::{FieldEvent, FieldKind, NumericField};
 use crate::widgets::text_input::{InputEvent, TextInput};
 
 mod importing;
+mod merge;
 mod shell;
 use shell::{Stage, StageView, handles::HandleState, thumbnails::ThumbData, tools::ToolState};
 
@@ -67,7 +68,7 @@ const JOB_ERROR_CAPACITY: usize = 200;
 /// Raw arrays are small (two Vec<f64> per file); keep plenty around.
 const RAW_CACHE_CAPACITY: usize = 256;
 /// Raw (energy, mu) of one file after import math.
-type RawArrays = Arc<(Vec<f64>, Vec<f64>)>;
+type RawArrays = Arc<crate::params::RawData>;
 /// Live-follow recompute cadence while dragging a plot handle.
 const DRAG_RECOMPUTE_TICK: Duration = Duration::from_millis(50);
 /// Import-preview column width. Wide enough for a 4-decimal energy value
@@ -164,6 +165,64 @@ pub(crate) enum ParamSection {
     Norm,
     Bkg,
     Fft,
+}
+
+/// The two group kinds share the same override semantics.
+fn store_custom_params(
+    catalog_len: usize,
+    overrides: &mut BTreeMap<usize, PipelineParams>,
+    derived: &mut [DerivedSpectrum],
+    ix: usize,
+    params: Option<PipelineParams>,
+) {
+    if ix >= DERIVED_BASE {
+        if let Some(group) = derived.get_mut(ix - DERIVED_BASE) {
+            group.params = params;
+        }
+    } else if ix < catalog_len {
+        match params {
+            Some(params) => {
+                overrides.insert(ix, params);
+            }
+            None => {
+                overrides.remove(&ix);
+            }
+        }
+    }
+}
+
+/// Prepare on a clone: only an actual change may invalidate the preview or enter history.
+fn prepare_parameter_edit(
+    before: &PipelineParams,
+    edit: impl FnOnce(&mut PipelineParams) -> anyhow::Result<()>,
+) -> anyhow::Result<Option<PipelineParams>> {
+    let mut after = before.clone();
+    edit(&mut after)?;
+    Ok((*before != after).then_some(after))
+}
+
+/// Apply only the selected source's latest preview, preserving read-error details.
+fn finish_import_preview(
+    current: (&std::path::Path, u64),
+    requested: (&std::path::Path, u64),
+    result: Result<ImportPreview, String>,
+    preview: &mut Option<ImportPreview>,
+    error: &mut SharedString,
+) -> bool {
+    if current != requested {
+        return false;
+    }
+    match result {
+        Ok(value) => {
+            *preview = Some(value);
+            *error = "".into();
+        }
+        Err(message) => {
+            *preview = None;
+            *error = message.into();
+        }
+    }
+    true
 }
 
 /// Stepper / ↑↓ increment per parameter: energies in whole eV, k in half
@@ -348,6 +407,12 @@ const DETECTION_MODES: [DetectionMode; 4] = [
 actions!(
     studio,
     [
+        Quit,
+        AssistantSend,
+        AssistantStop,
+        AssistantEscape,
+        AssistantNextControl,
+        AssistantPreviousControl,
         NavUp,
         NavDown,
         NavExtendUp,
@@ -388,6 +453,16 @@ actions!(
 /// editing keystroke must stay with the focused editor.
 pub fn studio_keybindings() -> Vec<KeyBinding> {
     vec![
+        KeyBinding::new("cmd-q", Quit, None),
+        KeyBinding::new("cmd-enter", AssistantSend, Some("Assistant")),
+        KeyBinding::new("cmd-.", AssistantStop, Some("Assistant")),
+        KeyBinding::new("escape", AssistantEscape, Some("Assistant")),
+        KeyBinding::new("tab", AssistantNextControl, Some("Assistant && !TextInput")),
+        KeyBinding::new(
+            "shift-tab",
+            AssistantPreviousControl,
+            Some("Assistant && !TextInput"),
+        ),
         KeyBinding::new("up", NavUp, Some("DataPanel")),
         KeyBinding::new("down", NavDown, Some("DataPanel")),
         KeyBinding::new("shift-up", NavExtendUp, Some("DataPanel")),
@@ -406,21 +481,45 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
         KeyBinding::new("shift-right", FrameJumpFwd, Some("Operando && !TextInput")),
         KeyBinding::new("home", FrameFirst, Some("Operando && !TextInput")),
         KeyBinding::new("end", FrameLast, Some("Operando && !TextInput")),
-        KeyBinding::new("cmd-1", StageData, Some("Studio")),
-        KeyBinding::new("cmd-2", StageNormalize, Some("Studio")),
-        KeyBinding::new("cmd-3", StageBackground, Some("Studio")),
-        KeyBinding::new("cmd-4", StageTransform, Some("Studio")),
-        KeyBinding::new("cmd-5", StageFit, Some("Studio")),
-        KeyBinding::new("cmd-6", StageSeries, Some("Studio")),
-        KeyBinding::new("cmd-b", ToggleDataPanel, Some("Studio && !TextInput")),
-        KeyBinding::new("cmd-j", ToggleContextPanel, Some("Studio && !TextInput")),
-        KeyBinding::new("cmd-p", FocusFilter, Some("Studio && !TextInput")),
-        KeyBinding::new("escape", ExploreEscape, Some("Explore && !TextInput")),
-        KeyBinding::new("cmd-k", PaletteOpen, Some("Studio")),
+        KeyBinding::new("cmd-1", StageData, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-2", StageNormalize, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-3", StageBackground, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-4", StageTransform, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-5", StageFit, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-6", StageSeries, Some("Studio && !Assistant")),
+        KeyBinding::new(
+            "cmd-b",
+            ToggleDataPanel,
+            Some("Studio && !TextInput && !Assistant"),
+        ),
+        KeyBinding::new(
+            "cmd-j",
+            ToggleContextPanel,
+            Some("Studio && !TextInput && !Assistant"),
+        ),
+        KeyBinding::new(
+            "cmd-p",
+            FocusFilter,
+            Some("Studio && !TextInput && !Assistant"),
+        ),
+        KeyBinding::new(
+            "escape",
+            ExploreEscape,
+            Some("Explore && !TextInput && !Assistant"),
+        ),
+        KeyBinding::new("cmd-k", PaletteOpen, Some("Studio && !Assistant")),
         KeyBinding::new("escape", PaletteClose, Some("Palette")),
-        KeyBinding::new("cmd-z", Undo, Some("Studio && !TextInput")),
-        KeyBinding::new("cmd-shift-z", Redo, Some("Studio && !TextInput")),
-        KeyBinding::new("cmd-shift-j", JournalToggle, Some("Studio && !TextInput")),
+        KeyBinding::new("cmd-z", Undo, Some("Studio && !TextInput && !Assistant")),
+        KeyBinding::new(
+            "cmd-shift-z",
+            Redo,
+            Some("Studio && !TextInput && !Assistant"),
+        ),
+        KeyBinding::new(
+            "cmd-shift-j",
+            JournalToggle,
+            Some("Studio && !TextInput && !Assistant"),
+        ),
     ]
 }
 
@@ -592,10 +691,55 @@ struct FitProvenance {
     model_fingerprint: u64,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProblemSeverity {
+    Error,
+    Warning,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 struct JobError {
+    severity: ProblemSeverity,
     label: String,
     message: String,
+}
+
+impl JobError {
+    fn warning(path: &std::path::Path, message: String) -> Self {
+        Self {
+            severity: ProblemSeverity::Warning,
+            label: path.display().to_string(),
+            message,
+        }
+    }
+}
+
+fn push_problem(problems: &mut Vec<JobError>, problem: JobError) {
+    // Browsing/reprocessing a cached source should not flood recent problems.
+    if problem.severity == ProblemSeverity::Warning && problems.contains(&problem) {
+        return;
+    }
+    if problems.len() == JOB_ERROR_CAPACITY {
+        if let Some(index) = problems
+            .iter()
+            .position(|p| p.severity == ProblemSeverity::Warning)
+        {
+            problems.remove(index);
+        } else if problem.severity == ProblemSeverity::Warning {
+            return;
+        } else {
+            problems.remove(0);
+        }
+    }
+    problems.push(problem);
+}
+
+fn problem_counts(problems: &[JobError]) -> (usize, usize) {
+    let warnings = problems
+        .iter()
+        .filter(|p| p.severity == ProblemSeverity::Warning)
+        .count();
+    (problems.len() - warnings, warnings)
 }
 
 /// A selection that failed to load while earlier results are still on screen.
@@ -749,6 +893,7 @@ pub(crate) struct FitVar {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum PathParam {
     S02,
+    Degen,
     E0,
     Sigma2,
     DeltaR,
@@ -758,8 +903,9 @@ pub(crate) enum PathParam {
 }
 
 impl PathParam {
-    pub(crate) const ALL: [PathParam; 7] = [
+    pub(crate) const ALL: [PathParam; 8] = [
         PathParam::S02,
+        PathParam::Degen,
         PathParam::E0,
         PathParam::DeltaR,
         PathParam::Sigma2,
@@ -773,13 +919,18 @@ impl PathParam {
     pub(crate) fn is_primary(self) -> bool {
         matches!(
             self,
-            PathParam::S02 | PathParam::E0 | PathParam::DeltaR | PathParam::Sigma2
+            PathParam::S02
+                | PathParam::Degen
+                | PathParam::E0
+                | PathParam::DeltaR
+                | PathParam::Sigma2
         )
     }
 
     pub(crate) fn label(self) -> &'static str {
         match self {
             PathParam::S02 => "S₀²",
+            PathParam::Degen => "N",
             PathParam::E0 => "ΔE₀",
             PathParam::Sigma2 => "σ²",
             PathParam::DeltaR => "ΔR",
@@ -792,6 +943,7 @@ impl PathParam {
     fn get(self, spec: &FitPathSpec) -> &str {
         match self {
             PathParam::S02 => &spec.s02,
+            PathParam::Degen => &spec.degen,
             PathParam::E0 => &spec.e0,
             PathParam::Sigma2 => &spec.sigma2,
             PathParam::DeltaR => &spec.deltar,
@@ -804,6 +956,7 @@ impl PathParam {
     fn set(self, spec: &mut FitPathSpec, text: String) {
         match self {
             PathParam::S02 => spec.s02 = text,
+            PathParam::Degen => spec.degen = text,
             PathParam::E0 => spec.e0 = text,
             PathParam::Sigma2 => spec.sigma2 = text,
             PathParam::DeltaR => spec.deltar = text,
@@ -884,6 +1037,10 @@ pub struct StudioApp {
     publish: shell::publish::PublishState,
     main_window: gpui::AnyWindowHandle,
     assistant_window: Option<gpui::AnyWindowHandle>,
+    assistant: Option<Entity<shell::assistant::AssistantWindow>>,
+    assistant_host: shell::assistant_shell::AssistantHost,
+    assistant_resizing: Option<(f32, f32)>,
+    last_opened_side_panel: Option<shell::assistant_shell::SidePanel>,
     /// Catalog indices passing the filter (ascending); None = no filter.
     filtered: Option<Arc<Vec<usize>>>,
     /// Bumped per filter edit; stale background match results are dropped.
@@ -918,6 +1075,10 @@ pub struct StudioApp {
     current_path: PathBuf,
     spectrum_path: PathBuf,
     spectrum_fingerprint: u64,
+    /// Identity of the data retained in `spectrum`, independent of selection.
+    spectrum_group: Option<shell::tools::ToolTarget>,
+    /// Scientific quantity captured with the loaded data, including stale plots.
+    spectrum_quantity: crate::params::Quantity,
     spectrum: Option<Arc<XASSpectrum>>,
     spectrum_label: SharedString,
     /// Set when the newest selection failed to load. The plots still show the
@@ -993,6 +1154,9 @@ pub struct StudioApp {
     project_raw_files: Vec<PathBuf>,
     project_source_origins: BTreeMap<PathBuf, PathBuf>,
     project_generation: u64,
+    assistant_history: crate::project::assistant::AssistantHistory,
+    assistant_history_revision: u64,
+    assistant_history_saved_revision: u64,
     project_load_generation: u64,
     project_saving: bool,
     updates: shell::updates_view::UpdateState,
@@ -1384,6 +1548,93 @@ mod override_tests {
     use crate::params::PipelineParams;
 
     #[test]
+    fn mapping_edit_preparation_skips_noops_and_rejects_partial_edits() {
+        let before = PipelineParams::default();
+        assert!(
+            super::prepare_parameter_edit(&before, |_| Ok(()))
+                .unwrap()
+                .is_none()
+        );
+        let rejected = super::prepare_parameter_edit(&before, |p| {
+            p.import.i0_col = Some(7);
+            anyhow::bail!("invalid ROI columns")
+        });
+        assert_eq!(rejected.err().unwrap().to_string(), "invalid ROI columns");
+        assert_eq!(before.import.i0_col, None);
+        let after = super::prepare_parameter_edit(&before, |p| {
+            p.align_to_ref = !p.align_to_ref;
+            Ok(())
+        })
+        .unwrap()
+        .unwrap();
+        assert_ne!(after.align_to_ref, before.align_to_ref);
+    }
+
+    #[test]
+    fn mapping_preview_completion_rejects_superseded_results_and_surfaces_errors() {
+        use super::finish_import_preview;
+        use std::path::Path;
+        let source = Path::new("Ru_QAS.dat");
+        let other = Path::new("other.dat");
+        let resolved = crate::params::ResolvedImport {
+            mode: crate::params::DetectionMode::Reference,
+            energy_col: 0,
+            i0_col: 1,
+            it_col: 2,
+            ir_col: 3,
+            fluor_cols: vec![4, 5],
+            mu_col: None,
+        };
+        let reference = crate::params::ImportPreview {
+            column_count: 6,
+            names: None,
+            rows: vec![],
+            detected: resolved.clone(),
+            auto_mode: resolved.mode,
+            resolved,
+            xdi: None,
+            diagnostics: Default::default(),
+            signal_error: None,
+        };
+        let mut preview = Some(reference.clone());
+        let mut error = gpui::SharedString::from("current error");
+        // A different selected file, a new channel/mode on the same source,
+        // or selection of a source-less group supersedes the old request.
+        for current in [(other, 2), (source, 3), (Path::new(""), 3)] {
+            for result in [Ok(reference.clone()), Err("stale error".into())] {
+                assert!(!finish_import_preview(
+                    current,
+                    (source, 2),
+                    result,
+                    &mut preview,
+                    &mut error
+                ));
+                assert_eq!(preview, Some(reference.clone()));
+                assert_eq!(error.as_ref(), "current error");
+            }
+        }
+        let message = "Ru_QAS.dat: permission denied";
+        assert!(finish_import_preview(
+            (source, 3),
+            (source, 3),
+            Err(message.into()),
+            &mut preview,
+            &mut error
+        ));
+        assert!(preview.is_none());
+        assert_eq!(error.as_ref(), message);
+        assert!(finish_import_preview(
+            (source, 3),
+            (source, 3),
+            Ok(reference.clone()),
+            &mut preview,
+            &mut error
+        ));
+        assert_eq!(preview, Some(reference));
+        assert!(error.is_empty());
+    }
+
+    #[test]
     fn section_differs_is_per_section_and_reset_restores_global() {
         let global = PipelineParams::default();
         let mut ov = global.clone();
@@ -1569,6 +1820,44 @@ mod keybinding_tests {
     }
 
     #[test]
+    fn assistant_prompt_context_blocks_main_shortcuts() {
+        let contexts = [
+            KeyContext::parse("Studio Explore").unwrap(),
+            KeyContext::parse("Assistant").unwrap(),
+            KeyContext::parse("TextInput MultilineTextInput").unwrap(),
+        ];
+        for binding in studio_keybindings() {
+            let Some(predicate) = binding.predicate() else {
+                continue;
+            };
+            if binding.action().as_any().is::<super::AssistantSend>()
+                || binding.action().as_any().is::<super::AssistantStop>()
+                || binding.action().as_any().is::<super::AssistantEscape>()
+            {
+                assert!(predicate.depth_of(&contexts).is_some());
+            } else {
+                assert!(
+                    predicate.depth_of(&contexts).is_none(),
+                    "main shortcut matched Assistant prompt: {:?}",
+                    binding.keystrokes()
+                );
+            }
+        }
+        // The groups panel is a sibling of Assistant, never its ancestor.
+        let groups = [
+            KeyContext::parse("Studio Explore").unwrap(),
+            KeyContext::parse("DataPanel").unwrap(),
+        ];
+        assert!(
+            binding::<super::MarkAllGroups>(&studio_keybindings())
+                .predicate()
+                .unwrap()
+                .depth_of(&groups)
+                .is_some()
+        );
+    }
+
+    #[test]
     fn operando_extreme_keys_yield_to_nested_text_input() {
         let bindings = studio_keybindings();
         let studio = KeyContext::parse("Studio OperandoWorkspace").unwrap();
@@ -1609,6 +1898,7 @@ fn default_data_file() -> PathBuf {
 fn default_for(param: PathParam) -> f64 {
     match param {
         PathParam::S02 => 0.9,
+        PathParam::Degen => 1.0,
         PathParam::Sigma2 => 0.003,
         PathParam::E0
         | PathParam::DeltaR
@@ -1629,11 +1919,27 @@ fn spectrum_status(label: &SharedString, sp: &XASSpectrum) -> SharedString {
 }
 
 impl StudioApp {
+    /// Both side panels hidden (the assistant's "Focus plots" layout).
+    pub(crate) fn panels_hidden(&self) -> bool {
+        !self.data_panel_open && !self.context_panel_open
+    }
+
     pub fn new_with_open(
         initial_open: Option<PathBuf>,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let studio = cx.weak_entity();
+        _window.on_window_should_close(cx, move |_, cx| {
+            if let Some(assistant) = studio
+                .read_with(cx, |app, _| app.assistant.clone())
+                .ok()
+                .flatten()
+            {
+                assistant.update(cx, |assistant, cx| assistant.analysis_closed(cx));
+            }
+            true
+        });
         let initial_project = initial_open
             .as_ref()
             .filter(|path| crate::project::is_project(path))
@@ -1717,6 +2023,10 @@ impl StudioApp {
             publish: Default::default(),
             main_window: _window.window_handle(),
             assistant_window: None,
+            assistant: None,
+            assistant_host: Default::default(),
+            assistant_resizing: None,
+            last_opened_side_panel: None,
             generation: 0,
             load_running: false,
             recompute_epoch: 0,
@@ -1733,6 +2043,8 @@ impl StudioApp {
             current_path: path.clone(),
             spectrum_path: path.clone(),
             spectrum_fingerprint: 0,
+            spectrum_group: None,
+            spectrum_quantity: crate::params::Quantity::RawMu,
             spectrum: None,
             spectrum_label: label.clone(),
             stale_plots: None,
@@ -1789,6 +2101,9 @@ impl StudioApp {
             project_raw_files: Vec::new(),
             project_source_origins: BTreeMap::new(),
             project_generation: 0,
+            assistant_history: Default::default(),
+            assistant_history_revision: 0,
+            assistant_history_saved_revision: 0,
             project_load_generation: 0,
             project_saving: false,
             updates: Default::default(),
@@ -1858,45 +2173,21 @@ impl StudioApp {
         .detach();
         app.filter_input = Some(filter_input);
         let roi_input = cx.new(|cx| TextInput::new("e.g. 4 or 4-7", "", theme, cx));
-        cx.subscribe(&roi_input, |this: &mut Self, input, event, cx| {
+        cx.subscribe(&roi_input, |this: &mut Self, _input, event, cx| {
             let InputEvent::Committed(text) = event else {
                 return;
             };
             let trimmed = text.trim();
-            if trimmed.is_empty() {
-                if this.ui_params().import.fluor_cols.is_some() {
-                    this.edit_params().import.fluor_cols = None;
-                    this.schedule_recompute(cx);
-                    this.update_import_preview(cx);
-                }
-                cx.notify();
-                return;
-            }
-            match parse_cols(trimmed) {
-                Some(cols) => {
-                    if this.ui_params().import.fluor_cols.as_ref() != Some(&cols) {
-                        this.edit_params().import.fluor_cols = Some(cols);
-                        this.schedule_recompute(cx);
-                        this.update_import_preview(cx);
-                    }
-                }
-                None => {
-                    // revert to current value, with a visible rejection cue
-                    this.status =
-                        format!("invalid ROI columns: '{trimmed}' — expected e.g. 4 or 4-7").into();
-                    let text = this
-                        .ui_params()
-                        .import
-                        .fluor_cols
-                        .as_deref()
-                        .unwrap_or_default()
-                        .iter()
-                        .map(|c| c.to_string())
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    input.update(cx, |i, cx| i.set_text(text, cx));
-                }
-            }
+            this.edit_parameters("Set fluorescence ROI columns".into(), cx, |params| {
+                params.import.fluor_cols = if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(parse_cols(trimmed).ok_or_else(|| {
+                        anyhow::anyhow!("invalid ROI columns: '{trimmed}' — expected e.g. 4 or 4-7")
+                    })?)
+                };
+                Ok(())
+            });
             cx.notify();
         })
         .detach();
@@ -1951,13 +2242,24 @@ impl StudioApp {
         label: impl Into<String>,
         message: impl Into<String>,
     ) {
-        if self.job_errors.len() == JOB_ERROR_CAPACITY {
-            self.job_errors.remove(0);
+        push_problem(
+            &mut self.job_errors,
+            JobError {
+                severity: ProblemSeverity::Error,
+                label: label.into(),
+                message: message.into(),
+            },
+        );
+    }
+
+    fn record_source_warnings(
+        &mut self,
+        path: &std::path::Path,
+        diagnostics: &crate::params::ParserDiagnostics,
+    ) {
+        for message in diagnostics.warnings() {
+            push_problem(&mut self.job_errors, JobError::warning(path, message));
         }
-        self.job_errors.push(JobError {
-            label: label.into(),
-            message: message.into(),
-        });
     }
 
     fn running_job_count(&self) -> usize {
@@ -1993,20 +2295,13 @@ impl StudioApp {
     }
 
     fn set_custom_params(&mut self, ix: usize, params: Option<PipelineParams>) {
-        if ix >= DERIVED_BASE {
-            if let Some(group) = self.derived.get_mut(ix - DERIVED_BASE) {
-                group.params = params;
-            }
-        } else if ix < self.catalog.len() {
-            match params {
-                Some(params) => {
-                    self.overrides.insert(ix, params);
-                }
-                None => {
-                    self.overrides.remove(&ix);
-                }
-            }
-        }
+        store_custom_params(
+            self.catalog.len(),
+            &mut self.overrides,
+            &mut self.derived,
+            ix,
+            params,
+        );
     }
 
     fn active_group_id(&self) -> Option<u64> {
@@ -2028,7 +2323,14 @@ impl StudioApp {
     }
 
     fn effective_fingerprint(&self, ix: usize) -> u64 {
-        self.effective_params(ix).fingerprint()
+        let params = self.effective_params(ix);
+        if ix >= DERIVED_BASE
+            && let Some(group) = self.derived.get(ix - DERIVED_BASE)
+        {
+            group.fingerprint(params)
+        } else {
+            params.fingerprint()
+        }
     }
 
     /// Effective fingerprint of the active spectrum (global when nothing
@@ -2073,24 +2375,25 @@ impl StudioApp {
     /// Chip action: copy the global section back over the override,
     /// dropping the override entirely once nothing diverges anymore.
     fn reset_section_override(&mut self, section: ParamSection, cx: &mut Context<Self>) {
-        let Some(ix) = self.override_target() else {
-            return;
-        };
-        let global = self.params.clone();
-        let Some(mut ov) = self.custom_params(ix).cloned() else {
-            return;
-        };
-        copy_section(&mut ov, &global, section);
-        self.set_custom_params(ix, (ov != global).then_some(ov));
-        self.sync_param_fields(cx);
-        self.schedule_recompute(cx);
-        cx.notify();
+        let scope = shell::parameter_actions::ParamScope::Stage(match section {
+            ParamSection::Import => Stage::Data,
+            ParamSection::Norm => Stage::Normalize,
+            ParamSection::Bkg => Stage::Background,
+            ParamSection::Fft => Stage::Transform,
+        });
+        self.reset_scope(scope, cx);
     }
 
     /// Push the displayed param set into the context-panel fields (never
     /// emits change events). Called whenever the edit target may have
     /// changed: selection moves, multi-select edits, resets, project load.
     fn sync_param_fields(&mut self, cx: &mut Context<Self>) {
+        self.restore_param_field_text(cx);
+        self.update_import_preview(cx);
+    }
+
+    /// Restore canonical input text without discarding the live column preview.
+    fn restore_param_field_text(&mut self, cx: &mut Context<Self>) {
         let params = self.ui_params().clone();
         for (key, field) in &self.param_fields {
             let value = param_field_value(*key, &params);
@@ -2108,7 +2411,6 @@ impl StudioApp {
                 .join(",");
             roi.update(cx, |i, cx| i.set_text(text, cx));
         }
-        self.update_import_preview(cx);
     }
 
     /// Attach path-keyed overrides from a loaded project to the freshly
@@ -2179,6 +2481,7 @@ impl StudioApp {
             row.spec.file.hash(&mut hasher);
             row.spec.label.hash(&mut hasher);
             row.spec.s02.hash(&mut hasher);
+            row.spec.degen.hash(&mut hasher);
             row.spec.e0.hash(&mut hasher);
             row.spec.sigma2.hash(&mut hasher);
             row.spec.deltar.hash(&mut hasher);
@@ -2237,6 +2540,7 @@ impl StudioApp {
     /// folder starts streaming. Generation bumps also make old async arrivals
     /// harmless while their receivers/workers wind down.
     fn reset_catalog_state(&mut self, cx: &mut Context<Self>) {
+        self.tools.invalidate_bindings();
         self.catalog_gen += 1;
         self.generation += 1;
         self.compare_gen += 1;
@@ -2279,6 +2583,7 @@ impl StudioApp {
         self.current_path = PathBuf::new();
         self.spectrum_path = PathBuf::new();
         self.spectrum_fingerprint = 0;
+        self.spectrum_group = None;
         self.spectrum = None;
         self.spectrum_label = "no spectrum".into();
         self.import_preview = None;
@@ -2472,25 +2777,92 @@ impl StudioApp {
             .collect()
     }
 
-    fn apply_param(&mut self, key: ParamKey, value: Option<f64>, cx: &mut Context<Self>) {
-        let target = self.override_target();
-        if let Some(ix) = target
-            && self.frozen.contains(&ix)
+    /// Shared lock gate for parameter editors; restore rejected field text too.
+    fn refuse_frozen_edit(&mut self, cx: &mut Context<Self>) -> bool {
+        if self
+            .override_target()
+            .is_some_and(|ix| self.frozen.contains(&ix))
         {
-            self.status = "this group is frozen — thaw it to edit its parameters".into();
-            self.sync_param_fields(cx);
+            self.status = "This group is frozen — thaw it to edit its parameters.".into();
+            self.restore_param_field_text(cx);
             cx.notify();
+            return true;
+        }
+        false
+    }
+
+    /// Commit one mapping edit or reset against the current effective settings.
+    fn edit_parameters(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+        edit: impl FnOnce(&mut PipelineParams) -> anyhow::Result<()>,
+    ) {
+        self.edit_parameters_keyed(None, text, cx, edit);
+    }
+
+    fn edit_parameters_keyed(
+        &mut self,
+        key: Option<ParamKey>,
+        text: String,
+        cx: &mut Context<Self>,
+        edit: impl FnOnce(&mut PipelineParams) -> anyhow::Result<()>,
+    ) {
+        if self.refuse_frozen_edit(cx) {
             return;
         }
+        let target = self.override_target();
+        let before = self.ui_params().clone();
+        match prepare_parameter_edit(&before, edit) {
+            Ok(Some(after)) => {
+                self.apply_params_to(target, after.clone());
+                self.record_param_edit(target, key, before, after, text);
+                self.schedule_recompute(cx);
+                self.sync_handles(cx);
+                self.invalidate_explore_plots(cx);
+                self.sync_param_fields(cx);
+            }
+            result => {
+                if let Err(error) = result {
+                    self.status = error.to_string().into();
+                }
+                self.restore_param_field_text(cx);
+            }
+        }
+        cx.notify();
+    }
+
+    fn apply_param(&mut self, key: ParamKey, value: Option<f64>, cx: &mut Context<Self>) {
+        let role = match key {
+            ParamKey::ImpEnergyCol => Some(ImportRole::Energy),
+            ParamKey::ImpI0Col => Some(ImportRole::I0),
+            ParamKey::ImpItCol => Some(ImportRole::It),
+            ParamKey::ImpIrCol => Some(ImportRole::Ir),
+            _ => None,
+        };
+        if let Some(role) = role {
+            self.set_import_role_column(
+                role,
+                value.map(|v| v.round().max(0.0) as usize),
+                Some(key),
+                cx,
+            );
+            return;
+        }
+        if self.refuse_frozen_edit(cx) {
+            return;
+        }
+        let target = self.override_target();
         let before = self.ui_params().clone();
         let p = self.edit_params();
         let int = value.map(|v| v.round() as i32);
-        let col = value.map(|v| v.round().max(0.0) as usize);
         match key {
-            ParamKey::ImpEnergyCol => p.import.energy_col = col,
-            ParamKey::ImpI0Col => p.import.i0_col = col,
-            ParamKey::ImpItCol => p.import.it_col = col,
-            ParamKey::ImpIrCol => p.import.ir_col = col,
+            ParamKey::ImpEnergyCol
+            | ParamKey::ImpI0Col
+            | ParamKey::ImpItCol
+            | ParamKey::ImpIrCol => {
+                unreachable!("mapping fields use edit_parameters above")
+            }
             ParamKey::AlignTarget => p.align_target = value,
             ParamKey::E0 => p.e0 = value,
             ParamKey::EdgeStep => p.edge_step = value,
@@ -2612,21 +2984,24 @@ impl StudioApp {
     /// Apply a selection from the option list (0 = auto).
     fn set_enum_param(&mut self, which: EnumParam, index: usize, cx: &mut Context<Self>) {
         let variant = index.checked_sub(1);
-        let target = self.override_target();
-        if target.is_some_and(|ix| self.frozen.contains(&ix)) {
-            self.status = "This group is frozen — thaw it to edit its parameters.".into();
-            self.open_enum = None;
-            cx.notify();
+        self.open_enum = None;
+        if which == EnumParam::ImportMode {
+            self.edit_parameters(format!("{which:?} = option {index}"), cx, |params| {
+                params.import.mode = variant
+                    .and_then(|i| DETECTION_MODES.get(i).copied())
+                    .unwrap_or(DetectionMode::Auto);
+                Ok(())
+            });
             return;
         }
+        if self.refuse_frozen_edit(cx) {
+            return;
+        }
+        let target = self.override_target();
         let before = self.ui_params().clone();
         let p = self.edit_params();
         match which {
-            EnumParam::ImportMode => {
-                p.import.mode = variant
-                    .and_then(|i| DETECTION_MODES.get(i).copied())
-                    .unwrap_or(DetectionMode::Auto);
-            }
+            EnumParam::ImportMode => unreachable!("mapping mode uses edit_parameters above"),
             EnumParam::BkgWindow => {
                 p.bkg_window = variant.map(|i| FT_WINDOWS[i]);
             }
@@ -2681,9 +3056,6 @@ impl StudioApp {
             format!("{which:?} = option {index}"),
         );
         self.schedule_recompute(cx);
-        if which == EnumParam::ImportMode {
-            self.update_import_preview(cx);
-        }
         cx.notify();
     }
 
@@ -2839,45 +3211,44 @@ impl StudioApp {
         &mut self,
         role: ImportRole,
         column: Option<usize>,
+        key: Option<ParamKey>,
         cx: &mut Context<Self>,
     ) {
-        let import = &mut self.edit_params().import;
-        match role {
-            ImportRole::Energy => import.energy_col = column,
-            ImportRole::I0 => import.i0_col = column,
-            ImportRole::It => import.it_col = column,
-            ImportRole::Ir => import.ir_col = column,
-            ImportRole::Mu => import.mu_col = column,
-            ImportRole::Fluor => return,
-        }
         self.open_import_role = None;
-        self.schedule_recompute(cx);
-        self.update_import_preview(cx);
-        cx.notify();
+        self.edit_parameters_keyed(
+            key,
+            format!("Set {} column = {column:?}", Self::import_role_label(role)),
+            cx,
+            |params| {
+                let import = &mut params.import;
+                match role {
+                    ImportRole::Energy => import.energy_col = column,
+                    ImportRole::I0 => import.i0_col = column,
+                    ImportRole::It => import.it_col = column,
+                    ImportRole::Ir => import.ir_col = column,
+                    ImportRole::Mu => import.mu_col = column,
+                    ImportRole::Fluor => {}
+                }
+                Ok(())
+            },
+        );
     }
 
     fn toggle_import_fluor(&mut self, column: Option<usize>, cx: &mut Context<Self>) {
-        match column {
-            None => self.edit_params().import.fluor_cols = None,
-            Some(column) => {
-                let mut columns = self
-                    .ui_params()
+        let auto = self
+            .import_preview
+            .as_ref()
+            .map(|p| p.resolved.fluor_cols.clone());
+        self.edit_parameters(
+            format!("Toggle fluorescence ROI = {column:?}"),
+            cx,
+            |params| {
+                params
                     .import
-                    .fluor_cols
-                    .clone()
-                    .unwrap_or_default();
-                if let Some(index) = columns.iter().position(|&current| current == column) {
-                    columns.remove(index);
-                } else {
-                    columns.push(column);
-                    columns.sort_unstable();
-                }
-                self.edit_params().import.fluor_cols = Some(columns);
-            }
-        }
-        self.schedule_recompute(cx);
-        self.update_import_preview(cx);
-        cx.notify();
+                    .toggle_fluor(column, auto.as_deref())
+                    .map_err(anyhow::Error::msg)
+            },
+        );
     }
 
     /// Debounced (~200 ms) recompute of the current spectrum after parameter
@@ -3028,7 +3399,10 @@ impl StudioApp {
         self.recompute_last = Some(Instant::now());
         self.recompute_dirty = false;
 
-        if let Some(sp) = self.cache.get(&key) {
+        // NO_ENTRY has no path component in the shared cache key.
+        if ix != NO_ENTRY
+            && let Some(sp) = self.cache.get(&key)
+        {
             self.load_running = false;
             let sp = sp.clone();
             self.set_processed(ix, label, path, key.1, sp, cx);
@@ -3039,28 +3413,9 @@ impl StudioApp {
         self.status = format!("processing {label} ...").into();
         self.load_running = true;
         cx.notify();
-        let params = self.effective_params(ix).clone();
-        let derived = (ix >= DERIVED_BASE)
-            .then(|| self.derived.get(ix - DERIVED_BASE).cloned())
-            .flatten();
-        let raw_key = (ix, params.raw_fingerprint());
-        let raw = self.raw_cache.get(&raw_key).cloned();
+        let raw_key = (ix, self.effective_params(ix).raw_fingerprint());
         let processed_path = path.clone();
-        let load = cx.background_executor().spawn(async move {
-            match raw {
-                Some(raw) => {
-                    process_arrays(raw.0.clone(), raw.1.clone(), &params).map(|sp| (sp, None))
-                }
-                None => {
-                    let (energy, mu) = match derived {
-                        Some(group) => group.raw(&params)?,
-                        None => load_raw(&path, &params)?,
-                    };
-                    let sp = process_arrays(energy.clone(), mu.clone(), &params)?;
-                    Ok((sp, Some(Arc::new((energy, mu)))))
-                }
-            }
-        });
+        let load = self.process_group_job(ix, path, cx);
         cx.spawn(async move |this, cx| {
             let result = load.await;
             this.update(cx, |app, cx| {
@@ -3071,10 +3426,15 @@ impl StudioApp {
                 match result {
                     Ok((sp, raw)) => {
                         if let Some(raw) = raw {
-                            app.raw_cache.put(raw_key, raw);
+                            app.record_source_warnings(&processed_path, &raw.diagnostics);
+                            if ix != NO_ENTRY {
+                                app.raw_cache.put(raw_key, raw);
+                            }
                         }
                         let sp = Arc::new(sp);
-                        app.cache.put(key, sp.clone());
+                        if ix != NO_ENTRY {
+                            app.cache.put(key, sp.clone());
+                        }
                         app.set_processed(ix, label, processed_path, key.1, sp, cx);
                         // A drag tick landed while this job ran: follow it.
                         if app.recompute_dirty {
@@ -3085,9 +3445,8 @@ impl StudioApp {
                     Err(e) => {
                         app.status = format!("failed to process {label}: {e}").into();
                         app.record_job_error(label.to_string(), e.to_string());
-                        // The plots keep the previous spectrum; flag the
-                        // mismatch so the canvas can't be misread as the
-                        // selected entry.
+                        // Retain the plot and its identity. Tool readiness rejects
+                        // this failed selection even if the old data is present.
                         app.stale_plots = Some(StalePlots {
                             requested: label.clone(),
                             message: e.to_string().into(),
@@ -3101,6 +3460,42 @@ impl StudioApp {
         .detach();
     }
 
+    /// Snapshot inputs for either the current group or a tool operand. The
+    /// caller decides where the result lands; this job never changes selection.
+    fn process_group_job(
+        &mut self,
+        ix: usize,
+        path: PathBuf,
+        cx: &Context<Self>,
+    ) -> gpui::Task<Result<(XASSpectrum, Option<RawArrays>), String>> {
+        let params = self.effective_params(ix).clone();
+        let derived = (ix >= DERIVED_BASE)
+            .then(|| self.derived.get(ix - DERIVED_BASE).cloned())
+            .flatten();
+        let raw_key = (ix, params.raw_fingerprint());
+        let raw = (ix != NO_ENTRY)
+            .then(|| self.raw_cache.get(&raw_key).cloned())
+            .flatten();
+        cx.background_executor().spawn(async move {
+            // Dispatch typed results before consulting the raw cache: cached
+            // arrays must never bypass the quantity guard on later edits.
+            if let Some(group) = &derived
+                && group.processing_block_reason().is_some()
+            {
+                return group.for_display(&params).map(|sp| (sp, None));
+            }
+            match raw {
+                Some(raw) => process_arrays(raw.energy.clone(), raw.mu.clone(), &params)
+                    .map(|sp| (sp, Some(raw))),
+                None => {
+                    let raw = load_group_raw_with_diagnostics(&path, &params, derived.as_ref())?;
+                    let sp = process_arrays(raw.energy.clone(), raw.mu.clone(), &params)?;
+                    Ok((sp, Some(Arc::new(raw))))
+                }
+            }
+        })
+    }
+
     fn set_processed(
         &mut self,
         ix: usize,
@@ -3111,6 +3506,25 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) {
         self.status = spectrum_status(&label, &sp);
+        if ix >= DERIVED_BASE
+            && let Some(reason) = self
+                .derived
+                .get(ix - DERIVED_BASE)
+                .and_then(DerivedSpectrum::processing_block_reason)
+        {
+            self.status = reason.into();
+        }
+        self.spectrum_group = self.tool_target(ix).map(|mut identity| {
+            identity.fingerprint = fingerprint;
+            identity.label = label.to_string();
+            identity.path = path.clone();
+            identity
+        });
+        self.spectrum_quantity = ix
+            .checked_sub(DERIVED_BASE)
+            .and_then(|i| self.derived.get(i))
+            .map(|g| g.quantity)
+            .unwrap_or_default();
         self.spectrum_label = label;
         self.spectrum_path = path;
         self.spectrum_fingerprint = fingerprint;
@@ -3797,7 +4211,7 @@ impl StudioApp {
                 .map(|(ix, fingerprint, source, params)| {
                     let result = match source {
                         Ok(path) => process_file(path, params),
-                        Err(d) => d.process(params),
+                        Err(d) => d.for_display(params),
                     };
                     (*ix, *fingerprint, result)
                 })
@@ -3926,7 +4340,13 @@ impl StudioApp {
             Vec::new()
         };
         let in_plot_legend = self.maximized.is_some();
-        let mut specs = build_quadrant_specs(&traces, &self.view, &self.theme, in_plot_legend);
+        let mut specs = crate::plotting::quantity_quadrant_specs(
+            &traces,
+            &self.view,
+            &self.theme,
+            in_plot_legend,
+            self.spectrum_quantity,
+        );
         if self.stage == Stage::Background
             && let Some((_, hi)) = self
                 .spectrum
@@ -4103,6 +4523,7 @@ impl StudioApp {
                 match result {
                     Ok(catalog) => {
                         let total = catalog.len();
+                        app.tools.invalidate_bindings();
                         app.catalog = catalog;
                         app.resolve_pending_overrides(cx);
                         app.restore_project_selection(cx);
@@ -4204,6 +4625,7 @@ impl StudioApp {
     /// keyed by catalog indices is invalidated; the active spectrum is
     /// re-located by path so the plots keep their subject when it survived.
     fn install_refreshed_catalog(&mut self, catalog: Catalog, cx: &mut Context<Self>) {
+        self.tools.invalidate_bindings();
         let remap = |indices: &BTreeSet<usize>| -> BTreeSet<usize> {
             indices
                 .iter()
@@ -4571,109 +4993,6 @@ impl StudioApp {
         cx.notify();
     }
 
-    /// Average the selected catalog spectra into a derived spectrum.
-    fn merge_selection(&mut self, cx: &mut Context<Self>) {
-        let files: Vec<usize> = self
-            .selection
-            .iter()
-            .copied()
-            .filter(|&ix| ix < DERIVED_BASE)
-            .collect();
-        if files.len() < 2 {
-            self.status = "select at least 2 spectra to merge".into();
-            cx.notify();
-            return;
-        }
-        let trim = |name: &str| name.trim_end_matches(".dat").to_string();
-        let label = format!(
-            "avg{} {}..{}",
-            files.len(),
-            trim(self.catalog.name(files[0])),
-            trim(self.catalog.name(*files.last().unwrap()))
-        );
-        // Each input loads under its own effective params (per-file import
-        // config / alignment overrides apply to the merge too).
-        let sources: Vec<(PathBuf, PipelineParams)> = files
-            .iter()
-            .map(|&ix| (self.catalog.path(ix), self.effective_params(ix).clone()))
-            .collect();
-        let catalog_gen = self.catalog_gen;
-        if let Some(cancel) = self.merge_cancel.take() {
-            cancel.store(true, Ordering::Relaxed);
-        }
-        self.merge_gen += 1;
-        let generation = self.merge_gen;
-        let cancel = Arc::new(AtomicBool::new(false));
-        self.merge_cancel = Some(cancel.clone());
-        self.merge_running = true;
-        self.status = format!("merging {} spectra ...", files.len()).into();
-        cx.notify();
-        let job_cancel = cancel.clone();
-        let job = cx.background_executor().spawn(async move {
-            // Stream a running sum: memory stays bounded at one input plus
-            // the accumulator no matter how many spectra are merged.
-            let mut iter = sources.iter();
-            let (first_path, first_params) = iter
-                .next()
-                .ok_or_else(|| "need at least 2 spectra to merge".to_string())?;
-            let (energy, mu) = load_raw(first_path, first_params)?;
-            let mut acc = StreamingAverage::new(energy, mu);
-            for (path, params) in iter {
-                if job_cancel.load(Ordering::Relaxed) {
-                    return Err("merge cancelled".to_string());
-                }
-                let (energy, mu) = load_raw(path, params)?;
-                acc.add(&energy, &mu);
-            }
-            acc.finish()
-        });
-        cx.spawn(async move |this, cx| {
-            let result = job.await;
-            this.update(cx, |app, cx| {
-                if app.catalog_gen != catalog_gen || app.merge_gen != generation {
-                    return;
-                }
-                app.merge_running = false;
-                app.merge_cancel = None;
-                match result {
-                    Ok((energy, mu)) => {
-                        let merged = DerivedSpectrum {
-                            label: label.clone(),
-                            energy,
-                            mu,
-                            id: app.next_group_id(),
-                            params: Some(app.params.clone()),
-                            ..Default::default()
-                        };
-                        app.record(
-                            format!("merge → {}", merged.label),
-                            Some(shell::journal::UndoOp::DerivedAdd {
-                                index: app.derived.len(),
-                                spectrum: merged.clone(),
-                            }),
-                        );
-                        app.derived.push(merged);
-                        let ix = DERIVED_BASE + app.derived.len() - 1;
-                        app.status = format!("merged → {label}").into();
-                        app.selection.clear();
-                        app.select_entry(ix, cx);
-                    }
-                    Err(e) => {
-                        if cancel.load(Ordering::Relaxed) {
-                            app.status = "merge cancelled".into();
-                        } else {
-                            app.status = format!("merge failed: {e}").into();
-                            app.record_job_error(format!("merge: {label}"), e);
-                        }
-                    }
-                }
-                cx.notify();
-            })
-            .ok();
-        })
-        .detach();
-    }
-
     fn remove_derived(&mut self, i: usize, cx: &mut Context<Self>) {
         let Some(spectrum) = self.take_derived(i, cx) else {
             return;
@@ -4707,7 +5026,7 @@ impl StudioApp {
                             d.label
                         )
                     } else {
-                        d.label.clone()
+                        d.display_label()
                     }
                 })
                 .unwrap_or_else(|| "merged".into())
@@ -4731,6 +5050,7 @@ impl StudioApp {
                 .source
                 .clone()
                 .unwrap_or_default();
+            // Field synchronization refreshes the preview for this channel/source too.
             self.sync_param_fields(cx);
             self.load_spectrum(ix, self.current_path.clone(), label, cx);
             return;
@@ -4743,26 +5063,26 @@ impl StudioApp {
         let label: SharedString = self.catalog.name(ix).to_string().into();
         let path = self.catalog.path(ix);
         self.current_path = path.clone();
-        self.update_import_preview(cx);
         // The panel must show this spectrum's effective (override or
         // global) params.
         self.sync_param_fields(cx);
         self.load_spectrum(ix, path, label, cx);
     }
 
-    /// Bounded-read preview of the current file on the background executor;
+    /// Full-source diagnostics and column preview on the background executor;
     /// the result is dropped if the selection moved on before it arrived.
     fn update_import_preview(&mut self, cx: &mut Context<Self>) {
         let path = self.current_path.clone();
         // Metadata must never describe the previously selected file while the
         // next preview is loading (the structure library follows this hint).
         self.import_preview = None;
+        self.import_preview_error = "".into();
+        self.import_preview_gen += 1;
         if path.as_os_str().is_empty() {
-            self.import_preview = None;
-            self.import_preview_error = "no preview".into();
+            self.import_preview_error =
+                "This group has no source file for a column preview.".into();
             return;
         }
-        self.import_preview_gen += 1;
         let generation = self.import_preview_gen;
         let import = self.ui_params().import.clone();
         let job = cx.background_executor().spawn({
@@ -4772,20 +5092,19 @@ impl StudioApp {
         cx.spawn(async move |this, cx| {
             let result = job.await;
             this.update(cx, |app, cx| {
-                if app.current_path != path || app.import_preview_gen != generation {
-                    return; // a newer selection superseded this preview
-                }
-                match result {
-                    Ok(preview) => {
-                        app.import_preview = Some(preview);
-                        app.import_preview_error = "".into();
+                if finish_import_preview(
+                    (&app.current_path, app.import_preview_gen),
+                    (&path, generation),
+                    result,
+                    &mut app.import_preview,
+                    &mut app.import_preview_error,
+                ) {
+                    if let Some(preview) = &app.import_preview {
+                        let diagnostics = preview.diagnostics.clone();
+                        app.record_source_warnings(&path, &diagnostics);
                     }
-                    Err(_) => {
-                        app.import_preview = None;
-                        app.import_preview_error = "no preview".into();
-                    }
+                    cx.notify();
                 }
-                cx.notify();
             })
             .ok();
         })
@@ -4966,7 +5285,9 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) {
         let text = text.trim().to_string();
-        if text.is_empty() && param.is_primary() {
+        // An empty N cell means "use the FEFF degeneracy"; the other primary
+        // cells keep their previous value instead of going blank.
+        if text.is_empty() && param.is_primary() && param != PathParam::Degen {
             return;
         }
         if text.parse::<f64>().is_err() {
@@ -5149,7 +5470,15 @@ impl StudioApp {
             .into_iter()
             .map(|param| (param, param.get(&spec).to_string()))
             .map(|(param, initial)| {
-                let placeholder = if param.is_primary() { "expr" } else { "0" };
+                let placeholder: SharedString = match param {
+                    PathParam::Degen => meta
+                        .as_ref()
+                        .map(|m| format!("{}", m.degen))
+                        .unwrap_or_else(|| "FEFF".into())
+                        .into(),
+                    p if p.is_primary() => "expr".into(),
+                    _ => "0".into(),
+                };
                 let field = cx.new(|cx| {
                     TextInput::new(placeholder, initial, theme, cx).with_style(
                         crate::widgets::text_input::InputStyle {
@@ -6455,6 +6784,10 @@ impl StudioApp {
             fit_history: self.fit_history.clone(),
             joint: self.joint.config.clone(),
             publication: self.publish.settings.clone(),
+            assistant: crate::project::assistant::AssistantHistory {
+                conversations: self.assistant_history.conversations.clone(),
+                limit: Some(self.structure.settings.assistant_history_limit),
+            },
             extensions: self.project_extensions.clone(),
             embedded: Default::default(),
             raw_files: (0..self.catalog.len())
@@ -6480,6 +6813,7 @@ impl StudioApp {
             return;
         }
         let project = self.project_file();
+        let history_revision = self.assistant_history_revision;
         let generation = self.project_generation;
         let mode = self.project_storage;
         let folder = self
@@ -6523,6 +6857,12 @@ impl StudioApp {
                             if app.project_generation == generation {
                                 app.project_path = Some(path.clone());
                                 app.project_header = Some(header);
+                                app.assistant_history_saved_revision = history_revision;
+                                if app.assistant_history_revision == history_revision {
+                                    app.assistant_history.limit =
+                                        Some(app.structure.settings.assistant_history_limit);
+                                    app.assistant_history.prune_for_save();
+                                }
                             }
                             app.status = format!("Saved {}", path.display()).into();
                         }
@@ -6595,6 +6935,16 @@ impl StudioApp {
     fn apply_project(&mut self, mut project: ProjectFile, cx: &mut Context<Self>) {
         self.next_derived_id = project.assign_group_ids();
         self.project_generation += 1;
+        self.assistant_history = project.assistant.clone();
+        self.assistant_history_revision = 0;
+        self.assistant_history_saved_revision = 0;
+        if let Some(assistant) = self.assistant.clone() {
+            let generation = self.project_generation;
+            cx.defer(move |cx| {
+                assistant.update(cx, |view, cx| view.replace_project(generation, cx))
+            });
+        }
+        self.tools.invalidate_bindings();
         self.journal = Default::default();
         self.project_path = project.origin.clone();
         self.project_storage = project
@@ -6711,6 +7061,8 @@ impl StudioApp {
 
     fn focus_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.data_panel_open = true;
+        self.last_opened_side_panel = Some(shell::assistant_shell::SidePanel::Groups);
+        self.fit_assistant_layout();
         self.data_tab = DataTab::Files;
         let input = self.filter_input.clone();
         cx.notify();
@@ -7299,6 +7651,14 @@ impl StudioApp {
                         }
                     }
                 }
+                let diagnostics = self
+                    .selected
+                    .and_then(|ix| {
+                        self.raw_cache
+                            .peek(&(ix, self.effective_params(ix).raw_fingerprint()))
+                    })
+                    .map(|raw| &raw.diagnostics)
+                    .unwrap_or(&preview.diagnostics);
                 let table_width = px(preview.column_count as f32 * IMPORT_COL_W);
                 let header_status = if preview.names.is_some() {
                     "header names found"
@@ -7312,10 +7672,22 @@ impl StudioApp {
                         .text_xs()
                         .text_color(t.text_muted)
                         .child(format!(
-                            "detected: {} columns · {header_status} · auto: {:?}",
-                            preview.column_count, preview.auto_mode
+                            "{} · detected: {} columns · {header_status} · auto: {:?}",
+                            diagnostics.summary(),
+                            preview.column_count,
+                            preview.auto_mode
                         )),
                 );
+                if let Some(error) = &preview.signal_error {
+                    sections = sections.child(
+                        div()
+                            .px_3()
+                            .pb_1()
+                            .text_xs()
+                            .text_color(t.error)
+                            .child(error.clone()),
+                    );
+                }
                 // The column table is a diagnostic, not a parameter — behind
                 // the disclosure it stops permanently occupying the top of the
                 // panel and pushing the actual parameters down. The one-line
@@ -7535,7 +7907,7 @@ impl StudioApp {
                                         this.toggle_import_fluor(None, cx);
                                         this.open_import_role = None;
                                     } else {
-                                        this.set_import_role_column(role, None, cx);
+                                        this.set_import_role_column(role, None, None, cx);
                                     }
                                 }))
                                 .child(self.import_role_auto_label(role)),
@@ -7547,7 +7919,11 @@ impl StudioApp {
                             .unwrap_or(0);
                         for column in 0..column_count {
                             let is_selected = if role == ImportRole::Fluor {
-                                fluor.is_some_and(|columns| columns.contains(&column))
+                                fluor
+                                    .or_else(|| {
+                                        self.import_preview.as_ref().map(|p| &p.resolved.fluor_cols)
+                                    })
+                                    .is_some_and(|columns| columns.contains(&column))
                             } else {
                                 manual == Some(column)
                             };
@@ -7572,7 +7948,12 @@ impl StudioApp {
                                             if role == ImportRole::Fluor {
                                                 this.toggle_import_fluor(Some(column), cx);
                                             } else {
-                                                this.set_import_role_column(role, Some(column), cx);
+                                                this.set_import_role_column(
+                                                    role,
+                                                    Some(column),
+                                                    None,
+                                                    cx,
+                                                );
                                             }
                                         },
                                     ))
@@ -7618,10 +7999,14 @@ impl StudioApp {
                                 .text_color(if align_on { t.accent } else { t.text_muted })
                                 .hover(|d| d.bg(t.raised))
                                 .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
-                                    let on = this.ui_params().align_to_ref;
-                                    this.edit_params().align_to_ref = !on;
-                                    this.schedule_recompute(cx);
-                                    cx.notify();
+                                    this.edit_parameters(
+                                        "Toggle reference alignment".into(),
+                                        cx,
+                                        |p| {
+                                            p.align_to_ref = !p.align_to_ref;
+                                            Ok(())
+                                        },
+                                    );
                                 }))
                                 .child(if align_on {
                                     "✓ align to ref"
@@ -7746,6 +8131,7 @@ impl StudioApp {
 
     fn problems_panel(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
+        let (errors, warnings) = problem_counts(&self.job_errors);
         let mut list = div()
             .id("recent-problems-list")
             .flex_1()
@@ -7762,8 +8148,20 @@ impl StudioApp {
                     .text_xs()
                     .child(
                         div()
-                            .text_color(t.error)
-                            .child(SharedString::from(error.label.clone())),
+                            .text_color(if error.severity == ProblemSeverity::Error {
+                                t.error
+                            } else {
+                                t.text_muted
+                            })
+                            .child(SharedString::from(format!(
+                                "{}: {}",
+                                if error.severity == ProblemSeverity::Error {
+                                    "Error"
+                                } else {
+                                    "Warning"
+                                },
+                                error.label
+                            ))),
                     )
                     .child(
                         div()
@@ -7794,7 +8192,7 @@ impl StudioApp {
                     .text_xs()
                     .text_color(t.text)
                     .child(div().flex_1().child(format!(
-                        "Recent problems ({}/{JOB_ERROR_CAPACITY})",
+                        "Recent problems · {errors} errors · {warnings} warnings ({}/{JOB_ERROR_CAPACITY})",
                         self.job_errors.len()
                     )))
                     .child(
@@ -7877,7 +8275,7 @@ impl StudioApp {
     fn status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
         let jobs = self.running_job_count();
-        let errors = self.job_errors.len();
+        let (errors, warnings) = problem_counts(&self.job_errors);
         let mut bar = div()
             .h(px(28.))
             .w_full()
@@ -7920,7 +8318,7 @@ impl StudioApp {
                         this.problems_open = !this.problems_open;
                         cx.notify();
                     }))
-                    .child(format!("errors:{errors}")),
+                    .child(format!("{errors} errors · {warnings} warnings")),
             );
         if self.catalog.scanning
             || self.verify_running
@@ -7976,6 +8374,7 @@ impl StudioApp {
 impl Render for StudioApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.viewport_w = f32::from(window.viewport_size().width);
+        self.fit_assistant_layout();
         let key_context = if self.updates.open {
             "UpdateDialog"
         } else if self.palette.is_some() {
@@ -8020,12 +8419,22 @@ impl Render for StudioApp {
             .on_action(
                 cx.listener(|this: &mut Self, _: &ToggleDataPanel, _window, cx| {
                     this.data_panel_open = !this.data_panel_open;
+                    if this.data_panel_open {
+                        this.last_opened_side_panel =
+                            Some(shell::assistant_shell::SidePanel::Groups);
+                    }
+                    this.fit_assistant_layout();
                     cx.notify();
                 }),
             )
             .on_action(
                 cx.listener(|this: &mut Self, _: &ToggleContextPanel, _window, cx| {
                     this.context_panel_open = !this.context_panel_open;
+                    if this.context_panel_open {
+                        this.last_opened_side_panel =
+                            Some(shell::assistant_shell::SidePanel::Inspector);
+                    }
+                    this.fit_assistant_layout();
                     cx.notify();
                 }),
             )

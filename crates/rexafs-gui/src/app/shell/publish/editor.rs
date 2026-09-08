@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::shell::{button, chip};
-use crate::publication::figures::{fit_figures, render_figure, spectrum_figures};
+use crate::publication::figures::{fit_figures, render_figure};
 use crate::widgets::numeric_field::{FieldEvent, FieldKind};
 use crate::widgets::text_input::InputEvent;
 use gpui::{
@@ -9,6 +9,7 @@ use gpui::{
 
 impl StudioApp {
     fn refresh_publication_source(&mut self, cx: &mut Context<Self>) {
+        let ready = self.publication_ready();
         let source = (
             self.spectrum
                 .as_ref()
@@ -19,7 +20,10 @@ impl StudioApp {
                 .map(|s| Arc::as_ptr(s) as usize)
                 .unwrap_or(0),
             self.joint.result_index,
-            format!("{}:{:?}", self.current_group_label(), self.theme.mode),
+            format!(
+                "{}:{:?}:{:?}:{ready}",
+                self.spectrum_label, self.theme.mode, self.spectrum_quantity
+            ),
         );
         if self.publish.source.as_ref() == Some(&source) {
             return;
@@ -30,11 +34,15 @@ impl StudioApp {
             .figures
             .get(self.publish.selected)
             .map(|f| f.key);
-        let mut figures = self
-            .spectrum
-            .as_ref()
-            .map(|sp| spectrum_figures(sp.clone(), &self.current_group_label().to_string()))
-            .unwrap_or_default();
+        let current = self.tool_target(self.selected.unwrap_or(crate::app::NO_ENTRY));
+        let mut figures = publication_spectrum_figures(
+            current.as_ref(),
+            self.spectrum_group.as_ref(),
+            self.spectrum.as_ref(),
+            self.spectrum_quantity,
+            self.stale_plots.is_some(),
+            self.load_running,
+        );
         if let Some(result) = &self.fit_result {
             figures.extend(fit_figures(&crate::joint_fitting::result_view(
                 result,
@@ -237,6 +245,10 @@ impl StudioApp {
     }
 
     fn save_publication_figure(&mut self, extension: &'static str, cx: &mut Context<Self>) {
+        if !self.require_publication_source(cx) {
+            return;
+        }
+        self.refresh_publication_source(cx);
         let Some(figure) = self.publish.figures.get(self.publish.selected) else {
             return;
         };

@@ -33,7 +33,59 @@ impl PublishState {
         };
     }
 }
+fn publication_target<'a>(
+    current: Option<&super::tools::ToolTarget>,
+    loaded: Option<&'a super::tools::ToolTarget>,
+    failed: bool,
+    loading: bool,
+) -> Option<&'a super::tools::ToolTarget> {
+    loaded.filter(|identity| !failed && !loading && current == Some(*identity))
+}
+
+fn publication_spectrum_figures(
+    current: Option<&super::tools::ToolTarget>,
+    loaded: Option<&super::tools::ToolTarget>,
+    spectrum: Option<&Arc<rexafs::prelude::XASSpectrum>>,
+    quantity: crate::params::Quantity,
+    failed: bool,
+    loading: bool,
+) -> Vec<FigureData> {
+    let Some(identity) = publication_target(current, loaded, failed, loading) else {
+        return Vec::new();
+    };
+    spectrum
+        .map(|sp| {
+            crate::publication::figures::quantity_figures(
+                sp.clone(),
+                &identity.label,
+                Some(quantity),
+            )
+        })
+        .unwrap_or_default()
+}
+
 impl StudioApp {
+    fn publication_ready(&self) -> bool {
+        let current = self.tool_target(self.selected.unwrap_or(crate::app::NO_ENTRY));
+        self.spectrum.is_some()
+            && publication_target(
+                current.as_ref(),
+                self.spectrum_group.as_ref(),
+                self.stale_plots.is_some(),
+                self.load_running,
+            )
+            .is_some()
+    }
+
+    fn require_publication_source(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.publication_ready() {
+            return true;
+        }
+        self.publish.error =
+            Some("Selected group/revision must load successfully before export.".into());
+        cx.notify();
+        false
+    }
     pub(crate) fn analysis_snapshot(&self) -> Snapshot {
         let mut indices = self.selection.clone();
         indices.extend(self.selected);
@@ -137,7 +189,7 @@ impl StudioApp {
         }
     }
     pub(crate) fn export_publication(&mut self, cx: &mut Context<Self>) {
-        if self.publish.running {
+        if self.publish.running || !self.require_publication_source(cx) {
             return;
         }
         let snapshot = self.analysis_snapshot();
@@ -173,5 +225,92 @@ impl StudioApp {
             }
         })
         .detach();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        app::shell::tools::ToolTarget,
+        params::{DerivedSpectrum, PipelineParams, Quantity},
+    };
+
+    #[test]
+    fn publication_failed_selection_cannot_relabel_retained_difference() {
+        let params = PipelineParams::default();
+        let difference = DerivedSpectrum {
+            id: 1,
+            label: "difference".into(),
+            quantity: Quantity::NormalizedDifference,
+            energy: vec![1., 2., 3.],
+            mu: vec![-0.1, 0., 0.2],
+            ..Default::default()
+        };
+        let spectrum = Arc::new(difference.for_display(&params).unwrap());
+        let loaded = ToolTarget {
+            ix: DERIVED_BASE,
+            fingerprint: difference.fingerprint(&params),
+            label: difference.display_label(),
+            path: Default::default(),
+            derived_id: Some(1),
+            project_generation: 1,
+            catalog_generation: 1,
+            size: None,
+        };
+        let figures = publication_spectrum_figures(
+            Some(&loaded),
+            Some(&loaded),
+            Some(&spectrum),
+            difference.quantity,
+            false,
+            false,
+        );
+        assert_eq!(figures.len(), 1);
+        assert_eq!(figures[0].series[0].label, loaded.label);
+        assert!(figures[0].ylabel.contains("Δμnorm"));
+        let failed = DerivedSpectrum {
+            id: 2,
+            ..Default::default()
+        };
+        assert!(failed.process(&params).is_err());
+        let selected = ToolTarget {
+            ix: DERIVED_BASE + 1,
+            derived_id: Some(2),
+            label: "failed raw group".into(),
+            fingerprint: failed.fingerprint(&params),
+            ..loaded.clone()
+        };
+        // Even if selected metadata is supplied accidentally, no stale curves escape.
+        assert!(
+            publication_spectrum_figures(
+                Some(&selected),
+                Some(&loaded),
+                Some(&spectrum),
+                failed.quantity,
+                true,
+                false
+            )
+            .is_empty()
+        );
+        assert!(publication_target(Some(&selected), Some(&loaded), false, false).is_none());
+        assert!(publication_target(Some(&loaded), Some(&loaded), true, false).is_none());
+        assert!(publication_target(Some(&loaded), Some(&loaded), false, true).is_none());
+        let revised = ToolTarget {
+            fingerprint: loaded.fingerprint.wrapping_add(1),
+            ..loaded.clone()
+        };
+        assert!(publication_target(Some(&revised), Some(&loaded), false, false).is_none());
+        assert!(
+            publication_spectrum_figures(
+                Some(&loaded),
+                Some(&loaded),
+                None,
+                difference.quantity,
+                false,
+                false
+            )
+            .is_empty()
+        );
     }
 }

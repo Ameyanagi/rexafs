@@ -9,6 +9,7 @@ mod codex_client;
 mod debug_stats;
 mod feffgen;
 mod fit_details;
+mod fit_report;
 mod fitting;
 mod joint_fitting;
 mod params;
@@ -72,6 +73,7 @@ fn main() {
     gpui_platform::application().run(move |cx: &mut App| {
         cx.bind_keys(widgets::text_input::text_input_keybindings());
         cx.bind_keys(app::studio_keybindings());
+        cx.on_action(|_: &app::Quit, cx| cx.quit());
         let window_size = Size {
             width: px(1440.0),
             height: px(900.0),

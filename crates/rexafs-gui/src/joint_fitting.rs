@@ -171,6 +171,7 @@ pub(crate) fn prepare(
             p.label = format!("Spectrum {} · {} · {}", d.id, d.label, p.label);
             for expr in [
                 &mut p.s02,
+                &mut p.degen,
                 &mut p.e0,
                 &mut p.sigma2,
                 &mut p.deltar,

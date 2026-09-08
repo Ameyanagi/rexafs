@@ -33,8 +33,8 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: '0.12.3'
           python-version: '3.12'
@@ -51,7 +51,7 @@ jobs:
         run: uv run --no-project python scripts/windows_installer.py windows-installer --release $env:RELEASE_TAG
       - name: Install, reinstall and uninstall the complete payload
         run: ./scripts/test-windows-installer.ps1 -Directory windows-installer
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: windows-installer

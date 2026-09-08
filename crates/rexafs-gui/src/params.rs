@@ -68,6 +68,39 @@ impl Default for ImportConfig {
     }
 }
 
+/// ROI columns are a set; canonical order also keeps persisted edits stable.
+fn unique_columns(mut columns: Vec<usize>) -> Vec<usize> {
+    columns.sort_unstable();
+    columns.dedup();
+    columns
+}
+
+impl ImportConfig {
+    /// None selects Auto. A first manual click edits the resolved automatic set.
+    pub(crate) fn toggle_fluor(
+        &mut self,
+        column: Option<usize>,
+        auto: Option<&[usize]>,
+    ) -> Result<(), String> {
+        self.fluor_cols = match column {
+            None => None,
+            Some(column) => {
+                let seed = self.fluor_cols.as_deref().or(auto).ok_or_else(|| {
+                    "ROI columns are not available yet; wait for the source preview or type a column list.".to_string()
+                })?;
+                let mut columns = unique_columns(seed.to_vec());
+                if columns.contains(&column) {
+                    columns.retain(|&c| c != column);
+                } else {
+                    columns.push(column);
+                }
+                Some(unique_columns(columns))
+            }
+        };
+        Ok(())
+    }
+}
+
 /// File-derived import assignments after applying any manual overrides.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResolvedImport {
@@ -78,6 +111,108 @@ pub struct ResolvedImport {
     pub ir_col: usize,
     pub fluor_cols: Vec<usize>,
     pub mu_col: Option<usize>,
+}
+
+/// Count every occurrence while retaining bounded, 1-based source locations.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct DiagnosticCategory {
+    pub count: usize,
+    pub examples: Vec<usize>,
+}
+
+impl DiagnosticCategory {
+    fn record(&mut self, line: Option<usize>) {
+        self.count += 1;
+        if let Some(line) = line
+            && self.examples.len() < 5
+            && !self.examples.contains(&line)
+        {
+            self.examples.push(line);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ParserDiagnostics {
+    pub malformed_rows: DiagnosticCategory,
+    pub short_rows: DiagnosticCategory,
+    pub truncated_wide_rows: DiagnosticCategory,
+    pub excluded_signal_points: DiagnosticCategory,
+    pub header_units_anomalies: DiagnosticCategory,
+    pub valid_points: usize,
+}
+
+fn point_count(count: usize) -> String {
+    let digits = count.to_string();
+    let mut result = String::new();
+    for (i, digit) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            result.push(',');
+        }
+        result.push(digit);
+    }
+    result
+}
+
+impl ParserDiagnostics {
+    pub fn summary(&self) -> String {
+        let mut parts = vec![format!("{} points", point_count(self.valid_points))];
+        for (count, label) in [
+            (
+                self.malformed_rows.count + self.short_rows.count,
+                "rows skipped",
+            ),
+            (self.truncated_wide_rows.count, "wide rows truncated"),
+            (self.excluded_signal_points.count, "points excluded"),
+            (self.header_units_anomalies.count, "header/units anomalies"),
+        ] {
+            if count > 0 {
+                parts.push(format!("{} {label}", point_count(count)));
+            }
+        }
+        parts.join(" · ")
+    }
+
+    /// One warning per category. Missing XDI metadata has no source line.
+    pub fn warnings(&self) -> Vec<String> {
+        [
+            (&self.malformed_rows, "malformed rows skipped"),
+            (&self.short_rows, "short rows skipped"),
+            (&self.truncated_wide_rows, "wide rows truncated"),
+            (
+                &self.excluded_signal_points,
+                "non-finite signal/energy points excluded",
+            ),
+            (&self.header_units_anomalies, "header/units anomalies"),
+        ]
+        .into_iter()
+        .filter(|(category, _)| category.count > 0)
+        .map(|(category, label)| {
+            let locations = if category.examples.is_empty() {
+                "source line unavailable".into()
+            } else {
+                format!(
+                    "example lines: {}",
+                    category
+                        .examples
+                        .iter()
+                        .map(usize::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
+            format!("{} {label} ({locations})", point_count(category.count))
+        })
+        .collect()
+    }
+}
+
+/// Raw arrays and their diagnostics travel together, including through caches.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RawData {
+    pub energy: Vec<f64>,
+    pub mu: Vec<f64>,
+    pub diagnostics: ParserDiagnostics,
 }
 
 /// Bounded data shown in the Import panel.
@@ -94,6 +229,9 @@ pub struct ImportPreview {
     pub resolved: ResolvedImport,
     /// Original XDI metadata, comments and units for the import inspector.
     pub xdi: Option<XdiHeader>,
+    pub diagnostics: ParserDiagnostics,
+    /// Mapping/axis errors do not hide the column preview or row diagnostics.
+    pub signal_error: Option<String>,
 }
 
 impl ImportPreview {
@@ -129,6 +267,8 @@ struct ParsedData {
     names: Option<Vec<String>>,
     rows: Vec<Vec<f64>>,
     xdi: Option<XdiHeader>,
+    source_lines: Vec<usize>,
+    diagnostics: ParserDiagnostics,
 }
 
 #[derive(Debug)]
@@ -174,8 +314,55 @@ fn fluorescence_name_matches(name: &str) -> bool {
 
 fn parse_data(text: &str) -> Result<ParsedData, String> {
     if io::xdi::is_xdi(text) {
+        let normalized = text
+            .trim_start_matches('\u{feff}')
+            .replace("\r\n", "\n")
+            .replace('\r', "\n");
         let file = XdiFile::parse(text).map_err(|e| e.to_string())?;
+        let mut diagnostics = ParserDiagnostics::default();
+        for warning in &file.header.warnings {
+            let line = warning
+                .strip_prefix("Line ")
+                .and_then(|s| s.split_once(':'))
+                .and_then(|(n, _)| n.parse().ok());
+            diagnostics.header_units_anomalies.record(line);
+        }
+        for (index, column) in file.header.columns.iter().enumerate() {
+            let units = column.units.as_deref().unwrap_or("").to_ascii_lowercase();
+            let unsupported = match column.label.to_ascii_lowercase().as_str() {
+                "energy" => !matches!(units.as_str(), "ev" | "kev"),
+                "angle" => !matches!(
+                    units.as_str(),
+                    "deg" | "degree" | "degrees" | "rad" | "radian" | "radians"
+                ),
+                _ => false,
+            };
+            if unsupported {
+                let key = format!("column.{}:", index + 1);
+                let line = normalized.lines().enumerate().find_map(|(i, line)| {
+                    line.trim()
+                        .trim_start_matches('#')
+                        .trim_start()
+                        .to_ascii_lowercase()
+                        .starts_with(&key)
+                        .then_some(i + 1)
+                });
+                diagnostics.header_units_anomalies.record(line);
+            }
+        }
+        // The core XDI parser rejects malformed tables. Every non-comment,
+        // nonempty line in a successfully parsed file is a retained data row.
+        let source_lines = normalized
+            .lines()
+            .enumerate()
+            .filter_map(|(i, line)| {
+                let line = line.trim();
+                (!line.is_empty() && !line.starts_with('#')).then_some(i + 1)
+            })
+            .collect();
         return Ok(ParsedData {
+            source_lines,
+            diagnostics,
             names: Some(
                 file.header
                     .columns
@@ -188,12 +375,15 @@ fn parse_data(text: &str) -> Result<ParsedData, String> {
         });
     }
     let mut rows = Vec::new();
+    let mut source_lines = Vec::new();
+    let mut diagnostics = ParserDiagnostics::default();
     let mut width = 0usize;
-    let mut last_comment = None;
-    for line in text.lines() {
+    let mut last_header = None;
+    for (index, line) in text.lines().enumerate() {
+        let line_number = index + 1;
         let line = line.trim();
         if rows.is_empty() && line.starts_with('#') {
-            last_comment = Some(line);
+            last_header = Some((line_number, line));
             continue;
         }
         if line.is_empty() || line.starts_with('#') || line.starts_with('*') {
@@ -203,7 +393,14 @@ fn parse_data(text: &str) -> Result<ParsedData, String> {
             .split_whitespace()
             .map(|token| token.parse::<f64>().ok())
             .collect();
-        let Some(values) = values else { continue };
+        let Some(values) = values else {
+            if rows.is_empty() {
+                last_header = Some((line_number, line));
+            } else {
+                diagnostics.malformed_rows.record(Some(line_number));
+            }
+            continue;
+        };
         if values.is_empty() {
             continue;
         }
@@ -211,25 +408,48 @@ fn parse_data(text: &str) -> Result<ParsedData, String> {
             width = values.len();
         }
         if values.len() >= width {
+            if values.len() > width {
+                diagnostics.truncated_wide_rows.record(Some(line_number));
+            }
             rows.push(values[..width].to_vec());
+            source_lines.push(line_number);
+        } else {
+            diagnostics.short_rows.record(Some(line_number));
         }
     }
     if rows.is_empty() {
         return Err("no numeric data rows".into());
     }
-    let names = last_comment.and_then(|line| {
+    let names = last_header.and_then(|(line_number, line)| {
         let names = line
             .trim_start_matches('#')
             .split(|c: char| c.is_whitespace() || c == ',')
             .filter(|token| !token.is_empty())
             .map(str::to_string)
             .collect::<Vec<_>>();
+        // Separators and metadata labels ("----", "Data:") are not name rows.
+        let looks_like_names = names.len() > 1
+            && names.iter().all(|name| {
+                name.parse::<f64>().is_err()
+                    && name.chars().any(char::is_alphabetic)
+                    && name
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || "_-./()[]".contains(c))
+            });
+        if !looks_like_names {
+            return None;
+        }
+        if names.len() != width {
+            diagnostics.header_units_anomalies.record(Some(line_number));
+        }
         (names.len() == width).then_some(names)
     });
     Ok(ParsedData {
         names,
         rows,
         xdi: None,
+        source_lines,
+        diagnostics,
     })
 }
 
@@ -345,7 +565,7 @@ fn resolve_import(data: &ParsedData, import: &ImportConfig) -> ResolvedImport {
         i0_col: import.i0_col.unwrap_or(detected.i0_col),
         it_col: import.it_col.unwrap_or(detected.it_col),
         ir_col: import.ir_col.unwrap_or(detected.ir_col),
-        fluor_cols: import.fluor_cols.clone().unwrap_or(detected.fluor_cols),
+        fluor_cols: unique_columns(import.fluor_cols.clone().unwrap_or(detected.fluor_cols)),
         mu_col: import.mu_col.or(detected.mu_col),
     }
 }
@@ -368,45 +588,30 @@ pub fn parse_cols(text: &str) -> Option<Vec<usize>> {
             None => out.push(token.trim().parse::<usize>().ok()?),
         }
     }
-    (!out.is_empty()).then_some(out)
+    (!out.is_empty()).then(|| unique_columns(out))
 }
 
-/// Bytes read for the import preview: enough to reach the first numeric
-/// row of any realistic header without ever parsing a whole file.
-const PREVIEW_BYTES: usize = 64 * 1024;
-
-/// Column metadata and the first three numeric rows, reading at most
-/// [`PREVIEW_BYTES`]. The caller runs this on the background executor so
-/// selection never blocks on I/O (large files, network filesystems).
+/// Column metadata, three original rows, and full-source diagnostics. Runs on
+/// the background executor; totals must include rows beyond a header prefix.
 pub fn preview_import(
     path: &std::path::Path,
     import: &ImportConfig,
 ) -> Result<ImportPreview, String> {
-    use std::io::Read;
-    let file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let mut buf = Vec::with_capacity(PREVIEW_BYTES);
-    file.take(PREVIEW_BYTES as u64)
-        .read_to_end(&mut buf)
-        .map_err(|e| format!("{}: {e}", path.display()))?;
-    let truncated = buf.len() == PREVIEW_BYTES;
-    let text = String::from_utf8_lossy(&buf)
-        .replace("\r\n", "\n")
-        .replace('\r', "\n");
-    let mut lines: Vec<&str> = text.lines().collect();
-    if truncated {
-        // the final line may be cut mid-number
-        lines.pop();
-    }
-    let data = parse_file_data(&lines.join("\n"), path)?;
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut data = parse_file_data(&text, path)?;
     let detected = resolve_import(&data, &ImportConfig::default());
     let mut auto_import = import.clone();
     auto_import.mode = DetectionMode::Auto;
     let auto_mode = resolve_import(&data, &auto_import).mode;
     let resolved = resolve_import(&data, import);
+    let rows = data.rows.iter().take(3).cloned().collect();
+    let signal_error = construct_mu(&mut data, path, import).err();
     Ok(ImportPreview {
+        diagnostics: data.diagnostics,
+        signal_error,
         column_count: data.rows[0].len(),
         names: data.names,
-        rows: data.rows.into_iter().take(3).collect(),
+        rows,
         detected,
         auto_mode,
         resolved,
@@ -421,12 +626,30 @@ pub fn load_mu(
     path: &std::path::Path,
     import: &ImportConfig,
 ) -> Result<(Vec<f64>, Vec<f64>), String> {
+    let raw = load_mu_with_diagnostics(path, import)?;
+    Ok((raw.energy, raw.mu))
+}
+
+pub fn load_mu_with_diagnostics(
+    path: &std::path::Path,
+    import: &ImportConfig,
+) -> Result<RawData, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut data = parse_file_data(&text, path)?;
-    if data.rows.len() < 2 {
-        return Err(format!("{}: no numeric data rows", path.display()));
-    }
-    let resolved = resolve_import(&data, import);
+    let (energy, mu) = construct_mu(&mut data, path, import)?;
+    Ok(RawData {
+        energy,
+        mu,
+        diagnostics: data.diagnostics,
+    })
+}
+
+fn construct_mu(
+    data: &mut ParsedData,
+    path: &std::path::Path,
+    import: &ImportConfig,
+) -> Result<(Vec<f64>, Vec<f64>), String> {
+    let resolved = resolve_import(data, import);
     if let Some(header) = &data.xdi {
         for row in &mut data.rows {
             let value = row
@@ -442,7 +665,7 @@ pub fn load_mu(
         .as_ref()
         .and_then(|names| names.iter().position(|n| name_matches(n, REF_MU_NAMES)))
         .filter(|_| import.it_col.is_none() && import.ir_col.is_none());
-    let rows = data.rows;
+    let rows = &data.rows;
     let width = rows[0].len();
     let need = |col: usize, name: &str| -> Result<usize, String> {
         if col < width {
@@ -461,11 +684,13 @@ pub fn load_mu(
         DetectionMode::Auto => unreachable!("auto mode is resolved before import math"),
         DetectionMode::Transmission => {
             let (i0, it) = (need(resolved.i0_col, "I0")?, need(resolved.it_col, "It")?);
-            for row in &rows {
+            for (row, &line) in rows.iter().zip(&data.source_lines) {
                 let m = (row[i0] / row[it]).ln();
                 if m.is_finite() && row[e].is_finite() {
                     energy.push(row[e]);
                     mu.push(m);
+                } else {
+                    data.diagnostics.excluded_signal_points.record(Some(line));
                 }
             }
         }
@@ -478,29 +703,35 @@ pub fn load_mu(
             if cols.is_empty() {
                 return Err("no fluorescence ROI columns configured".into());
             }
-            for row in &rows {
+            for (row, &line) in rows.iter().zip(&data.source_lines) {
                 let m = cols.iter().map(|&c| row[c]).sum::<f64>() / row[i0];
                 if m.is_finite() && row[e].is_finite() {
                     energy.push(row[e]);
                     mu.push(m);
+                } else {
+                    data.diagnostics.excluded_signal_points.record(Some(line));
                 }
             }
         }
         DetectionMode::Reference => {
             if let Some(col) = ref_mu_col {
-                for row in &rows {
+                for (row, &line) in rows.iter().zip(&data.source_lines) {
                     if row[col].is_finite() && row[e].is_finite() {
                         energy.push(row[e]);
                         mu.push(row[col]);
+                    } else {
+                        data.diagnostics.excluded_signal_points.record(Some(line));
                     }
                 }
             } else {
                 let (it, ir) = (need(resolved.it_col, "It")?, need(resolved.ir_col, "Ir")?);
-                for row in &rows {
+                for (row, &line) in rows.iter().zip(&data.source_lines) {
                     let m = (row[it] / row[ir]).ln();
                     if m.is_finite() && row[e].is_finite() {
                         energy.push(row[e]);
                         mu.push(m);
+                    } else {
+                        data.diagnostics.excluded_signal_points.record(Some(line));
                     }
                 }
             }
@@ -510,14 +741,17 @@ pub fn load_mu(
                 .mu_col
                 .ok_or_else(|| format!("{}: no precomputed mu column detected", path.display()))?;
             let mu_col = need(mu_col, "mu")?;
-            for row in &rows {
+            for (row, &line) in rows.iter().zip(&data.source_lines) {
                 if row[mu_col].is_finite() && row[e].is_finite() {
                     energy.push(row[e]);
                     mu.push(row[mu_col]);
+                } else {
+                    data.diagnostics.excluded_signal_points.record(Some(line));
                 }
             }
         }
     }
+    data.diagnostics.valid_points = energy.len();
     if energy.len() < 2 {
         return Err(format!(
             "{}: fewer than 2 finite data points",
@@ -696,6 +930,18 @@ fn legacy_bkg_clamp_policy() -> AUTOBKClampScalePolicy {
 }
 
 impl PipelineParams {
+    /// Inherit settings for already materialized, energy-shifted arrays.
+    /// Pre/post-edge ranges are relative to E0; only the two absolute edge
+    /// overrides move. Reference alignment belongs to the input read, not replay.
+    pub fn for_materialized(&self, applied_shift_ev: f64) -> Self {
+        let mut params = self.clone();
+        params.e0 = params.e0.map(|e| e + applied_shift_ev);
+        params.bkg_ek0 = params.bkg_ek0.map(|e| e + applied_shift_ev);
+        params.align_to_ref = false;
+        params.align_target = None;
+        params
+    }
+
     pub fn legacy_defaults() -> Self {
         Self {
             bkg_clamp_policy: legacy_bkg_clamp_policy(),
@@ -811,16 +1057,55 @@ pub fn load_raw(
     path: &std::path::Path,
     params: &PipelineParams,
 ) -> Result<(Vec<f64>, Vec<f64>), String> {
-    let (mut energy, mu) = load_mu(path, &params.import)?;
+    let raw = load_raw_with_diagnostics(path, params)?;
+    Ok((raw.energy, raw.mu))
+}
+
+pub fn load_raw_with_diagnostics(
+    path: &std::path::Path,
+    params: &PipelineParams,
+) -> Result<RawData, String> {
+    let mut raw = load_mu_with_diagnostics(path, &params.import)?;
     if params.align_to_ref
         && let Some(target) = params.align_target
     {
         let shift = target - reference_e0(path, &params.import)?;
-        for e in energy.iter_mut() {
+        for e in &mut raw.energy {
             *e += shift;
         }
     }
-    Ok((energy, mu))
+    Ok(raw)
+}
+
+/// Shared uncached access for file channels and materialized results.
+pub(crate) fn load_group_raw(
+    path: &std::path::Path,
+    params: &PipelineParams,
+    derived: Option<&DerivedSpectrum>,
+) -> Result<(Vec<f64>, Vec<f64>), String> {
+    let raw = load_group_raw_with_diagnostics(path, params, derived)?;
+    Ok((raw.energy, raw.mu))
+}
+
+pub(crate) fn load_group_raw_with_diagnostics(
+    path: &std::path::Path,
+    params: &PipelineParams,
+    derived: Option<&DerivedSpectrum>,
+) -> Result<RawData, String> {
+    match derived {
+        Some(group) => match &group.source {
+            Some(source) => load_raw_with_diagnostics(source, params),
+            None => Ok(RawData {
+                energy: group.energy.clone(),
+                mu: group.mu.clone(),
+                diagnostics: ParserDiagnostics {
+                    valid_points: group.energy.len(),
+                    ..Default::default()
+                },
+            }),
+        },
+        None => load_raw_with_diagnostics(path, params),
+    }
 }
 
 /// An additional spectrum: an in-memory result or an independently processed
@@ -837,12 +1122,136 @@ pub struct DerivedSpectrum {
     pub source: Option<std::path::PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub params: Option<PipelineParams>,
+    #[serde(default)]
+    pub quantity: Quantity,
+    /// Legacy materialized arrays have no trustworthy scientific type.
+    #[serde(default)]
+    pub quantity_unconfirmed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation: Option<Operation>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Quantity {
+    #[default]
+    RawMu,
+    NormalizedMu,
+    NormalizedDifference,
+    ChiK,
+}
+
+impl Quantity {
+    /// Compatibility predicate for raw absorption operations (including Merge).
+    pub fn is_absorption(self) -> bool {
+        self == Self::RawMu
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::RawMu => "μ(E)",
+            Self::NormalizedMu => "μnorm",
+            Self::NormalizedDifference => "Δμnorm",
+            Self::ChiK => "χ(k)",
+        }
+    }
+}
+
+/// Portable subset of a bound ToolTarget. Session indices/generations are not
+/// durable identities; preserve the source path or derived id and revision.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OperationInput {
+    pub label: String,
+    pub path: std::path::PathBuf,
+    pub derived_id: Option<u64>,
+    pub fingerprint: u64,
+    pub size: Option<u64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Operation {
+    pub tool: String,
+    pub parameters: serde_json::Value,
+    /// Target first, then the explicit standard/baseline, when present.
+    pub inputs: Vec<OperationInput>,
+    /// Historical correction already baked into energy and inherited E0s.
+    /// Loading/reprocessing must never replay it.
+    pub applied_energy_shift_ev: f64,
 }
 
 impl DerivedSpectrum {
+    pub fn fingerprint(&self, params: &PipelineParams) -> u64 {
+        let mut hasher = std::hash::DefaultHasher::new();
+        params.fingerprint().hash(&mut hasher);
+        self.quantity.hash(&mut hasher);
+        self.quantity_unconfirmed.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    pub fn confirm_quantity(&mut self, quantity: Quantity) -> bool {
+        if !self.quantity_unconfirmed && self.quantity == quantity {
+            return false;
+        }
+        self.quantity = quantity;
+        self.quantity_unconfirmed = false;
+        true
+    }
+
+    pub fn display_label(&self) -> String {
+        let mut label = self.label.clone();
+        if !self.quantity.is_absorption() {
+            label.push_str(&format!(" · {}", self.quantity.label()));
+        }
+        if self.quantity_unconfirmed {
+            label.push_str(" · quantity unconfirmed");
+        }
+        label
+    }
+
+    pub fn processing_block_reason(&self) -> Option<String> {
+        if self.quantity_unconfirmed {
+            Some("Quantity unconfirmed: confirm the quantity before normalization/AUTOBK; plotting/export available.".into())
+        } else if !self.quantity.is_absorption() {
+            Some(format!(
+                "{}: normalization/AUTOBK disabled; plotting/export available.",
+                self.quantity.label()
+            ))
+        } else {
+            None
+        }
+    }
+
     pub fn process(&self, params: &PipelineParams) -> Result<XASSpectrum, String> {
+        if let Some(reason) = self.processing_block_reason() {
+            return Err(reason);
+        }
         let (energy, mu) = self.raw(params)?;
         process_arrays(energy, mu, params)
+    }
+
+    /// Display/export bypass for quantities that must not enter the pipeline.
+    /// No normalization/background objects are manufactured for differences.
+    pub fn for_display(&self, params: &PipelineParams) -> Result<XASSpectrum, String> {
+        if self.processing_block_reason().is_none() {
+            return self.process(params);
+        }
+        let (energy, mu) = self.raw(params)?;
+        let mut sp = XASSpectrum::new();
+        sp.set_name(self.display_label());
+        if self.quantity == Quantity::ChiK {
+            sp.k = Some(energy.into());
+            sp.chi = Some(mu.into());
+            // XASSpectrum's plotting getters borrow these buffers from AUTOBK.
+            // This is only an array adapter: no background fit is performed,
+            // and no normalization, spline or Fourier output is supplied.
+            sp.background = Some(BackgroundMethod::AUTOBK(AUTOBK {
+                k: sp.k.clone(),
+                chi: sp.chi.clone(),
+                ..Default::default()
+            }));
+        } else {
+            sp.set_spectrum(energy, mu);
+        }
+        Ok(sp)
     }
     pub fn raw(&self, params: &PipelineParams) -> Result<(Vec<f64>, Vec<f64>), String> {
         match &self.source {
@@ -1139,6 +1548,168 @@ pub fn resample_chik(sp: &XASSpectrum, grid: &[f64]) -> Option<Vec<f64>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn typed_outputs_refuse_processing_but_preserve_display_arrays() {
+        let params = PipelineParams {
+            edge_step: Some(-1.0),
+            ..Default::default()
+        };
+        for quantity in [
+            Quantity::NormalizedDifference,
+            Quantity::NormalizedMu,
+            Quantity::ChiK,
+        ] {
+            let group = DerivedSpectrum {
+                quantity,
+                label: "renamed result".into(),
+                energy: vec![1.0, 2.0, 3.0],
+                mu: vec![-0.1, 0.0, 0.2],
+                ..Default::default()
+            };
+            let reason = group.process(&params).unwrap_err();
+            assert!(reason.contains(quantity.label()));
+            assert!(reason.contains("normalization/AUTOBK disabled"));
+            let sp = group.for_display(&params).unwrap();
+            assert!(sp.normalization.is_none() && sp.xftf.is_none());
+            let (x, y) = if quantity == Quantity::ChiK {
+                (sp.k(), sp.chi())
+            } else {
+                assert!(sp.background.is_none());
+                (
+                    sp.energy.as_ref().map(|v| v.as_slice()),
+                    sp.mu.as_ref().map(|v| v.as_slice()),
+                )
+            };
+            assert_eq!(x.unwrap(), group.energy);
+            assert_eq!(y.unwrap(), group.mu);
+            if quantity == Quantity::ChiK {
+                let figures = crate::publication::figures::quantity_figures(
+                    std::sync::Arc::new(sp),
+                    "chi",
+                    Some(quantity),
+                );
+                assert_eq!(figures.len(), 1);
+                assert_eq!(figures[0].key, "chi-k");
+                assert_eq!(figures[0].series[0].x, group.energy);
+                assert_eq!(figures[0].series[0].y, vec![-0.1, 0.0, 1.8]);
+                assert_eq!(
+                    figures[0].csv(&Default::default()).unwrap().lines().count(),
+                    4
+                );
+            }
+            assert!(group.display_label().contains(quantity.label()));
+            assert!(!quantity.is_absorption());
+        }
+        assert!(Quantity::RawMu.is_absorption());
+    }
+
+    #[test]
+    fn typed_outputs_confirmation_changes_revision_and_allows_correction() {
+        let mut group = DerivedSpectrum {
+            quantity_unconfirmed: true,
+            ..Default::default()
+        };
+        let params = PipelineParams::default();
+        let fingerprint = group.fingerprint(&params);
+        assert!(
+            group
+                .process(&params)
+                .unwrap_err()
+                .contains("Quantity unconfirmed")
+        );
+        assert!(group.display_label().contains("quantity unconfirmed"));
+        assert!(group.confirm_quantity(Quantity::NormalizedDifference));
+        assert_ne!(fingerprint, group.fingerprint(&params));
+        assert!(!group.confirm_quantity(Quantity::NormalizedDifference));
+        assert_eq!(group.quantity, Quantity::NormalizedDifference);
+        assert!(!group.display_label().contains("unconfirmed"));
+        assert!(group.confirm_quantity(Quantity::RawMu));
+        assert!(group.processing_block_reason().is_none());
+    }
+
+    #[test]
+    fn typed_outputs_shift_only_absolute_energy_overrides() {
+        let params = PipelineParams {
+            e0: Some(9000.0),
+            bkg_ek0: Some(9001.0),
+            pre_edge_start: Some(-150.0),
+            pre_edge_end: Some(-30.0),
+            norm_start: Some(50.0),
+            norm_end: Some(500.0),
+            align_to_ref: true,
+            align_target: Some(8980.0),
+            ..Default::default()
+        };
+        for shift in [-3.0, 0.0, 4.5] {
+            let shifted = params.for_materialized(shift);
+            assert_eq!(shifted.e0, Some(9000.0 + shift));
+            assert_eq!(shifted.bkg_ek0, Some(9001.0 + shift));
+            let mut expected = params.clone();
+            expected.e0 = shifted.e0;
+            expected.bkg_ek0 = shifted.bkg_ek0;
+            expected.align_to_ref = false;
+            expected.align_target = None;
+            assert!(shifted == expected);
+        }
+        let auto = PipelineParams::default().for_materialized(3.0);
+        assert_eq!(auto.e0, None);
+        assert_eq!(auto.bkg_ek0, None);
+    }
+
+    #[test]
+    fn mapping_roi_parse_deduplicates_overlapping_ranges() {
+        assert_eq!(parse_cols("8, 4-6 5,8,4"), Some(vec![4, 5, 6, 8]));
+        assert_eq!(parse_cols("0,0"), Some(vec![0]));
+        for invalid in ["", "  ", "6-4", "4,x", "-1", "4-", "1-2-3"] {
+            assert_eq!(parse_cols(invalid), None, "{invalid}");
+        }
+    }
+
+    #[test]
+    fn mapping_roi_toggle_seeds_auto_and_preserves_manual_empty() {
+        let mut import = ImportConfig::default();
+        import.toggle_fluor(Some(5), Some(&[4, 5, 6, 6])).unwrap();
+        assert_eq!(import.fluor_cols, Some(vec![4, 6]));
+        import.toggle_fluor(Some(7), None).unwrap();
+        assert_eq!(import.fluor_cols, Some(vec![4, 6, 7]));
+        import.fluor_cols = Some(vec![4, 4]);
+        import.toggle_fluor(Some(4), Some(&[4, 5])).unwrap();
+        assert_eq!(import.fluor_cols, Some(vec![]));
+        import.toggle_fluor(Some(7), Some(&[4, 5])).unwrap();
+        assert_eq!(import.fluor_cols, Some(vec![7]));
+        import.toggle_fluor(None, None).unwrap();
+        assert_eq!(import.fluor_cols, None);
+        assert!(import.toggle_fluor(Some(4), None).is_err());
+        assert_eq!(import.fluor_cols, None);
+        import.toggle_fluor(Some(7), Some(&[4, 5])).unwrap();
+        assert_eq!(import.fluor_cols, Some(vec![4, 5, 7]));
+    }
+
+    #[test]
+    fn mapping_roi_loaded_duplicates_are_previewed_and_summed_once() {
+        let path =
+            std::env::temp_dir().join(format!("rexafs-mapping-roi-{}.dat", std::process::id()));
+        std::fs::write(&path, "# energy i0 roi1 roi2\n100 10 2 3\n101 10 4 5\n").unwrap();
+        let mut import = ImportConfig {
+            mode: DetectionMode::Fluorescence,
+            energy_col: Some(0),
+            i0_col: Some(1),
+            fluor_cols: Some(vec![3, 2, 3, 2]),
+            ..Default::default()
+        };
+        let preview = preview_import(&path, &import).unwrap();
+        assert_eq!(preview.resolved.fluor_cols, vec![2, 3]);
+        assert_eq!(load_mu(&path, &import).unwrap().1, vec![0.5, 0.9]);
+        import.fluor_cols = None;
+        let auto = preview_import(&path, &import).unwrap();
+        import
+            .toggle_fluor(Some(2), Some(&auto.resolved.fluor_cols))
+            .unwrap();
+        assert_eq!(import.fluor_cols, Some(vec![3]));
+        assert_eq!(load_mu(&path, &import).unwrap().1, vec![0.3, 0.5]);
+        std::fs::remove_file(path).unwrap();
+    }
 
     #[test]
     fn advanced_processing_preserves_standard_and_controls_actual_transforms() {
@@ -1463,9 +2034,45 @@ mod tests {
 
         let no_header = parse_data("7000 10 5\n7010 10 4\n").unwrap();
         assert_eq!(no_header.names, None);
+        assert!(no_header.diagnostics.warnings().is_empty());
 
         let mismatch = parse_data("# energy i0\n7000 10 5\n7010 10 4\n").unwrap();
         assert_eq!(mismatch.names, None);
+        assert_eq!(mismatch.diagnostics.header_units_anomalies.count, 1);
+        assert_eq!(
+            mismatch.diagnostics.header_units_anomalies.examples,
+            vec![1]
+        );
+    }
+
+    #[test]
+    fn plain_headers_are_not_malformed_data_or_spurious_anomalies() {
+        for header in ["Energy I0 It", "# Energy I0 It"] {
+            let data = parse_data(&format!(
+                "Beamline scan title\n{header}\n7000 10 5\nbroken data row\n7010 10 4\n"
+            ))
+            .unwrap();
+            assert_eq!(
+                data.names,
+                Some(vec!["Energy".into(), "I0".into(), "It".into()])
+            );
+            assert_eq!(data.diagnostics.malformed_rows.count, 1);
+            assert_eq!(data.diagnostics.malformed_rows.examples, vec![4]);
+            assert_eq!(data.diagnostics.header_units_anomalies.count, 0);
+        }
+        for header in ["# ----", "# Data:", "# scan 123"] {
+            let data =
+                parse_data(&format!("Scan title\n{header}\n7000 10 5\n7010 10 4\n")).unwrap();
+            assert_eq!(data.names, None);
+            assert!(data.diagnostics.warnings().is_empty());
+        }
+        let mismatch = parse_data("Energy I0\n7000 10 5\n7010 10 4\n").unwrap();
+        assert_eq!(mismatch.diagnostics.malformed_rows.count, 0);
+        assert_eq!(mismatch.diagnostics.header_units_anomalies.count, 1);
+        assert_eq!(
+            mismatch.diagnostics.header_units_anomalies.examples,
+            vec![1]
+        );
     }
 
     #[test]
@@ -1575,6 +2182,201 @@ mod tests {
         let (energy, mu) = load_mu(&mu_path, &ImportConfig::default()).unwrap();
         assert_eq!(energy, vec![100.0, 101.0]);
         assert_eq!(mu, vec![0.25, 0.5]);
+    }
+
+    #[test]
+    fn dirty_parser_diagnostics_count_and_locate_every_category() {
+        let path = std::env::temp_dir().join("rexafs-dirty-diagnostics.dat");
+        std::fs::write(
+            &path,
+            "# energy i0 it extra\n100 10 5\n101 bad 5\n102 10\n103 10 2 999\n104 10 0\n105 10 1\n",
+        )
+        .unwrap();
+        let raw = load_mu_with_diagnostics(&path, &ImportConfig::default()).unwrap();
+        assert_eq!(raw.energy, vec![100., 103., 105.]);
+        assert_eq!(raw.mu, vec![2.0f64.ln(), 5.0f64.ln(), 10.0f64.ln()]);
+        let d = &raw.diagnostics;
+        for (category, line) in [
+            (&d.malformed_rows, 3),
+            (&d.short_rows, 4),
+            (&d.truncated_wide_rows, 5),
+            (&d.excluded_signal_points, 6),
+            (&d.header_units_anomalies, 1),
+        ] {
+            assert_eq!(category.count, 1);
+            assert_eq!(category.examples, vec![line]);
+        }
+        assert_eq!(d.valid_points, 3);
+        assert_eq!(d.warnings().len(), 5);
+        assert!(d.warnings().iter().all(|w| w.contains("example lines:")));
+        assert_eq!(
+            d.summary(),
+            "3 points · 2 rows skipped · 1 wide rows truncated · 1 points excluded · 1 header/units anomalies"
+        );
+        let preview = preview_import(&path, &ImportConfig::default()).unwrap();
+        assert_eq!(preview.diagnostics, *d);
+        assert!(preview.signal_error.is_none());
+        let params = PipelineParams::default();
+        assert_eq!(load_raw_with_diagnostics(&path, &params).unwrap(), raw);
+        let channel = DerivedSpectrum {
+            source: Some(path.clone()),
+            ..Default::default()
+        };
+        assert_eq!(
+            load_group_raw_with_diagnostics(&path, &params, Some(&channel)).unwrap(),
+            raw
+        );
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn clean_diagnostics_preserve_exact_detection_mode_numbers() {
+        let path = fixture(&std::env::temp_dir(), "clean-diagnostics.dat");
+        for (mode, expected) in [
+            (
+                DetectionMode::Transmission,
+                vec![2.0f64.ln(), 2.5f64.ln(), 5.0f64.ln()],
+            ),
+            (DetectionMode::Fluorescence, vec![0.3, 0.4, 0.5]),
+            (DetectionMode::Reference, vec![2.0f64.ln(); 3]),
+            (DetectionMode::MuColumn, vec![1., 1.5, 2.]),
+        ] {
+            let import = ImportConfig {
+                mode,
+                fluor_cols: Some(vec![4, 5]),
+                mu_col: Some(4),
+                ..Default::default()
+            };
+            let raw = load_mu_with_diagnostics(&path, &import).unwrap();
+            assert_eq!(raw.energy, vec![100., 101., 102.]);
+            assert_eq!(raw.mu, expected);
+            assert_eq!(
+                raw.diagnostics,
+                ParserDiagnostics {
+                    valid_points: 3,
+                    ..Default::default()
+                }
+            );
+            assert!(raw.diagnostics.warnings().is_empty());
+            assert_eq!(load_mu(&path, &import).unwrap(), (raw.energy, raw.mu));
+        }
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn excluded_signal_locations_cover_all_modes_and_nonfinite_energy() {
+        let path = std::env::temp_dir().join("rexafs-excluded-modes.dat");
+        for (header, invalid, mode) in [
+            ("energy i0 it", "101 10 0", DetectionMode::Transmission),
+            ("energy i0 if", "101 0 1", DetectionMode::Fluorescence),
+            ("energy it ir", "101 10 0", DetectionMode::Reference),
+            (
+                "energy murefer extra",
+                "101 NaN 1",
+                DetectionMode::Reference,
+            ),
+            ("energy mu extra", "101 inf 1", DetectionMode::MuColumn),
+        ] {
+            std::fs::write(
+                &path,
+                format!("# {header}\n102 10 5\n{invalid}\nNaN 10 5\n100 10 5\n"),
+            )
+            .unwrap();
+            let import = ImportConfig {
+                mode,
+                ..Default::default()
+            };
+            let raw = load_mu_with_diagnostics(&path, &import).unwrap();
+            assert_eq!(raw.energy, vec![100., 102.]);
+            assert_eq!(
+                raw.diagnostics.excluded_signal_points,
+                DiagnosticCategory {
+                    count: 2,
+                    examples: vec![3, 4]
+                }
+            );
+            assert_eq!(raw.diagnostics.valid_points, 2);
+        }
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn diagnostics_examples_are_bounded_and_summary_formats_thousands() {
+        let mut d = ParserDiagnostics {
+            valid_points: 1284,
+            ..Default::default()
+        };
+        for line in 1..=12 {
+            d.malformed_rows.record(Some(line));
+        }
+        assert_eq!(d.malformed_rows.count, 12);
+        assert_eq!(d.malformed_rows.examples, vec![1, 2, 3, 4, 5]);
+        assert_eq!(d.summary(), "1,284 points · 12 rows skipped");
+        assert_eq!(ParserDiagnostics::default().summary(), "0 points");
+        let mut category = DiagnosticCategory::default();
+        category.record(None);
+        assert_eq!(category.count, 1);
+        assert!(category.examples.is_empty());
+    }
+
+    #[test]
+    fn preview_diagnostics_include_tail_and_failed_signal_construction() {
+        let path = std::env::temp_dir().join("rexafs-tail-diagnostics.dat");
+        let mut text = String::from("# energy i0 it\n");
+        for i in 0..6000 {
+            text.push_str(&format!("{} 10.0 5.0\n", 1000 + i));
+        }
+        assert!(text.len() > 64 * 1024);
+        text.push_str("7000 broken 5\n7001 10 0\n");
+        std::fs::write(&path, text).unwrap();
+        let preview = preview_import(&path, &ImportConfig::default()).unwrap();
+        assert_eq!(preview.rows.len(), 3);
+        assert_eq!(preview.diagnostics.valid_points, 6000);
+        assert_eq!(preview.diagnostics.malformed_rows.examples, vec![6002]);
+        assert_eq!(
+            preview.diagnostics.excluded_signal_points.examples,
+            vec![6003]
+        );
+        std::fs::write(&path, "# energy i0 it\n100 10 0\n101 10 0\n").unwrap();
+        let preview = preview_import(&path, &ImportConfig::default()).unwrap();
+        assert_eq!(preview.diagnostics.valid_points, 0);
+        assert_eq!(preview.diagnostics.excluded_signal_points.count, 2);
+        assert!(
+            preview
+                .signal_error
+                .as_ref()
+                .unwrap()
+                .contains("fewer than 2")
+        );
+        assert!(load_mu_with_diagnostics(&path, &ImportConfig::default()).is_err());
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn xdi_diagnostics_retain_header_warnings_and_signal_line_numbers() {
+        let path = std::env::temp_dir().join("rexafs-xdi-diagnostics.xdi");
+        let text = "# XDI/1.0\n# malformed field\n# Column.1: energy eV\n# Column.2: i0\n# Column.3: it\n# ---\n100 10 5\n101 10 0\n102 10 2\n";
+        std::fs::write(&path, text.replace('\n', "\r\n")).unwrap();
+        let raw = load_mu_with_diagnostics(&path, &ImportConfig::default()).unwrap();
+        assert_eq!(raw.diagnostics.header_units_anomalies.count, 3);
+        assert_eq!(raw.diagnostics.header_units_anomalies.examples, vec![2]);
+        assert_eq!(raw.diagnostics.excluded_signal_points.examples, vec![8]);
+        assert_eq!(raw.diagnostics.valid_points, 2);
+        std::fs::write(&path, text.replace("energy eV", "energy joules")).unwrap();
+        let preview = preview_import(&path, &ImportConfig::default()).unwrap();
+        assert_eq!(preview.diagnostics.header_units_anomalies.count, 4);
+        assert_eq!(
+            preview.diagnostics.header_units_anomalies.examples,
+            vec![2, 3]
+        );
+        assert!(
+            preview
+                .signal_error
+                .as_ref()
+                .unwrap()
+                .contains("unsupported energy units")
+        );
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

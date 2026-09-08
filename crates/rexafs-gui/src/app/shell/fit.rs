@@ -59,6 +59,19 @@ impl StudioApp {
                 );
             }
         }
+        if let Some(notice) = super::assistant_receipts::history_result_notice(
+            self.fit_provenance.is_some(),
+            self.fit_history_selected,
+        ) {
+            column = column.child(
+                div()
+                    .mx_3()
+                    .mt_2()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child(notice),
+            );
+        }
         let Some(plots) = self.fit_plots.as_ref().map(|p| FitPlotHandles {
             k: p.k.clone(),
             k_residual: p.k_residual.clone(),
@@ -1148,6 +1161,15 @@ impl StudioApp {
             .gap_2()
             .child(section_label(&t, "Result"))
             .child(div().flex_1())
+            .when_some(self.fit_history_selected, |head, id| {
+                head.child(
+                    button(&t, "copy-fit-report", "Copy as Markdown", false).on_click(cx.listener(
+                        move |this, _: &ClickEvent, _, cx| {
+                            this.copy_fit_report(id, cx);
+                        },
+                    )),
+                )
+            })
             .child(
                 div()
                     .font_family(MONO)
@@ -1168,6 +1190,20 @@ impl StudioApp {
             .child(head)
             .children(rows)
             .into_any_element()
+    }
+
+    /// Copies the Larch-style report of one archived fit to the clipboard.
+    pub(crate) fn copy_fit_report(&mut self, id: usize, cx: &mut Context<Self>) {
+        let Some(entry) = self.fit_history.iter().find(|e| e.id == id) else {
+            self.status = "No fit result to copy.".into();
+            cx.notify();
+            return;
+        };
+        let result = self.fit_history_results.get(&id).map(|r| r.as_ref());
+        let report = crate::fit_report::markdown(entry, result);
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(report));
+        self.status = format!("Fit {id} report copied as Markdown").into();
+        cx.notify();
     }
 
     fn fit_path_details(
@@ -1222,7 +1258,7 @@ impl StudioApp {
                             .child(format!("{distance_label}   {} Å", value(&p.distance, 4))),
                     )
                     .child(div().text_color(t.text_muted).child(format!(
-                            "FEFF R_eff {} Å · {} legs · degeneracy {}",
+                            "FEFF R_eff {} Å · {} legs · FEFF degeneracy {}",
                             p.reff
                                 .map(|r| format!("{r:.4}"))
                                 .unwrap_or_else(|| "unavailable".into()),
@@ -1231,6 +1267,7 @@ impl StudioApp {
                                 .map(|n| n.to_string())
                                 .unwrap_or_else(|| "?".into())
                         )))
+                    .child(format!("N  {}", value(&p.effective_degen, 2)))
                     .child(format!("ΔR  {} Å", value(&p.deltar, 4)))
                     .child(format!("σ²  {} Å²", value(&p.sigma2, 5)))
                     .child(format!(
@@ -1349,6 +1386,25 @@ impl StudioApp {
                     );
                 }
                 rows.push(self.fit_path_details(entry).into_any_element());
+                rows.push(
+                    div()
+                        .mx_3()
+                        .py_1()
+                        .child(
+                            button(
+                                &t,
+                                ("copy-fit-history-report", id),
+                                "Copy as Markdown",
+                                false,
+                            )
+                            .on_click(cx.listener(
+                                move |this, _: &ClickEvent, _, cx| {
+                                    this.copy_fit_report(id, cx);
+                                },
+                            )),
+                        )
+                        .into_any_element(),
+                );
             }
         }
         self.section("History", None, rows, cx)

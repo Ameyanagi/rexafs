@@ -111,8 +111,8 @@ pub(crate) struct FitPreviewState {
     pub q: Option<Entity<RuvizPlot>>,
     pub view: FitView,
     label: String,
-    error: Option<String>,
-    loading: bool,
+    pub(super) error: Option<String>,
+    pub(super) loading: bool,
 }
 impl Default for FitPreviewState {
     fn default() -> Self {
@@ -174,7 +174,7 @@ impl StudioApp {
         self.rebuild_fit_plots(cx);
         cx.notify();
     }
-    fn ensure_fit_preview(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn ensure_fit_preview(&mut self, cx: &mut Context<Self>) {
         let (file, label, ranges) = self.preview_source();
         let source = match self
             .model_preview_dataset_id()

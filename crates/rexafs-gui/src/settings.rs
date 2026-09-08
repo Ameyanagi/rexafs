@@ -27,7 +27,7 @@ pub fn home_dir() -> Option<PathBuf> {
     home.filter(|value| !value.is_empty()).map(PathBuf::from)
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UserSettings {
     /// Folder scanned for `*.cif` files (the "CIF library" structure source).
@@ -39,6 +39,36 @@ pub struct UserSettings {
     pub update_channel: crate::updates::UpdateChannel,
     /// None uses the default: check automatically on startup, without installing.
     pub check_updates_on_startup: Option<bool>,
+    /// None follows the first model in the Codex app-server catalog.
+    pub assistant_model: Option<String>,
+    /// None follows the selected model's default, falling back to high.
+    pub assistant_effort: Option<String>,
+    /// None enables Codex's configured web search (legacy settings default).
+    pub assistant_web_search: Option<bool>,
+    /// Preference only: activation always requires a click in this app session.
+    pub assistant_extended_access: bool,
+    pub assistant_docked: bool,
+    pub assistant_panel_width: f32,
+    pub assistant_history_limit: u32,
+}
+
+impl Default for UserSettings {
+    fn default() -> Self {
+        Self {
+            cif_library: None,
+            amcsd_db: None,
+            mp_api_key: String::new(),
+            update_channel: Default::default(),
+            check_updates_on_startup: None,
+            assistant_model: None,
+            assistant_effort: None,
+            assistant_web_search: None,
+            assistant_extended_access: false,
+            assistant_docked: true,
+            assistant_panel_width: 380.,
+            assistant_history_limit: crate::project::assistant::DEFAULT_HISTORY_LIMIT,
+        }
+    }
 }
 
 /// `~/.rexafs` (created on demand, owner-only on Unix because it
@@ -283,6 +313,13 @@ mod tests {
             mp_api_key: "abc".into(),
             update_channel: crate::updates::UpdateChannel::Nightly,
             check_updates_on_startup: Some(false),
+            assistant_model: Some("catalog-model".into()),
+            assistant_effort: Some("xhigh".into()),
+            assistant_web_search: Some(false),
+            assistant_extended_access: true,
+            assistant_docked: false,
+            assistant_panel_width: 512.,
+            assistant_history_limit: 3,
         };
         s.save_to(&path).unwrap();
         assert_eq!(UserSettings::load_from(&path).unwrap(), s);
@@ -292,6 +329,10 @@ mod tests {
             let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
             assert_eq!(mode, 0o600, "settings file must be owner-only");
         }
+        assert!(!UserSettings::default().assistant_extended_access);
+        assert!(UserSettings::default().assistant_web_search.unwrap_or(true));
+        assert!(UserSettings::default().assistant_docked);
+        assert_eq!(UserSettings::default().assistant_panel_width, 380.);
         // Missing keys fall back to defaults.
         std::fs::write(&path, "{}").unwrap();
         assert_eq!(
