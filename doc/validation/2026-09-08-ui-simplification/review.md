@@ -53,8 +53,9 @@ The maintainer's original checkout and active app sessions were preserved.
   All four molecular-view tests also passed.
 - After correcting Assistant theme synchronization, all 47 Assistant tests passed.
 - Optimized build passed with the distributed `refeff-runner,feff10-runner` features.
-- The earlier optimized package passed extracted Cu example/pipeline and both FEFF
-  backend self-checks. The final candidate is repackaged from the final release binary.
+- The final optimized package at source commit `bb26002` passed the extracted Cu
+  example/pipeline and both FEFF backend self-checks. Its build metadata records a
+  clean source tree and the same commit as the embedded build identity.
 - `cargo fmt --all` and `git diff --check` passed.
 
 A local opt-in integration test used the maintainer-designated 102-file folder.
@@ -85,6 +86,11 @@ marked flows could be exercised visually, computer-use failed repeatedly with
 The final channel-choice/footer, Remove marked and structure-focus layouts therefore
 still need native verification. Reconnecting for structure-focus verification failed
 with the same native-pipe error. Do not treat integration tests as visual QA.
+
+The final release candidate was packaged in a separate app bundle. The requested
+launch also failed at the native connection with the same error, before the app
+could open. New empty-Data startup and live Assistant theme synchronization are
+implemented and compiled, but their final appearance is not visually qualified.
 
 Also pending: narrow/light-theme workflows, populated Series navigation, completed
 Fit/Assistant busy and approval states, export-preview comparison, and complete
