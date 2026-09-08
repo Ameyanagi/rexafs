@@ -2,7 +2,7 @@
 //! the projected bounding box; only the wheel and explicit reset change zoom.
 use super::bond_geometry::{BondMode, contacts, nearest_bonds};
 use super::molecular_geometry::{MolecularComponent, complete_molecule};
-use super::structure_depth::DepthFrame;
+use super::structure_depth::{DepthFrame, FadeMode};
 use super::structure_view::AtomPick;
 use crate::{
     app::StudioApp,
@@ -786,102 +786,6 @@ fn shaded_ball(w: &mut Window, p: [f32; 3], r: f32, color: Rgba, cue: impl Fn(Rg
     }
 }
 
-fn depth_steps(depth: DepthFrame, edge: [[f64; 3]; 2], inside: bool) -> usize {
-    let mid = std::array::from_fn(|a| (edge[0][a] + edge[1][a]) * 0.5);
-    let a = depth.alpha(edge[0], inside);
-    let b = depth.alpha(edge[1], inside);
-    let bend = (depth.alpha(mid, inside) - (a + b) * 0.5).abs() * 2.;
-    let variation =
-        (a - b).abs().max(bend) + (depth.fog_amount(edge[0]) - depth.fog_amount(edge[1])).abs();
-    (variation / 0.12).ceil().clamp(1., 8.) as usize
-}
-
-// Two adjacent gradients give sticks a cylindrical highlight without stacking
-// translucent strokes. Each pixel receives the requested alpha once.
-fn shaded_stick(w: &mut Window, points: [[f32; 3]; 2], width: f32, dark: Rgba, light: Rgba) {
-    let [a, b] = points;
-    let dx = b[0] - a[0];
-    let dy = b[1] - a[1];
-    let length = dx.hypot(dy);
-    if length < 0.1 {
-        return;
-    }
-    let normal = [-dy / length, dx / length];
-    let angle = normal[0].atan2(-normal[1]).to_degrees().rem_euclid(360.);
-    for (lo, hi, from, to) in [
-        (-width * 0.5, 0., dark, light),
-        (0., width * 0.5, light, dark),
-    ] {
-        let at = |p: [f32; 3], offset| {
-            point(px(p[0] + normal[0] * offset), px(p[1] + normal[1] * offset))
-        };
-        let mut path = gpui::PathBuilder::fill();
-        path.move_to(at(a, lo));
-        path.line_to(at(a, hi));
-        path.line_to(at(b, hi));
-        path.line_to(at(b, lo));
-        path.close();
-        if let Ok(path) = path.build() {
-            let span = f32::from(path.bounds.size.width) * normal[0].abs()
-                + f32::from(path.bounds.size.height) * normal[1].abs();
-            let fraction = ((hi - lo) / span.max(hi - lo)).clamp(0., 1.);
-            w.paint_path(
-                path,
-                gpui::linear_gradient(
-                    angle,
-                    gpui::linear_color_stop(from, 0.5 - fraction * 0.5),
-                    gpui::linear_color_stop(to, 0.5 + fraction * 0.5),
-                ),
-            );
-        }
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn depth_bond(
-    w: &mut Window,
-    edge: [[f64; 3]; 2],
-    depth: DepthFrame,
-    project: &impl Fn([f64; 3]) -> [f32; 3],
-    color: Rgba,
-    width: f32,
-    backdrop: Rgba,
-    shading: bool,
-) {
-    for (part, inside) in depth.segments(edge) {
-        let steps = depth_steps(depth, part, inside);
-        let at = |t: f64| std::array::from_fn(|a| part[0][a] + (part[1][a] - part[0][a]) * t);
-        for n in 0..steps {
-            let midpoint = at((n as f64 + 0.5) / steps as f64);
-            let opacity = depth.alpha(midpoint, inside) * color.a;
-            if opacity <= 0.002 {
-                continue;
-            }
-            let points = [
-                project(at(n as f64 / steps as f64)),
-                project(at((n + 1) as f64 / steps as f64)),
-            ];
-            let cue = |color| {
-                alpha(
-                    depth_cue_color(color, backdrop, depth.fog_amount(midpoint)),
-                    opacity,
-                )
-            };
-            if shading {
-                shaded_stick(
-                    w,
-                    points,
-                    width,
-                    cue(tint(color, 0.5)),
-                    cue(tint(color, 1.35)),
-                );
-            } else {
-                line(w, &points, cue(color), width, false);
-            }
-        }
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 fn depth_line(
     w: &mut Window,
@@ -893,7 +797,13 @@ fn depth_line(
     backdrop: Rgba,
 ) {
     for (part, inside) in depth.segments(edge) {
-        let steps = depth_steps(depth, part, inside);
+        let steps = if depth.options.fade != FadeMode::Off {
+            8
+        } else if depth.options.depth_cue {
+            2
+        } else {
+            1
+        };
         for n in 0..steps {
             let at = |t: f64| std::array::from_fn(|a| part[0][a] + (part[1][a] - part[0][a]) * t);
             let midpoint = at((n as f64 + 0.5) / steps as f64);
@@ -1305,16 +1215,23 @@ fn paint_scene(
                         if atom.faded { 0.14 } else { 1. },
                     );
                     let edge = [pts[n], midpoint];
-                    depth_bond(
-                        w,
-                        edge,
-                        depth,
-                        &project,
-                        color,
-                        width,
-                        t.raised,
-                        shading && style != AtomStyle::Wireframe,
-                    );
+                    if depth.options.active() || color.a < 0.99 {
+                        depth_line(w, edge, depth, &project, color, width * 0.8, t.raised);
+                    } else {
+                        depth_line(w, edge, depth, &project, tint(color, 0.5), width, t.raised);
+                        depth_line(w, edge, depth, &project, color, width * 0.67, t.raised);
+                        if shading && style != AtomStyle::Wireframe {
+                            depth_line(
+                                w,
+                                edge,
+                                depth,
+                                &project,
+                                tint(color, 1.35),
+                                width * 0.22,
+                                t.raised,
+                            );
+                        }
+                    }
                 }
             }
             Primitive::Face(i, vertices, inside) => {
@@ -1669,28 +1586,6 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn uniform_faded_bonds_avoid_eight_unnecessary_subdivisions() {
-        use super::super::structure_depth::{DepthOptions, FadeMode};
-        let camera = ViewCamera {
-            az: 0.,
-            el: 0.,
-            zoom: 1.,
-        };
-        let depth = DepthFrame::new(
-            DepthOptions {
-                fade: FadeMode::Center,
-                strength: 0.98,
-                ..Default::default()
-            },
-            &MoleculeScene::default(),
-            camera,
-            None,
-        );
-        assert_eq!(depth_steps(depth, [[8., 0., 0.], [10., 0., 0.]], true), 1);
-        assert!(depth_steps(depth, [[2., 0., 0.], [5., 0., 0.]], true) > 1);
     }
 
     #[test]

@@ -162,8 +162,9 @@ same colors identify group swatches, all processing plots and their legends.
 Okabe–Ito's neutral swatch follows the text color for readability in both themes.
 Reset restores the existing group colors; each assignment is one undoable action.
 
-Center fading preserves atom and cylindrical bond lighting at every opacity.
+Center fading preserves atom lighting at every opacity. Bonds retain their
+previous stroke rendering, including its opacity and shading behavior.
 Cached, non-overlapping sphere bands avoid repeated alpha compositing and repeated
-path tessellation. Bond subdivision follows actual depth variation. Orbit and zoom
+path tessellation. Orbit and zoom
 repaint a retained structure viewport; inspector zoom readouts update after a short
 scroll pause. Native perceived smoothness still requires interactive qualification.

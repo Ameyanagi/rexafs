@@ -36,9 +36,9 @@ The maintainer's original checkout and active app sessions were preserved.
   the projected atom centers; repeated traversals separate between those centers
   and their arrowheads follow the curve. Structure path/cutoff inputs and the
   processing standard filter now update with the application theme.
-  Center fading now retains atom and cylinder lighting at fractional opacity.
-  Sphere tessellation is cached as non-overlapping bands; bonds subdivide only
-  when depth effects vary. Camera interaction repaints a retained viewport rather
+  Center fading now retains atom lighting at fractional opacity. Sphere
+  tessellation is cached as non-overlapping bands. Bonds use their previous
+  stroke renderer. Camera interaction repaints a retained viewport rather
   than rebuilding the structure controls for every wheel/drag event.
 - Assistant keeps model, reasoning, mode and sharing/access switches visible.
   Conversation utilities and longer descriptions use Settings. Permission and
@@ -146,7 +146,7 @@ qualified in this macOS session.
 `cargo test -p rexafs-gui` passed **449 tests, 0 failures, 5 ignored** (119.76 s).
 The follow-up suite covers publication presets/Typst output, normalization Auto
 on both complete and truncated spectra, the actual AUTOBK/FFT link on/off pipeline,
-non-overlapping sphere opacity and adaptive bond subdivision, palette repetition
+non-overlapping sphere opacity, palette repetition
 and gradient reversal, cross-quadrant colors with mixed FFT weights, and saved
 identity-based palette undo/redo. Rendered publication PNGs were visually inspected
 for XANES (flattened and normalized), full flattened energy, χ(k), |χ(R)| and the
@@ -158,3 +158,11 @@ Native access was retried for these changes and again failed with
 `Sky Computer Use native pipe startup failed`. Color-menu/inspector layout and
 interactive shading/zoom smoothness therefore remain pending native QA; no frame
 rate or responsiveness measurement is claimed.
+
+The maintainer reported worse-looking bonds in `dacd740`. The subsequent correction
+restores bond strokes, widths, shading branches and depth subdivision exactly from
+`dc9ed30`, and removes the new gradient-stick renderer. Cached atom shading and
+retained-viewport camera interaction remain.
+All ten molecular-view tests passed after the bond restoration. The bond paint
+branch and depth-line helper were also compared directly with `dc9ed30` and match
+exactly. Formatting and diff checks passed.
