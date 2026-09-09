@@ -1,0 +1,249 @@
+//! Secondary actions and an offline license reader.
+use super::button;
+use crate::{app::StudioApp, licenses};
+use gpui::{Context, FocusHandle, IntoElement, MouseButton, SharedString, div, prelude::*, px};
+
+#[derive(Default)]
+pub(crate) struct HelpState {
+    menu: bool,
+    reader: Option<LicenseReader>,
+    focus: Option<FocusHandle>,
+}
+
+struct LicenseReader {
+    documents: Vec<licenses::Document>,
+    selected: usize,
+    text: SharedString,
+    scroll: gpui::ScrollHandle,
+}
+
+impl HelpState {
+    pub(crate) fn is_open(&self) -> bool {
+        self.menu || self.reader.is_some()
+    }
+}
+
+impl StudioApp {
+    fn focus_help(&mut self, cx: &mut Context<Self>) {
+        let focus = self
+            .help
+            .focus
+            .get_or_insert_with(|| cx.focus_handle())
+            .clone();
+        let view = cx.weak_entity();
+        let handle = self.main_window;
+        cx.defer(move |cx| {
+            let _ = handle.update(cx, |_, window, cx| {
+                let _ = view.update(cx, |app, cx| {
+                    if app.help.is_open() {
+                        focus.focus(window, cx);
+                    }
+                });
+            });
+        });
+        cx.notify();
+    }
+
+    pub(crate) fn open_help(&mut self, cx: &mut Context<Self>) {
+        self.help.menu = true;
+        self.focus_help(cx);
+    }
+
+    fn close_help(&mut self, cx: &mut Context<Self>) {
+        self.help.menu = false;
+        self.help.reader = None;
+        let focus = self.root_focus.clone();
+        let view = cx.weak_entity();
+        let handle = self.main_window;
+        cx.defer(move |cx| {
+            let _ = handle.update(cx, |_, window, cx| {
+                let _ = view.update(cx, |app, cx| {
+                    if !app.help.is_open() && !app.updates.open && app.palette.is_none() {
+                        focus.focus(window, cx);
+                    }
+                });
+            });
+        });
+        cx.notify();
+    }
+
+    pub(crate) fn open_example(&mut self, cx: &mut Context<Self>) {
+        self.close_help(cx);
+        if let Some(path) = crate::app::example_data_file() {
+            self.route_paths(vec![path], false, cx);
+        } else {
+            self.status = "Bundled example unavailable".into();
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn open_licenses(&mut self, cx: &mut Context<Self>) {
+        let documents = licenses::documents();
+        let text = documents[0].read().unwrap_or_else(|error| error).into();
+        self.help.menu = false;
+        self.help.reader = Some(LicenseReader {
+            documents,
+            selected: 0,
+            text,
+            scroll: Default::default(),
+        });
+        self.focus_help(cx);
+    }
+
+    pub(crate) fn help_overlay(&self, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+        if !self.help.is_open() {
+            return None;
+        }
+        let t = self.theme;
+        let overlay = div()
+            .id("help-overlay")
+            .absolute()
+            .inset_0()
+            .occlude()
+            .track_focus(self.help.focus.as_ref().expect("help has focus"))
+            .on_key_down(cx.listener(|app, event: &gpui::KeyDownEvent, _, cx| {
+                if event.keystroke.key == "escape" {
+                    app.close_help(cx);
+                }
+                cx.stop_propagation();
+            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|app, _, _, cx| app.close_help(cx)),
+            );
+        let Some(reader) = &self.help.reader else {
+            let item =
+                |id: &'static str,
+                 label: &'static str,
+                 action: fn(&mut StudioApp, &mut Context<StudioApp>)| {
+                    div()
+                        .id(id)
+                        .px_3()
+                        .py_2()
+                        .cursor_pointer()
+                        .rounded_sm()
+                        .hover(|d| d.bg(t.raised))
+                        .child(label)
+                        .on_click(cx.listener(move |app, _, _, cx| action(app, cx)))
+                };
+            return Some(
+                overlay
+                    .child(
+                        div()
+                            .absolute()
+                            .top(px(38.))
+                            .right(px(12.))
+                            .w(px(196.))
+                            .p_1()
+                            .bg(t.surface)
+                            .border_1()
+                            .border_color(t.border)
+                            .rounded_md()
+                            .shadow_lg()
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .child(item("help-example", "Open Cu example", Self::open_example))
+                            .child(item("help-licenses", "Licenses", Self::open_licenses))
+                            .child(item("help-updates", "Updates", |app, cx| {
+                                app.close_help(cx);
+                                app.open_updates(cx);
+                            })),
+                    )
+                    .into_any_element(),
+            );
+        };
+        let mut list = div()
+            .id("license-list")
+            .w(px(250.))
+            .flex_none()
+            .overflow_y_scroll()
+            .p_2()
+            .border_r_1()
+            .border_color(t.border);
+        for (index, document) in reader.documents.iter().enumerate() {
+            list = list.child(
+                div()
+                    .id(("license-document", index))
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .cursor_pointer()
+                    .when(index == reader.selected, |d| {
+                        d.bg(t.raised).text_color(t.accent)
+                    })
+                    .hover(|d| d.bg(t.raised))
+                    .child(document.title.clone())
+                    .on_click(cx.listener(move |app, _, _, cx| {
+                        if let Some(reader) = &mut app.help.reader {
+                            reader.selected = index;
+                            reader.text = reader.documents[index]
+                                .read()
+                                .unwrap_or_else(|error| error)
+                                .into();
+                            reader.scroll.set_offset(gpui::point(px(0.), px(0.)));
+                            cx.notify();
+                        }
+                    })),
+            );
+        }
+        let panel = div()
+            .w(px(920.))
+            .max_w_full()
+            .h(px(620.))
+            .max_h_full()
+            .flex()
+            .flex_col()
+            .bg(t.surface)
+            .border_1()
+            .border_color(t.border)
+            .rounded_lg()
+            .shadow_lg()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .p_3()
+                    .border_b_1()
+                    .border_color(t.border)
+                    .child(div().flex_1().text_size(px(16.)).child("Licenses"))
+                    .child(
+                        button(&t, "copy-license", "Copy", false).on_click(cx.listener(
+                            |app, _, _, cx| {
+                                if let Some(reader) = &app.help.reader {
+                                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                        reader.text.to_string(),
+                                    ));
+                                }
+                            },
+                        )),
+                    )
+                    .child(
+                        button(&t, "close-licenses", "Close", false)
+                            .on_click(cx.listener(|app, _, _, cx| app.close_help(cx))),
+                    ),
+            )
+            .child(
+                div().flex_1().min_h_0().flex().child(list).child(
+                    div()
+                        .id("license-text")
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_y_scroll()
+                        .track_scroll(&reader.scroll)
+                        .p_4()
+                        .child(reader.text.clone()),
+                ),
+            );
+        Some(
+            overlay
+                .flex()
+                .p_4()
+                .items_center()
+                .justify_center()
+                .bg(gpui::rgba(0x00000099))
+                .child(panel)
+                .into_any_element(),
+        )
+    }
+}

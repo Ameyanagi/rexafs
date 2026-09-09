@@ -37,6 +37,7 @@ jobs:
       - run: python scripts/check-release-version.py
       - run: python scripts/test-release-maintenance.py
       - run: python scripts/test-registry-artifacts.py
+      - run: python scripts/test-release-downloads.py
       - run: python scripts/test-desktop-channels.py
       - run: python scripts/test-macos-installer.py
       - run: python scripts/test-benchmark-tools.py

@@ -1,5 +1,31 @@
 # rexafs 0.2.0
 
+| Desktop | Installer | Portable |
+|---|---|---|
+| macOS · Apple Silicon | [Download](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.0/rexafs-0.2.0-aarch64-apple-darwin.dmg) | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.0/rexafs-0.2.0-aarch64-apple-darwin.zip) |
+| macOS · Intel | [Download](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.0/rexafs-0.2.0-x86_64-apple-darwin.dmg) | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.0/rexafs-0.2.0-x86_64-apple-darwin.zip) |
+| Windows · preview | [Download](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.0/rexafs-0.2.0-x86_64-pc-windows-msvc-setup.exe) | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.0/rexafs-0.2.0-x86_64-pc-windows-msvc.zip) |
+| Linux · preview | — | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.0/rexafs-0.2.0-x86_64-unknown-linux-gnu.tar.gz) |
+
+Mac downloads are signed and notarized. Intel was checked under Rosetta;
+Windows/Linux remain previews.
+
+[Installation and offline setup](https://github.com/Ameyanagi/rexafs/blob/main/doc/installing.md)
+
+<details>
+<summary>Python · Rust · npm</summary>
+
+| Package | Install |
+|---|---|
+| [Python](https://pypi.org/project/rexafs/0.2.0/) | `python -m pip install rexafs` |
+| [Rust](https://crates.io/crates/rexafs/0.2.0) | `cargo add rexafs` |
+| [npm](https://www.npmjs.com/package/rexafs/v/0.2.0) | `npm install rexafs` |
+
+</details>
+
+<details>
+<summary>What changed</summary>
+
 The Groups panel keeps current, keyboard focus, marks, and range selection
 separate. Browsing a spectrum preserves marks. Source files and their channels
 share collapsible stacks; materialized outputs appear in Results. Group names,
@@ -61,7 +87,10 @@ clean-machine installation remain unqualified. Windows/Linux remain desktop
 previews pending native interactive checks. Their build, archive, numerical,
 and installer checks are recorded separately from graphical qualification.
 
-## Build and qualification
+</details>
+
+<details>
+<summary>Build and verification</summary>
 
 These assets come from [release build 34204231697](https://github.com/Ameyanagi/rexafs/actions/runs/34204231697),
 which passed all 29 jobs at commit `7278be4ce91b80de235ce785782b46e7f5647447`.
@@ -80,16 +109,8 @@ project restoration under Rosetta.
 See the [qualification report](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-09-08-release-0.2.0/review.md)
 for the recorded evidence and remaining platform and upstream dependency limits.
 
-## Package publication
+The Rust crate, npm tarball, all 20 Python wheels, and Python source archive
+were verified against the same qualified build. They remain available through
+their package registries; GitHub's download list contains the desktop assets.
 
-[crates.io](https://crates.io/crates/rexafs/0.2.0),
-[PyPI](https://pypi.org/project/rexafs/0.2.0/), and
-[npm](https://www.npmjs.com/package/rexafs/v/0.2.0) now publish 0.2.0 as the
-stable version. The Rust crate, npm tarball, all 20 Python wheels, and Python
-source archive match the qualified build's SHA-256 hashes.
-
-Publication used the unchanged source tag and build with reviewed publisher
-maintenance from `v0.2.0-publish-tools.1`:
-[Rust](https://github.com/Ameyanagi/rexafs/actions/runs/34211846925),
-[npm](https://github.com/Ameyanagi/rexafs/actions/runs/34211849827), and
-[PyPI](https://github.com/Ameyanagi/rexafs/actions/runs/34211852979).
+</details>

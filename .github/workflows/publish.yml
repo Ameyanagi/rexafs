@@ -110,6 +110,11 @@ jobs:
       - name: Verify GitHub artifact checksums
         if: inputs.channel == 'github-draft'
         run: python scripts/check-artifacts.py verify artifacts artifacts/release-manifest/SHA256SUMS
+      - name: Stage desktop downloads for GitHub
+        if: inputs.channel == 'github-draft'
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: python scripts/release_downloads.py artifacts artifacts/release-manifest/SHA256SUMS github-dist "$RELEASE_VERSION"
       - name: Require every registry package and its original build checksum
         if: inputs.channel != 'github-draft'
         env:
@@ -182,5 +187,4 @@ jobs:
             gh release create "$RELEASE_TAG" --verify-tag --draft --generate-notes --title "rexafs $RELEASE_TAG" "${PRERELEASE[@]}"
           fi
           test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
-          gh release upload "$RELEASE_TAG" artifacts/release-manifest/SHA256SUMS --clobber
-          find artifacts -type f \( -name '*.zip' -o -name '*.sha256' -o -name '*.crate' -o -name '*.whl' -o -name '*.tar.gz' -o -name '*.tgz' -o -name '*-setup.exe' -o -name '*-setup.build.json' -o -name '*-setup.exe.qualification.json' \) -exec gh release upload "$RELEASE_TAG" {} +
+          gh release upload "$RELEASE_TAG" github-dist/* --clobber

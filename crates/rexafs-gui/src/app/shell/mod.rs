@@ -20,6 +20,7 @@ pub mod fit_workspace;
 pub(crate) mod group_menu;
 pub mod groups_panel;
 pub mod handles;
+pub(crate) mod help;
 pub(crate) mod import_editor;
 mod import_receipt;
 mod import_review;
@@ -355,10 +356,15 @@ impl StudioApp {
             Stage::Publish => self.publish_panel(cx),
             _ => self.stage_center(cx).into_any_element(),
         };
-        let groups = self
-            .data_panel_open
-            .then(|| self.groups_panel(cx).into_any_element());
+        let has_groups = !self.catalog.is_empty()
+            || !self.derived.is_empty()
+            || !self.current_path.as_os_str().is_empty()
+            || self.catalog.scanning
+            || !self.intake.history.is_empty();
+        let groups =
+            (self.data_panel_open && has_groups).then(|| self.groups_panel(cx).into_any_element());
         let inspector = (self.context_panel_open
+            && has_groups
             && !matches!(self.stage, Stage::Fit | Stage::Publish))
         .then(|| self.inspector(cx).into_any_element());
         let assistant = self.assistant_panel(cx);
@@ -422,6 +428,7 @@ impl StudioApp {
             .children(self.parameter_menu_overlay(cx))
             .children(self.parameter_context_overlay(cx))
             .children(self.updates_overlay(cx))
+            .children(self.help_overlay(cx))
             .when(self.assistant_resizing.is_some(), |d| {
                 d.child(
                     div()
@@ -570,14 +577,14 @@ impl StudioApp {
             .child(action("theme-toggle", "Theme", |this, cx| {
                 this.toggle_theme(cx)
             }))
-            .child(action(
-                "updates",
-                if self.updates.result.as_ref().is_some_and(|r| r.available) {
-                    "Update available"
-                } else {
-                    "Updates"
+            .when(
+                self.updates.result.as_ref().is_some_and(|r| r.available),
+                |d| {
+                    d.child(action("updates", "Update available", |this, cx| {
+                        this.open_updates(cx)
+                    }))
                 },
-                |this, cx| this.open_updates(cx),
-            ))
+            )
+            .child(action("help", "Help", |this, cx| this.open_help(cx)))
     }
 }
