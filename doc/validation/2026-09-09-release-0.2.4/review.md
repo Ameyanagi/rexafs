@@ -32,11 +32,19 @@ The first release-PR strict job passed Clippy and formatting, then its hook trie
 to install the repository-pinned toolchain over a partially installed runner
 copy. The workflow now explicitly runs hooks with the stable toolchain it already
 installed, matching the job's other checks. Local hooks still use the repository
-pin. The corrected revision passed that strict job. Reviewing the first successful
-Linux CI screenshots also exposed a weak readiness assertion: an idle diagnostic
-line included the text “ruviz frames”. The smoke check now requires a nonzero
-rendered-frame count before continuing; the packaged 0.2.4 local check passed
-again. The final revision requires a complete CI pass.
+pin. The corrected revision passed that strict job.
+
+The strengthened graphical check selects Normalize's raw μ(E) control and
+requires a nonzero rendered-frame count for that instrumented plot. The earlier
+idle diagnostic line alone did not establish rendering. This interaction exposed
+a reproducible focus regression: Normalize → Background removed the focused
+control, so the subsequent Transform shortcut could no longer reach the root.
+Stage shortcuts now return focus to the workspace before switching. The same
+packaged click-and-shortcut sequence then passed all ten
+[checks](gui-checks.json), including the
+[Transform screenshot after clicking a control](stage-shortcut-after-click.png).
+The final
+revision requires a complete CI pass.
 
 ## Final build and publication
 

@@ -6,6 +6,8 @@
   and example actions in the empty workspace.
 - Use platform monospace fonts; clip long text inside fields, keep the caret
   visible while editing, and correct character hit testing in translated fields.
+- Keep stage shortcuts working after a focused plot control disappears during
+  navigation by returning focus to the workspace before switching.
 - Bound folder-scan batches and stop cancelled scans while traversing unrelated
   files, limiting queued catalog memory when the UI is busy.
 - Keep Unix pprof dependencies out of Windows tests and benchmarks. Add Windows

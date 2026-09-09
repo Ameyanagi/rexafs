@@ -343,6 +343,18 @@ pub fn button(
 }
 
 impl StudioApp {
+    /// Stage shortcuts must leave focus on a surviving element. A focused plot
+    /// option can disappear in the next stage, stranding later key bindings.
+    pub(crate) fn navigate_stage(
+        &mut self,
+        stage: Stage,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.root_focus.focus(window, cx);
+        self.set_stage(stage, cx);
+    }
+
     pub(crate) fn set_stage(&mut self, stage: Stage, cx: &mut Context<Self>) {
         let previous = self.stage;
         self.stage = stage;

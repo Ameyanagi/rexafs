@@ -69,6 +69,12 @@ def main():
                 assert int(geometry["WIDTH"]) <= int(desktop[0]), geometry
                 assert int(geometry["HEIGHT"]) <= int(desktop[1]), geometry
                 checks.append("window-fits-display")
+                # Select Normalize, then its raw μ(E) tab. The diagnostics report
+                # this first plot's renderer. Coordinates are window-relative
+                # at the X11 smoke session's unscaled laptop resolution.
+                command("xdotool", "key", "--clearmodifiers", "--delay", "100", "ctrl+2")
+                time.sleep(0.5)
+                command("xdotool", "mousemove", "--window", window, "410", "132", "click", "1")
                 # Wait for restored data and plot construction, not just the
                 # first empty frame. Diagnostics explicitly distinguish these.
                 while time.monotonic() < deadline:
@@ -93,11 +99,12 @@ def main():
 
                 previous = capture("opened-project")
                 checks.append("embedded-project-and-rendered-plot")
+                command("xdotool", "mousemove", "--window", window, "30", "20")
                 for key, name in [("ctrl+1", "data"), ("ctrl+2", "normalize"),
                                   ("ctrl+3", "background"), ("ctrl+4", "transform"),
                                   ("ctrl+5", "fit"), ("ctrl+7", "publish")]:
                     command("xdotool", "windowfocus", "--sync", window,
-                            "key", "--clearmodifiers", key)
+                            "key", "--clearmodifiers", "--delay", "100", key)
                     time.sleep(1)
                     frame = capture(name)
                     # The first key may select the restored stage again.

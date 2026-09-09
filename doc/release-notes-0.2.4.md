@@ -25,7 +25,9 @@ The desktop opens within the available display area, including small Linux
 screens. The empty workspace offers Import spectra, Open project and Open Cu
 example actions. Numeric fields use each platform's monospace font, clip long
 values inside the field, and scroll to keep the editing caret visible. Clicking
-and IME positioning follow the scrolled text.
+and IME positioning follow the scrolled text. Stage shortcuts return focus to the
+workspace before switching, so they keep working after a focused plot control
+disappears.
 
 Folder scanning now bounds queued batches and stops cancelled scans while walking
 unrelated files, limiting memory growth when the UI is busy. Windows tests and
