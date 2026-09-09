@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.4
 
 - Fit the desktop window to the available display area and show import, project
   and example actions in the empty workspace.
