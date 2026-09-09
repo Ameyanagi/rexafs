@@ -427,10 +427,8 @@ mod tests {
         dataset.model_chir_mag = DVector::from_vec(vec![0.8, 0.0, 0.0]);
         dataset.path_contributions.push(PathContribution {
             label: "path-1".to_string(),
-            chi: DVector::zeros(0),
-            chir_re: DVector::zeros(0),
-            chir_im: DVector::zeros(0),
             chir_mag: DVector::from_vec(vec![0.3, 0.1, 0.0]),
+            ..Default::default()
         });
         fit.datasets.push(dataset);
         fit.sync_primary_dataset_fields();
