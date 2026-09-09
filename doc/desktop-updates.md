@@ -9,6 +9,14 @@ Choose **Download** to fetch the matching Mac archive and verify its size and SH
 
 A Nightly label includes the immutable build tag. `rexafs --build-info` reports the library version, channel, release tag, source commit and optional nightly build time. Each packaged archive contains the same identity and signing/notarization provenance in `build.json`.
 
+## Updating to 0.2.4
+
+Version 0.2.4 fits the initial window to the display, adds import/project/example
+actions to the empty workspace, and keeps long text and its caret inside fields.
+Folder scans use bounded batches and respond to cancellation. Existing format-1
+projects, processing settings and numerical defaults are unchanged. Save the
+current project before replacing the application.
+
 ## Updating to 0.2.3
 
 Version 0.2.3 fixes Windows console launches, Ctrl shortcuts and multi-selection,
@@ -47,4 +55,4 @@ previous-save backups remain available.
 
 The workflow builds macOS ARM and Intel packages with ReFEFF, runs core and desktop checks, and uses the existing `macos-signing` environment for Developer ID signing and Apple notarization. No signing secrets are available in build jobs. It produces ZIP archives and [drag-to-Applications DMG installers](macos-installers.md), with installation checks and notices inside the app. The final `nightly` environment publishes only after both formats and architectures pass source, target, checksum and notarization-provenance checks. Uploaded GitHub digests are checked before the draft becomes public. A failed draft can be resumed by rerunning the workflow; an already-public nightly requires a new dispatch/run ID.
 
-The separate reviewed stable workflow remains `publish.yml`; its crates.io, PyPI and npm trusted publishers are unchanged. Windows/Linux portable desktop previews and a Windows setup installer are available for platform testing. Native Windows development-build interaction checks are recorded in the [Windows review](validation/2026-09-09-windows-gui/README.md). Final-download native Windows/Linux interactive qualification remains pending; automated archive and installation checks are recorded with the releases.
+The separate reviewed stable workflow remains `publish.yml`; its crates.io, PyPI and npm trusted publishers are unchanged. Windows/Linux portable desktop previews and a Windows setup installer are available for platform testing. Native Windows development-build interaction checks are recorded in the [Windows review](validation/2026-09-09-windows-gui/README.md). Linux packaged GUI checks use X11 software rendering. Final-download native Windows interaction, physical Linux GPUs and native Wayland remain unqualified; automated archive and installation checks are recorded with the releases.

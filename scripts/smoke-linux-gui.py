@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -73,7 +74,7 @@ def main():
                 while time.monotonic() < deadline:
                     if process.poll() is not None:
                         raise RuntimeError("Desktop exited while restoring the project")
-                    if "ruviz frames" in (output / "desktop.log").read_text():
+                    if re.search(r"ruviz frames [1-9]\d*/s", (output / "desktop.log").read_text()):
                         break
                     time.sleep(0.2)
                 else:

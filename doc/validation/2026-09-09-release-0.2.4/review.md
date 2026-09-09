@@ -32,7 +32,11 @@ The first release-PR strict job passed Clippy and formatting, then its hook trie
 to install the repository-pinned toolchain over a partially installed runner
 copy. The workflow now explicitly runs hooks with the stable toolchain it already
 installed, matching the job's other checks. Local hooks still use the repository
-pin. The corrected revision requires a new complete CI pass.
+pin. The corrected revision passed that strict job. Reviewing the first successful
+Linux CI screenshots also exposed a weak readiness assertion: an idle diagnostic
+line included the text “ruviz frames”. The smoke check now requires a nonzero
+rendered-frame count before continuing; the packaged 0.2.4 local check passed
+again. The final revision requires a complete CI pass.
 
 ## Final build and publication
 

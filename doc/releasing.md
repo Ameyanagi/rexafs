@@ -11,16 +11,18 @@ release's source, checks and publication. Numerical defaults and dependency
 versions are unchanged. The [0.2.3 record](validation/2026-09-10-release-0.2.3/review.md)
 retains that release's independent preparation history.
 
-## Current stable release
+## Published releases
 
-The current stable release is [0.2.1](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.1).
-Its [release notes](release-notes-0.2.1.md) describe the merged UI, structure,
-and ruviz 0.14.1 updates; its
-[qualification report](validation/2026-09-09-release-0.2.1/review.md) records the
-completed build, registry, signing, artifact, and available-host checks.
-All three registries publish 0.2.1 as stable. Mac downloads are signed and
-notarized. Windows/Linux remain desktop previews until native interactive
-qualification is available.
+Use the [latest stable release](https://github.com/Ameyanagi/rexafs/releases/latest)
+for current desktop downloads and publication status. The
+[installation guide](installing.md) links the package channels. Each release's
+notes and qualification record identify its exact source, build, signatures and
+checks; preparation records do not establish publication.
+
+The [0.2.1 notes](release-notes-0.2.1.md) and
+[qualification report](validation/2026-09-09-release-0.2.1/review.md) retain the
+completed publication history for that version. Windows and Linux remain desktop
+previews with the limits stated in each release's qualification record.
 The [rebranding plan](rebranding-plan.md) defines scope; [dependency notes](dependencies.md)
 record the Rust 1.98.1 toolchain and compatibility constraints.
 
