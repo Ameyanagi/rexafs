@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.2
+
+- Open Windows desktop sessions without a console window. Preserve redirected
+  diagnostic output and verify the GUI subsystem in the packaged executable.
+- Use Ctrl for Windows/Linux command shortcuts and multi-selection, including
+  Undo, Open, Save, stage navigation, and clipboard actions. Preserve macOS Cmd
+  shortcuts and use each platform's word-navigation keys.
+- Reduce accessibility update overhead by sharing the complete activation
+  snapshot, comparing nodes by identity, and skipping unchanged native updates.
+- Wait for Windows installer diagnostic processes and capture their output.
+  Add opt-in graphics-adapter diagnostics and retain native Windows interaction
+  checks with measured debug/release timing limits.
+- Retain linked and embedded 0.2.2 projects with the existing format-1 state.
+  Numerical defaults and solver dependencies are unchanged.
+
 ## 0.2.1
 
 - Start in the complete, empty Data workspace and keep Help and theme switching

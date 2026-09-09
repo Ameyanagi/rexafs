@@ -14,6 +14,7 @@ are not supported or retained as compatibility fixtures.
 | `rexafs-0.1.3-links.rxs`, `rexafs-0.1.3-embedded.rxs` | Saved and reopened through the 0.1.3 writer from the 0.1.2 linked fixture; same format and preserved reference/standard/inverse-grid state |
 | `rexafs-0.2.0-links.rxs`, `rexafs-0.2.0-embedded.rxs` | Groups and locks, two immutable recipe versions, an application retaining version 1, pending source, declared Cu K identity and full parser diagnostics |
 | `rexafs-0.2.1-links.rxs`, `rexafs-0.2.1-embedded.rxs` | Retained 0.2.0 state plus an AUTOBK/FFT weight link with its independent value, reversed Viridis group assignments, and publication style with a mixed Japanese/Latin title |
+| `rexafs-0.2.2-links.rxs`, `rexafs-0.2.2-embedded.rxs` | Saved and reopened through the 0.2.2 writer; unchanged format-1 state including recipes, locks, weight links, palettes, publication style and Assistant history |
 | `future-version.rxs` | Future format: reject without modification |
 | `truncated.rxs` | Corrupt/incomplete input: reject without modification |
 | `data/*.xmu`, `feff/*.dat` | Real inputs for relocation, byte recovery and processing checks |

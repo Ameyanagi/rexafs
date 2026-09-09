@@ -1,5 +1,16 @@
 # Releasing rexafs
 
+## Preparing 0.2.2
+
+The next patch release includes the Windows console, native shortcut and
+accessibility fixes from `29a1191`. Its [release notes](release-notes-0.2.2.md)
+and [qualification record](validation/2026-09-10-release-0.2.2/review.md) track
+the exact source, build, signing and publication checks. PR #39 remains excluded
+because its nalgebra update fails at the solver type boundary. Issue #20 remains
+open for the legacy clamp Jacobian and output-FFT window-domain differences.
+
+## Current stable release
+
 The current stable release is [0.2.1](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.1).
 Its [release notes](release-notes-0.2.1.md) describe the merged UI, structure,
 and ruviz 0.14.1 updates; its

@@ -1,12 +1,20 @@
 # Desktop updates and release channels
 
-Open **Updates** in the top bar, or search for **Check for updates** with Cmd+K.
+Open **Updates** in the top bar, or search for **Check for updates** with Cmd+K
+on macOS or Ctrl+K on Windows/Linux.
 
 **Stable** is the default for routine analysis. **Nightly** is opt-in and follows daily builds of main. The selected channel and the **Check for updates on startup** preference belong to this computer, not the project. Automatic checks do not install software or upload spectra.
 
 Choose **Download** to fetch the matching Mac archive and verify its size and SHA-256. **Show download in Finder** reveals the completed ZIP. Save the project, quit the app, extract the archive, and move the application into Applications. Nightly is named `rexafs Nightly.app`, so it can coexist with Stable. Choosing Stable from a Nightly app explicitly offers the stable release, even if its library version is older.
 
 A Nightly label includes the immutable build tag. `rexafs --build-info` reports the library version, channel, release tag, source commit and optional nightly build time. Each packaged archive contains the same identity and signing/notarization provenance in `build.json`.
+
+## Updating to 0.2.2
+
+Version 0.2.2 fixes Windows console launches, Ctrl shortcuts and multi-selection,
+and reduces accessibility update overhead. macOS keeps its Cmd shortcuts.
+Project format, saved processing settings and numerical defaults are unchanged.
+Save the current project before replacing the application.
 
 ## Updating to 0.2.1
 
@@ -39,4 +47,4 @@ previous-save backups remain available.
 
 The workflow builds macOS ARM and Intel packages with ReFEFF, runs core and desktop checks, and uses the existing `macos-signing` environment for Developer ID signing and Apple notarization. No signing secrets are available in build jobs. It produces ZIP archives and [drag-to-Applications DMG installers](macos-installers.md), with installation checks and notices inside the app. The final `nightly` environment publishes only after both formats and architectures pass source, target, checksum and notarization-provenance checks. Uploaded GitHub digests are checked before the draft becomes public. A failed draft can be resumed by rerunning the workflow; an already-public nightly requires a new dispatch/run ID.
 
-The separate reviewed stable workflow remains `publish.yml`; its crates.io, PyPI and npm trusted publishers are unchanged. Windows/Linux portable desktop previews and a Windows setup installer are available for platform testing. Native interactive qualification remains pending; automated archive and installation checks are recorded with the releases.
+The separate reviewed stable workflow remains `publish.yml`; its crates.io, PyPI and npm trusted publishers are unchanged. Windows/Linux portable desktop previews and a Windows setup installer are available for platform testing. Native Windows development-build interaction checks are recorded in the [Windows review](validation/2026-09-09-windows-gui/README.md). Final-download native Windows/Linux interactive qualification remains pending; automated archive and installation checks are recorded with the releases.

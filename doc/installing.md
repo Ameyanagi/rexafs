@@ -11,8 +11,11 @@ Choose your platform on the [latest release](https://github.com/Ameyanagi/rexafs
 | Linux preview | Extract the archive and run `rexafs` from the extracted folder. A graphical session, Vulkan-capable driver, GTK 3, fontconfig, and xkbcommon are required. |
 
 ZIP archives remain available for portable installation and the desktop updater.
-Checksums and installer evidence accompany the downloads. Native Windows/Linux
-interactive qualification and native Intel hardware checks remain outstanding.
+Checksums and installer evidence accompany the downloads. Native Windows
+development-build interaction checks are recorded in the
+[Windows review](validation/2026-09-09-windows-gui/README.md). Final-download
+Windows/Linux interactive qualification and native Intel hardware checks remain
+outstanding.
 
 ## Packages
 
@@ -35,16 +38,16 @@ For Python, download on a connected computer with the same OS, architecture,
 and Python version as the offline computer:
 
 ```sh
-python -m pip download rexafs==0.2.1 --dest wheelhouse
+python -m pip download rexafs==0.2.2 --dest wheelhouse
 ```
 
 Copy `wheelhouse` to the offline computer, then run:
 
 ```sh
-python -m pip install --no-index --find-links wheelhouse rexafs==0.2.1
+python -m pip install --no-index --find-links wheelhouse rexafs==0.2.2
 ```
 
-For npm, `npm pack rexafs@0.2.1` downloads the package for a later
-`npm install ./rexafs-0.2.1.tgz`. For Rust, prepare the consuming project's
+For npm, `npm pack rexafs@0.2.2` downloads the package for a later
+`npm install ./rexafs-0.2.2.tgz`. For Rust, prepare the consuming project's
 dependencies with `cargo vendor`; retain its generated configuration alongside
 the project's existing Cargo settings before building with `--offline --locked`.
