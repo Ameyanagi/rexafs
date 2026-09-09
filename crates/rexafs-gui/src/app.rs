@@ -282,6 +282,7 @@ fn copy_section(dst: &mut PipelineParams, src: &PipelineParams, section: ParamSe
             dst.bkg_kstep = src.bkg_kstep;
             dst.bkg_nknots = src.bkg_nknots;
             dst.bkg_kweight = src.bkg_kweight;
+            dst.bkg_kweight_linked = src.bkg_kweight_linked;
             dst.bkg_clamp_lo = src.bkg_clamp_lo;
             dst.bkg_clamp_hi = src.bkg_clamp_hi;
             dst.bkg_nclamp = src.bkg_nclamp;
@@ -450,11 +451,18 @@ actions!(
         StageTransform,
         StageFit,
         StageSeries,
+        StagePublish,
+        ShowHelp,
+        ShowLicenses,
+        ShowUpdates,
+        ShowExample,
+        SwitchTheme,
         ToggleDataPanel,
         ToggleContextPanel,
         FocusFilter,
         ExploreEscape,
         OpenProject,
+        SaveProject,
         ImportPaths,
         DismissPathRoute,
         PaletteOpen,
@@ -485,6 +493,7 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
             Some("Assistant && !TextInput"),
         ),
         KeyBinding::new("cmd-o", OpenProject, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-s", SaveProject, Some("Studio && !Assistant")),
         KeyBinding::new("cmd-shift-o", ImportPaths, Some("Studio && !Assistant")),
         KeyBinding::new("escape", DismissPathRoute, Some("PathRoute")),
         KeyBinding::new("f2", RenameGroup, Some("DataPanel && !TextInput")),
@@ -525,6 +534,7 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
         KeyBinding::new("cmd-4", StageTransform, Some("Studio && !Assistant")),
         KeyBinding::new("cmd-5", StageFit, Some("Studio && !Assistant")),
         KeyBinding::new("cmd-6", StageSeries, Some("Studio && !Assistant")),
+        KeyBinding::new("cmd-7", StagePublish, Some("Studio && !Assistant")),
         KeyBinding::new(
             "cmd-b",
             ToggleDataPanel,
@@ -1029,6 +1039,7 @@ pub struct StudioApp {
     /// Pipeline stage shown by the shell (drives `workspace`).
     stage: Stage,
     stage_view: StageView,
+    ui: shell::controls::Presentation,
     /// Ripple-strip thumbnails of the current group.
     thumbs: Option<Arc<[ThumbData; 4]>>,
     handles: HandleState,
@@ -1254,6 +1265,7 @@ pub struct StudioApp {
     pub(crate) card_px: BTreeMap<usize, (u32, u32)>,
     /// Viewport width captured at render time (responsive chrome).
     pub(crate) viewport_w: f32,
+    pub(crate) viewport_h: f32,
 }
 
 /// Evenly sample `all` (sorted) down to `cap`, always keeping first, last,
@@ -2814,12 +2826,13 @@ impl StudioApp {
         // Scripted launches (screenshots) can pick the initial stage.
         let initial_stage = match crate::settings::env_var("STAGE").ok().as_deref() {
             Some("data") => Stage::Data,
+            Some("normalize") => Stage::Normalize,
             Some("background") => Stage::Background,
             Some("transform") => Stage::Transform,
             Some("fit") => Stage::Fit,
             Some("series") => Stage::Series,
             Some("publish") => Stage::Publish,
-            _ => Stage::Normalize,
+            _ => Stage::Data,
         };
 
         let structure = shell::structure_view::StructureState::new(theme, cx);
@@ -2829,6 +2842,7 @@ impl StudioApp {
             workspace: initial_stage.workspace(),
             stage: initial_stage,
             stage_view: StageView::default(),
+            ui: Default::default(),
             thumbs: None,
             handles: HandleState::default(),
             tools: ToolState::new(),
@@ -2993,6 +3007,7 @@ impl StudioApp {
             problems_open: false,
             card_px: BTreeMap::new(),
             viewport_w: 1440.0,
+            viewport_h: 900.0,
         };
         if crate::debug_stats::enabled() {
             Self::start_debug_stats(cx);
@@ -3887,7 +3902,12 @@ impl StudioApp {
                 FLOAT,
             ),
             (ParamKey::NormStart, "fit minimum (eV)", "auto (150)", FLOAT),
-            (ParamKey::NormEnd, "fit maximum (eV)", "auto (2000)", FLOAT),
+            (
+                ParamKey::NormEnd,
+                "fit maximum (eV)",
+                "auto (spectrum end)",
+                FLOAT,
+            ),
             (ParamKey::NormPolyorder, "poly order", "auto (2)", INT),
             (ParamKey::NVictoreen, "victoreen n", "auto (0)", INT),
             (ParamKey::Rbkg, "rbkg (Å)", "auto (1.0)", FLOAT),
@@ -5352,7 +5372,6 @@ impl StudioApp {
         self.time_pos = offset;
         let ix = scan.start + offset;
         self.reveal_time_selection(scan_ix, offset, ix);
-        self.selection.clear();
         self.select_entry(ix, cx);
     }
 
@@ -5611,9 +5630,11 @@ impl StudioApp {
             let label = self.entry_label(ix);
             let fingerprint = self.effective_fingerprint(ix);
             let color_index = self.group_color_index(ix);
+            let color = self.group_plot_color(ix);
             if let Some(sp) = self.cache.get(&(ix, fingerprint)) {
                 traces.push(QuadTrace {
                     color_index,
+                    color,
                     label,
                     sp: sp.clone(),
                     active: Some(ix) == current,
@@ -5627,6 +5648,12 @@ impl StudioApp {
                 return;
             };
             traces.push(QuadTrace {
+                color: self
+                    .spectrum_group
+                    .as_ref()
+                    .and_then(|t| t.group_id.as_ref())
+                    .and_then(|id| self.group_state.plot_colors.get(id))
+                    .map(|c| c.color(&self.theme)),
                 color_index: self
                     .spectrum_group
                     .as_ref()
@@ -5684,7 +5711,10 @@ impl StudioApp {
                             },
                             36,
                         )),
-                        trace_rgba(&self.theme, trace.color_index),
+                        trace
+                            .color
+                            .map(crate::spectrum_colors::rgba)
+                            .unwrap_or_else(|| trace_rgba(&self.theme, trace.color_index)),
                     )
                 })
                 .collect()
@@ -5764,9 +5794,7 @@ impl StudioApp {
         for (_, field) in &self.param_fields {
             field.update(cx, |f, cx| f.set_theme(theme, cx));
         }
-        for (_, field) in &self.tools.fields {
-            field.update(cx, |f, cx| f.set_theme(theme, cx));
-        }
+        self.tools.set_theme(theme, cx);
         for (_, field) in &self.fit_range_fields {
             field.update(cx, |f, cx| f.set_theme(theme, cx));
         }
@@ -5788,6 +5816,8 @@ impl StudioApp {
             &self.structure.radius,
             &self.structure.max_reff_input,
             &self.structure.mp_key,
+            &self.structure.path_filter,
+            &self.structure.poly_cutoff_input,
         ] {
             field.update(cx, |f, cx| f.set_theme(theme, cx));
         }
@@ -8195,7 +8225,7 @@ impl StudioApp {
         }
     }
 
-    fn save_project(&mut self, cx: &mut Context<Self>) {
+    fn save_project_confirmed(&mut self, cx: &mut Context<Self>) {
         if self.project_saving {
             return;
         }
@@ -9298,6 +9328,17 @@ impl StudioApp {
 impl Render for StudioApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.viewport_w = f32::from(window.viewport_size().width);
+        self.viewport_h = f32::from(window.viewport_size().height);
+        let blocked = self.import_editor.is_some()
+            || self.path_route.is_some()
+            || self.updates.open
+            || self.ui.menu.is_some()
+            || self.help.is_open()
+            || self.palette.is_some();
+        if self.ui.native_menu_blocked != Some(blocked) {
+            crate::native_menus(blocked, cx);
+            self.ui.native_menu_blocked = Some(blocked);
+        }
         self.fit_assistant_layout();
         let key_context = if self.import_editor.is_some() {
             "ImportEditor"
@@ -9305,6 +9346,8 @@ impl Render for StudioApp {
             "PathRoute"
         } else if self.updates.open {
             "UpdateDialog"
+        } else if self.ui.menu.is_some() {
+            "StudioPopover"
         } else if self.help.is_open() {
             "HelpDialog"
         } else if self.palette.is_some() {
@@ -9316,98 +9359,114 @@ impl Render for StudioApp {
                 Workspace::Fit => "Studio FitWorkspace",
             }
         };
-        div()
-            .id("root")
-            .track_focus(&self.root_focus)
-            .key_context(key_context)
-            .border_2()
-            .border_color(self.theme.bg)
-            .drag_over::<ExternalPaths>({
-                let accent = self.theme.accent;
-                move |style, _, _, _| style.border_color(accent)
-            })
-            .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
-                this.route_paths(paths.paths().to_vec(), false, cx);
-            }))
-            .on_action(cx.listener(|this, _: &OpenProject, _, cx| this.open_project(cx)))
-            .on_action(cx.listener(|this, _: &ImportPaths, _, cx| this.open_folder(cx)))
-            .on_action(cx.listener(|this, _: &DismissPathRoute, window, cx| {
-                this.dismiss_path_route(window, cx);
-            }))
-            .on_action(cx.listener(|this: &mut Self, _: &StageData, _window, cx| {
-                this.set_stage(Stage::Data, cx);
-            }))
-            .on_action(
-                cx.listener(|this: &mut Self, _: &StageNormalize, _window, cx| {
-                    this.set_stage(Stage::Normalize, cx);
-                }),
-            )
-            .on_action(
-                cx.listener(|this: &mut Self, _: &StageBackground, _window, cx| {
-                    this.set_stage(Stage::Background, cx);
-                }),
-            )
-            .on_action(
-                cx.listener(|this: &mut Self, _: &StageTransform, _window, cx| {
-                    this.set_stage(Stage::Transform, cx);
-                }),
-            )
-            .on_action(cx.listener(|this: &mut Self, _: &StageFit, _window, cx| {
-                this.set_stage(Stage::Fit, cx);
-            }))
-            .on_action(
-                cx.listener(|this: &mut Self, _: &StageSeries, _window, cx| {
-                    this.set_stage(Stage::Series, cx);
-                }),
-            )
-            .on_action(
-                cx.listener(|this: &mut Self, _: &ToggleDataPanel, _window, cx| {
-                    this.data_panel_open = !this.data_panel_open;
-                    if this.data_panel_open {
-                        this.last_opened_side_panel =
-                            Some(shell::assistant_shell::SidePanel::Groups);
-                    }
-                    this.fit_assistant_layout();
-                    cx.notify();
-                }),
-            )
-            .on_action(
-                cx.listener(|this: &mut Self, _: &ToggleContextPanel, _window, cx| {
-                    this.context_panel_open = !this.context_panel_open;
-                    if this.context_panel_open {
-                        this.last_opened_side_panel =
-                            Some(shell::assistant_shell::SidePanel::Inspector);
-                    }
-                    this.fit_assistant_layout();
-                    cx.notify();
-                }),
-            )
-            .on_action(cx.listener(|this: &mut Self, _: &FocusFilter, window, cx| {
-                this.focus_filter(window, cx);
-            }))
-            .on_action(
-                cx.listener(|this: &mut Self, _: &ExploreEscape, _window, cx| {
-                    this.explore_escape(cx);
-                }),
-            )
-            .on_action(cx.listener(|this: &mut Self, _: &PaletteOpen, window, cx| {
-                this.open_palette(window, cx);
-            }))
-            .on_action(cx.listener(|this: &mut Self, _: &Undo, _window, cx| {
-                this.undo(cx);
-            }))
-            .on_action(cx.listener(|this: &mut Self, _: &Redo, _window, cx| {
-                this.redo(cx);
-            }))
-            .on_action(
-                cx.listener(|this: &mut Self, _: &JournalToggle, _window, cx| {
-                    this.journal.open = !this.journal.open;
-                    cx.notify();
-                }),
-            )
-            .size_full()
-            .min_h_0()
-            .min_w_0()
-            .child(self.shell_root(cx))
+        crate::accessibility::root(
+            div()
+                .id("root")
+                .track_focus(&self.root_focus)
+                .key_context(key_context)
+                .tab_group()
+                .on_key_down(|event, window, cx| {
+                    shell::controls::navigate(event, window, cx);
+                })
+                .border_2()
+                .border_color(self.theme.bg)
+                .drag_over::<ExternalPaths>({
+                    let accent = self.theme.accent;
+                    move |style, _, _, _| style.border_color(accent)
+                })
+                .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
+                    this.route_paths(paths.paths().to_vec(), false, cx);
+                }))
+                .on_action(
+                    cx.listener(|this, _: &StagePublish, _, cx| this.set_stage(Stage::Publish, cx)),
+                )
+                .on_action(cx.listener(|this, _: &ShowHelp, _, cx| this.open_help(cx)))
+                .on_action(cx.listener(|this, _: &ShowLicenses, _, cx| this.open_licenses(cx)))
+                .on_action(cx.listener(|this, _: &ShowUpdates, _, cx| this.open_updates(cx)))
+                .on_action(cx.listener(|this, _: &ShowExample, _, cx| this.open_example(cx)))
+                .on_action(cx.listener(|this, _: &SwitchTheme, _, cx| this.toggle_theme(cx)))
+                .on_action(cx.listener(|this, _: &OpenProject, _, cx| this.open_project(cx)))
+                .on_action(cx.listener(|this, _: &SaveProject, _, cx| this.save_project(cx)))
+                .on_action(cx.listener(|this, _: &ImportPaths, _, cx| this.open_folder(cx)))
+                .on_action(cx.listener(|this, _: &DismissPathRoute, window, cx| {
+                    this.dismiss_path_route(window, cx);
+                }))
+                .on_action(cx.listener(|this: &mut Self, _: &StageData, _window, cx| {
+                    this.set_stage(Stage::Data, cx);
+                }))
+                .on_action(
+                    cx.listener(|this: &mut Self, _: &StageNormalize, _window, cx| {
+                        this.set_stage(Stage::Normalize, cx);
+                    }),
+                )
+                .on_action(
+                    cx.listener(|this: &mut Self, _: &StageBackground, _window, cx| {
+                        this.set_stage(Stage::Background, cx);
+                    }),
+                )
+                .on_action(
+                    cx.listener(|this: &mut Self, _: &StageTransform, _window, cx| {
+                        this.set_stage(Stage::Transform, cx);
+                    }),
+                )
+                .on_action(cx.listener(|this: &mut Self, _: &StageFit, _window, cx| {
+                    this.set_stage(Stage::Fit, cx);
+                }))
+                .on_action(
+                    cx.listener(|this: &mut Self, _: &StageSeries, _window, cx| {
+                        this.set_stage(Stage::Series, cx);
+                    }),
+                )
+                .on_action(
+                    cx.listener(|this: &mut Self, _: &ToggleDataPanel, _window, cx| {
+                        this.data_panel_open = !this.data_panel_open;
+                        if this.data_panel_open {
+                            this.last_opened_side_panel =
+                                Some(shell::assistant_shell::SidePanel::Groups);
+                        }
+                        this.fit_assistant_layout();
+                        cx.notify();
+                    }),
+                )
+                .on_action(
+                    cx.listener(|this: &mut Self, _: &ToggleContextPanel, _window, cx| {
+                        this.context_panel_open = !this.context_panel_open;
+                        if this.context_panel_open {
+                            this.last_opened_side_panel =
+                                Some(shell::assistant_shell::SidePanel::Inspector);
+                        }
+                        this.fit_assistant_layout();
+                        cx.notify();
+                    }),
+                )
+                .on_action(cx.listener(|this: &mut Self, _: &FocusFilter, window, cx| {
+                    this.focus_filter(window, cx);
+                }))
+                .on_action(
+                    cx.listener(|this: &mut Self, _: &ExploreEscape, _window, cx| {
+                        this.explore_escape(cx);
+                    }),
+                )
+                .on_action(cx.listener(|this: &mut Self, _: &PaletteOpen, window, cx| {
+                    this.open_palette(window, cx);
+                }))
+                .on_action(cx.listener(|this: &mut Self, _: &Undo, _window, cx| {
+                    this.undo(cx);
+                }))
+                .on_action(cx.listener(|this: &mut Self, _: &Redo, _window, cx| {
+                    this.redo(cx);
+                }))
+                .on_action(
+                    cx.listener(|this: &mut Self, _: &JournalToggle, _window, cx| {
+                        this.journal.open = !this.journal.open;
+                        cx.notify();
+                    }),
+                )
+                .size_full()
+                .min_h_0()
+                .min_w_0()
+                .child(self.shell_root(cx)),
+            "rexafs workspace",
+        )
     }
 }

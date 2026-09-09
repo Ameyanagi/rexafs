@@ -411,6 +411,8 @@ pub struct GroupState {
     pub excluded: BTreeSet<GroupId>,
     pub labels: BTreeMap<GroupId, String>,
     pub colors: BTreeMap<GroupId, u8>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub plot_colors: BTreeMap<GroupId, crate::spectrum_colors::Assignment>,
     pub marked: BTreeSet<GroupId>,
     pub frozen: BTreeSet<GroupId>,
     pub overrides: Vec<(GroupId, PipelineParams)>,

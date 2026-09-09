@@ -1,11 +1,13 @@
 use super::*;
-use crate::app::shell::{button, chip};
+use crate::app::shell::{
+    button, chip,
+    controls::{disclosure, icon_button},
+};
+use crate::icons::Icon;
 use crate::publication::figures::{fit_figures, render_figure};
 use crate::widgets::numeric_field::{FieldEvent, FieldKind};
 use crate::widgets::text_input::InputEvent;
-use gpui::{
-    ClickEvent, ImageFormat, IntoElement, ObjectFit, SharedString, Styled, div, img, prelude::*, px,
-};
+use gpui::{ImageFormat, IntoElement, ObjectFit, SharedString, Styled, div, img, prelude::*, px};
 
 impl StudioApp {
     fn refresh_publication_source(&mut self, cx: &mut Context<Self>) {
@@ -80,15 +82,25 @@ impl StudioApp {
                 options.height,
                 format!("Auto ({:.1})", config.figure.height),
             ),
-            (
-                "DPI",
-                options.dpi,
-                format!("Auto ({:.0})", config.figure.dpi),
-            ),
+            ("DPI", options.dpi, "Auto (300)".into()),
             ("Font size (pt)", options.font_size, "Auto".into()),
             ("Line width (pt)", options.line_width, "Auto".into()),
-            ("X min", options.xmin, "Auto".into()),
-            ("X max", options.xmax, "Auto".into()),
+            (
+                "X min",
+                options.xmin,
+                figure
+                    .default_xlim
+                    .map(|(min, _)| format!("Auto ({min:.2})"))
+                    .unwrap_or("Auto".into()),
+            ),
+            (
+                "X max",
+                options.xmax,
+                figure
+                    .default_xlim
+                    .map(|(_, max)| format!("Auto ({max:.2})"))
+                    .unwrap_or("Auto".into()),
+            ),
             ("Y min", options.ymin, "Auto".into()),
             ("Y max", options.ymax, "Auto".into()),
         ];
@@ -126,9 +138,9 @@ impl StudioApp {
         let caption = figure.caption(&options);
         let table_defaults = crate::publication::report::TABLE_CAPTIONS;
         for (index, (placeholder, value)) in [
-            ("No title".to_string(), options.title),
-            (figure.xlabel.clone(), options.xlabel),
-            (figure.ylabel.clone(), options.ylabel),
+            ("No title".to_string(), options.title.clone()),
+            (figure.math_xlabel().into(), options.xlabel.clone()),
+            (figure.math_ylabel(&options).into(), options.ylabel.clone()),
             (caption, options.caption),
             (
                 table_defaults[0].2.into(),
@@ -330,33 +342,134 @@ impl StudioApp {
             .get(self.publish.selected)
             .map(|f| self.publish.settings.options(f.key))
             .unwrap_or_default();
-        let ready = self.publish.preview.is_some() && !self.publish.preview_running;
-        let header =
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(
-                    div()
-                        .flex_1()
-                        .text_size(px(22.))
-                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .child("Publish"),
-                )
-                .child(button(&t, "save-figure-png", "Save PNG…", ready).on_click(
-                    cx.listener(|this, _, _, cx| this.save_publication_figure("png", cx)),
-                ))
-                .child(button(&t, "save-figure-svg", "Save SVG…", ready).on_click(
-                    cx.listener(|this, _, _, cx| this.save_publication_figure("svg", cx)),
-                ))
-                .child(
-                    button(&t, "save-figure-csv", "Save data CSV…", false).on_click(
-                        cx.listener(|this, _, _, cx| this.save_publication_figure("csv", cx)),
+        let format = self.publish.format;
+        let ready = self.publication_ready()
+            && !self.publish.running
+            && match format {
+                ExportFormat::Png | ExportFormat::Svg => {
+                    self.publish.preview.is_some() && !self.publish.preview_running
+                }
+                ExportFormat::Csv => !self.publish.figures.is_empty(),
+                _ => true,
+            };
+        let scope = if matches!(format, ExportFormat::Folder | ExportFormat::Markdown) {
+            format!(
+                "Current + {} marked + {} joint-fit inputs",
+                self.selection.len(),
+                self.joint.config.datasets.len()
+            )
+        } else {
+            format!("Current: {}", self.current_group_label())
+        };
+        let mut formats = div().flex().flex_wrap().gap_1();
+        for (i, choice) in ExportFormat::ALL.into_iter().enumerate() {
+            formats = formats.child(
+                chip(&t, ("export-format", i), choice.label(), choice == format).on_click(
+                    cx.listener(move |this, _, _, cx| {
+                        this.publish.format = choice;
+                        cx.notify();
+                    }),
+                ),
+            );
+        }
+        let header = div()
+            .flex_none()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .child(formats)
+                    .child(div().flex_1())
+                    .child(
+                        button(
+                            &t,
+                            "publish-export",
+                            if self.publish.running {
+                                "Exporting…"
+                            } else if format == ExportFormat::Markdown {
+                                "Copy"
+                            } else {
+                                "Export…"
+                            },
+                            ready,
+                        )
+                        .when(!ready, |d| d.disabled(true).opacity(0.45).cursor_default())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if !ready {
+                                return;
+                            }
+                            if let Some(extension) = format.extension() {
+                                this.save_publication_figure(extension, cx);
+                            } else if format == ExportFormat::Folder {
+                                this.export_publication(cx);
+                            } else {
+                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                    this.analysis_snapshot().markdown(),
+                                ));
+                                this.status = "Analysis record copied".into();
+                                cx.notify();
+                            }
+                        })),
                     ),
-                );
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .text_size(px(11.5))
+                    .text_color(t.text_muted)
+                    .child(scope)
+                    .when(format == ExportFormat::Csv, |d| {
+                        d.child("Visible curves · full data grids · axis limits do not crop CSV")
+                    })
+                    .when(format == ExportFormat::Folder, |d| {
+                        d.child("Figures, tables, report, project & arrays")
+                    })
+                    .when(format != ExportFormat::Markdown, |d| {
+                        d.child("Choose destination on export")
+                    }),
+            )
+            .when_some(self.publish.destination.clone(), |d, path| {
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .overflow_hidden()
+                                .whitespace_nowrap()
+                                .text_ellipsis()
+                                .text_size(px(11.))
+                                .text_color(t.text_muted)
+                                .child(format!("Saved: {}", path.display())),
+                        )
+                        .child(
+                            icon_button(
+                                &t,
+                                "open-publication",
+                                Icon::Folder,
+                                "Show saved output",
+                                false,
+                            )
+                            .on_click(cx.listener(move |_, _, _, cx| cx.reveal_path(&path))),
+                        ),
+                )
+            });
+        let style_open = !self.ui.sections.contains("Publication style closed");
+        let caption_open = self.ui.sections.contains("Publication caption");
         let mut controls = div()
             .id("publication-controls")
-            .w(px(268.))
+            .w(px(312.))
             .flex_none()
             .min_h_0()
             .overflow_y_scroll()
@@ -370,164 +483,273 @@ impl StudioApp {
                 .text_size(px(12.))
                 .child("Figure · current spectrum / fit"),
         );
-        controls = controls.child(div().text_size(px(11.)).text_color(t.text_muted)
-            .child("Normalized and flattened μ(E) are separate figures. CSV saves the visible curves on their full data grids; axis limits only crop the figure."));
-        for (index, figure) in self.publish.figures.iter().enumerate() {
-            controls = controls.child(
-                chip(
-                    &t,
-                    SharedString::from(format!("publication-figure-{index}")),
-                    figure.label.clone(),
-                    index == self.publish.selected,
-                )
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.publish.selected = index;
-                    this.publication_fields(cx);
-                    this.refresh_publication_preview(cx);
-                })),
-            );
-        }
-        controls = controls.child(
-            div()
-                .mt_3()
-                .text_size(px(12.))
-                .text_color(t.text_muted)
-                .child("Size & style · blank = ruviz default"),
-        );
-        for field in self.publish.numbers.iter().take(5) {
-            controls = controls.child(field.clone());
-        }
-        controls = controls.child(
-            div()
-                .flex()
-                .flex_wrap()
-                .gap_1()
-                .child(
-                    chip(&t, "publication-legend", "Legend", options.legend).on_click(cx.listener(
-                        |this, _, _, cx| {
-                            if let Some(f) = this.publish.figures.get(this.publish.selected) {
-                                let o = this
-                                    .publish
-                                    .settings
-                                    .figures
-                                    .entry(f.key.into())
-                                    .or_default();
-                                o.legend = !o.legend;
-                                this.refresh_publication_preview(cx);
-                            }
-                        },
-                    )),
-                )
-                .child(
-                    chip(
+        let more_figures = self.ui.sections.contains("Publication more figures");
+        for common in [true, false] {
+            if !common {
+                controls = controls.child(
+                    disclosure(
                         &t,
-                        "publication-grid",
-                        "Grid",
-                        options
-                            .grid
-                            .unwrap_or(ruviz::core::GridStyle::default().visible),
+                        "publication-more-figures",
+                        "More figures",
+                        more_figures,
+                        false,
                     )
                     .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(f) = this.publish.figures.get(this.publish.selected) {
-                            let o = this
-                                .publish
-                                .settings
-                                .figures
-                                .entry(f.key.into())
-                                .or_default();
-                            o.grid =
-                                Some(!o.grid.unwrap_or(ruviz::core::GridStyle::default().visible));
-                            this.refresh_publication_preview(cx);
+                        if !this.ui.sections.remove("Publication more figures") {
+                            this.ui.sections.insert("Publication more figures");
                         }
+                        cx.notify();
                     })),
-                )
-                .child(
-                    chip(&t, "publication-guides", "Guides", options.guides).on_click(cx.listener(
-                        |this, _, _, cx| {
-                            if let Some(f) = this.publish.figures.get(this.publish.selected) {
-                                let o = this
-                                    .publish
-                                    .settings
-                                    .figures
-                                    .entry(f.key.into())
-                                    .or_default();
-                                o.guides = !o.guides;
-                                this.refresh_publication_preview(cx);
-                            }
-                        },
-                    )),
-                ),
-        );
-        for (label, field) in [
-            "Title",
-            "X label",
-            "Y label",
-            "Figure caption · Enter to apply",
-            "Processing table caption",
-            "Fit parameters caption",
-            "Path results caption",
-        ]
-        .into_iter()
-        .zip(&self.publish.labels)
-        {
-            controls = controls
-                .child(
-                    div()
-                        .mt_1()
-                        .text_size(px(12.))
-                        .text_color(t.text_muted)
-                        .child(label),
-                )
-                .child(field.clone());
-        }
-        controls = controls.child(
-            div()
-                .mt_2()
-                .text_size(px(12.))
-                .text_color(t.text_muted)
-                .child("Axis limits · set or clear each pair"),
-        );
-        for field in self.publish.numbers.iter().skip(5) {
-            controls = controls.child(field.clone());
-        }
-        controls = controls.child(
-            div()
-                .mt_2()
-                .text_size(px(12.))
-                .text_color(t.text_muted)
-                .child("Visible curves"),
-        );
-        if let Some(figure) = self.publish.figures.get(self.publish.selected) {
-            for series in &figure.series {
-                let key = series.key.clone();
+                );
+                if !more_figures {
+                    continue;
+                }
+            }
+            for (index, figure) in self
+                .publish
+                .figures
+                .iter()
+                .enumerate()
+                .filter(|(_, f)| f.common() == common)
+            {
                 controls = controls.child(
                     chip(
                         &t,
-                        SharedString::from(format!("publication-series-{key}")),
-                        series.label.clone(),
-                        !options.hidden.contains(&key),
+                        SharedString::from(format!("publication-figure-{index}")),
+                        figure.label.clone(),
+                        index == self.publish.selected,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.publish.selected = index;
+                        this.publication_fields(cx);
+                        this.refresh_publication_preview(cx);
+                    })),
+                );
+            }
+        }
+        if self
+            .publish
+            .figures
+            .get(self.publish.selected)
+            .is_some_and(|f| f.normalized_series.is_some())
+        {
+            let mut modes = div().flex().flex_wrap().gap_1();
+            for (normalized, label) in [(false, "Flattened"), (true, "Normalized")] {
+                modes = modes.child(
+                    chip(
+                        &t,
+                        SharedString::from(format!("publication-energy-{normalized}")),
+                        label,
+                        options.normalized == normalized,
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(f) = this.publish.figures.get(this.publish.selected) {
-                            let o = this
-                                .publish
+                            this.publish
                                 .settings
                                 .figures
                                 .entry(f.key.into())
-                                .or_default();
-                            if !o.hidden.remove(&key) {
-                                o.hidden.insert(key.clone());
-                            }
+                                .or_default()
+                                .normalized = normalized;
+                            this.publication_fields(cx);
                             this.refresh_publication_preview(cx);
                         }
                     })),
                 );
             }
+            controls = controls.child(modes);
         }
-        controls=controls.child(button(&t,"publication-reset","Reset figure to defaults",false).on_click(cx.listener(|this,_,_,cx| {
+        controls = controls.child(
+            disclosure(
+                &t,
+                "publication-style",
+                "Style",
+                style_open,
+                options.width.is_some()
+                    || options.height.is_some()
+                    || options.dpi.is_some()
+                    || options.font_size.is_some()
+                    || options.line_width.is_some()
+                    || options.grid.is_some()
+                    || options.guides
+                    || !options.legend
+                    || !options.hidden.is_empty()
+                    || !options.shown.is_empty()
+                    || options.xmin.is_some()
+                    || options.ymin.is_some(),
+            )
+            .on_click(cx.listener(|this, _, _, cx| {
+                if !this.ui.sections.remove("Publication style closed") {
+                    this.ui.sections.insert("Publication style closed");
+                }
+                cx.notify();
+            })),
+        );
+        if style_open {
+            for field in self.publish.numbers.iter().take(5) {
+                controls = controls.child(field.clone());
+            }
+            controls = controls.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_1()
+                    .child(
+                        chip(&t, "publication-legend", "Legend", options.legend).on_click(
+                            cx.listener(|this, _, _, cx| {
+                                if let Some(f) = this.publish.figures.get(this.publish.selected) {
+                                    let o = this
+                                        .publish
+                                        .settings
+                                        .figures
+                                        .entry(f.key.into())
+                                        .or_default();
+                                    o.legend = !o.legend;
+                                    this.refresh_publication_preview(cx);
+                                }
+                            }),
+                        ),
+                    )
+                    .child(
+                        chip(&t, "publication-grid", "Grid", options.grid.unwrap_or(true))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(f) = this.publish.figures.get(this.publish.selected) {
+                                    let o = this
+                                        .publish
+                                        .settings
+                                        .figures
+                                        .entry(f.key.into())
+                                        .or_default();
+                                    o.grid = Some(!o.grid.unwrap_or(true));
+                                    this.refresh_publication_preview(cx);
+                                }
+                            })),
+                    )
+                    .child(
+                        chip(&t, "publication-guides", "Guides", options.guides).on_click(
+                            cx.listener(|this, _, _, cx| {
+                                if let Some(f) = this.publish.figures.get(this.publish.selected) {
+                                    let o = this
+                                        .publish
+                                        .settings
+                                        .figures
+                                        .entry(f.key.into())
+                                        .or_default();
+                                    o.guides = !o.guides;
+                                    this.refresh_publication_preview(cx);
+                                }
+                            }),
+                        ),
+                    ),
+            );
+            for (label, field) in ["Title · Typst", "X label · Typst", "Y label · Typst"]
+                .into_iter()
+                .zip(self.publish.labels.iter().take(3))
+            {
+                controls = controls
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(t.text_muted)
+                            .child(label),
+                    )
+                    .child(field.clone());
+            }
+            controls = controls.child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child("Use $…$ for math, e.g. $k^2 chi(k)$."),
+            );
+            controls = controls.child(
+                div()
+                    .mt_2()
+                    .text_size(px(12.))
+                    .text_color(t.text_muted)
+                    .child("Axis limits · set or clear each pair"),
+            );
+            for field in self.publish.numbers.iter().skip(5) {
+                controls = controls.child(field.clone());
+            }
+            controls = controls.child(
+                div()
+                    .mt_2()
+                    .text_size(px(12.))
+                    .text_color(t.text_muted)
+                    .child("Visible curves"),
+            );
+            if let Some(figure) = self.publish.figures.get(self.publish.selected) {
+                for series in figure.series(&options) {
+                    let key = series.key.clone();
+                    let visible = series.visible(&options);
+                    controls = controls.child(
+                        chip(
+                            &t,
+                            SharedString::from(format!("publication-series-{key}")),
+                            series.label.clone(),
+                            visible,
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(f) = this.publish.figures.get(this.publish.selected) {
+                                let o = this
+                                    .publish
+                                    .settings
+                                    .figures
+                                    .entry(f.key.into())
+                                    .or_default();
+                                if visible {
+                                    o.shown.remove(&key);
+                                    o.hidden.insert(key.clone());
+                                } else {
+                                    o.hidden.remove(&key);
+                                    o.shown.insert(key.clone());
+                                }
+                                this.refresh_publication_preview(cx);
+                            }
+                        })),
+                    );
+                }
+            }
+            controls=controls.child(button(&t,"publication-reset","Reset figure to defaults",false).on_click(cx.listener(|this,_,_,cx| {
             if let Some(f)=this.publish.figures.get(this.publish.selected) { this.publish.settings.figures.remove(f.key); }
             this.publication_fields(cx);this.refresh_publication_preview(cx);
         }))).child(div().text_size(px(11.)).text_color(t.text_muted).child("Settings apply to this figure type in the export folder and are saved with the project."));
+        }
+        controls = controls.child(
+            disclosure(
+                &t,
+                "publication-caption",
+                "Caption",
+                caption_open,
+                options.caption.is_some(),
+            )
+            .on_click(cx.listener(|this, _, _, cx| {
+                if !this.ui.sections.remove("Publication caption") {
+                    this.ui.sections.insert("Publication caption");
+                }
+                cx.notify();
+            })),
+        );
+        if caption_open {
+            for (label, field) in [
+                "Figure caption · Enter to apply",
+                "Processing table caption",
+                "Fit parameters caption",
+                "Path results caption",
+            ]
+            .into_iter()
+            .zip(self.publish.labels.iter().skip(3))
+            {
+                controls = controls
+                    .child(
+                        div()
+                            .mt_1()
+                            .text_size(px(12.))
+                            .text_color(t.text_muted)
+                            .child(label),
+                    )
+                    .child(field.clone());
+            }
+        }
         let (width, height, dpi) = options.dimensions();
         let mut preview = div()
             .flex_1()
@@ -574,17 +796,19 @@ impl StudioApp {
         }
         preview = preview.child(canvas);
         if let Some(figure) = self.publish.figures.get(self.publish.selected) {
-            preview = preview.child(div().text_size(px(12.)).child(figure.caption(&options)));
+            preview = preview.when(caption_open, |d| {
+                d.child(div().text_size(px(12.)).child(figure.caption(&options)))
+            });
             preview = preview.child(
-                button(&t, "copy-figure-caption", "Copy caption", false).on_click(cx.listener(
-                    |this, _, _, cx| {
+                icon_button(&t, "copy-figure-caption", Icon::Copy, "Copy caption", false).on_click(
+                    cx.listener(|this, _, _, cx| {
                         if let Some(f) = this.publish.figures.get(this.publish.selected) {
                             cx.write_to_clipboard(gpui::ClipboardItem::new_string(
                                 f.caption(&this.publish.settings.options(f.key)),
                             ));
                         }
-                    },
-                )),
+                    }),
+                ),
             );
         }
         if let Some(error) = &self.publish.error {
@@ -595,56 +819,15 @@ impl StudioApp {
                     .child(error.clone()),
             );
         }
-        let footer =
-            div()
-                .flex()
-                .flex_wrap()
-                .gap_2()
-                .items_center()
-                .child(
-                    button(
-                        &t,
-                        "publish-export",
-                        if self.publish.running {
-                            "Exporting…"
-                        } else {
-                            "Export analysis folder…"
-                        },
-                        false,
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| this.export_publication(cx))),
-                )
-                .child(
-                    button(&t, "copy-analysis-markdown", "Copy Markdown", false).on_click(
-                        cx.listener(|this, _: &ClickEvent, _, cx| {
-                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                this.analysis_snapshot().markdown(),
-                            ));
-                            this.status = "Analysis record copied".into();
-                            cx.notify();
-                        }),
-                    ),
-                )
-                .when_some(self.publish.destination.clone(), |d, path| {
-                    d.child(
-                        button(&t, "open-publication", "Show saved output", false)
-                            .on_click(cx.listener(move |_, _, _, cx| cx.reveal_path(&path))),
-                    )
-                })
-                .child(div().text_size(px(11.)).text_color(t.text_muted).child(
-                    "PNG + SVG + CSV · captioned report & tables · methods · project · arrays",
-                ));
         div()
             .flex_1()
             .min_w_0()
             .min_h_0()
             .flex()
             .flex_col()
-            .p_4()
-            .gap_3()
+            .p_3()
+            .gap_2()
             .child(header)
-            .child(div().text_size(px(12.)).text_color(t.text_muted)
-                .child(format!("Spectrum: {} · Export analysis folder includes the current spectrum, marked groups and joint-fit inputs.", self.current_group_label())))
             .when(self.fit_result.is_some() && self.fit_is_stale(), |d| d.child(
                 div().text_size(px(12.)).text_color(t.warn)
                     .child("Fit figures show a previous result. The spectrum or fit settings have changed; rerun the fit to update them.")))
@@ -657,7 +840,6 @@ impl StudioApp {
                     .child(controls)
                     .child(preview),
             )
-            .child(footer)
             .into_any_element()
     }
 }

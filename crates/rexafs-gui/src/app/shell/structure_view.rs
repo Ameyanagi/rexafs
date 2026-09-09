@@ -111,9 +111,9 @@ pub(crate) struct StructureState {
     // ---- 3D view ----
     pub show: bool,
     pub scene: Option<Arc<MoleculeScene>>,
+    pub viewport: Option<Entity<super::molecule_view::MoleculeViewport>>,
     pub depth: super::depth_controls::DepthControls,
     pub camera: ViewCamera,
-    pub drag: Option<(gpui::Point<gpui::Pixels>, gpui::Point<gpui::Pixels>, bool)>,
     pub view_bounds: Option<gpui::Bounds<gpui::Pixels>>,
     pub atom_style: AtomStyle,
     pub bond_mode: super::bond_geometry::BondMode,
@@ -258,9 +258,9 @@ impl StructureState {
             max_reff_input,
             show: false,
             scene: None,
+            viewport: None,
             depth: Default::default(),
             camera: ViewCamera::default(),
-            drag: None,
             view_bounds: None,
             atom_style: AtomStyle::BallStick,
             bond_mode: Default::default(),
@@ -1427,6 +1427,41 @@ impl StudioApp {
 
     fn structure_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
+        div().w_full().flex().flex_wrap().items_center().gap_2().px_2().py_1()
+            .child(self.center_focus_slider(cx))
+            .child(chip(&t, "structure-depth-cue", "Depth cue", self.structure.depth.options.depth_cue)
+                .role(accesskit::Role::CheckBox)
+                .description("Front atoms stay clear; rear atoms and bonds blend toward the background. Follows rotation and combines with Center focus.")
+                .on_click(cx.listener(|app, _, _, cx| {
+                    app.structure.depth.options.depth_cue = !app.structure.depth.options.depth_cue;
+                    cx.notify();
+                })))
+            .when(self.structure.scene.as_ref().is_some_and(|s| s.route.len() > 1), |d| {
+                d.child(chip(&t, "structure-path-focus", "Path focus", self.structure.depth.options.path_focus)
+                    .role(accesskit::Role::CheckBox)
+                    .description("Keep the selected scattering path clear, fade surrounding atoms and hide other bonds.")
+                    .on_click(cx.listener(|app, _, _, cx| {
+                        app.structure.depth.options.path_focus = !app.structure.depth.options.path_focus;
+                        cx.notify();
+                    })))
+            })
+            .child(super::controls::icon_button(
+                &t,
+                "structure-display-options",
+                crate::icons::Icon::Sliders,
+                "Structure display",
+                self.ui.menu == Some(super::controls::Menu::Structure),
+            )
+            .on_click(cx.listener(|app, event, window, cx| {
+                app.open_chrome_menu(super::controls::Menu::Structure, event, window, cx);
+            })))
+    }
+
+    pub(crate) fn structure_display_menu(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
+        let t = self.theme;
         let mut presets = div().flex().items_center().gap_1();
         for p in CameraPreset::ALL {
             presets = presets.child(
@@ -1921,6 +1956,18 @@ impl StudioApp {
         legend = legend.child(swatches);
         if let Some(frame) = self.structure_depth_frame() {
             use super::structure_depth::{FadeMode, SliceMode};
+            if frame.options.depth_cue {
+                let mut key = div().flex().items_center().gap_1().child("Depth: back");
+                for fog in [0.72, 0.54, 0.36, 0.18, 0.] {
+                    key = key.child(
+                        div()
+                            .size(px(7.))
+                            .rounded_full()
+                            .bg(super::molecule_view::depth_cue_color(t.text, t.raised, fog)),
+                    );
+                }
+                legend = legend.child(key.child("front · follows rotation"));
+            }
             if frame.options.slice != SliceMode::Off {
                 let [lo, hi] = frame.limits();
                 let counts = self

@@ -17,7 +17,7 @@ path = "src/main.rs"
 # git-pinned gpui 0.2.2 (zed rev 3060e417...) shared with ruviz-gpui, so there
 # is exactly one gpui in the tree.
 gpui = { workspace = true }
-ruviz = { workspace = true }
+ruviz = { workspace = true, features = ["typst-math"] }
 ruviz-gpui = { workspace = true }
 
 # Platform entry point: gpui 0.2.2 has no zero-arg `Application::new()`; the
@@ -33,6 +33,8 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "3060e417
 rexafs = { path = "../rexafs", default-features = true, features = ["amcsd", "materials-project", "cod"] }
 feff10 = { workspace = true, optional = true }
 
+accesskit = "0.25"
+raw-window-handle = "0.6"
 anyhow = "1.0"
 base64 = "0.23"
 flate2 = { workspace = true }
@@ -56,3 +58,13 @@ serde_json = { workspace = true, features = ["float_roundtrip"] }
 default = ["refeff-runner", "feff10-runner"]
 refeff-runner = ["rexafs/refeff-runner"]
 feff10-runner = ["rexafs/feff10-runner", "dep:feff10"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+accesskit_macos = "0.27"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+accesskit_windows = "0.35"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+accesskit_unix = "0.23"

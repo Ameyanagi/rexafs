@@ -37,27 +37,36 @@ impl StudioApp {
         for (batch, path, pending) in pending.into_iter().take(24) {
             let path = path.clone();
             list = list.child(
-                div()
-                    .id(SharedString::from(format!(
+                crate::accessibility::Control::new(
+                    div().id(SharedString::from(format!(
                         "pending-{batch}-{}",
                         path.display()
-                    )))
-                    .cursor_pointer()
-                    .py_1()
-                    .text_color(self.theme.warn)
-                    .child(format!(
-                        "{} · {}",
+                    ))),
+                    format!(
+                        "Review {}: {}",
                         path.file_name().unwrap_or_default().to_string_lossy(),
                         pending.reason
-                    ))
-                    .on_click(cx.listener(move |app, _: &ClickEvent, window, cx| {
-                        let index = app
-                            .pending_clusters(batch)
-                            .iter()
-                            .position(|c| c.files.contains(&path))
-                            .unwrap_or(0);
-                        app.open_import_review(batch, index, window, cx);
-                    })),
+                    ),
+                    accesskit::Role::Button,
+                )
+                .tab_index(0)
+                .key_context("Control")
+                .cursor_pointer()
+                .py_1()
+                .text_color(self.theme.warn)
+                .child(format!(
+                    "{} · {}",
+                    path.file_name().unwrap_or_default().to_string_lossy(),
+                    pending.reason
+                ))
+                .on_click(cx.listener(move |app, _: &ClickEvent, window, cx| {
+                    let index = app
+                        .pending_clusters(batch)
+                        .iter()
+                        .position(|c| c.files.contains(&path))
+                        .unwrap_or(0);
+                    app.open_import_review(batch, index, window, cx);
+                })),
             );
         }
         Some(list)

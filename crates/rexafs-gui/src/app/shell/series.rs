@@ -8,13 +8,114 @@ use gpui::{
     relative,
 };
 
+use super::controls::{Tooltip, icon, icon_button};
 use super::{MONO, button, chip, section_label, segment, segmented};
 use crate::app::{
     FrameFirst, FrameJumpBack, FrameJumpFwd, FrameLast, FrameNext, FramePrev, SeriesSpace,
     StudioApp, TrendSource,
 };
+use crate::icons::Icon;
 
 impl StudioApp {
+    pub(crate) fn series_ready(&self) -> bool {
+        self.active_scan.is_some_and(|scan| {
+            self.catalog.scans.get(scan).is_some_and(|s| s.len > 0)
+                && self
+                    .operando
+                    .as_ref()
+                    .is_some_and(|data| data.scan == scan && data.scan_len > 0)
+        })
+    }
+
+    fn choose_series_scan(&mut self, scan: usize, cx: &mut Context<Self>) {
+        let Some(source) = self.catalog.scans.get(scan) else {
+            return;
+        };
+        if crate::app::active_scan_indices(&self.group_registry, source.start, source.len, 1)
+            .is_empty()
+        {
+            return;
+        }
+        if self.active_scan != Some(scan) {
+            self.operando = None;
+            self.operando_plots = None;
+            self.time_pos = 0;
+            self.pending_time_pos = None;
+        }
+        self.active_scan = Some(scan);
+        self.ui.scan_picker = false;
+        self.ensure_operando(cx);
+        cx.notify();
+    }
+
+    fn series_scan_picker(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let t = self.theme;
+        let mut list = div()
+            .id("series-scan-list")
+            .w_full()
+            .max_w(px(560.))
+            .max_h(px(400.))
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap_2();
+        for (index, scan) in self.catalog.scans.iter().enumerate() {
+            let available =
+                !crate::app::active_scan_indices(&self.group_registry, scan.start, scan.len, 1)
+                    .is_empty();
+            let label = scan.label.clone();
+            list = list.child(
+                button(&t, ("select-series-scan", index), label, false)
+                    .h(px(40.))
+                    .w_full()
+                    .gap_2()
+                    .child(div().flex_1())
+                    .child(
+                        div()
+                            .text_color(t.text_muted)
+                            .child(format!("{} frames", scan.len)),
+                    )
+                    .when(!available, |d| {
+                        d.disabled(true)
+                            .opacity(0.45)
+                            .tab_stop(false)
+                            .cursor_default()
+                    })
+                    .when(available, |d| {
+                        d.on_click(
+                            cx.listener(move |app, _, _, cx| app.choose_series_scan(index, cx)),
+                        )
+                    }),
+            );
+        }
+        div()
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .p_4()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap_3()
+            .child(div().text_size(px(16.)).child("Select scan"))
+            .child(list)
+            .child(
+                button(&t, "series-import-scan", "Import…", false)
+                    .on_click(cx.listener(|app, _, _, cx| app.open_folder(cx))),
+            )
+            .when(self.series_ready(), |d| {
+                d.child(
+                    button(&t, "series-cancel-picker", "Cancel", false).on_click(cx.listener(
+                        |app, _, _, cx| {
+                            app.ui.scan_picker = false;
+                            cx.notify();
+                        },
+                    )),
+                )
+            })
+    }
+
     /// "<scan> · N frames" · Refresh overview.
     pub(crate) fn series_inspector_header(
         &self,
@@ -47,13 +148,18 @@ impl StudioApp {
                     .child(label),
             )
             .child(
-                button(&t, "series-refresh", "Refresh overview", false).on_click(cx.listener(
-                    |this, _: &ClickEvent, _w, cx| {
-                        this.operando = None;
-                        this.ensure_operando(cx);
-                        cx.notify();
-                    },
-                )),
+                icon_button(
+                    &t,
+                    "series-refresh",
+                    Icon::Refresh,
+                    "Refresh overview",
+                    false,
+                )
+                .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
+                    this.operando = None;
+                    this.ensure_operando(cx);
+                    cx.notify();
+                })),
             )
     }
 
@@ -62,37 +168,26 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let t = self.theme;
+        if self.ui.scan_picker {
+            return self.series_scan_picker(cx).into_any_element();
+        }
         let bar = self.series_plot_bar(cx);
         let Some((heatmap, chik, trend)) = self
             .operando_plots
             .as_ref()
+            .filter(|_| self.series_ready())
             .map(|p| (p.heatmap.clone(), p.chik.clone(), p.trend.clone()))
         else {
-            let (hint, detail): (SharedString, Option<SharedString>) = if self.operando_running {
-                (
-                    "Building the scan overview…".into(),
-                    Some(self.status.clone()),
-                )
-            } else if self.active_scan.is_some() {
-                (
-                    "No overview for this selection — pick a scan in the Scans tab".into(),
-                    Some(self.status.clone()),
-                )
-            } else if self.catalog.scans.is_empty() {
-                (
-                    "Open a folder of frames, then pick a scan in the Scans tab".into(),
-                    None,
-                )
-            } else {
-                ("Pick a scan in the Scans tab".into(), None)
-            };
+            let running = self.operando_running;
+            let has_scan = self.active_scan.is_some();
+            let can_select = !self.catalog.scans.is_empty();
             return div()
                 .flex_1()
                 .min_h_0()
                 .min_w_0()
                 .flex()
                 .flex_col()
-                .child(bar)
+                .when(has_scan, |d| d.child(bar))
                 .child(
                     div()
                         .flex_1()
@@ -100,13 +195,41 @@ impl StudioApp {
                         .flex_col()
                         .items_center()
                         .justify_center()
-                        .gap_1()
-                        .child(div().text_color(t.text).child(hint))
-                        .children(
-                            detail.map(|d| {
-                                div().text_size(px(11.)).text_color(t.text_muted).child(d)
-                            }),
-                        ),
+                        .gap_3()
+                        .when(running, |d| d.child("Building overview…"))
+                        .when(!running, |d| {
+                            d.child(
+                                button(
+                                    &t,
+                                    "series-select-scan",
+                                    if can_select {
+                                        "Select scan"
+                                    } else {
+                                        "Import frames…"
+                                    },
+                                    true,
+                                )
+                                .on_click(cx.listener(
+                                    move |app, _, _, cx| {
+                                        if can_select {
+                                            app.ui.scan_picker = true;
+                                            cx.notify();
+                                        } else {
+                                            app.open_folder(cx);
+                                        }
+                                    },
+                                )),
+                            )
+                        })
+                        .when(has_scan && !running, |d| {
+                            d.child(
+                                div()
+                                    .max_w(px(540.))
+                                    .text_size(px(11.))
+                                    .text_color(t.warn)
+                                    .child(self.status.clone()),
+                            )
+                        }),
                 )
                 .into_any_element();
         };
@@ -255,7 +378,7 @@ impl StudioApp {
             );
         }
         div()
-            .h(px(36.))
+            .min_h(px(36.))
             .w_full()
             .min_w_0()
             .flex_none()
@@ -266,35 +389,30 @@ impl StudioApp {
             .bg(t.surface)
             .border_b_1()
             .border_color(t.border)
-            .overflow_hidden()
+            .flex_wrap()
             .child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(t.text_muted)
-                    .child("Show"),
+                button(&t, "series-change-scan", self.active_scan
+                    .and_then(|ix| self.catalog.scans.get(ix)).map(|s| s.label.clone())
+                    .unwrap_or_else(|| "Select scan".into()), false)
+                    .max_w(px(180.)).overflow_hidden().text_ellipsis()
+                    .child(icon(&t, Icon::ChevronDown))
+                    .on_click(cx.listener(|app, _, _, cx| { app.ui.scan_picker = true; cx.notify(); })),
             )
             .child(seg)
             .child(div().w(px(1.)).h(px(18.)).bg(t.border))
-            .child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(t.text_muted)
-                    .whitespace_nowrap()
-                    .overflow_hidden()
-                    .child("click a heatmap row to jump · ←/→ step · ⇧←/→ 1 % · Home/End"),
-            )
             .child(div().flex_1())
             .child(
                 chip(
                     &t,
                     "series-preview",
-                    "preview · sampled frames",
+                    if self.batch_preview { "Sampled frames" } else { "All frames" },
                     self.batch_preview,
                 )
                 .on_click(
                     cx.listener(|this, _: &ClickEvent, _w, cx| this.toggle_batch_preview(cx)),
-                ),
+                ).tooltip(move |_, cx| cx.new(|_| Tooltip { theme: t, label: "Calculation scope. The overview is always sampled; All frames calculates every surviving frame.".into() }).into()),
             )
+            .child(icon_button(&t, "series-shortcuts", Icon::Help, "Click a heatmap row to jump. ←/→: frame; Shift+←/→: 1%; Home/End: first/last.", false))
     }
 
     fn time_scrubber(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -359,7 +477,6 @@ impl StudioApp {
             .child(self.series_trends_section(cx))
             .child(self.series_lcf_section(cx))
             .child(self.series_batch_section(cx))
-            .child(self.note("Every frame runs through the Normalize / Background / Transform parameters of this project; per-frame overrides apply where set."))
             .child(div().h(px(12.)).bg(t.surface))
     }
 

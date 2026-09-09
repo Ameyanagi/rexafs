@@ -1,0 +1,76 @@
+{
+  "perf-baseline": {
+    "rotation": {
+      "cpu_frame": {
+        "n": 37,
+        "median_ms": 42.056041,
+        "p95_ms": 48.575950199999994,
+        "max_ms": 51.608833
+      },
+      "cpu_canvas": {
+        "n": 0
+      },
+      "input_handler_to_canvas_end": {
+        "n": 0
+      }
+    },
+    "fading": {
+      "cpu_frame": {
+        "n": 17,
+        "median_ms": 54.120208,
+        "p95_ms": 87.2087672,
+        "max_ms": 94.004
+      },
+      "cpu_canvas": {
+        "n": 0
+      },
+      "input_handler_to_canvas_end": {
+        "n": 0
+      }
+    }
+  },
+  "perf-final": {
+    "rotation": {
+      "cpu_frame": {
+        "n": 31,
+        "median_ms": 25.995875,
+        "p95_ms": 33.849792,
+        "max_ms": 38.65625
+      },
+      "cpu_canvas": {
+        "n": 31,
+        "median_ms": 10.888,
+        "p95_ms": 14.2785,
+        "max_ms": 15.009
+      },
+      "input_handler_to_canvas_end": {
+        "n": 21,
+        "median_ms": 10.216,
+        "p95_ms": 29.41,
+        "max_ms": 29.506
+      }
+    },
+    "fading": {
+      "cpu_frame": {
+        "n": 18,
+        "median_ms": 28.0554375,
+        "p95_ms": 34.51504375,
+        "max_ms": 39.316375
+      },
+      "cpu_canvas": {
+        "n": 18,
+        "median_ms": 9.8795,
+        "p95_ms": 12.198049999999999,
+        "max_ms": 14.006
+      },
+      "input_handler_to_canvas_end": {
+        "n": 12,
+        "median_ms": 15.829,
+        "p95_ms": 26.527449999999998,
+        "max_ms": 27.122
+      }
+    }
+  },
+  "source_file_sha256": "34a71c6b24d8698739501e083e6ea41abcd085a755fda25a0836a06ae5ebd9c4",
+  "candidate_binary_sha256": "5cf440f25803acc363db6a738b83ef3c03c0682847bfe1ed75c6ae4fe7097076"
+}

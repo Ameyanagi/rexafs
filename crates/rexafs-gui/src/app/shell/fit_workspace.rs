@@ -1,7 +1,12 @@
 //! Fitting is a workspace, not a stack of inspector sections. Navigation is
 //! freely reversible; only actions with missing prerequisites are disabled.
-use super::{button, chip, section_label};
+use super::{
+    button, chip,
+    controls::{Tooltip, disclosure, icon_button},
+    section_label,
+};
 use crate::app::StudioApp;
+use crate::icons::Icon;
 use gpui::{ClickEvent, Context, IntoElement, ParentElement, Styled, div, prelude::*, px};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,8 +30,8 @@ impl FitStep {
             Self::Structure => "Structure",
             Self::Calculate => "Calculate",
             Self::Paths => "Paths",
-            Self::Model => "Model & fit",
-            Self::Results => "Results & batch",
+            Self::Model => "Model",
+            Self::Results => "Results",
         }
     }
     fn hint(self) -> &'static str {
@@ -142,7 +147,7 @@ impl StudioApp {
             .and_then(|i| self.catalog.scans.get(i))
             .is_none()
         {
-            return Some("Open Scans in the data panel and select a scan.");
+            return Some("Select a scan in Series.");
         }
         if let Some(reason) = self.fit_blocker() {
             return Some(reason);
@@ -179,10 +184,11 @@ impl StudioApp {
         }
         let mut nav = div()
             .flex()
+            .flex_wrap()
             .flex_none()
-            .gap_2()
+            .gap_1()
             .px_3()
-            .py_2()
+            .py_1()
             .bg(t.surface)
             .border_b_1()
             .border_color(t.border);
@@ -194,75 +200,22 @@ impl StudioApp {
                 FitStep::Model => self.fit_result.is_some() && !self.fit_is_stale(),
                 FitStep::Results => self.fit_result.is_some(),
             };
-            nav =
-                nav.child(
-                    div()
-                        .id(("fit-workflow", i))
-                        .flex_1()
-                        .min_w_0()
-                        .px_2()
-                        .py_2()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(if step == dest { t.accent } else { t.border })
-                        .when(step == dest, |d| d.bg(t.raised))
-                        .cursor_pointer()
-                        .hover(|d| d.bg(t.raised))
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
-                            this.set_fit_step(dest, cx)
-                        }))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .size(px(20.))
-                                        .flex_none()
-                                        .rounded_full()
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .text_size(px(10.))
-                                        .bg(if done {
-                                            t.success
-                                        } else if step == dest {
-                                            t.accent
-                                        } else {
-                                            t.border
-                                        })
-                                        .text_color(if done || step == dest {
-                                            t.bg
-                                        } else {
-                                            t.text_muted
-                                        })
-                                        .child(if done {
-                                            "✓".to_string()
-                                        } else {
-                                            (i + 1).to_string()
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .child(dest.label()),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .mt_1()
-                                .text_size(px(10.5))
-                                .text_color(t.text_muted)
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .text_ellipsis()
-                                .child(dest.hint()),
-                        ),
-                );
+            nav = nav.child(
+                chip(&t, ("fit-workflow", i), dest.label(), step == dest)
+                    .when(done, |d| {
+                        d.child(super::controls::icon(&t, Icon::Check).size(px(12.)))
+                    })
+                    .tooltip(move |_, cx| {
+                        cx.new(|_| Tooltip {
+                            label: dest.hint().into(),
+                            theme: t,
+                        })
+                        .into()
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| this.set_fit_step(dest, cx))),
+            );
         }
-        let (title, description, action, enabled) = match step {
+        let (_title, description, action, enabled) = match step {
             FitStep::Structure => (
                 "Start with a structure",
                 "Browse curated standards, search a database, or import your own structure.",
@@ -303,36 +256,56 @@ impl StudioApp {
                 true,
             ),
         };
+        let blocker = match step {
+            FitStep::Model => self.fit_blocker(),
+            FitStep::Structure if !enabled => Some("Choose a structure"),
+            FitStep::Calculate if !enabled && !self.feff_running => {
+                Some("Choose a structure or FEFF input")
+            }
+            FitStep::Paths if selected == 0 => Some("Select at least one path"),
+            _ => None,
+        };
         let header = div()
             .flex_none()
-            .px_4()
-            .py_3()
+            .px_3()
+            .py_2()
             .flex()
             .items_center()
-            .gap_3()
+            .flex_wrap()
+            .gap_2()
             .child(
                 div()
                     .flex_1()
-                    .min_w_0()
-                    .child(
-                        div()
-                            .text_size(px(20.))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child(title),
-                    )
-                    .child(
-                        div()
-                            .mt_1()
-                            .text_size(px(12.))
-                            .text_color(t.text_muted)
-                            .child(description),
-                    ),
+                    .min_w(px(140.))
+                    .text_size(px(11.5))
+                    .text_color(t.warn)
+                    .when_some(blocker, |d, reason| d.child(reason)),
+            )
+            .child(
+                icon_button(
+                    &t,
+                    "fit-parameters-toggle",
+                    Icon::Sliders,
+                    "Show or hide fit controls",
+                    self.context_panel_open,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.context_panel_open = !this.context_panel_open;
+                    cx.notify();
+                })),
             )
             .child(
                 button(&t, "fit-workflow-action", action, enabled)
-                    .h(px(32.))
-                    .px_3()
-                    .when(!enabled, |d| d.opacity(0.45).cursor_default())
+                    .tooltip(move |_, cx| {
+                        cx.new(|_| Tooltip {
+                            label: description.into(),
+                            theme: t,
+                        })
+                        .into()
+                    })
+                    .when(!enabled, |d| {
+                        d.disabled(true).opacity(0.45).cursor_default()
+                    })
                     .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
                         if !enabled {
                             return;
@@ -353,6 +326,14 @@ impl StudioApp {
                         }
                     })),
             );
+        let available = self.viewport_w
+            - if self.data_panel_open { 260. } else { 0. }
+            - if self.assistant_host == super::assistant_shell::AssistantHost::Docked {
+                self.structure.settings.assistant_panel_width
+            } else {
+                0.
+            };
+        let stacked = available < 700.;
         let content = match step {
             FitStep::Structure | FitStep::Calculate => {
                 let library = step == FitStep::Structure;
@@ -382,25 +363,39 @@ impl StudioApp {
                             ),
                         );
                 }
+                let custom_open = self.ui.sections.contains("Custom FEFF input");
                 let footer = div()
-                    .px_3()
-                    .py_3()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
+                    .px_2()
+                    .py_1()
                     .border_t_1()
                     .border_color(t.border)
-                    .child(section_label(
-                        &t,
-                        if library {
-                            "Already have FEFF paths?"
-                        } else {
-                            "Custom FEFF input"
-                        },
-                    ))
-                    .child(actions);
+                    .child(
+                        disclosure(
+                            &t,
+                            "custom-feff-input",
+                            if library {
+                                "Import paths"
+                            } else {
+                                "Custom FEFF input"
+                            },
+                            custom_open,
+                            false,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if !this.ui.sections.remove("Custom FEFF input") {
+                                this.ui.sections.insert("Custom FEFF input");
+                            }
+                            cx.notify();
+                        })),
+                    )
+                    .when(custom_open, |d| d.child(actions));
                 let sidebar = div()
-                    .w(px(410.))
+                    .w(px(if stacked {
+                        available.max(240.) - 24.
+                    } else {
+                        340.
+                    }))
+                    .max_w_full()
                     .flex_none()
                     .min_h_0()
                     .flex()
@@ -454,7 +449,10 @@ impl StudioApp {
                     .gap_2()
                     .px_3()
                     .pb_3()
-                    .child(sidebar)
+                    .when(stacked, |d| d.flex_col())
+                    .when(self.context_panel_open, |d| {
+                        d.child(sidebar.when(stacked, |d| d.max_h(px(320.))))
+                    })
                     .child(self.structure_center(cx))
                     .into_any_element()
             }
@@ -509,14 +507,18 @@ impl StudioApp {
                                 .filter(|(_, p)| p.spec.enabled)
                                 .map(|(i, _)| i)
                                 .collect();
-                            div().flex().flex_col().child(self.note("Path expressions reference the shared variables in Parameters. Numeric constants keep a path quantity fixed."))
-                            .children(indices.into_iter().map(|i|self.fit_path_cells(i,cx))).into_any_element()
+                            div()
+                                .flex()
+                                .flex_col()
+                                .children(indices.into_iter().map(|i| self.fit_path_cells(i, cx)))
+                                .into_any_element()
                         }
                         _ => self.fit_params_section(cx).into_any_element(),
                     }
                 };
                 let panel = div()
-                    .w(px(390.))
+                    .w(px(if stacked { available.max(240.) } else { 330. }))
+                    .max_w_full()
                     .min_h_0()
                     .flex_none()
                     .flex()
@@ -547,11 +549,9 @@ impl StudioApp {
                                 t.text_muted
                             })
                             .child(if results && tab == 2 {
-                                self.batch_blocker()
-                                    .unwrap_or("Ready to apply this model to the selected scan.")
+                                self.batch_blocker().unwrap_or("Ready")
                             } else {
-                                self.fit_blocker()
-                                    .unwrap_or("Ready to fit · results are saved in History.")
+                                self.fit_blocker().unwrap_or("Ready")
                             }),
                     );
                 let main = if !results && self.joint.config.enabled && self.joint.setup {
@@ -568,11 +568,12 @@ impl StudioApp {
                     .min_w_0()
                     .min_h_0()
                     .flex()
+                    .when(stacked, |d| d.flex_col())
                     .child(main)
                     .when(
                         self.context_panel_open
                             && !(step == FitStep::Model && self.joint.config.enabled),
-                        |d| d.child(panel),
+                        |d| d.child(panel.when(stacked, |d| d.max_h(px(300.)))),
                     )
                     .into_any_element()
             }
@@ -616,9 +617,9 @@ impl StudioApp {
                 div()
                     .flex_none()
                     .mx_3()
-                    .mb_2()
-                    .px_3()
-                    .py_2()
+                    .mb_1()
+                    .px_2()
+                    .py_1()
                     .rounded_md()
                     .bg(t.surface)
                     .flex()
@@ -637,8 +638,8 @@ impl StudioApp {
                     ))
                     .child(
                         div()
-                            .w(px(230.))
-                            .flex_none()
+                            .max_w(px(230.))
+                            .min_w_0()
                             .overflow_hidden()
                             .whitespace_nowrap()
                             .text_ellipsis()

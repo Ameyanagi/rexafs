@@ -17,7 +17,7 @@ impl StudioApp {
             a: 1.,
         };
         let mut strip = div()
-            .h(px(58.))
+            .h(px(36.))
             .w_full()
             .min_w_0()
             .flex_none()
@@ -31,63 +31,56 @@ impl StudioApp {
             .border_color(t.border);
         for stage in Stage::ALL {
             let active = self.stage == stage;
-            let (status, summary) = self.stage_summary(stage);
+            let (status, _) = self.stage_summary(stage);
             let tip = self.stage_tooltip(stage);
             strip = strip.child(
-                div()
-                    .id(SharedString::from(format!("stage-{}", stage.number())))
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .justify_center()
-                    .gap_1()
-                    .px_3()
-                    .rounded_md()
-                    .cursor_pointer()
-                    .border_1()
-                    .border_color(if active { t.accent } else { t.border })
-                    .bg(if active { tint(0.15) } else { t.surface })
-                    .hover(move |d| d.bg(tint(0.09)).border_color(t.accent))
-                    .tooltip(move |_, cx| cx.new(|_| tip.clone()).into())
-                    .on_click(
-                        cx.listener(move |this, _: &ClickEvent, _, cx| this.set_stage(stage, cx)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .text_size(px(12.))
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(if active { t.accent } else { t.text })
-                                    .child(stage.name()),
-                            )
-                            .child(div().flex_1())
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .w(px(6.))
-                                    .h(px(6.))
-                                    .rounded_full()
-                                    .bg(status.color(&t)),
-                            ),
-                    )
-                    .when(self.viewport_w >= 950., |d| {
-                        d.child(
+                crate::accessibility::Control::new(
+                    div().id(SharedString::from(format!("stage-{}", stage.number()))),
+                    stage.name(),
+                    accesskit::Role::Tab,
+                )
+                .selected(active)
+                .tab_index(0)
+                .key_context("Control")
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .justify_center()
+                .gap_1()
+                .px_2()
+                .rounded_md()
+                .cursor_pointer()
+                .border_1()
+                .border_color(if active { t.accent } else { t.border })
+                .bg(if active { tint(0.15) } else { t.surface })
+                .hover(move |d| d.bg(tint(0.09)).border_color(t.accent))
+                .focus(|d| d.border_color(t.accent))
+                .tooltip(move |_, cx| cx.new(|_| tip.clone()).into())
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set_stage(stage, cx)))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
                             div()
-                                .font_family(MONO)
-                                .text_size(px(10.))
-                                .text_color(t.text_muted)
-                                .whitespace_nowrap()
-                                .overflow_hidden()
-                                .text_ellipsis()
-                                .child(summary),
+                                .flex_none()
+                                .text_size(px(12.))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(if active { t.accent } else { t.text })
+                                .child(stage.name()),
                         )
-                    }),
+                        .child(div().flex_1())
+                        .child(
+                            div()
+                                .flex_none()
+                                .w(px(6.))
+                                .h(px(6.))
+                                .rounded_full()
+                                .bg(status.color(&t)),
+                        ),
+                ),
             );
         }
         strip

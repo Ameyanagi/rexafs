@@ -352,7 +352,8 @@ impl StudioApp {
             );
         }
         div()
-            .h(px(36.))
+            .min_h(px(32.))
+            .py_1()
             .w_full()
             .min_w_0()
             .flex_none()
@@ -363,23 +364,22 @@ impl StudioApp {
             .bg(t.surface)
             .border_b_1()
             .border_color(t.border)
-            .overflow_hidden()
-            .child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(t.text_muted)
-                    .child("Space"),
-            )
+            .flex_wrap()
             .child(seg)
             .child(div().w(px(1.)).h(px(18.)).bg(t.border))
-            .child(
-                chip(&t, "fit-paths", "Contributions", v.fit_show_paths).on_click(cx.listener(
-                    |this, _: &ClickEvent, _w, cx| {
-                        this.stage_view.fit_show_paths = !this.stage_view.fit_show_paths;
-                        this.rebuild_fit_plots(cx);
-                        cx.notify();
-                    },
-                )),
+            .when(
+                self.fit_result.is_some() || self.joint.result_config.is_some(),
+                |d| {
+                    d.child(
+                        chip(&t, "fit-paths", "Contributions", v.fit_show_paths).on_click(
+                            cx.listener(|this, _: &ClickEvent, _w, cx| {
+                                this.stage_view.fit_show_paths = !this.stage_view.fit_show_paths;
+                                this.rebuild_fit_plots(cx);
+                                cx.notify();
+                            }),
+                        ),
+                    )
+                },
             )
             .child(
                 chip(&t, "fit-re", "Re χ(R)", v.fit_show_re).on_click(cx.listener(
@@ -400,18 +400,6 @@ impl StudioApp {
                         cx.notify();
                     },
                 )),
-            )
-            .child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(t.text_muted)
-                    .whitespace_nowrap()
-                    .overflow_hidden()
-                    .child(if self.fit_plots.is_some() {
-                        "drag edges to adjust ranges"
-                    } else {
-                        "data preview"
-                    }),
             )
             .child(div().flex_1())
     }

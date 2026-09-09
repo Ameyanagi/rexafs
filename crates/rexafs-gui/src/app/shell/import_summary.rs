@@ -10,9 +10,11 @@ fn action(
     t: &Theme,
     id: impl Into<gpui::ElementId>,
     label: impl Into<SharedString>,
-) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
+) -> crate::accessibility::Control {
+    let label = label.into();
+    crate::accessibility::Control::new(div().id(id), label.clone(), accesskit::Role::Button)
+        .tab_index(0)
+        .key_context("Control")
         .flex_none()
         .px_2()
         .py_1()
@@ -24,11 +26,64 @@ fn action(
         .text_size(px(11.5))
         .cursor_pointer()
         .hover(|d| d.border_color(t.accent))
-        .child(label.into())
+        .child(label)
 }
 
 impl StudioApp {
     pub(crate) fn import_summary(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let t = self.theme;
+        let open = !self.ui.sections.contains("source-details-closed");
+        let warning_count = self
+            .import_preview
+            .as_ref()
+            .map(|p| p.diagnostics.warnings().len())
+            .unwrap_or(0);
+        let mut panel = div().flex().flex_col().child(
+            controls::disclosure(&t, "source-disclosure", "Source", open, false)
+                .when(warning_count > 0, |d| {
+                    d.child(
+                        div()
+                            .text_color(t.warn)
+                            .child(format!("{warning_count} warnings")),
+                    )
+                })
+                .on_click(cx.listener(|app, _, _, cx| {
+                    if !app.ui.sections.remove("source-details-closed") {
+                        app.ui.sections.insert("source-details-closed");
+                    }
+                    cx.notify();
+                })),
+        );
+        if !self.import_preview_error.is_empty() {
+            panel = panel.child(
+                div()
+                    .px_3()
+                    .text_color(t.warn)
+                    .child(self.import_preview_error.clone()),
+            );
+        }
+        if self.ui_params().align_to_ref {
+            panel = panel.child(
+                div()
+                    .px_3()
+                    .text_color(t.warn)
+                    .text_size(px(11.))
+                    .child(format!(
+                        "Reference alignment · {} eV",
+                        self.ui_params()
+                            .align_target
+                            .map(|v| format!("{v:.3}"))
+                            .unwrap_or("no target".into())
+                    )),
+            );
+        }
+        if open {
+            panel = panel.child(self.import_summary_details(cx));
+        }
+        panel
+    }
+
+    fn import_summary_details(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
         let mut card = div()
             .flex()
@@ -68,6 +123,16 @@ impl StudioApp {
         let Some(group) = target.group_id.clone() else {
             return card.into_any_element();
         };
+        let id = group.clone();
+        card = card.child(
+            action(&t, "remap-current", "Re-map columns…").on_click(cx.listener(
+                move |app, _, window, cx| {
+                    if let Some(ix) = app.menu_index(&id) {
+                        app.open_import_editor(ix, window, cx);
+                    }
+                },
+            )),
+        );
         card = card.child(section_label(&t, "Import")).child(format!(
             "Source: {}",
             target
@@ -159,16 +224,6 @@ impl StudioApp {
         } else {
             "0 eV · original source axis".into()
         });
-        let id = group.clone();
-        card = card.child(
-            action(&t, "remap-current", "Re-map columns…").on_click(cx.listener(
-                move |app, _, window, cx| {
-                    if let Some(ix) = app.menu_index(&id) {
-                        app.open_import_editor(ix, window, cx);
-                    }
-                },
-            )),
-        );
         if application.is_some() {
             let id = group.clone();
             card = card.child(

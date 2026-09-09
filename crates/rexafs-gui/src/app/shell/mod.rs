@@ -13,6 +13,8 @@ pub(crate) mod assistant_shell;
 mod assistant_state;
 mod bond_geometry;
 pub mod center;
+mod chrome;
+pub(crate) mod controls;
 mod depth_controls;
 pub mod fit;
 pub(crate) mod fit_preview;
@@ -29,6 +31,7 @@ pub mod inspector;
 mod joint_browser;
 pub(crate) mod joint_fit;
 pub mod journal;
+mod marked_removal;
 mod molecular_geometry;
 pub mod molecule_view;
 pub mod palette;
@@ -38,6 +41,7 @@ pub mod path_picker;
 pub(crate) mod path_routing;
 pub(crate) mod publish;
 pub mod series;
+mod spectrum_colors;
 pub mod stage_strip;
 mod structure_depth;
 pub mod structure_view;
@@ -233,9 +237,12 @@ pub fn chip(
     id: impl Into<gpui::ElementId>,
     label: impl Into<SharedString>,
     on: bool,
-) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
+) -> crate::accessibility::Control {
+    let label = label.into();
+    crate::accessibility::Control::new(div().id(id), label.clone(), accesskit::Role::Button)
+        .selected(on)
+        .tab_index(0)
+        .key_context("Control")
         .h(px(22.))
         .px_2()
         .flex()
@@ -255,7 +262,8 @@ pub fn chip(
         })
         .when(!on, |d| d.border_color(t.border).text_color(t.text_muted))
         .hover(|d| d.bg(t.raised))
-        .child(label.into())
+        .focus(|d| d.border_color(t.accent))
+        .child(label)
 }
 
 /// One button of a segmented control.
@@ -265,9 +273,12 @@ pub fn segment(
     label: impl Into<SharedString>,
     on: bool,
     first: bool,
-) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
+) -> crate::accessibility::Control {
+    let label = label.into();
+    crate::accessibility::Control::new(div().id(id), label.clone(), accesskit::Role::Tab)
+        .selected(on)
+        .tab_index(0)
+        .key_context("Control")
         .h(px(24.))
         .px_2()
         .flex()
@@ -280,7 +291,8 @@ pub fn segment(
         .when(!on, |d| {
             d.text_color(t.text_muted).hover(|d| d.bg(t.raised))
         })
-        .child(label.into())
+        .focus(|d| d.bg(t.raised).text_color(t.accent))
+        .child(label)
 }
 
 /// Container for a row of [`segment`]s.
@@ -301,9 +313,11 @@ pub fn button(
     id: impl Into<gpui::ElementId>,
     label: impl Into<SharedString>,
     primary: bool,
-) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
+) -> crate::accessibility::Control {
+    let label = label.into();
+    crate::accessibility::Control::new(div().id(id), label.clone(), accesskit::Role::Button)
+        .tab_index(0)
+        .key_context("Control")
         .h(px(24.))
         .px_2()
         .flex()
@@ -324,7 +338,8 @@ pub fn button(
                 .text_color(t.text)
                 .hover(|d| d.border_color(t.accent))
         })
-        .child(label.into())
+        .focus(|d| d.border_color(t.accent))
+        .child(label)
 }
 
 impl StudioApp {
@@ -356,15 +371,11 @@ impl StudioApp {
             Stage::Publish => self.publish_panel(cx),
             _ => self.stage_center(cx).into_any_element(),
         };
-        let has_groups = !self.catalog.is_empty()
-            || !self.derived.is_empty()
-            || !self.current_path.as_os_str().is_empty()
-            || self.catalog.scanning
-            || !self.intake.history.is_empty();
-        let groups =
-            (self.data_panel_open && has_groups).then(|| self.groups_panel(cx).into_any_element());
+        let groups = self
+            .data_panel_open
+            .then(|| self.groups_panel(cx).into_any_element());
         let inspector = (self.context_panel_open
-            && has_groups
+            && (self.stage != Stage::Series || self.series_ready())
             && !matches!(self.stage, Stage::Fit | Stage::Publish))
         .then(|| self.inspector(cx).into_any_element());
         let assistant = self.assistant_panel(cx);
@@ -429,6 +440,7 @@ impl StudioApp {
             .children(self.parameter_context_overlay(cx))
             .children(self.updates_overlay(cx))
             .children(self.help_overlay(cx))
+            .children(self.chrome_menu_overlay(cx))
             .when(self.assistant_resizing.is_some(), |d| {
                 d.child(
                     div()
@@ -450,141 +462,174 @@ impl StudioApp {
             .children(self.import_editor.clone())
     }
 
-    /// Brand · project · actions (open folder / project, theme).
+    /// Project identity and a small set of familiar actions.
     fn top_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        use self::controls::{Menu, icon_button};
+        use crate::icons::Icon;
         let t = self.theme;
-        let mut project: SharedString = self
-            .source_dir
+        let mut project = self
+            .project_path
             .as_ref()
-            .and_then(|d| d.file_name().map(|n| n.to_string_lossy().into_owned()))
-            .unwrap_or_else(|| self.spectrum_label.to_string())
-            .into();
+            .and_then(|p| p.file_stem())
+            .or_else(|| self.source_dir.as_ref().and_then(|p| p.file_name()))
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| self.spectrum_label.to_string());
         if self.assistant_history_revision != self.assistant_history_saved_revision {
-            project = format!("{project} *").into();
+            project.push_str(" •");
         }
         let action = |id: &'static str,
+                      glyph: Icon,
                       label: &'static str,
-                      f: fn(&mut Self, &mut Context<Self>)|
-         -> gpui::Stateful<gpui::Div> {
-            div()
-                .id(id)
-                .h(px(24.))
-                .px_2()
-                .flex()
-                .items_center()
-                .rounded_md()
-                .text_size(px(11.5))
-                .text_color(t.text_muted)
-                .cursor_pointer()
-                .hover(|d| d.bg(t.raised).text_color(t.text))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| f(this, cx)))
-                .child(label)
+                      active: bool,
+                      f: fn(&mut Self, &mut Context<Self>)| {
+            icon_button(&t, id, glyph, label, active)
+                .on_click(cx.listener(move |app, _, _, cx| f(app, cx)))
         };
         div()
             .h(px(38.))
-            .w_full()
             .min_w_0()
+            .w_full()
             .flex_none()
             .flex()
             .items_center()
-            .gap_3()
-            .px_3()
+            .gap_1()
+            .px_2()
             .bg(t.surface)
             .border_b_1()
             .border_color(t.border)
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .child(div().w(px(16.)).h(px(16.)).rounded_sm().bg(t.accent))
-                    .child(crate::updates::application_name()),
+                icon_button(
+                    &t,
+                    "project-menu",
+                    Icon::Folder,
+                    "Project",
+                    self.ui.menu == Some(Menu::Project),
+                )
+                .on_click(cx.listener(|app, event, window, cx| {
+                    app.open_chrome_menu(Menu::Project, event, window, cx)
+                })),
             )
-            .child(div().text_color(t.text_muted).child("›"))
             .child(
                 div()
                     .min_w_0()
+                    .flex_1()
                     .overflow_hidden()
                     .whitespace_nowrap()
+                    .text_ellipsis()
                     .font_weight(gpui::FontWeight::MEDIUM)
-                    .child(project),
-            )
-            .child(div().flex_1())
-            .child(
-                div()
-                    .id("cmdk")
-                    .h(px(24.))
-                    .px_2()
-                    .min_w(px(220.))
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(t.border)
-                    .bg(t.bg)
-                    .text_size(px(11.5))
-                    .text_color(t.text_muted)
-                    .cursor_pointer()
-                    .hover(|d| d.border_color(t.accent))
-                    .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
-                        this.open_palette(window, cx);
-                    }))
-                    .child("Search actions, tools, groups…")
-                    .child(div().flex_1())
-                    .child(div().font_family(MONO).text_size(px(10.5)).child("⌘K")),
-            )
-            .child(action("undo", "↶", |this, cx| this.undo(cx)))
-            .child(action("redo", "↷", |this, cx| this.redo(cx)))
-            .child(action("open-folder", "Import…", |this, cx| {
-                this.open_folder(cx)
-            }))
-            .child(action("open-project", "Open project…", |this, cx| {
-                this.open_project(cx)
-            }))
-            .child(
-                chip(
-                    &t,
-                    "project-storage",
-                    if self.project_storage == crate::project::DataStorage::Paths {
-                        "Raw: paths"
+                    .child(if project.is_empty() {
+                        "rexafs".into()
                     } else {
-                        "Raw: embedded"
-                    },
-                    self.project_storage == crate::project::DataStorage::Embedded,
+                        project
+                    }),
+            )
+            .when(self.viewport_w >= 800., |d| {
+                d.child(
+                    action("undo", Icon::Undo, "Undo · ⌘Z", false, |a, c| a.undo(c))
+                        .when(self.journal.undo.is_empty(), |d| {
+                            d.disabled(true).opacity(0.4).tab_stop(false)
+                        }),
                 )
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.project_storage = match this.project_storage {
-                        crate::project::DataStorage::Paths => crate::project::DataStorage::Embedded,
-                        crate::project::DataStorage::Embedded => crate::project::DataStorage::Paths,
-                    };
-                    this.status = if this.project_storage == crate::project::DataStorage::Paths {
-                        "Save .rxs with paths relative to the project folder"
-                    } else {
-                        "Save .rxs with compressed raw spectra and referenced FEFF files"
-                    }
-                    .into();
-                    cx.notify();
-                })),
+                .child(
+                    action("redo", Icon::Redo, "Redo · ⇧⌘Z", false, |a, c| {
+                        a.redo(c)
+                    })
+                    .when(self.journal.redo.is_empty(), |d| {
+                        d.disabled(true).opacity(0.4).tab_stop(false)
+                    }),
+                )
+            })
+            .child(
+                action(
+                    "open-folder",
+                    Icon::Import,
+                    "Import files or folders · ⇧⌘O",
+                    false,
+                    |a, c| a.open_folder(c),
+                )
+                .w_auto()
+                .px_2()
+                .gap_1()
+                .child("Import…"),
             )
-            .child(action("save-project", "Save project", |this, cx| {
-                this.save_project(cx)
-            }))
-            .child(action("assistant-window", "Assistant", |this, cx| {
-                this.open_assistant(cx)
-            }))
-            .child(action("theme-toggle", "Theme", |this, cx| {
-                this.toggle_theme(cx)
-            }))
+            .child(action(
+                "save-project",
+                Icon::Save,
+                "Save project · ⌘S",
+                self.project_saving,
+                |a, c| a.save_project(c),
+            ))
+            .child(action(
+                "switch-theme",
+                if t.mode == crate::theme::ThemeMode::Dark {
+                    Icon::Sun
+                } else {
+                    Icon::Moon
+                },
+                if t.mode == crate::theme::ThemeMode::Dark {
+                    "Switch to light theme"
+                } else {
+                    "Switch to dark theme"
+                },
+                false,
+                |a, c| a.toggle_theme(c),
+            ))
+            .child(div().w(px(1.)).h(px(18.)).mx_1().bg(t.border))
+            .child(
+                icon_button(
+                    &t,
+                    "cmdk",
+                    Icon::Search,
+                    "Find actions, tools, or groups · ⌘K",
+                    false,
+                )
+                .on_click(cx.listener(|app, _, window, cx| app.open_palette(window, cx))),
+            )
+            .child(action(
+                "toggle-groups",
+                Icon::PanelLeft,
+                "Groups · ⌘B",
+                self.data_panel_open,
+                |a, c| {
+                    a.data_panel_open = !a.data_panel_open;
+                    a.fit_assistant_layout();
+                    c.notify();
+                },
+            ))
+            .when(!matches!(self.stage, Stage::Fit | Stage::Publish), |d| {
+                d.child(action(
+                    "toggle-inspector",
+                    Icon::PanelRight,
+                    "Parameters · ⌘J",
+                    self.context_panel_open,
+                    |a, c| {
+                        a.context_panel_open = !a.context_panel_open;
+                        a.fit_assistant_layout();
+                        c.notify();
+                    },
+                ))
+            })
+            .child(action(
+                "assistant-window",
+                Icon::Chat,
+                "Assistant",
+                self.assistant_host == assistant_shell::AssistantHost::Docked,
+                |a, c| a.open_assistant(c),
+            ))
             .when(
                 self.updates.result.as_ref().is_some_and(|r| r.available),
                 |d| {
-                    d.child(action("updates", "Update available", |this, cx| {
-                        this.open_updates(cx)
-                    }))
+                    d.child(action(
+                        "updates",
+                        Icon::Download,
+                        "Update available",
+                        true,
+                        |a, c| a.open_updates(c),
+                    ))
                 },
             )
-            .child(action("help", "Help", |this, cx| this.open_help(cx)))
+            .child(action("help", Icon::Help, "Help", false, |a, c| {
+                a.open_help(c)
+            }))
     }
 }

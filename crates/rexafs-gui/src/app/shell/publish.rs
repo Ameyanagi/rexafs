@@ -10,6 +10,7 @@ use std::sync::Arc;
 #[derive(Default)]
 pub(crate) struct PublishState {
     pub running: bool,
+    pub(super) format: ExportFormat,
     pub destination: Option<std::path::PathBuf>,
     pub error: Option<String>,
     pub settings: FigureSettings,
@@ -22,6 +23,41 @@ pub(crate) struct PublishState {
     pub(super) preview_running: bool,
     pub(super) preview: Option<Arc<RenderedFigure>>,
     pub(super) image: Option<Arc<gpui::Image>>,
+}
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum ExportFormat {
+    #[default]
+    Png,
+    Svg,
+    Csv,
+    Folder,
+    Markdown,
+}
+impl ExportFormat {
+    const ALL: [Self; 5] = [
+        Self::Png,
+        Self::Svg,
+        Self::Csv,
+        Self::Folder,
+        Self::Markdown,
+    ];
+    fn label(self) -> &'static str {
+        match self {
+            Self::Png => "PNG",
+            Self::Svg => "SVG",
+            Self::Csv => "CSV",
+            Self::Folder => "Analysis folder",
+            Self::Markdown => "Markdown",
+        }
+    }
+    fn extension(self) -> Option<&'static str> {
+        match self {
+            Self::Png => Some("png"),
+            Self::Svg => Some("svg"),
+            Self::Csv => Some("csv"),
+            _ => None,
+        }
+    }
 }
 impl PublishState {
     pub(crate) fn load_settings(&mut self, settings: FigureSettings) {

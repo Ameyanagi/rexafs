@@ -23,6 +23,7 @@ fn vecs(v: &nalgebra::DVector<f64>) -> Vec<f64> {
 /// One spectrum in a comparison overlay.
 pub struct QuadTrace {
     pub color_index: usize,
+    pub color: Option<Color>,
     pub label: String,
     pub sp: std::sync::Arc<XASSpectrum>,
     pub active: bool,
@@ -462,7 +463,9 @@ fn build_multi(
             x,
             y,
             width: if trace.active && n > 1 { 2.2 } else { 1.4 },
-            color: trace_color(theme, trace.color_index),
+            color: trace
+                .color
+                .unwrap_or_else(|| trace_color(theme, trace.color_index)),
             dashed: false,
             label: with_legend.then(|| middle_truncate(&trace.label, 24)),
         })
@@ -599,6 +602,7 @@ pub fn build_quadrant_specs(
                 sp: trace.sp.clone(),
                 active: trace.active,
                 color_index: trace.color_index,
+                color: trace.color,
             })
             .collect()
     } else {
@@ -1274,6 +1278,7 @@ mod tests {
         let traces = (0..12)
             .map(|i| QuadTrace {
                 color_index: i,
+                color: None,
                 label: i.to_string(),
                 sp: if i == 0 {
                     current.clone()
@@ -1338,6 +1343,15 @@ mod tests {
                     sp: sp.clone(),
                     active: i == active,
                     color_index: i + 4,
+                    color: (i == 1).then(|| {
+                        crate::spectrum_colors::Assignment {
+                            palette: crate::spectrum_colors::Palette::Viridis,
+                            index: 1,
+                            count: 2,
+                            reversed: false,
+                        }
+                        .color(&Theme::dark())
+                    }),
                 })
                 .collect();
             let specs =
@@ -1357,13 +1371,25 @@ mod tests {
                     .map(|(k, chi)| chi * k.powf(weight))
                     .collect();
                 assert_eq!(plotted.y, expected);
-                assert_eq!(plotted.color, trace_color(&Theme::dark(), index + 4));
+                let expected_color = traces[index]
+                    .color
+                    .unwrap_or_else(|| trace_color(&Theme::dark(), index + 4));
+                assert_eq!(plotted.color, expected_color);
+                for spec in &specs {
+                    if let Some(series) = spec
+                        .series
+                        .iter()
+                        .find(|s| s.key == SeriesKey::Trace(index))
+                    {
+                        assert_eq!(series.color, expected_color);
+                    }
+                }
                 let fourier = specs[3]
                     .series
                     .iter()
                     .find(|s| s.key == SeriesKey::Trace(index))
                     .unwrap();
-                assert_eq!(fourier.color, trace_color(&Theme::dark(), index + 4));
+                assert_eq!(fourier.color, expected_color);
                 assert_eq!(
                     fourier.y,
                     original_r[index].iter().copied().collect::<Vec<_>>()
@@ -1442,4 +1468,61 @@ mod tests {
         assert_eq!(heatmap_y_extent(1, 1), (-0.5, 0.5));
         assert_eq!(heatmap_y_extent(0, 0), (-0.5, 0.5));
     }
+}
+
+/// A tool preview uses full scientific inputs; display curves keep their own grids.
+pub(crate) fn build_tool_preview(
+    before: &XASSpectrum,
+    after: &XASSpectrum,
+    standard: Option<(&str, &XASSpectrum)>,
+    difference: bool,
+    theme: &Theme,
+) -> Result<Plot, String> {
+    let bx = before.energy.as_ref().ok_or("Target has no energy grid")?;
+    let by = if difference {
+        before.norm()
+    } else {
+        before.mu.clone()
+    }
+    .ok_or("Target quantity unavailable")?;
+    let ax = after.energy.as_ref().ok_or("Result has no energy grid")?;
+    let ay = after.mu.as_ref().ok_or("Result quantity unavailable")?;
+    let mut plot: Plot = Plot::new()
+        .theme(theme.plot_theme())
+        .line(&vecs(bx), &vecs(&by))
+        .color(trace_color(theme, 0))
+        .line_style(LineStyle::Dashed)
+        .label("Original")
+        .line(&vecs(ax), &vecs(ay))
+        .color(trace_color(theme, 1))
+        .line_width(1.8)
+        .label(if difference {
+            "Result: target − baseline"
+        } else {
+            "Result"
+        })
+        .into();
+    if let Some((name, standard)) = standard {
+        let sy = if difference {
+            standard.norm()
+        } else {
+            standard.mu.clone()
+        };
+        if let (Some(x), Some(y)) = (&standard.energy, sy) {
+            plot = plot
+                .line(&vecs(x), &vecs(&y))
+                .color(trace_color(theme, 2))
+                .line_width(1.1)
+                .label(format!("Standard: {name}"))
+                .into();
+        }
+    }
+    Ok(plot
+        .xlabel("Energy (eV)")
+        .ylabel(if difference {
+            "normalized μ(E) / Δμ(E)"
+        } else {
+            "μ(E)"
+        })
+        .legend_position(LegendPosition::UpperRight))
 }

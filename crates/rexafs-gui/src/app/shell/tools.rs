@@ -205,6 +205,13 @@ pub struct ToolState {
     pub open: Option<Tool>,
     pub fields: Vec<(ToolField, Entity<NumericField>)>,
     pub message: SharedString,
+    preview_request: u64,
+    preview_key: Option<ToolPreviewKey>,
+    pub(super) preview_plot: Option<Entity<ruviz_gpui::RuvizPlot>>,
+    pub(super) preview_message: String,
+    preview_running: bool,
+    preview_error: Option<String>,
+
     target: Option<ToolTarget>,
     standard: Option<ToolTarget>,
     pub(crate) alignment_standard: Option<crate::group_identity::GroupId>,
@@ -223,6 +230,110 @@ pub struct ToolState {
     pub lcf_all_combinations: bool,
     pub lcf_range: Option<(f64, f64)>,
     pub pca_components: usize,
+}
+
+/// The preview and Apply use the same operation on a private spectrum copy.
+fn process_tool(
+    tool: Tool,
+    source: &XASSpectrum,
+    standard: Option<(&str, &XASSpectrum)>,
+    name: &str,
+    values: &[(ToolField, Option<f64>)],
+    inputs: Vec<OperationInput>,
+) -> Result<(XASSpectrum, Operation, String), String> {
+    let mut sp = source.clone();
+    let value = |field| {
+        values
+            .iter()
+            .find(|(f, _)| *f == field)
+            .and_then(|(_, v)| *v)
+    };
+    let mut operation = Operation {
+        tool: tool.name().into(),
+        parameters: serde_json::json!({}),
+        inputs,
+        applied_energy_shift_ev: 0.0,
+    };
+    let result: Result<String, String> = (|| {
+        let label = match tool {
+            Tool::Align => {
+                let (ref_name, reference) = standard.ok_or("Choose a standard")?;
+                let lo = value(ToolField::WinLo).unwrap_or(-50.0);
+                let hi = value(ToolField::WinHi).unwrap_or(100.0);
+                let shift = sp
+                    .align_to(reference, (lo, hi))
+                    .map_err(|e| e.to_string())?;
+                operation.parameters = serde_json::json!({"window_relative_e0_ev": [lo, hi]});
+                operation.applied_energy_shift_ev = shift;
+                format!("align: {name} → {ref_name} ({shift:+.2} eV)")
+            }
+            Tool::Calibrate => {
+                let target = value(ToolField::Target).ok_or("enter the target E₀")?;
+                let (ref_name, reference) = standard.ok_or("Choose a standard")?;
+                let shift = calibrate_from_standard(&mut sp, reference, target)?;
+                operation.parameters = serde_json::json!({"expected_energy_ev": target, "measured_energy_ev": target - shift, "feature": "DerivativeMax"});
+                operation.applied_energy_shift_ev = shift;
+                format!("calibrate: {name} via {ref_name} → {target:.1} eV ({shift:+.2})")
+            }
+            Tool::Deglitch => {
+                let lo = value(ToolField::ELo).ok_or("enter a range")?;
+                let hi = value(ToolField::EHi).ok_or("enter a range")?;
+                let n = sp.deglitch_range(lo, hi).map_err(|e| e.to_string())?;
+                operation.parameters =
+                    serde_json::json!({"range_ev": [lo, hi], "removed_points": n});
+                format!("deglitch: {name} (−{n} pts)")
+            }
+            Tool::Truncate => {
+                let before = value(ToolField::Before);
+                let after = value(ToolField::After);
+                sp.truncate(before, after).map_err(|e| e.to_string())?;
+                operation.parameters =
+                    serde_json::json!({"keep_from_ev": before, "keep_to_ev": after});
+                format!("truncate: {name}")
+            }
+            Tool::Rebin => {
+                let cfg = RebinConfig {
+                    e0: sp.e0(),
+                    pre_step: value(ToolField::PreStep).unwrap_or(10.0),
+                    xanes_step: value(ToolField::XanesStep).unwrap_or(0.5),
+                    exafs_kstep: value(ToolField::KStep).unwrap_or(0.05),
+                    ..RebinConfig::default()
+                };
+                sp.rebin(&cfg).map_err(|e| e.to_string())?;
+                operation.parameters = serde_json::json!(cfg);
+                format!("rebin: {name}")
+            }
+            Tool::Smooth => {
+                let sigma = value(ToolField::Sigma).unwrap_or(1.0);
+                sp.smooth_mu(ConvolveForm::Gaussian, Some(sigma), None)
+                    .map_err(|e| e.to_string())?;
+                operation.parameters = serde_json::json!({"form": "Gaussian", "sigma_ev": sigma});
+                format!("smooth: {name} (σ {sigma:.2} eV)")
+            }
+            Tool::Lcf | Tool::Pca => return Err("Use the analysis action for this tool".into()),
+            Tool::Difference => {
+                operation.parameters = serde_json::json!({"space": Quantity::NormalizedMu});
+                let (ref_name, reference) = standard.ok_or("Choose a standard")?;
+                sp = rexafs::xafs::tools::difference(
+                    &sp,
+                    reference,
+                    rexafs::xafs::tools::DiffSpace::Norm,
+                )
+                .map_err(|e| e.to_string())?;
+                format!("diff: {name} − {ref_name}")
+            }
+        };
+        Ok(label)
+    })();
+    result.map(|label| (sp, operation, label))
+}
+
+#[derive(Clone, PartialEq)]
+struct ToolPreviewKey {
+    tool: Tool,
+    target: ToolTarget,
+    standard: Option<ToolTarget>,
+    values: Vec<(ToolField, Option<f64>)>,
 }
 
 /// Session-local identity: indices alone can be reused after a catalog walk
@@ -485,6 +596,15 @@ impl LcfSpaceChoice {
 }
 
 impl ToolState {
+    pub(crate) fn set_theme(&self, theme: crate::theme::Theme, cx: &mut gpui::App) {
+        for (_, field) in &self.fields {
+            field.update(cx, |field, cx| field.set_theme(theme, cx));
+        }
+        if let Some(input) = &self.standard_filter {
+            input.update(cx, |input, cx| input.set_theme(theme, cx));
+        }
+    }
+
     pub(crate) fn pin_alignment_standard(&mut self, id: crate::group_identity::GroupId) -> bool {
         self.alignment_standard = Some(id);
         self.open == Some(Tool::Align)
@@ -585,11 +705,13 @@ impl StudioApp {
                     let field = cx.new(|cx| {
                         NumericField::new(label, placeholder, default, FieldKind::Float, theme, cx)
                     });
-                    cx.subscribe(&field, |this: &mut Self, _f, event, cx| {
-                        if let FieldEvent::Invalid(message) = event {
+                    cx.subscribe(&field, |this: &mut Self, _f, event, cx| match event {
+                        FieldEvent::Invalid(message) => {
                             this.status = message.clone();
                             cx.notify();
                         }
+                        FieldEvent::Changed(_) => this.queue_tool_preview(cx),
+                        _ => {}
                     })
                     .detach();
                     (f, field)
@@ -638,11 +760,12 @@ impl StudioApp {
         self.choose_tool_standard(standard, cx);
         if tool.is_analysis() {
             self.analysis.shown = Some(tool);
-            // The analysis section sits at the bottom of the Data inspector;
-            // bring the form into view.
-            self.inspector_scroll.scroll_to_bottom();
         }
         self.set_stage(super::Stage::Data, cx);
+        self.context_panel_open = true;
+        self.inspector_scroll
+            .set_offset(gpui::point(px(0.), px(0.)));
+        self.queue_tool_preview(cx);
         cx.notify();
     }
 
@@ -865,12 +988,14 @@ impl StudioApp {
                 && let Some(sp) = &self.spectrum
             {
                 self.tools.standard_load = StandardLoad::Ready(sp.clone());
+                self.queue_tool_preview(cx);
             }
             return;
         }
         let key = (standard.ix, standard.fingerprint);
         if let Some(sp) = self.cache.get(&key) {
             self.tools.standard_load = StandardLoad::Ready(sp.clone());
+            self.queue_tool_preview(cx);
             return;
         }
         let raw_key = (
@@ -919,6 +1044,7 @@ impl StudioApp {
                         app.tools.standard_load = StandardLoad::Failed(error);
                     }
                 }
+                app.queue_tool_preview(cx);
                 cx.notify();
             })
             .ok();
@@ -977,6 +1103,103 @@ impl StudioApp {
         }
     }
 
+    fn tool_preview_key(&self, cx: &Context<Self>) -> Option<ToolPreviewKey> {
+        let tool = self.tools.open.filter(|t| !t.is_analysis())?;
+        self.tool_readiness(tool).ok()?;
+        Some(ToolPreviewKey {
+            tool,
+            target: self.tools.target.clone()?,
+            standard: self
+                .tools
+                .standard
+                .clone()
+                .filter(|_| tool.needs_standard()),
+            values: tool
+                .fields()
+                .iter()
+                .map(|&f| (f, self.tool_value(f, cx)))
+                .collect(),
+        })
+    }
+
+    pub(super) fn tool_preview_current(&self, cx: &Context<Self>) -> bool {
+        self.tools.preview_key.is_some() && self.tool_preview_key(cx) == self.tools.preview_key
+    }
+
+    fn queue_tool_preview(&mut self, cx: &mut Context<Self>) {
+        let key = self.tool_preview_key(cx);
+        if key.is_some() && key == self.tools.preview_key {
+            return;
+        }
+        self.tools.preview_request += 1;
+        let request = self.tools.preview_request;
+        self.tools.preview_key = key.clone();
+        self.tools.preview_plot = None;
+        self.tools.preview_error = None;
+        self.tools.preview_message.clear();
+        self.tools.preview_running = key.is_some();
+        let (Some(key), Some(source)) = (key, self.spectrum.clone()) else {
+            cx.notify();
+            return;
+        };
+        let standard = match &self.tools.standard_load {
+            StandardLoad::Ready(s) if key.tool.needs_standard() => Some(s.clone()),
+            _ => None,
+        };
+        let theme = self.theme;
+        let job_key = key.clone();
+        let job = cx.background_executor().spawn(async move {
+            let standard_name = job_key
+                .standard
+                .as_ref()
+                .map(|t| t.label.as_str())
+                .unwrap_or("");
+            let standard = standard.as_deref().map(|s| (standard_name, s));
+            let (after, _, label) = process_tool(
+                job_key.tool,
+                &source,
+                standard,
+                &job_key.target.label,
+                &job_key.values,
+                Vec::new(),
+            )?;
+            let plot = crate::plotting::build_tool_preview(
+                &source,
+                &after,
+                standard,
+                job_key.tool == Tool::Difference,
+                &theme,
+            )?;
+            Ok::<_, String>((plot, label))
+        });
+        cx.spawn(async move |this, cx| {
+            let result = job.await;
+            this.update(cx, |app, cx| {
+                if app.tools.preview_request != request
+                    || app.tool_preview_key(cx).as_ref() != Some(&key)
+                {
+                    return;
+                }
+                app.tools.preview_running = false;
+                match result {
+                    Ok((plot, label)) => {
+                        app.tools.preview_plot = Some(
+                            ruviz_gpui::plot_builder(plot.size_px(900, 540))
+                                .interactive()
+                                .build(cx),
+                        );
+                        app.tools.preview_message = label;
+                    }
+                    Err(error) => app.tools.preview_error = Some(error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
     pub(crate) fn apply_tool(&mut self, cx: &mut Context<Self>) {
         let Some(tool) = self.tools.open else {
             return;
@@ -996,95 +1219,26 @@ impl StudioApp {
             return;
         };
         let name = self.current_group_label().to_string();
-        let mut sp: XASSpectrum = (*source).clone();
-        let mut operation = Operation {
-            tool: tool.name().into(),
-            parameters: serde_json::json!({}),
-            inputs: self
-                .tools
-                .target
-                .iter()
-                .chain(self.tools.standard.iter().filter(|_| tool.needs_standard()))
-                .map(ToolTarget::operation_input)
-                .collect(),
-            applied_energy_shift_ev: 0.0,
+        let values: Vec<_> = tool
+            .fields()
+            .iter()
+            .map(|&f| (f, self.tool_value(f, cx)))
+            .collect();
+        let inputs = self
+            .tools
+            .target
+            .iter()
+            .chain(self.tools.standard.iter().filter(|_| tool.needs_standard()))
+            .map(ToolTarget::operation_input)
+            .collect();
+        let standard = if tool.needs_standard() {
+            self.tool_standard().ok()
+        } else {
+            None
         };
-        let result: Result<String, String> = (|| {
-            let label = match tool {
-                Tool::Align => {
-                    let (ref_name, reference) = self.tool_standard()?;
-                    let lo = self.tool_value(ToolField::WinLo, cx).unwrap_or(-50.0);
-                    let hi = self.tool_value(ToolField::WinHi, cx).unwrap_or(100.0);
-                    let shift = sp
-                        .align_to(reference, (lo, hi))
-                        .map_err(|e| e.to_string())?;
-                    operation.parameters = serde_json::json!({"window_relative_e0_ev": [lo, hi]});
-                    operation.applied_energy_shift_ev = shift;
-                    format!("align: {name} → {ref_name} ({shift:+.2} eV)")
-                }
-                Tool::Calibrate => {
-                    let target = self
-                        .tool_value(ToolField::Target, cx)
-                        .ok_or("enter the target E₀")?;
-                    let (ref_name, reference) = self.tool_standard()?;
-                    let shift = calibrate_from_standard(&mut sp, reference, target)?;
-                    operation.parameters = serde_json::json!({"expected_energy_ev": target, "measured_energy_ev": target - shift, "feature": "DerivativeMax"});
-                    operation.applied_energy_shift_ev = shift;
-                    format!("calibrate: {name} via {ref_name} → {target:.1} eV ({shift:+.2})")
-                }
-                Tool::Deglitch => {
-                    let lo = self.tool_value(ToolField::ELo, cx).ok_or("enter a range")?;
-                    let hi = self.tool_value(ToolField::EHi, cx).ok_or("enter a range")?;
-                    let n = sp.deglitch_range(lo, hi).map_err(|e| e.to_string())?;
-                    operation.parameters =
-                        serde_json::json!({"range_ev": [lo, hi], "removed_points": n});
-                    format!("deglitch: {name} (−{n} pts)")
-                }
-                Tool::Truncate => {
-                    let before = self.tool_value(ToolField::Before, cx);
-                    let after = self.tool_value(ToolField::After, cx);
-                    sp.truncate(before, after).map_err(|e| e.to_string())?;
-                    operation.parameters =
-                        serde_json::json!({"keep_from_ev": before, "keep_to_ev": after});
-                    format!("truncate: {name}")
-                }
-                Tool::Rebin => {
-                    let cfg = RebinConfig {
-                        e0: sp.e0(),
-                        pre_step: self.tool_value(ToolField::PreStep, cx).unwrap_or(10.0),
-                        xanes_step: self.tool_value(ToolField::XanesStep, cx).unwrap_or(0.5),
-                        exafs_kstep: self.tool_value(ToolField::KStep, cx).unwrap_or(0.05),
-                        ..RebinConfig::default()
-                    };
-                    sp.rebin(&cfg).map_err(|e| e.to_string())?;
-                    operation.parameters = serde_json::json!(cfg);
-                    format!("rebin: {name}")
-                }
-                Tool::Smooth => {
-                    let sigma = self.tool_value(ToolField::Sigma, cx).unwrap_or(1.0);
-                    sp.smooth_mu(ConvolveForm::Gaussian, Some(sigma), None)
-                        .map_err(|e| e.to_string())?;
-                    operation.parameters =
-                        serde_json::json!({"form": "Gaussian", "sigma_ev": sigma});
-                    format!("smooth: {name} (σ {sigma:.2} eV)")
-                }
-                Tool::Lcf | Tool::Pca => unreachable!("analysis tools run above"),
-                Tool::Difference => {
-                    operation.parameters = serde_json::json!({"space": Quantity::NormalizedMu});
-                    let (ref_name, reference) = self.tool_standard()?;
-                    sp = rexafs::xafs::tools::difference(
-                        &sp,
-                        reference,
-                        rexafs::xafs::tools::DiffSpace::Norm,
-                    )
-                    .map_err(|e| e.to_string())?;
-                    format!("diff: {name} − {ref_name}")
-                }
-            };
-            Ok(label)
-        })();
+        let result = process_tool(tool, &source, standard, &name, &values, inputs);
         match result {
-            Ok(label) => {
+            Ok((sp, operation, label)) => {
                 let derived = match materialize_tool_output(
                     tool,
                     label.clone(),
@@ -1156,44 +1310,33 @@ impl StudioApp {
     fn tool_list(&self, tools: &[Tool], cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
         let mut list = div().flex().flex_col().gap_0p5();
-        for &tool in tools {
+        let mut ordered = tools.to_vec();
+        ordered.sort_by_key(|&tool| self.tools.open != Some(tool));
+        for tool in ordered {
             let open = self.tools.open == Some(tool);
             list = list.child(
-                div()
-                    .id(SharedString::from(format!("tool-{}", tool.name())))
-                    .min_h(px(30.))
-                    .px_2()
-                    .py_0p5()
-                    .flex()
-                    .flex_col()
-                    .justify_center()
-                    .rounded_md()
-                    .cursor_pointer()
-                    .when(open, |d| {
-                        d.bg(gpui::Rgba {
-                            a: 0.16,
-                            ..t.accent
-                        })
+                super::controls::disclosure(
+                    &t,
+                    SharedString::from(format!("tool-{}", tool.name())),
+                    tool.name(),
+                    open,
+                    false,
+                )
+                .tooltip(move |_, cx| {
+                    cx.new(|_| super::controls::Tooltip {
+                        label: tool.hint().into(),
+                        theme: t,
                     })
-                    .when(!open, |d| d.hover(|d| d.bg(t.raised)))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
-                        if this.tools.open == Some(tool) {
-                            this.tools.open = None;
-                            cx.notify();
-                        } else {
-                            this.open_tool(tool, cx);
-                        }
-                    }))
-                    .child(div().text_color(t.text).child(tool.name()))
-                    .child(
-                        div()
-                            .text_size(px(10.5))
-                            .text_color(t.text_muted)
-                            .whitespace_nowrap()
-                            .overflow_hidden()
-                            .text_ellipsis()
-                            .child(tool.hint()),
-                    ),
+                    .into()
+                })
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if this.tools.open == Some(tool) {
+                        this.tools.open = None;
+                        cx.notify();
+                    } else {
+                        this.open_tool(tool, cx);
+                    }
+                })),
             );
             if open {
                 let readiness = self.tool_readiness(tool);
@@ -1219,37 +1362,78 @@ impl StudioApp {
                     form = form.child(self.standard_picker(tool, cx));
                 }
                 if tool.is_analysis() {
-                    form = form.child(self.analysis_options(tool, cx));
+                    form = form
+                        .child(self.analysis_operands(tool, cx))
+                        .child(self.analysis_options(tool, cx));
+                } else {
+                    form = form.child(
+                        div()
+                            .px_3()
+                            .py_1()
+                            .text_size(px(11.))
+                            .text_color(t.text_muted)
+                            .child("1 target → 1 new group"),
+                    );
                 }
                 for field in tool.fields() {
                     if let Some((_, entity)) = self.tools.fields.iter().find(|(f, _)| f == field) {
                         form = form.child(entity.clone());
                     }
                 }
-                form =
-                    form.child(
+                if self.tool_preview_current(cx) {
+                    form = form.child(
                         div()
                             .px_3()
                             .py_1()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                button(&t, "tool-apply", tool.apply_label(), readiness.is_ok())
-                                    .when(readiness.is_err(), |d| d.opacity(0.45).cursor_default())
-                                    .when(readiness.is_ok(), |d| {
-                                        d.on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
-                                            this.apply_tool(cx)
-                                        }))
-                                    }),
+                            .text_size(px(11.))
+                            .text_color(if self.tools.preview_error.is_some() {
+                                t.warn
+                            } else {
+                                t.text_muted
+                            })
+                            .child(if self.tools.preview_running {
+                                "Preparing preview…".to_owned()
+                            } else if let Some(error) = &self.tools.preview_error {
+                                error.clone()
+                            } else {
+                                self.tools.preview_message.clone()
+                            }),
+                    );
+                }
+                form = form.child(
+                    div()
+                        .px_3()
+                        .py_1()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            button(&t, "tool-apply", tool.apply_label(), readiness.is_ok())
+                                .when(readiness.is_err(), |d| {
+                                    d.disabled(true).opacity(0.45).cursor_default()
+                                })
+                                .when(readiness.is_ok(), |d| {
+                                    d.on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
+                                        this.apply_tool(cx)
+                                    }))
+                                }),
+                        )
+                        .child(
+                            super::controls::icon_button(
+                                &t,
+                                "tool-cancel",
+                                crate::icons::Icon::Close,
+                                "Close tool",
+                                false,
                             )
-                            .child(button(&t, "tool-cancel", "Close", false).on_click(
-                                cx.listener(|this, _: &ClickEvent, _w, cx| {
+                            .on_click(cx.listener(
+                                |this, _: &ClickEvent, _w, cx| {
                                     this.tools.open = None;
                                     cx.notify();
-                                }),
+                                },
                             )),
-                    );
+                        ),
+                );
                 if let Err(reason) = readiness {
                     form = form.child(
                         div()
@@ -1438,6 +1622,70 @@ impl StudioApp {
                 );
         }
         picker
+    }
+
+    fn analysis_operands(&self, tool: Tool, cx: &mut Context<Self>) -> gpui::Div {
+        let t = self.theme;
+        let current = self.current_group_index().and_then(|ix| self.group_id(ix));
+        let marks = analysis_marks(&self.selection, current.as_ref(), |ix| self.group_id(ix));
+        let ready = self.marked_spectra().len();
+        let skipped = marks.len().saturating_sub(ready);
+        let open = self.ui.sections.contains("Analysis inputs");
+        let mut panel = div().px_2().child(
+            super::controls::disclosure(
+                &t,
+                "analysis-inputs",
+                format!(
+                    "{}: {ready} ready{}",
+                    if tool == Tool::Lcf {
+                        "Standards"
+                    } else {
+                        "Training set"
+                    },
+                    if skipped > 0 {
+                        format!(" · {skipped} unavailable")
+                    } else {
+                        String::new()
+                    }
+                ),
+                open,
+                false,
+            )
+            .on_click(cx.listener(|this, _, _, cx| {
+                if !this.ui.sections.remove("Analysis inputs") {
+                    this.ui.sections.insert("Analysis inputs");
+                }
+                cx.notify();
+            })),
+        );
+        if open {
+            let mut rows = div()
+                .id("analysis-input-list")
+                .max_h(px(180.))
+                .overflow_y_scroll();
+            for ix in marked_group_indices(&marks) {
+                let cached = self
+                    .cache
+                    .peek(&(ix, self.effective_fingerprint(ix)))
+                    .is_some();
+                rows = rows.child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(if cached { t.text_muted } else { t.warn })
+                        .child(format!(
+                            "{}{}",
+                            self.entry_label(ix),
+                            if cached {
+                                ""
+                            } else {
+                                " · skipped: unavailable"
+                            }
+                        )),
+                );
+            }
+            panel = panel.child(rows);
+        }
+        panel
     }
 
     /// Space segment + option chips shared by LCF and PCA.
@@ -2319,6 +2567,81 @@ mod tool_readiness_tests {
         let mut sp = XASSpectrum::new();
         sp.set_spectrum(energy, mu);
         sp
+    }
+
+    #[test]
+    fn tool_preview_calibration_uses_standard_and_does_not_change_operands() {
+        let source = edge(110.0);
+        let standard = edge(100.0);
+        let before = (
+            source.energy.clone(),
+            source.mu.clone(),
+            standard.energy.clone(),
+            standard.mu.clone(),
+        );
+        let (result, operation, label) = process_tool(
+            Tool::Calibrate,
+            &source,
+            Some(("foil", &standard)),
+            "sample",
+            &[(ToolField::Target, Some(103.0))],
+            vec![],
+        )
+        .unwrap();
+        let expected_shift = 103.0
+            - standard
+                .edge_feature_energy(EdgeFeature::DerivativeMax)
+                .unwrap();
+        assert!((2.0..4.0).contains(&expected_shift));
+        assert!((operation.applied_energy_shift_ev - expected_shift).abs() < 1e-10);
+        assert!(
+            (result.energy.as_ref().unwrap()[0]
+                - source.energy.as_ref().unwrap()[0]
+                - expected_shift)
+                .abs()
+                < 1e-10
+        );
+        assert_eq!(result.mu, source.mu);
+        assert!(label.contains("sample via foil"));
+        assert_eq!(
+            (source.energy, source.mu, standard.energy, standard.mu),
+            before
+        );
+    }
+
+    #[test]
+    fn tool_preview_truncates_copy_and_rejects_missing_standard() {
+        let source = edge(100.0);
+        let before = (source.energy.clone(), source.mu.clone());
+        let (result, _, _) = process_tool(
+            Tool::Truncate,
+            &source,
+            None,
+            "sample",
+            &[
+                (ToolField::Before, Some(95.0)),
+                (ToolField::After, Some(105.0)),
+            ],
+            vec![],
+        )
+        .unwrap();
+        let energy = result.energy.as_ref().unwrap();
+        assert!(energy.len() < source.energy.as_ref().unwrap().len());
+        assert!(energy[0] >= 95.0 && energy[energy.len() - 1] <= 105.0);
+        for tool in [Tool::Calibrate, Tool::Align, Tool::Difference] {
+            assert!(
+                process_tool(
+                    tool,
+                    &source,
+                    None,
+                    "sample",
+                    &[(ToolField::Target, Some(103.0))],
+                    vec![]
+                )
+                .is_err()
+            );
+        }
+        assert_eq!((source.energy, source.mu), before);
     }
 
     #[test]

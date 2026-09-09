@@ -1,15 +1,24 @@
 # UI simplification handoff
 
-Status: reviewed with computer use on 2026-09-08; implementation remains planned,
-except the startup/Help changes in [PR #45](https://github.com/Ameyanagi/rexafs/pull/45).
-The published 0.2.0 binaries do not contain those changes.
+Status: implemented on `feat/ui-simplification`, based on
+[PR #45](https://github.com/Ameyanagi/rexafs/pull/45). This is an unreleased candidate.
+Validation and remaining native checks are recorded in
+[the implementation review](validation/2026-09-08-ui-simplification/review.md).
 
 ## Design contract
 
 Make the plot the main workspace. Keep the current task and its next action
-visible. Put secondary controls behind menus or disclosure panels. Prefer direct
+visible. Keep everyday controls visible: the maintainer found the initial implementation
+hid too much. Fold advanced settings and supporting explanations. Prefer direct
 manipulation, short labels, and familiar icons to instructional paragraphs.
 Icons need accessible names; scientific units and ambiguous actions still need labels.
+Import keeps its word label. Source mapping, common plot toggles, Assistant model,
+reasoning, permissions and mode, and publication style remain visible.
+The theme sun/moon button remains directly available in the top bar.
+An ordinary launch opens the full Data workspace: an empty Groups panel, blank
+plotting area, and Source/processing-tools inspector. Side panels follow their
+visibility toggles even before any import. There is no central Import/Open project
+prompt. File drops and the top-bar commands remain the entry points.
 
 Keep errors, unsaved changes, named operands, affected counts, active overrides,
 and permission scope visible when they affect a decision. Put detailed provenance,
@@ -28,7 +37,7 @@ These are observations from native interaction, not just source inspection.
 | Import / Groups | A missing-source dialog still exposes three channel-control rows, recipe setup, validation controls, and disabled navigation. Pending import also occupies the sidebar and a persistent multi-row receipt. | Lead missing-source repair with **Locate source**. Reveal mapping after repair. Collapse receipt/history to one actionable pending count; retain unresolved sources. Show hidden-mark controls only when relevant. The existing column-table/plot mapping preview is worth keeping. |
 | Tools / LCF / PCA | Align opens below the visible inspector area. LCF/PCA name the target but leave input identities implicit in marks. | Bring the opened tool into view. Put named operands and the preview above its action; keep exact input lists one click away. Preserve each tool's different use of current and marked groups. |
 | Fit | Two navigation rows, repeated headings/instructions, and many structure-display buttons compete with the model and plots. Results exposes contribution controls before any fit exists. | Compact step navigation; completed setup as a summary; structure appearance in a View menu. Keep parameter errors beside the action that resolves them. Reveal result controls when results exist. |
-| Assistant | Model, reasoning, image sharing, web search, access, mode, copy, and explanatory text consume much of the panel. Opening it squeezes Fit into narrow columns. | Keep conversation and composer prominent. Put model/reasoning/history utilities in menus; retain visible permission and sharing scope. Offer a focus layout without silently changing access or scientific settings. |
+| Assistant | Model, reasoning, image sharing, web search, access, mode, copy, and explanatory text consume much of the panel. Opening it squeezes Fit into narrow columns. | Keep conversation and composer prominent. Keep model/reasoning/mode and sharing controls visible; put supporting explanations and conversation utilities in settings. Offer a focus layout without silently changing access or scientific settings. |
 | Help / Updates | Help is already compact. Updates says **Up to date** while highlighting a download of the same version. | Show current version/status first. Put channel/preferences and same-version download behind secondary controls. Preserve release notes and offline licenses. |
 | Series | Empty state says **Pick a scan in the Scans tab**, but no such tab is visible. Inspector shows **Frame 1 / 0**, an unrelated current spectrum, and run buttons. | One **Select scan** action opening the actual scan selector. Show frame/trend/run controls only with a valid scan; give an actionable empty state when none exist. |
 | Publish | PNG/SVG/CSV actions are at the top; folder export/Markdown at the bottom. Style controls and export explanations are always open. | One export area with format and explicit scope; large preview; Style and Caption disclosure panels. Show format-specific details when that format is chosen. |
@@ -55,7 +64,7 @@ and Publish (U5/U4/U9). Check accessibility throughout.
 | U8 | Actionable Series selection and contextual inspector. Coordinate with F1/F2. | Empty state opens an actual scan selector. No impossible frame count or runnable calculation without valid inputs. Populated view retains exact range and sampled-preview distinctions; selection must not silently create a scientific series. |
 | U9 | Unified export area; preview-first Publish; optional style/caption controls. | Before export, format, quantity, current/marked/fit-input scope, and destination are clear. PNG/SVG preview matches output; CSV full-grid behavior remains explicit. |
 
-U1–U9 are separate reviewable changes. Capture the affected workflow, make the
+U1–U9 describe the areas of this change. Capture the affected workflow, make the
 smallest layout change, then verify it in the native app. Scientific algorithms,
 defaults, project compatibility, and authorization policy must stay intact.
 
@@ -86,3 +95,79 @@ screenshots, and test the affected interaction and project restoration. Do not
 mark a task complete from source inspection or static screenshots alone.
 
 The separate feature backlog is in [remaining-work-plan.md](remaining-work-plan.md).
+
+## Import correction from hands-on feedback
+
+Do not silently choose Transmission from a file containing multiple detector
+channels. A new import stages sources, groups matching layouts, and opens the
+mapping preview before adding groups. The user explicitly chooses the main
+spectrum and optional channels once per layout. Only those channels are added;
+project restoration and already accepted reviews retain their stored mappings.
+Saved recipes provide suggestions in this flow.
+
+Switching the main spectrum replaces the previous main-channel choice. It does
+not retain an unwanted Transmission output. Additional selected channels remain
+explicit. Channel choices, formulas, column assignments, units, preview, file
+counts and Import/Cancel remain reachable. The footer stays visible while the
+mapping table scrolls.
+
+The Groups panel also has **Remove marked…**, with a captured identity list,
+hidden-mark count, stale-selection check, and one undoable removal. It never
+deletes source files.
+
+## Structure clarity
+
+Keep **Center focus** visible above the structure canvas. Increasing it smoothly
+fades atoms and bonds beyond the clear coordination radius while preserving the
+absorber and selected scattering path. **Path focus** retains faint atom context
+and shows only scattering legs. The inspection center defaults to the absorber;
+clicking an atom changes the inspection center. Clear radius, slicing and global
+opacity remain in Structure display. These controls never change the FEFF cluster,
+calculation radius or path geometry.
+
+Enable **Depth cue** by default beside Center focus. It lowers rear-surface
+contrast toward the canvas color while keeping nearer surfaces clear, with a
+back-to-front key. The cue follows the camera and combines with radial alpha;
+lighting, element colors, selected-path visibility and geometric clipping retain
+their separate roles. It works against both dark and light backgrounds.
+
+Horizontal and vertical orbit dragging follow the pointer. Scattering legs meet
+the projected atom centers; only repeated traversals bow apart between those
+centers, with arrowheads following each curve. Clipping preserves the full-leg
+position. Structure filters and numeric inputs follow theme changes immediately.
+
+
+## Publication, processing and color follow-ups
+
+Publication puts five common views first: flattened XANES (E₀ − 20 to E₀ + 80 eV),
+full flattened energy through the normalization endpoint, weighted χ(k) through
+FFT k-max + 1 Å⁻¹, |χ(R)| over 0–6 Å, and the R-space fit. Energy views have a
+Normalized toggle. A fit above 6 Å expands its default R limit. FFT windows are
+hidden, the effective transform weight supplies χ(k)/χ(R) units, and defaults are
+300 DPI, legend and grid. Title and axis labels accept Typst math. Extra diagnostics
+and fit components remain available; CSV exports retain complete arrays.
+
+GUI Auto normalization maximum resolves to each spectrum's last measured energy,
+relative to E₀. Explicit limits are preserved. Background k-weight has an opt-in
+**Link to FFT** switch, off by default; unlinking restores its independent value.
+The link participates in processing invalidation, project persistence, copy/reset
+and undo. The theme switch is immediately after Save Project; Help is rightmost.
+
+**Colors** in the plot bar assigns Theme, Tab10 or Okabe–Ito cycles, or Viridis,
+Plasma or Inferno gradients, to the current plot scope. In Marked scope this covers
+marked groups plus current, including groups omitted by the display sampling cap.
+Gradients span that set in group order and may be reversed. Assignments remain
+with group identities across selection changes, save/open and removal/undo; the
+same colors identify group swatches, all processing plots and their legends.
+Okabe–Ito's neutral swatch follows the text color for readability in both themes.
+Reset restores the existing group colors; each assignment is one undoable action.
+
+Center fading preserves atom lighting at every opacity. Bonds retain their
+previous stroke rendering, including its opacity and shading behavior.
+Cached, non-overlapping sphere bands avoid repeated alpha compositing and repeated
+path tessellation. Non-overlapping sphere bands and straight stroke segments
+share paint-order entries; straight strokes reuse equivalent rectangle geometry
+instead of invoking the general tessellator. Orbit and zoom use a retained
+structure viewport; inspector zoom readouts update after a short scroll pause.
+Measured CuO rotation CPU frame time fell from 42 to 26 ms on the validation Mac;
+see [the timing method and limits](validation/2026-09-09-structure-performance/review.md).

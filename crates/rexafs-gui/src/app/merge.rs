@@ -6,7 +6,7 @@ use crate::params::{
     DerivedSpectrum, DetectionMode, Operation, PipelineParams, Quantity, StreamingAverage,
     load_group_raw_with_diagnostics, preview_import,
 };
-use gpui::Context;
+use gpui::{Context, IntoElement, div, prelude::*, px};
 use rexafs::prelude::XASSpectrum;
 use std::{
     collections::BTreeSet,
@@ -41,6 +41,7 @@ fn template_first(inputs: &mut [ToolTarget], current: Option<&ToolTarget>) {
     }
 }
 
+#[derive(Clone)]
 struct MergeInput {
     target: ToolTarget,
     params: PipelineParams,
@@ -240,6 +241,13 @@ fn keep_current(
     started != now
 }
 
+pub(crate) struct MergeReview {
+    targets: Vec<ToolTarget>,
+    plot: Option<gpui::Entity<ruviz_gpui::RuvizPlot>>,
+    error: Option<String>,
+    ready: bool,
+}
+
 impl StudioApp {
     /// Check facts already available to the UI; disk reads and full validation
     /// stay in the merge worker. Unknown inputs can still be checked on click.
@@ -363,6 +371,180 @@ impl StudioApp {
         path
     }
 
+    pub(crate) fn open_merge_review(
+        &mut self,
+        event: &gpui::ClickEvent,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(reason) = self.merge_disabled_reason() {
+            self.status = reason.into();
+            cx.notify();
+            return;
+        }
+        let mut targets = match collect_inputs(&self.selection, |ix| self.tool_target(ix)) {
+            Ok(targets) => targets,
+            Err(error) => {
+                self.status = error.into();
+                cx.notify();
+                return;
+            }
+        };
+        template_first(&mut targets, self.current_tool_target().as_ref());
+        let inputs = self.merge_inputs(targets.clone());
+        self.ui.merge_review = Some(MergeReview {
+            targets: targets.clone(),
+            plot: None,
+            error: None,
+            ready: false,
+        });
+        self.open_chrome_menu(shell::controls::Menu::Merge, event, window, cx);
+        let theme = self.theme;
+        let job = cx.background_executor().spawn(async move {
+            let template = inputs.first().ok_or("No merge inputs")?;
+            let raw = load_group_raw_with_diagnostics(
+                &template.target.path,
+                &template.params,
+                template.derived.as_ref(),
+            )?;
+            let mut before = XASSpectrum::new();
+            before.set_spectrum(raw.energy, raw.mu);
+            let merged = run_merge(inputs, &AtomicBool::new(false))?;
+            let mut after = XASSpectrum::new();
+            after.set_spectrum(merged.energy, merged.mu);
+            crate::plotting::build_tool_preview(&before, &after, None, false, &theme)
+        });
+        cx.spawn(async move |this, cx| {
+            let result = job.await;
+            this.update(cx, |app, cx| {
+                if !app
+                    .ui
+                    .merge_review
+                    .as_ref()
+                    .is_some_and(|r| r.targets == targets)
+                {
+                    return;
+                }
+                let review = app.ui.merge_review.as_mut().unwrap();
+                match result {
+                    Ok(plot) => {
+                        review.plot = Some(
+                            ruviz_gpui::plot_builder(plot.size_px(780, 400))
+                                .interactive()
+                                .build(cx),
+                        );
+                        review.ready = true;
+                    }
+                    Err(error) => review.error = Some(error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn merge_inputs(&self, targets: Vec<ToolTarget>) -> Vec<MergeInput> {
+        targets
+            .into_iter()
+            .map(|target| MergeInput {
+                params: self.effective_params(target.ix).clone(),
+                derived: target
+                    .ix
+                    .checked_sub(DERIVED_BASE)
+                    .and_then(|i| self.derived.get(i))
+                    .cloned(),
+                mode_source: self.merge_mode_source(&target),
+                target,
+            })
+            .collect()
+    }
+
+    pub(crate) fn merge_review_panel(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let t = self.theme;
+        let Some(review) = &self.ui.merge_review else {
+            return div().into_any_element();
+        };
+        let valid = review
+            .targets
+            .iter()
+            .all(|target| self.tool_target(target.ix).as_ref() == Some(target))
+            && self.selection == review.targets.iter().map(|t| t.ix).collect();
+        let ready = valid && review.ready && self.merge_disabled_reason().is_none();
+        let mut inputs = div().id("merge-inputs").max_h(px(112.)).overflow_y_scroll();
+        for (i, target) in review.targets.iter().enumerate() {
+            inputs = inputs.child(div().text_size(px(11.5)).text_color(t.text_muted).child(
+                format!(
+                    "{}{}",
+                    target.label,
+                    if i == 0 {
+                        " · grid & settings template"
+                    } else {
+                        ""
+                    }
+                ),
+            ));
+        }
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_2()
+            .child(
+                div()
+                    .text_size(px(16.))
+                    .child(format!("Merge {} → 1 new group", review.targets.len())),
+            )
+            .child(inputs)
+            .when(valid, |d| {
+                d.when_some(review.plot.clone(), |d, plot| {
+                    d.child(div().h(px(280.)).min_w_0().child(plot))
+                })
+            })
+            .when(!valid, |d| {
+                d.child(
+                    div()
+                        .text_color(t.warn)
+                        .child("Inputs changed. Close and reopen Merge."),
+                )
+            })
+            .when(valid && !review.ready && review.error.is_none(), |d| {
+                d.child("Preparing preview…")
+            })
+            .when_some(review.error.clone(), |d, error| {
+                d.child(div().text_size(px(12.)).text_color(t.warn).child(error))
+            })
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        shell::button(&t, "merge-review-apply", "Merge", ready)
+                            .when(!ready, |d| d.opacity(0.45).cursor_default())
+                            .on_click(cx.listener(move |app, _, window, cx| {
+                                if ready {
+                                    app.close_chrome_menu(window, cx);
+                                    app.merge_selection(cx);
+                                }
+                            })),
+                    )
+                    .child(
+                        shell::controls::icon_button(
+                            &t,
+                            "merge-review-close",
+                            crate::icons::Icon::Close,
+                            "Close merge preview",
+                            false,
+                        )
+                        .on_click(
+                            cx.listener(|app, _, window, cx| app.close_chrome_menu(window, cx)),
+                        ),
+                    ),
+            )
+            .into_any_element()
+    }
+
     pub(super) fn merge_selection(&mut self, cx: &mut Context<Self>) {
         if let Some(reason) = self.merge_disabled_reason() {
             self.status = reason.into();
@@ -379,19 +561,7 @@ impl StudioApp {
             }
         };
         template_first(&mut targets, current.as_ref());
-        let inputs: Vec<_> = targets
-            .into_iter()
-            .map(|target| MergeInput {
-                params: self.effective_params(target.ix).clone(),
-                derived: target
-                    .ix
-                    .checked_sub(DERIVED_BASE)
-                    .and_then(|i| self.derived.get(i))
-                    .cloned(),
-                mode_source: self.merge_mode_source(&target),
-                target,
-            })
-            .collect();
+        let inputs = self.merge_inputs(targets);
         for input in &inputs {
             if let Err(e) = input.validate_quantity() {
                 self.status = e.into();
