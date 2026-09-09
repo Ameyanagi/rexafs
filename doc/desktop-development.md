@@ -28,6 +28,21 @@ The initial window fits the display's available area, including scaled laptop
 screens. Numeric fields use DejaVu Sans Mono on Linux. Keep the extracted release
 directory together so the executable can find its `resources` and licenses.
 
+For a repeatable graphical smoke test without a physical display:
+
+```bash
+sudo apt-get install -y xvfb xauth xdotool imagemagick mesa-vulkan-drivers
+uv run --no-project --with Pillow python scripts/smoke-linux-gui.py --help
+xvfb-run -a -s "-screen 0 1366x768x24" uv run --no-project --with Pillow \
+  python scripts/smoke-linux-gui.py target/release/rexafs \
+  crates/rexafs-gui/tests/fixtures/projects/rexafs-0.2.3-embedded.rxs
+```
+
+The test opens a temporary copy of an embedded project, switches processing
+stages with Ctrl shortcuts, resizes the window, and quits. Screenshots and logs
+are saved under `target/gui-smoke/`. This uses X11 and can use Mesa software
+rendering; it does not qualify native Wayland or physical GPU performance.
+
 ## Windows
 
 Install Visual Studio Build Tools with **Desktop development with C++**, the

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Fit the desktop window to the available display area and show import, project
+  and example actions in the empty workspace.
+- Use platform monospace fonts; clip long text inside fields, keep the caret
+  visible while editing, and correct character hit testing in translated fields.
+- Bound folder-scan batches and stop cancelled scans while traversing unrelated
+  files, limiting queued catalog memory when the UI is busy.
+- Keep Unix pprof dependencies out of Windows tests and benchmarks. Add Windows
+  core checks and a Linux graphical smoke test with retained screenshots.
+- Install reproducible pre-commit/pre-push checks for formatting, release tooling,
+  compatibility fixtures, strict Clippy and the numerical core.
+
 ## 0.2.3
 
 - Deliver the Windows launch, shortcut, selection and accessibility changes

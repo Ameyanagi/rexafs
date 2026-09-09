@@ -825,6 +825,7 @@ impl EntityInputHandler for TextInput {
             ));
         }
         let last_layout = self.last_layout.as_ref()?;
+        let bounds = self.last_bounds.unwrap_or(bounds);
         Some(Bounds::from_corners(
             point(
                 bounds.left() + last_layout.x_for_index(range.start),
@@ -851,11 +852,7 @@ impl EntityInputHandler for TextInput {
         let line_point = self.last_bounds?.localize(&point)?;
         let last_layout = self.last_layout.as_ref()?;
 
-        assert_eq!(last_layout.text, self.content);
-        let utf8_index = clamp_char_boundary(
-            &self.content,
-            last_layout.index_for_x(point.x - line_point.x)?,
-        );
+        let utf8_index = clamp_char_boundary(&self.content, last_layout.index_for_x(line_point.x)?);
         Some(self.offset_to_utf16(utf8_index))
     }
 }
@@ -867,6 +864,11 @@ fn clamp_char_boundary(text: &str, index: usize) -> usize {
         index -= 1;
     }
     index
+}
+
+/// Keep the caret inside a narrow single-line field, including its 2 px width.
+fn single_line_scroll(cursor_x: Pixels, width: Pixels) -> Pixels {
+    (cursor_x - (width - px(2.)).max(px(0.))).max(px(0.))
 }
 
 /// Byte ranges exclude paragraph separators, but retain empty/trailing paragraphs.
@@ -1309,19 +1311,24 @@ impl Element for TextElement {
             .text_system()
             .shape_line(display_text, font_size, &runs, None);
 
+        let cursor_pos = line.x_for_index(cursor);
+        let scroll = if input.focus_handle.is_focused(window) && !input.content.is_empty() {
+            single_line_scroll(cursor_pos, bounds.size.width)
+        } else {
+            px(0.)
+        };
         // Right-aligned text starts at the right edge minus its width; the
         // bounds handed to the paint / hit-test helpers are shifted the same
         // way so every `bounds.left() + x` stays correct.
-        let bounds = if input.style.align_right {
-            let shift = (bounds.size.width - line.width).max(px(0.));
-            Bounds::new(
-                point(bounds.left() + shift, bounds.top()),
-                size(bounds.size.width - shift, bounds.size.height),
-            )
+        let shift = if input.style.align_right {
+            (bounds.size.width - line.width - px(2.)).max(px(0.))
         } else {
-            bounds
+            px(0.)
         };
-        let cursor_pos = line.x_for_index(cursor);
+        let bounds = Bounds::new(
+            point(bounds.left() + shift - scroll, bounds.top()),
+            size(bounds.size.width - shift + scroll, bounds.size.height),
+        );
         let (selection, cursor) = if selected_range.is_empty() {
             (
                 None,
@@ -1413,30 +1420,32 @@ impl Element for TextElement {
             });
             return;
         }
-        if let Some(selection) = prepaint.selection.take() {
-            window.paint_quad(selection)
-        }
         let line = prepaint.line.take().unwrap();
-        let bounds = prepaint.text_bounds;
-        line.paint(
-            bounds.origin,
-            window.line_height(),
-            gpui::TextAlign::Left,
-            None,
-            window,
-            cx,
-        )
-        .unwrap();
-
-        if focus_handle.is_focused(window)
-            && let Some(cursor) = prepaint.cursor.take()
-        {
-            window.paint_quad(cursor);
-        }
+        // Clip to the field, not to the translated text bounds. Long values,
+        // placeholders and selections must never paint over adjacent controls.
+        window.with_content_mask(Some(gpui::ContentMask { bounds }), |window| {
+            if let Some(selection) = prepaint.selection.take() {
+                window.paint_quad(selection);
+            }
+            line.paint(
+                prepaint.text_bounds.origin,
+                window.line_height(),
+                gpui::TextAlign::Left,
+                None,
+                window,
+                cx,
+            )
+            .unwrap();
+            if focus_handle.is_focused(window)
+                && let Some(cursor) = prepaint.cursor.take()
+            {
+                window.paint_quad(cursor);
+            }
+        });
 
         self.input.update(cx, |input, _cx| {
             input.last_layout = Some(line);
-            input.last_bounds = Some(bounds);
+            input.last_bounds = Some(prepaint.text_bounds);
         });
     }
 }
@@ -1666,6 +1675,20 @@ mod tests {
         rows.extend(paragraph_rows(1, 8..8, &[], px(0.)));
         rows.extend(paragraph_rows(2, 9..15, &[(2, px(12.))], px(42.)));
         rows
+    }
+
+    #[test]
+    fn single_line_caret_stays_inside_narrow_fields() {
+        for width in [px(20.), px(100.), px(300.)] {
+            for cursor in [px(0.), px(12.), px(98.), px(450.)] {
+                let scroll = single_line_scroll(cursor, width);
+                let visible_cursor = cursor - scroll;
+                assert!(visible_cursor >= px(0.));
+                assert!(visible_cursor + px(2.) <= width);
+            }
+        }
+        assert_eq!(single_line_scroll(px(12.), px(100.)), px(0.));
+        assert_eq!(single_line_scroll(px(450.), px(100.)), px(352.));
     }
 
     #[test]
