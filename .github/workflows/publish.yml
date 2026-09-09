@@ -122,8 +122,10 @@ jobs:
         with:
           ref: ${{ needs.version.outputs.commit }}
           path: release-source
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # 1.98.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         if: inputs.channel == 'crates-io'
+        with:
+          toolchain: 1.98.1
       - name: Verify Rust package matches the GitHub artifact
         if: inputs.channel == 'crates-io'
         working-directory: release-source
