@@ -7823,9 +7823,9 @@ dependencies = [
 
 [[package]]
 name = "ruviz"
-version = "0.13.1"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "193a3fd110d4a35f3d45f8bada0ed11ffbf7f68c28b3e1d917a8d5407dfa5096"
+checksum = "2729a92b51a34e55b94e26e8336b15f2a909ff3798da2cc0796e53f84a3ff2a8"
 dependencies = [
  "base64 0.22.1",
  "bytemuck",
@@ -7850,7 +7850,9 @@ dependencies = [
  "typst-kit",
  "typst-render",
  "typst-svg",
+ "unicode-bidi",
  "unicode-linebreak",
+ "unicode-script",
  "unicode-segmentation",
  "unicode-width",
  "wgpu 29.0.4",
@@ -7859,9 +7861,9 @@ dependencies = [
 
 [[package]]
 name = "ruviz-gpui"
-version = "0.13.1"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "467bec0d3c72c6f5c6bfa76e8205efbe3edb9941db2c52a3ed7ae70b1a00e50a"
+checksum = "b83705e4e6f5a6803b4f5803c7370a3859be5050b591197ff1a0a3cfb387b51e"
 dependencies = [
  "arboard",
  "core-foundation 0.10.0",
