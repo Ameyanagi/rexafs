@@ -40,7 +40,7 @@ jobs:
       with:
         toolchain: stable
     - name: Test core plotting feature
-      run: cargo test --locked -p rexafs --features plotting
+      run: cargo +stable test --locked -p rexafs --features plotting
 
   strict-gates:
     name: Strict Gates (stable)
