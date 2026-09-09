@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.1
+
+- Start in the complete, empty Data workspace and keep Help and theme switching
+  accessible. Simplify processing controls, contextual Fit steps, and publication
+  previews; synchronize Assistant and structure inputs with the active theme.
+- Require explicit main and optional import channels. Add an undoable Remove
+  marked action and preview processing operations before applying them.
+- Resolve Auto normalization maximum to the spectrum endpoint. Add an optional
+  AUTOBK weight link to FFT that preserves the independent value when unlinked.
+- Add persistent spectrum color cycles and reversible gradients, plus publication
+  presets for XANES, full energy, weighted chi(k), chi(R), and R-space fits.
+  Export full CSV arrays alongside 300-DPI figures with Typst labels.
+- Add structure center focus and camera-relative depth cues, preserve the bond
+  appearance, and reduce structure paint overhead during rotation and zoom.
+- Update ruviz and ruviz-gpui to 0.14.1 for consistent font handling, international
+  fallback, complete angstrom labels, and PNG strokes without sharp join spikes.
+- Add continuous testing for the core plotting feature and retain linked and
+  embedded 0.2.1 projects covering weight links, palettes, and publication style.
+
 ## 0.2.0
 
 - Unify Groups with durable identities, source/channel stacks, Results, independent

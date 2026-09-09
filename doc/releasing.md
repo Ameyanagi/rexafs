@@ -1,5 +1,10 @@
 # Releasing rexafs
 
+Version **0.2.1** is prepared with the merged UI, structure-rendering, and
+ruviz 0.14.1 updates. Its [release notes](release-notes-0.2.1.md) describe the
+scope, and its [qualification record](validation/2026-09-09-release-0.2.1/review.md)
+tracks the tagged build, signing, and publication gates.
+
 The coordinated release process is described below. The published stable release
 is [0.2.0](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.0);
 [its qualification report](validation/2026-09-08-release-0.2.0/review.md) records

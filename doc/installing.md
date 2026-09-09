@@ -35,16 +35,16 @@ For Python, download on a connected computer with the same OS, architecture,
 and Python version as the offline computer:
 
 ```sh
-python -m pip download rexafs==0.2.0 --dest wheelhouse
+python -m pip download rexafs==0.2.1 --dest wheelhouse
 ```
 
 Copy `wheelhouse` to the offline computer, then run:
 
 ```sh
-python -m pip install --no-index --find-links wheelhouse rexafs==0.2.0
+python -m pip install --no-index --find-links wheelhouse rexafs==0.2.1
 ```
 
-For npm, `npm pack rexafs@0.2.0` downloads the package for a later
-`npm install ./rexafs-0.2.0.tgz`. For Rust, prepare the consuming project's
+For npm, `npm pack rexafs@0.2.1` downloads the package for a later
+`npm install ./rexafs-0.2.1.tgz`. For Rust, prepare the consuming project's
 dependencies with `cargo vendor`; retain its generated configuration alongside
 the project's existing Cargo settings before building with `--offline --locked`.
