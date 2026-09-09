@@ -38,8 +38,8 @@ The maintainer's original checkout and active app sessions were preserved.
   processing standard filter now update with the application theme.
   Center fading now retains atom lighting at fractional opacity. Sphere
   tessellation is cached as non-overlapping bands. Bonds use their previous
-  stroke renderer. Camera interaction repaints a retained viewport rather
-  than rebuilding the structure controls for every wheel/drag event.
+  stroke appearance. Camera interaction uses a retained viewport and coalesces
+  zoom readout updates after scrolling; GPUI may still rebuild ancestor views.
 - Assistant keeps model, reasoning, mode and sharing/access switches visible.
   Conversation utilities and longer descriptions use Settings. Permission and
   approval behavior retain the existing backend and busy-state guards.
@@ -110,36 +110,30 @@ stops, which were corrected. The maintainer used those candidates and identified
 excessive hiding and automatic Transmission import; this implementation includes
 those corrections.
 
-An optimized release candidate was launched and its empty-window controls and
-platform menus were inspected. Before the revised channel-choice and Remove
-marked flows could be exercised visually, computer-use failed repeatedly with
-`Sky Computer Use native pipe startup failed`, including after reconnecting.
-The final channel-choice/footer, Remove marked and structure-focus layouts therefore
-still need native verification. Reconnecting for structure-focus verification failed
-with the same native-pipe error. Do not treat integration tests as visual QA.
+Earlier native checks were interrupted by a failed computer-use connection. The
+connection subsequently recovered, and optimized candidates were inspected with
+Computer Use on macOS. Verified workflows now include:
 
-The final release candidate was packaged in a separate app bundle. The requested
-launch failed at the native connection with the same error. After the maintainer
-requested a direct launch, macOS opened one release instance; its exact packaged
-executable was confirmed running. New empty-Data startup and live Assistant theme
-synchronization are implemented and compiled, but their final appearance is not
-visually qualified.
+- Cu example import: explicit μ-column selection, eV confirmation, validation,
+  one imported group and the expected E0 of about 8977.5 eV.
+- Normalize's automatic upper limit displays “spectrum end”. Applying Okabe–Ito
+  changes both the group swatch and live spectrum curve.
+- Remove marked shows the captured file and count, removes the disposable group,
+  and one Undo restores its identity, mark, color and publication preview.
+- Link to FFT replaces the independent AUTOBK weight with “2 · from FFT”;
+  unlinking restores the independent Auto (1) setting and replots the spectrum.
+- Publish renders the Cu XANES figure, legend, grid and Typst axis labels, and
+  exposes the 300 DPI default. Native inspection identified clipped Style and
+  unlinked background-weight labels; the controls now receive enough width.
+- Restored structure bonds, center fading, depth cue, rotation and wheel zoom
+  were inspected. The later performance checks and their limits are recorded in
+  [the measured renderer review](../2026-09-09-structure-performance/review.md).
 
-The maintainer's follow-up screenshot clarified that the initial Data view should
-include the empty Groups panel and Source/tools inspector. The shell had still
-hidden those panels until an import existed; that gate was removed. The updated
-optimized build was launched for testing and its exact executable confirmed
-running. Its archive also passed the extracted example and FEFF checks above.
-
-The subsequent camera-depth cue build was launched and its executable confirmed
-running as well. Native inspection still failed at the same connection, so the
-new depth cue has automated contrast/geometry coverage but awaits visual QA.
-
-Also pending: narrow/light-theme workflows, populated Series navigation, completed
-Fit/Assistant busy and approval states, export-preview comparison, and complete
+Broader native qualification remains open for narrow-window workflows, populated
+Series navigation, completed Fit/Assistant busy and approval states, and complete
 keyboard/screen-reader coverage. Windows/Linux native adapters are not runtime
-qualified in this macOS session.
-
+qualified in this macOS session. These limits do not replace the automated
+pipeline, import, project and fitting coverage above.
 
 ## Follow-up qualification (2026-09-09 JST)
 
@@ -154,10 +148,9 @@ R-fit layout. The R-fit layout uses a synthetic internal fixture; it is not an
 experimental fit result. Legends with punctuation remain literal while axis math
 uses Typst.
 
-Native access was retried for these changes and again failed with
-`Sky Computer Use native pipe startup failed`. Color-menu/inspector layout and
-interactive shading/zoom smoothness therefore remain pending native QA; no frame
-rate or responsiveness measurement is claimed.
+Native access initially failed for this follow-up, then recovered. The current
+observations and measured CPU rendering costs are listed above; no physical
+display frame-rate guarantee is claimed.
 
 The maintainer reported worse-looking bonds in `dacd740`. The subsequent correction
 restores bond strokes, widths, shading branches and depth subdivision exactly from
@@ -166,3 +159,9 @@ retained-viewport camera interaction remain.
 All ten molecular-view tests passed after the bond restoration. The bond paint
 branch and depth-line helper were also compared directly with `dc9ed30` and match
 exactly. Formatting and diff checks passed.
+
+
+The performance revision passes **449 GUI tests, zero failures, five ignored**
+with both distributed FEFF features (10.02 s after compilation). Its new regression
+compares straight-stroke vertices and triangle coverage against the original Lyon
+renderer, including short segments that collapse at the tessellator tolerance.

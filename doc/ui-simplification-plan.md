@@ -165,6 +165,9 @@ Reset restores the existing group colors; each assignment is one undoable action
 Center fading preserves atom lighting at every opacity. Bonds retain their
 previous stroke rendering, including its opacity and shading behavior.
 Cached, non-overlapping sphere bands avoid repeated alpha compositing and repeated
-path tessellation. Orbit and zoom
-repaint a retained structure viewport; inspector zoom readouts update after a short
-scroll pause. Native perceived smoothness still requires interactive qualification.
+path tessellation. Non-overlapping sphere bands and straight stroke segments
+share paint-order entries; straight strokes reuse equivalent rectangle geometry
+instead of invoking the general tessellator. Orbit and zoom use a retained
+structure viewport; inspector zoom readouts update after a short scroll pause.
+Measured CuO rotation CPU frame time fell from 42 to 26 ms on the validation Mac;
+see [the timing method and limits](validation/2026-09-09-structure-performance/review.md).

@@ -367,14 +367,20 @@ impl StudioApp {
             .into_any_element();
         div()
             .flex()
-            .items_center()
-            .gap_2()
-            .child(div().flex_1().min_w_0().child(field))
-            .child(self.parameter_context(
-                super::parameter_actions::ParamScope::Field("bkg_kweight_linked"),
-                toggle,
-                cx,
-            ))
+            .flex_col()
+            .gap_1()
+            .child(field)
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .px_3()
+                    .child(self.parameter_context(
+                        super::parameter_actions::ParamScope::Field("bkg_kweight_linked"),
+                        toggle,
+                        cx,
+                    )),
+            )
             .into_any_element()
     }
 

@@ -667,6 +667,12 @@ fn line(window: &mut Window, pts: &[[f32; 3]], color: Rgba, width: f32, closed: 
     if pts.is_empty() {
         return;
     }
+    if pts.len() == 2 && !closed {
+        if let Some(path) = straight_stroke(pts[0], pts[1], width) {
+            window.paint_path(path, color);
+        }
+        return;
+    }
     let mut b = gpui::PathBuilder::stroke(px(width));
     b.move_to(point(px(pts[0][0]), px(pts[0][1])));
     for p in &pts[1..] {
@@ -678,6 +684,29 @@ fn line(window: &mut Window, pts: &[[f32; 3]], color: Rgba, width: f32, closed: 
     if let Ok(p) = b.build() {
         window.paint_path(p, color);
     }
+}
+
+/// The same two triangles as a flat-ended Lyon stroke, without constructing
+/// and tessellating a new SVG path for every short depth-cue segment.
+fn straight_stroke(a: [f32; 3], b: [f32; 3], width: f32) -> Option<gpui::Path<Pixels>> {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let length = dx.hypot(dy);
+    if !length.is_finite() || length <= 0. || !width.is_finite() || width <= 0. {
+        return None;
+    }
+    // Match Lyon's default 0.1 px tolerance: an almost coincident pair is
+    // collapsed before its butt caps are emitted, leaving no painted geometry.
+    let merge_threshold = (0.1_f32 * 0.1 * 0.5).min(width * width * 0.05).max(1e-8);
+    if dx * dx + dy * dy < merge_threshold {
+        return None;
+    }
+    let (nx, ny) = (-dy / length * width * 0.5, dx / length * width * 0.5);
+    let mut path = gpui::Path::new(point(px(a[0] + nx), px(a[1] + ny)));
+    path.vertices.reserve_exact(6);
+    path.line_to(point(px(b[0] + nx), px(b[1] + ny)));
+    path.line_to(point(px(b[0] - nx), px(b[1] - ny)));
+    path.line_to(point(px(a[0] - nx), px(a[1] - ny)));
+    Some(path)
 }
 fn disk(window: &mut Window, p: [f32; 3], r: f32, c: Rgba) {
     window.paint_quad(gpui::quad(
@@ -766,24 +795,32 @@ fn sphere_lighting() -> &'static [(gpui::Path<Pixels>, f32)] {
 }
 
 fn shaded_ball(w: &mut Window, p: [f32; 3], r: f32, color: Rgba, cue: impl Fn(Rgba) -> Rgba) {
-    for (template, brightness) in sphere_lighting() {
-        let mut path = template.clone();
-        let scale = r / 24.;
-        let transform = |q: Point<Pixels>| {
-            point(
-                px(p[0] + f32::from(q.x) * scale),
-                px(p[1] + f32::from(q.y) * scale),
-            )
-        };
-        for vertex in &mut path.vertices {
-            vertex.xy_position = transform(vertex.xy_position);
+    // The annuli tile one disk without overlapping. Give the disk one scene
+    // ordering entry instead of inserting thirteen overlapping bounding boxes.
+    let bounds = Bounds::new(
+        point(px(p[0] - r), px(p[1] - r)),
+        size(px(2. * r), px(2. * r)),
+    );
+    w.paint_layer(bounds, |w| {
+        for (template, brightness) in sphere_lighting() {
+            let mut path = template.clone();
+            let scale = r / 24.;
+            let transform = |q: Point<Pixels>| {
+                point(
+                    px(p[0] + f32::from(q.x) * scale),
+                    px(p[1] + f32::from(q.y) * scale),
+                )
+            };
+            for vertex in &mut path.vertices {
+                vertex.xy_position = transform(vertex.xy_position);
+            }
+            path.bounds = Bounds::new(
+                transform(path.bounds.origin),
+                path.bounds.size.map(|v| v * scale),
+            );
+            w.paint_path(path, cue(tint(color, *brightness)));
         }
-        path.bounds = Bounds::new(
-            transform(path.bounds.origin),
-            path.bounds.size.map(|v| v * scale),
-        );
-        w.paint_path(path, cue(tint(color, *brightness)));
-    }
+    });
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -796,35 +833,52 @@ fn depth_line(
     width: f32,
     backdrop: Rgba,
 ) {
-    for (part, inside) in depth.segments(edge) {
-        let steps = if depth.options.fade != FadeMode::Off {
-            8
-        } else if depth.options.depth_cue {
-            2
-        } else {
-            1
-        };
-        for n in 0..steps {
-            let at = |t: f64| std::array::from_fn(|a| part[0][a] + (part[1][a] - part[0][a]) * t);
-            let midpoint = at((n as f64 + 0.5) / steps as f64);
-            let opacity = depth.alpha(midpoint, inside) * color.a;
-            if opacity > 0.002 {
-                line(
-                    w,
-                    &[
-                        project(at(n as f64 / steps as f64)),
-                        project(at((n + 1) as f64 / steps as f64)),
-                    ],
-                    alpha(
-                        depth_cue_color(color, backdrop, depth.fog_amount(midpoint)),
-                        opacity,
-                    ),
-                    width,
-                    false,
-                );
+    // Flat-ended segments of this straight stroke do not overlap. Their colors,
+    // widths and subdivision stay unchanged; only scene ordering is shared.
+    // Separate calls (including the three bond highlights) retain their order.
+    let ends = edge.map(project);
+    let bounds = Bounds::new(
+        point(
+            px(ends[0][0].min(ends[1][0]) - width),
+            px(ends[0][1].min(ends[1][1]) - width),
+        ),
+        size(
+            px((ends[1][0] - ends[0][0]).abs() + 2. * width),
+            px((ends[1][1] - ends[0][1]).abs() + 2. * width),
+        ),
+    );
+    w.paint_layer(bounds, |w| {
+        for (part, inside) in depth.segments(edge) {
+            let steps = if depth.options.fade != FadeMode::Off {
+                8
+            } else if depth.options.depth_cue {
+                2
+            } else {
+                1
+            };
+            for n in 0..steps {
+                let at =
+                    |t: f64| std::array::from_fn(|a| part[0][a] + (part[1][a] - part[0][a]) * t);
+                let midpoint = at((n as f64 + 0.5) / steps as f64);
+                let opacity = depth.alpha(midpoint, inside) * color.a;
+                if opacity > 0.002 {
+                    line(
+                        w,
+                        &[
+                            project(at(n as f64 / steps as f64)),
+                            project(at((n + 1) as f64 / steps as f64)),
+                        ],
+                        alpha(
+                            depth_cue_color(color, backdrop, depth.fog_amount(midpoint)),
+                            opacity,
+                        ),
+                        width,
+                        false,
+                    );
+                }
             }
         }
-    }
+    });
 }
 
 impl StudioApp {
@@ -878,6 +932,7 @@ impl StudioApp {
                 state,
                 drag: None,
                 scroll_generation: 0,
+                timing: Default::default(),
             });
             self.structure.viewport = Some(view.clone());
             view
@@ -951,13 +1006,14 @@ struct MoleculePaintState {
     theme: Theme,
 }
 
-/// Camera events invalidate only this view, avoiding re-layout of the group,
-/// path and inspector controls for every high-resolution scroll event.
+/// Keeps camera interaction state in the viewport and coalesces the surrounding
+/// controls' zoom readout update until scrolling stops.
 pub(crate) struct MoleculeViewport {
     owner: gpui::WeakEntity<StudioApp>,
     state: MoleculePaintState,
     drag: Option<(Point<Pixels>, Point<Pixels>, bool)>,
     scroll_generation: u64,
+    timing: crate::debug_stats::StructureTiming,
 }
 impl MoleculeViewport {
     fn sync_camera(&self, cx: &mut Context<Self>) {
@@ -988,6 +1044,7 @@ impl gpui::Render for MoleculeViewport {
         let state = self.state.clone();
         let depth = DepthFrame::new(state.depth, &state.scene, state.camera, state.picked);
         let owner = self.owner.clone();
+        let timing = self.timing.clone();
         let view = canvas(
             move |bounds, _, cx| {
                 owner
@@ -995,6 +1052,7 @@ impl gpui::Render for MoleculeViewport {
                     .ok();
             },
             move |bounds, _, window, cx| {
+                let started = crate::debug_stats::StructureTiming::begin_paint();
                 paint_scene(
                     &state.scene,
                     state.camera,
@@ -1009,7 +1067,8 @@ impl gpui::Render for MoleculeViewport {
                     bounds,
                     window,
                     cx,
-                )
+                );
+                timing.painted(started);
             },
         )
         .size_full();
@@ -1035,6 +1094,7 @@ impl gpui::Render for MoleculeViewport {
                     let distance = f32::from(ev.position.x - start.x)
                         .hypot(f32::from(ev.position.y - start.y));
                     if moved || distance > 4. {
+                        this.timing.pointer_event();
                         this.state.camera.orbit_drag(dx, dy);
                         this.drag = Some((start, ev.position, true));
                         this.sync_camera(cx);
@@ -1075,6 +1135,7 @@ impl gpui::Render for MoleculeViewport {
                 let before = this.state.camera.zoom;
                 this.state.camera.scroll_zoom(ev.delta);
                 if this.state.camera.zoom != before {
+                    this.timing.pointer_event();
                     this.sync_camera(cx);
                     this.refresh_zoom_readout_after_scroll(cx);
                     cx.notify();
@@ -1545,6 +1606,64 @@ fn paint_absorber_marker(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn straight_stroke_preserves_lyon_vertices_and_coverage() {
+        // Exercise both directions, shallow diagonals, thin guides and thick
+        // bond highlights. Vertex and area equivalence preserves the flat caps
+        // and avoids double coverage when these strokes are translucent.
+        for (a, b) in [
+            ([20., 30., 0.], [180., 30., 0.]),
+            ([40., 20., 0.], [40., 190., 0.]),
+            ([183., 137., 0.], [21., 31., 0.]),
+            ([21., 31., 0.], [183., 137., 0.]),
+            ([20., 30., 0.], [180., 30.1, 0.]),
+            ([20., 30., 0.], [20.01, 30.02, 0.]),
+            ([20., 30., 0.], [20.05, 30., 0.]),
+            ([20., 30., 0.], [20.071, 30., 0.]),
+        ] {
+            for width in [0.22, 0.65, 1., 2.5, 7.] {
+                let actual = straight_stroke(a, b, width);
+                let mut builder = gpui::PathBuilder::stroke(px(width));
+                builder.move_to(point(px(a[0]), px(a[1])));
+                builder.line_to(point(px(b[0]), px(b[1])));
+                let expected = builder.build().unwrap();
+                if expected.vertices.is_empty() {
+                    assert!(actual.is_none(), "collapsed stroke {a:?} {b:?} {width}");
+                    continue;
+                }
+                let actual = actual.expect("visible reference stroke");
+                assert_eq!(actual.vertices.len(), 6);
+                for vertex in actual.vertices.iter().chain(&expected.vertices) {
+                    for mesh in [&actual, &expected] {
+                        assert!(
+                            mesh.vertices.iter().any(|other| {
+                                let delta = vertex.xy_position - other.xy_position;
+                                f32::from(delta.x).hypot(f32::from(delta.y)) < 0.0001
+                            }),
+                            "stroke {a:?} {b:?} width={width}: {vertex:?} absent from {mesh:?}"
+                        );
+                    }
+                }
+                let area = |path: &gpui::Path<Pixels>| {
+                    path.vertices
+                        .chunks_exact(3)
+                        .map(|triangle| {
+                            let a = triangle[1].xy_position - triangle[0].xy_position;
+                            let b = triangle[2].xy_position - triangle[0].xy_position;
+                            (f32::from(a.x) * f32::from(b.y) - f32::from(a.y) * f32::from(b.x))
+                                .abs()
+                                * 0.5
+                        })
+                        .sum::<f32>()
+                };
+                assert!((area(&actual) - area(&expected)).abs() < 0.001);
+            }
+        }
+        assert!(straight_stroke([0.; 3], [0.; 3], 1.).is_none());
+        assert!(straight_stroke([0.; 3], [1.; 3], 0.).is_none());
+        assert!(straight_stroke([0.; 3], [f32::NAN; 3], 1.).is_none());
+    }
 
     #[test]
     fn translucent_sphere_lighting_covers_one_disk_without_stacking_opacity() {

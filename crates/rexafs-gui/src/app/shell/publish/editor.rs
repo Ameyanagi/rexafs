@@ -469,7 +469,7 @@ impl StudioApp {
         let caption_open = self.ui.sections.contains("Publication caption");
         let mut controls = div()
             .id("publication-controls")
-            .w(px(224.))
+            .w(px(312.))
             .flex_none()
             .min_h_0()
             .overflow_y_scroll()

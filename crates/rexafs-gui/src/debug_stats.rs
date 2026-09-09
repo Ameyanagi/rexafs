@@ -10,6 +10,41 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
+/// Per-viewport diagnostics. Input latency ends when CPU canvas painting ends;
+/// it does not include GPU execution or physical display presentation.
+#[derive(Clone, Default)]
+pub(crate) struct StructureTiming {
+    pending: std::rc::Rc<std::cell::Cell<Option<Instant>>>,
+}
+
+impl StructureTiming {
+    pub fn pointer_event(&self) {
+        if enabled() && self.pending.get().is_none() {
+            // Preserve the oldest event when several events coalesce.
+            self.pending.set(Some(Instant::now()));
+        }
+    }
+
+    pub fn begin_paint() -> Option<Instant> {
+        enabled().then(Instant::now)
+    }
+
+    pub fn painted(&self, started: Option<Instant>) {
+        if let Some(started) = started {
+            let now = Instant::now();
+            let latency = self
+                .pending
+                .take()
+                .map(|input| now.duration_since(input).as_micros());
+            eprintln!(
+                "[structure] paint_us={} input_to_paint_us={}",
+                now.duration_since(started).as_micros(),
+                latency.map_or_else(|| "none".into(), |value| value.to_string()),
+            );
+        }
+    }
+}
+
 static ENABLED: OnceLock<bool> = OnceLock::new();
 static BASE: OnceLock<Instant> = OnceLock::new();
 static POINTER_EVENTS: AtomicU64 = AtomicU64::new(0);
