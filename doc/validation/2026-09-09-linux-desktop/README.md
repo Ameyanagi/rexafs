@@ -61,8 +61,8 @@ pipeline. All eight release-tool suites passed. The packaged Linux ARM64 archive
 was extracted to a fresh directory and passed version, numerical-example, and
 both embedded-backend checks; dynamic libraries resolved.
 
-GitHub authentication was unavailable locally during this audit. Windows checks
-and the new Linux CI smoke job still require a successful remote PR run before
-merge/release. The historical Windows interaction report covers the earlier
-baseline, not these new input-widget changes. The local archive is validation
-output, not a published release artifact.
+The optional core plotting tests also passed (see the recorded Rust results).
+Windows checks and the new Linux CI smoke job require a successful remote PR run
+before merge/release. The historical Windows interaction report covers the
+earlier baseline, not these new input-widget changes. The local archive is
+validation output, not a published release artifact.
