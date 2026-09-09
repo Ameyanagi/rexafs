@@ -42,6 +42,22 @@ jobs:
     - name: Test core plotting feature
       run: cargo +stable test --locked -p rexafs --features plotting
 
+  linux-desktop:
+    name: Linux desktop compile (stable)
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      with:
+        toolchain: stable
+    - name: Install Linux platform dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential clang cmake pkg-config libasound2-dev libfontconfig-dev libglib2.0-dev libgtk-3-dev libssl-dev libvulkan-dev libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libzstd-dev libsqlite3-dev
+    - name: Check the native Linux GUI and accessibility adapter
+      run: cargo +stable check --locked -p rexafs-gui --no-default-features --features refeff-runner,feff10-runner
+
   strict-gates:
     name: Strict Gates (stable)
     runs-on: ubuntu-latest

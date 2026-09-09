@@ -1,7 +1,17 @@
 # rexafs 0.2.2 release qualification
 
-Status: preparation in progress. Version 0.2.1 remains the published stable
-release until the checks and publication below are complete.
+Status: **not published**. The immutable `v0.2.2` tag points to
+`dc993fe55dea9889b0eab3b1668f1bce1e2bd8c4`. Its
+[manual release build](https://github.com/Ameyanagi/rexafs/actions/runs/34408472161)
+failed Linux desktop compilation and was cancelled. No release assets or registry
+packages were published from this attempt. The
+[0.2.3 qualification record](../2026-09-10-release-0.2.3/review.md) tracks the fix.
+
+The Linux [failed job](https://github.com/Ameyanagi/rexafs/actions/runs/34408472161/job/102657037257)
+reported `E0308` at `accessibility.rs:305`: `Option::and_then` required the
+adapter call to return `Option`, while `accesskit_unix` returns `()`.
+The Mac and Windows adapters return optional queued events. The correction
+preserves each platform's return type and adds a regular Linux GUI compile gate.
 
 ## Source and issue/PR review
 
@@ -49,14 +59,9 @@ Verified locally on Apple Silicon macOS with Rust 1.98.1:
 
 ## Final build and publication
 
-Pending: immutable `v0.2.2` tag; successful manual release build for its exact
-commit; all four desktop platforms, 20 Python wheels, source distribution, Rust
-crate, npm package, license checks and the final manifest.
-
-Pending: both Mac signatures, Apple notarization, ZIP/DMG provenance and
-installation checks; available-host final-download GUI and numerical checks;
-registry publication and hash comparisons; desktop-only public asset checksums;
-GitHub release publication and latest-version verification.
+The manual build did not produce a qualified final manifest. Signing, registry
+publication, and GitHub release publication were not started. The existing
+0.2.1 public release and packages were left intact.
 
 ## Platform coverage
 

@@ -1,10 +1,12 @@
 # Releasing rexafs
 
-## Preparing 0.2.2
+## Preparing 0.2.3
 
 The next patch release includes the Windows console, native shortcut and
-accessibility fixes from `29a1191`. Its [release notes](release-notes-0.2.2.md)
-and [qualification record](validation/2026-09-10-release-0.2.2/review.md) track
+accessibility fixes from `29a1191`, plus the Linux native adapter return-type
+correction. Version 0.2.2 was withheld after its Linux build failed; its tag
+remains immutable. The new release's [release notes](release-notes-0.2.3.md)
+and [qualification record](validation/2026-09-10-release-0.2.3/review.md) track
 the exact source, build, signing and publication checks. PR #39 remains excluded
 because its nalgebra update fails at the solver type boundary. Issue #20 remains
 open for the legacy clamp Jacobian and output-FFT window-domain differences.

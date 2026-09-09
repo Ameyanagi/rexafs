@@ -1,24 +1,20 @@
-**Unpublished qualification attempt.** The Linux desktop compile check failed;
-see the [0.2.3 release notes](release-notes-0.2.3.md) for the corrected release.
-The download links below were prepared for 0.2.2 and were never published.
-
 | Desktop | Installer | Portable |
 |---|---|---|
-| macOS · Apple Silicon | [Download](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.2/rexafs-0.2.2-aarch64-apple-darwin.dmg) | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.2/rexafs-0.2.2-aarch64-apple-darwin.zip) |
-| macOS · Intel | [Download](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.2/rexafs-0.2.2-x86_64-apple-darwin.dmg) | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.2/rexafs-0.2.2-x86_64-apple-darwin.zip) |
-| Windows · preview | [Download](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.2/rexafs-0.2.2-x86_64-pc-windows-msvc-setup.exe) | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.2/rexafs-0.2.2-x86_64-pc-windows-msvc.zip) |
-| Linux · preview | — | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.2/rexafs-0.2.2-x86_64-unknown-linux-gnu.tar.gz) |
+| macOS · Apple Silicon | [Download](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.3/rexafs-0.2.3-aarch64-apple-darwin.dmg) | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.3/rexafs-0.2.3-aarch64-apple-darwin.zip) |
+| macOS · Intel | [Download](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.3/rexafs-0.2.3-x86_64-apple-darwin.dmg) | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.3/rexafs-0.2.3-x86_64-apple-darwin.zip) |
+| Windows · preview | [Download](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.3/rexafs-0.2.3-x86_64-pc-windows-msvc-setup.exe) | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.3/rexafs-0.2.3-x86_64-pc-windows-msvc.zip) |
+| Linux · preview | — | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.3/rexafs-0.2.3-x86_64-unknown-linux-gnu.tar.gz) |
 
-[Installation and offline setup](https://github.com/Ameyanagi/rexafs/blob/v0.2.2/doc/installing.md)
+[Installation and offline setup](https://github.com/Ameyanagi/rexafs/blob/v0.2.3/doc/installing.md)
 
 <details>
 <summary>Python · Rust · npm</summary>
 
 | Package | Install |
 |---|---|
-| [Python](https://pypi.org/project/rexafs/0.2.2/) | `python -m pip install --upgrade rexafs` |
-| [Rust](https://crates.io/crates/rexafs/0.2.2) | `cargo add rexafs@0.2.2` |
-| [npm](https://www.npmjs.com/package/rexafs/v/0.2.2) | `npm install rexafs@0.2.2` |
+| [Python](https://pypi.org/project/rexafs/0.2.3/) | `python -m pip install --upgrade rexafs` |
+| [Rust](https://crates.io/crates/rexafs/0.2.3) | `cargo add rexafs@0.2.3` |
+| [npm](https://www.npmjs.com/package/rexafs/v/0.2.3) | `npm install rexafs@0.2.3` |
 
 </details>
 
@@ -31,6 +27,9 @@ atom multi-selection. Text fields use Ctrl+Arrow for word navigation on
 Windows/Linux and retain the standard macOS gestures. macOS continues to use Cmd
 for command shortcuts.
 
+The native adapter return types are handled correctly on Linux/FreeBSD, macOS,
+and Windows. A Linux GUI compile check now runs in regular CI.
+
 Accessibility updates compare nodes by identity, share the complete activation
 snapshot, and skip unchanged native updates. This reduces work during plot and
 pointer redraws while preserving changes to controls, focus, and tree structure.
@@ -38,7 +37,7 @@ pointer redraws while preserving changes to controls, focus, and tree structure.
 Windows packaging checks the executable's GUI subsystem. Installer checks wait
 for diagnostic processes and capture their output. Opt-in debug statistics also
 report the selected graphics adapter. The
-[Windows interaction review](https://github.com/Ameyanagi/rexafs/blob/v0.2.2/doc/validation/2026-09-09-windows-gui/README.md)
+[Windows interaction review](https://github.com/Ameyanagi/rexafs/blob/v0.2.3/doc/validation/2026-09-09-windows-gui/README.md)
 records development-build checks and the limits of the measured timings.
 
 Existing format-1 projects remain readable. New linked and embedded fixtures
@@ -50,6 +49,9 @@ numerical dependencies remain the same as 0.2.1.
 
 <details>
 <summary>Platform scope and reviewed follow-ups</summary>
+
+Version 0.2.2 was withheld after Linux qualification failed. This release includes
+the correction and is qualified from a new immutable tag.
 
 Mac releases use signed and notarized ZIP archives and DMG installers. Intel
 interactive checks on the available Apple Silicon host use Rosetta; native Intel

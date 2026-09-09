@@ -302,7 +302,13 @@ fn publish(window: &mut Window, cx: &mut App) {
         state
             .adapter
             .update_window_focus_state(window.is_window_active());
-        let events = update.and_then(|update| state.adapter.update_if_active(|| update));
+        // Mac/Windows return queued events; Unix dispatches in place and returns
+        // unit. Preserve each adapter's return type when there is no change.
+        let events = if let Some(update) = update {
+            state.adapter.update_if_active(|| update)
+        } else {
+            Default::default()
+        };
         #[cfg(target_os = "macos")]
         {
             (events, focus_events)

@@ -9,9 +9,9 @@ Choose **Download** to fetch the matching Mac archive and verify its size and SH
 
 A Nightly label includes the immutable build tag. `rexafs --build-info` reports the library version, channel, release tag, source commit and optional nightly build time. Each packaged archive contains the same identity and signing/notarization provenance in `build.json`.
 
-## Updating to 0.2.2
+## Updating to 0.2.3
 
-Version 0.2.2 fixes Windows console launches, Ctrl shortcuts and multi-selection,
+Version 0.2.3 fixes Windows console launches, Ctrl shortcuts and multi-selection,
 and reduces accessibility update overhead. macOS keeps its Cmd shortcuts.
 Project format, saved processing settings and numerical defaults are unchanged.
 Save the current project before replacing the application.

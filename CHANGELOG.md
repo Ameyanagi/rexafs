@@ -1,6 +1,18 @@
 # Changelog
 
-## 0.2.2
+## 0.2.3
+
+- Deliver the Windows launch, shortcut, selection and accessibility changes
+  prepared for 0.2.2, which was withheld after Linux qualification failed.
+- Preserve the native accessibility adapter return type on Linux/FreeBSD as
+  well as macOS/Windows. Add a native Linux GUI compile check to regular CI.
+- Retain linked and embedded 0.2.3 compatibility projects; numerical defaults
+  and dependencies are unchanged from 0.2.1.
+
+## 0.2.2 (unpublished)
+
+The immutable tag was retained after the Linux desktop compile check failed.
+Version 0.2.3 includes the correction and must pass a new complete release build.
 
 - Open Windows desktop sessions without a console window. Preserve redirected
   diagnostic output and verify the GUI subsystem in the packaged executable.
