@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::{fs::File, os::raw::c_int, path::Path};
 
 use criterion::profiler::Profiler;

@@ -354,7 +354,7 @@ impl Render for NumericField {
                 div()
                     .flex_none()
                     .w(px(22.))
-                    .font_family("Menlo")
+                    .font_family(crate::theme::MONO)
                     .text_size(px(10.5))
                     .text_color(t.text_muted)
                     .child(self.unit.clone()),

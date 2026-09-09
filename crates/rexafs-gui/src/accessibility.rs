@@ -12,6 +12,7 @@ use gpui::{
     InspectorElementId, IntoElement, LayoutId, ParentElement, Pixels, SharedString, Stateful,
     Window, WindowId, div, prelude::*,
 };
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
 use std::{
     cell::RefCell,

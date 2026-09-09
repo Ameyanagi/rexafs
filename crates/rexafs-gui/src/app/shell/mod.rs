@@ -220,7 +220,7 @@ impl StageStatus {
 }
 
 /// Monospace face for numbers (tabular) in the chrome.
-pub const MONO: &str = "Menlo";
+pub use crate::theme::MONO;
 
 /// Uppercase, letter-spaced section label used by every panel.
 pub fn section_label(t: &Theme, text: impl Into<SharedString>) -> impl IntoElement {

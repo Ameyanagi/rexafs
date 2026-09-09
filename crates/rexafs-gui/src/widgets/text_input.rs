@@ -1541,7 +1541,7 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::prev_field))
             .on_action(cx.listener(Self::step_up))
             .on_action(cx.listener(Self::step_down))
-            .when(self.style.mono, |d| d.font_family("Menlo"))
+            .when(self.style.mono, |d| d.font_family(crate::theme::MONO))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))

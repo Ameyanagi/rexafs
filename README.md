@@ -47,6 +47,10 @@ identification. The desktop's experimental assistant is optional.
 The release work is tested with Rust 1.98.1. The desktop uses edition 2024 and a
 pinned GPUI dependency; see the runbook for platform qualification.
 
+Install the development dependencies for your platform first; see
+[Linux and Windows development](doc/desktop-development.md). On Windows MSVC,
+use the ReFEFF-only command below because the FEFF10 prebuilt uses MinGW.
+
 ```bash
 cargo test -p rexafs
 cargo run --release -p rexafs-gui
@@ -57,6 +61,17 @@ The desktop executable is `target/release/rexafs`. To build only the ReFEFF back
 ```bash
 cargo build --release -p rexafs-gui --no-default-features --features refeff-runner
 ```
+
+Install repository hooks once per checkout (Python 3.12+):
+
+```bash
+uv tool install pre-commit==4.5.1
+pre-commit install --install-hooks
+pre-commit run --all-files
+```
+
+Commits check source formatting, configuration, release versions and tooling.
+Pushes also run core tests and strict Clippy when Rust inputs change.
 
 Python development (CPython 3.10–3.14):
 

@@ -49,7 +49,8 @@ fn main() {
     #[cfg(feature = "feff10-runner")]
     feff10::worker::init();
 
-    match std::env::args().nth(1).as_deref() {
+    let first_arg = std::env::args_os().nth(1);
+    match first_arg.as_deref().and_then(std::ffi::OsStr::to_str) {
         Some("--version") => {
             println!("rexafs {}", updates::installed_label());
             return;
@@ -81,7 +82,7 @@ fn main() {
     // Optional positional arg: a spectrum, folder or .rxs to open. Enables
     // "open with", scripted launches, and screenshot testing without driving
     // the native file dialog.
-    let initial_open: Option<PathBuf> = std::env::args().nth(1).map(PathBuf::from);
+    let initial_open: Option<PathBuf> = first_arg.map(PathBuf::from);
 
     // gpui 0.2.2 has no zero-arg `Application::new()`; the public entry point
     // is `gpui_platform::application()`.
@@ -91,11 +92,12 @@ fn main() {
             cx.bind_keys(widgets::text_input::text_input_keybindings());
             cx.bind_keys(app::studio_keybindings());
             cx.on_action(|_: &app::Quit, cx| cx.quit());
-            let window_size = Size {
-                width: px(1440.0),
-                height: px(900.0),
-            };
-            let bounds = Bounds::centered(None, window_size, cx);
+            let display = cx.primary_display().map(|display| display.visible_bounds());
+            let window_size = initial_window_size(display.map(|bounds| bounds.size));
+            let bounds = display.map_or_else(
+                || Bounds::centered(None, window_size, cx),
+                |display| Bounds::centered_at(display.center(), window_size),
+            );
             let main_window = cx
                 .open_window(
                     WindowOptions {
@@ -106,6 +108,17 @@ fn main() {
                             ..Default::default()
                         }),
                         window_bounds: Some(WindowBounds::Windowed(bounds)),
+                        window_min_size: Some(Size {
+                            width: px(960.).min(window_size.width),
+                            height: px(640.).min(window_size.height),
+                        }),
+                        app_id: Some(
+                            if updates::installed_channel() == updates::UpdateChannel::Nightly {
+                                "com.rexafs.nightly".into()
+                            } else {
+                                "com.rexafs.desktop".into()
+                            },
+                        ),
                         ..Default::default()
                     },
                     |window, cx| {
@@ -120,6 +133,45 @@ fn main() {
             let _ = main_window.update(cx, |_, window, _| accessibility::show(window));
             cx.activate(true);
         });
+}
+
+/// Leave room for window decorations on laptop screens and scaled desktops.
+fn initial_window_size(display: Option<Size<gpui::Pixels>>) -> Size<gpui::Pixels> {
+    let preferred = Size {
+        width: px(1440.),
+        height: px(900.),
+    };
+    display.map_or(preferred, |size| Size {
+        width: preferred.width.min(size.width * 0.95),
+        height: preferred.height.min(size.height * 0.9),
+    })
+}
+
+#[cfg(test)]
+mod window_tests {
+    use super::*;
+
+    #[test]
+    fn startup_fits_small_and_scaled_displays() {
+        for (width, height) in [(1366., 768.), (1280., 720.), (800., 600.), (3840., 2160.)] {
+            let available = Size {
+                width: px(width),
+                height: px(height),
+            };
+            let size = initial_window_size(Some(available));
+            assert!(size.width < available.width);
+            assert!(size.height < available.height);
+            assert!(size.width <= px(1440.));
+            assert!(size.height <= px(900.));
+        }
+        assert_eq!(
+            initial_window_size(None),
+            Size {
+                width: px(1440.),
+                height: px(900.)
+            }
+        );
+    }
 }
 
 /// Keep terminal diagnostics available when launched from a shell, while

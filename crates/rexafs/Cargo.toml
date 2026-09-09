@@ -61,9 +61,10 @@ http = ["dep:ureq"]
 materials-project = ["http"]
 cod = ["http"]
 
-[dev-dependencies]
+[target.'cfg(unix)'.dev-dependencies]
 pprof = { version = "0.15", features = ["flamegraph"] }
 
+[dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports"] }
 
 [[bench]]
