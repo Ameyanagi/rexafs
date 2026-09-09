@@ -46,7 +46,7 @@ lazy_static = "1.5.0"
 apex-solver = { version = "1.4.0", default-features = false }
 levenberg-marquardt = "0.15.0"
 # Latest compatible line for levenberg-marquardt 0.15's public matrix types.
-nalgebra = { version = "0.34.2", features = ["serde-serialize"] }
+nalgebra = { version = "0.35.0", features = ["serde-serialize"] }
 # apex-solver 1.4 still exposes nalgebra 0.33 at its solver boundary.
 nalgebra-apex = { package = "nalgebra", version = "0.33.3" }
 num-complex = { version = "0.4.6", features = ["serde"] }
