@@ -24,7 +24,15 @@ The 0.2.4 writer saved, reopened and compared both new fixtures. The manifest
 verifies all 30 retained samples; all previous fixture bytes and hashes remain
 unchanged. The coordinated v0.2.4 version check and optimized desktop suite
 passed (461 tests, 5 ignored). Local packages are verification outputs, not
-public release artifacts.
+public release artifacts. The final 0.2.4 Linux ARM64 package also passed both
+FEFF engine diagnostics and all ten X11 smoke checks using the new embedded
+fixture.
+
+The first release-PR strict job passed Clippy and formatting, then its hook tried
+to install the repository-pinned toolchain over a partially installed runner
+copy. The workflow now explicitly runs hooks with the stable toolchain it already
+installed, matching the job's other checks. Local hooks still use the repository
+pin. The corrected revision requires a new complete CI pass.
 
 ## Final build and publication
 

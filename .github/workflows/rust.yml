@@ -86,6 +86,8 @@ jobs:
       with:
         python-version: '3.12'
     - name: Run repository hooks
+      env:
+        RUSTUP_TOOLCHAIN: stable
       run: |
         python -m pip install pre-commit==4.5.1
         pre-commit run --all-files
