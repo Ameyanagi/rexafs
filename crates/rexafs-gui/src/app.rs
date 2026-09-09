@@ -482,9 +482,9 @@ actions!(
 /// editing keystroke must stay with the focused editor.
 pub fn studio_keybindings() -> Vec<KeyBinding> {
     vec![
-        KeyBinding::new("cmd-q", Quit, None),
-        KeyBinding::new("cmd-enter", AssistantSend, Some("Assistant")),
-        KeyBinding::new("cmd-.", AssistantStop, Some("Assistant")),
+        KeyBinding::new("secondary-q", Quit, None),
+        KeyBinding::new("secondary-enter", AssistantSend, Some("Assistant")),
+        KeyBinding::new("secondary-.", AssistantStop, Some("Assistant")),
         KeyBinding::new("escape", AssistantEscape, Some("Assistant")),
         KeyBinding::new("tab", AssistantNextControl, Some("Assistant && !TextInput")),
         KeyBinding::new(
@@ -492,9 +492,13 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
             AssistantPreviousControl,
             Some("Assistant && !TextInput"),
         ),
-        KeyBinding::new("cmd-o", OpenProject, Some("Studio && !Assistant")),
-        KeyBinding::new("cmd-s", SaveProject, Some("Studio && !Assistant")),
-        KeyBinding::new("cmd-shift-o", ImportPaths, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-o", OpenProject, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-s", SaveProject, Some("Studio && !Assistant")),
+        KeyBinding::new(
+            "secondary-shift-o",
+            ImportPaths,
+            Some("Studio && !Assistant"),
+        ),
         KeyBinding::new("escape", DismissPathRoute, Some("PathRoute")),
         KeyBinding::new("f2", RenameGroup, Some("DataPanel && !TextInput")),
         KeyBinding::new("enter", RenameGroup, Some("DataPanel && !TextInput")),
@@ -509,9 +513,21 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
         KeyBinding::new("down", NavDown, Some("DataPanel && !TextInput")),
         KeyBinding::new("shift-up", NavExtendUp, Some("DataPanel && !TextInput")),
         KeyBinding::new("shift-down", NavExtendDown, Some("DataPanel && !TextInput")),
-        KeyBinding::new("cmd-a", MarkAllGroups, Some("DataPanel && !TextInput")),
-        KeyBinding::new("cmd-shift-a", ClearCompare, Some("DataPanel && !TextInput")),
-        KeyBinding::new("cmd-i", InvertGroupMarks, Some("DataPanel && !TextInput")),
+        KeyBinding::new(
+            "secondary-a",
+            MarkAllGroups,
+            Some("DataPanel && !TextInput"),
+        ),
+        KeyBinding::new(
+            "secondary-shift-a",
+            ClearCompare,
+            Some("DataPanel && !TextInput"),
+        ),
+        KeyBinding::new(
+            "secondary-i",
+            InvertGroupMarks,
+            Some("DataPanel && !TextInput"),
+        ),
         KeyBinding::new("space", ToggleFocusedMark, Some("DataPanel && !TextInput")),
         KeyBinding::new(
             "left",
@@ -528,25 +544,25 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
         KeyBinding::new("shift-right", FrameJumpFwd, Some("Operando && !TextInput")),
         KeyBinding::new("home", FrameFirst, Some("Operando && !TextInput")),
         KeyBinding::new("end", FrameLast, Some("Operando && !TextInput")),
-        KeyBinding::new("cmd-1", StageData, Some("Studio && !Assistant")),
-        KeyBinding::new("cmd-2", StageNormalize, Some("Studio && !Assistant")),
-        KeyBinding::new("cmd-3", StageBackground, Some("Studio && !Assistant")),
-        KeyBinding::new("cmd-4", StageTransform, Some("Studio && !Assistant")),
-        KeyBinding::new("cmd-5", StageFit, Some("Studio && !Assistant")),
-        KeyBinding::new("cmd-6", StageSeries, Some("Studio && !Assistant")),
-        KeyBinding::new("cmd-7", StagePublish, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-1", StageData, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-2", StageNormalize, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-3", StageBackground, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-4", StageTransform, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-5", StageFit, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-6", StageSeries, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-7", StagePublish, Some("Studio && !Assistant")),
         KeyBinding::new(
-            "cmd-b",
+            "secondary-b",
             ToggleDataPanel,
             Some("Studio && !TextInput && !Assistant"),
         ),
         KeyBinding::new(
-            "cmd-j",
+            "secondary-j",
             ToggleContextPanel,
             Some("Studio && !TextInput && !Assistant"),
         ),
         KeyBinding::new(
-            "cmd-p",
+            "secondary-p",
             FocusFilter,
             Some("Studio && !TextInput && !Assistant"),
         ),
@@ -555,16 +571,20 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
             ExploreEscape,
             Some("Explore && !TextInput && !Assistant"),
         ),
-        KeyBinding::new("cmd-k", PaletteOpen, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-k", PaletteOpen, Some("Studio && !Assistant")),
         KeyBinding::new("escape", PaletteClose, Some("Palette")),
-        KeyBinding::new("cmd-z", Undo, Some("Studio && !TextInput && !Assistant")),
         KeyBinding::new(
-            "cmd-shift-z",
+            "secondary-z",
+            Undo,
+            Some("Studio && !TextInput && !Assistant"),
+        ),
+        KeyBinding::new(
+            "secondary-shift-z",
             Redo,
             Some("Studio && !TextInput && !Assistant"),
         ),
         KeyBinding::new(
-            "cmd-shift-j",
+            "secondary-shift-j",
             JournalToggle,
             Some("Studio && !TextInput && !Assistant"),
         ),
@@ -2364,17 +2384,63 @@ mod keybinding_tests {
     }
 
     #[test]
+    fn shortcuts_use_the_native_command_modifier() {
+        use crate::widgets::text_input::{Copy, Paste, SelectAll, WordLeft};
+
+        let shell = studio_keybindings();
+        let input = crate::widgets::text_input::text_input_keybindings();
+        let command = if cfg!(target_os = "macos") {
+            "cmd"
+        } else {
+            "ctrl"
+        };
+        for (binding, key) in [
+            (binding::<super::Undo>(&shell), "z"),
+            (binding::<super::OpenProject>(&shell), "o"),
+            (binding::<StageData>(&shell), "1"),
+            (binding::<Copy>(&input), "c"),
+            (binding::<Paste>(&input), "v"),
+            (binding::<SelectAll>(&input), "a"),
+        ] {
+            let key = gpui::Keystroke::parse(&format!("{command}-{key}")).unwrap();
+            assert_eq!(binding.match_keystrokes(&[key]), Some(false));
+        }
+        let word_modifier = if cfg!(target_os = "macos") {
+            "alt"
+        } else {
+            "ctrl"
+        };
+        assert_eq!(
+            binding::<WordLeft>(&input)
+                .match_keystrokes(&[
+                    gpui::Keystroke::parse(&format!("{word_modifier}-left")).unwrap(),
+                ]),
+            Some(false)
+        );
+        if !cfg!(target_os = "macos") {
+            for binding in shell.iter().chain(&input) {
+                for key in binding.keystrokes() {
+                    assert!(
+                        !key.modifiers().platform,
+                        "Windows shortcuts must not require the Windows key"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn project_and_import_shortcuts_are_distinct_and_yield_to_routing_card() {
         let bindings = studio_keybindings();
         let open = binding::<super::OpenProject>(&bindings);
         let import = binding::<super::ImportPaths>(&bindings);
         assert_eq!(
             open.keystrokes(),
-            KeyBinding::new("cmd-o", super::OpenProject, None).keystrokes()
+            KeyBinding::new("secondary-o", super::OpenProject, None).keystrokes()
         );
         assert_eq!(
             import.keystrokes(),
-            KeyBinding::new("cmd-shift-o", super::ImportPaths, None).keystrokes()
+            KeyBinding::new("secondary-shift-o", super::ImportPaths, None).keystrokes()
         );
         let text_bindings = crate::widgets::text_input::text_input_keybindings();
         for target in [open, import] {
@@ -6199,7 +6265,7 @@ impl StudioApp {
     fn click_entry(&mut self, ix: usize, modifiers: gpui::Modifiers, cx: &mut Context<Self>) {
         let gesture = if modifiers.shift {
             group_rows::Gesture::Range
-        } else if modifiers.platform {
+        } else if modifiers.secondary() {
             group_rows::Gesture::Toggle
         } else {
             group_rows::Gesture::Current

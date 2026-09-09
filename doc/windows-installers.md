@@ -16,6 +16,12 @@ installer does not force-close a running app. It preserves user-created files
 on uninstall and does not delete `.rxs` projects or the user's `.rexafs` settings.
 The portable ZIP remains available for users who prefer manual installation.
 
+Source builds use the Windows GUI subsystem, so opening the app from Explorer
+or a shortcut does not create a terminal window. Diagnostic flags still support
+redirected output. When scripting these flags in PowerShell, use
+`Start-Process -Wait` with `-RedirectStandardOutput` and `-RedirectStandardError`
+to wait for the GUI executable and collect its output reliably.
+
 The setup EXE and rexafs EXE currently have no Windows publisher signature.
 The release provides SHA-256 checksums and installer qualification records.
 The included Microsoft runtime DLLs retain Microsoft's signatures. Microsoft

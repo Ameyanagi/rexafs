@@ -3,6 +3,10 @@
 //! Opens a single window whose root view is [`app::StudioApp`].
 //! UX reference: doc/gui-ux-design.md.
 
+// Explorer/Start menu launches must not allocate a console. Keep the test
+// harness as a console program so Cargo can collect its output normally.
+#![cfg_attr(all(target_os = "windows", not(test)), windows_subsystem = "windows")]
+
 mod accessibility;
 mod app;
 mod catalog;
@@ -38,6 +42,9 @@ use gpui::{App, AppContext, Bounds, Size, WindowBounds, WindowOptions, px};
 use crate::app::StudioApp;
 
 fn main() {
+    #[cfg(target_os = "windows")]
+    attach_parent_console();
+
     // Handle re-executed FEFF stage workers before argument or GUI setup.
     #[cfg(feature = "feff10-runner")]
     feff10::worker::init();
@@ -102,6 +109,9 @@ fn main() {
                         ..Default::default()
                     },
                     |window, cx| {
+                        if debug_stats::enabled() {
+                            eprintln!("[renderer] {:?}", window.gpu_specs());
+                        }
                         accessibility::install(window, cx);
                         cx.new(|cx| StudioApp::new_with_open(initial_open.clone(), window, cx))
                     },
@@ -110,6 +120,26 @@ fn main() {
             let _ = main_window.update(cx, |_, window, _| accessibility::show(window));
             cx.activate(true);
         });
+}
+
+/// Keep terminal diagnostics available when launched from a shell, while
+/// preserving redirected output used by packaging and installer checks.
+#[cfg(target_os = "windows")]
+fn attach_parent_console() {
+    use windows::Win32::System::Console::{
+        ATTACH_PARENT_PROCESS, AttachConsole, GetStdHandle, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE,
+    };
+
+    // SAFETY: these APIs inspect this process's standard handles and attach
+    // only to an existing parent console; they never create a console window.
+    unsafe {
+        let has_output = [STD_OUTPUT_HANDLE, STD_ERROR_HANDLE]
+            .into_iter()
+            .any(|kind| GetStdHandle(kind).is_ok_and(|handle| !handle.is_invalid()));
+        if !has_output {
+            let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+        }
+    }
 }
 
 /// Exercise the distributed example and numerical pipeline without a display.

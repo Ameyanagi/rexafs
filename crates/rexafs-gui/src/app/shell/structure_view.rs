@@ -466,7 +466,7 @@ impl StudioApp {
         modifiers: gpui::Modifiers,
         cx: &mut Context<Self>,
     ) {
-        if modifiers.platform {
+        if modifiers.secondary() {
             if !self.structure.multi.remove(&i) {
                 self.structure.multi.insert(i);
             }

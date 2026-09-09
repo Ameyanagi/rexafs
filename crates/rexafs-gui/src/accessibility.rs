@@ -22,6 +22,8 @@ use std::{
 };
 
 const ROOT: NodeId = NodeId(1);
+mod tree;
+
 type Click = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 type Request = Rc<dyn Fn(Action, Option<ActionData>, &mut Window, &mut App)>;
 
@@ -32,10 +34,10 @@ type Adapter = accesskit_windows::SubclassingAdapter;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 type Adapter = accesskit_unix::Adapter;
 
-struct Activate(Arc<Mutex<Option<TreeUpdate>>>);
+struct Activate(Arc<Mutex<Option<Arc<TreeUpdate>>>>);
 impl accesskit::ActivationHandler for Activate {
     fn request_initial_tree(&mut self) -> Option<TreeUpdate> {
-        self.0.lock().ok()?.clone()
+        self.0.lock().ok()?.as_deref().cloned()
     }
 }
 struct Actions(mpsc::UnboundedSender<ActionRequest>);
@@ -67,8 +69,7 @@ struct Record {
 }
 struct WindowTree {
     adapter: Adapter,
-    snapshot: Arc<Mutex<Option<TreeUpdate>>>,
-    previous: Option<TreeUpdate>,
+    snapshot: Arc<Mutex<Option<Arc<TreeUpdate>>>>,
     focus: HashMap<NodeId, FocusHandle>,
     records: Vec<Record>,
     handlers: HashMap<NodeId, Handler>,
@@ -133,7 +134,6 @@ pub(crate) fn install(window: &mut Window, cx: &mut App) {
     let state = Rc::new(RefCell::new(WindowTree {
         adapter,
         snapshot,
-        previous: None,
         focus: HashMap::new(),
         records: Vec::new(),
         handlers: HashMap::new(),
@@ -286,12 +286,13 @@ fn publish(window: &mut Window, cx: &mut App) {
             tree_id: TreeId::ROOT,
             focus,
         };
-        *state.snapshot.lock().unwrap() = Some(tree.clone());
-        // Skip unchanged trees and send only changed nodes after activation.
-        let previous = state.previous.replace(tree.clone());
-        let mut update = tree;
-        if let Some(previous) = &previous {
-            update.nodes.retain(|entry| !previous.nodes.contains(entry));
+        // Keep one complete snapshot for activation, and diff by node ID.
+        // A plot/hover repaint must not clone the whole previous tree or
+        // submit an empty native accessibility update.
+        let previous = state.snapshot.lock().unwrap().clone();
+        let update = tree::changes_since(&tree, previous.as_deref());
+        if update.is_some() {
+            *state.snapshot.lock().unwrap() = Some(Arc::new(tree));
         }
         #[cfg(target_os = "macos")]
         let focus_events = state
@@ -301,7 +302,7 @@ fn publish(window: &mut Window, cx: &mut App) {
         state
             .adapter
             .update_window_focus_state(window.is_window_active());
-        let events = state.adapter.update_if_active(|| update);
+        let events = update.and_then(|update| state.adapter.update_if_active(|| update));
         #[cfg(target_os = "macos")]
         {
             (events, focus_events)

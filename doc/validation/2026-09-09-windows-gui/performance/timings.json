@@ -1,0 +1,49 @@
+{
+  "pipeline": {
+    "debug": {
+      "n": 50,
+      "median_ms": {
+        "normalize": 1.40005,
+        "autobk": 11.22565,
+        "fft": 0.59345,
+        "ifft": 0.7799,
+        "total": 14.92855
+      }
+    },
+    "release": {
+      "n": 50,
+      "median_ms": {
+        "normalize": 0.0716,
+        "autobk": 0.253,
+        "fft": 0.04245,
+        "ifft": 0.0805,
+        "total": 0.45275
+      }
+    }
+  },
+  "structure_rotation": {
+    "debug": {
+      "n": 4,
+      "median_ms": {
+        "canvas": 208.6365,
+        "input_handler_to_canvas_end": 268.5525,
+        "cpu_frame": 568.0752
+      }
+    },
+    "release": {
+      "n": 4,
+      "median_ms": {
+        "canvas": 30.3995,
+        "input_handler_to_canvas_end": 63.165,
+        "cpu_frame": 288.04240000000004
+      }
+    }
+  },
+  "renderer": "[renderer] Some(GpuSpecs { is_software_emulated: true, device_name: \"Microsoft Basic Render Driver\", driver_name: \"Unknown Vendor (ID: 0x1414)\", driver_info: \"10.0.26100.9278\" })",
+  "sha256": {
+    "crates\\rexafs-gui\\src\\params.rs": "81c24050b614be35c3875ebe553d0fbaf3ae4ed8f59227b8c10f373c8e8243e2",
+    "crates\\rexafs-gui\\src\\app\\shell\\molecule_view.rs": "0ec4f6c4bb41b12a55592538de4dbf6743478f9691bf01d6efc76136d1f295e0",
+    "target\\debug\\rexafs.exe": "de972ca03f7cffc7de9a71e39569ec46b51720b21a83ff953e3e6e3b231e0c44",
+    "target\\release\\rexafs.exe": "d4203dd4dbd7a93af5fa9c3b552f2febd97c42a93d50185947c991ee69775cc2"
+  }
+}

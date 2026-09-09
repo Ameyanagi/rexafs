@@ -5,6 +5,7 @@ import os
 import platform
 import plistlib
 import shutil
+import struct
 import subprocess
 import tempfile
 from pathlib import Path
@@ -34,6 +35,18 @@ binary_relative = Path(application_name) / "Contents/MacOS/rexafs" if system == 
 binary = bundle / binary_relative
 binary.parent.mkdir(parents=True, exist_ok=True)
 shutil.copy2(Path(metadata["target_directory"]) / "release" / binary_name, binary)
+if system == "Windows":
+    # IMAGE_SUBSYSTEM_WINDOWS_GUI prevents a console opening with the app.
+    # Qualify the actual release EXE so a linker/config regression cannot ship.
+    with binary.open("rb") as executable:
+        executable.seek(0x3C)
+        pe_offset = struct.unpack("<I", executable.read(4))[0]
+        executable.seek(pe_offset)
+        if executable.read(4) != b"PE\0\0":
+            raise SystemExit("Windows desktop executable has no PE header")
+        executable.seek(pe_offset + 24 + 68)
+        if struct.unpack("<H", executable.read(2))[0] != 2:
+            raise SystemExit("Windows desktop must use the GUI subsystem (no console window)")
 resources = bundle / (f"{application_name}/Contents/Resources" if system == "Darwin" else "resources")
 compiled_identity = json.loads(subprocess.check_output([str(binary), "--build-info"], text=True))
 features = compiled_identity.get("features")

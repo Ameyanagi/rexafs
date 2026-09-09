@@ -85,20 +85,34 @@ Install-Checked 'reinstall.log'
 if ((Get-Content -Raw -LiteralPath $sentinel) -ne $sentinelText) { throw 'Reinstall changed user data' }
 
 $executable = Join-Path $installed 'rexafs.exe'
+function Invoke-InstalledCheck([string]$flag) {
+    # PowerShell may launch a GUI-subsystem EXE asynchronously, even when its
+    # output is assigned to a variable. Wait explicitly and retain both streams.
+    $name = $flag.TrimStart('-')
+    $stdout = Join-Path $logs "$name.stdout.log"
+    $stderr = Join-Path $logs "$name.stderr.log"
+    $check = Start-Process -FilePath $executable -ArgumentList $flag -WindowStyle Hidden `
+        -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
+    if ($check.ExitCode -ne 0) {
+        throw "Installed $flag failed ($($check.ExitCode)): $(Get-Content -Raw -LiteralPath $stderr)"
+    }
+    Get-Content -LiteralPath $stdout
+}
 Push-Location $env:RUNNER_TEMP
 try {
-    $identityText = & $executable --build-info
-    if ($LASTEXITCODE -ne 0) { throw 'Installed build identity check failed' }
+    $identityText = Invoke-InstalledCheck '--build-info'
     $identity = ($identityText -join "`n") | ConvertFrom-Json
     foreach ($key in @('version', 'commit', 'channel', 'release_tag')) {
         if ($identity.$key -ne $record.source_build.$key) { throw "Wrong installed $key" }
     }
-    & $executable --version
-    if ($LASTEXITCODE -ne 0) { throw 'Installed --version failed' }
-    & $executable --self-check
-    if ($LASTEXITCODE -ne 0) { throw 'Installed packaged-data check failed' }
-    & $executable --self-check-feff
-    if ($LASTEXITCODE -ne 0) { throw 'Installed FEFF runner check failed' }
+    $versionText = Invoke-InstalledCheck '--version'
+    if (-not ($versionText -match '^rexafs ')) { throw 'Installed --version returned no version' }
+    $selfCheckText = Invoke-InstalledCheck '--self-check'
+    if (-not ($selfCheckText -match 'package check passed')) { throw 'Installed package check returned no result' }
+    $feffCheckText = Invoke-InstalledCheck '--self-check-feff'
+    Write-Output $versionText
+    Write-Output $selfCheckText
+    Write-Output $feffCheckText
 } finally {
     Pop-Location
 }

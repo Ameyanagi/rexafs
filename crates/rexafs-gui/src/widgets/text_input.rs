@@ -50,33 +50,42 @@ actions!(
 
 /// Key bindings required by [`TextInput`]; register once at app startup.
 pub fn text_input_keybindings() -> Vec<KeyBinding> {
-    vec![
+    let mut bindings = vec![
         KeyBinding::new("backspace", Backspace, None),
         KeyBinding::new("delete", Delete, None),
         KeyBinding::new("left", Left, None),
         KeyBinding::new("right", Right, None),
         KeyBinding::new("shift-left", SelectLeft, None),
         KeyBinding::new("shift-right", SelectRight, None),
-        KeyBinding::new("cmd-a", SelectAll, None),
-        KeyBinding::new("cmd-v", Paste, None),
-        KeyBinding::new("cmd-c", Copy, None),
-        KeyBinding::new("cmd-x", Cut, None),
+        KeyBinding::new("secondary-a", SelectAll, None),
+        KeyBinding::new("secondary-v", Paste, None),
+        KeyBinding::new("secondary-c", Copy, None),
+        KeyBinding::new("secondary-x", Cut, None),
         KeyBinding::new("home", Home, None),
         KeyBinding::new("end", End, None),
-        // standard macOS line/word gestures
-        KeyBinding::new("cmd-left", Home, None),
-        KeyBinding::new("cmd-right", End, None),
-        KeyBinding::new("alt-left", WordLeft, None),
-        KeyBinding::new("alt-right", WordRight, None),
-        KeyBinding::new("cmd-backspace", DeleteToStart, None),
-        KeyBinding::new("ctrl-cmd-space", ShowCharacterPalette, None),
         KeyBinding::new("enter", Commit, None),
         KeyBinding::new("shift-enter", InsertNewline, Some("MultilineTextInput")),
         KeyBinding::new("tab", NextField, None),
         KeyBinding::new("shift-tab", PrevField, None),
         KeyBinding::new("up", StepUp, Some("TextInput")),
         KeyBinding::new("down", StepDown, Some("TextInput")),
-    ]
+    ];
+    if cfg!(target_os = "macos") {
+        bindings.extend([
+            KeyBinding::new("cmd-left", Home, None),
+            KeyBinding::new("cmd-right", End, None),
+            KeyBinding::new("alt-left", WordLeft, None),
+            KeyBinding::new("alt-right", WordRight, None),
+            KeyBinding::new("cmd-backspace", DeleteToStart, None),
+            KeyBinding::new("ctrl-cmd-space", ShowCharacterPalette, None),
+        ]);
+    } else {
+        bindings.extend([
+            KeyBinding::new("ctrl-left", WordLeft, None),
+            KeyBinding::new("ctrl-right", WordRight, None),
+        ]);
+    }
+    bindings
 }
 
 /// Presentation options of a [`TextInput`].
