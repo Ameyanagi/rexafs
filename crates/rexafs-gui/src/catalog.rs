@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use futures::channel::mpsc;
+use futures::{SinkExt, channel::mpsc, executor::block_on};
 
 /// File extensions treated as spectrum data files during a scan.
 pub const SPECTRUM_EXTENSIONS: &[&str] = &["dat", "txt", "xmu", "chi", "xdi"];
@@ -33,8 +33,9 @@ pub enum ScanEvent {
 
 /// Walk `root` on a dedicated thread, streaming matching files in batches.
 /// Dropping the receiver cancels the scan (sends fail and the thread exits).
-pub fn start_scan(root: PathBuf) -> mpsc::UnboundedReceiver<ScanEvent> {
-    let (tx, rx) = mpsc::unbounded();
+/// Bound pending batches so a slow UI cannot accumulate a second full catalog.
+pub fn start_scan(root: PathBuf) -> mpsc::Receiver<ScanEvent> {
+    let (mut tx, rx) = mpsc::channel(2);
     std::thread::Builder::new()
         .name("catalog-scan".into())
         .spawn(move || {
@@ -50,10 +51,13 @@ pub fn start_scan(root: PathBuf) -> mpsc::UnboundedReceiver<ScanEvent> {
                 .sort_by_file_name()
                 .into_iter()
             {
+                if tx.is_closed() {
+                    return;
+                }
                 let entry = match result {
                     Ok(entry) => entry,
                     Err(error) => {
-                        let _ = tx.unbounded_send(ScanEvent::Error(error.to_string()));
+                        let _ = block_on(tx.send(ScanEvent::Error(error.to_string())));
                         return;
                     }
                 };
@@ -82,10 +86,10 @@ pub fn start_scan(root: PathBuf) -> mpsc::UnboundedReceiver<ScanEvent> {
                 let size = match entry.metadata() {
                     Ok(metadata) => metadata.len(),
                     Err(error) => {
-                        let _ = tx.unbounded_send(ScanEvent::Error(format!(
+                        let _ = block_on(tx.send(ScanEvent::Error(format!(
                             "cannot read metadata for {}: {error}",
                             entry.path().display()
-                        )));
+                        ))));
                         return;
                     }
                 };
@@ -95,18 +99,21 @@ pub fn start_scan(root: PathBuf) -> mpsc::UnboundedReceiver<ScanEvent> {
                     size,
                 });
                 total += 1;
-                if batch.len() >= BATCH_SIZE
-                    && tx
-                        .unbounded_send(ScanEvent::Batch(std::mem::take(&mut batch)))
-                        .is_err()
-                {
-                    return; // receiver dropped -> cancelled
+                if batch.len() >= BATCH_SIZE {
+                    if block_on(tx.send(ScanEvent::Batch(std::mem::replace(
+                        &mut batch,
+                        Vec::with_capacity(BATCH_SIZE),
+                    ))))
+                    .is_err()
+                    {
+                        return; // receiver dropped -> cancelled
+                    }
                 }
             }
             if !batch.is_empty() {
-                let _ = tx.unbounded_send(ScanEvent::Batch(batch));
+                let _ = block_on(tx.send(ScanEvent::Batch(batch)));
             }
-            let _ = tx.unbounded_send(ScanEvent::Done { total });
+            let _ = block_on(tx.send(ScanEvent::Done { total }));
         })
         .expect("spawn catalog-scan thread");
     rx
@@ -631,6 +638,40 @@ mod tests {
             }
         });
         assert_eq!(names, ["cu.xdi", "ni.XDI"]);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn bounded_scan_delivers_every_batch_in_order() {
+        let root = std::env::temp_dir().join(format!("rexafs-batched-scan-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let expected = BATCH_SIZE * 4 + 1;
+        for index in 0..expected {
+            std::fs::write(root.join(format!("scan-{index:05}.xmu")), "").unwrap();
+        }
+        let mut scan = start_scan(root.clone());
+        let mut received = 0;
+        let mut completed = false;
+        futures::executor::block_on(async {
+            while let Some(event) = scan.next().await {
+                match event {
+                    ScanEvent::Batch(files) => {
+                        assert!(!completed);
+                        for file in files {
+                            assert_eq!(&*file.name, format!("scan-{received:05}.xmu"));
+                            received += 1;
+                        }
+                    }
+                    ScanEvent::Done { total } => {
+                        assert_eq!(total, expected);
+                        assert_eq!(received, expected);
+                        completed = true;
+                    }
+                    ScanEvent::Error(error) => panic!("{error}"),
+                }
+            }
+        });
+        assert!(completed);
         std::fs::remove_dir_all(root).unwrap();
     }
 

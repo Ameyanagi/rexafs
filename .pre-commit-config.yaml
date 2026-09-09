@@ -1,0 +1,52 @@
+minimum_pre_commit_version: '4.0.0'
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+  - repo: local
+    hooks:
+      - id: rustfmt
+        name: Rust formatting
+        entry: cargo fmt --all -- --check
+        language: system
+        files: '\.rs$'
+        pass_filenames: false
+      - id: release-version
+        name: Release version consistency
+        entry: python scripts/check-release-version.py
+        language: python
+        files: '(Cargo\.(toml|lock)|package\.json|pyproject\.toml|rust-toolchain\.toml|scripts/check-release-version\.py)$'
+        pass_filenames: false
+      - id: project-fixtures
+        name: Retained project compatibility fixtures
+        entry: python scripts/check-compatibility-fixtures.py
+        language: python
+        files: '(^Cargo\.toml$|^crates/rexafs-gui/tests/fixtures/|^scripts/check-compatibility-fixtures\.py$)'
+        pass_filenames: false
+      - id: release-tool-tests
+        name: Release tooling regressions
+        entry: python scripts/check-tooling.py
+        language: python
+        files: '(^scripts/.*\.py$|^\.github/workflows/|^\.pre-commit-config\.yaml$)'
+        pass_filenames: false
+      - id: core-clippy
+        name: Core strict Clippy
+        entry: cargo clippy --locked -p rexafs --all-targets -- -D warnings
+        language: system
+        files: '(^crates/rexafs/.*\.rs$|Cargo\.(toml|lock)$|^rust-toolchain\.toml$)'
+        pass_filenames: false
+        stages: [pre-push]
+      - id: core-tests
+        name: Core regressions
+        entry: cargo test --locked -p rexafs
+        language: system
+        files: '(^crates/rexafs/|Cargo\.(toml|lock)$|^rust-toolchain\.toml$)'
+        pass_filenames: false
+        stages: [pre-push]

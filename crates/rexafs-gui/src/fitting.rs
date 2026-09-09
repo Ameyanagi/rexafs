@@ -753,7 +753,9 @@ pub fn result_summary(result: &FeffFitResult) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::params::{PipelineParams, process_file};
+    #[cfg(feature = "feff10-runner")]
+    use crate::params::PipelineParams;
+    use crate::params::process_file;
 
     #[test]
     fn background_floor_accepts_equality_and_rejects_any_lower_radius() {

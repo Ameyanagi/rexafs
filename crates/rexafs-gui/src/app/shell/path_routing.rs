@@ -342,6 +342,11 @@ impl StudioApp {
             .flex_1()
             .min_h_0()
             .min_w_0()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .p_4()
             .border_2()
             .border_color(t.bg)
             .drag_over::<ExternalPaths>(move |style, _, _, _| {
@@ -350,6 +355,59 @@ impl StudioApp {
             .on_drop(cx.listener(|app, paths: &ExternalPaths, _, cx| {
                 app.route_paths(paths.paths().to_vec(), false, cx)
             }))
+            .child(
+                div()
+                    .w_full()
+                    .max_w(px(460.))
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .p_4()
+                    .rounded_lg()
+                    .bg(t.surface)
+                    .border_1()
+                    .border_color(t.border)
+                    .child(
+                        div()
+                            .text_size(px(20.))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child("Start an analysis"),
+                    )
+                    .child(
+                        div().text_color(t.text_muted).child(
+                            "Drop spectrum files, a data folder, or a saved .rxs project here.",
+                        ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_2()
+                            .child(
+                                button(&t, "empty-import", "Import spectra…", true)
+                                    .h(px(32.))
+                                    .on_click(cx.listener(|app, _, _, cx| app.open_folder(cx))),
+                            )
+                            .child(
+                                button(&t, "empty-open-project", "Open project…", false)
+                                    .h(px(32.))
+                                    .on_click(cx.listener(|app, _, _, cx| app.open_project(cx))),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap_2()
+                            .child(div().text_color(t.text_muted).child("Try the workflow:"))
+                            .child(
+                                button(&t, "empty-example", "Open Cu example", false)
+                                    .h(px(32.))
+                                    .on_click(cx.listener(|app, _, _, cx| app.open_example(cx))),
+                            ),
+                    ),
+            )
     }
 }
 

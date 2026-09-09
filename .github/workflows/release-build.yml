@@ -166,7 +166,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential clang cmake pkg-config libasound2-dev libfontconfig-dev libglib2.0-dev libgtk-3-dev libssl-dev libvulkan-dev libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libzstd-dev libsqlite3-dev
+          sudo apt-get install -y build-essential clang cmake pkg-config libasound2-dev libfontconfig-dev libglib2.0-dev libgtk-3-dev libssl-dev libvulkan-dev libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libzstd-dev libsqlite3-dev fonts-dejavu-core mesa-vulkan-drivers xvfb xauth xdotool imagemagick
       - name: Project compatibility, publication and desktop regressions
         run: cargo test --locked --release -p rexafs-gui --no-default-features --features ${{ matrix.features }}
       - name: Embedded FEFF runner and fitting integration
@@ -176,6 +176,23 @@ jobs:
         run: python scripts/test-release-archive.py
       - run: cargo build --locked --release -p rexafs-gui --no-default-features --features ${{ matrix.features }}
       - run: python scripts/package-desktop.py
+      - name: Exercise the packaged Linux GUI at laptop resolution
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install Pillow
+          for driver in /usr/share/vulkan/icd.d/lvp_icd*.json; do
+            export VK_DRIVER_FILES="$driver"
+            break
+          done
+          xvfb-run -a -s "-screen 0 1366x768x24" python scripts/smoke-linux-gui.py \
+            target/distributions/rexafs-*-unknown-linux-gnu/rexafs \
+            crates/rexafs-gui/tests/fixtures/projects/rexafs-0.2.3-embedded.rxs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always() && runner.os == 'Linux'
+        with:
+          name: linux-gui-smoke
+          path: target/gui-smoke/
+          if-no-files-found: warn
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         if: runner.os == 'Windows'
         with:

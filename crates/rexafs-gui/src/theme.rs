@@ -3,6 +3,14 @@
 
 use gpui::{Rgba, rgb};
 
+/// Use a native monospace family so numeric columns align on every desktop.
+#[cfg(target_os = "macos")]
+pub const MONO: &str = "Menlo";
+#[cfg(target_os = "windows")]
+pub const MONO: &str = "Consolas";
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub const MONO: &str = "DejaVu Sans Mono";
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ThemeMode {
     Dark,

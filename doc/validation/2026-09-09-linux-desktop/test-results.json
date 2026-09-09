@@ -1,0 +1,22 @@
+{
+  "core-tests": {
+    "passed": 236,
+    "failed": 0,
+    "ignored": 3
+  },
+  "ndarray-tests": {
+    "passed": 264,
+    "failed": 0,
+    "ignored": 3
+  },
+  "gui-release-tests": {
+    "passed": 461,
+    "failed": 0,
+    "ignored": 5
+  },
+  "plotting-tests": {
+    "passed": 258,
+    "failed": 0,
+    "ignored": 3
+  }
+}

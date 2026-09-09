@@ -2,6 +2,7 @@ mod perf;
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use nalgebra::DVector;
+#[cfg(unix)]
 use perf::FlamegraphProfiler;
 use rexafs::xafs::fitting::{
     feffit_independent, feffit_joint_with_options, feffpath, ff2chi, FeffBatchOptions,
@@ -160,13 +161,11 @@ fn criterion_benchmark(c: &mut Criterion) {
 
 fn custom() -> Criterion {
     let base = Criterion::default().sample_size(10);
-    let enable_profiler =
-        std::env::args().any(|arg| arg == "--profile-time" || arg.starts_with("--profile-time="));
-    if enable_profiler {
-        base.with_profiler(FlamegraphProfiler::new(1000))
-    } else {
-        base
+    #[cfg(unix)]
+    if std::env::args().any(|arg| arg == "--profile-time" || arg.starts_with("--profile-time=")) {
+        return base.with_profiler(FlamegraphProfiler::new(1000));
     }
+    base
 }
 
 criterion_group! {

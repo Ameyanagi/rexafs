@@ -3,6 +3,7 @@ mod perf;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
 
+#[cfg(unix)]
 use perf::FlamegraphProfiler;
 use rexafs::xafs::background::{AUTOBKClampScalePolicy, AUTOBKSolver, AUTOBK};
 use rexafs::xafs::normalization::{NormalizationMethod, PrePostEdge};
@@ -73,13 +74,11 @@ fn criterion_benchmark(c: &mut Criterion) {
 
 fn custom() -> Criterion {
     let base = Criterion::default().sample_size(20);
-    let enable_profiler =
-        std::env::args().any(|arg| arg == "--profile-time" || arg.starts_with("--profile-time="));
-    if enable_profiler {
-        base.with_profiler(FlamegraphProfiler::new(1000))
-    } else {
-        base
+    #[cfg(unix)]
+    if std::env::args().any(|arg| arg == "--profile-time" || arg.starts_with("--profile-time=")) {
+        return base.with_profiler(FlamegraphProfiler::new(1000));
     }
+    base
 }
 
 criterion_group! {
