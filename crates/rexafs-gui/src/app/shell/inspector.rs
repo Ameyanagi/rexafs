@@ -44,7 +44,12 @@ impl StudioApp {
                     || p.bft_nfft.is_some()
                     || p.bft_window.is_some()
             }
-            "Advanced" => p.fft_dk2.is_some() || p.fft_kstep.is_some() || p.fft_nfft.is_some(),
+            "Advanced" => {
+                p.fft_grid != rexafs::FFTGrid::Input
+                    || p.fft_dk2.is_some()
+                    || p.fft_kstep.is_some()
+                    || p.fft_nfft.is_some()
+            }
             "Clamps & window" => {
                 p.bkg_clamp_lo.is_some()
                     || p.bkg_clamp_hi.is_some()
@@ -911,6 +916,7 @@ impl StudioApp {
                     "Advanced",
                     None,
                     [
+                        Some(self.enum_row("sampling grid", EnumParam::FftGrid, cx)),
                         self.field(ParamKey::FftDk2, cx),
                         self.field(ParamKey::FftKstep, cx),
                         self.field(ParamKey::FftNfft, cx),

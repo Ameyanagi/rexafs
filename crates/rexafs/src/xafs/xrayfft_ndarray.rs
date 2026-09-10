@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 // load dependencies
 use super::errors::FFTError;
+pub use super::fft_grid::FFTGrid;
 
 // Load local traits
 use super::mathutils::MathUtils;
@@ -21,6 +22,7 @@ use crate::xafs::xafsutils::FTWindow;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct XrayFFTF {
+    pub grid: FFTGrid,
     pub rmax_out: Option<f64>,
     pub window: Option<FTWindow>,
     pub dk: Option<f64>,
@@ -40,7 +42,8 @@ pub struct XrayFFTF {
 // Preserve the original equality contract: the complex FFT cache is omitted.
 impl PartialEq for XrayFFTF {
     fn eq(&self, other: &Self) -> bool {
-        self.rmax_out == other.rmax_out
+        self.grid == other.grid
+            && self.rmax_out == other.rmax_out
             && self.window == other.window
             && self.dk == other.dk
             && self.dk2 == other.dk2
@@ -58,6 +61,7 @@ impl PartialEq for XrayFFTF {
 impl Default for XrayFFTF {
     fn default() -> Self {
         XrayFFTF {
+            grid: FFTGrid::Larch,
             rmax_out: Some(10.0),
             window: Some(FTWindow::KaiserBessel),
             dk: Some(1.),
@@ -177,12 +181,39 @@ impl XrayFFTF {
             });
         }
 
+        if k.iter().chain(chi.iter()).any(|v| !v.is_finite())
+            || k.iter().zip(k.iter().skip(1)).any(|(a, b)| a >= b)
+        {
+            return Err(FFTError::InvalidParameter {
+                parameter: "k/chi".into(),
+                reason: "must be finite with strictly increasing k".into(),
+            });
+        }
         self.fill_parameter(k);
         let kweight = self.kweight.unwrap() as i32;
-        let k_max = k.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-        let npts = (1.01 + k_max / self.kstep.unwrap()) as usize;
-        let k_max = k_max.max(self.kmax.unwrap() + self.dk2.unwrap());
-        let k_ = Array1::range(0.0, k_max + self.kstep.unwrap(), self.kstep.unwrap());
+        if self.grid == FFTGrid::Input {
+            let win = self
+                .window
+                .unwrap_or_default()
+                .window(&k.to_owned(), self.kmin, self.kmax, self.dk, self.dk2)
+                .map_err(|e| FFTError::WindowCalculationFailed {
+                    reason: e.to_string(),
+                })?;
+            return Ok((chi.to_owned() * k.mapv(|v| v.powi(kweight)), win));
+        }
+        let step = self.kstep.unwrap();
+        let last = k[k.len() - 1];
+        let npts = (1.01 + last / step).floor();
+        let extent = last.max(self.kmax.unwrap() + self.dk2.unwrap());
+        let nwin = (1.01 + extent / step).floor();
+        if k[0] < 0.0 || !nwin.is_finite() || npts < 2.0 || nwin > self.nfft.unwrap() as f64 {
+            return Err(FFTError::InvalidParameter {
+                parameter: "Larch grid".into(),
+                reason: "requires nonnegative k, at least two resampled points, and nfft large enough for kmax+dk2".into(),
+            });
+        }
+        let npts = npts as usize;
+        let k_ = Array1::from_iter((0..nwin as usize).map(|i| i as f64 * step));
 
         let chi_ = if let (Some(k_slice), Some(chi_slice)) = (k.as_slice(), chi.as_slice()) {
             k_.interpolate(k_slice, chi_slice)
@@ -194,7 +225,7 @@ impl XrayFFTF {
         })?;
         let win = self
             .window
-            .unwrap()
+            .unwrap_or_default()
             .window(&k_, self.kmin, self.kmax, self.dk, self.dk2)
             .map_err(|e| FFTError::WindowCalculationFailed {
                 reason: e.to_string(),
@@ -215,7 +246,11 @@ impl XrayFFTF {
     ) -> Result<&mut Self, FFTError> {
         let (cchi, win) = self.xftf_prep(k, chi)?;
 
-        let cchi_fft = xftf_fast(cchi.view(), self.nfft.unwrap(), self.kstep.unwrap());
+        let cchi_fft = xftf_fast(
+            (&cchi * &win).view(),
+            self.nfft.unwrap(),
+            self.kstep.unwrap(),
+        );
 
         let rstep = std::f64::consts::PI / self.kstep.unwrap() / self.nfft.unwrap() as f64;
 

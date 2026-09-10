@@ -365,6 +365,23 @@ impl PyXrayFFTF {
         }
     }
     #[getter]
+    fn grid(&self) -> String {
+        format!("{:?}", self.inner.grid)
+    }
+    #[setter]
+    fn set_grid(&mut self, value: &str) -> PyResult<()> {
+        self.inner.grid = match value {
+            "Input" => rexafs::FFTGrid::Input,
+            "Larch" => rexafs::FFTGrid::Larch,
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "FFT grid must be Input or Larch",
+                ))
+            }
+        };
+        Ok(())
+    }
+    #[getter]
     fn rmax_out(&self) -> Option<f64> {
         self.inner.rmax_out
     }
@@ -635,6 +652,16 @@ impl PySpectrum {
     fn r<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyArray1<f64>>> {
         self.inner
             .r()
+            .map(|v| PyArray1::from_vec(py, v.as_slice().to_vec()))
+    }
+    fn kwin<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyArray1<f64>>> {
+        self.inner
+            .kwin()
+            .map(|v| PyArray1::from_vec(py, v.as_slice().to_vec()))
+    }
+    fn kwin_k<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyArray1<f64>>> {
+        self.inner
+            .kwin_k()
             .map(|v| PyArray1::from_vec(py, v.as_slice().to_vec()))
     }
     fn chir_mag<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyArray1<f64>>> {

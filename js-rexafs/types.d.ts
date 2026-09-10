@@ -1,4 +1,5 @@
 /** Configuration names and scalar fields mirror Rust. Setters copy the configuration. */
+export type FFTGrid = "Input" | "Larch";
 export type FTWindow = "Hanning" | "Parzen" | "Welch" | "Gaussian" | "Sine" | "KaiserBessel" | "FHanning";
 export type AUTOBKSolver = "TrustRegionDogLeg" | "LegacyLm" | "LinearDirect";
 export type AUTOBKClampScalePolicy = "FixedPenalty" | "Fixed" | "TwoPass";
@@ -45,6 +46,8 @@ export class AUTOBK {
 }
 
 export class XrayFFTF {
+  /** Explicit sampling/window domain; defaults to Input. */
+  grid: FFTGrid;
   constructor();
   free(): void;
   rmax_out: number | undefined;
@@ -100,6 +103,8 @@ export class Spectrum {
   pre_edge(): Float64Array | undefined;
   post_edge(): Float64Array | undefined;
   r(): Float64Array | undefined;
+  kwin(): Float64Array | undefined;
+  kwin_k(): Float64Array | undefined;
   chir_mag(): Float64Array | undefined;
   chir_real(): Float64Array | undefined;
   chir_imag(): Float64Array | undefined;

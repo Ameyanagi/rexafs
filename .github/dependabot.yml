@@ -12,6 +12,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Published levenberg-marquardt 0.15 exposes nalgebra 0.34 types.
+      # Revisit this exclusion when a compatible solver release is published.
+      - dependency-name: nalgebra
+        versions: [">=0.35, <0.36"]
   - package-ecosystem: npm
     directory: /js-rexafs
     schedule:

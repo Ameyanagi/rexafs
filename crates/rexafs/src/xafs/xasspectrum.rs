@@ -1006,6 +1006,22 @@ impl XASSpectrum {
         }
     }
 
+    /// Wavenumbers for `kwin()`. In Larch mode these follow the resampled
+    /// FFT grid, which can differ from the background's `k()` spacing.
+    pub fn kwin_k(&self) -> Option<DVector<f64>> {
+        let ft = self.xftf.as_ref()?;
+        let len = ft.get_kwin()?.len();
+        if ft.grid == super::xrayfft::FFTGrid::Larch {
+            let step = *ft.get_kstep()?;
+            Some(DVector::from_iterator(
+                len,
+                (0..len).map(|i| i as f64 * step),
+            ))
+        } else {
+            Some(DVector::from_column_slice(self.k()?))
+        }
+    }
+
     pub fn kwin(&self) -> Option<DVector<f64>> {
         #[cfg(feature = "ndarray-compat")]
         {

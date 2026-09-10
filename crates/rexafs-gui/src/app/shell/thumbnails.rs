@@ -48,11 +48,11 @@ pub fn thumb_data(sp: &XASSpectrum, _fit_r: (f64, f64)) -> [ThumbData; 4] {
         y: chi.clone(),
         muted: false,
     }];
-    if let Some(kwin) = sp.kwin() {
+    if let (Some(k), Some(kwin)) = (sp.kwin_k(), sp.kwin()) {
         let peak = chi.iter().fold(0.0f64, |m, v| m.max(v.abs())).max(1e-12);
         let n = k.len().min(kwin.len());
         win_series.push(ThumbSeries {
-            x: k[..n].to_vec(),
+            x: k.as_slice()[..n].to_vec(),
             y: kwin.iter().take(n).map(|w| w * peak).collect(),
             muted: true,
         });

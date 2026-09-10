@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "window-fits-display",
+    "embedded-project-and-rendered-plot",
+    "shortcut-data",
+    "shortcut-normalize",
+    "shortcut-background",
+    "shortcut-transform",
+    "shortcut-fit",
+    "shortcut-publish",
+    "resize-960x640",
+    "quit-shortcut"
+  ]
+}

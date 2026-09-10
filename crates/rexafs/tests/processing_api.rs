@@ -282,3 +282,24 @@ fn failed_transform_preserves_parameters_and_clears_results() {
     assert!(spectrum.r().is_none());
     assert!(spectrum.chi().is_some());
 }
+
+#[test]
+fn fft_window_axis_tracks_resampling_without_replacing_background_k() {
+    let mut spectrum = sample();
+    spectrum.fft().unwrap();
+    let original = spectrum.k().unwrap().to_vec();
+    for step in [0.025, 0.1] {
+        let ft = XrayFFTF {
+            grid: rexafs::FFTGrid::Larch,
+            kstep: Some(step),
+            ..Default::default()
+        };
+        spectrum.set_fft(ft).fft().unwrap();
+        assert_eq!(spectrum.k().unwrap(), original.as_slice());
+        let axis = spectrum.kwin_k().unwrap();
+        assert_eq!(axis.len(), spectrum.kwin().unwrap().len());
+        for (i, &k) in axis.iter().enumerate() {
+            assert_eq!(k, i as f64 * step);
+        }
+    }
+}
