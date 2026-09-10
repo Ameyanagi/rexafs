@@ -9,7 +9,7 @@ is preserved. The [release notes](release-notes-0.2.4.md) and
 [qualification record](validation/2026-09-09-release-0.2.4/review.md) track this
 release's source, checks and publication. Numerical defaults and dependency
 versions are unchanged. The [0.2.3 record](validation/2026-09-10-release-0.2.3/review.md)
-retains that release's independent preparation history.
+retains that release's completed build, registry, signing and publication history.
 
 ## Published releases
 
@@ -23,6 +23,10 @@ The [0.2.1 notes](release-notes-0.2.1.md) and
 [qualification report](validation/2026-09-09-release-0.2.1/review.md) retain the
 completed publication history for that version. Windows and Linux remain desktop
 previews with the limits stated in each release's qualification record.
+
+Version 0.2.2 was withheld after its Linux build failed; its tag remains immutable.
+The desktop quality work in PRs #48 and #49 is outside the 0.2.3 source tag.
+
 The [rebranding plan](rebranding-plan.md) defines scope; [dependency notes](dependencies.md)
 record the Rust 1.98.1 toolchain and compatibility constraints.
 
