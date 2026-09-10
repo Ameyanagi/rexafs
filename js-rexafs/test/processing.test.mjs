@@ -129,3 +129,27 @@ test("legacy clamp mode retains the earlier native reference", async () => {
   }
   s.free(); b.free(); bkg.free();
 });
+
+
+test("FFT grid is explicit and preserves chi", () => {
+  const ft = new XrayFFTF();
+  assert.equal(ft.grid, "Input");
+  const spectrum = new Spectrum(energy, mu).calc_background();
+  ft.kmax = spectrum.k().at(-1);
+  spectrum.set_fft(ft).fft();
+  const chi = spectrum.chi(), original = spectrum.chir_mag();
+  ft.grid = "Larch";
+  spectrum.set_fft(ft).fft();
+  assert.deepEqual(spectrum.chi(), chi);
+  assert.notDeepEqual(spectrum.chir_mag(), original);
+  ft.kstep = 0.025;
+  spectrum.set_fft(ft).fft();
+  assert.equal(spectrum.kwin_k()[1], 0.025);
+  assert.equal(spectrum.kwin_k().length, spectrum.kwin().length);
+  assert.throws(() => { ft.grid = "unknown"; });
+  assert.equal(ft.grid, "Larch");
+  ft.grid = "Input";
+  ft.kstep = undefined;
+  assert.deepEqual(spectrum.set_fft(ft).fft().chir_mag(), original);
+  spectrum.free(); ft.free();
+});

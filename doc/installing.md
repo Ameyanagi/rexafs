@@ -14,8 +14,10 @@ ZIP archives remain available for portable installation and the desktop updater.
 Checksums and installer evidence accompany the downloads. Native Windows
 development-build interaction checks are recorded in the
 [Windows review](validation/2026-09-09-windows-gui/README.md). Final-download
-Windows/Linux interactive qualification and native Intel hardware checks remain
-outstanding.
+Windows interaction checks for the new controls remain outstanding. Linux GUI
+checks use X11 with Mesa software rendering; physical GPUs, native Wayland,
+clean-machine graphical installation and native Intel hardware remain unqualified.
+See the [Linux review](validation/2026-09-09-linux-desktop/README.md).
 
 ## Packages
 
@@ -38,16 +40,16 @@ For Python, download on a connected computer with the same OS, architecture,
 and Python version as the offline computer:
 
 ```sh
-python -m pip download rexafs==0.2.3 --dest wheelhouse
+python -m pip download rexafs==0.2.4 --dest wheelhouse
 ```
 
 Copy `wheelhouse` to the offline computer, then run:
 
 ```sh
-python -m pip install --no-index --find-links wheelhouse rexafs==0.2.3
+python -m pip install --no-index --find-links wheelhouse rexafs==0.2.4
 ```
 
-For npm, `npm pack rexafs@0.2.3` downloads the package for a later
-`npm install ./rexafs-0.2.3.tgz`. For Rust, prepare the consuming project's
+For npm, `npm pack rexafs@0.2.4` downloads the package for a later
+`npm install ./rexafs-0.2.4.tgz`. For Rust, prepare the consuming project's
 dependencies with `cargo vendor`; retain its generated configuration alongside
 the project's existing Cargo settings before building with `--offline --locked`.

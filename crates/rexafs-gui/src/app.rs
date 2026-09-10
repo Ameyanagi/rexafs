@@ -145,6 +145,7 @@ pub(crate) enum EnumParam {
     BkgSolver,
     BkgClampPolicy,
     FftWindow,
+    FftGrid,
     BftWindow,
     BkgFallback,
     BkgCache,
@@ -4241,6 +4242,7 @@ impl StudioApp {
                 "auto (LinearDirect)",
                 AUTOBK_SOLVERS.iter().map(|v| format!("{v:?}")).collect(),
             ),
+            EnumParam::FftGrid => return vec!["Input grid".into(), "Larch grid".into()],
             EnumParam::FftWindow => (
                 "auto (KaiserBessel)",
                 FT_WINDOWS.iter().map(|w| format!("{w:?}")).collect(),
@@ -4309,6 +4311,13 @@ impl StudioApp {
                     p.bkg_clamp_policy = rexafs::prelude::AUTOBKClampScalePolicy::Fixed;
                 }
             }
+            EnumParam::FftGrid => {
+                p.fft_grid = if index == 1 {
+                    rexafs::FFTGrid::Larch
+                } else {
+                    rexafs::FFTGrid::Input
+                }
+            }
             EnumParam::FftWindow => {
                 p.fft_window = variant.map(|i| FT_WINDOWS[i]);
             }
@@ -4369,6 +4378,7 @@ impl StudioApp {
                 .and_then(|v| AUTOBK_SOLVERS.iter().position(|x| *x == v))
                 .map(|i| i + 1)
                 .unwrap_or(0),
+            EnumParam::FftGrid => usize::from(p.fft_grid == rexafs::FFTGrid::Larch),
             EnumParam::FftWindow => p
                 .fft_window
                 .and_then(|w| FT_WINDOWS.iter().position(|x| *x == w))
@@ -9443,9 +9453,9 @@ impl Render for StudioApp {
                 .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
                     this.route_paths(paths.paths().to_vec(), false, cx);
                 }))
-                .on_action(
-                    cx.listener(|this, _: &StagePublish, _, cx| this.set_stage(Stage::Publish, cx)),
-                )
+                .on_action(cx.listener(|this, _: &StagePublish, window, cx| {
+                    this.navigate_stage(Stage::Publish, window, cx)
+                }))
                 .on_action(cx.listener(|this, _: &ShowHelp, _, cx| this.open_help(cx)))
                 .on_action(cx.listener(|this, _: &ShowLicenses, _, cx| this.open_licenses(cx)))
                 .on_action(cx.listener(|this, _: &ShowUpdates, _, cx| this.open_updates(cx)))
@@ -9457,32 +9467,30 @@ impl Render for StudioApp {
                 .on_action(cx.listener(|this, _: &DismissPathRoute, window, cx| {
                     this.dismiss_path_route(window, cx);
                 }))
-                .on_action(cx.listener(|this: &mut Self, _: &StageData, _window, cx| {
-                    this.set_stage(Stage::Data, cx);
+                .on_action(cx.listener(|this: &mut Self, _: &StageData, window, cx| {
+                    this.navigate_stage(Stage::Data, window, cx);
                 }))
                 .on_action(
-                    cx.listener(|this: &mut Self, _: &StageNormalize, _window, cx| {
-                        this.set_stage(Stage::Normalize, cx);
+                    cx.listener(|this: &mut Self, _: &StageNormalize, window, cx| {
+                        this.navigate_stage(Stage::Normalize, window, cx);
                     }),
                 )
                 .on_action(
-                    cx.listener(|this: &mut Self, _: &StageBackground, _window, cx| {
-                        this.set_stage(Stage::Background, cx);
+                    cx.listener(|this: &mut Self, _: &StageBackground, window, cx| {
+                        this.navigate_stage(Stage::Background, window, cx);
                     }),
                 )
                 .on_action(
-                    cx.listener(|this: &mut Self, _: &StageTransform, _window, cx| {
-                        this.set_stage(Stage::Transform, cx);
+                    cx.listener(|this: &mut Self, _: &StageTransform, window, cx| {
+                        this.navigate_stage(Stage::Transform, window, cx);
                     }),
                 )
-                .on_action(cx.listener(|this: &mut Self, _: &StageFit, _window, cx| {
-                    this.set_stage(Stage::Fit, cx);
+                .on_action(cx.listener(|this: &mut Self, _: &StageFit, window, cx| {
+                    this.navigate_stage(Stage::Fit, window, cx);
                 }))
-                .on_action(
-                    cx.listener(|this: &mut Self, _: &StageSeries, _window, cx| {
-                        this.set_stage(Stage::Series, cx);
-                    }),
-                )
+                .on_action(cx.listener(|this: &mut Self, _: &StageSeries, window, cx| {
+                    this.navigate_stage(Stage::Series, window, cx);
+                }))
                 .on_action(
                     cx.listener(|this: &mut Self, _: &ToggleDataPanel, _window, cx| {
                         this.data_panel_open = !this.data_panel_open;

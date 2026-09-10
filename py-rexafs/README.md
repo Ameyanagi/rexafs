@@ -42,7 +42,7 @@ still unimplemented placeholders; selecting them raises an error.
 
 ## Build
 
-Registry publication is pending. Build from the repository root with CPython
+Build from the repository root with CPython
 3.10–3.14:
 
 ```bash
@@ -59,3 +59,7 @@ Set `clamp_lambda` to `0` to disable the endpoint penalty. The low-end weight
 is `clamp_lo = 0`, the high-end weight is `clamp_hi = 1`, and `nclamp = 3`.
 The `FixedPenalty` model does not add a separate ridge penalty on coefficients.
 See the [full definition](../doc/autobk-fixed-penalty.md).
+
+`XrayFFTF.grid` defaults to `"Input"`. Set it to `"Larch"` to resample on the
+extended FFT window grid used by XrayLarch. `Spectrum.kwin_k()` and `.kwin()`
+return the matching window axis and values. See [compatibility and migration](../doc/fft-grid-compatibility.md).

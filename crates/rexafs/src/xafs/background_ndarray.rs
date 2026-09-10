@@ -446,13 +446,20 @@ impl AUTOBK {
     }
 
     fn solve_lm_problem(problem: AUTOBKSpline) -> Result<AUTOBKSpline, BackgroundError> {
-        let (fit_result, _report) = LevenbergMarquardt::new()
+        let (fit_result, report) = LevenbergMarquardt::new()
             .with_gtol(1.0e-5)
             .with_ftol(1.0e-5)
             .with_xtol(1.0e-5)
             .with_stepbound(1.0e-5)
             .minimize(problem);
-
+        if !report.termination.was_successful() || !report.objective_function.is_finite() {
+            return Err(BackgroundError::OptimizationFailed {
+                reason: format!(
+                    "legacy LM terminated with {:?} after {} evaluations",
+                    report.termination, report.number_of_evaluations
+                ),
+            });
+        }
         Ok(fit_result)
     }
 
@@ -1155,11 +1162,24 @@ impl AUTOBKSpline {
         coefs: &DVector<f64>,
         clamp_scale_override: Option<f64>,
     ) -> DMatrix<f64> {
-        let scale = if self.nclamp != 0 {
-            clamp_scale_override.unwrap_or_else(|| self.clamp_scale(coefs))
-        } else {
-            1.0
-        };
+        // For a dynamic clamp s(c) * chi(c), include both terms of the
+        // product rule. A frozen scale is used by the linear solver and has
+        // zero derivative. Compute the shared residual only once per Jacobian.
+        let dynamic =
+            (self.clamp_len(self.kout.len()) > 0 && clamp_scale_override.is_none()).then(|| {
+                let chi = self.chi_for_coefs(coefs);
+                let head = self.fft_residual_head(&chi);
+                (chi, head)
+            });
+        let scale = clamp_scale_override.unwrap_or_else(|| {
+            dynamic.as_ref().map_or(1.0, |(_, head)| {
+                if head.is_empty() {
+                    1.0
+                } else {
+                    1.0 + 100.0 * head.norm_squared() / head.len() as f64
+                }
+            })
+        });
 
         let spline_jacobian = -splev_jacobian(
             self.knots.data.as_vec().clone(),
@@ -1187,13 +1207,20 @@ impl AUTOBKSpline {
                     return out;
                 }
 
-                let low_clamp = self.clamp_lo as f64 * scale * chi_der.view((0, 0), (nclamp, 1));
+                let scale_der = dynamic.as_ref().map_or(0.0, |(_, head)| {
+                    if head.is_empty() {
+                        0.0
+                    } else {
+                        200.0 * head.dot(&out) / head.len() as f64
+                    }
+                });
                 let high_start = chi_der.len() - nclamp - 1;
-                let high_clamp =
-                    self.clamp_hi as f64 * scale * chi_der.view((high_start, 0), (nclamp, 1));
-
-                out.extend(low_clamp.data.as_vec().to_owned());
-                out.extend(high_clamp.data.as_vec().to_owned());
+                for (start, weight) in [(0, self.clamp_lo), (high_start, self.clamp_hi)] {
+                    out.extend((start..start + nclamp).map(|i| {
+                        let chi = dynamic.as_ref().map_or(0.0, |(chi, _)| chi[i]);
+                        weight as f64 * (scale * chi_der[i] + scale_der * chi)
+                    }));
+                }
                 out
             })
             .collect::<Vec<DVector<f64>>>();
@@ -1907,3 +1934,7 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "background/legacy_clamp_tests.rs"]
+mod legacy_clamp_tests;

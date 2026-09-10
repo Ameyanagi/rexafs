@@ -69,6 +69,29 @@ class SpectrumTests(unittest.TestCase):
         self.assertIsNone(spectrum.chi())
         self.assertIsNotNone(spectrum.fft().r())
 
+    def test_fft_grid_is_explicit_and_preserves_chi(self):
+        ft = rexafs.XrayFFTF()
+        self.assertEqual(ft.grid, "Input")
+        spectrum = self.spectrum().calc_background()
+        ft.kmax = float(spectrum.k()[-1])
+        spectrum.set_fft(ft).fft()
+        chi, original = spectrum.chi(), spectrum.chir_mag()
+        ft.grid = "Larch"
+        self.assertEqual(ft.grid, "Larch")
+        spectrum.set_fft(ft).fft()
+        np.testing.assert_array_equal(spectrum.chi(), chi)
+        self.assertFalse(np.allclose(spectrum.chir_mag(), original))
+        ft.kstep = 0.025
+        spectrum.set_fft(ft).fft()
+        self.assertEqual(spectrum.kwin_k()[1], 0.025)
+        self.assertEqual(len(spectrum.kwin_k()), len(spectrum.kwin()))
+        with self.assertRaises(ValueError):
+            ft.grid = "unknown"
+        self.assertEqual(ft.grid, "Larch")
+        ft.grid = "Input"
+        ft.kstep = None
+        np.testing.assert_array_equal(spectrum.set_fft(ft).fft().chir_mag(), original)
+
     def test_fixed_lambda_is_configurable_and_zero_disables_both_clamps(self):
         bkg = rexafs.AUTOBK()
         self.assertEqual(bkg.clamp_scale_policy, "FixedPenalty")

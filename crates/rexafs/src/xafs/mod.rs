@@ -25,6 +25,7 @@ pub mod background;
 pub mod background;
 pub mod bessel_i0;
 pub mod errors;
+mod fft_grid;
 pub mod fitting;
 mod inverse_fft;
 pub mod io;

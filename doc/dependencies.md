@@ -84,3 +84,9 @@ into either backend; Python and Wasm packages keep their existing analysis APIs.
 For a single-engine comparison, select that source in **Paths**, choose the desired
 preset (for example **First shell**), then click **Deselect other sources**. This
 retains the other calculations and their parameter edits for later comparison.
+
+PR #39's isolated nalgebra 0.35 update is incompatible with the published
+`levenberg-marquardt 0.15.0` (its manifest requires nalgebra 0.34). Dependabot
+excludes only the 0.35 line until a compatible solver release can be upgraded
+with it; 0.34 patch updates remain enabled. Upstream master has migrated to
+0.35, but that unpublished change cannot be used by a registry release of rexafs.

@@ -1,21 +1,32 @@
 # Releasing rexafs
 
-## Current stable release
+## Preparing 0.2.4
 
-The current stable release is [0.2.3](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.3).
-Its [release notes](release-notes-0.2.3.md) describe the Windows console, native
-shortcut and accessibility fixes, plus the Linux adapter correction. Its
-[qualification report](validation/2026-09-10-release-0.2.3/review.md) records the
-completed build, registry, signing, artifact and available-host checks.
-All three registries select 0.2.3 as stable. Mac ZIPs and DMGs are signed and
-notarized. Windows/Linux remain desktop previews; native interactive checks of
-those final downloads remain outside the available qualification coverage.
+The next patch release improves desktop sizing, empty-workspace actions, text
+editing and bounded folder scanning. It adds Windows core validation and an
+X11 smoke check of the packaged Linux application. Version 0.2.3's existing tag
+is preserved. The [release notes](release-notes-0.2.4.md) and
+[qualification record](validation/2026-09-09-release-0.2.4/review.md) track this
+release's source, checks and publication. Numerical defaults and dependency
+versions are unchanged; the [compatibility fixes](fft-grid-compatibility.md)
+correct legacy derivatives and add an explicit FFT grid choice. The [0.2.3 record](validation/2026-09-10-release-0.2.3/review.md)
+retains that release's completed build, registry, signing and publication history.
+
+## Published releases
+
+Use the [latest stable release](https://github.com/Ameyanagi/rexafs/releases/latest)
+for current desktop downloads and publication status. The
+[installation guide](installing.md) links the package channels. Each release's
+notes and qualification record identify its exact source, build, signatures and
+checks; preparation records do not establish publication.
+
+The [0.2.1 notes](release-notes-0.2.1.md) and
+[qualification report](validation/2026-09-09-release-0.2.1/review.md) retain the
+completed publication history for that version. Windows and Linux remain desktop
+previews with the limits stated in each release's qualification record.
 
 Version 0.2.2 was withheld after its Linux build failed; its tag remains immutable.
-PR #39 remains excluded because its nalgebra update fails at the solver type
-boundary. Issue #20 remains open for the legacy clamp Jacobian and output-FFT
-window-domain differences. The subsequent desktop quality work in PRs #48 and
-#49 is prepared for 0.2.4 and is outside the 0.2.3 source tag.
+The desktop quality work in PRs #48 and #49 is outside the 0.2.3 source tag.
 
 The [rebranding plan](rebranding-plan.md) defines scope; [dependency notes](dependencies.md)
 record the Rust 1.98.1 toolchain and compatibility constraints.
