@@ -33,6 +33,11 @@ Folder scanning now bounds queued batches and stops cancelled scans while walkin
 unrelated files, limiting memory growth when the UI is busy. Windows tests and
 benchmarks no longer pull in the Unix-only profiler.
 
+The locked HTTP client updates to ureq 3.4.1 and ureq-proto 0.6.2, including
+fixes for timeout budgets, TLS connection timeouts, connection reuse and response
+parsing. Small JSON responses also use faster buffered parsing; see the
+[upstream changes](https://github.com/algesten/ureq/blob/3.4.1/CHANGELOG.md).
+
 Linux release builds exercise the packaged application under X11 with Mesa
 software rendering: open an embedded project from a Unicode path, render plots,
 switch stages, resize and quit. Windows runs the core tests and all-target compile
