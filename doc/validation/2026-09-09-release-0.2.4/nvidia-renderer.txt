@@ -1,0 +1,13 @@
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+[renderer] Some(GpuSpecs { is_software_emulated: false, device_name: "NVIDIA GB10", driver_name: "NVIDIA", driver_info: "580.142" })
+[rexafs-stats t=1s] pointer 0/s · paints 5/s · pointer→paint avg 0.0 ms max 0.0 ms (n=0) · ruviz frames 1/s last 2.7 ms avg 2.7 ms fps 374 target Surface · presented 2/s interval avg 15.8 ms fps 63 · dropped 0 · backend HybridFallback
+[rexafs-stats t=2s] pointer 0/s · paints 2/s · pointer→paint avg 0.0 ms max 0.0 ms (n=0) · ruviz frames 0/s last 2.7 ms avg 2.7 ms fps 374 target Surface · presented 4/s interval avg 179.1 ms fps 2 · dropped 0 · backend HybridFallback
+[rexafs-stats t=3s] pointer 0/s · paints 1/s · pointer→paint avg 0.0 ms max 0.0 ms (n=0) · ruviz frames 0/s last 2.7 ms avg 2.7 ms fps 374 target Surface · presented 1/s interval avg 290.7 ms fps 1 · dropped 0 · backend HybridFallback
+[rexafs-stats t=4s] pointer 0/s · paints 3/s · pointer→paint avg 0.0 ms max 0.0 ms (n=0) · ruviz frames 0/s last 2.0 ms avg 2.0 ms fps 500 target Surface · presented 0/s interval avg 15.7 ms fps 64 · dropped 0 · backend HybridFallback
+[rexafs-stats t=5s] pointer 0/s · paints 0/s · pointer→paint avg 0.0 ms max 0.0 ms (n=0) · ruviz frames 0/s last 2.0 ms avg 2.0 ms fps 500 target Surface · presented 0/s interval avg 15.7 ms fps 64 · dropped 0 · backend HybridFallback
+[rexafs-stats t=6s] pointer 0/s · paints 6/s · pointer→paint avg 0.0 ms max 0.0 ms (n=0) · ruviz frames 0/s last 2.0 ms avg 2.0 ms fps 500 target Surface · presented 0/s interval avg 0.0 ms fps 0 · dropped 0 · backend HybridFallback
+[rexafs-stats t=7s] pointer 0/s · paints 6/s · pointer→paint avg 0.0 ms max 0.0 ms (n=0) · ruviz frames 0/s last 2.0 ms avg 2.0 ms fps 500 target Surface · presented 0/s interval avg 0.0 ms fps 0 · dropped 0 · backend HybridFallback
+[rexafs-stats t=8s] pointer 0/s · paints 0/s · pointer→paint avg 0.0 ms max 0.0 ms (n=0) · ruviz frames 0/s last 2.0 ms avg 2.0 ms fps 500 target Surface · presented 0/s interval avg 0.0 ms fps 0 · dropped 0 · backend HybridFallback
+[rexafs-stats t=9s] pointer 0/s · paints 2/s · pointer→paint avg 0.0 ms max 0.0 ms (n=0) · ruviz frames 0/s last 2.0 ms avg 2.0 ms fps 500 target Surface · presented 1/s interval avg 0.0 ms fps 0 · dropped 0 · backend HybridFallback
+[rexafs-stats t=10s] pointer 0/s · paints 2/s · pointer→paint avg 0.0 ms max 0.0 ms (n=0) · ruviz frames 0/s last 1.9 ms avg 1.9 ms fps 537 target Surface · presented 2/s interval avg 17.9 ms fps 62 · dropped 0 · backend HybridFallback
