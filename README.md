@@ -1,12 +1,12 @@
 # rexafs
 
-![rexafs — Rust-powered X-ray absorption analysis](assets/brand/rexafs-release.png)
-
-**Rust-powered X-ray absorption analysis.**
-
 **[Download the latest desktop binaries](https://github.com/Ameyanagi/rexafs/releases/latest)** ·
 [Installation guide](doc/installing.md) ·
 [Release build workflow](https://github.com/Ameyanagi/rexafs/actions/workflows/release-build.yml)
+
+![rexafs — Rust-powered X-ray absorption analysis](assets/brand/rexafs-release.png)
+
+**Rust-powered X-ray absorption analysis.**
 
 rexafs processes measured XAS spectra, removes EXAFS backgrounds, computes Fourier
 transforms and fits scattering-path models. Use the Rust library, Python bindings,

@@ -53,10 +53,14 @@ ZIP archives remain available for portable installation and the desktop updater.
 Checksums and installer evidence accompany the downloads. Native Windows
 development-build interaction checks are recorded in the
 [Windows review](validation/2026-09-09-windows-gui/README.md). Final-download
-Windows interaction checks for the new controls remain outstanding. Linux GUI
-checks use X11 with Mesa software rendering; physical GPUs, native Wayland,
-clean-machine graphical installation and native Intel hardware remain unqualified.
-See the [Linux review](validation/2026-09-09-linux-desktop/README.md).
+Windows interaction checks for the new controls remain outstanding. Linux release
+checks use X11 with Mesa software rendering. The
+[qualification record](validation/2026-09-09-release-0.2.4/review.md) additionally
+records local ARM64 checks with an NVIDIA GB10 hardware device and virtual X11
+display. Physical monitors, native Wayland and clean-machine graphical setup
+remain outside those checks. See the
+[Linux review](validation/2026-09-09-linux-desktop/README.md) for the earlier
+interaction results.
 
 ## Packages
 
