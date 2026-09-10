@@ -108,6 +108,8 @@ paired solver/model setting to keep that combination valid.
 Older saved projects with no clamp-model field retain the legacy `Fixed` model.
 New projects explicitly save `FixedPenalty`, even when other defaults are omitted.
 The parameter fingerprint, scoped copying, overrides, and undo history include
-the model and λ. The separate legacy ndarray compatibility implementation retains
-its previous behavior. The existing legacy dynamic-clamp Jacobian issue is not
-addressed by this change; the new fixed objective does not use that Jacobian.
+the model and λ. The fixed objective does not use the legacy dynamic-clamp Jacobian.
+As of 0.2.4, both backends include the missing product-rule term in that legacy
+Jacobian. Iterative legacy results can therefore change on recomputation;
+the residual objective, frozen-scale direct models and fixed-λ default are
+unchanged. See the [numerical compatibility record](fft-grid-compatibility.md).

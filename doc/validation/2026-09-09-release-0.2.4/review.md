@@ -9,7 +9,9 @@ exact immutable release tag, signing and verified distribution artifacts.
 desktop usability, folder scanning and repository validation. A separate release
 PR coordinates the four workspace package versions, npm version, release notes
 and retained project fixtures. Existing version tags and fixture bytes remain
-unchanged. Numerical algorithms, defaults and dependency versions are unchanged.
+unchanged. The expanded release PR also resolves issue #20 with a corrected
+legacy derivative and explicit FFT grid compatibility; numerical defaults and
+dependency versions are unchanged.
 
 ## Available-host validation
 
@@ -46,6 +48,16 @@ packaged click-and-shortcut sequence then passed all ten
 The final
 revision requires a complete CI pass.
 
+## Numerical compatibility follow-up
+
+The expanded PR adds the [issue #20 corrections](../../fft-grid-compatibility.md).
+Both array backends pass independent derivative and FFT regressions. The
+[measured comparison](../2026-09-10-numerical-compat/README.md) retains complete
+before/after Cu/Ni/Ru arrays; fixed-λ defaults are exactly unchanged. The desktop
+suite now contains 462 passing optimized tests (5 ignored), including persistence
+and cache invalidation for the FFT grid choice. All nine Python API tests pass.
+The final revision requires refreshed CI and packaging checks below.
+
 ## Final build and publication
 
 Pending: green feature and release PRs; immutable v0.2.4 tag; successful manual
@@ -68,4 +80,4 @@ installation; interactive Mac qualification is outside this Linux host.
 
 [PR #39](https://github.com/Ameyanagi/rexafs/pull/39) remains excluded due to its
 solver dependency incompatibility. [Issue #20](https://github.com/Ameyanagi/rexafs/issues/20)
-remains open for the legacy clamp Jacobian and output-FFT window-domain differences.
+is addressed by the [numerical compatibility fixes](../../fft-grid-compatibility.md).

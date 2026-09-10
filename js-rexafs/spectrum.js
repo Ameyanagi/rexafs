@@ -45,6 +45,8 @@ export function bindSpectrum(core, ready = () => true) {
     pre_edge() { return this.#inner.pre_edge(); }
     post_edge() { return this.#inner.post_edge(); }
     r() { return this.#inner.r(); }
+    kwin() { return this.#inner.kwin(); }
+    kwin_k() { return this.#inner.kwin_k(); }
     chir_mag() { return this.#inner.chir_mag(); }
     chir_real() { return this.#inner.chir_real(); }
     chir_imag() { return this.#inner.chir_imag(); }

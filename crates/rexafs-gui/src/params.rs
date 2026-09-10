@@ -1089,6 +1089,7 @@ pub struct PipelineParams {
     pub fft_dk2: Option<f64>,
     pub fft_rmax: Option<f64>,
     pub fft_window: Option<FTWindow>,
+    pub fft_grid: rexafs::FFTGrid,
     pub fft_kstep: Option<f64>,
     pub fft_nfft: Option<i32>,
     // Back FT (R -> q).
@@ -1194,6 +1195,7 @@ impl PipelineParams {
         let mut hasher = std::hash::DefaultHasher::new();
         self.hash_raw_fields(&mut hasher);
         self.bkg_kweight_linked.hash(&mut hasher);
+        self.fft_grid.hash(&mut hasher);
         for v in [
             self.e0,
             self.edge_step,
@@ -1710,6 +1712,7 @@ pub fn process_arrays(
     if params.fft_rmax.is_some() {
         xftf.rmax_out = params.fft_rmax;
     }
+    xftf.grid = params.fft_grid;
     if params.fft_window.is_some() {
         xftf.window = params.fft_window;
     }
@@ -1777,6 +1780,18 @@ pub fn resample_chik(sp: &XASSpectrum, grid: &[f64]) -> Option<Vec<f64>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fft_grid_survives_roundtrip_and_invalidates_processing_cache() {
+        let legacy: PipelineParams = serde_json::from_str("{}").unwrap();
+        assert_eq!(legacy.fft_grid, rexafs::FFTGrid::Input);
+        let mut changed = legacy.clone();
+        changed.fft_grid = rexafs::FFTGrid::Larch;
+        assert_ne!(legacy.fingerprint(), changed.fingerprint());
+        let restored: PipelineParams =
+            serde_json::from_str(&serde_json::to_string(&changed).unwrap()).unwrap();
+        assert!(restored == changed);
+    }
 
     #[test]
     fn normalization_auto_uses_each_spectrum_endpoint_and_preserves_explicit_limits() {

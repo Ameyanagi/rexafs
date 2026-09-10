@@ -4,11 +4,15 @@ use nalgebra::DVector;
 use serde::{Deserialize, Serialize};
 
 use super::errors::FFTError;
+use super::mathutils::MathUtils;
 use super::xafsutils::{ftwindow, FTWindow};
+
+pub use super::fft_grid::FFTGrid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct XrayFFTF {
+    pub grid: FFTGrid,
     pub rmax_out: Option<f64>,
     pub window: Option<FTWindow>,
     pub dk: Option<f64>,
@@ -27,7 +31,8 @@ pub struct XrayFFTF {
 // Preserve the original equality contract: the complex FFT cache is omitted.
 impl PartialEq for XrayFFTF {
     fn eq(&self, other: &Self) -> bool {
-        self.rmax_out == other.rmax_out
+        self.grid == other.grid
+            && self.rmax_out == other.rmax_out
             && self.window == other.window
             && self.dk == other.dk
             && self.dk2 == other.dk2
@@ -45,6 +50,7 @@ impl PartialEq for XrayFFTF {
 impl Default for XrayFFTF {
     fn default() -> Self {
         Self {
+            grid: FFTGrid::Input,
             rmax_out: Some(10.0),
             window: Some(FTWindow::KaiserBessel),
             dk: Some(1.0),
@@ -149,21 +155,18 @@ impl XrayFFTF {
             });
         }
 
-        self.fill_parameter(k);
-        let nfft = self.nfft.unwrap();
-        let kweight = self.kweight.unwrap();
-
-        let mut chi_weighted = DVector::zeros(chi.len());
-        for i in 0..chi.len() {
-            chi_weighted[i] = chi[i] * k[i].powf(kweight);
+        if k.iter().chain(chi.iter()).any(|v| !v.is_finite())
+            || k.as_slice().windows(2).any(|w| w[0] >= w[1])
+        {
+            return Err(FFTError::InvalidParameter {
+                parameter: "k/chi".into(),
+                reason: "must be finite with strictly increasing k".into(),
+            });
         }
 
-        let win =
-            ftwindow(k, self.kmin, self.kmax, self.dk, self.dk2, self.window).map_err(|e| {
-                FFTError::WindowCalculationFailed {
-                    reason: e.to_string(),
-                }
-            })?;
+        self.fill_parameter(k);
+        let nfft = self.nfft.unwrap();
+        let (mut chi_weighted, win) = self.prepare(k, chi)?;
 
         for i in 0..chi_weighted.len() {
             chi_weighted[i] *= win[i];
@@ -184,6 +187,58 @@ impl XrayFFTF {
         self.chir = Some(cchi_fft);
 
         Ok(self)
+    }
+
+    fn prepare(
+        &self,
+        k: &DVector<f64>,
+        chi: &DVector<f64>,
+    ) -> Result<(DVector<f64>, DVector<f64>), FFTError> {
+        let kweight = self.kweight.unwrap();
+        let grid_owned;
+        let chi_owned;
+        let (grid, chi, npts) = match self.grid {
+            FFTGrid::Input => (k, chi, k.len()),
+            FFTGrid::Larch => {
+                let step = self.kstep.unwrap();
+                let last = k[k.len() - 1];
+                let npts = (1.01 + last / step).floor();
+                let extent = last.max(self.kmax.unwrap() + self.dk2.unwrap());
+                let nwin = (1.01 + extent / step).floor();
+                // Bound both arrays before float-to-integer conversion/allocation.
+                if k[0] < 0.0 || !nwin.is_finite() || npts < 2.0 || nwin > self.nfft.unwrap() as f64
+                {
+                    return Err(FFTError::InvalidParameter {
+                        parameter: "Larch grid".into(),
+                        reason: "requires nonnegative k, at least two resampled points, and nfft large enough for kmax+dk2".into(),
+                    });
+                }
+                grid_owned = DVector::from_iterator(
+                    nwin as usize,
+                    (0..nwin as usize).map(|i| i as f64 * step),
+                );
+                chi_owned = grid_owned
+                    .interpolate(k.as_slice(), chi.as_slice())
+                    .map_err(|e| FFTError::InterpolationFailed {
+                        reason: e.to_string(),
+                    })?;
+                (&grid_owned, &chi_owned, npts as usize)
+            }
+        };
+        let window =
+            ftwindow(grid, self.kmin, self.kmax, self.dk, self.dk2, self.window).map_err(|e| {
+                FFTError::WindowCalculationFailed {
+                    reason: e.to_string(),
+                }
+            })?;
+        let weighted =
+            DVector::from_iterator(npts, (0..npts).map(|i| chi[i] * grid[i].powf(kweight)));
+        let window = if npts == window.len() {
+            window
+        } else {
+            window.rows(0, npts).into_owned()
+        };
+        Ok((weighted, window))
     }
 
     pub fn get_rmax_out(&self) -> Option<&f64> {

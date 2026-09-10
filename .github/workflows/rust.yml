@@ -32,6 +32,9 @@ jobs:
       run: cargo +${{ matrix.toolchain }} build --locked -p rexafs --verbose
     - name: Run core crate tests
       run: cargo +${{ matrix.toolchain }} test --locked -p rexafs --verbose
+    - name: Test optional ndarray compatibility backend
+      if: runner.os == 'Linux' && matrix.toolchain == '1.98.1'
+      run: cargo +${{ matrix.toolchain }} test --locked -p rexafs --features ndarray-compat
     - name: Check Windows benchmark portability
       if: runner.os == 'Windows'
       run: cargo +${{ matrix.toolchain }} check --locked -p rexafs --all-targets

@@ -1,0 +1,26 @@
+{
+  "cu-FixedPenalty": {
+    "chi_relative_l2": 0.0,
+    "chir_mag_relative_l2": 0.0
+  },
+  "cu-Fixed": {
+    "chi_relative_l2": 1.4287908637291646e-05,
+    "chir_mag_relative_l2": 3.57176729501091e-06
+  },
+  "ni-FixedPenalty": {
+    "chi_relative_l2": 0.0,
+    "chir_mag_relative_l2": 0.0
+  },
+  "ni-Fixed": {
+    "chi_relative_l2": 2.597146194885814e-06,
+    "chir_mag_relative_l2": 1.0753382803237975e-06
+  },
+  "ru-FixedPenalty": {
+    "chi_relative_l2": 0.0,
+    "chir_mag_relative_l2": 0.0
+  },
+  "ru-Fixed": {
+    "chi_relative_l2": 1.7786355966524461e-07,
+    "chir_mag_relative_l2": 2.3239105900222548e-07
+  }
+}

@@ -145,6 +145,7 @@ pub(crate) enum EnumParam {
     BkgSolver,
     BkgClampPolicy,
     FftWindow,
+    FftGrid,
     BftWindow,
     BkgFallback,
     BkgCache,
@@ -4241,6 +4242,7 @@ impl StudioApp {
                 "auto (LinearDirect)",
                 AUTOBK_SOLVERS.iter().map(|v| format!("{v:?}")).collect(),
             ),
+            EnumParam::FftGrid => return vec!["Input grid".into(), "Larch grid".into()],
             EnumParam::FftWindow => (
                 "auto (KaiserBessel)",
                 FT_WINDOWS.iter().map(|w| format!("{w:?}")).collect(),
@@ -4309,6 +4311,13 @@ impl StudioApp {
                     p.bkg_clamp_policy = rexafs::prelude::AUTOBKClampScalePolicy::Fixed;
                 }
             }
+            EnumParam::FftGrid => {
+                p.fft_grid = if index == 1 {
+                    rexafs::FFTGrid::Larch
+                } else {
+                    rexafs::FFTGrid::Input
+                }
+            }
             EnumParam::FftWindow => {
                 p.fft_window = variant.map(|i| FT_WINDOWS[i]);
             }
@@ -4369,6 +4378,7 @@ impl StudioApp {
                 .and_then(|v| AUTOBK_SOLVERS.iter().position(|x| *x == v))
                 .map(|i| i + 1)
                 .unwrap_or(0),
+            EnumParam::FftGrid => usize::from(p.fft_grid == rexafs::FFTGrid::Larch),
             EnumParam::FftWindow => p
                 .fft_window
                 .and_then(|w| FT_WINDOWS.iter().position(|x| *x == w))

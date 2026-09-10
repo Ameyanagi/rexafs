@@ -8,7 +8,8 @@ X11 smoke check of the packaged Linux application. Version 0.2.3's existing tag
 is preserved. The [release notes](release-notes-0.2.4.md) and
 [qualification record](validation/2026-09-09-release-0.2.4/review.md) track this
 release's source, checks and publication. Numerical defaults and dependency
-versions are unchanged. The [0.2.3 record](validation/2026-09-10-release-0.2.3/review.md)
+versions are unchanged; the [compatibility fixes](fft-grid-compatibility.md)
+correct legacy derivatives and add an explicit FFT grid choice. The [0.2.3 record](validation/2026-09-10-release-0.2.3/review.md)
 retains that release's completed build, registry, signing and publication history.
 
 ## Published releases

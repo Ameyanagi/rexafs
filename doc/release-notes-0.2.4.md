@@ -41,8 +41,13 @@ pre-push hooks cover formatting, compatibility fixtures, release tooling and cor
 quality checks.
 
 Existing format-1 projects remain readable. The 0.2.4 linked and embedded fixtures
-are saved and reopened through this version's writer. Numerical algorithms,
-scientific defaults and dependency versions are unchanged from 0.2.3.
+are saved and reopened through this version's writer. The fixed-λ AUTOBK default
+and default desktop FFT grid remain unchanged. Legacy iterative AUTOBK now uses
+the complete clamp derivative and reports failed convergence; recomputed legacy
+fits can change. An explicit **Larch grid** option in Transform → Advanced,
+Python, JavaScript and Rust resolves output-FFT endpoint differences without
+changing saved-project defaults. The optional ndarray backend now applies its
+calculated FFT window. [Numerical details and migration](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/doc/fft-grid-compatibility.md).
 
 </details>
 
@@ -63,8 +68,9 @@ records the available-host checks and screenshots. The
 tracks the exact build, signing and publication evidence.
 
 [PR #39](https://github.com/Ameyanagi/rexafs/pull/39) remains excluded because its
-nalgebra update is incompatible with the current solver. The legacy clamp
-Jacobian and output-FFT window-domain differences tracked by
-[issue #20](https://github.com/Ameyanagi/rexafs/issues/20) remain open.
+nalgebra update is incompatible with the published solver. Compatible patch
+updates remain enabled; the 0.35 upgrade awaits a coordinated solver release.
+The remaining work in [issue #20](https://github.com/Ameyanagi/rexafs/issues/20)
+is covered by the derivative correction and explicit FFT compatibility mode.
 
 </details>

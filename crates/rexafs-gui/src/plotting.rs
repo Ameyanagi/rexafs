@@ -730,7 +730,7 @@ pub fn build_quadrant_specs(
         // shifted onto the active trace in waterfall mode.
         if view.show_kwin
             && let (Some(k), Some(kwin), Some(chi)) = (
-                active.sp.k().map(nalgebra::DVector::from_column_slice),
+                active.sp.kwin_k(),
                 active.sp.kwin(),
                 active.sp.chi_kweighted(),
             )

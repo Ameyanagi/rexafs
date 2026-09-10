@@ -331,6 +331,19 @@ impl WasmXrayFFTF {
         }
     }
     #[wasm_bindgen(getter)]
+    pub fn grid(&self) -> String {
+        format!("{:?}", self.inner.grid)
+    }
+    #[wasm_bindgen(setter)]
+    pub fn set_grid(&mut self, value: &str) -> Result<(), JsValue> {
+        self.inner.grid = match value {
+            "Input" => rexafs::FFTGrid::Input,
+            "Larch" => rexafs::FFTGrid::Larch,
+            _ => return Err(JsValue::from_str("FFT grid must be Input or Larch")),
+        };
+        Ok(())
+    }
+    #[wasm_bindgen(getter)]
     pub fn rmax_out(&self) -> Option<f64> {
         self.inner.rmax_out
     }
@@ -558,6 +571,16 @@ impl WasmSpectrum {
     pub fn r(&self) -> Option<js_sys::Float64Array> {
         self.inner
             .r()
+            .map(|v| js_sys::Float64Array::from(v.as_slice()))
+    }
+    pub fn kwin(&self) -> Option<js_sys::Float64Array> {
+        self.inner
+            .kwin()
+            .map(|v| js_sys::Float64Array::from(v.as_slice()))
+    }
+    pub fn kwin_k(&self) -> Option<js_sys::Float64Array> {
+        self.inner
+            .kwin_k()
             .map(|v| js_sys::Float64Array::from(v.as_slice()))
     }
     pub fn chir_mag(&self) -> Option<js_sys::Float64Array> {
