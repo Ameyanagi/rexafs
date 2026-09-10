@@ -4,6 +4,10 @@
 
 **Rust-powered X-ray absorption analysis.**
 
+**[Download the latest desktop binaries](https://github.com/Ameyanagi/rexafs/releases/latest)** ·
+[Installation guide](doc/installing.md) ·
+[Release build workflow](https://github.com/Ameyanagi/rexafs/actions/workflows/release-build.yml)
+
 rexafs processes measured XAS spectra, removes EXAFS backgrounds, computes Fourier
 transforms and fits scattering-path models. Use the Rust library, Python bindings,
 JavaScript/Wasm package or desktop application. [rexafs.com](https://rexafs.com) is
@@ -14,17 +18,38 @@ in **rexafs** stands for both **Rust** and **reinventing the wheel** for EXAFS
 analysis. The project began with the need to process large in-situ measurement
 series.
 
-## Release status
+## Install the desktop
 
-The source tree uses `rexafs`. Registry publication and GitHub downloads are being
-prepared; the commands below build from this checkout. The repository is now
-[`Ameyanagi/rexafs`](https://github.com/Ameyanagi/rexafs). See the
-[release plan](doc/rebranding-plan.md),
-[migration guide](doc/migration.md) and [release runbook](doc/releasing.md).
+Open the [latest release](https://github.com/Ameyanagi/rexafs/releases/latest)
+and choose the package for your operating system and processor. This link follows
+each new stable release automatically.
 
-For Windows, use the setup EXE from the
-[GitHub releases](https://github.com/Ameyanagi/rexafs/releases), or the portable ZIP.
-See [Windows installation](doc/windows-installers.md) for setup, updates and uninstall.
+| Platform | Architecture | Package and installation |
+|---|---|---|
+| macOS | Apple Silicon (ARM64) | Open the `aarch64-apple-darwin.dmg` installer and drag rexafs to Applications; a ZIP is also available. |
+| macOS | Intel (x86-64) | Open the `x86_64-apple-darwin.dmg` installer and drag rexafs to Applications; a ZIP is also available. |
+| Windows preview | Intel / AMD (x86-64) | Run the `x86_64-pc-windows-msvc-setup.exe` installer, or extract the portable ZIP. |
+| Linux preview | Intel / AMD (x86-64) | Extract the `x86_64-unknown-linux-gnu.tar.gz` archive and run `./rexafs` from its folder. |
+
+Asset names begin with `rexafs-` and the release version. Keep portable folders
+together: they contain the executable, resources, examples and licenses. The
+desktop does not require Rust or Python to be installed. Linux uses the Ubuntu
+24.04 runtime baseline and requires a graphical session and Vulkan driver; see
+the [Linux requirements](doc/installing.md#linux-portable-archive).
+
+Linux and Windows ARM64 downloads are not currently published. You can build
+Linux ARM64 using the [source-build instructions](#build-from-source); Windows
+ARM64 is not yet qualified.
+
+The [release build workflow](https://github.com/Ameyanagi/rexafs/actions/workflows/release-build.yml)
+builds and tests optimized desktop binaries with `cargo build --release`.
+The [publication workflow](https://github.com/Ameyanagi/rexafs/actions/workflows/publish.yml)
+stages the verified downloads, and the
+[Mac signing workflow](https://github.com/Ameyanagi/rexafs/actions/workflows/sign-macos.yml)
+signs and notarizes Mac installers. Release pages include checksums and validation
+details. See [Windows installation](doc/windows-installers.md),
+[offline setup](doc/installing.md#offline-installation) and the
+[release runbook](doc/releasing.md).
 
 ## What is available
 

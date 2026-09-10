@@ -6,9 +6,48 @@ Choose your platform on the [latest release](https://github.com/Ameyanagi/rexafs
 
 | Platform | Install |
 |---|---|
-| macOS | Open the DMG, drag rexafs to Applications, then eject the DMG. Choose Apple Silicon or Intel. |
-| Windows preview | Run the setup executable, or extract the ZIP for a portable copy. |
-| Linux preview | Extract the archive and run `rexafs` from the extracted folder. A graphical session, Vulkan-capable driver, GTK 3, fontconfig, and xkbcommon are required. |
+| macOS ARM64 / x86-64 | Open the DMG, drag rexafs to Applications, then eject the DMG. Choose Apple Silicon or Intel. |
+| Windows x86-64 preview | Run the setup executable, or extract the ZIP for a portable copy. |
+| Linux x86-64 preview | Extract the archive and run `./rexafs` from the extracted folder. See the runtime requirements below. |
+
+The latest-release link follows new stable versions automatically. Linux and
+Windows ARM64 downloads are not currently published. Linux ARM64 can be built
+from source; Windows ARM64 has not been qualified.
+
+### Linux portable archive
+
+Download the `rexafs-VERSION-x86_64-unknown-linux-gnu.tar.gz` asset from the
+[latest release](https://github.com/Ameyanagi/rexafs/releases/latest), where
+`VERSION` is the release number. Extract it, open a terminal in the extracted
+folder, and run:
+
+```sh
+./rexafs
+```
+
+Keep the folder's resources, examples and licenses beside the executable. This
+is a portable application folder: it does not install a system package, register
+a menu shortcut or require a Rust/Python runtime. To remove it, delete the
+application folder after keeping your saved projects elsewhere.
+
+Linux builds use Ubuntu 24.04 and require glibc 2.39 or newer, a graphical
+session, a Vulkan-capable driver, GTK 3, fontconfig and xkbcommon with X11 support.
+The `.tar.gz` does not bundle these system libraries. On Ubuntu 24.04, install
+the runtime packages with:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y libgtk-3-0t64 libxkbcommon-x11-0 libvulkan1 \
+  libfontconfig1 fonts-dejavu-core xdg-desktop-portal xdg-desktop-portal-gtk
+```
+
+Use the Vulkan driver for your graphics device. Run rexafs inside your graphical
+login session so D-Bus and the file chooser portal are available. Other
+distributions need compatible library versions; source-build dependencies are
+listed in [Linux development](desktop-development.md#linux).
+An x86-64 archive cannot run natively on an ARM64 system such as DGX Spark.
+
+### Validation and checksums
 
 ZIP archives remain available for portable installation and the desktop updater.
 Checksums and installer evidence accompany the downloads. Native Windows
