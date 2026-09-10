@@ -1,26 +1,22 @@
 # Releasing rexafs
 
-## Preparing 0.2.3
-
-The next patch release includes the Windows console, native shortcut and
-accessibility fixes from `29a1191`, plus the Linux native adapter return-type
-correction. Version 0.2.2 was withheld after its Linux build failed; its tag
-remains immutable. The new release's [release notes](release-notes-0.2.3.md)
-and [qualification record](validation/2026-09-10-release-0.2.3/review.md) track
-the exact source, build, signing and publication checks. PR #39 remains excluded
-because its nalgebra update fails at the solver type boundary. Issue #20 remains
-open for the legacy clamp Jacobian and output-FFT window-domain differences.
-
 ## Current stable release
 
-The current stable release is [0.2.1](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.1).
-Its [release notes](release-notes-0.2.1.md) describe the merged UI, structure,
-and ruviz 0.14.1 updates; its
-[qualification report](validation/2026-09-09-release-0.2.1/review.md) records the
-completed build, registry, signing, artifact, and available-host checks.
-All three registries publish 0.2.1 as stable. Mac downloads are signed and
-notarized. Windows/Linux remain desktop previews until native interactive
-qualification is available.
+The current stable release is [0.2.3](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.3).
+Its [release notes](release-notes-0.2.3.md) describe the Windows console, native
+shortcut and accessibility fixes, plus the Linux adapter correction. Its
+[qualification report](validation/2026-09-10-release-0.2.3/review.md) records the
+completed build, registry, signing, artifact and available-host checks.
+All three registries select 0.2.3 as stable. Mac ZIPs and DMGs are signed and
+notarized. Windows/Linux remain desktop previews; native interactive checks of
+those final downloads remain outside the available qualification coverage.
+
+Version 0.2.2 was withheld after its Linux build failed; its tag remains immutable.
+PR #39 remains excluded because its nalgebra update fails at the solver type
+boundary. Issue #20 remains open for the legacy clamp Jacobian and output-FFT
+window-domain differences. The subsequent desktop quality work in PRs #48 and
+#49 is prepared for 0.2.4 and is outside the 0.2.3 source tag.
+
 The [rebranding plan](rebranding-plan.md) defines scope; [dependency notes](dependencies.md)
 record the Rust 1.98.1 toolchain and compatibility constraints.
 
