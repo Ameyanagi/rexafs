@@ -4,6 +4,7 @@ fn error(error: rexafs::Error) -> JsValue {
     js_sys::Error::new(&error.to_string()).into()
 }
 
+/// Pre/post-edge normalization settings. Defaults adapt to the measured energy range.
 #[wasm_bindgen(js_name = PrePostEdge)]
 pub struct WasmPrePostEdge {
     inner: rexafs::PrePostEdge,
@@ -16,6 +17,7 @@ impl WasmPrePostEdge {
             inner: rexafs::PrePostEdge::new(),
         }
     }
+    /// Pre-edge fit start relative to E0, in eV. Default: infer from the measured range.
     #[wasm_bindgen(getter)]
     pub fn pre_edge_start(&self) -> Option<f64> {
         self.inner.pre_edge_start
@@ -24,6 +26,7 @@ impl WasmPrePostEdge {
     pub fn set_pre_edge_start(&mut self, value: Option<f64>) {
         self.inner.pre_edge_start = value;
     }
+    /// Pre-edge fit end relative to E0, in eV. Default: infer from the pre-edge start.
     #[wasm_bindgen(getter)]
     pub fn pre_edge_end(&self) -> Option<f64> {
         self.inner.pre_edge_end
@@ -32,6 +35,7 @@ impl WasmPrePostEdge {
     pub fn set_pre_edge_end(&mut self, value: Option<f64>) {
         self.inner.pre_edge_end = value;
     }
+    /// Post-edge fit start relative to E0, in eV. Default: infer from the available range (at most 25 eV).
     #[wasm_bindgen(getter)]
     pub fn norm_start(&self) -> Option<f64> {
         self.inner.norm_start
@@ -40,6 +44,7 @@ impl WasmPrePostEdge {
     pub fn set_norm_start(&mut self, value: Option<f64>) {
         self.inner.norm_start = value;
     }
+    /// Post-edge fit end relative to E0, in eV. Default: measured upper energy limit.
     #[wasm_bindgen(getter)]
     pub fn norm_end(&self) -> Option<f64> {
         self.inner.norm_end
@@ -48,6 +53,7 @@ impl WasmPrePostEdge {
     pub fn set_norm_end(&mut self, value: Option<f64>) {
         self.inner.norm_end = value;
     }
+    /// Post-edge polynomial degree, 0 through 5. Default: 0, 1 or 2 for fit spans below 50, below 350, or at least 350 eV.
     #[wasm_bindgen(getter)]
     pub fn norm_polyorder(&self) -> Option<i32> {
         self.inner.norm_polyorder
@@ -56,6 +62,7 @@ impl WasmPrePostEdge {
     pub fn set_norm_polyorder(&mut self, value: Option<i32>) {
         self.inner.norm_polyorder = value;
     }
+    /// Victoreen energy exponent for the pre-edge fit. Default: 0.
     #[wasm_bindgen(getter)]
     pub fn n_victoreen(&self) -> Option<i32> {
         self.inner.n_victoreen
@@ -64,6 +71,7 @@ impl WasmPrePostEdge {
     pub fn set_n_victoreen(&mut self, value: Option<i32>) {
         self.inner.n_victoreen = value;
     }
+    /// Edge energy in eV. Default: detect from the spectrum.
     #[wasm_bindgen(getter)]
     pub fn e0(&self) -> Option<f64> {
         self.inner.e0
@@ -72,6 +80,7 @@ impl WasmPrePostEdge {
     pub fn set_e0(&mut self, value: Option<f64>) {
         self.inner.e0 = value;
     }
+    /// Absorption edge-step override in mu units. Default: estimate from the fitted baselines.
     #[wasm_bindgen(getter)]
     pub fn edge_step(&self) -> Option<f64> {
         self.inner.edge_step
@@ -82,6 +91,7 @@ impl WasmPrePostEdge {
     }
 }
 
+/// AUTOBK background settings. Recommended defaults use LinearDirect and FixedPenalty with lambda 0.001.
 #[wasm_bindgen(js_name = AUTOBK)]
 pub struct WasmAUTOBK {
     inner: rexafs::AUTOBK,
@@ -94,6 +104,7 @@ impl WasmAUTOBK {
             inner: rexafs::AUTOBK::new(),
         }
     }
+    /// Edge energy in eV. Default: use normalization E0.
     #[wasm_bindgen(getter)]
     pub fn ek0(&self) -> Option<f64> {
         self.inner.ek0
@@ -102,6 +113,7 @@ impl WasmAUTOBK {
     pub fn set_ek0(&mut self, value: Option<f64>) {
         self.inner.ek0 = value;
     }
+    /// Background cutoff in angstroms. AUTOBK suppresses Fourier residuals below this R. Default: 1.0; increasing it can remove structural signal.
     #[wasm_bindgen(getter)]
     pub fn rbkg(&self) -> Option<f64> {
         self.inner.rbkg
@@ -110,6 +122,7 @@ impl WasmAUTOBK {
     pub fn set_rbkg(&mut self, value: Option<f64>) {
         self.inner.rbkg = value;
     }
+    /// Spline knot count. Default: determine from rbkg and the k range.
     #[wasm_bindgen(getter)]
     pub fn nknots(&self) -> Option<i32> {
         self.inner.nknots
@@ -118,6 +131,7 @@ impl WasmAUTOBK {
     pub fn set_nknots(&mut self, value: Option<i32>) {
         self.inner.nknots = value;
     }
+    /// Background fit lower k limit in inverse angstroms. Default: 0.0.
     #[wasm_bindgen(getter)]
     pub fn kmin(&self) -> Option<f64> {
         self.inner.kmin
@@ -126,6 +140,7 @@ impl WasmAUTOBK {
     pub fn set_kmin(&mut self, value: Option<f64>) {
         self.inner.kmin = value;
     }
+    /// Background fit upper k limit in inverse angstroms. Default: available data limit.
     #[wasm_bindgen(getter)]
     pub fn kmax(&self) -> Option<f64> {
         self.inner.kmax
@@ -134,6 +149,7 @@ impl WasmAUTOBK {
     pub fn set_kmax(&mut self, value: Option<f64>) {
         self.inner.kmax = value;
     }
+    /// Uniform output k spacing in inverse angstroms. Default: 0.05.
     #[wasm_bindgen(getter)]
     pub fn kstep(&self) -> Option<f64> {
         self.inner.kstep
@@ -142,6 +158,7 @@ impl WasmAUTOBK {
     pub fn set_kstep(&mut self, value: Option<f64>) {
         self.inner.kstep = value;
     }
+    /// Number of samples at each endpoint used by the clamp. Default: 3; 0 disables clamping.
     #[wasm_bindgen(getter)]
     pub fn nclamp(&self) -> Option<i32> {
         self.inner.nclamp
@@ -150,6 +167,7 @@ impl WasmAUTOBK {
     pub fn set_nclamp(&mut self, value: Option<i32>) {
         self.inner.nclamp = value;
     }
+    /// Low-k endpoint weight. Default: 0 (disabled).
     #[wasm_bindgen(getter)]
     pub fn clamp_lo(&self) -> Option<i32> {
         self.inner.clamp_lo
@@ -158,6 +176,7 @@ impl WasmAUTOBK {
     pub fn set_clamp_lo(&mut self, value: Option<i32>) {
         self.inner.clamp_lo = value;
     }
+    /// High-k endpoint weight. Default: 1.
     #[wasm_bindgen(getter)]
     pub fn clamp_hi(&self) -> Option<i32> {
         self.inner.clamp_hi
@@ -166,6 +185,7 @@ impl WasmAUTOBK {
     pub fn set_clamp_hi(&mut self, value: Option<i32>) {
         self.inner.clamp_hi = value;
     }
+    /// FixedPenalty strength. Recommended default: 0.001; 0 disables the endpoint penalty.
     #[wasm_bindgen(getter)]
     pub fn clamp_lambda(&self) -> Option<f64> {
         self.inner.clamp_lambda
@@ -174,6 +194,7 @@ impl WasmAUTOBK {
     pub fn set_clamp_lambda(&mut self, value: Option<f64>) {
         self.inner.clamp_lambda = value;
     }
+    /// FFT length for background removal. Default: 2048.
     #[wasm_bindgen(getter)]
     pub fn nfft(&self) -> Option<i32> {
         self.inner.nfft
@@ -182,6 +203,7 @@ impl WasmAUTOBK {
     pub fn set_nfft(&mut self, value: Option<i32>) {
         self.inner.nfft = value;
     }
+    /// Power of k used in the background objective. Default: 1.
     #[wasm_bindgen(getter)]
     pub fn kweight(&self) -> Option<i32> {
         self.inner.kweight
@@ -190,6 +212,7 @@ impl WasmAUTOBK {
     pub fn set_kweight(&mut self, value: Option<i32>) {
         self.inner.kweight = value;
     }
+    /// Background window taper width in inverse angstroms. Default: 0.1.
     #[wasm_bindgen(getter)]
     pub fn dk(&self) -> Option<f64> {
         self.inner.dk
@@ -198,6 +221,7 @@ impl WasmAUTOBK {
     pub fn set_dk(&mut self, value: Option<f64>) {
         self.inner.dk = value;
     }
+    /// Legacy direct-solver ridge strength. Default: 0.0001; unused by FixedPenalty.
     #[wasm_bindgen(getter)]
     pub fn linear_regularization(&self) -> Option<f64> {
         self.inner.linear_regularization
@@ -206,6 +230,7 @@ impl WasmAUTOBK {
     pub fn set_linear_regularization(&mut self, value: Option<f64>) {
         self.inner.linear_regularization = value;
     }
+    /// Maximum accepted linear-system condition number. Default: 1e8.
     #[wasm_bindgen(getter)]
     pub fn linear_condition_limit(&self) -> Option<f64> {
         self.inner.linear_condition_limit
@@ -214,6 +239,7 @@ impl WasmAUTOBK {
     pub fn set_linear_condition_limit(&mut self, value: Option<f64>) {
         self.inner.linear_condition_limit = value;
     }
+    /// Legacy direct-solver residual acceptance ratio. Default: 1.05; unused by FixedPenalty.
     #[wasm_bindgen(getter)]
     pub fn linear_residual_ratio_limit(&self) -> Option<f64> {
         self.inner.linear_residual_ratio_limit
@@ -222,6 +248,7 @@ impl WasmAUTOBK {
     pub fn set_linear_residual_ratio_limit(&mut self, value: Option<f64>) {
         self.inner.linear_residual_ratio_limit = value;
     }
+    /// Allow legacy solver fallback. Default: True; FixedPenalty never falls back.
     #[wasm_bindgen(getter)]
     pub fn linear_fallback_to_lm(&self) -> Option<bool> {
         self.inner.linear_fallback_to_lm
@@ -230,6 +257,7 @@ impl WasmAUTOBK {
     pub fn set_linear_fallback_to_lm(&mut self, value: Option<bool>) {
         self.inner.linear_fallback_to_lm = value;
     }
+    /// Reuse compatible spline/FFT geometry and SVD factors. Default: True; each spectrum has a new right-hand side and solution.
     #[wasm_bindgen(getter)]
     pub fn linear_workspace_cache(&self) -> Option<bool> {
         self.inner.linear_workspace_cache
@@ -238,6 +266,7 @@ impl WasmAUTOBK {
     pub fn set_linear_workspace_cache(&mut self, value: Option<bool>) {
         self.inner.linear_workspace_cache = value;
     }
+    /// Background Fourier window. Default: Hanning.
     #[wasm_bindgen(getter)]
     pub fn window(&self) -> Option<String> {
         Some(format!("{:?}", self.inner.window))
@@ -260,6 +289,7 @@ impl WasmAUTOBK {
         self.inner.window = parsed.unwrap_or_default();
         Ok(())
     }
+    /// Background solver. Recommended default: LinearDirect, required by FixedPenalty. TrustRegionDogLeg requires a Rust build with trust-region (included in Python, unavailable in Wasm).
     #[wasm_bindgen(getter)]
     pub fn solver(&self) -> Option<String> {
         self.inner.solver.map(|v| format!("{v:?}"))
@@ -278,6 +308,7 @@ impl WasmAUTOBK {
         self.inner.solver = parsed;
         Ok(())
     }
+    /// Legacy fallback solver. Default: TrustRegionDogLeg in Python, LegacyLm in Wasm; unused by FixedPenalty.
     #[wasm_bindgen(getter)]
     pub fn linear_fallback_solver(&self) -> Option<String> {
         self.inner.linear_fallback_solver.map(|v| format!("{v:?}"))
@@ -296,6 +327,7 @@ impl WasmAUTOBK {
         self.inner.linear_fallback_solver = parsed;
         Ok(())
     }
+    /// Endpoint model. Recommended default: FixedPenalty with LinearDirect; Fixed and TwoPass are legacy models.
     #[wasm_bindgen(getter)]
     pub fn clamp_scale_policy(&self) -> Option<String> {
         self.inner.clamp_scale_policy.map(|v| format!("{v:?}"))
@@ -318,6 +350,7 @@ impl WasmAUTOBK {
     }
 }
 
+/// Forward Fourier-transform settings. Defaults: k=2..15 inverse angstroms, kweight=2, KaiserBessel window.
 #[wasm_bindgen(js_name = XrayFFTF)]
 pub struct WasmXrayFFTF {
     inner: rexafs::XrayFFTF,
@@ -330,6 +363,7 @@ impl WasmXrayFFTF {
             inner: rexafs::XrayFFTF::new(),
         }
     }
+    /// Sampling/window domain. Default: Input (existing k grid). Larch resamples on the extended FFT window grid.
     #[wasm_bindgen(getter)]
     pub fn grid(&self) -> String {
         format!("{:?}", self.inner.grid)
@@ -343,6 +377,7 @@ impl WasmXrayFFTF {
         };
         Ok(())
     }
+    /// Maximum displayed R in angstroms. Default: 10.0; does not truncate the inverse-transform filter.
     #[wasm_bindgen(getter)]
     pub fn rmax_out(&self) -> Option<f64> {
         self.inner.rmax_out
@@ -351,6 +386,7 @@ impl WasmXrayFFTF {
     pub fn set_rmax_out(&mut self, value: Option<f64>) {
         self.inner.rmax_out = value;
     }
+    /// Low-k taper width in inverse angstroms. Default: 1.0.
     #[wasm_bindgen(getter)]
     pub fn dk(&self) -> Option<f64> {
         self.inner.dk
@@ -359,6 +395,7 @@ impl WasmXrayFFTF {
     pub fn set_dk(&mut self, value: Option<f64>) {
         self.inner.dk = value;
     }
+    /// High-k taper width in inverse angstroms. Default: use dk.
     #[wasm_bindgen(getter)]
     pub fn dk2(&self) -> Option<f64> {
         self.inner.dk2
@@ -367,6 +404,7 @@ impl WasmXrayFFTF {
     pub fn set_dk2(&mut self, value: Option<f64>) {
         self.inner.dk2 = value;
     }
+    /// Lower Fourier window limit in inverse angstroms. Default: 2.0; None/undefined uses the first k sample.
     #[wasm_bindgen(getter)]
     pub fn kmin(&self) -> Option<f64> {
         self.inner.kmin
@@ -375,6 +413,7 @@ impl WasmXrayFFTF {
     pub fn set_kmin(&mut self, value: Option<f64>) {
         self.inner.kmin = value;
     }
+    /// Upper Fourier window limit in inverse angstroms. Default: 15.0; None/undefined uses the last k sample.
     #[wasm_bindgen(getter)]
     pub fn kmax(&self) -> Option<f64> {
         self.inner.kmax
@@ -383,6 +422,7 @@ impl WasmXrayFFTF {
     pub fn set_kmax(&mut self, value: Option<f64>) {
         self.inner.kmax = value;
     }
+    /// Power of k applied before FFT. Default: 2.0; nonnegative values are floored to an integer.
     #[wasm_bindgen(getter)]
     pub fn kweight(&self) -> Option<f64> {
         self.inner.kweight
@@ -391,6 +431,7 @@ impl WasmXrayFFTF {
     pub fn set_kweight(&mut self, value: Option<f64>) {
         self.inner.kweight = value;
     }
+    /// Forward FFT length. Default: 2048.
     #[wasm_bindgen(getter)]
     pub fn nfft(&self) -> Option<usize> {
         self.inner.nfft
@@ -399,6 +440,7 @@ impl WasmXrayFFTF {
     pub fn set_nfft(&mut self, value: Option<usize>) {
         self.inner.nfft = value;
     }
+    /// FFT k spacing in inverse angstroms. Default: infer from input k.
     #[wasm_bindgen(getter)]
     pub fn kstep(&self) -> Option<f64> {
         self.inner.kstep
@@ -407,6 +449,117 @@ impl WasmXrayFFTF {
     pub fn set_kstep(&mut self, value: Option<f64>) {
         self.inner.kstep = value;
     }
+    /// Fourier window shape. Default: KaiserBessel; explicitly unset uses Hanning.
+    #[wasm_bindgen(getter)]
+    pub fn window(&self) -> Option<String> {
+        self.inner.window.map(|v| format!("{v:?}"))
+    }
+    #[wasm_bindgen(setter)]
+    pub fn set_window(&mut self, value: Option<String>) -> Result<(), JsValue> {
+        let parsed = match value.as_deref() {
+            None => None,
+            Some("Hanning") => Some(rexafs::prelude::FTWindow::Hanning),
+            Some("Parzen") => Some(rexafs::prelude::FTWindow::Parzen),
+            Some("Welch") => Some(rexafs::prelude::FTWindow::Welch),
+            Some("Gaussian") => Some(rexafs::prelude::FTWindow::Gaussian),
+            Some("Sine") => Some(rexafs::prelude::FTWindow::Sine),
+            Some("KaiserBessel") => Some(rexafs::prelude::FTWindow::KaiserBessel),
+            Some("FHanning") => Some(rexafs::prelude::FTWindow::FHanning),
+            Some(value) => {
+                return Err(js_sys::Error::new(&format!("unknown FTWindow: {value}")).into())
+            }
+        };
+        self.inner.window = parsed;
+        Ok(())
+    }
+}
+
+/// Inverse Fourier-transform settings. Set rmin/rmax to select an R-space shell.
+#[wasm_bindgen(js_name = XrayFFTR)]
+pub struct WasmXrayFFTR {
+    inner: rexafs::XrayFFTR,
+}
+#[wasm_bindgen(js_class = XrayFFTR)]
+impl WasmXrayFFTR {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self {
+            inner: rexafs::XrayFFTR::new(),
+        }
+    }
+    /// Maximum back-transform q in inverse angstroms. Default: 10.0.
+    #[wasm_bindgen(getter)]
+    pub fn qmax_out(&self) -> Option<f64> {
+        self.inner.qmax_out
+    }
+    #[wasm_bindgen(setter)]
+    pub fn set_qmax_out(&mut self, value: Option<f64>) {
+        self.inner.qmax_out = value;
+    }
+    /// Low-R taper width in angstroms. Default: 1.0.
+    #[wasm_bindgen(getter)]
+    pub fn dr(&self) -> Option<f64> {
+        self.inner.dr
+    }
+    #[wasm_bindgen(setter)]
+    pub fn set_dr(&mut self, value: Option<f64>) {
+        self.inner.dr = value;
+    }
+    /// High-R taper width in angstroms. Default: use dr.
+    #[wasm_bindgen(getter)]
+    pub fn dr2(&self) -> Option<f64> {
+        self.inner.dr2
+    }
+    #[wasm_bindgen(setter)]
+    pub fn set_dr2(&mut self, value: Option<f64>) {
+        self.inner.dr2 = value;
+    }
+    /// Lower inverse-transform window limit in angstroms. Default: 0.0.
+    #[wasm_bindgen(getter)]
+    pub fn rmin(&self) -> Option<f64> {
+        self.inner.rmin
+    }
+    #[wasm_bindgen(setter)]
+    pub fn set_rmin(&mut self, value: Option<f64>) {
+        self.inner.rmin = value;
+    }
+    /// Upper inverse-transform window limit in angstroms. Default: 20.0; choose a shell range for R filtering.
+    #[wasm_bindgen(getter)]
+    pub fn rmax(&self) -> Option<f64> {
+        self.inner.rmax
+    }
+    #[wasm_bindgen(setter)]
+    pub fn set_rmax(&mut self, value: Option<f64>) {
+        self.inner.rmax = value;
+    }
+    /// Power of R applied before IFFT. Default: 0.0; nonnegative values are floored to an integer.
+    #[wasm_bindgen(getter)]
+    pub fn rweight(&self) -> Option<f64> {
+        self.inner.rweight
+    }
+    #[wasm_bindgen(setter)]
+    pub fn set_rweight(&mut self, value: Option<f64>) {
+        self.inner.rweight = value;
+    }
+    /// Inverse FFT length. Default: 2048; leave kstep automatic when changing this.
+    #[wasm_bindgen(getter)]
+    pub fn nfft(&self) -> Option<usize> {
+        self.inner.nfft
+    }
+    #[wasm_bindgen(setter)]
+    pub fn set_nfft(&mut self, value: Option<usize>) {
+        self.inner.nfft = value;
+    }
+    /// Output q spacing in inverse angstroms. Default: infer from input R and nfft; an explicit value must match that spacing.
+    #[wasm_bindgen(getter)]
+    pub fn kstep(&self) -> Option<f64> {
+        self.inner.kstep
+    }
+    #[wasm_bindgen(setter)]
+    pub fn set_kstep(&mut self, value: Option<f64>) {
+        self.inner.kstep = value;
+    }
+    /// Inverse Fourier window shape. Default: KaiserBessel; explicitly unset uses Hanning.
     #[wasm_bindgen(getter)]
     pub fn window(&self) -> Option<String> {
         self.inner.window.map(|v| format!("{v:?}"))
@@ -437,6 +590,7 @@ pub struct WasmNormalizationMethod {
 }
 #[wasm_bindgen(js_class = NormalizationMethod)]
 impl WasmNormalizationMethod {
+    /// Pre/post-edge normalization settings. Defaults adapt to the measured energy range.
     #[wasm_bindgen(js_name = PrePostEdge)]
     pub fn configured(parameters: &WasmPrePostEdge) -> Self {
         Self {
@@ -461,6 +615,7 @@ pub struct WasmBackgroundMethod {
 }
 #[wasm_bindgen(js_class = BackgroundMethod)]
 impl WasmBackgroundMethod {
+    /// AUTOBK background settings. Recommended defaults use LinearDirect and FixedPenalty with lambda 0.001.
     #[wasm_bindgen(js_name = AUTOBK)]
     pub fn configured(parameters: &WasmAUTOBK) -> Self {
         Self {
@@ -508,6 +663,9 @@ impl WasmSpectrum {
     }
     pub fn invalidate_derived(&mut self) {
         self.inner.invalidate_derived();
+    }
+    pub fn set_ifft(&mut self, parameters: &WasmXrayFFTR) {
+        self.inner.set_ifft(parameters.inner.clone());
     }
     pub fn set_fft(&mut self, parameters: &WasmXrayFFTF) {
         self.inner.set_fft(parameters.inner.clone());

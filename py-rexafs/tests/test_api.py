@@ -1,11 +1,16 @@
 """Run against the built wheel, not the source package."""
+
 import json
 import unittest
 from pathlib import Path
+
 import numpy as np
 import rexafs
 
-FIXTURE = Path(__file__).resolve().parents[2] / "crates/rexafs/tests/testfiles/Ru_QAS.dat"
+FIXTURE = (
+    Path(__file__).resolve().parents[2] / "crates/rexafs/tests/testfiles/Ru_QAS.dat"
+)
+
 
 class SpectrumTests(unittest.TestCase):
     @classmethod
@@ -24,8 +29,14 @@ class SpectrumTests(unittest.TestCase):
         for other in (explicit,):
             self.assertEqual(spectrum.e0(), other.e0())
             for name in ("norm", "chi", "r", "chir_mag"):
-                np.testing.assert_allclose(getattr(spectrum, name)(), getattr(other, name)())
-        np.testing.assert_allclose(spectrum.chir_mag(), np.hypot(spectrum.chir_real(), spectrum.chir_imag()), atol=1e-10)
+                np.testing.assert_allclose(
+                    getattr(spectrum, name)(), getattr(other, name)()
+                )
+        np.testing.assert_allclose(
+            spectrum.chir_mag(),
+            np.hypot(spectrum.chir_real(), spectrum.chir_imag()),
+            atol=1e-10,
+        )
 
     def test_owned_arrays_and_input_conversion(self):
         energy, mu = self.energy.copy(), self.mu.copy()
@@ -47,10 +58,13 @@ class SpectrumTests(unittest.TestCase):
         bkg.rbkg = 1.2
         ft = rexafs.XrayFFTF()
         ft.kweight = 1
-        spectrum = (self.spectrum()
+        spectrum = (
+            self.spectrum()
             .set_normalization_method(rexafs.NormalizationMethod.PrePostEdge(norm))
             .set_background_method(rexafs.BackgroundMethod.AUTOBK(bkg))
-            .set_fft(ft).fft())
+            .set_fft(ft)
+            .fft()
+        )
         chi, old_r = spectrum.chi(), spectrum.chir_mag()
         ft.kweight = 3
         spectrum.set_fft(ft)
@@ -99,8 +113,15 @@ class SpectrumTests(unittest.TestCase):
         bkg.kmax = 12.0
         bkg.clamp_lo = 2
         bkg.clamp_hi = 5
+
         def chi():
-            return self.spectrum().set_background_method(rexafs.BackgroundMethod.AUTOBK(bkg)).calc_background().chi()
+            return (
+                self.spectrum()
+                .set_background_method(rexafs.BackgroundMethod.AUTOBK(bkg))
+                .calc_background()
+                .chi()
+            )
+
         initial = chi()
         bkg.clamp_lambda = 1.0
         self.assertGreater(np.linalg.norm(chi() - initial), 1e-6)
@@ -125,29 +146,46 @@ class SpectrumTests(unittest.TestCase):
             for penalty, expected in zip((0, 0.001, 1), case["chi"]):
                 with self.subTest(case=case["name"], penalty=penalty):
                     bkg.clamp_lambda = penalty
-                    spectrum = (rexafs.Spectrum(case["energy"], case["mu"])
+                    spectrum = (
+                        rexafs.Spectrum(case["energy"], case["mu"])
                         .set_e0(norm.e0)
-                        .set_normalization_method(rexafs.NormalizationMethod.PrePostEdge(norm))
+                        .set_normalization_method(
+                            rexafs.NormalizationMethod.PrePostEdge(norm)
+                        )
                         .set_background_method(rexafs.BackgroundMethod.AUTOBK(bkg))
-                        .calc_background())
-                    np.testing.assert_allclose(spectrum.k(), case["k"], rtol=0, atol=1e-14)
+                        .calc_background()
+                    )
+                    np.testing.assert_allclose(
+                        spectrum.k(), case["k"], rtol=0, atol=1e-14
+                    )
                     # Independent SciPy fixture of the same fixed objective.
-                    np.testing.assert_allclose(spectrum.chi(), expected, rtol=1e-11, atol=1e-12)
+                    np.testing.assert_allclose(
+                        spectrum.chi(), expected, rtol=1e-11, atol=1e-12
+                    )
 
     def test_unsupported_methods_are_not_replaced(self):
-        spectrum = self.spectrum().set_normalization_method(rexafs.NormalizationMethod.new_mback())
+        spectrum = self.spectrum().set_normalization_method(
+            rexafs.NormalizationMethod.new_mback()
+        )
         with self.assertRaisesRegex(ValueError, "MBack"):
             spectrum.fft()
-        spectrum.set_normalization_method().set_background_method(rexafs.BackgroundMethod.new_ilpbkg())
+        spectrum.set_normalization_method().set_background_method(
+            rexafs.BackgroundMethod.new_ilpbkg()
+        )
         with self.assertRaisesRegex(RuntimeError, "ILPBkg"):
             spectrum.fft()
         self.assertIsNone(spectrum.r())
         self.assertIsNotNone(spectrum.set_background_method().fft().r())
 
     def test_invalid_input_and_parameters_raise(self):
-        for energy, mu in [([], []), ([2, 1, 3], [1]), ([1, 2, 2], [1, 2, 3]),
-                           ([1, np.nan, 3], [1, 2, 3]), ([1, 2, 3], [1, np.inf, 3]),
-                           ([[1, 2]], [[1, 2]])]:
+        for energy, mu in [
+            ([], []),
+            ([2, 1, 3], [1]),
+            ([1, 2, 2], [1, 2, 3]),
+            ([1, np.nan, 3], [1, 2, 3]),
+            ([1, 2, 3], [1, np.inf, 3]),
+            ([[1, 2]], [[1, 2]]),
+        ]:
             with self.subTest(energy=energy), self.assertRaises(ValueError):
                 rexafs.Spectrum.from_arrays(energy, mu)
         with self.assertRaises(ValueError):
@@ -161,12 +199,88 @@ class SpectrumTests(unittest.TestCase):
         ft.nfft = 2048
         self.assertIsNotNone(spectrum.set_fft(ft).fft().r())
 
+    def test_keyword_settings_and_runtime_help(self):
+        import inspect
+
+        background = rexafs.AUTOBK(rbkg=1.2)
+        transform = rexafs.XrayFFTF(kmax=12.0, window="Hanning")
+        normalization = rexafs.PrePostEdge(pre_edge_end=-30.0)
+        self.assertEqual(background.solver, "LinearDirect")
+        self.assertEqual(background.clamp_lambda, 0.001)
+        self.assertEqual(background.kstep, 0.05)
+        self.assertEqual(transform.kweight, 2.0)
+        self.assertIsNone(normalization.norm_end)
+        direct = (
+            self.spectrum()
+            .set_normalization_method(normalization)
+            .set_background_method(background)
+            .set_fft(transform)
+            .fft()
+        )
+        explicit = (
+            self.spectrum()
+            .set_normalization_method(
+                rexafs.NormalizationMethod.PrePostEdge(normalization)
+            )
+            .set_background_method(rexafs.BackgroundMethod.AUTOBK(background))
+            .set_fft(transform)
+            .fft()
+        )
+        np.testing.assert_array_equal(direct.chi(), explicit.chi())
+        np.testing.assert_array_equal(direct.chir_mag(), explicit.chir_mag())
+        background.rbkg = 2.0
+        np.testing.assert_array_equal(direct.calc_background().chi(), explicit.chi())
+        with self.assertRaises(TypeError):
+            rexafs.AUTOBK(rbkg_typo=1)
+        with self.assertRaises(TypeError):
+            rexafs.AUTOBK(1.2)
+        with self.assertRaises(ValueError):
+            rexafs.XrayFFTF(window="Typo")
+        self.assertIn("angstroms", rexafs.AUTOBK.rbkg.__doc__)
+        self.assertIn("2048", rexafs.Spectrum.fft.__doc__)
+        signature = inspect.signature(rexafs.AUTOBK)
+        self.assertEqual(signature.parameters["clamp_lambda"].default, 0.001)
+        self.assertEqual(
+            signature.parameters["rbkg"].kind, inspect.Parameter.KEYWORD_ONLY
+        )
+
+    def test_inverse_settings_preserve_forward_and_invalidate_inverse(self):
+        inverse = rexafs.XrayFFTR(rmin=1.0, rmax=3.0, dr=0.5)
+        spectrum = self.spectrum().ifft()
+        old, forward = spectrum.chiq(), spectrum.chir_mag()
+        self.assertEqual(inverse.nfft, 2048)
+        self.assertEqual(inverse.qmax_out, 10.0)
+        self.assertIs(spectrum.set_ifft(inverse), spectrum)
+        self.assertIsNone(spectrum.q())
+        self.assertIsNone(spectrum.chiq())
+        np.testing.assert_array_equal(spectrum.chir_mag(), forward)
+        inverse.rmax = 4.0
+        spectrum.ifft()
+        filtered = spectrum.chiq()
+        self.assertFalse(np.allclose(filtered, old))
+        self.assertEqual(len(filtered), len(spectrum.q()))
+        self.assertTrue(np.isfinite(filtered).all())
+        spectrum.set_ifft(inverse).ifft()
+        self.assertFalse(np.allclose(spectrum.chiq(), filtered))
+        inverse.nfft = 0
+        spectrum.set_ifft(inverse)
+        with self.assertRaisesRegex(RuntimeError, "nfft"):
+            spectrum.ifft()
+        self.assertIsNone(spectrum.chiq())
+
     def test_reader_and_removed_pipeline_facade(self):
         spectrum = rexafs.io.read_qas_transmission(FIXTURE).fft()
         self.assertIsInstance(spectrum, rexafs.Spectrum)
         np.testing.assert_allclose(spectrum.chi(), self.spectrum().fft().chi())
-        for name in ("process", "ProcessedSpectrum", "process_qas_batch", "run_pipeline_arrays", "run_batch_qas_trans"):
+        for name in (
+            "process",
+            "ProcessedSpectrum",
+            "process_qas_batch",
+            "run_pipeline_arrays",
+            "run_batch_qas_trans",
+        ):
             self.assertFalse(hasattr(rexafs, name), name)
+
 
 if __name__ == "__main__":
     unittest.main()

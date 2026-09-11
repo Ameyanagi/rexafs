@@ -19,17 +19,20 @@ export function bindSpectrum(core, ready = () => true) {
       return this;
     }
     set_normalization_method(method) {
-      const selected = method ?? core.NormalizationMethod.new_prepostedge();
+      const parameters = method instanceof core.PrePostEdge;
+      const selected = parameters ? core.NormalizationMethod.PrePostEdge(method) : method ?? core.NormalizationMethod.new_prepostedge();
       try { this.#inner.set_normalization_method(selected); }
-      finally { if (method == null) selected.free(); }
+      finally { if (parameters || method == null) selected.free(); }
       return this;
     }
     set_background_method(method) {
-      const selected = method ?? core.BackgroundMethod.new_autobk();
+      const parameters = method instanceof core.AUTOBK;
+      const selected = parameters ? core.BackgroundMethod.AUTOBK(method) : method ?? core.BackgroundMethod.new_autobk();
       try { this.#inner.set_background_method(selected); }
-      finally { if (method == null) selected.free(); }
+      finally { if (parameters || method == null) selected.free(); }
       return this;
     }
+    set_ifft(parameters) { this.#inner.set_ifft(parameters); return this; }
     set_fft(parameters) { this.#inner.set_fft(parameters); return this; }
     invalidate_derived() { this.#inner.invalidate_derived(); return this; }
     find_e0() { this.#inner.find_e0(); return this; }

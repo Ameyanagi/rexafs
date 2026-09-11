@@ -43,17 +43,23 @@
     "LICENSE-APACHE",
     "node.d.ts",
     "types.d.ts",
-    "spectrum.js"
+    "spectrum.js",
+    "configuration.js"
   ],
   "scripts": {
     "build": "node build.mjs",
     "test": "node --test test/*.test.mjs",
-    "prepack": "node verify-package.mjs"
+    "prepack": "node verify-package.mjs",
+    "test:python-editor": "node test/python-editor.mjs"
   },
   "engines": {
     "node": ">=22"
   },
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "pyright": "1.1.414",
+    "typescript": "5.9.3"
   }
 }
