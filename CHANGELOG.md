@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- Establish a repository-wide English and scientific-documentation baseline.
+  Explain processing equations and fit-statistic conventions with source links
+  and citations; correct the older uncertainty notes' mathematical errors.
+
+- Document desktop, Python, npm and Rust installation, with quick starts and
+  recommended processing defaults.
+- Add Python keyword-only and TypeScript options constructors for processing
+  settings. Accept `PrePostEdge` and `AUTOBK` settings directly in spectrum
+  setters while preserving existing Rust-style method selectors.
+- Add documented Python Literal choices, runtime docstrings/signature defaults,
+  and TypeScript option interfaces/JSDoc. Check completion, hover help and strict
+  typing against installed wheels and npm tarballs in release CI.
+- Expose `XrayFFTR` and `Spectrum.set_ifft()` across Rust, Python and Wasm;
+  inverse settings invalidate inverse results while preserving forward results.
+- Retain concise historical 0.1.3 benchmark evidence and a reproducible
+  normalization research prototype; numerical processing defaults are unchanged.
+
 ## 0.2.4
 
 - Fit the desktop window to the available display area and show import, project

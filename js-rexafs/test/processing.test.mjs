@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import init, * as api from "../node.js";
-import browserInit, { Spectrum as BrowserSpectrum } from "../browser.js";
+import browserInit, { Spectrum as BrowserSpectrum, AUTOBK as BrowserAUTOBK, XrayFFTR as BrowserXrayFFTR } from "../browser.js";
 const { Spectrum, PrePostEdge, AUTOBK, XrayFFTF, NormalizationMethod, BackgroundMethod } = api;
 const text = await readFile(new URL("../../crates/rexafs/tests/testfiles/Ru_QAS.dat", import.meta.url), "utf8");
 const rows = text.split(/\r?\n/).filter(line => line.trim() && !line.trim().startsWith("#")).map(line => line.trim().split(/\s+/).map(Number));
@@ -89,9 +89,17 @@ test("invalid inputs and FFT settings throw errors and allow recovery", () => {
 
 test("browser glue initializes from bytes and matches Node", async () => {
   assert.throws(() => new BrowserSpectrum(energy, mu), /init/);
+  assert.throws(() => new BrowserAUTOBK({ rbkg: 1.2 }), /init/);
   await browserInit(await readFile(new URL("../dist/web/rexafs_wasm_bg.wasm", import.meta.url)));
   const spectrum = BrowserSpectrum.from_arrays(energy, mu).fft();
-  verify(spectrum); spectrum.free();
+  verify(spectrum);
+  const background = new BrowserAUTOBK({ rbkg: 1.2 });
+  const inverse = new BrowserXrayFFTR({ rmin: 1, rmax: 3 });
+  try {
+    spectrum.set_background_method(background).set_ifft(inverse).ifft();
+    assert.ok(spectrum.chiq().every(Number.isFinite));
+    assert.equal(spectrum.chiq().length, spectrum.q().length);
+  } finally { background.free(); inverse.free(); spectrum.free(); }
 });
 
 test("fixed lambda matches the independent Larch-model reference", async () => {
@@ -152,4 +160,57 @@ test("FFT grid is explicit and preserves chi", () => {
   ft.kstep = undefined;
   assert.deepEqual(spectrum.set_fft(ft).fft().chir_mag(), original);
   spectrum.free(); ft.free();
+});
+
+test("options constructors preserve defaults, accept direct settings and reject typos", () => {
+  const b = new AUTOBK({ rbkg: 1.2, clamp_lambda: 0.001 });
+  const f = new XrayFFTF({ kmax: 12, window: "Hanning" });
+  const n = new PrePostEdge({ pre_edge_end: -30 });
+  const method = BackgroundMethod.AUTOBK(b);
+  const s = new Spectrum(energy, mu), explicit = new Spectrum(energy, mu);
+  try {
+    assert.equal(b.solver, "LinearDirect");
+    assert.equal(b.kstep, 0.05);
+    assert.equal(b.window, "Hanning");
+    assert.equal(f.kweight, 2);
+    assert.equal(f.grid, "Input");
+    assert.equal(n.norm_end, undefined);
+    s.set_normalization_method(n).set_background_method(b).set_fft(f).fft();
+    const norm = NormalizationMethod.PrePostEdge(n);
+    try { explicit.set_normalization_method(norm).set_background_method(method).set_fft(f).fft(); }
+    finally { norm.free(); }
+    assert.deepEqual(s.chi(), explicit.chi());
+    assert.deepEqual(s.chir_mag(), explicit.chir_mag());
+    b.rbkg = 2;
+    assert.deepEqual(s.calc_background().chi(), explicit.chi()); // Settings were copied.
+    assert.throws(() => new AUTOBK({ rbkg_typo: 1 }), /Unknown configuration/);
+    assert.throws(() => new XrayFFTF({ window: "Typo" }), /FTWindow/);
+    assert.throws(() => new XrayFFTF(null), /options must be an object/);
+  } finally { b.free(); f.free(); n.free(); method.free(); s.free(); explicit.free(); }
+});
+
+test("inverse configuration invalidates only inverse results and copies settings", () => {
+  const inverse = new api.XrayFFTR({ rmin: 1, rmax: 3, dr: 0.5 });
+  const s = new Spectrum(energy, mu).ifft();
+  try {
+    const old = s.chiq(), forward = s.chir_mag();
+    assert.equal(inverse.qmax_out, 10);
+    assert.equal(inverse.nfft, 2048);
+    assert.equal(s.set_ifft(inverse), s);
+    assert.equal(s.q(), undefined);
+    assert.equal(s.chiq(), undefined);
+    assert.deepEqual(s.chir_mag(), forward);
+    inverse.rmax = 4;
+    s.ifft();
+    const filtered = s.chiq();
+    assert.notDeepEqual(filtered, old);
+    assert.equal(filtered.length, s.q().length);
+    assert.ok(filtered.every(Number.isFinite));
+    s.set_ifft(inverse).ifft();
+    assert.notDeepEqual(s.chiq(), filtered);
+    inverse.nfft = 0;
+    s.set_ifft(inverse);
+    assert.throws(() => s.ifft(), /nfft/);
+    assert.equal(s.chiq(), undefined);
+  } finally { inverse.free(); s.free(); }
 });

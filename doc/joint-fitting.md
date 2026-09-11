@@ -4,6 +4,11 @@
 The browser groups paths under their spectrum. Selecting a spectrum shows its
 range and every assigned path's parameter values; selecting a path focuses it.
 
+For the mathematical objective and the meaning of shared parameters,
+chi-square, covariance and R-factor, see [fitting statistics](fitting-statistics.md).
+A joint fit combines residuals under shared parameter constraints; it does not
+make duplicated spectra independent physical measurements.
+
 ## Workflow
 
 1. Configure the needed paths in **Paths**, including paths from different

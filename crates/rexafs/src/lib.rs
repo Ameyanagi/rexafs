@@ -14,5 +14,5 @@ pub use xafs::background::{BackgroundMethod, AUTOBK};
 pub use xafs::normalization::{NormalizationMethod, PrePostEdge};
 pub use xafs::xasgroup::XASGroup as Group;
 pub use xafs::xasspectrum::XASSpectrum as Spectrum;
-pub use xafs::xrayfft::{FFTGrid, XrayFFTF};
+pub use xafs::xrayfft::{FFTGrid, XrayFFTF, XrayFFTR};
 pub use xafs::{analysis, fitting, io, structure, tools, Result, XAFSError as Error};

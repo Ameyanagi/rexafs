@@ -1,5 +1,43 @@
-"""Rust Spectrum API for X-ray absorption analysis. Energy is in eV."""
-from ._core import Spectrum, PrePostEdge, AUTOBK, XrayFFTF, NormalizationMethod, BackgroundMethod, __version__
-from . import io
+"""Rust spectrum processing with NumPy results. Energy is in eV.
 
-__all__ = ["Spectrum", "PrePostEdge", "AUTOBK", "XrayFFTF", "NormalizationMethod", "BackgroundMethod", "io", "__version__"]
+Start with Spectrum(energy, mu).fft(); configure stages with keyword-only
+PrePostEdge, AUTOBK, XrayFFTF and XrayFFTR settings. See member docstrings
+for units, defaults and invalidation behavior.
+"""
+
+from typing import Literal
+
+from . import io
+from ._core import (
+    AUTOBK,
+    BackgroundMethod,
+    NormalizationMethod,
+    PrePostEdge,
+    Spectrum,
+    XrayFFTF,
+    XrayFFTR,
+    __version__,
+)
+
+FFTGrid = Literal["Input", "Larch"]
+FTWindow = Literal[
+    "Hanning", "Parzen", "Welch", "Gaussian", "Sine", "KaiserBessel", "FHanning"
+]
+AUTOBKSolver = Literal["TrustRegionDogLeg", "LegacyLm", "LinearDirect"]
+AUTOBKClampScalePolicy = Literal["FixedPenalty", "Fixed", "TwoPass"]
+
+__all__ = [
+    "AUTOBK",
+    "AUTOBKClampScalePolicy",
+    "AUTOBKSolver",
+    "BackgroundMethod",
+    "FFTGrid",
+    "FTWindow",
+    "NormalizationMethod",
+    "PrePostEdge",
+    "Spectrum",
+    "XrayFFTF",
+    "XrayFFTR",
+    "__version__",
+    "io",
+]

@@ -1,0 +1,710 @@
+<div id="interactive-normalization-example">
+  <h1>Interactive edge normalization</h1>
+
+  <div class="viz-controls" aria-label="Normalization parameters">
+    <label class="form-label" for="norm-dataset">
+      Spectrum
+      <select class="form-select" id="norm-dataset">
+        <option value="ru_qas">Ru K edge (QAS)</option>
+        <option value="cu_150k">Cu K edge (150 K foil)</option>
+      </select>
+    </label>
+    <label class="form-label" for="norm-e0">
+      E0: <span class="tabular-nums" id="norm-e0-value"></span>
+      <input class="form-range" id="norm-e0" type="range" step="0.2">
+    </label>
+    <label class="form-label" for="norm-pre-start">
+      Pre-edge start: <span class="tabular-nums" id="norm-pre-start-value"></span>
+      <input class="form-range" id="norm-pre-start" type="range" step="5">
+    </label>
+    <label class="form-label" for="norm-pre-end">
+      Pre-edge end: <span class="tabular-nums" id="norm-pre-end-value"></span>
+      <input class="form-range" id="norm-pre-end" type="range" step="5">
+    </label>
+    <label class="form-label" for="norm-post-start">
+      Post-edge start: <span class="tabular-nums" id="norm-post-start-value"></span>
+      <input class="form-range" id="norm-post-start" type="range" step="5">
+    </label>
+    <label class="form-label" for="norm-post-end">
+      Post-edge end: <span class="tabular-nums" id="norm-post-end-value"></span>
+      <input class="form-range" id="norm-post-end" type="range" step="5">
+    </label>
+  </div>
+
+  <div id="norm-error" role="alert" hidden></div>
+  <div class="series-legend" id="norm-methods" aria-label="Normalization methods" aria-live="polite"></div>
+
+  <section class="chart-block" id="norm-raw-chart">
+    <h2>Raw μ(E) and fitted baselines</h2>
+    <p class="text-small text-muted">Pre-edge: a(E0/E)³ + b(E0/E)⁴. Shaded areas are the only observations included in each fit.</p>
+    <svg></svg>
+  </section>
+
+  <div class="lower-charts">
+    <section class="chart-block" id="norm-corrected-chart">
+      <h2>Baseline after subtracting the fitted step</h2>
+      <p class="text-small text-muted">A kink at E0 indicates a first-derivative mismatch.</p>
+      <svg></svg>
+    </section>
+    <section class="chart-block" id="norm-output-chart">
+      <h2>Normalized μ(E)</h2>
+      <p class="text-small text-muted">Move E0 or any endpoint above to compare sensitivity.</p>
+      <svg></svg>
+    </section>
+  </div>
+
+  <div class="chart-tooltip" id="norm-tooltip" role="tooltip" hidden></div>
+</div>
+
+<style>
+  #interactive-normalization-example {
+    color: var(--foreground);
+    position: relative;
+    width: 100%;
+  }
+  #interactive-normalization-example .series-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin: 14px 0 10px;
+  }
+  #interactive-normalization-example .series-toggle {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--foreground);
+    padding: 4px 0;
+  }
+  #interactive-normalization-example .series-toggle[aria-pressed="false"] {
+    opacity: 0.45;
+  }
+  #interactive-normalization-example .series-swatch {
+    display: inline-block;
+    height: 0;
+    margin-right: 6px;
+    vertical-align: middle;
+    width: 22px;
+  }
+  #interactive-normalization-example .series-swatch.current { border-top: 3px solid var(--viz-series-1); }
+  #interactive-normalization-example .series-swatch.c1_anchored { border-top: 3px dashed var(--viz-series-2); }
+  #interactive-normalization-example .series-swatch.c1_joint { border-top: 3px dotted var(--viz-series-3); }
+  #interactive-normalization-example .series-swatch.shared_polynomial { border-top: 3px double var(--viz-series-4); }
+  #interactive-normalization-example .chart-block {
+    min-width: 0;
+  }
+  #interactive-normalization-example .chart-block h2 {
+    margin-bottom: 2px;
+  }
+  #interactive-normalization-example .chart-block p {
+    margin-top: 0;
+  }
+  #interactive-normalization-example .lower-charts {
+    display: grid;
+    gap: 24px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 20px;
+  }
+  #interactive-normalization-example .chart-block svg {
+    display: block;
+    width: 100%;
+  }
+  #interactive-normalization-example .chart-frame,
+  #interactive-normalization-example .axis path,
+  #interactive-normalization-example .axis line {
+    fill: none;
+    stroke: var(--border);
+  }
+  #interactive-normalization-example .grid line {
+    stroke: var(--border);
+    stroke-opacity: 0.45;
+  }
+  #interactive-normalization-example .grid path {
+    display: none;
+  }
+  #interactive-normalization-example svg text {
+    fill: var(--foreground);
+    font-size: 12px;
+    font-weight: 400;
+  }
+  #interactive-normalization-example .axis-title {
+    font-weight: 500;
+  }
+  #interactive-normalization-example .fit-window {
+    fill: var(--accent);
+    opacity: 0.14;
+  }
+  #interactive-normalization-example .e0-line {
+    stroke: var(--border);
+    stroke-width: 1px;
+  }
+  #interactive-normalization-example .data-line {
+    fill: none;
+    stroke: var(--foreground);
+    stroke-opacity: 0.6;
+    stroke-width: 1.2px;
+  }
+  #interactive-normalization-example .method-line {
+    fill: none;
+    stroke-width: 2px;
+  }
+  #interactive-normalization-example .method-line.current { stroke: var(--viz-series-1); }
+  #interactive-normalization-example .method-line.c1_anchored { stroke: var(--viz-series-2); stroke-dasharray: 8 4; }
+  #interactive-normalization-example .method-line.c1_joint { stroke: var(--viz-series-3); stroke-dasharray: 2 3; }
+  #interactive-normalization-example .method-line.shared_polynomial { stroke: var(--viz-series-4); stroke-dasharray: 10 3 2 3; }
+  #interactive-normalization-example .hover-overlay {
+    fill: transparent;
+    pointer-events: all;
+  }
+  #interactive-normalization-example .hover-guide {
+    stroke: var(--foreground);
+    stroke-opacity: 0.45;
+    stroke-width: 1px;
+  }
+  #interactive-normalization-example .hover-marker {
+    stroke: var(--background);
+    stroke-width: 2px;
+  }
+  #interactive-normalization-example .hover-marker.current { fill: var(--viz-series-1); }
+  #interactive-normalization-example .hover-marker.c1_anchored { fill: var(--viz-series-2); }
+  #interactive-normalization-example .hover-marker.c1_joint { fill: var(--viz-series-3); }
+  #interactive-normalization-example .hover-marker.shared_polynomial { fill: var(--viz-series-4); }
+  #interactive-normalization-example .hover-marker.observed { fill: var(--foreground); }
+  #interactive-normalization-example .chart-tooltip {
+    background: var(--popover);
+    border: 1px solid var(--border);
+    color: var(--popover-foreground);
+    max-width: 260px;
+    padding: 8px 10px;
+    pointer-events: none;
+    position: absolute;
+    z-index: 2;
+  }
+  #interactive-normalization-example .tooltip-row {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+    justify-content: space-between;
+  }
+  #interactive-normalization-example .tooltip-row + .tooltip-row {
+    margin-top: 3px;
+  }
+  #interactive-normalization-example .tooltip-name {
+    margin-right: 12px;
+  }
+  #interactive-normalization-example #norm-error {
+    color: var(--destructive);
+    margin-top: 8px;
+  }
+  @media (max-width: 720px) {
+    #interactive-normalization-example .lower-charts {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script>
+(() => {
+  const root = document.getElementById("interactive-normalization-example");
+  const spectra = /*__SPECTRA__*/;
+  for (const spectrum of Object.values(spectra)) {
+    spectrum.points = spectrum.points.map(([r, mu]) => ({r, mu}));
+  }
+  const methods = [
+    {key: "current", label: "Independent"},
+    {key: "c1_anchored", label: "C1 anchored"},
+    {key: "c1_joint", label: "C1 joint"},
+    {key: "shared_polynomial", label: "Shared polynomial"}
+  ];
+  const visible = new Set(methods.map(method => method.key));
+  const controls = {
+    dataset: root.querySelector("#norm-dataset"),
+    e0: root.querySelector("#norm-e0"),
+    preStart: root.querySelector("#norm-pre-start"),
+    preEnd: root.querySelector("#norm-pre-end"),
+    postStart: root.querySelector("#norm-post-start"),
+    postEnd: root.querySelector("#norm-post-end")
+  };
+  const valueLabels = {
+    e0: root.querySelector("#norm-e0-value"),
+    preStart: root.querySelector("#norm-pre-start-value"),
+    preEnd: root.querySelector("#norm-pre-end-value"),
+    postStart: root.querySelector("#norm-post-start-value"),
+    postEnd: root.querySelector("#norm-post-end-value")
+  };
+  const errorBox = root.querySelector("#norm-error");
+  const tooltip = root.querySelector("#norm-tooltip");
+  const legend = root.querySelector("#norm-methods");
+  const chartHosts = {
+    raw: root.querySelector("#norm-raw-chart"),
+    corrected: root.querySelector("#norm-corrected-chart"),
+    output: root.querySelector("#norm-output-chart")
+  };
+  const chartStates = new Map();
+  let currentFits = null;
+  let currentDataset = null;
+
+  function solveLeastSquares(rows, values) {
+    const size = rows[0].length;
+    const matrix = Array.from({length: size}, () => Array(size).fill(0));
+    const rhs = Array(size).fill(0);
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+      const row = rows[rowIndex];
+      const value = values[rowIndex];
+      for (let i = 0; i < size; i += 1) {
+        rhs[i] += row[i] * value;
+        for (let j = 0; j < size; j += 1) matrix[i][j] += row[i] * row[j];
+      }
+    }
+    for (let pivot = 0; pivot < size; pivot += 1) {
+      let best = pivot;
+      for (let row = pivot + 1; row < size; row += 1) {
+        if (Math.abs(matrix[row][pivot]) > Math.abs(matrix[best][pivot])) best = row;
+      }
+      [matrix[pivot], matrix[best]] = [matrix[best], matrix[pivot]];
+      [rhs[pivot], rhs[best]] = [rhs[best], rhs[pivot]];
+      if (Math.abs(matrix[pivot][pivot]) < 1e-14) throw new Error("Fit matrix is singular for these windows.");
+      const divisor = matrix[pivot][pivot];
+      for (let column = pivot; column < size; column += 1) matrix[pivot][column] /= divisor;
+      rhs[pivot] /= divisor;
+      for (let row = 0; row < size; row += 1) {
+        if (row === pivot) continue;
+        const factor = matrix[row][pivot];
+        for (let column = pivot; column < size; column += 1) matrix[row][column] -= factor * matrix[pivot][column];
+        rhs[row] -= factor * rhs[pivot];
+      }
+    }
+    return rhs;
+  }
+
+  function selectedPoints(points, start, end) {
+    return points.filter(point => point.r >= start && point.r <= end);
+  }
+
+  function finishFit(dataset, step, preFunction, postFunction) {
+    if (!Number.isFinite(step) || step <= 1e-12) throw new Error("The fitted edge step is not positive.");
+    const values = dataset.points.map(point => {
+      const pre = preFunction(point.r / 1000);
+      const post = postFunction(point.r / 1000);
+      return {
+        x: point.r,
+        pre,
+        post,
+        corrected: point.r < 0 ? pre : post - step,
+        baseline: point.r < 0 ? pre : post,
+        norm: (point.mu - pre) / step
+      };
+    });
+    return {step, values};
+  }
+
+  function victoreenTerms(e0, x) {
+    const ratio = e0 / (e0 + 1000 * x);
+    return [ratio ** 3, ratio ** 4];
+  }
+
+  function victoreenValue(e0, coefficients, x) {
+    const terms = victoreenTerms(e0, x);
+    return coefficients[0] * terms[0] + coefficients[1] * terms[1];
+  }
+
+  function fitAll(dataset, window) {
+    const prePoints = selectedPoints(dataset.points, window.preStart, window.preEnd);
+    const postPoints = selectedPoints(dataset.points, window.postStart, window.postEnd);
+    if (prePoints.length < 3) throw new Error("Choose a wider pre-edge window (at least 3 observations). ");
+    if (postPoints.length < 4) throw new Error("Choose a wider post-edge window (at least 4 observations). ");
+
+    const preX = prePoints.map(point => point.r / 1000);
+    const postX = postPoints.map(point => point.r / 1000);
+    const preY = prePoints.map(point => point.mu);
+    const postY = postPoints.map(point => point.mu);
+    const preVictoreen = solveLeastSquares(preX.map(x => victoreenTerms(dataset.e0, x)), preY);
+    const preValue = x => victoreenValue(dataset.e0, preVictoreen, x);
+    const postQuadratic = solveLeastSquares(postX.map(x => [1, x, x * x]), postY);
+
+    const currentStep = postQuadratic[0] - preValue(0);
+    const current = finishFit(
+      dataset,
+      currentStep,
+      preValue,
+      x => postQuadratic[0] + postQuadratic[1] * x + postQuadratic[2] * x * x
+    );
+
+    const anchoredResidual = postPoints.map((point, index) => point.mu - preValue(postX[index]));
+    const anchoredPost = solveLeastSquares(postX.map(x => [1, x * x]), anchoredResidual);
+    const anchored = finishFit(
+      dataset,
+      anchoredPost[0],
+      preValue,
+      x => preValue(x) + anchoredPost[0] + anchoredPost[1] * x * x
+    );
+
+    const jointRows = [
+      ...preX.map(x => [...victoreenTerms(dataset.e0, x), 0, 0]),
+      ...postX.map(x => [...victoreenTerms(dataset.e0, x), 1, x * x])
+    ];
+    const joint = solveLeastSquares(jointRows, [...preY, ...postY]);
+    const jointPreValue = x => victoreenValue(dataset.e0, joint, x);
+    const jointFit = finishFit(
+      dataset,
+      joint[2],
+      jointPreValue,
+      x => jointPreValue(x) + joint[2] + joint[3] * x * x
+    );
+
+    const sharedRows = [
+      ...preX.map(x => [1, x, x * x, 0]),
+      ...postX.map(x => [1, x, x * x, 1])
+    ];
+    const shared = solveLeastSquares(sharedRows, [...preY, ...postY]);
+    const sharedFit = finishFit(
+      dataset,
+      shared[3],
+      x => shared[0] + shared[1] * x + shared[2] * x * x,
+      x => shared[0] + shared[1] * x + shared[2] * x * x + shared[3]
+    );
+
+    return {current, c1_anchored: anchored, c1_joint: jointFit, shared_polynomial: sharedFit};
+  }
+
+  function paddedDomain(values, fraction = 0.05) {
+    const extent = d3.extent(values);
+    const span = Math.max(1e-9, extent[1] - extent[0]);
+    return [extent[0] - span * fraction, extent[1] + span * fraction];
+  }
+
+  function interpolate(values, xValue) {
+    const index = d3.bisector(value => value.x).left(values, xValue);
+    if (index <= 0) return values[0].y;
+    if (index >= values.length) return values[values.length - 1].y;
+    const left = values[index - 1];
+    const right = values[index];
+    const fraction = (xValue - left.x) / (right.x - left.x);
+    return left.y + fraction * (right.y - left.y);
+  }
+
+  function ensureChart(host) {
+    if (chartStates.has(host)) return chartStates.get(host);
+    const svg = d3.select(host.querySelector("svg"));
+    const id = `${host.id}-clip`;
+    svg.append("defs").append("clipPath").attr("id", id).append("rect");
+    const state = {
+      host,
+      svg,
+      clipId: id,
+      windows: svg.append("g"),
+      grid: svg.append("g").attr("class", "grid"),
+      frame: svg.append("rect").attr("class", "chart-frame").attr("data-chart-frame", ""),
+      xAxis: svg.append("g").attr("class", "axis"),
+      yAxis: svg.append("g").attr("class", "axis"),
+      e0: svg.append("line").attr("class", "e0-line"),
+      series: svg.append("g").attr("clip-path", `url(#${id})`),
+      xTitle: svg.append("text").attr("class", "axis-title").attr("data-axis", "x").attr("text-anchor", "middle"),
+      yTitle: svg.append("text").attr("class", "axis-title").attr("data-axis", "y").attr("text-anchor", "middle"),
+      guide: svg.append("line").attr("class", "hover-guide").attr("data-chart-hover-guide", "").style("display", "none"),
+      markers: svg.append("g"),
+      overlay: svg.append("rect").attr("class", "hover-overlay").attr("data-chart-hit", "").attr("data-chart-hover-overlay", "cross-series"),
+      pinned: false,
+      drawn: false
+    };
+    chartStates.set(host, state);
+    return state;
+  }
+
+  function drawChart(host, chartSeries, options) {
+    const state = ensureChart(host);
+    const width = Math.max(300, Math.floor(host.getBoundingClientRect().width));
+    const height = options.height;
+    const margin = {top: 12, right: 18, bottom: 48, left: 68};
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+    const activeSeries = chartSeries.filter(series => series.observed || visible.has(series.key));
+    const allX = activeSeries.flatMap(series => series.values.map(value => value.x));
+    const allY = activeSeries.flatMap(series => series.values.map(value => value.y));
+    const x = d3.scaleLinear().domain(paddedDomain(allX, 0.015)).range([margin.left, margin.left + innerWidth]);
+    const y = d3.scaleLinear().domain(paddedDomain(allY)).nice().range([margin.top + innerHeight, margin.top]);
+    const ticks = width <= 360 ? 4 : 6;
+    const duration = state.drawn && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 180 : 0;
+    const transition = state.svg.transition().duration(duration);
+
+    state.svg
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("height", height)
+      .attr("role", "img")
+      .attr("aria-label", options.description);
+    state.svg.selectAll("title, desc").remove();
+    state.svg.append("title").text(options.title);
+    state.svg.append("desc").text(options.description);
+    state.svg.select("defs clipPath rect")
+      .attr("x", margin.left).attr("y", margin.top).attr("width", innerWidth).attr("height", innerHeight);
+
+    state.grid.attr("transform", `translate(${margin.left},0)`)
+      .transition(transition)
+      .call(d3.axisLeft(y).ticks(5).tickSize(-innerWidth).tickFormat(""));
+    state.frame.transition(transition)
+      .attr("x", margin.left).attr("y", margin.top).attr("width", innerWidth).attr("height", innerHeight);
+    state.xAxis.attr("transform", `translate(0,${margin.top + innerHeight})`)
+      .transition(transition)
+      .call(d3.axisBottom(x).ticks(ticks).tickFormat(d3.format("~g")));
+    state.yAxis.attr("transform", `translate(${margin.left},0)`)
+      .transition(transition)
+      .call(d3.axisLeft(y).ticks(5).tickFormat(d3.format("~g")));
+    state.xTitle.attr("x", margin.left + innerWidth / 2).attr("y", height - 8).text("Energy − E0 (eV)");
+    state.yTitle.attr("transform", "rotate(-90)").attr("x", -(margin.top + innerHeight / 2)).attr("y", 14).text(options.yTitle);
+
+    const inDomain = x.domain()[0] <= 0 && x.domain()[1] >= 0;
+    state.e0.style("display", inDomain ? null : "none")
+      .transition(transition)
+      .attr("x1", x(0)).attr("x2", x(0)).attr("y1", margin.top).attr("y2", margin.top + innerHeight);
+
+    const windowData = options.windows || [];
+    state.windows.selectAll("rect")
+      .data(windowData)
+      .join("rect")
+      .attr("class", "fit-window")
+      .attr("y", margin.top)
+      .attr("height", innerHeight)
+      .transition(transition)
+      .attr("x", window => x(Math.max(window[0], x.domain()[0])))
+      .attr("width", window => Math.max(0, x(Math.min(window[1], x.domain()[1])) - x(Math.max(window[0], x.domain()[0]))));
+
+    const line = d3.line().x(value => x(value.x)).y(value => y(value.y));
+    const paths = state.series.selectAll("path").data(activeSeries, series => series.key);
+    paths.exit().remove();
+    paths.enter().append("path")
+      .attr("class", series => series.observed ? "data-line" : `method-line ${series.key}`)
+      .merge(paths)
+      .transition(transition)
+      .attr("d", series => line(series.values));
+
+    state.guide.style("display", "none");
+    state.markers.selectAll("circle").remove();
+    tooltip.hidden = true;
+    state.overlay
+      .attr("x", margin.left).attr("y", margin.top).attr("width", innerWidth).attr("height", innerHeight)
+      .on("pointermove", event => {
+        if (state.pinned && event.pointerType === "mouse") return;
+        showHover(event);
+      })
+      .on("pointerleave", () => {
+        if (!state.pinned) hideHover();
+      })
+      .on("pointerdown", event => {
+        state.pinned = !state.pinned;
+        showHover(event);
+      });
+
+    function showHover(event) {
+      const pointer = d3.pointer(event, state.svg.node());
+      const px = Math.max(margin.left, Math.min(margin.left + innerWidth, pointer[0]));
+      const xValue = x.invert(px);
+      const values = activeSeries.map(series => ({series, y: interpolate(series.values, xValue)}));
+      state.guide.style("display", null).attr("x1", px).attr("x2", px).attr("y1", margin.top).attr("y2", margin.top + innerHeight);
+      state.markers.selectAll("circle")
+        .data(values, value => value.series.key)
+        .join("circle")
+        .attr("class", value => `hover-marker ${value.series.key}`)
+        .attr("data-chart-hover-marker", "")
+        .attr("r", 4.5)
+        .attr("cx", px)
+        .attr("cy", value => y(value.y));
+
+      tooltip.replaceChildren();
+      const heading = document.createElement("div");
+      heading.className = "tooltip-row tabular-nums";
+      heading.textContent = `E − E0: ${xValue.toFixed(1)} eV`;
+      tooltip.append(heading);
+      for (const value of values) {
+        const row = document.createElement("div");
+        row.className = "tooltip-row tabular-nums";
+        const name = document.createElement("span");
+        name.className = "tooltip-name";
+        name.textContent = value.series.label;
+        const number = document.createElement("span");
+        number.textContent = value.y.toFixed(5);
+        row.append(name, number);
+        tooltip.append(row);
+      }
+      tooltip.hidden = false;
+      const rootBox = root.getBoundingClientRect();
+      const svgBox = state.svg.node().getBoundingClientRect();
+      const scaleX = svgBox.width / width;
+      const scaleY = svgBox.height / height;
+      let left = svgBox.left - rootBox.left + px * scaleX + 12;
+      let top = svgBox.top - rootBox.top + pointer[1] * scaleY + 12;
+      const tooltipBox = tooltip.getBoundingClientRect();
+      left = Math.min(left, root.clientWidth - tooltipBox.width - 4);
+      if (top + tooltipBox.height > root.scrollHeight) top -= tooltipBox.height + 24;
+      tooltip.style.left = `${Math.max(0, left)}px`;
+      tooltip.style.top = `${Math.max(0, top)}px`;
+    }
+
+    function hideHover() {
+      state.guide.style("display", "none");
+      state.markers.selectAll("circle").remove();
+      tooltip.hidden = true;
+    }
+
+    state.drawn = true;
+  }
+
+  function makeSeries(kind, dataset, fits, range) {
+    const within = value => value >= range[0] && value <= range[1];
+    const series = [];
+    if (kind === "raw") {
+      series.push({
+        key: "observed",
+        label: "Observed μ",
+        observed: true,
+        values: dataset.points.filter(point => within(point.r)).map(point => ({x: point.r, y: point.mu}))
+      });
+    }
+    for (const method of methods) {
+      const field = kind === "raw" ? "baseline" : kind === "corrected" ? "corrected" : "norm";
+      series.push({
+        key: method.key,
+        label: method.label,
+        values: fits[method.key].values.filter(value => within(value.x)).map(value => ({x: value.x, y: value[field]}))
+      });
+    }
+    return series;
+  }
+
+  function peakTop(fit, upperEnergy) {
+    const candidates = fit.values.filter(value => value.x >= 0 && value.x <= upperEnergy);
+    if (!candidates.length) return Number.NaN;
+    return d3.max(candidates, value => value.norm);
+  }
+
+  function updateLegend(fits, upperEnergy) {
+    const buttons = d3.select(legend).selectAll("button")
+      .data(methods, method => method.key)
+      .join(enter => {
+        const button = enter.append("button")
+          .attr("type", "button")
+          .attr("class", "series-toggle")
+          .on("click", (_, method) => {
+            if (visible.has(method.key)) visible.delete(method.key); else visible.add(method.key);
+            update();
+          });
+        button.append("span").attr("class", method => `series-swatch ${method.key}`).attr("aria-hidden", "true");
+        button.append("span").attr("class", "series-label");
+        return button;
+      });
+    buttons.attr("aria-pressed", method => visible.has(method.key) ? "true" : "false")
+      .select(".series-label")
+      .text(method => `${method.label} · Δμ ${fits[method.key].step.toFixed(4)} · peak ${peakTop(fits[method.key], upperEnergy).toFixed(4)}`);
+  }
+
+  function readWindow() {
+    return {
+      preStart: Number(controls.preStart.value),
+      preEnd: Number(controls.preEnd.value),
+      postStart: Number(controls.postStart.value),
+      postEnd: Number(controls.postEnd.value)
+    };
+  }
+
+  function updateValueLabels(window) {
+    valueLabels.e0.textContent = `${Number(controls.e0.value).toFixed(1)} eV`;
+    for (const key of ["preStart", "preEnd", "postStart", "postEnd"]) valueLabels[key].textContent = `${window[key].toFixed(0)} eV`;
+  }
+
+  function datasetAtSelectedE0() {
+    const source = spectra[controls.dataset.value];
+    const selectedE0 = Number(controls.e0.value);
+    const shift = selectedE0 - source.e0;
+    return {
+      ...source,
+      e0: selectedE0,
+      points: source.points.map(point => ({r: point.r - shift, mu: point.mu}))
+    };
+  }
+
+  function update() {
+    currentDataset = datasetAtSelectedE0();
+    const window = readWindow();
+    updateValueLabels(window);
+    if (window.preStart >= window.preEnd - 10 || window.postStart >= window.postEnd - 20) {
+      errorBox.textContent = "Keep the pre-edge endpoints at least 10 eV apart and the post-edge endpoints at least 20 eV apart.";
+      errorBox.hidden = false;
+      return;
+    }
+    try {
+      currentFits = fitAll(currentDataset, window);
+    } catch (error) {
+      errorBox.textContent = error.message;
+      errorBox.hidden = false;
+      return;
+    }
+    errorBox.hidden = true;
+    updateLegend(currentFits, Math.min(window.postEnd, 800));
+
+    const minimum = currentDataset.points[0].r;
+    const rawRange = [minimum, window.postEnd];
+    const correctedRange = [Math.max(minimum, -120), Math.min(window.postEnd, 180)];
+    const outputRange = [Math.max(minimum, -50), Math.min(window.postEnd, 800)];
+    drawChart(
+      chartHosts.raw,
+      makeSeries("raw", currentDataset, currentFits, rawRange),
+      {
+        height: 330,
+        title: "Observed absorption and fitted piecewise baselines",
+        description: "Observed absorption with the independent fit and three step-aware fitted baselines. Only the shaded pre-edge and post-edge regions enter the fits.",
+        yTitle: "μ(E)",
+        windows: [[window.preStart, window.preEnd], [window.postStart, window.postEnd]]
+      }
+    );
+    drawChart(
+      chartHosts.corrected,
+      makeSeries("corrected", currentDataset, currentFits, correctedRange),
+      {
+        height: 275,
+        title: "Step-corrected fitted baselines near E0",
+        description: "Fitted baselines after the post-edge step is removed. The constrained methods have matching value and first derivative at E0.",
+        yTitle: "Step-corrected μ"
+      }
+    );
+    drawChart(
+      chartHosts.output,
+      makeSeries("output", currentDataset, currentFits, outputRange),
+      {
+        height: 275,
+        title: "Normalized absorption",
+        description: "Normalized absorption produced by each method for the selected fitting windows.",
+        yTitle: "Normalized μ(E)"
+      }
+    );
+  }
+
+  function resetControls() {
+    const source = spectra[controls.dataset.value];
+    controls.e0.min = String(source.e0 - 20);
+    controls.e0.max = String(source.e0 + 20);
+    controls.e0.value = String(source.e0);
+    currentDataset = datasetAtSelectedE0();
+    const minimum = Math.ceil(currentDataset.points[0].r / 5) * 5;
+    const maximum = Math.floor(currentDataset.points[currentDataset.points.length - 1].r / 5) * 5;
+    controls.preStart.min = String(minimum);
+    controls.preStart.max = "-80";
+    controls.preStart.value = String(Math.max(minimum, -200));
+    controls.preEnd.min = "-150";
+    controls.preEnd.max = "-20";
+    controls.preEnd.value = "-65";
+    controls.postStart.min = "10";
+    controls.postStart.max = String(Math.min(250, maximum - 100));
+    controls.postStart.value = "25";
+    controls.postEnd.min = "200";
+    controls.postEnd.max = String(maximum);
+    controls.postEnd.value = String(Math.min(940, maximum));
+    update();
+  }
+
+  controls.dataset.addEventListener("change", resetControls);
+  for (const key of ["e0", "preStart", "preEnd", "postStart", "postEnd"]) controls[key].addEventListener("input", update);
+  new ResizeObserver(() => {
+    if (currentFits) update();
+  }).observe(root);
+  resetControls();
+})();
+</script>
