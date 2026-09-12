@@ -24,6 +24,16 @@ const chi = spectrum.chi();
 spectrum.free();
 ```
 
+## Scientific meaning
+
+`normalize()` expresses absorption in edge-step units; `calc_background()`
+estimates the smooth background and returns dimensionless chi(k). `fft()`
+weights and windows chi(k) before converting it to complex R-space values.
+`ifft()` filters those values in R and returns a real q-space signal. It does
+not generally recover the unweighted input, because the forward weighting and
+window remain part of the signal. See [processing theory](processing-theory.md)
+for the exact equations, symbols, conventions, references and limits.
+
 ## Stages and methods
 
 | Call | Behavior |
@@ -55,8 +65,10 @@ part of this API.
 ## Configuration
 
 The bindings expose the Rust configuration names and fields: `PrePostEdge`,
-`AUTOBK`, `XrayFFTF`, `NormalizationMethod`, and `BackgroundMethod`. Configure a
-stage separately, then let `fft()` run it when needed.
+`AUTOBK`, `XrayFFTF`, `XrayFFTR`, `NormalizationMethod`, and `BackgroundMethod`. Configure a
+stage separately, then let `fft()` run it when needed. Python keyword constructors,
+TypeScript options constructors, direct settings setters and `XrayFFTR` are
+additions after 0.2.4; see the binding guides for source installation until released.
 
 ```rust,ignore
 use rexafs::{AUTOBK, BackgroundMethod, XrayFFTF};
@@ -69,29 +81,27 @@ spectrum.set_fft(transform).fft()?;
 ```
 
 ```python
-from rexafs import AUTOBK, BackgroundMethod, XrayFFTF
-background = AUTOBK()
-background.rbkg = 1.2
-spectrum.set_background_method(BackgroundMethod.AUTOBK(background))
-transform = XrayFFTF()
-transform.kweight = 3
-spectrum.set_fft(transform).fft()
+from rexafs import AUTOBK, XrayFFTF, XrayFFTR
+spectrum.set_background_method(AUTOBK(rbkg=1.2))
+spectrum.set_fft(XrayFFTF(kweight=3.0)).fft()
+spectrum.set_ifft(XrayFFTR(rmin=1.0, rmax=3.0)).ifft()
 ```
 
 ```typescript
-import { AUTOBK, BackgroundMethod, XrayFFTF } from "rexafs";
-const background = new AUTOBK();
-background.rbkg = 1.2;
-const method = BackgroundMethod.AUTOBK(background);
-spectrum.set_background_method(method);
-const transform = new XrayFFTF();
-transform.kweight = 3;
-spectrum.set_fft(transform).fft();
-background.free(); method.free(); transform.free();
+import { AUTOBK, XrayFFTF, XrayFFTR } from "rexafs";
+const background = new AUTOBK({ rbkg: 1.2 });
+const transform = new XrayFFTF({ kweight: 3 });
+const inverse = new XrayFFTR({ rmin: 1, rmax: 3 });
+try {
+  spectrum.set_background_method(background).set_fft(transform).fft();
+  spectrum.set_ifft(inverse).ifft();
+} finally {
+  background.free(); transform.free(); inverse.free();
+}
 ```
 
 Normalization uses `set_normalization_method` with
-`NormalizationMethod.PrePostEdge(parameters)` in the bindings, or
+`PrePostEdge(...)` directly (or `NormalizationMethod.PrePostEdge(parameters)`) in the bindings, or
 `Some(NormalizationMethod::PrePostEdge(parameters))` in Rust. Use `set_e0(value)`
 for an explicit edge energy. Unset scalar parameters use Rust defaults. Window
 and solver fields in the bindings use Rust variant names such as `Hanning`,
@@ -102,6 +112,7 @@ Setters copy configuration objects. Editing a configuration afterward takes
 effect when it is passed to the setter again. Changing normalization invalidates
 background and both transforms; changing background invalidates both transforms;
 changing forward-transform parameters invalidates forward/reverse results.
+`set_ifft(XrayFFTR(...))` invalidates only inverse results.
 Unchanged prerequisite results are reused. Calling a stage explicitly recomputes
 that stage. Replacing spectrum data clears the old E0 and derived results.
 

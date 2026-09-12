@@ -1,0 +1,127 @@
+{
+  "million": {
+    "status": "complete",
+    "scope": "processing after loading; not EXAFS structural fitting",
+    "rexafs_actual_count": 1000000,
+    "rexafs_actual_seconds": 26.97184642899998,
+    "rexafs_threads": 10,
+    "larch_actual_count": 10000,
+    "larch_actual_seconds": 45.903868418,
+    "larch_threads": 1,
+    "larch_executed_total_count": 52000,
+    "larch_report_selection": "first 10,000, as requested",
+    "throughput_ratio": 170.19179068380134,
+    "larch_million_is_estimate": true,
+    "larch_million_seconds": 4590.3868418,
+    "max_chi_relative_l2_percent": 0.0016416630357319179,
+    "memory_audit": {
+      "separate_instrumented_run": true,
+      "samples": 800,
+      "peak_sampled_combined_rss_bytes": 487866368,
+      "minimum_available_system_ram_bytes": 7924400128
+    }
+  },
+  "resampling": {
+    "primary_timing": [
+      {
+        "threads": 1,
+        "variant": "baseline",
+        "mode": "cubic",
+        "median": 107.9405,
+        "p10": 105.04984180000001,
+        "p90": 112.17783340000001,
+        "ratio": 1.0,
+        "ci95_low": 1.0,
+        "ci95_high": 1.0
+      },
+      {
+        "threads": 1,
+        "variant": "baseline",
+        "mode": "linear",
+        "median": 98.167291,
+        "p10": 95.72223319999999,
+        "p90": 114.374383,
+        "ratio": 1.0995566741268228,
+        "ci95_low": 1.042281269292072,
+        "ci95_high": 1.120278844145773
+      },
+      {
+        "threads": 1,
+        "variant": "cached_svd",
+        "mode": "cubic",
+        "median": 93.944125,
+        "p10": 89.0728082,
+        "p90": 106.10259199999999,
+        "ratio": 1.1489861659789795,
+        "ci95_low": 1.1185965283556654,
+        "ci95_high": 1.1811474267912194
+      },
+      {
+        "threads": 1,
+        "variant": "cached_svd",
+        "mode": "linear",
+        "median": 85.129042,
+        "p10": 82.83526699999999,
+        "p90": 99.13553379999999,
+        "ratio": 1.267963288016327,
+        "ci95_low": 1.2376711741240367,
+        "ci95_high": 1.3001967450305791
+      },
+      {
+        "threads": 10,
+        "variant": "baseline",
+        "mode": "cubic",
+        "median": 26.0811,
+        "p10": 23.57343166,
+        "p90": 32.13172918,
+        "ratio": 1.0,
+        "ci95_low": 1.0,
+        "ci95_high": 1.0
+      },
+      {
+        "threads": 10,
+        "variant": "baseline",
+        "mode": "linear",
+        "median": 25.345645899999997,
+        "p10": 21.702898419999997,
+        "p90": 33.79052831999999,
+        "ratio": 1.0290169799933961,
+        "ci95_low": 0.9672767540856895,
+        "ci95_high": 1.122510340655772
+      },
+      {
+        "threads": 10,
+        "variant": "cached_svd",
+        "mode": "cubic",
+        "median": 22.800058500000002,
+        "p10": 20.827371639999996,
+        "p90": 31.70796658,
+        "ratio": 1.1439049597175375,
+        "ci95_low": 0.9276308282229976,
+        "ci95_high": 1.2175534706178628
+      },
+      {
+        "threads": 10,
+        "variant": "cached_svd",
+        "mode": "linear",
+        "median": 23.233878899999997,
+        "p10": 19.92710498,
+        "p90": 29.013254959999998,
+        "ratio": 1.1225460936701364,
+        "ci95_low": 1.0372712136605204,
+        "ci95_high": 1.2135240864662784
+      }
+    ]
+  },
+  "provenance": {
+    "rexafs_version": "0.1.3",
+    "larch_version": "2026.3.1",
+    "hardware": "Apple M4, 32 GiB RAM",
+    "source_stash_commit": "dc68f9bd56fa40829a9912889bc7928ffee0ed92",
+    "source_files": [
+      "doc/benchmarks/2026-09-07-million-spectra/summary.json",
+      "doc/benchmarks/2026-09-08-linear-resampling/summary.json"
+    ],
+    "note": "Historical retained aggregates, not rerun against current main. Resampling medians are microseconds per spectrum; ratio is cubic baseline / variant."
+  }
+}

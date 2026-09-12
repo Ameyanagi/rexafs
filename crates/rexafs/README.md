@@ -4,8 +4,8 @@ Rust-powered X-ray absorption analysis, developed under the codename xraytsubaki
 The core includes normalization, AUTOBK, Fourier transforms, group processing,
 EXAFS fitting, structure handling, LCF/PCA and spectrum tools.
 
-Publication on crates.io is pending. In this checkout, run `cargo test -p rexafs`.
-After publication, add the library with `cargo add rexafs`.
+Install the library with `cargo add rexafs`. In this checkout, run
+`cargo test -p rexafs` to exercise the core regression suite.
 
 ## Start with a spectrum
 
@@ -24,13 +24,26 @@ also support explicit chaining. The same stage names are used in Python and
 TypeScript. The standalone `process()` facade has been removed.
 
 Configure methods with `NormalizationMethod`, `BackgroundMethod`, `PrePostEdge`,
-`AUTOBK` and `XrayFFTF`. Setters invalidate dependent results. Alternative methods
+`AUTOBK`, `XrayFFTF` and `XrayFFTR` (the inverse-transform settings). Setters invalidate dependent results. Alternative methods
 remain selectable; unimplemented methods return explicit errors. Inputs to
 `from_arrays` must be finite, equal-length arrays with strictly increasing energy
 in eV. Result getters expose the spectrum's intermediate and final arrays.
 
 See the [API guide](../../doc/api.md) for examples, units and ownership.
 `Spectrum` and `Group` remain aliases for `XASSpectrum` and `XASGroup`.
+
+## What the calculations mean
+
+Normalization subtracts a fitted pre-edge baseline and divides absorption by
+its edge step. AUTOBK estimates the smooth background to obtain the EXAFS
+oscillations, chi(k). The Fourier transform weights and windows those oscillations
+to display them against R; its peaks are not automatically phase-corrected bond
+lengths. An inverse transform filters selected R contributions back into q space.
+
+The [processing theory guide](../../doc/processing-theory.md) explains the
+equations, symbols, units, assumptions and implementation choices, with scientific
+references. Use the [fitting-statistics guide](../../doc/fitting-statistics.md)
+when interpreting structural fits and uncertainties.
 
 ## Features and scope
 

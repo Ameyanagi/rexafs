@@ -485,6 +485,17 @@ impl XASSpectrum {
         Ok(self)
     }
 
+    /// Configure the inverse transform, preserving forward results and clearing q/chi(q).
+    pub fn set_ifft(&mut self, mut parameters: xrayfft::XrayFFTR) -> &mut Self {
+        parameters.q = None;
+        parameters.chiq = None;
+        parameters.rwin = None;
+        self.q = None;
+        self.xftr = Some(parameters);
+        self
+    }
+
+    /// Back-transform chi(R), computing missing forward stages first.
     pub fn ifft(&mut self) -> Result<&mut Self, XAFSError> {
         if self.chir().is_none() {
             self.fft()?;

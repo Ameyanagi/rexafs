@@ -4,6 +4,16 @@ Start with the [project README](../README.md), [API guide](api.md),
 [Rust guide](../crates/rexafs/README.md), [Python guide](../py-rexafs/README.md) or
 [JavaScript guide](../js-rexafs/README.md).
 
+## Scientific explanations and documentation standards
+
+- [How processing works](processing-theory.md): transmission, normalization,
+  AUTOBK, Fourier transforms and filtering, with equations and references.
+- [Fitting statistics](fitting-statistics.md): residuals, information counts,
+  covariance, standard errors and interpretation limits.
+- [Fixed-penalty AUTOBK](autobk-fixed-penalty.md): the rexafs-specific objective.
+- [Contributor documentation baseline](../CONTRIBUTING.md): requirements for
+  clear English, defined symbols/units, verified citations and useful API help.
+
 ## Release and migration
 
 - [Rebranding plan](rebranding-plan.md): decisions, implementation order and release gates.
@@ -41,3 +51,8 @@ and benchmark timings are historical, not assertions about the current build.
 - [FEFF10 card comparison](plots/feff10_card_comparison_2026-03-03/report.md)
 - [Uncertainty notes](../supportinginfo/uncertainty.md) and [additional notes](../supportinginfo/uncertainty2.md)
 - [Larch fixture generation](../crates/rexafs/tests/pythonscript/README.md) and [fit reference provenance](../crates/rexafs/tests/testfiles/larch_fit_refs/README.md)
+
+## Historical numerical research
+
+- [September 7–8 processing benchmarks](benchmarks/2026-09-07-08-summary.md): rexafs 0.1.3 methodology, aggregate measurements and limitations.
+- [Normalization stability prototype](../experiments/normalization_stability/README.md): reproducible comparison of four models on Ru/Cu fixtures.

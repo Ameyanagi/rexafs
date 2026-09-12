@@ -1,0 +1,288 @@
+{
+  "datasets": {
+    "cu_150k": {
+      "e0_ev": 8980.0,
+      "label": "Cu K edge (150 K foil)",
+      "nominal": {
+        "c1_anchored": {
+          "derivative_jump_mu_per_ev": 0.0,
+          "edge_step": 2.0439663751005637,
+          "post_slope_mu_per_ev": -0.0004447188788480263,
+          "pre_slope_mu_per_ev": -0.0004447188788480263
+        },
+        "c1_joint": {
+          "derivative_jump_mu_per_ev": 0.0,
+          "edge_step": 2.435549850963485,
+          "post_slope_mu_per_ev": -0.001329195287026287,
+          "pre_slope_mu_per_ev": -0.001329195287026287
+        },
+        "current": {
+          "derivative_jump_mu_per_ev": -0.0006807974156688328,
+          "edge_step": 2.2774245501493704,
+          "post_slope_mu_per_ev": -0.001125516294516859,
+          "pre_slope_mu_per_ev": -0.0004447188788480263
+        },
+        "shared_polynomial": {
+          "derivative_jump_mu_per_ev": 0.0,
+          "edge_step": 2.3730760859511726,
+          "post_slope_mu_per_ev": -0.001124456215028417,
+          "pre_slope_mu_per_ev": -0.001124456215028417
+        }
+      },
+      "nominal_window": {
+        "post_end": 2385.49,
+        "post_start": 25.0,
+        "pre_end": -65.0,
+        "pre_start": -200.0
+      },
+      "source": "crates/rexafs/tests/testfiles/xraylarch_d867/xafsdata/cu_150k.xmu",
+      "sweeps": {
+        "available_span": {
+          "label": "Post-edge end varied over 40\u2013100% of available span",
+          "methods": {
+            "c1_anchored": {
+              "edge_step_median": 2.0756034987387593,
+              "edge_step_p90_span_percent": 9.572466538537086,
+              "edge_step_std_percent": 3.057418344366865,
+              "failures": 0,
+              "flat_rms_spread": 0.02442553497402027,
+              "norm_rms_spread": 0.030158199469911957,
+              "post_rmse_over_step_median": 0.13274580949119602,
+              "pre_rmse_over_step_median": 0.0018222155327783022,
+              "runs": 625
+            },
+            "c1_joint": {
+              "edge_step_median": 2.445874802298066,
+              "edge_step_p90_span_percent": 7.526713133680687,
+              "edge_step_std_percent": 2.292550354474033,
+              "failures": 0,
+              "flat_rms_spread": 0.005561237140899519,
+              "norm_rms_spread": 0.00943319211402875,
+              "post_rmse_over_step_median": 0.032208288246130375,
+              "pre_rmse_over_step_median": 0.029347232879199048,
+              "runs": 625
+            },
+            "current": {
+              "edge_step_median": 2.3094611748186686,
+              "edge_step_p90_span_percent": 3.9996169685889846,
+              "edge_step_std_percent": 1.2824264465218589,
+              "failures": 0,
+              "flat_rms_spread": 0.005304317915665343,
+              "norm_rms_spread": 0.011661941237340497,
+              "post_rmse_over_step_median": 0.03395540880628402,
+              "pre_rmse_over_step_median": 0.0016453730932558285,
+              "runs": 625
+            },
+            "shared_polynomial": {
+              "edge_step_median": 2.3996051678706696,
+              "edge_step_p90_span_percent": 6.788527421200967,
+              "edge_step_std_percent": 1.9681035541541698,
+              "failures": 0,
+              "flat_rms_spread": 0.004910223467956041,
+              "norm_rms_spread": 0.006446820113783964,
+              "post_rmse_over_step_median": 0.03302321632803961,
+              "pre_rmse_over_step_median": 0.02371476622550207,
+              "runs": 625
+            }
+          },
+          "window_count": 625
+        },
+        "near_post_edge": {
+          "label": "Post-edge end varied from 300 to 940 eV",
+          "methods": {
+            "c1_anchored": {
+              "edge_step_median": 2.1989592187568645,
+              "edge_step_p90_span_percent": 6.143206805025698,
+              "edge_step_std_percent": 1.782183298033639,
+              "failures": 0,
+              "flat_rms_spread": 0.056221372385125694,
+              "norm_rms_spread": 0.016371116046702997,
+              "post_rmse_over_step_median": 0.057369769680683295,
+              "pre_rmse_over_step_median": 0.0017248005505183061,
+              "runs": 625
+            },
+            "c1_joint": {
+              "edge_step_median": 2.3722967199987304,
+              "edge_step_p90_span_percent": 22.039141653940412,
+              "edge_step_std_percent": 6.774664656820479,
+              "failures": 0,
+              "flat_rms_spread": 0.10172583027376118,
+              "norm_rms_spread": 0.07589729849760689,
+              "post_rmse_over_step_median": 0.0431361190481143,
+              "pre_rmse_over_step_median": 0.023743861491506268,
+              "runs": 625
+            },
+            "current": {
+              "edge_step_median": 2.3042317546190145,
+              "edge_step_p90_span_percent": 13.267326702900492,
+              "edge_step_std_percent": 7.725609918754283,
+              "failures": 0,
+              "flat_rms_spread": 0.1763579842601831,
+              "norm_rms_spread": 0.06313777470036487,
+              "post_rmse_over_step_median": 0.04463809996183297,
+              "pre_rmse_over_step_median": 0.001638552965395185,
+              "runs": 625
+            },
+            "shared_polynomial": {
+              "edge_step_median": 2.36577672901958,
+              "edge_step_p90_span_percent": 19.82247687718424,
+              "edge_step_std_percent": 6.216716304946893,
+              "failures": 0,
+              "flat_rms_spread": 0.08062124663650393,
+              "norm_rms_spread": 0.06992769244521811,
+              "post_rmse_over_step_median": 0.04282548909669539,
+              "pre_rmse_over_step_median": 0.020570764097609398,
+              "runs": 625
+            }
+          },
+          "window_count": 625
+        }
+      }
+    },
+    "ru_qas": {
+      "e0_ev": 22118.8,
+      "label": "Ru K edge (QAS)",
+      "nominal": {
+        "c1_anchored": {
+          "derivative_jump_mu_per_ev": 0.0,
+          "edge_step": 0.8387079523030285,
+          "post_slope_mu_per_ev": -7.350743586707113e-08,
+          "pre_slope_mu_per_ev": -7.350743586707113e-08
+        },
+        "c1_joint": {
+          "derivative_jump_mu_per_ev": 0.0,
+          "edge_step": 0.8872287774191185,
+          "post_slope_mu_per_ev": -0.00017767523075456617,
+          "pre_slope_mu_per_ev": -0.00017767523075456617
+        },
+        "current": {
+          "derivative_jump_mu_per_ev": -0.00018052849356239866,
+          "edge_step": 0.8628149244194042,
+          "post_slope_mu_per_ev": -0.00018060200099826574,
+          "pre_slope_mu_per_ev": -7.350743586707113e-08
+        },
+        "shared_polynomial": {
+          "derivative_jump_mu_per_ev": 0.0,
+          "edge_step": 0.8862116522023392,
+          "post_slope_mu_per_ev": -0.00017571991567488354,
+          "pre_slope_mu_per_ev": -0.00017571991567488354
+        }
+      },
+      "nominal_window": {
+        "post_end": 944.5331719999995,
+        "post_start": 25.0,
+        "pre_end": -65.0,
+        "pre_start": -200.0
+      },
+      "source": "crates/rexafs/tests/testfiles/Ru_QAS.dat",
+      "sweeps": {
+        "available_span": {
+          "label": "Post-edge end varied over 40\u2013100% of available span",
+          "methods": {
+            "c1_anchored": {
+              "edge_step_median": 0.8388515750250367,
+              "edge_step_p90_span_percent": 5.391613801438752,
+              "edge_step_std_percent": 1.6240424385155792,
+              "failures": 0,
+              "flat_rms_spread": 0.0365560885345719,
+              "norm_rms_spread": 0.01604495789870153,
+              "post_rmse_over_step_median": 0.04015133679315542,
+              "pre_rmse_over_step_median": 0.0030663509016124854,
+              "runs": 625
+            },
+            "c1_joint": {
+              "edge_step_median": 0.9107166880836655,
+              "edge_step_p90_span_percent": 9.747086786375805,
+              "edge_step_std_percent": 3.1792073416274955,
+              "failures": 0,
+              "flat_rms_spread": 0.029277265427314837,
+              "norm_rms_spread": 0.03231585969354819,
+              "post_rmse_over_step_median": 0.021073854074354702,
+              "pre_rmse_over_step_median": 0.016974214750765475,
+              "runs": 625
+            },
+            "current": {
+              "edge_step_median": 0.8841073020414865,
+              "edge_step_p90_span_percent": 6.280128463393011,
+              "edge_step_std_percent": 1.9017400137182918,
+              "failures": 0,
+              "flat_rms_spread": 0.03015853694579767,
+              "norm_rms_spread": 0.020365079589951162,
+              "post_rmse_over_step_median": 0.022742764721289832,
+              "pre_rmse_over_step_median": 0.0029184172010840873,
+              "runs": 625
+            },
+            "shared_polynomial": {
+              "edge_step_median": 0.9087377259126449,
+              "edge_step_p90_span_percent": 9.881325313718824,
+              "edge_step_std_percent": 3.2214136484611595,
+              "failures": 0,
+              "flat_rms_spread": 0.02668663882771228,
+              "norm_rms_spread": 0.022673250996125195,
+              "post_rmse_over_step_median": 0.020938792557890017,
+              "pre_rmse_over_step_median": 0.017104054242242293,
+              "runs": 625
+            }
+          },
+          "window_count": 625
+        },
+        "near_post_edge": {
+          "label": "Post-edge end varied from 300 to 940 eV",
+          "methods": {
+            "c1_anchored": {
+              "edge_step_median": 0.8388329053125957,
+              "edge_step_p90_span_percent": 6.012416396453461,
+              "edge_step_std_percent": 1.8255681977676539,
+              "failures": 0,
+              "flat_rms_spread": 0.05655611124600247,
+              "norm_rms_spread": 0.017989884826610725,
+              "post_rmse_over_step_median": 0.03561041409212195,
+              "pre_rmse_over_step_median": 0.0030652186410639235,
+              "runs": 625
+            },
+            "c1_joint": {
+              "edge_step_median": 0.9086420725890586,
+              "edge_step_p90_span_percent": 10.130856010008987,
+              "edge_step_std_percent": 3.716058631576545,
+              "failures": 0,
+              "flat_rms_spread": 0.06899493753566364,
+              "norm_rms_spread": 0.04678852006836678,
+              "post_rmse_over_step_median": 0.020608783810921048,
+              "pre_rmse_over_step_median": 0.016872416648196758,
+              "runs": 625
+            },
+            "current": {
+              "edge_step_median": 0.8836554515622077,
+              "edge_step_p90_span_percent": 6.551031611322614,
+              "edge_step_std_percent": 2.241625455903543,
+              "failures": 0,
+              "flat_rms_spread": 0.07498968811730031,
+              "norm_rms_spread": 0.023359929982034785,
+              "post_rmse_over_step_median": 0.022425170306273844,
+              "pre_rmse_over_step_median": 0.002920801518628123,
+              "runs": 625
+            },
+            "shared_polynomial": {
+              "edge_step_median": 0.9068232319585707,
+              "edge_step_p90_span_percent": 9.806519345857211,
+              "edge_step_std_percent": 3.610867627178386,
+              "failures": 0,
+              "flat_rms_spread": 0.05601423906072305,
+              "norm_rms_spread": 0.044524578520704385,
+              "post_rmse_over_step_median": 0.020490932508729555,
+              "pre_rmse_over_step_median": 0.016783742422974007,
+              "runs": 625
+            }
+          },
+          "window_count": 625
+        }
+      }
+    }
+  },
+  "method_labels": {
+    "c1_anchored": "C1 anchored to pre-edge",
+    "c1_joint": "C1 joint fit",
+    "current": "Independent Victoreen / quadratic",
+    "shared_polynomial": "Shared quadratic + step"
+  }
+}

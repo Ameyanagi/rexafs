@@ -15,8 +15,7 @@ test.txt
 .llm/
 .prompt-cache/
 
-# Repository-local AI instructions/spec workspace
-/AGENTS.md
+# Local assistant configuration and specification workspace
 /CLAUDE.md
 /openspec/
 
@@ -28,3 +27,6 @@ test.txt
 /.venv/
 __pycache__/
 *.so
+
+# JavaScript development dependencies
+/js-rexafs/node_modules/

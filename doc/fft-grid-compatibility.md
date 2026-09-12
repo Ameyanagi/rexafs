@@ -17,6 +17,16 @@ dresidual/dc = weight × (s × dchi/dc + chi × ds/dc)
 ds/dc = 200 × dot(h, dh/dc) / len(h)
 ```
 
+Here `c` denotes a spline coefficient (apply the expression to every coefficient
+to build the Jacobian), `chi(c)` is an endpoint residual, `weight` is its fixed
+endpoint multiplier, and `len(h)` counts the real/imaginary low-R entries.
+The second equation follows by differentiating the sum of squared entries of h;
+the first follows from the product rule. Omitting `chi × ds/dc` differentiates
+a frozen scale instead of the scale actually used by the residual. These are
+derivatives of the [implemented legacy objective](../crates/rexafs/src/xafs/background.rs),
+not an additional physical model. For normalization and Fourier conventions,
+see [processing theory](processing-theory.md).
+
 Both array backends include the previously omitted second term. The FFT head
 and spectrum used by that term are computed once per Jacobian. The frozen-scale
 linear design matrix still uses zero scale derivative. Residual weights, scale,

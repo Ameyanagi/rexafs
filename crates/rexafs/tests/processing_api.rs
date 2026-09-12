@@ -303,3 +303,36 @@ fn fft_window_axis_tracks_resampling_without_replacing_background_k() {
         }
     }
 }
+
+#[test]
+fn inverse_configuration_clears_cached_outputs_and_preserves_forward_results() {
+    let mut spectrum = sample();
+    spectrum.ifft().unwrap();
+    let forward = spectrum.chir_mag().unwrap();
+    let background = spectrum.chi().unwrap().to_vec();
+    let unfiltered = spectrum.chiq().unwrap();
+    // A computed configuration can be reused without leaking another spectrum's
+    // cached q/chi(q). Both Rust array backends must honor the same contract.
+    let mut inverse = spectrum.xftr.clone().unwrap();
+    assert!(inverse.chiq.is_some());
+    inverse.rmin = Some(1.0);
+    inverse.rmax = Some(3.0);
+    inverse.dr = Some(0.5);
+    spectrum.set_ifft(inverse);
+    assert!(spectrum.q().is_none());
+    assert!(spectrum.chiq().is_none());
+    assert!(spectrum.xftr.as_ref().unwrap().rwin.is_none());
+    assert_eq!(spectrum.chir_mag().unwrap(), forward);
+    assert_eq!(spectrum.chi().unwrap(), background);
+    spectrum.ifft().unwrap();
+    assert_ne!(spectrum.chiq().unwrap(), unfiltered);
+    assert_eq!(spectrum.q().unwrap().len(), spectrum.chiq().unwrap().len());
+    assert_eq!(spectrum.chir_mag().unwrap(), forward);
+
+    let mut invalid = rexafs::XrayFFTR::new();
+    invalid.nfft = Some(0);
+    spectrum.set_ifft(invalid);
+    assert!(spectrum.ifft().is_err());
+    assert!(spectrum.chiq().is_none());
+    assert_eq!(spectrum.chir_mag().unwrap(), forward);
+}

@@ -18,6 +18,37 @@ in **rexafs** stands for both **Rust** and **reinventing the wheel** for EXAFS
 analysis. The project began with the need to process large in-situ measurement
 series.
 
+## Choose your installation
+
+| Use case | Install | Start here |
+|---|---|---|
+| Desktop analysis, fitting and plots | [Download the latest release](https://github.com/Ameyanagi/rexafs/releases/latest) | [Desktop installation](#install-the-desktop) |
+| Python / Jupyter with NumPy | `python -m pip install rexafs` | [Python guide](py-rexafs/README.md) |
+| TypeScript / JavaScript, Node or browser | `npm install rexafs` | [TypeScript guide](js-rexafs/README.md) |
+| Rust applications | `cargo add rexafs` | [Rust API](https://docs.rs/rexafs) |
+
+Python supports CPython 3.10–3.14. Node requires version 22 or newer.
+Prebuilt Python wheels and the npm Wasm package do not require a Rust compiler.
+Use a Python virtual environment to keep project dependencies separate:
+
+```bash
+python -m venv .venv
+# macOS/Linux:
+source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install --upgrade rexafs
+```
+
+In VS Code, select this environment with **Python: Select Interpreter**; in
+Jupyter, select its kernel. The Python package includes `py.typed` and type
+stubs; npm includes TypeScript declarations. Member completion and hover help
+are available without extra rexafs editor plugins.
+
+The guides in this checkout describe the next release's keyword/options
+constructors and `XrayFFTR` support. Published 0.2.4 supports the basic pipeline
+below; use the guides' source-install steps to try the new configuration API
+until a release containing it is published.
+
 ## Install the desktop
 
 Open the [latest release](https://github.com/Ameyanagi/rexafs/releases/latest)
@@ -129,19 +160,51 @@ spectrum.fft()?;
 ```
 
 ```python
-import rexafs
-spectrum = rexafs.Spectrum.from_arrays(energy, mu).fft()
+import numpy as np
+from rexafs import Spectrum
+
+# A whitespace-delimited file: column 1 = energy in eV, column 2 = absorption mu.
+data = np.loadtxt("spectrum.dat")
+spectrum = Spectrum(data[:, 0], data[:, 1]).fft()
 print(spectrum.e0(), spectrum.k(), spectrum.chi())
 ```
 
 ```javascript
 import init, { Spectrum } from "rexafs";
 await init();
-const spectrum = Spectrum.from_arrays(energy, mu).fft(); // Float64Array inputs
+// energy and mu are Float64Arrays containing your measured spectrum.
+const spectrum = Spectrum.from_arrays(energy, mu).fft();
+console.log(spectrum.r(), spectrum.chir_mag());
+spectrum.free();
 ```
+
+Call only the stage you need: `.normalize()`, `.calc_background()`, `.fft()` or
+`.ifft()`. Missing earlier stages run automatically. Keep the defaults initially;
+choose fit/window limits appropriate to your measured range.
 
 See the [API guide](doc/api.md) for units, errors and advanced Rust entry points,
 [Python guide](py-rexafs/README.md) and [JavaScript guide](js-rexafs/README.md).
+
+## What the calculations mean
+
+Normalization subtracts a fitted pre-edge baseline and divides absorption by
+its edge step. AUTOBK estimates the smooth background to obtain the EXAFS
+oscillations, chi(k). The Fourier transform weights and windows those oscillations
+to display them against R; its peaks are not automatically phase-corrected bond
+lengths. An inverse transform filters selected R contributions back into q space.
+
+The [processing theory guide](doc/processing-theory.md) explains the
+equations, symbols, units, assumptions and implementation choices, with scientific
+references. Use the [fitting-statistics guide](doc/fitting-statistics.md)
+when interpreting structural fits and uncertainties.
+
+## Benchmarks and numerical research
+
+See the [historical 0.1.3 benchmark summary](doc/benchmarks/2026-09-07-08-summary.md)
+for measured workloads, hardware and limitations, and the
+[normalization stability experiment](experiments/normalization_stability/README.md)
+for a reproducible comparison of candidate models. These are historical research
+results, not performance promises or changes to the current numerical defaults.
 
 ## Documentation and scientific context
 
@@ -191,3 +254,9 @@ Dependencies and reference fixtures retain their own terms. The release license
 gate requires a non-GPL license choice for every Rust dependency; see the
 [distribution notices](doc/distribution-notices.md). Identify the actual calculation
 backend when reporting scientific results.
+
+## Contributing
+
+All project-authored guides, examples and API help follow the
+[documentation baseline](CONTRIBUTING.md): clear English, explained equations,
+defined units and assumptions, verified citations, and documented defaults.
