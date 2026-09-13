@@ -17,7 +17,7 @@ X-rays as a function of photon energy. The absorption rises sharply at an
 excited. Because each element has its own edge energies, XAS is element-specific.
 Energies in rexafs are photon energies in electronvolts (eV).
 
-**μ(E)** is the absorption spectrum. In transmission, it is the natural
+**$\mu(E)$** is the absorption spectrum. In transmission, it is the natural
 logarithm of the incident intensity divided by the transmitted intensity,
 $\mu(E)=\ln[I_0(E)/I_t(E)]$. In fluorescence, a common estimate is the
 fluorescence intensity divided by $I_0$. The desktop import assigns the detector
@@ -40,19 +40,19 @@ of neighbors. Extracting and fitting EXAFS is the main purpose of rexafs.
 
 | Term | Meaning | Where it is used |
 |---|---|---|
-| **E₀** | The edge energy used as the energy origin. rexafs estimates it from the absorption derivative; it is an estimate, not a calibration. | [Normalize](/docs/desktop/processing/#normalization) |
+| **$E_0$** | The edge energy used as the energy origin. rexafs estimates it from the absorption derivative; it is an estimate, not a calibration. | [Normalize](/docs/desktop/processing/#normalization) |
 | **Pre-edge and post-edge lines** | Baselines fitted below and above the edge. The pre-edge line is subtracted; the post-edge fit defines the edge step. | [Normalize](/docs/desktop/processing/#normalization) |
-| **Edge step** | The size of the absorption jump at E₀. Dividing by it produces a spectrum that rises from 0 to 1. | [Processing equations](/docs/science/processing/#2-find-the-edge-and-normalize-the-absorption) |
+| **Edge step** | The size of the absorption jump at $E_0$. Dividing by it produces a spectrum that rises from 0 to 1. | [Processing equations](/docs/science/processing/#2-find-the-edge-and-normalize-the-absorption) |
 | **norm / flat** | Normalized absorption; the flattened version also removes the fitted post-edge trend so the region above the edge is level. | [Normalize](/docs/desktop/processing/#normalization) |
-| **k** | The photoelectron wave number in Å⁻¹, computed from the energy above E₀. EXAFS is analyzed on this axis. | [Background](/docs/desktop/processing/#background) |
-| **χ(k)** | The EXAFS oscillations: the normalized absorption minus the smooth background, as a function of k. It is dimensionless. | [Background](/docs/desktop/processing/#background) |
+| **k** | The photoelectron wave number in Å⁻¹, computed from the energy above $E_0$. EXAFS is analyzed on this axis. | [Background](/docs/desktop/processing/#background) |
+| **$\chi(k)$** | The EXAFS oscillations: the normalized absorption minus the smooth background, as a function of k. It is dimensionless. | [Background](/docs/desktop/processing/#background) |
 | **AUTOBK** | The algorithm that estimates the smooth background with a spline chosen so that the low-R part of the Fourier transform is small. | [AUTOBK objective](/docs/science/autobk/) |
-| **R_bkg** | The AUTOBK cutoff distance in Å. Fourier components below it are treated as background. The starting value is 1 Å. | [AUTOBK objective](/docs/science/autobk/) |
-| **k weight** | The power of k multiplied into χ(k) before transforming or plotting. It compensates for the decay of the oscillations at high k. The forward transform starts with weight 2. | [Transform](/docs/desktop/processing/#forward-transform) |
-| **Window** | A taper applied to χ(k) before the transform to reduce truncation ripples. rexafs starts with a Kaiser–Bessel window from 2 to 15 Å⁻¹. | [Transform](/docs/desktop/processing/#forward-transform) |
-| **χ(R)** | The Fourier transform of weighted, windowed χ(k), as a function of distance R in Å. Its magnitude has peaks near neighbor distances, shifted by a scattering phase. | [Processing equations](/docs/science/processing/#4-transform-from-k-to-r) |
-| **Phase correction** | The shift between a peak in χ(R) and the actual interatomic distance. rexafs does not phase-correct plots; fitted distances come from the path model. | [Fit statistics](/docs/science/fitting-statistics/) |
-| **q and χ(q)** | The back-transform of a selected R range, in Å⁻¹. It isolates the contribution of one distance region. | [Back transform](/docs/desktop/processing/#back-transform) |
+| **$R_{\mathrm{bkg}}$** | The AUTOBK cutoff distance in Å. Fourier components below it are treated as background. The starting value is 1 Å. | [AUTOBK objective](/docs/science/autobk/) |
+| **k weight** | The power of k multiplied into $\chi(k)$ before transforming or plotting. It compensates for the decay of the oscillations at high k. The forward transform starts with weight 2. | [Transform](/docs/desktop/processing/#forward-transform) |
+| **Window** | A taper applied to $\chi(k)$ before the transform to reduce truncation ripples. rexafs starts with a Kaiser–Bessel window from 2 to 15 Å⁻¹. | [Transform](/docs/desktop/processing/#forward-transform) |
+| **$\chi(R)$** | The Fourier transform of weighted, windowed $\chi(k)$, as a function of distance R in Å. Its magnitude has peaks near neighbor distances, shifted by a scattering phase. | [Processing equations](/docs/science/processing/#4-transform-from-k-to-r) |
+| **Phase correction** | The shift between a peak in $\chi(R)$ and the actual interatomic distance. rexafs does not phase-correct plots; fitted distances come from the path model. | [Fit statistics](/docs/science/fitting-statistics/) |
+| **q and $\chi(q)$** | The back-transform of a selected R range, in Å⁻¹. It isolates the contribution of one distance region. | [Back transform](/docs/desktop/processing/#back-transform) |
 
 ## Structures and fitting
 
@@ -65,10 +65,10 @@ of neighbors. Extracting and fitting EXAFS is the main purpose of rexafs.
 | **Scattering path** | One route the photoelectron can take from the absorber to one or more neighbors and back. Single-scattering paths visit one neighbor; multiple-scattering paths visit several. | [Structures and paths](/docs/desktop/structures/#path-parameters) |
 | **Shell** | A group of neighbors at about the same distance from the absorber. The **first shell** is the nearest one. | [First fit](/docs/desktop/fitting/) |
 | **Degeneracy (N)** | The number of equivalent paths in the reference structure, equal to the coordination number for a single-scattering shell. | [Path parameters](/docs/desktop/structures/#path-parameters) |
-| **S₀²** | The amplitude reduction factor, a dimensionless scale usually between 0.7 and 1. It multiplies N, so the two cannot be separated from one fit. | [Path parameters](/docs/desktop/structures/#path-parameters) |
-| **ΔE₀** | A fitted shift in eV between the experimental energy origin and the calculation's. | [Path parameters](/docs/desktop/structures/#path-parameters) |
-| **ΔR** | A fitted change in Å from the path's reference half-length. The fitted distance is the reference length plus ΔR. | [Path parameters](/docs/desktop/structures/#path-parameters) |
-| **σ²** | The mean-square disorder of the path length in Å², from thermal motion and structural variation. Larger values damp high-k oscillations. | [Path parameters](/docs/desktop/structures/#path-parameters) |
+| **$S_0^2$** | The amplitude reduction factor, a dimensionless scale usually between 0.7 and 1. It multiplies N, so the two cannot be separated from one fit. | [Path parameters](/docs/desktop/structures/#path-parameters) |
+| **$\Delta E_0$** | A fitted shift in eV between the experimental energy origin and the calculation's. | [Path parameters](/docs/desktop/structures/#path-parameters) |
+| **$\Delta R$** | A fitted change in Å from the path's reference half-length. The fitted distance is the reference length plus $\Delta R$. | [Path parameters](/docs/desktop/structures/#path-parameters) |
+| **$\sigma^2$** | The mean-square disorder of the path length in Å², from thermal motion and structural variation. Larger values damp high-k oscillations. | [Path parameters](/docs/desktop/structures/#path-parameters) |
 | **Fit range** | The k and R limits inside which the model is compared with the data. They determine how much independent information the fit has. | [Fit statistics](/docs/science/fitting-statistics/#independent-information-and-reported-chi-square) |
 | **R-factor** | The squared misfit divided by the squared data, a dimensionless measure of how closely the model follows the data. It does not prove the model is correct. | [Fit statistics](/docs/science/fitting-statistics/#r-factor) |
 | **Joint fit** | Fitting several spectra at once with some variables shared and others local to each spectrum. | [Multiple spectra](/docs/desktop/multiple-spectra/) |

@@ -97,14 +97,14 @@ previous file intact. See [troubleshooting](/docs/troubleshooting/#recover-a-pro
 
 ## Results
 
-**Why is the peak in χ(R) not at the bond distance?**
-The Fourier transform of χ(k) includes a scattering phase that shifts peaks to
+**Why is the peak in $\chi(R)$ not at the bond distance?**
+The Fourier transform of $\chi(k)$ includes a scattering phase that shifts peaks to
 lower R, typically by a few tenths of an ångström. rexafs does not phase-correct
 plots. Fitted distances come from the path model, which includes the phase.
 See [processing](/docs/science/processing/#4-transform-from-k-to-r).
 
 **Why do my results differ slightly from another program?**
-Compare the resolved settings: E₀, normalization ranges, R_bkg, k weight,
+Compare the resolved settings: $E_0$, normalization ranges, $R_{\mathrm{bkg}}$, k weight,
 window type and range, FFT length and the endpoint penalty. The
 [compatibility guide](/docs/science/fourier-compatibility/) lists the known
 differences and how to switch to the Larch grid when needed.

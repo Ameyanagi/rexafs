@@ -71,7 +71,8 @@ independent NumPy float64 copies. Before a stage runs, or after invalidation,
 an unavailable output is `None`. Input and normalization errors raise
 `ValueError`; background and Fourier failures raise `RuntimeError`. The default
 Fourier magnitude has units Å⁻³ because `kweight=2` and the amplitude factor is
-`kstep / sqrt(pi)`, with no additional FFT-length normalization.
+$\delta k/\sqrt{\pi}$ for the k step $\delta k$ (`kstep`), with no additional
+FFT-length normalization.
 
 ## Configure stable 0.2.4
 
