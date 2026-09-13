@@ -65,12 +65,15 @@ interaction results.
 ## Packages
 
 ```sh
-python -m pip install rexafs
-npm install rexafs
-cargo add rexafs
+uv venv
+uv pip install rexafs==0.2.4
+bun add rexafs@0.2.4
+cargo add rexafs@0.2.4
 ```
 
-Use the command for your project. Package registries supply the Python wheels,
+Use the commands for your project. We recommend the current stable
+[uv](https://docs.astral.sh/uv/getting-started/installation/) and
+[Bun](https://bun.sh/docs/installation) for package management. Package registries supply the Python wheels,
 source distribution, npm/Wasm package, and Rust crate; these are not duplicated
 in the desktop release asset list.
 
@@ -79,20 +82,39 @@ in the desktop release asset list.
 Desktop installers/archives can be copied to another computer of the same
 platform. Keep portable archive contents together.
 
-For Python, download on a connected computer with the same OS, architecture,
-and Python version as the offline computer:
+For Python, prepare uv and the Python interpreter on the offline computer first.
+Use a connected computer with the same OS, architecture and Python version to
+download wheels. This example uses Python 3.12; change it to the version on the
+destination. uv does not provide a `pip download` subcommand, so use pip in a
+temporary uv-managed environment for this preparation step:
 
 ```sh
-python -m pip download rexafs==0.2.4 --dest wheelhouse
+uv run --no-project --python 3.12 --with pip python -m pip download --only-binary=:all: rexafs==0.2.4 --dest wheelhouse
 ```
 
-Copy `wheelhouse` to the offline computer, then run:
+Copy the directory to the offline computer, then create an environment and
+install from the local wheels:
 
 ```sh
-python -m pip install --no-index --find-links wheelhouse rexafs==0.2.4
+uv venv --offline --python 3.12
+uv pip install --offline --no-index --find-links wheelhouse rexafs==0.2.4
 ```
 
-For npm, `npm pack rexafs@0.2.4` downloads the package for a later
-`npm install ./rexafs-0.2.4.tgz`. For Rust, prepare the consuming project's
-dependencies with `cargo vendor`; retain its generated configuration alongside
-the project's existing Cargo settings before building with `--offline --locked`.
+The `--offline` option prevents network access; creating the environment requires
+the interpreter to be installed already. See [uv package
+installation](https://docs.astral.sh/uv/pip/packages/).
+
+For TypeScript/JavaScript, install Bun on the destination first. Download the
+[published 0.2.4 package archive](https://registry.npmjs.org/rexafs/-/rexafs-0.2.4.tgz)
+on the connected computer, copy it to your project on the offline computer, and run:
+
+```sh
+bun add ./rexafs-0.2.4.tgz
+```
+
+The rexafs 0.2.4 archive includes its WebAssembly binaries and has no runtime
+package dependencies. Your application may have other dependencies that need to
+be prepared separately. Bun supports [installing local
+tarballs](https://bun.sh/docs/pm/cli/add). For Rust, use `cargo vendor` in your
+consuming project and retain its generated Cargo configuration before building
+offline.

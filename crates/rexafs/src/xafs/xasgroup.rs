@@ -24,14 +24,20 @@ use crate::xafs::io::xasdatatype::XASGroupFile;
 use crate::xafs::io::{xafs_bson::XASBson, xafs_json::XASJson};
 use crate::xafs::xasspectrum::XASSpectrum;
 
+/// One failed stage operation, associated with its original zero-based group index.
 #[derive(Debug, Clone)]
 pub struct BatchSpectrumError {
+    /// Position in the group when the batch operation started.
     pub index: usize,
+    /// Typed error returned by that spectrum.
     pub source: XAFSError,
 }
 
+/// Collected failures after every spectrum has been attempted.
+/// Successful spectra retain their results; this is not a transactional rollback.
 #[derive(Debug, Clone)]
 pub struct BatchProcessError {
+    /// Failures sorted by original spectrum index for both execution modes.
     pub errors: Vec<BatchSpectrumError>,
 }
 
@@ -51,9 +57,19 @@ impl fmt::Display for BatchProcessError {
 
 impl Error for BatchProcessError {}
 
+/// Ordered, owned collection of spectra, also exported as [`crate::Group`].
+///
+/// Stage methods process every member using that spectrum's settings. The default
+/// methods use Rayon parallel iteration; `_seq` variants run sequentially. Empty
+/// groups succeed without work. On failure, all errors are collected in index order
+/// and successful members remain processed. No spectrum is merged automatically.
+///
+/// Legacy `get_spectrum` methods clamp oversized indices to the final spectrum.
+/// Use `group.spectra.get(index)` for ordinary checked indexing instead.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct XASGroup {
+    /// Spectra in display/processing order; direct edits follow [`XASSpectrum`] invalidation rules.
     pub spectra: Vec<XASSpectrum>,
 }
 
@@ -64,35 +80,43 @@ impl Default for XASGroup {
 }
 
 impl XASGroup {
+    /// Create an empty collection with no allocated spectrum data.
     pub fn new() -> Self {
         Self {
             spectra: Vec::new(),
         }
     }
 
+    /// Return the number of spectra.
     pub fn len(&self) -> usize {
         self.spectra.len()
     }
 
+    /// Return whether the collection contains no spectra.
     pub fn is_empty(&self) -> bool {
         self.spectra.is_empty()
     }
 
+    /// Move one spectrum into the end of the collection without cloning its buffers.
     pub fn add_spectrum(&mut self, spectrum: XASSpectrum) -> &mut Self {
         self.spectra.push(spectrum);
         self
     }
 
+    /// Move spectra into the end of the collection, preserving their order.
     pub fn add_spectra(&mut self, spectra: Vec<XASSpectrum>) -> &mut Self {
         self.spectra.extend(spectra);
         self
     }
 
+    /// Move all members of another collection into the end of this collection.
     pub fn add_group(&mut self, group: XASGroup) -> &mut Self {
         self.spectra.extend(group.spectra);
         self
     }
 
+    /// Remove one member by zero-based index. An out-of-range index returns an error
+    /// and leaves the collection unchanged.
     pub fn remove_spectrum(&mut self, index: usize) -> Result<&mut Self, XAFSError> {
         if index >= self.spectra.len() {
             return Err(DataError::IndexOutOfRange {
@@ -106,6 +130,8 @@ impl XASGroup {
         Ok(self)
     }
 
+    /// Remove members at the given original zero-based indices. Duplicate indices are
+    /// removed once; out-of-range indices are ignored. Remaining order is preserved.
     pub fn remove_spectra(&mut self, indices: &[usize]) -> Result<&mut Self, XAFSError> {
         if self.spectra.is_empty() || indices.is_empty() {
             return Ok(self);
@@ -127,6 +153,12 @@ impl XASGroup {
         Ok(self)
     }
 
+    /// Move one member to a position immediately before the original `to` index.
+    /// `to == len()` appends; larger destinations are clamped to `len()`. An oversized
+    /// source selects the final member.
+    ///
+    /// # Panics
+    /// Panics for an empty collection; check [`Self::is_empty`] first.
     pub fn move_spectrum(&mut self, from: usize, to: usize) -> &mut Self {
         // TODO: check if it is fast enough
 
@@ -158,6 +190,9 @@ impl XASGroup {
         self
     }
 
+    /// Move selected members before the original `to` position, or append if it is
+    /// beyond the end. Source indices are sorted and deduplicated; out-of-range sources
+    /// are ignored, preserving the relative order of selected and remaining members.
     pub fn move_spectra(&mut self, from: &[usize], to: usize) -> &mut Self {
         let to_index = if to <= self.spectra.len() {
             to
@@ -215,6 +250,8 @@ impl XASGroup {
         self
     }
 
+    /// Borrow a member, clamping an oversized index to the final member.
+    /// Returns `EmptyGroup` when empty. Use `spectra.get(index)` to reject oversized indices.
     pub fn get_spectrum(&self, index: usize) -> Result<&XASSpectrum, XAFSError> {
         if self.spectra.is_empty() {
             return Err(DataError::EmptyGroup.into());
@@ -230,6 +267,9 @@ impl XASGroup {
         Ok(&self.spectra[index])
     }
 
+    /// Mutably borrow a member, clamping an oversized index to the final member.
+    /// Returns `EmptyGroup` when empty. Use setters on the spectrum to invalidate cached
+    /// results, or call `invalidate_derived()` after direct data/settings edits.
     pub fn get_spectrum_mut(&mut self, index: usize) -> Result<&mut XASSpectrum, XAFSError> {
         if self.spectra.is_empty() {
             return Err(DataError::EmptyGroup.into());
@@ -319,66 +359,114 @@ impl XASGroup {
         }
     }
 
+    /// Attempt to estimate edge energies for every spectrum in parallel (the default).
+    /// Uses [`XASSpectrum::find_e0`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn find_e0(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.find_e0_par()
     }
 
+    /// Attempt to estimate edge energies for every spectrum sequentially.
+    /// Uses [`XASSpectrum::find_e0`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn find_e0_seq(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.collect_seq_errors(|spectrum| spectrum.find_e0())
     }
 
+    /// Attempt to estimate edge energies for every spectrum in parallel using Rayon.
+    /// Uses [`XASSpectrum::find_e0`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn find_e0_par(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.collect_par_errors(|spectrum| spectrum.find_e0())
     }
 
+    /// Attempt to normalize absorption for every spectrum in parallel (the default).
+    /// Uses [`XASSpectrum::normalize`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn normalize(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.normalize_par()
     }
 
+    /// Attempt to normalize absorption for every spectrum sequentially.
+    /// Uses [`XASSpectrum::normalize`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn normalize_seq(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.collect_seq_errors(|spectrum| spectrum.normalize())
     }
 
+    /// Attempt to normalize absorption for every spectrum in parallel using Rayon.
+    /// Uses [`XASSpectrum::normalize`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn normalize_par(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.collect_par_errors(|spectrum| spectrum.normalize())
     }
 
+    /// Attempt to calculate backgrounds for every spectrum in parallel (the default).
+    /// Uses [`XASSpectrum::calc_background`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn calc_background(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.calc_background_par()
     }
 
+    /// Attempt to calculate backgrounds for every spectrum sequentially.
+    /// Uses [`XASSpectrum::calc_background`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn calc_background_seq(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.collect_seq_errors(|spectrum| spectrum.calc_background())
     }
 
+    /// Attempt to calculate backgrounds for every spectrum in parallel using Rayon.
+    /// Uses [`XASSpectrum::calc_background`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn calc_background_par(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.collect_par_errors(|spectrum| spectrum.calc_background())
     }
 
+    /// Attempt to calculate forward Fourier transforms for every spectrum in parallel (the default).
+    /// Uses [`XASSpectrum::fft`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn fft(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.fft_par()
     }
 
+    /// Attempt to calculate forward Fourier transforms for every spectrum sequentially.
+    /// Uses [`XASSpectrum::fft`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn fft_seq(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.collect_seq_errors(|spectrum| spectrum.fft())
     }
 
+    /// Attempt to calculate forward Fourier transforms for every spectrum in parallel using Rayon.
+    /// Uses [`XASSpectrum::fft`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn fft_par(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.collect_par_errors(|spectrum| spectrum.fft())
     }
 
+    /// Attempt to calculate inverse Fourier transforms for every spectrum in parallel (the default).
+    /// Uses [`XASSpectrum::ifft`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn ifft(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.ifft_par()
     }
 
+    /// Attempt to calculate inverse Fourier transforms for every spectrum sequentially.
+    /// Uses [`XASSpectrum::ifft`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn ifft_seq(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.collect_seq_errors(|spectrum| spectrum.ifft())
     }
 
+    /// Attempt to calculate inverse Fourier transforms for every spectrum in parallel using Rayon.
+    /// Uses [`XASSpectrum::ifft`], including its prerequisite calculations and
+    /// invalidation behavior. All failures are collected; successful results are retained.
     pub fn ifft_par(&mut self) -> Result<&mut Self, BatchProcessError> {
         self.collect_par_errors(|spectrum| spectrum.ifft())
     }
 
+    /// Replace this collection with a successfully decoded legacy BSON group file.
+    /// Read/decoding failures leave this collection unchanged. This format is separate
+    /// from the desktop `.rxs` project format.
     pub fn read_bson(&mut self, filename: &str) -> Result<&mut Self, XAFSError> {
         let mut xas_group_file = XASGroupFile::new();
 
@@ -389,6 +477,9 @@ impl XASGroup {
         Ok(self)
     }
 
+    /// Clone this collection into a legacy group envelope and write BSON, overwriting
+    /// the destination. Returns file/serialization errors. This is not the desktop
+    /// project writer and provides no atomic replacement or backup guarantee.
     pub fn write_bson(&self, filename: &str) -> Result<&Self, XAFSError> {
         let mut xas_group_file = XASGroupFile::new();
 
@@ -399,6 +490,9 @@ impl XASGroup {
         Ok(self)
     }
 
+    /// Read a legacy BSON group file and append all of its members without cloning.
+    /// Despite the singular name, the file can contain multiple spectra. Read/decoding
+    /// failures leave this collection unchanged.
     pub fn add_spectrum_from_bson(&mut self, filename: &str) -> Result<&mut Self, XAFSError> {
         let mut xas_group_file = XASGroupFile::new();
         xas_group_file.read_bson(filename)?;

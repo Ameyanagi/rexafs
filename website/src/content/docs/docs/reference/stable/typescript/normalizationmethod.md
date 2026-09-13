@@ -1,22 +1,22 @@
 ---
 title: "TypeScript · NormalizationMethod"
-description: "NormalizationMethod declarations and JSDoc."
+description: "NormalizationMethod declarations, defaults and API explanations."
 audience: user
 pagefind: true
 ---
 
-
-**Stable 0.2.4.** These signatures match the released npm package.
+**Stable 0.2.4.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/js-rexafs/types.d.ts)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-## constructor
+Select the normalization algorithm and hold an owned copy of its settings.
 
-```typescript
-private constructor();
-```
+Use PrePostEdge(settings) for customized pre/post-edge fits or new_prepostedge() for
+automatic defaults. The MBack factory is only a placeholder; it does not implement that
+algorithm. Copy this method into Spectrum.set_normalization_method(), then free() the wrapper
+when no longer needed.
 
 ## free
 
@@ -24,11 +24,18 @@ private constructor();
 free(): void;
 ```
 
+Release this object's Wasm allocation. Do not call methods, read fields or free it again
+afterwards. Arrays and settings already copied elsewhere remain valid.
+
 ## PrePostEdge
 
 ```typescript
 static PrePostEdge(parameters: PrePostEdge): NormalizationMethod;
 ```
+
+Copy the supplied pre/post-edge configuration into a new owned algorithm wrapper. The input
+settings are not consumed. Assign the wrapper to Spectrum.set_normalization_method(), then
+free() it when no longer needed; the spectrum retains its own copy.
 
 ## new_prepostedge
 
@@ -36,8 +43,16 @@ static PrePostEdge(parameters: PrePostEdge): NormalizationMethod;
 static new_prepostedge(): NormalizationMethod;
 ```
 
+Create a new owned pre/post-edge normalization wrapper with automatic E0, fit ranges,
+polynomial order and edge step. It does not process any spectrum. Assign it to
+Spectrum.set_normalization_method() and free() the wrapper when finished.
+
 ## new_mback
 
 ```typescript
 static new_mback(): NormalizationMethod;
 ```
+
+Create an owned MBack placeholder for API compatibility. MBack processing is not
+implemented and normalize() throws if this method is selected. Use new_prepostedge() for
+supported normalization, and free() any placeholder you create.

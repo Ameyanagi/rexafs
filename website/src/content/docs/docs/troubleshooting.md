@@ -7,6 +7,10 @@ audience: user
 | Symptom | Check |
 |---|---|
 | Import remains pending | Select the main signal, assign columns, confirm axis units and revalidate. |
+| The imported point count is smaller than the file | Inspect parser diagnostics for skipped rows and excluded non-finite detector calculations; review the source-line examples before accepting the import. |
+| Normalize reports an inverse-transform error | The desktop computes the full pipeline, including back FT. Inspect the collapsed Back FT settings or reset the Transform stage. |
+| Apply to marked affects fewer groups than expected | The current group and processing-locked groups are excluded. Hidden marks can still be selected; review the marked count. |
+| A Series trend misses a brief feature | The overview is sampled to at most 192 frames. Inspect individual frames or calculate the batch/LCF trend for All frames. |
 | The edge is at the wrong energy | Check eV versus keV and calibration; an automatic edge estimate is not a reference calibration. |
 | Input arrays are rejected | Match lengths, remove non-finite values deliberately, and provide a strictly increasing energy axis. |
 | `chi()`, `r()` or a window is unavailable | Run the required stage and handle `None`/`undefined` before using the result. |

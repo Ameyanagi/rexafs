@@ -1,12 +1,20 @@
 ---
 title: "Python · type aliases"
-description: "Literal types and module attributes."
+description: "type aliases signatures, defaults and API explanations."
 audience: user
 pagefind: true
 ---
 
-**stable API**. See the [version guide](/docs/reference/).
+**Stable 0.2.4.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
+
+[Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
+
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
+
+## __version__
 
 ```python
 __version__: str
 ```
+
+Version of the installed Python package, for example "0.2.4". Include this value when reporting results or requesting help; a source build can contain changes beyond the published package with the same version.

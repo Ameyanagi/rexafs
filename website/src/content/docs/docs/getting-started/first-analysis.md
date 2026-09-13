@@ -62,8 +62,9 @@ Choose **Save project**. **Link source files** keeps references to your inputs;
 **Include source files** makes a portable project with embedded original bytes.
 Choose a new `.rxs` filename. See [projects and recovery](/docs/desktop/projects/).
 
-Open **Publish**, choose a figure and PNG or SVG, then **Export…**. Select an
-analysis folder to export figures, data, captions, methods and references together.
+Open **Publish**, choose a figure and PNG or SVG, then **Export…**. Choose
+**Analysis folder** as the format to export figures, data, captions, methods and
+references together.
 Review the figure labels and experimental details before sharing them.
 
 Next, [fit a first coordination shell](/docs/desktop/fitting/) or read

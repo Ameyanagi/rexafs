@@ -99,3 +99,5 @@ py-rexafs/README.md,mixed,split,/docs/libraries/python/,"Publish installation, N
 supportinginfo/uncertainty.md,developer,exclude,,Historical teaching notes; public scientific reference is processing-theory.md and fitting-statistics.md.
 supportinginfo/uncertainty2.md,developer,exclude,,Historical teaching notes; public scientific reference is processing-theory.md and fitting-statistics.md.
 vendor/sum_tree/README.rexafs.md,developer,exclude,,Vendored patch and attribution record; retain required notices separately from website prose.
+doc/series.md,user,publish,/docs/desktop/series/,Scan order and sampled overview limits; implemented trend definitions and calculation scope.
+doc/documentation-audit-2026-09-13.md,developer,exclude,,Source-to-documentation audit scope corrections and validation evidence.

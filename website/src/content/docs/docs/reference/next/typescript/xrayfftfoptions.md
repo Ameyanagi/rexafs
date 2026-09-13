@@ -1,18 +1,20 @@
 ---
 title: "TypeScript · XrayFFTFOptions"
-description: "XrayFFTFOptions declarations and JSDoc."
+description: "XrayFFTFOptions declarations, defaults and API explanations."
 audience: user
 pagefind: false
 ---
-
 
 **Next API · unreleased.** These signatures describe the source checkout, not npm rexafs@0.2.4.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
-Forward Fourier-transform settings. Defaults: k=2..15 inverse angstroms, kweight=2, KaiserBessel window.
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
+Named field overrides for new XrayFFTF(options). Omitted fields retain constructor defaults;
+explicitly assigning undefined uses the resolution described for each field. An unknown key
+or a non-object options argument throws TypeError. Numerical range and data-dependent checks
+generally run when the configured processing stage executes.
 
 ## grid
 
@@ -20,7 +22,10 @@ Forward Fourier-transform settings. Defaults: k=2..15 inverse angstroms, kweight
 grid?: FFTGrid;
 ```
 
-Sampling/window domain. Default: Input (existing k grid). Larch resamples on the extended FFT window grid.
+Sampling and window-construction convention. Default: Input preserves the prepared
+background k grid. Larch linearly resamples onto a zero-origin grid and extends the window
+domain as needed. Neither changes the returned background k()/chi(); always pair kwin()
+with kwin_k().
 
 ## rmax_out
 
@@ -28,7 +33,9 @@ Sampling/window domain. Default: Input (existing k grid). Larch resamples on the
 rmax_out?: number | undefined;
 ```
 
-Maximum displayed R in angstroms. Default: 10.0; does not truncate the inverse-transform filter.
+Maximum reported R in angstroms. Default: 10.0; undefined restores this default. This
+limits the r() and chir_*() output arrays, not the internally retained Fourier bins used by
+ifft(). It does not change the transform amplitude or frequency resolution.
 
 ## dk
 
@@ -36,7 +43,10 @@ Maximum displayed R in angstroms. Default: 10.0; does not truncate the inverse-t
 dk?: number | undefined;
 ```
 
-Low-k taper width in inverse angstroms. Default: 1.0.
+Low-k window parameter. Default: 1.0; undefined restores this default. For taper windows it
+controls transition geometry in inverse angstroms. KaiserBessel also uses the same numeric
+value as a dimensionless shape parameter, so it cannot be compared as a universal taper
+width across all windows.
 
 ## dk2
 
@@ -44,7 +54,9 @@ Low-k taper width in inverse angstroms. Default: 1.0.
 dk2?: number | undefined;
 ```
 
-High-k taper width in inverse angstroms. Default: use dk.
+High-k window parameter. Default: undefined uses dk. It controls the upper transition
+geometry in inverse angstroms; interpretation depends on the window family. Use the same
+value as dk for symmetric endpoint settings.
 
 ## kmin
 
@@ -52,7 +64,9 @@ High-k taper width in inverse angstroms. Default: use dk.
 kmin?: number | undefined;
 ```
 
-Lower Fourier window limit in inverse angstroms. Default: 2.0; undefined uses the first k sample.
+Lower Fourier window bound in inverse angstroms. Default: 2.0; explicitly assigning
+undefined uses the first prepared k sample. Require kmin < kmax. Select this above the
+region where the EXAFS approximation or background subtraction is unreliable.
 
 ## kmax
 
@@ -60,7 +74,9 @@ Lower Fourier window limit in inverse angstroms. Default: 2.0; undefined uses th
 kmax?: number | undefined;
 ```
 
-Upper Fourier window limit in inverse angstroms. Default: 15.0; undefined uses the last k sample.
+Upper Fourier window bound in inverse angstroms. Default: 15.0; explicitly assigning
+undefined uses the last prepared k sample. Require kmax > kmin. Select this within the
+useful measured range; high-k noise can dominate after k weighting.
 
 ## kweight
 
@@ -68,7 +84,10 @@ Upper Fourier window limit in inverse angstroms. Default: 15.0; undefined uses t
 kweight?: number | undefined;
 ```
 
-Power of k applied before FFT. Default: 2.0; nonnegative values are floored to an integer.
+Power of k applied before the forward transform. Default: 2.0; undefined restores this
+default. Finite nonnegative values are floored to an integer w. Larger w emphasizes high-k
+oscillations and noise; for dimensionless chi, the transformed amplitude has units
+angstrom^(-(w + 1)).
 
 ## nfft
 
@@ -76,7 +95,10 @@ Power of k applied before FFT. Default: 2.0; nonnegative values are floored to a
 nfft?: number | undefined;
 ```
 
-Forward FFT length. Default: 2048.
+Forward FFT length N. Default: 2048; undefined restores this default. Require an integer of
+at least 2. The R spacing is pi / (N * kstep), in angstroms. Use N at least as large as the
+prepared data: Input truncates excess samples, whereas Larch rejects a window grid that
+does not fit. Larger zero-padding does not improve experimental resolution.
 
 ## kstep
 
@@ -84,7 +106,10 @@ Forward FFT length. Default: 2048.
 kstep?: number | undefined;
 ```
 
-FFT k spacing in inverse angstroms. Default: infer from input k.
+k spacing used to scale the transform and label R, in inverse angstroms. Default: undefined
+infers the first spacing of the prepared k grid (normally 0.05 from AUTOBK defaults). Larch
+also uses this spacing to resample chi. Input does not resample, so keep it consistent with
+the input grid. Require a finite positive value.
 
 ## window
 
@@ -92,4 +117,7 @@ FFT k spacing in inverse angstroms. Default: infer from input k.
 window?: FTWindow | undefined;
 ```
 
-Fourier window shape. Default: KaiserBessel; explicitly unset uses Hanning.
+Fourier window family. Constructor default: KaiserBessel; explicitly assigning undefined
+selects the window routine's Hanning fallback. The window reduces truncation ringing and
+changes amplitude. No correction for window area or coherent gain is applied; see FTWindow
+for valid names.

@@ -50,6 +50,20 @@ fallback to them can therefore change its result. Keep the previous release
 when reproducing that earlier numerical behavior. The current fixed-λ default
 and legacy frozen-scale direct solves do not use this dynamic Jacobian.
 
+## Backend scope
+
+The default nalgebra backend implements the recommended FixedPenalty AUTOBK
+objective. The optional Rust `ndarray-compat` feature selects a historical
+backend with only Fixed/TwoPass clamp policies and a rounded, rather than
+floored, automatic spline coefficient count. It does not expose `clamp_lambda`.
+Matching the public FFT grid does not remove these background differences.
+Desktop, Python and Wasm use the default backend.
+
+Both public forward FFT implementations use the actual `kstep / sqrt(pi)`
+amplitude factor after an unnormalized negative-exponent FFT. AUTOBK's internal
+low-R objective instead uses the fixed reference multiplier `0.05 / sqrt(pi)`;
+its selected kstep still controls the R axis. These are separate operations.
+
 ## Explicit output FFT grid
 
 The default Rust backend, desktop, Python and JavaScript retain **Input grid**.

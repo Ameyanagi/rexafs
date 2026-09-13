@@ -107,14 +107,23 @@ impl StructureQuery {
     }
 }
 
-/// `RuO2` matches `Ru O2`, `O2Ru`, `ruo2`: compare element/count multisets.
+/// Compare normalized element/count maps: RuO2 matches Ru O2, O2Ru, and Ru2O4.
+/// Element capitalization must be valid; this function does not parse `ruo2`.
+/// See [`parse_formula`] for limitations; empty parsed queries never match.
 pub fn formula_matches(formula: &str, query: &str) -> bool {
     let a = parse_formula(formula);
     let b = parse_formula(query);
     !b.is_empty() && a == b
 }
 
-/// Parse `Fe2 O3`, `Fe2O3`, `(Fe0.5Ni0.5)O` into element → count.
+/// Extract element/count ratios from simple formula text, normalized to the
+/// smallest positive count and rounded to three decimal places.
+///
+/// Recognizes capitalized element symbols and immediate decimal counts; spaces
+/// and punctuation are skipped. Parenthesized group multipliers, hydrates, and
+/// isotope/charge syntax are not interpreted chemically. For example,
+/// `(Fe0.5Ni0.5)O` is supported, but `Ca(OH)2` is not a grouped formula parser.
+/// This search helper is not suitable for computing exact stoichiometry.
 pub fn parse_formula(text: &str) -> BTreeMap<String, f64> {
     let mut out = BTreeMap::new();
     let chars: Vec<char> = text.chars().collect();

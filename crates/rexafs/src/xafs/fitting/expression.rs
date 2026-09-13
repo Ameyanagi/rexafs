@@ -317,6 +317,13 @@ where
     }
 }
 
+/// Evaluate arithmetic, supported math functions, and named scalar values.
+///
+/// The callback supplies symbols; built-in constants/functions are handled by
+/// the parser. Powers use right associativity. Trigonometric arguments use
+/// radians. No physical-unit checking is performed: expressions must preserve
+/// the units required by their path fields. Parse errors, resolver errors,
+/// invalid function calls, and nonfinite results return [`FittingError`].
 pub fn eval_expression_with<F>(expr: &str, mut resolver: F) -> Result<f64, FittingError>
 where
     F: FnMut(&str) -> Result<f64, FittingError>,
@@ -353,6 +360,8 @@ fn collect_symbols(ast: &Expr, out: &mut Vec<String>, seen: &mut HashSet<String>
     }
 }
 
+/// Parse distinct variable names in first-use order, excluding reff and degen.
+/// Those two names are supplied by each path rather than inferred as fit variables.
 pub fn try_extract_symbols(expr: &str) -> Result<Vec<String>, FittingError> {
     let ast = parse_cached(expr)?;
     let mut out = Vec::new();
@@ -361,6 +370,8 @@ pub fn try_extract_symbols(expr: &str) -> Result<Vec<String>, FittingError> {
     Ok(out)
 }
 
+/// Return expression symbols, or an empty vector when parsing fails.
+/// Prefer [`try_extract_symbols`] for validating user expressions.
 pub fn extract_symbols(expr: &str) -> Vec<String> {
     try_extract_symbols(expr).unwrap_or_default()
 }

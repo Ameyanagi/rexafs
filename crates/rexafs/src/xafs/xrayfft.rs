@@ -9,22 +9,63 @@ use super::xafsutils::{ftwindow, FTWindow};
 
 pub use super::fft_grid::FFTGrid;
 
+/// Forward EXAFS transform from chi(k) to complex chi(R).
+///
+/// The transform is an unnormalized negative-exponent FFT multiplied by
+/// `kstep / sqrt(pi)`; no additional `1/nfft`, phase factor, or window-area
+/// normalization is applied. Use `new()` for recommended settings, then `xftf`
+/// to calculate. Mutating these standalone fields does not recalculate caches;
+/// use `Spectrum::set_fft` when managing a spectrum pipeline.
+///
+/// The sign and FFT normalization match the
+/// [NumPy convention](https://numpy.org/doc/stable/reference/routines.fft.html#normalization).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct XrayFFTF {
+    /// Sampling and window domain. Default: `FFTGrid::Input` in the nalgebra backend.
+    /// Input preserves samples; Larch resamples on a uniform grid starting at zero.
     pub grid: FFTGrid,
+    /// Maximum displayed R in Å; default 10.0. The full transform is retained for
+    /// inverse filtering, so this does not set an R-space filter cutoff.
     pub rmax_out: Option<f64>,
+    /// Window family; default `Some(FTWindow::KaiserBessel)`. `None` selects
+    /// the window helper's Hanning default, not an all-pass window.
     pub window: Option<FTWindow>,
+    /// Low-side window parameter; default 1.0. Usually a taper width in Å⁻¹;
+    /// Kaiser–Bessel also uses its numerical value as a shape parameter. Gaussian
+    /// uses it as the width, and fractional Hanning uses fractional taper geometry.
     pub dk: Option<f64>,
+    /// High-side window parameter; `None` uses `dk`. Interpretation depends on
+    /// window family; equal values do not make different families equivalent.
     pub dk2: Option<f64>,
+    /// Lower window boundary in Å⁻¹; default 2.0. `None` uses the first input k.
     pub kmin: Option<f64>,
+    /// Upper window boundary in Å⁻¹; default 15.0. `None` uses the last input k.
+    /// In Larch mode, the window domain extends through `kmax + dk2`.
     pub kmax: Option<f64>,
+    /// Power of k multiplying chi before transformation; default 2.0.
+    /// Nonnegative fractional values are floored. Larger values emphasize high-k
+    /// signal and noise; this weighting is separate from AUTOBK's own k-weight.
     pub kweight: Option<f64>,
+    /// FFT length; default 2048. Short input is zero-padded; Input mode truncates
+    /// longer input to this length. Larch mode requires room for its extended window.
+    /// More zero-padding refines the R grid without adding experimental resolution.
     pub nfft: Option<usize>,
+    /// FFT sample spacing in Å⁻¹; `None` infers `k[1] - k[0]`. This controls both
+    /// R spacing `pi / (nfft * kstep)` and amplitude `kstep / sqrt(pi)`.
+    /// AUTOBK normally supplies 0.05 Å⁻¹; Input mode does not resample when this changes.
     pub kstep: Option<f64>,
+    /// Displayed R grid in Å, populated by `xftf`; `None` before calculation.
     pub r: Option<DVector<f64>>,
+    /// Full complex real-FFT coefficients, including DC and the even-length Nyquist
+    /// bin. For dimensionless chi and k-weight w, units are Å⁻⁽ʷ⁺¹⁾. This cache is
+    /// not truncated by `rmax_out`; `None` before calculation.
     pub chir: Option<DynRealDft<f64>>,
+    /// Magnitude of the displayed complex transform, paired with `r`.
+    /// Units are Å⁻⁽ʷ⁺¹⁾ for dimensionless chi; `None` before calculation.
     pub chir_mag: Option<DVector<f64>>,
+    /// Dimensionless window on the prepared k grid, before k-weight multiplication.
+    /// Use `Spectrum::kwin_k` to obtain the matching axis; `None` before calculation.
     pub kwin: Option<DVector<f64>>,
 }
 
@@ -69,10 +110,15 @@ impl Default for XrayFFTF {
 }
 
 impl XrayFFTF {
+    /// Create recommended forward settings with automatic input spacing.
     pub fn new() -> XrayFFTF {
         Self::default()
     }
 
+    /// Resolve automatic settings from a nonempty k grid without calculating.
+    ///
+    /// Prefer the validated transform method for public input. This lower-level
+    /// helper indexes the supplied grid directly and can panic on an empty grid.
     pub fn fill_parameter(&mut self, k: &DVector<f64>) -> &mut Self {
         if self.kweight.is_none() {
             self.kweight = Some(2.0);
@@ -111,6 +157,13 @@ impl XrayFFTF {
         self
     }
 
+    /// Calculate and cache chi(R) from equally sized finite k/chi arrays.
+    ///
+    /// At least two strictly increasing k samples are required. For a physical R
+    /// interpretation, Input mode requires a zero-origin uniform k grid consistent
+    /// with `kstep`; it does not enforce uniformity or correct a nonzero origin.
+    /// Larch mode resamples from zero. Invalid settings, insufficient input or an
+    /// undersized Larch transform return `FFTError`. Inputs are borrowed unchanged.
     pub fn xftf(&mut self, k: &DVector<f64>, chi: &DVector<f64>) -> Result<&mut Self, FFTError> {
         if self.nfft.is_some_and(|n| n < 2) {
             return Err(FFTError::InvalidParameter {
@@ -241,42 +294,81 @@ impl XrayFFTF {
         Ok((weighted, window))
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Maximum displayed R in Å; default 10.0. The full transform is retained for
+    /// inverse filtering, so this does not set an R-space filter cutoff.
     pub fn get_rmax_out(&self) -> Option<&f64> {
         self.rmax_out.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Window family; default `Some(FTWindow::KaiserBessel)`. `None` selects
+    /// the window helper's Hanning default, not an all-pass window.
     pub fn get_window(&self) -> Option<&FTWindow> {
         self.window.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Low-side window parameter; default 1.0. Usually a taper width in Å⁻¹;
+    /// Kaiser–Bessel also uses its numerical value as a shape parameter. Gaussian
+    /// uses it as the width, and fractional Hanning uses fractional taper geometry.
     pub fn get_dk(&self) -> Option<&f64> {
         self.dk.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// High-side window parameter; `None` uses `dk`. Interpretation depends on
+    /// window family; equal values do not make different families equivalent.
     pub fn get_dk2(&self) -> Option<&f64> {
         self.dk2.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Lower window boundary in Å⁻¹; default 2.0. `None` uses the first input k.
     pub fn get_kmin(&self) -> Option<&f64> {
         self.kmin.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Upper window boundary in Å⁻¹; default 15.0. `None` uses the last input k.
+    /// In Larch mode, the window domain extends through `kmax + dk2`.
     pub fn get_kmax(&self) -> Option<&f64> {
         self.kmax.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Power of k multiplying chi before transformation; default 2.0.
+    /// Nonnegative fractional values are floored. Larger values emphasize high-k
+    /// signal and noise; this weighting is separate from AUTOBK's own k-weight.
     pub fn get_kweight(&self) -> Option<&f64> {
         self.kweight.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Displayed R grid in Å, populated by `xftf`; `None` before calculation.
     pub fn get_r(&self) -> Option<&DVector<f64>> {
         self.r.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Full complex real-FFT coefficients, including DC and the even-length Nyquist
+    /// bin. For dimensionless chi and k-weight w, units are Å⁻⁽ʷ⁺¹⁾. This cache is
+    /// not truncated by `rmax_out`; `None` before calculation.
     pub fn get_chir(&self) -> Option<&DynRealDft<f64>> {
         self.chir.as_ref()
     }
 
+    /// Return a newly allocated real component on the displayed R grid.
+    /// Units are Å⁻⁽ʷ⁺¹⁾ for dimensionless chi. Returns `None` before calculation.
     pub fn get_chir_real(&self) -> Option<DVector<f64>> {
         let len_r = self.r.as_ref()?.len();
         let chir = self.chir.as_ref()?;
@@ -286,6 +378,8 @@ impl XrayFFTF {
         ))
     }
 
+    /// Return a newly allocated imaginary component on the displayed R grid.
+    /// Units are Å⁻⁽ʷ⁺¹⁾ for dimensionless chi. Returns `None` before calculation.
     pub fn get_chir_imag(&self) -> Option<DVector<f64>> {
         let len_r = self.r.as_ref()?.len();
         let chir = self.chir.as_ref()?;
@@ -295,33 +389,75 @@ impl XrayFFTF {
         ))
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Magnitude of the displayed complex transform, paired with `r`.
+    /// Units are Å⁻⁽ʷ⁺¹⁾ for dimensionless chi; `None` before calculation.
     pub fn get_chir_mag(&self) -> Option<&DVector<f64>> {
         self.chir_mag.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Dimensionless window on the prepared k grid, before k-weight multiplication.
+    /// Use `Spectrum::kwin_k` to obtain the matching axis; `None` before calculation.
     pub fn get_kwin(&self) -> Option<&DVector<f64>> {
         self.kwin.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// FFT sample spacing in Å⁻¹; `None` infers `k[1] - k[0]`. This controls both
+    /// R spacing `pi / (nfft * kstep)` and amplitude `kstep / sqrt(pi)`.
+    /// AUTOBK normally supplies 0.05 Å⁻¹; Input mode does not resample when this changes.
     pub fn get_kstep(&self) -> Option<&f64> {
         self.kstep.as_ref()
     }
 }
 
+/// Real inverse EXAFS transform with an R-space filter.
+///
+/// The inverse restores conjugate symmetry and applies `sqrt(pi)/(kstep*nfft)`
+/// to an unnormalized inverse FFT. An all-pass filter with zero R-weight recovers
+/// the forward weighted/windowed signal, not unweighted chi. This real-output
+/// convention differs from Larch's complex analytic inverse.
+///
+/// Change settings through `Spectrum::set_ifft` to invalidate dependent caches.
+/// Direct field mutation requires an explicit `xftr` call.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct XrayFFTR {
+    /// Maximum returned q in Å⁻¹; default 10.0, bounded by the inverse array length.
     pub qmax_out: Option<f64>,
+    /// R-window family; default Kaiser–Bessel. `None` selects Hanning, not all-pass.
     pub window: Option<FTWindow>,
+    /// Low-side R-window parameter; default 1.0. Usually a width in Å; Kaiser–Bessel
+    /// also uses its numerical value for shape, and fractional Hanning uses fractions.
     pub dr: Option<f64>,
+    /// High-side R-window parameter; `None` uses `dr`. Its meaning depends on the family.
     pub dr2: Option<f64>,
+    /// Lower R-window boundary in Å; default 0.0. `None` uses the first supplied R.
     pub rmin: Option<f64>,
+    /// Upper R-window boundary in Å; default 20.0. `None` uses the last supplied R.
     pub rmax: Option<f64>,
+    /// Additional power of R applied before inversion; default 0.0.
+    /// Nonnegative fractional values are floored. This does not remove forward k-weighting.
     pub rweight: Option<f64>,
+    /// Inverse FFT length; default 2048. Changing it resizes the positive-frequency
+    /// coefficients and changes automatic q spacing; leave `kstep` automatic.
     pub nfft: Option<usize>,
+    /// Output q spacing in Å⁻¹. `None` infers `pi / (R_step * nfft)`.
+    /// An explicit positive value must agree with the supplied uniform R grid.
     pub kstep: Option<f64>,
+    /// Returned q grid in Å⁻¹, beginning at zero; `None` before calculation.
     pub q: Option<DVector<f64>>,
+    /// Full real inverse signal before the `qmax_out` display limit. It retains
+    /// forward weighting/windowing. Units are Å⁽ᵘ⁻ʷ⁾ for dimensionless input chi,
+    /// forward k-weight w and inverse R-weight u; `None` before calculation.
     pub chiq: Option<DVector<f64>>,
+    /// Full R-window multiplied by `R.powf(rweight)`, paired with all positive
+    /// forward bins, not just the displayed R range. It is dimensionless only when
+    /// `rweight=0`; `None` before calculation.
     pub rwin: Option<DVector<f64>>,
 }
 
@@ -345,10 +481,15 @@ impl Default for XrayFFTR {
 }
 
 impl XrayFFTR {
+    /// Create recommended inverse settings with automatic q spacing.
     pub fn new() -> XrayFFTR {
         Self::default()
     }
 
+    /// Resolve automatic settings from a nonempty r grid without calculating.
+    ///
+    /// Prefer the validated transform method for public input. This lower-level
+    /// helper indexes the supplied grid directly and can panic on an empty grid.
     pub fn fill_parameter(&mut self, r: &DVector<f64>) -> &mut Self {
         if self.rweight.is_none() {
             self.rweight = Some(0.0);
@@ -386,6 +527,12 @@ impl XrayFFTR {
         self
     }
 
+    /// Filter full complex forward coefficients and cache a real inverse signal.
+    ///
+    /// `r` must contain at least two uniformly increasing finite samples starting
+    /// at zero. Explicit `kstep` and `nfft` must match its spacing. Invalid grids,
+    /// negative/nonfinite parameters or `rmin >= rmax` return `FFTError`. The input
+    /// coefficients are borrowed unchanged; `rmax_out` never truncates this filter.
     pub fn xftr(
         &mut self,
         r: &DVector<f64>,
@@ -427,10 +574,15 @@ impl XrayFFTR {
         Ok(self)
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Returned q grid in Å⁻¹, beginning at zero; `None` before calculation.
     pub fn get_q(&self) -> Option<&DVector<f64>> {
         self.q.as_ref()
     }
 
+    /// Return a newly allocated real inverse signal limited to the returned q grid.
+    /// Forward k-weighting and windowing remain; returns `None` before calculation.
     pub fn get_chiq(&self) -> Option<DVector<f64>> {
         let len_q = self.q.as_ref()?.len();
         let chiq = self.chiq.as_ref()?;
@@ -440,27 +592,52 @@ impl XrayFFTR {
         ))
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Full R-window multiplied by `R.powf(rweight)`, paired with all positive
+    /// forward bins, not just the displayed R range. It is dimensionless only when
+    /// `rweight=0`; `None` before calculation.
     pub fn get_rwin(&self) -> Option<&DVector<f64>> {
         self.rwin.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Output q spacing in Å⁻¹. `None` infers `pi / (R_step * nfft)`.
+    /// An explicit positive value must agree with the supplied uniform R grid.
     pub fn get_kstep(&self) -> Option<&f64> {
         self.kstep.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Additional power of R applied before inversion; default 0.0.
+    /// Nonnegative fractional values are floored. This does not remove forward k-weighting.
     pub fn get_rweight(&self) -> Option<&f64> {
         self.rweight.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Inverse FFT length; default 2048. Changing it resizes the positive-frequency
+    /// coefficients and changes automatic q spacing; leave `kstep` automatic.
     pub fn get_nfft(&self) -> Option<&usize> {
         self.nfft.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// R-window family; default Kaiser–Bessel. `None` selects Hanning, not all-pass.
     pub fn get_window(&self) -> Option<&FTWindow> {
         self.window.as_ref()
     }
 }
 
+/// Transform an already weighted/windowed real signal with `kstep / sqrt(pi)`.
+///
+/// Uses an unnormalized negative-exponent FFT and returns all positive-frequency
+/// bins. The input is zero-padded or truncated to `nfft`. This low-level helper
+/// does not validate sizes or spacing; prefer `XrayFFTF::xftf` for checked input.
 pub fn xftf_fast_nalgebra(chi: &DVector<f64>, nfft: usize, kstep: f64) -> DynRealDft<f64> {
     let mut cchi = vec![0.0_f64; nfft];
     cchi[..chi.len().min(nfft)].copy_from_slice(&chi.as_slice()[..chi.len().min(nfft)]);
@@ -470,11 +647,18 @@ pub fn xftf_fast_nalgebra(chi: &DVector<f64>, nfft: usize, kstep: f64) -> DynRea
     freq
 }
 
+/// Invert already filtered positive-frequency coefficients into a real signal.
+///
+/// Restores conjugate symmetry, resizes to `nfft`, and multiplies the unnormalized
+/// inverse by `sqrt(pi)/(kstep*nfft)`. This helper does not validate settings; use
+/// `XrayFFTR::xftr` for checked input.
 pub fn xftr_fast_nalgebra(chir: &DynRealDft<f64>, nfft: usize, kstep: f64) -> DVector<f64> {
     DVector::from_vec(super::inverse_fft::inverse(chir, nfft, kstep))
 }
 
+/// Convenience extension for the unnormalized forward FFT with XAFS scaling.
 pub trait XFFT {
+    /// Transform already weighted/windowed input; see the corresponding fast helper.
     fn xftf_fast(&self, nfft: usize, kstep: f64) -> DynRealDft<f64>;
 }
 
@@ -484,7 +668,9 @@ impl XFFT for DVector<f64> {
     }
 }
 
+/// Convenience extension for a real inverse transform with XAFS scaling.
 pub trait XFFTReverse<T> {
+    /// Invert already filtered positive-frequency coefficients into a real array.
     fn xftr_fast(&self, nfft: usize, kstep: f64) -> T;
 }
 
@@ -494,11 +680,19 @@ impl XFFTReverse<DVector<f64>> for DynRealDft<f64> {
     }
 }
 
+/// Allocate component arrays from complex Fourier coefficients.
 pub trait FFTUtils<T> {
+    /// Allocate interleaved real and imaginary values `[re0, im0, re1, im1, ...]`.
+    /// Allocate the real component of every coefficient.
     fn realimg(&self) -> T;
+    /// Allocate the real component of every coefficient.
     fn re(&self) -> T;
+    /// Allocate the imaginary component of every coefficient.
     fn im(&self) -> T;
+    /// Allocate each coefficient magnitude `sqrt(re*re + im*im)`.
     fn norm(&self) -> T;
+    /// Allocate each coefficient magnitude `sqrt(re*re + im*im)`.
+    /// Allocate each squared magnitude `re*re + im*im`.
     fn norm_sqr(&self) -> T;
 }
 

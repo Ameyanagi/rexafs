@@ -48,10 +48,17 @@ const DEFAULT_LINEAR_CONDITION_LIMIT: f64 = 1.0e8;
 const DEFAULT_LINEAR_RESIDUAL_RATIO_LIMIT: f64 = 1.05;
 const AUTOBK_WORKSPACE_CACHE_CAPACITY: usize = 8;
 
+/// Solver backend for the spline coefficients.
+///
+/// LinearDirect with FixedPenalty is the recommended default; iterative solvers
+/// require a legacy clamp policy and optimize a different residual.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AUTOBKSolver {
+    /// Legacy iterative trust-region dog-leg; requires the `trust-region` feature.
     TrustRegionDogLeg,
+    /// Legacy Levenberg–Marquardt iteration with the dynamic clamp residual.
     LegacyLm,
+    /// Solve a linear system; recommended with the fixed endpoint objective.
     LinearDirect,
 }
 
@@ -65,6 +72,8 @@ fn default_autobk_fallback_solver() -> AUTOBKSolver {
     AUTOBKSolver::LegacyLm
 }
 
+/// Endpoint clamp convention. The fixed-penalty default and historical dynamic
+/// models have different objectives and should not be interpreted as solver-only choices.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum AUTOBKClampScalePolicy {
     /// One linear solve of mean(low-R residual²) + lambda * mean(active endpoint χ²).
@@ -72,6 +81,7 @@ pub enum AUTOBKClampScalePolicy {
     FixedPenalty,
     /// Legacy scale frozen from the initial spline, with ridge retries/fallback.
     Fixed,
+    /// Legacy direct solve, refresh the residual-dependent scale, then solve again.
     TwoPass,
 }
 
@@ -90,15 +100,33 @@ fn autobk_workspace_cache() -> &'static Mutex<VecDeque<AutobkLinearWorkspace>> {
     CACHE.get_or_init(|| Mutex::new(VecDeque::new()))
 }
 
-/// Enum for background subtraction methods
-/// AUTOBK: M. Newville, P. Livins, Y. Yacoby, J. J. Rehr, and E. A. Stern. Near-edge x-ray-absorption fine structure of Pb: A comparison of theory and experiment. Phys. Rev. B, 47:14126–14131, Jun 1993. doi:10.1103/PhysRevB.47.14126.
-/// ILPBkg: To be implemented
+/// Background algorithm and its settings/results.
+///
+/// AUTOBK implements spline-based low-R suppression as introduced by
+/// [Newville et al. (1993)](https://doi.org/10.1103/PhysRevB.47.14126).
+/// ILPBkg is an unimplemented placeholder; None explicitly skips calculation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum BackgroundMethod {
+    /// Implemented spline-based background removal.
     AUTOBK(AUTOBK),
+    /// Retained placeholder; background calculation returns `NotImplemented`.
     ILPBkg(ILPBkg),
+    /// Explicitly skip background calculation; no k or chi arrays are produced.
     None,
+}
+
+impl From<AUTOBK> for BackgroundMethod {
+    fn from(parameters: AUTOBK) -> Self {
+        Self::AUTOBK(parameters)
+    }
+}
+
+// Allow direct settings while preserving existing optional-enum setter calls.
+impl From<AUTOBK> for Option<BackgroundMethod> {
+    fn from(parameters: AUTOBK) -> Self {
+        Some(parameters.into())
+    }
 }
 
 impl Default for BackgroundMethod {
@@ -108,18 +136,28 @@ impl Default for BackgroundMethod {
 }
 
 impl BackgroundMethod {
+    /// Select AUTOBK with recommended settings.
     pub fn new() -> BackgroundMethod {
         BackgroundMethod::AUTOBK(AUTOBK::new())
     }
 
+    /// Select AUTOBK with recommended settings.
     pub fn new_autobk() -> BackgroundMethod {
         BackgroundMethod::AUTOBK(AUTOBK::new())
     }
 
+    /// Create the ILPBkg placeholder; background calculation returns `NotImplemented`.
     pub fn new_ilpbkg() -> BackgroundMethod {
         BackgroundMethod::ILPBkg(ILPBkg::new())
     }
 
+    /// Fit a smooth background from borrowed energy (eV) and absorption arrays.
+    ///
+    /// Calculates missing normalization, mutates the supplied normalization settings
+    /// and replaces this object's cached outputs. Inputs must be finite, matched
+    /// and increasing with enough post-edge points. Invalid cutoffs, spline geometry
+    /// or failed solves return `BackgroundError`; unavailable algorithms return
+    /// `NotImplemented`. Input arrays themselves are unchanged.
     pub fn calc_background(
         &mut self,
         energy: &DVector<f64>,
@@ -138,6 +176,10 @@ impl BackgroundMethod {
         }
     }
 
+    /// Return a newly allocated copy without recalculating.
+    ///
+    /// Uniform output wave-number grid in Å⁻¹ starting at zero.
+    /// `None` before calculation.
     pub fn get_k(&self) -> Option<DVector<f64>> {
         match self {
             BackgroundMethod::AUTOBK(autobk) => autobk.get_k().cloned(),
@@ -145,6 +187,10 @@ impl BackgroundMethod {
         }
     }
 
+    /// Return a newly allocated copy without recalculating.
+    ///
+    /// Dimensionless unweighted EXAFS on `k`, without objective-only standard
+    /// subtraction. `None` before calculation.
     pub fn get_chi(&self) -> Option<DVector<f64>> {
         match self {
             BackgroundMethod::AUTOBK(autobk) => autobk.get_chi().cloned(),
@@ -153,72 +199,122 @@ impl BackgroundMethod {
     }
 }
 
-/// Struct for AUTOBK
+/// Cubic-spline absorption background removal by suppressing low-R EXAFS.
 ///
-/// Parameters and the output are stored in this struct
+/// Start with `new()` and the recommended `rbkg=1.0` Å, `kstep=0.05` Å⁻¹,
+/// LinearDirect solver and FixedPenalty endpoint strength 0.001. The original
+/// AUTOBK method is described by
+/// [Newville et al. (1993)](https://doi.org/10.1103/PhysRevB.47.14126).
+/// FixedPenalty is a rexafs modification: one linear least-squares solve of
+/// mean squared low-R residual plus a fixed weighted endpoint penalty.
+///
+/// `calc_background` computes missing normalization and stores new background,
+/// k and chi arrays. Directly editing fields does not invalidate existing
+/// spectrum results; use `Spectrum::set_background_method` for managed updates.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AUTOBK {
-    /// Edge energy in eV (this is used for starting point of k). If None, it will be determined.
+    /// Background energy origin in eV. `None` uses the normalization E0. An explicit
+    /// value changes conversion to k without replacing a valid normalization E0.
     pub ek0: Option<f64>,
-    /// Rbkg parameter: distance (in Ang) for chi(R) above which the signal is ignored. Default = 1.
+    /// Low-R background cutoff in Å; recommended default 1.0, finite and positive.
+    /// Larger values increase spline flexibility and may remove structural signal.
+    /// This is an algorithmic cutoff, not an estimate of a bond length.
     pub rbkg: Option<f64>,
-    /// Number of knots in spline. If None, it will be determined.
+    /// Requested number of fitted cubic-spline coefficients. `None` uses
+    /// `1 + floor(2*rbkg*(kmax-kmin)/pi)`; the final count is bounded to 5–128.
+    /// Changing it overrides flexibility but does not independently change the low-R cutoff.
     pub nknots: Option<i32>,
-    /// Minimum k value. Default = 0.
+    /// Lower spline/window boundary in Å⁻¹; default 0.0. The returned k grid still
+    /// starts at zero; endpoint penalties use that output grid, not this boundary.
     pub kmin: Option<f64>,
-    /// Maximum k value. Default = full data range.
+    /// Upper spline/window boundary in Å⁻¹. `None` uses the available post-edge range;
+    /// an explicit value is capped at that range. Must exceed `kmin`.
     pub kmax: Option<f64>,
-    /// k step size to use for FFT. Default = 0.05.
+    /// Uniform output k spacing in Å⁻¹; default 0.05, finite and positive.
+    /// This sets the physical R grid of the internal objective; its amplitude
+    /// reference remains fixed at `0.05 / sqrt(pi)`.
     pub kstep: Option<f64>,
-    /// Number of energy end-points for clamp. Default = 3.
+    /// Number of output k samples penalized at each enabled end; default 3.
+    /// FixedPenalty uses up to the available point count and includes the last sample.
+    /// Zero disables endpoint rows; FixedPenalty rejects negative counts.
     pub nclamp: Option<i32>,
-    /// Weight of low-energy clamp. Default = 0.
+    /// Low-k endpoint weight; default 0 (disabled). FixedPenalty uses its absolute
+    /// value and squares that weight in the objective, so doubling it quadruples
+    /// that end's contribution.
     pub clamp_lo: Option<i32>,
-    /// Weight of high-energy clamp. Default = 1.
+    /// High-k endpoint weight; default 1. FixedPenalty uses its absolute value;
+    /// zero disables that end. The returned chi is not multiplied by this weight.
     pub clamp_hi: Option<i32>,
-    /// Array size to use for FFT. Default = 2048.
+    /// Internal Fourier length; default 2048. Use enough points for the complete
+    /// output grid; the low-level FFT pads short arrays and truncates longer arrays.
     pub nfft: Option<i32>,
-    /// Optional chi array for standard chi(k).
+    /// Objective-only standard, interpolated from `k_std` onto the output k grid.
+    /// FixedPenalty expects dimensionless chi. Legacy policies subtract the
+    /// standard before edge-step division, so they require values in original
+    /// mu units. It is never subtracted from the returned chi.
     pub chi_std: Option<DVector<f64>>,
-    /// Optional k array for standard chi(k).
+    /// Wave-number grid of `chi_std`, in Å⁻¹; both arrays must be supplied together.
+    /// Use finite matching arrays with strictly increasing k for interpolation.
     pub k_std: Option<DVector<f64>>,
-    /// k weight for FFT. Default = 1.
+    /// Integer k-weight used in the background objective; default 1.
+    /// It is separate from public forward-transform weighting and does not multiply
+    /// the returned unweighted chi. Larger weights emphasize high-k data and noise.
     pub kweight: Option<i32>,
-    /// FFT window function name. Default = Hanning.
+    /// Window family for the background objective; default Hanning.
+    /// Changing the family alters the objective and can affect the fitted background.
     pub window: FTWindow,
-    /// FFT window window parameter. Default = 0.1.
+    /// Internal window parameter; default 0.1, applied at both ends.
+    /// Usually a taper width in Å⁻¹; Kaiser–Bessel also uses its value for shape,
+    /// Gaussian uses it for width, and fractional Hanning uses fractional geometry.
     pub dk: Option<f64>,
-    /// Solver backend for AUTOBK spline optimization.
+    /// Spline solver; recommended default `LinearDirect`. FixedPenalty requires
+    /// this solver and returns failures as errors instead of falling back.
     pub solver: Option<AUTOBKSolver>,
     /// Clamp model. FixedPenalty requires LinearDirect; Fixed and TwoPass select legacy behavior.
     #[serde(default = "legacy_clamp_policy")]
+    /// Endpoint objective; recommended default `FixedPenalty`. `Fixed` and
+    /// `TwoPass` retain legacy scale models. Older serialized settings lacking this
+    /// field restore `Fixed` for historical compatibility.
     pub clamp_scale_policy: Option<AUTOBKClampScalePolicy>,
-    /// FixedPenalty strength (LinearDirect only). Default = 0.001; zero disables
-    /// endpoint penalties. Must be finite and nonnegative. No dynamic rescaling.
+    /// FixedPenalty endpoint strength; recommended default 0.001. Must be finite
+    /// and nonnegative; zero removes endpoint rows. This is an empirical rexafs
+    /// choice, not a physical constant or the dynamic clamp model in stock Larch.
     pub clamp_lambda: Option<f64>,
-    /// Ridge magnitude for legacy Fixed/TwoPass direct solves; unused by FixedPenalty.
+    /// Legacy Fixed/TwoPass ridge magnitude; default 1e-4.
+    /// Unused by FixedPenalty, which never adds a ridge to force a solution.
     pub linear_regularization: Option<f64>,
-    /// Condition proxy threshold used to reject unstable direct solves.
+    /// Direct-solver condition threshold; default 1e8. FixedPenalty checks the
+    /// ratio of largest to smallest singular value after column scaling and requires
+    /// a finite limit at least 1, including when reusing a cached factorization.
     pub linear_condition_limit: Option<f64>,
-    /// Maximum solved/base residual norm ratio for legacy Fixed/TwoPass direct solves.
+    /// Legacy Fixed/TwoPass acceptance limit for solved/base residual norm;
+    /// default 1.05. Unused by FixedPenalty.
     pub linear_residual_ratio_limit: Option<f64>,
-    /// Legacy Fixed/TwoPass only: if true, failures fall back to `linear_fallback_solver`.
-    /// FixedPenalty always returns a failed solve as an error.
+    /// Allow legacy direct-solve failures to use `linear_fallback_solver`; default
+    /// true. Despite the historical name, the chosen fallback may be dog-leg.
+    /// Unused by FixedPenalty, which returns failed solves as errors.
     pub linear_fallback_to_lm: Option<bool>,
-    /// Nonlinear solver used when the direct linear solver is rejected. Default = TrustRegionDogLeg
-    /// when the `trust-region` feature is enabled, LegacyLm otherwise.
+    /// Legacy nonlinear fallback. New defaults use TrustRegionDogLeg with the
+    /// `trust-region` feature and LegacyLm otherwise. When this field is explicitly
+    /// `None`, legacy fill behavior selects LegacyLm unless fallback is disabled.
+    /// Unused by FixedPenalty.
     pub linear_fallback_solver: Option<AUTOBKSolver>,
-    /// If true, cache direct-solver design matrices for compatible workloads.
-    /// FixedPenalty also reuses the column scaling and SVD factorization.
+    /// Reuse compatible direct-solver geometry; default true. FixedPenalty also
+    /// caches column scaling and SVD factors, but always solves a new right-hand side
+    /// for each spectrum. This does not reuse another spectrum's fitted answer.
     pub linear_workspace_cache: Option<bool>,
-    /// Background of mu(E)
+    /// Smooth background on the original energy grid, in input mu units.
+    /// Outside the fitted interval this equals the original mu; `None` before calculation.
     pub bkg: Option<DVector<f64>>,
-    /// Edge normalized mu(E) - bkg
+    /// Dimensionless `(mu - bkg) / edge_step` on the original energy grid.
+    /// It is zero outside the fitted interval; `None` before calculation.
     pub chie: Option<DVector<f64>>,
-    /// k grid
+    /// Uniform output wave-number grid in Å⁻¹ starting at zero.
+    /// `None` before calculation.
     pub k: Option<DVector<f64>>,
-    /// chi(k)
+    /// Dimensionless unweighted EXAFS on `k`, without objective-only standard
+    /// subtraction. `None` before calculation.
     pub chi: Option<DVector<f64>>,
 }
 
@@ -257,13 +353,14 @@ impl Default for AUTOBK {
     }
 }
 
-/// Implementation of AUTOBK
 impl AUTOBK {
+    /// Create recommended background settings; equivalent to `default()`.
     pub fn new() -> AUTOBK {
         AUTOBK::default()
     }
 
-    /// Fill in default values for parameters that are not set
+    /// Resolve unset scalar defaults without fitting a background.
+    /// Data-dependent E0, maximum k and coefficient count are resolved later.
     pub fn fill_parameter(&mut self) -> Result<(), BackgroundError> {
         if self.rbkg.is_none() {
             self.rbkg = Some(1.0);
@@ -601,6 +698,13 @@ impl AUTOBK {
     ///
     /// TODO: Add example
     ///
+    /// Fit a smooth background from borrowed energy (eV) and absorption arrays.
+    ///
+    /// Calculates missing normalization, mutates the supplied normalization settings
+    /// and replaces this object's cached outputs. Inputs must be finite, matched
+    /// and increasing with enough post-edge points. Invalid cutoffs, spline geometry
+    /// or failed solves return `BackgroundError`; unavailable algorithms return
+    /// `NotImplemented`. Input arrays themselves are unchanged.
     pub fn calc_background(
         &mut self,
         energy: &DVector<f64>,
@@ -922,82 +1026,169 @@ impl AUTOBK {
         Ok(self)
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Background energy origin in eV. `None` uses the normalization E0. An explicit
+    /// value changes conversion to k without replacing a valid normalization E0.
     pub fn get_ek0(&self) -> Option<&f64> {
         self.ek0.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Low-R background cutoff in Å; recommended default 1.0, finite and positive.
+    /// Larger values increase spline flexibility and may remove structural signal.
+    /// This is an algorithmic cutoff, not an estimate of a bond length.
     pub fn get_rbkg(&self) -> Option<&f64> {
         self.rbkg.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Requested number of fitted cubic-spline coefficients. `None` uses
+    /// `1 + floor(2*rbkg*(kmax-kmin)/pi)`; the final count is bounded to 5–128.
+    /// Changing it overrides flexibility but does not independently change the low-R cutoff.
     pub fn get_nknots(&self) -> Option<&i32> {
         self.nknots.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Lower spline/window boundary in Å⁻¹; default 0.0. The returned k grid still
+    /// starts at zero; endpoint penalties use that output grid, not this boundary.
     pub fn get_kmin(&self) -> Option<&f64> {
         self.kmin.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Upper spline/window boundary in Å⁻¹. `None` uses the available post-edge range;
+    /// an explicit value is capped at that range. Must exceed `kmin`.
     pub fn get_kmax(&self) -> Option<&f64> {
         self.kmax.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Uniform output k spacing in Å⁻¹; default 0.05, finite and positive.
+    /// This sets the physical R grid of the internal objective; its amplitude
+    /// reference remains fixed at `0.05 / sqrt(pi)`.
     pub fn get_kstep(&self) -> Option<&f64> {
         self.kstep.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Number of output k samples penalized at each enabled end; default 3.
+    /// FixedPenalty uses up to the available point count and includes the last sample.
+    /// Zero disables endpoint rows; FixedPenalty rejects negative counts.
     pub fn get_nclamp(&self) -> Option<&i32> {
         self.nclamp.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Low-k endpoint weight; default 0 (disabled). FixedPenalty uses its absolute
+    /// value and squares that weight in the objective, so doubling it quadruples
+    /// that end's contribution.
     pub fn get_clamp_lo(&self) -> Option<&i32> {
         self.clamp_lo.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// High-k endpoint weight; default 1. FixedPenalty uses its absolute value;
+    /// zero disables that end. The returned chi is not multiplied by this weight.
     pub fn get_clamp_hi(&self) -> Option<&i32> {
         self.clamp_hi.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Internal Fourier length; default 2048. Use enough points for the complete
+    /// output grid; the low-level FFT pads short arrays and truncates longer arrays.
     pub fn get_nfft(&self) -> Option<&i32> {
         self.nfft.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Objective-only standard, interpolated from `k_std` onto the output k grid.
+    /// FixedPenalty expects dimensionless chi. Legacy policies subtract the
+    /// standard before edge-step division, so they require values in original
+    /// mu units. It is never subtracted from the returned chi.
     pub fn get_chi_std(&self) -> Option<&DVector<f64>> {
         self.chi_std.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Wave-number grid of `chi_std`, in Å⁻¹; both arrays must be supplied together.
+    /// Use finite matching arrays with strictly increasing k for interpolation.
     pub fn get_k_std(&self) -> Option<&DVector<f64>> {
         self.k_std.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Integer k-weight used in the background objective; default 1.
+    /// It is separate from public forward-transform weighting and does not multiply
+    /// the returned unweighted chi. Larger weights emphasize high-k data and noise.
     pub fn get_kweight(&self) -> Option<&i32> {
         self.kweight.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Window family for the background objective; default Hanning.
+    /// Changing the family alters the objective and can affect the fitted background.
     pub fn get_window(&self) -> FTWindow {
         self.window
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Internal window parameter; default 0.1, applied at both ends.
+    /// Usually a taper width in Å⁻¹; Kaiser–Bessel also uses its value for shape,
+    /// Gaussian uses it for width, and fractional Hanning uses fractional geometry.
     pub fn get_dk(&self) -> Option<&f64> {
         self.dk.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Smooth background on the original energy grid, in input mu units.
+    /// Outside the fitted interval this equals the original mu; `None` before calculation.
     pub fn get_bkg(&self) -> Option<&DVector<f64>> {
         self.bkg.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Dimensionless `(mu - bkg) / edge_step` on the original energy grid.
+    /// It is zero outside the fitted interval; `None` before calculation.
     pub fn get_chie(&self) -> Option<&DVector<f64>> {
         self.chie.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Uniform output wave-number grid in Å⁻¹ starting at zero.
+    /// `None` before calculation.
     pub fn get_k(&self) -> Option<&DVector<f64>> {
         self.k.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Dimensionless unweighted EXAFS on `k`, without objective-only standard
+    /// subtraction. `None` before calculation.
     pub fn get_chi(&self) -> Option<&DVector<f64>> {
         self.chi.as_ref()
     }
 
+    /// Allocate chi multiplied by the background k-weight; no window is applied.
+    /// Units are Å⁻ʷ for dimensionless chi and k-weight w; `None` before calculation.
     pub fn get_chi_kweighted(&self) -> Option<DVector<f64>> {
         let kweight = self.kweight?;
         let k = self.k.clone()?;
@@ -1010,6 +1201,8 @@ impl AUTOBK {
         }
     }
 
+    /// Calculate a dimensionless background window on the stored k grid.
+    /// No k-weight is included. Returns `None` without a grid or if window creation fails.
     pub fn get_ftwin(&self) -> Option<DVector<f64>> {
         let k = self.k.as_ref()?;
 
@@ -1023,7 +1216,7 @@ impl AUTOBK {
 
 /// Evaluation of the spline used in AUTOBK
 ///
-/// In puts and outputs are in DVector struct from nalgebra crate
+/// Inputs and outputs use nalgebra vectors.
 ///
 /// # Arguments
 ///
@@ -1666,13 +1859,14 @@ fn dvector_arange(start: f64, stop: f64, step: f64) -> DVector<f64> {
     DVector::from_vec(values)
 }
 
-/// TODO: Implement ILPBkg
+/// Unimplemented background-removal placeholder.
+/// Selecting it returns `BackgroundError::NotImplemented` during calculation.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ILPBkg {}
 
-/// TODO: Implement ILPBkg
 impl ILPBkg {
+    /// Create an empty placeholder, not an implemented background method.
     pub fn new() -> ILPBkg {
         ILPBkg::default()
     }

@@ -7,6 +7,7 @@ use super::expression;
 use super::types::{FitVariable, FitVariables, PathParamSpec};
 
 impl FitVariables {
+    /// Independently varying names in sorted map order; expressions are excluded.
     pub fn varying_names(&self) -> Vec<String> {
         self.vars
             .iter()
@@ -15,6 +16,7 @@ impl FitVariables {
             .collect()
     }
 
+    /// Copy values in the requested name order; absent names contribute 0.0.
     pub fn parameter_vector(&self, names: &[String]) -> DVector<f64> {
         DVector::from_iterator(
             names.len(),
@@ -24,6 +26,9 @@ impl FitVariables {
         )
     }
 
+    /// Update existing named values after clamping to their stored bounds.
+    /// Missing names are ignored; unequal name/value lengths return an error.
+    /// This does not update init_value or evaluate expression-derived variables.
     pub fn apply_parameter_vector(
         &mut self,
         names: &[String],
@@ -46,6 +51,9 @@ impl FitVariables {
         Ok(())
     }
 
+    /// Resolve all expression dependencies into an owned name/value map.
+    /// Does not modify stored variables. Unknown names, cyclic dependencies,
+    /// malformed expressions, and nonfinite expression results return errors.
     pub fn resolve_values(&self) -> Result<BTreeMap<String, f64>, FittingError> {
         let mut resolved: HashMap<String, f64> = HashMap::new();
         let mut visiting: HashSet<String> = HashSet::new();
@@ -97,6 +105,9 @@ impl FitVariables {
     }
 }
 
+/// Resolve a fixed or expression-defined path parameter to a finite number.
+/// Path-local symbols take precedence over globals. The historical `_default`
+/// argument is unused; missing/invalid symbols error rather than using a fallback.
 pub fn resolve_path_param(
     spec: &PathParamSpec,
     _default: f64,
@@ -130,6 +141,8 @@ pub fn resolve_path_param(
     })
 }
 
+/// Evaluate a mathematical expression, resolving named values with the callback.
+/// See [`super::expression::eval_expression_with`] for errors and interpretation.
 pub fn eval_expression_with<F>(expr: &str, resolver: F) -> Result<f64, FittingError>
 where
     F: FnMut(&str) -> Result<f64, FittingError>,
@@ -137,10 +150,14 @@ where
     expression::eval_expression_with(expr, resolver)
 }
 
+/// Extract distinct variable names, or an empty vector if parsing fails.
+/// Prefer [`try_extract_symbols`] when malformed user expressions must be reported.
 pub fn extract_symbols(expr: &str) -> Vec<String> {
     expression::extract_symbols(expr)
 }
 
+/// Extract distinct names in first-use order, excluding path-local reff and degen.
+/// Returns a parse error instead of silently accepting malformed expressions.
 pub fn try_extract_symbols(expr: &str) -> Result<Vec<String>, FittingError> {
     expression::try_extract_symbols(expr)
 }

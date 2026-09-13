@@ -38,5 +38,6 @@ __pycache__/
 /website/playwright-report/
 /website/test-results/
 /website/public/api/rust/
+/website/public/api/rust-next/
 /website/.venv/
 /website/.cache/

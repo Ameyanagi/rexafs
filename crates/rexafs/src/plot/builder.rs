@@ -13,6 +13,12 @@ pub(crate) enum PlotSource<'a> {
     Fit(&'a mut FeffFitResult),
 }
 
+/// Configure and render panels while borrowing a spectrum, group or fit result.
+///
+/// Select a panel before its options; invalid combinations are reported when
+/// rendering. Default output is 800 × 600 pixels at 300 DPI, with a legend and
+/// no title. Missing spectrum stages may be computed during rendering; processing
+/// and rendering failures are returned as [`PlotError`].
 pub struct XASPlotBuilder<'a> {
     source: PlotSource<'a>,
     panels: Vec<PanelSpec>,
@@ -152,26 +158,40 @@ impl<'a> XASPlotBuilder<'a> {
         plot
     }
 
+    /// Append an energy panel, preferring flattened absorption.
+    /// For spectra, attempts normalization when at least eight points are available;
+    /// if flattening is unavailable, displays working mu with the corresponding label.
     pub fn mu(mut self) -> Self {
         self.panels.push(PanelSpec::new(PanelKind::Mu));
         self
     }
 
+    /// Append normalized absorption against energy in eV.
+    /// Computes missing normalization; a failed prerequisite returns a rendering error.
     pub fn norm(mut self) -> Self {
         self.panels.push(PanelSpec::new(PanelKind::Norm));
         self
     }
 
+    /// Append weighted EXAFS against wave number in Å⁻¹.
+    /// Computes a missing background. Default display weight is 2 for spectra/groups
+    /// and the stored fit weight for fit results; use [`Self::kweight`] to override it.
     pub fn k(mut self) -> Self {
         self.panels.push(PanelSpec::new(PanelKind::K));
         self
     }
 
+    /// Append Fourier components against distance in Å, initially magnitude only.
+    /// Computes a missing forward transform; the default displayed interval is 0–6 Å.
+    /// No scattering phase correction is applied.
     pub fn r(mut self) -> Self {
         self.panels.push(PanelSpec::new(PanelKind::R));
         self
     }
 
+    /// Set the most recently selected k panel's display weight.
+    /// This multiplies the plotted chi by k raised to this weight without changing
+    /// the stored processing settings. Calling it before `.k()` records an error.
     pub fn kweight(mut self, weight: f64) -> Self {
         self.apply_panel_option("kweight", |panel| {
             if panel.kind != PanelKind::K {
@@ -185,6 +205,8 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Set the latest R panel to magnitude, real and imaginary traces when true,
+    /// or magnitude alone when false. Requires an R panel.
     pub fn components(mut self, show: bool) -> Self {
         self.apply_panel_option("components", |panel| {
             if panel.kind != PanelKind::R {
@@ -206,6 +228,8 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Include magnitude in the latest R panel. Magnitude is the initial default;
+    /// use this explicitly to retain it together with `.real()` or `.imag()`.
     pub fn mag(mut self) -> Self {
         self.apply_panel_option("mag", |panel| {
             if panel.kind != PanelKind::R {
@@ -219,6 +243,8 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Include the real component in the latest R panel. Hides the implicit
+    /// magnitude unless `.mag()` or `.components(...)` selected it explicitly.
     pub fn real(mut self) -> Self {
         self.apply_panel_option("real", |panel| {
             if panel.kind != PanelKind::R {
@@ -235,6 +261,8 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Include the imaginary component in the latest R panel. Hides the implicit
+    /// magnitude unless `.mag()` or `.components(...)` selected it explicitly.
     pub fn imag(mut self) -> Self {
         self.apply_panel_option("imag", |panel| {
             if panel.kind != PanelKind::R {
@@ -251,6 +279,8 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Show fitted pre/post-edge curves on the latest normalization panel.
+    /// Default: false. Requires `.norm()` before this option.
     pub fn edges(mut self, show: bool) -> Self {
         self.apply_panel_option("edges", |panel| {
             if panel.kind != PanelKind::Norm {
@@ -264,6 +294,8 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Show both the window curve and its range markers on the latest k panel.
+    /// Default: false. Equivalent to setting `window_fn` and `window_box` together.
     pub fn window(mut self, show: bool) -> Self {
         self.apply_panel_option("window", |panel| {
             if panel.kind != PanelKind::K {
@@ -278,6 +310,8 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Show the window curve on the latest k panel. Default: false.
+    /// This is a display overlay, not a change to transform parameters.
     pub fn window_fn(mut self, show: bool) -> Self {
         self.apply_panel_option("window_fn", |panel| {
             if panel.kind != PanelKind::K {
@@ -291,6 +325,9 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Show lower/upper range markers on the latest k panel, or on an R panel
+    /// for a fit result. Default: false. Despite the name, these are two lines rather
+    /// than a rectangle; other panel/source combinations return a rendering error.
     pub fn window_box(mut self, show: bool) -> Self {
         let fit_source = self.is_fit_source();
         self.apply_panel_option("window_box", |panel| match panel.kind {
@@ -312,6 +349,9 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Vertically offset successive selected group spectra by `offset` in plotted
+    /// y units. Default: overlaid. Applies to the group's panels and requires at least
+    /// one selected panel; spectrum/fit sources are unsupported.
     pub fn stacked(mut self, offset: f64) -> Self {
         if !self.require_panel_for_option("stacked") {
             return self;
@@ -326,6 +366,8 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Copy the zero-based group indices to display across its panels.
+    /// Default: all members. Requires a group source and at least one panel.
     pub fn select(mut self, indices: &[usize]) -> Self {
         if !self.require_panel_for_option("select") {
             return self;
@@ -340,6 +382,10 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Select one zero-based dataset from a stored fit result for its panels.
+    /// Default: the first dataset, or legacy top-level arrays if no datasets exist.
+    /// Requires a fit source and at least one panel; an unavailable index produces
+    /// a rendering error.
     pub fn dataset(mut self, index: usize) -> Self {
         if !self.require_panel_for_option("dataset") {
             return self;
@@ -354,6 +400,9 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Show individual fit-path contributions on k panels. Default: false.
+    /// Requires a fit source with k as its latest panel. R magnitude panels already
+    /// include stored path magnitudes independently of this option.
     pub fn paths(mut self, show: bool) -> Self {
         if !self.require_panel_for_option("paths") {
             return self;
@@ -374,26 +423,33 @@ impl<'a> XASPlotBuilder<'a> {
         self
     }
 
+    /// Copy a title for the output figure. Default: no title.
     pub fn title(mut self, title: &str) -> Self {
         self.config.title = Some(title.to_string());
         self
     }
 
+    /// Set output width in pixels, clamped to at least 1. Default: 800.
     pub fn width(mut self, width: u32) -> Self {
         self.config.width = width.max(1);
         self
     }
 
+    /// Set output height in pixels, clamped to at least 1. Default: 600.
     pub fn height(mut self, height: u32) -> Self {
         self.config.height = height.max(1);
         self
     }
 
+    /// Show or hide legends. Default: visible.
     pub fn legend(mut self, show: bool) -> Self {
         self.config.show_legend = show;
         self
     }
 
+    /// Render the selected panels and write a PNG file, overwriting the destination.
+    /// Multiple panels are combined in one figure. Processing, configuration, rendering
+    /// and file-write failures return [`PlotError`].
     pub fn save_png<P: AsRef<Path>>(mut self, path: P) -> Result<(), PlotError> {
         let mut plots = self.build_plots()?;
         if plots.len() == 1 {
@@ -412,6 +468,9 @@ impl<'a> XASPlotBuilder<'a> {
         Ok(())
     }
 
+    /// Render exactly one panel into an owned ruviz plot for further customization.
+    /// No selected panel or multiple panels returns an error; use [`Self::save_png`]
+    /// or [`Self::to_svg_panels`] for multiple panels.
     pub fn render_plot(mut self) -> Result<Plot, PlotError> {
         let mut plots = self.build_plots()?;
         if plots.len() != 1 {
@@ -420,11 +479,16 @@ impl<'a> XASPlotBuilder<'a> {
         Ok(self.apply_single_config(plots.remove(0)))
     }
 
+    /// Render exactly one panel into an owned SVG string without writing a file.
+    /// Uses the same prerequisites and single-panel restriction as [`Self::render_plot`].
     pub fn to_svg(self) -> Result<String, PlotError> {
         let plot = self.render_plot()?;
         Ok(plot.render_to_svg()?)
     }
 
+    /// Render one owned SVG string per selected panel, preserving panel order.
+    /// Each SVG uses the configured width/height; the combined-figure title is not
+    /// inserted. No file is written and no combined multi-panel SVG is produced.
     pub fn to_svg_panels(mut self) -> Result<Vec<String>, PlotError> {
         let plots = self.build_plots()?;
         let mut svg_panels = Vec::with_capacity(plots.len());

@@ -8,11 +8,15 @@ compiled to WebAssembly. TypeScript declarations are included.
 
 ## Install
 
+We recommend [Bun](https://bun.sh/docs/installation) to manage the dependency:
+
 ```bash
-npm install rexafs
+bun add rexafs
 ```
 
-Use Node **22+**, or a browser with WebAssembly support. The
+Run the library in Node **22+**, or a browser with WebAssembly support. Bun can
+install the package for either runtime; `npm install rexafs` and
+`pnpm add rexafs` are also available. The
 [npm package](https://www.npmjs.com/package/rexafs) includes the Wasm binaries;
 Rust is not required to use it. Imports are ECMAScript modules.
 
@@ -117,8 +121,11 @@ when interpreting structural fits and uncertainties.
 
 ## Completion and hover help
 
-Every exported configuration field, constructor and spectrum method has typed
-signatures and JSDoc help. Options interfaces (`AUTOBKOptions`, `XrayFFTFOptions`,
+The declarations in this checkout include typed signatures and explanatory JSDoc
+for every exported configuration field, constructor and spectrum method. The
+published 0.2.4 package has less extensive editor help; the online stable reference
+includes reviewed explanations while preserving its released signatures.
+Options interfaces (`AUTOBKOptions`, `XrayFFTFOptions`,
 etc.) and string unions (`FTWindow`, `FFTGrid`, `AUTOBKSolver`,
 `AUTOBKClampScalePolicy`) are exported from all entry points. Editors can suggest
 field names and valid string choices, show units/defaults on hover and flag typos.
@@ -131,6 +138,14 @@ or `undefined` before the corresponding stage runs. Narrow that optional result
 before indexing it. Stages return the same spectrum and throw on failure.
 Changing parameters invalidates dependent stages; see the
 [shared API guide](../doc/api.md) for details.
+
+The forward transform multiplies the unnormalized, negative-exponent discrete
+Fourier transform by `kstep / Math.sqrt(Math.PI)`. It applies no additional
+`1 / nfft` or window-area correction. With dimensionless chi and k weight `w`,
+`chir_real()`, `chir_imag()` and `chir_mag()` have units Å⁻⁽ʷ⁺¹⁾. Use
+`kwin_k()` with `kwin()` because the window grid can differ from the background
+grid when `grid` is `"Larch"`. The [processing theory](../doc/processing-theory.md)
+explains this convention and its implementation sources.
 
 ## Build from source
 

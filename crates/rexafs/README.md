@@ -24,15 +24,35 @@ assert_eq!(spectrum.k().unwrap().len(), spectrum.chi().unwrap().len());
 `fft()` calculates missing normalization and background results using the selected
 methods and defaults. `normalize()`, `calc_background()`, `fft()` and `ifft()`
 also support explicit chaining. The same stage names are used in Python and
-TypeScript. The standalone `process()` facade has been removed.
+TypeScript. There is no separate `process()` facade.
 
 Configure methods with `NormalizationMethod`, `BackgroundMethod`, `PrePostEdge`,
-`AUTOBK`, `XrayFFTF` and `XrayFFTR` (the inverse-transform settings). Setters invalidate dependent results. Alternative methods
+`AUTOBK`, `XrayFFTF` and `XrayFFTR` (the inverse-transform settings). In the current
+checkout, pass settings directly; this simpler form is an addition after 0.2.4:
+
+```rust,no_run
+use rexafs::{AUTOBK, PrePostEdge, Spectrum};
+# let energy = [1.0, 2.0, 3.0];
+# let mu = [0.0, 0.5, 1.0];
+let mut spectrum = Spectrum::from_arrays(&energy, &mu)?;
+let mut background = AUTOBK::new();
+background.rbkg = Some(1.2); // Low-R background cutoff, in angstroms.
+spectrum.set_normalization_method(PrePostEdge::new())?;
+spectrum.set_background_method(background)?;
+# Ok::<(), rexafs::Error>(())
+```
+
+Rust setters move configurations into the spectrum; clone a reusable setting
+explicitly. Version 0.2.4 uses `Some(BackgroundMethod::AUTOBK(background))` and
+`Some(NormalizationMethod::PrePostEdge(parameters))`. Those forms and `None` for
+default settings remain supported. Setters invalidate dependent results. Alternative methods
 remain selectable; unimplemented methods return explicit errors. Inputs to
 `from_arrays` must be finite, equal-length arrays with strictly increasing energy
-in eV. Result getters expose the spectrum's intermediate and final arrays.
+in eV. `k()`, `chi()` and `chir()` borrow stored buffers; the other public array
+getters return owned copies. A getter returns `None` when its result is unavailable
+and never computes it implicitly.
 
-See the [API guide](../../doc/api.md) for examples, units and ownership.
+See the [API guide](https://github.com/Ameyanagi/rexafs/blob/main/doc/api.md) for examples, units and ownership.
 `Spectrum` and `Group` remain aliases for `XASSpectrum` and `XASGroup`.
 
 ## What the calculations mean
@@ -43,9 +63,9 @@ oscillations, chi(k). The Fourier transform weights and windows those oscillatio
 to display them against R; its peaks are not automatically phase-corrected bond
 lengths. An inverse transform filters selected R contributions back into q space.
 
-The [processing theory guide](../../doc/processing-theory.md) explains the
+The [processing theory guide](https://rexafs.com/docs/science/processing/) explains the
 equations, symbols, units, assumptions and implementation choices, with scientific
-references. Use the [fitting-statistics guide](../../doc/fitting-statistics.md)
+references. Use the [fitting-statistics guide](https://rexafs.com/docs/science/fitting-statistics/)
 when interpreting structural fits and uncertainties.
 
 ## Features and scope
@@ -117,7 +137,7 @@ Strict FEFF fit parity is regression-tested against these regenerated Cu/ZnSe fi
 - `.window_fn(...)` is supported only on `k()` panels.
 - `.window_box(...)` is supported on `k()` panels, and on `r()` panels for `FeffFitResult` plots; it renders two range markers (min/max), not a rectangle.
 - `FeffFitResult` now includes `varying_names`, `covariance`, and `correlation` (matrix order follows `varying_names`).
-- Multi-panel output is PNG-only in this phase.
+- `save_png()` combines multiple panels. `to_svg()` and `render_plot()` require a single panel; `to_svg_panels()` returns a separate SVG string for each panel.
 
 ### XASSpectrum examples
 

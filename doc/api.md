@@ -71,10 +71,10 @@ TypeScript options constructors, direct settings setters and `XrayFFTR` are
 additions after 0.2.4; see the binding guides for source installation until released.
 
 ```rust,ignore
-use rexafs::{AUTOBK, BackgroundMethod, XrayFFTF};
+use rexafs::{AUTOBK, XrayFFTF};
 let mut background = AUTOBK::new();
 background.rbkg = Some(1.2);
-spectrum.set_background_method(Some(BackgroundMethod::AUTOBK(background)))?;
+spectrum.set_background_method(background)?;
 let mut transform = XrayFFTF::new();
 transform.kweight = Some(3.0);
 spectrum.set_fft(transform).fft()?;
@@ -101,15 +101,20 @@ try {
 ```
 
 Normalization uses `set_normalization_method` with
-`PrePostEdge(...)` directly (or `NormalizationMethod.PrePostEdge(parameters)`) in the bindings, or
-`Some(NormalizationMethod::PrePostEdge(parameters))` in Rust. Use `set_e0(value)`
+`PrePostEdge(...)` directly in the bindings and `PrePostEdge::new()` or an edited
+`PrePostEdge` value in Rust. Rust also accepts method enums, optional method enums,
+and `None` to select default settings; older callers remain supported. Direct Rust
+settings setters are an addition after 0.2.4. In 0.2.4, pass
+`Some(NormalizationMethod::PrePostEdge(parameters))` or
+`Some(BackgroundMethod::AUTOBK(parameters))`. Use `set_e0(value)`
 for an explicit edge energy. Unset scalar parameters use Rust defaults. Window
 and solver fields in the bindings use Rust variant names such as `Hanning`,
 `KaiserBessel`, and `LinearDirect`. The bindings expose scalar configuration;
 advanced AUTOBK standard-spectrum arrays remain available in Rust.
 
-Setters copy configuration objects. Editing a configuration afterward takes
-effect when it is passed to the setter again. Changing normalization invalidates
+Python and TypeScript setters copy configuration objects. Editing one afterward
+takes effect when it is passed to the setter again. Rust setters take ownership;
+use `settings.clone()` when you need to retain a reusable configuration. Changing normalization invalidates
 background and both transforms; changing background invalidates both transforms;
 changing forward-transform parameters invalidates forward/reverse results.
 `set_ifft(XrayFFTR(...))` invalidates only inverse results.

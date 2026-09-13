@@ -6,12 +6,15 @@ audience: user
 
 ## Install
 
-Use Node 22 or newer:
+We recommend [Bun](https://bun.sh/docs/installation) to install the library:
 
 ```sh
-npm install rexafs@0.2.4
+bun add rexafs@0.2.4
 ```
 
+Run it in Node 22 or newer, or in a browser with WebAssembly support. Bun manages
+the dependency for either runtime. If you already use another package manager,
+`npm install rexafs@0.2.4` or `pnpm add rexafs@0.2.4` installs the same package.
 The package includes TypeScript declarations. Use an ESM project and a TypeScript
 module-resolution mode appropriate to your runtime, such as `NodeNext` for Node
 or `Bundler` for a browser bundler. See the
@@ -91,3 +94,25 @@ Wasm; use the recommended fixed-penalty/direct-solver combination. The option-ob
 constructors and inverse settings in [Next API](/docs/reference/) are not in npm 0.2.4.
 
 See [processing theory](/docs/science/processing/) for weighting, units and citations.
+
+## Read results and editor help
+
+The generated reference explains each configuration field's purpose, units,
+default and effect. It also states which settings are automatic when assigned
+`undefined`. These explanations come from the checked declarations; stable pages
+retain the 0.2.4 signatures. The installed 0.2.4 package has shorter editor help,
+while the source checkout includes the expanded JSDoc used by the site.
+
+`chi()` returns the unweighted, dimensionless background residual on `k()`.
+The `chir_real()`, `chir_imag()` and `chir_mag()` getters return the transform on
+`r()`, with units Å⁻⁽ʷ⁺¹⁾ for forward k weight `w`. The code multiplies an
+unnormalized forward discrete Fourier transform by `kstep / Math.sqrt(Math.PI)`;
+it adds no `1 / nfft` or window-area correction. The
+[Fourier explanation](/docs/science/processing/#4-transform-from-k-to-r) defines
+the sign, scaling and assumptions.
+
+To plot the forward window, pair `kwin()` with `kwin_k()`. The `"Larch"` grid can
+resample and extend the window domain while the background `k()` and `chi()` stay
+unchanged. Getter calls do not run processing, and their copied arrays remain
+valid after the spectrum is freed. After changing a stage's settings, run that
+stage again before reading its results.

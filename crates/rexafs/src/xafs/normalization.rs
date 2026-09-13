@@ -9,28 +9,59 @@ use super::errors::{DataError, NormalizationError};
 use super::mathutils::{self, MathUtils};
 use super::xafsutils;
 
-/// trait for Normalization
-/// it implements some methods required for normalization of XAFS data
+/// Common interface for absorption normalization and its cached results.
+///
+/// Energy is in eV; normalized and flattened outputs are dimensionless.
+/// Setters on these standalone objects do not clear cached arrays; recalculate
+/// after changing settings, or use Spectrum setters to manage invalidation.
 pub trait Normalization {
+    /// Normalize absorption using the selected method and refresh cached outputs.
+    /// Energy is in eV. Use matching finite arrays with sufficient fit points;
+    /// method-specific failures are returned as `NormalizationError`.
     fn normalize(
         &mut self,
         energy: &DVector<f64>,
         mu: &DVector<f64>,
     ) -> Result<&mut Self, NormalizationError>;
 
+    /// Borrow dimensionless edge-step-normalized absorption, or `None` before calculation.
     fn get_norm(&self) -> Option<&DVector<f64>>;
+    /// Borrow the flattened normalized absorption, or `None` before calculation.
     fn get_flat(&self) -> Option<&DVector<f64>>;
+    /// Read the absorption jump in input mu units, or `None` while automatic/unresolved.
     fn get_edge_step(&self) -> Option<f64>;
+    /// Read edge energy in eV, or `None` while automatic/unresolved.
     fn get_e0(&self) -> Option<f64>;
+    /// Set edge energy in eV or `None` for automatic detection; recalculate results afterward.
     fn set_e0(&mut self, e0: Option<f64>) -> &mut Self;
+    /// Set the jump in mu units or `None` for estimation; recalculate results afterward.
     fn set_edge_step(&mut self, edge_step: Option<f64>) -> &mut Self;
 }
 
-/// Enum for normalization method
+/// Absorption normalization algorithm and its settings/results.
+///
+/// Pre/post-edge normalization is implemented; MBACK is a retained placeholder
+/// and returns `NotImplemented`. `new()` uses automatic ranges while `default()`
+/// uses `PrePostEdge::default()` with fixed initial ranges.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum NormalizationMethod {
+    /// Implemented pre/post-edge subtraction and edge-step normalization.
     PrePostEdge(PrePostEdge),
+    /// Placeholder that returns `NotImplemented` when normalization is requested.
     MBack(MBack),
+}
+
+impl From<PrePostEdge> for NormalizationMethod {
+    fn from(parameters: PrePostEdge) -> Self {
+        Self::PrePostEdge(parameters)
+    }
+}
+
+// Allow direct settings while preserving existing optional-enum setter calls.
+impl From<PrePostEdge> for Option<NormalizationMethod> {
+    fn from(parameters: PrePostEdge) -> Self {
+        Some(parameters.into())
+    }
 }
 
 impl Default for NormalizationMethod {
@@ -40,18 +71,28 @@ impl Default for NormalizationMethod {
 }
 
 impl NormalizationMethod {
+    /// Select pre/post-edge normalization with automatic settings.
     pub fn new() -> NormalizationMethod {
         NormalizationMethod::PrePostEdge(PrePostEdge::new())
     }
 
+    /// Select pre/post-edge normalization with automatic settings.
     pub fn new_prepostedge() -> NormalizationMethod {
         NormalizationMethod::PrePostEdge(PrePostEdge::new())
     }
 
+    /// Create the MBACK placeholder; attempting normalization returns
+    /// `NormalizationError::NotImplemented`. Use pre/post-edge normalization.
     pub fn new_mback() -> NormalizationMethod {
         NormalizationMethod::MBack(MBack::new())
     }
 
+    /// Resolve the selected algorithm's automatic settings without fitting.
+    ///
+    /// For PrePostEdge, use matching finite energy/mu arrays with at least two
+    /// nondecreasing energy samples in eV; this resolves ranges and low-level E0
+    /// automatically. Spectrum validates an explicit E0 more strictly before
+    /// normalizing. The unimplemented MBACK variant performs no work or validation.
     pub fn fill_parameter(
         &mut self,
         energy: &DVector<f64>,
@@ -69,6 +110,11 @@ impl NormalizationMethod {
         Ok(self)
     }
 
+    /// Run the selected normalization method and replace its cached results.
+    ///
+    /// Input energy is in eV and mu has a consistent absorption scale. Invalid
+    /// data, insufficient fit points or failed fits return `NormalizationError`;
+    /// MBACK always returns `NotImplemented`. Borrowed inputs are unchanged.
     pub fn normalize(
         &mut self,
         energy: &DVector<f64>,
@@ -86,6 +132,9 @@ impl NormalizationMethod {
         Ok(self)
     }
 
+    /// Read the stored edge energy in eV without detecting or validating it.
+    /// `None` means no value is stored. Automatic detection belongs to PrePostEdge
+    /// calculation; MBACK never calculates an E0.
     pub fn get_e0(&self) -> Option<f64> {
         match self {
             NormalizationMethod::PrePostEdge(pre_post_edge) => pre_post_edge.get_e0(),
@@ -93,6 +142,9 @@ impl NormalizationMethod {
         }
     }
 
+    /// Read the stored absorption jump in input mu units without calculating it.
+    /// `None` means no value is stored. PrePostEdge estimates a missing jump during
+    /// normalization; MBACK never calculates one.
     pub fn get_edge_step(&self) -> Option<f64> {
         match self {
             NormalizationMethod::PrePostEdge(pre_post_edge) => pre_post_edge.get_edge_step(),
@@ -100,6 +152,9 @@ impl NormalizationMethod {
         }
     }
 
+    /// Borrow the stored dimensionless flattened absorption without calculating.
+    /// PrePostEdge removes its fitted post-edge trend above E0. Returns `None`
+    /// when no array is stored; MBACK never populates this output.
     pub fn get_flat(&self) -> Option<&DVector<f64>> {
         match self {
             NormalizationMethod::PrePostEdge(pre_post_edge) => pre_post_edge.get_flat(),
@@ -107,6 +162,9 @@ impl NormalizationMethod {
         }
     }
 
+    /// Borrow the stored dimensionless normalized absorption without calculating.
+    /// PrePostEdge produces `(mu - pre_edge) / edge_step`. Returns `None` when no
+    /// array is stored; MBACK never populates this output.
     pub fn get_norm(&self) -> Option<&DVector<f64>> {
         match self {
             NormalizationMethod::PrePostEdge(pre_post_edge) => pre_post_edge.get_norm(),
@@ -114,6 +172,10 @@ impl NormalizationMethod {
         }
     }
 
+    /// Store edge energy in eV, or `None` to request PrePostEdge detection.
+    /// An explicit value used through Spectrum must be finite and strictly inside
+    /// the input energy range. This standalone setter does not validate, recalculate
+    /// or clear arrays; setting a value does not implement the MBACK placeholder.
     pub fn set_e0(&mut self, e0: Option<f64>) -> &mut Self {
         match self {
             NormalizationMethod::PrePostEdge(pre_post_edge) => {
@@ -127,6 +189,9 @@ impl NormalizationMethod {
         self
     }
 
+    /// Store the absorption jump in mu units, or `None` for PrePostEdge estimation.
+    /// This standalone setter does not validate, recalculate or clear stored arrays.
+    /// The MBACK placeholder only stores the value and remains unimplemented.
     pub fn set_edge_step(&mut self, edge_step: Option<f64>) -> &mut Self {
         match self {
             NormalizationMethod::PrePostEdge(pre_post_edge) => {
@@ -141,23 +206,67 @@ impl NormalizationMethod {
     }
 }
 
-/// PrePostEdge normalization method
+/// Pre-edge subtraction, edge-step normalization and post-edge flattening.
+///
+/// Use `new()` for data-dependent fit ranges and polynomial degree, as in the
+/// Python/TypeScript constructors. `default()` instead uses fixed offsets
+/// −200/−30/150/2000 eV and degree 2. Endpoints are offsets from E0, not absolute
+/// energies. Results are cached in this object after `normalize`.
+///
+/// The method fits a line to `mu * E.powi(n_victoreen)`, removes that background,
+/// and fits a post-edge polynomial to estimate the edge step. See
+/// [Newville, Fundamentals of XAFS](https://docs.xrayabsorption.org/tutorials/XAFS_Fundamentals.pdf).
+/// The precise automatic ranges and flattening convention are rexafs choices.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PrePostEdge {
+    /// Lower pre-edge fit offset from E0 in eV. `new()` leaves this automatic;
+    /// `default()` uses −200. Automatic selection follows the available pre-edge data.
     pub pre_edge_start: Option<f64>,
+    /// Upper pre-edge fit offset from E0 in eV. `new()` is automatic; `default()`
+    /// uses −30. Choose a range below edge structure with enough points for a line.
     pub pre_edge_end: Option<f64>,
+    /// Lower post-edge fit offset from E0 in eV. `new()` is automatic; `default()`
+    /// uses 150. Automatic selection depends on the resolved upper endpoint.
     pub norm_start: Option<f64>,
+    /// Upper post-edge fit offset from E0 in eV. `new()` uses the available range;
+    /// `default()` uses 2000. Fit intervals are evaluated on available samples.
     pub norm_end: Option<f64>,
+    /// Degree of the post-edge polynomial. Automatic degrees are 0, 1, or 2 for
+    /// spans below 50 eV, below 350 eV, or at least 350 eV; explicit values are
+    /// clamped to 0–5. `new()` is automatic and `default()` uses 2.
     pub norm_polyorder: Option<i32>,
+    /// Exponent v in the pre-edge model `(a + b*E) * E.powi(-v)`.
+    /// The line is fitted to `mu * E.powi(v)`; automatic v is 0 (ordinary line).
     pub n_victoreen: Option<i32>,
+    /// Absorption edge energy in eV; `None` requests automatic detection.
+    /// When using Spectrum, an explicit E0 must be finite and strictly inside the
+    /// energy range or normalization returns `E0OutOfRange`. The lower-level
+    /// `PrePostEdge::fill_parameter` instead replaces a nonfinite value or one
+    /// outside the first through penultimate input energies with a derivative estimate.
     pub e0: Option<f64>,
+    /// Absorption jump in the same units as mu. `None` uses post-edge minus
+    /// pre-edge at the energy sample nearest E0. A finite result is floored at
+    /// 1e-12; inspect nonpositive or tiny jumps rather than trusting that floor.
     pub edge_step: Option<f64>,
+    /// Fitted pre-edge background on the energy grid, in input mu units.
+    /// `None` until normalization runs.
     pub pre_edge: Option<DVector<f64>>,
+    /// Pre-edge background plus the post-edge polynomial, in input mu units.
+    /// `None` until normalization runs.
     pub post_edge: Option<DVector<f64>>,
+    /// Dimensionless `(mu - pre_edge) / edge_step` on the energy grid.
+    /// `None` until normalization runs.
     pub norm: Option<DVector<f64>>,
+    /// Dimensionless normalized absorption with the post-edge trend removed above
+    /// the sample nearest E0. Values below that sample equal `norm`. This is a
+    /// separate display output and is not substituted into AUTOBK.
     pub flat: Option<DVector<f64>>,
+    /// Fitted line coefficients `[a, b]` for `mu * E.powi(n_victoreen)`.
+    /// Coefficient units depend on the exponent and the use of E in eV.
     pub pre_coefficients: Option<Vec<f64>>,
+    /// Post-edge polynomial coefficients in increasing powers of absolute E in eV.
+    /// Their weighted sum has input mu units; they are not powers of E − E0.
     pub norm_coefficients: Option<Vec<f64>>,
 }
 
@@ -185,6 +294,10 @@ impl Default for PrePostEdge {
 impl PrePostEdge {
     const MAX_NORM_POLYORDER: i32 = 5;
 
+    /// Create automatic normalization settings.
+    ///
+    /// Unlike `default()`, every configurable field starts as `None`; the next
+    /// calculation resolves fit ranges, degree, edge energy and edge step from data.
     pub fn new() -> PrePostEdge {
         PrePostEdge {
             pre_edge_start: None,
@@ -204,6 +317,10 @@ impl PrePostEdge {
         }
     }
 
+    /// Resolve automatic settings from equal-length finite energy/mu arrays.
+    ///
+    /// Requires at least two samples and nondecreasing energy in eV. This mutates
+    /// settings but does not fit the backgrounds or refresh result arrays.
     pub fn fill_parameter(
         &mut self,
         energy: &DVector<f64>,
@@ -321,42 +438,83 @@ impl PrePostEdge {
         Ok(())
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Lower pre-edge fit offset from E0 in eV. `new()` leaves this automatic;
+    /// `default()` uses −200. Automatic selection follows the available pre-edge data.
     pub fn get_pre_edge_start(&self) -> Option<f64> {
         self.pre_edge_start
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Upper pre-edge fit offset from E0 in eV. `new()` is automatic; `default()`
+    /// uses −30. Choose a range below edge structure with enough points for a line.
     pub fn get_pre_edge_end(&self) -> Option<f64> {
         self.pre_edge_end
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Lower post-edge fit offset from E0 in eV. `new()` is automatic; `default()`
+    /// uses 150. Automatic selection depends on the resolved upper endpoint.
     pub fn get_norm_start(&self) -> Option<f64> {
         self.norm_start
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Upper post-edge fit offset from E0 in eV. `new()` uses the available range;
+    /// `default()` uses 2000. Fit intervals are evaluated on available samples.
     pub fn get_norm_end(&self) -> Option<f64> {
         self.norm_end
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Degree of the post-edge polynomial. Automatic degrees are 0, 1, or 2 for
+    /// spans below 50 eV, below 350 eV, or at least 350 eV; explicit values are
+    /// clamped to 0–5. `new()` is automatic and `default()` uses 2.
     pub fn get_norm_polyorder(&self) -> Option<i32> {
         self.norm_polyorder
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Exponent v in the pre-edge model `(a + b*E) * E.powi(-v)`.
+    /// The line is fitted to `mu * E.powi(v)`; automatic v is 0 (ordinary line).
     pub fn get_n_victoreen(&self) -> Option<i32> {
         self.n_victoreen
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Fitted pre-edge background on the energy grid, in input mu units.
+    /// `None` until normalization runs.
     pub fn get_pre_edge(&self) -> Option<&DVector<f64>> {
         self.pre_edge.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Pre-edge background plus the post-edge polynomial, in input mu units.
+    /// `None` until normalization runs.
     pub fn get_post_edge(&self) -> Option<&DVector<f64>> {
         self.post_edge.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Post-edge polynomial coefficients in increasing powers of absolute E in eV.
+    /// Their weighted sum has input mu units; they are not powers of E − E0.
     pub fn get_norm_coefficients(&self) -> Option<&Vec<f64>> {
         self.norm_coefficients.as_ref()
     }
 
+    /// Read the stored value without recalculating.
+    ///
+    /// Fitted line coefficients `[a, b]` for `mu * E.powi(n_victoreen)`.
+    /// Coefficient units depend on the exponent and the use of E in eV.
     pub fn get_pre_coefficients(&self) -> Option<&Vec<f64>> {
         self.pre_coefficients.as_ref()
     }
@@ -531,23 +689,42 @@ impl Normalization for PrePostEdge {
     }
 }
 
+/// Unimplemented MBACK normalization placeholder.
+///
+/// Construction succeeds, but `normalize` always returns
+/// `NormalizationError::NotImplemented`; the presence of this type does not
+/// mean the MBACK algorithm is available.
+///
+/// The retained name refers to normalization against tabulated absorption in
+/// [Weng, Waldo and Penner-Hahn (2005)](https://doi.org/10.1107/S0909049504034193);
+/// rexafs does not currently implement that paper's algorithm.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 #[derive(Default)]
 pub struct MBack {
+    /// Stored edge-energy placeholder in eV; default `None`.
+    /// MBACK does not estimate, validate or update this value.
     pub e0: Option<f64>,
+    /// Stored absorption-jump placeholder in input mu units; default `None`.
+    /// MBACK does not estimate, floor or update this value.
     pub edge_step: Option<f64>,
+    /// Reserved normalized-output storage; default `None`.
+    /// MBACK never calculates or populates this array.
     pub norm: Option<DVector<f64>>,
+    /// Reserved flattened-output storage; default `None`.
+    /// MBACK never calculates or populates this array.
     pub flat: Option<DVector<f64>>,
 }
 
 impl MBack {
+    /// Create an empty placeholder; no MBACK calculation is implemented.
     pub fn new() -> MBack {
         MBack {
             ..Default::default()
         }
     }
 
+    /// No-op retained for compatibility; no MBACK defaults or results are calculated.
     pub fn fill_parameter(&mut self) {
         // MBack parameter filling is not implemented yet.
         // Keep this as a no-op to avoid panics in callers that probe this method.

@@ -1,3 +1,6 @@
+//! Legacy BSON serialization for [`XASGroupFile`].
+//! Writes replace files directly and do not create desktop project backups.
+
 use std::error::Error;
 use std::fs::File;
 use std::io::Write;
@@ -15,9 +18,12 @@ use crate::xafs::io::xasdatatype::{XASDataType, XASGroupFile};
 use crate::xafs::xasgroup::XASGroup;
 use crate::xafs::xasspectrum::XASSpectrum;
 
+/// Read and write owned group envelopes as BSON; this is not the `.rxs` format.
 pub trait XASBson {
+    /// Replace the envelope after successful BSON decoding. I/O or decoding errors leave it unchanged.
     fn read_bson(&mut self, filename: &str) -> Result<&mut Self, IOError>;
 
+    /// Update version/type metadata and overwrite the destination with BSON. Returns I/O or serialization errors.
     fn write_bson(&mut self, filename: &str) -> Result<&mut Self, IOError>;
 }
 

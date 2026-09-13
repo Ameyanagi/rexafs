@@ -29,7 +29,9 @@ TypeScript throws, and Rust returns `Result`.
 
 Before computation, result getters can be unavailable: `None` in Python,
 `undefined` in TypeScript, or `None` in a Rust `Option`. Python/TypeScript results
-are independent array copies; Rust normally borrows the stored arrays.
+are independent array copies. Rust `k()` and `chi()` borrow slices, and `chir()`
+borrows the complete complex FFT representation; its other array getters return
+owned vectors. No getter runs a calculation implicitly.
 
 ## Settings and dependent results
 
@@ -37,8 +39,9 @@ are independent array copies; Rust normally borrows the stored arrays.
 - Changing normalization invalidates background and both transforms.
 - Changing background invalidates both transforms.
 - Changing forward-transform settings invalidates forward and inverse results.
-- Settings objects are copied when assigned; editing the original object alone
-  does not change the spectrum.
+- Python and TypeScript settings are copied when assigned; editing the original
+  object alone does not change the spectrum.
+- Rust setters take ownership. Use `.clone()` to keep a reusable configuration.
 
 Prefer setters to direct Rust field edits; legacy field edits require explicit
 invalidation. Existing project defaults and automatic settings should be recorded

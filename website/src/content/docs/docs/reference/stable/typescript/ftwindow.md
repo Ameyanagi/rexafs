@@ -1,16 +1,22 @@
 ---
 title: "TypeScript · FTWindow"
-description: "FTWindow declarations and JSDoc."
+description: "FTWindow declarations, defaults and API explanations."
 audience: user
 pagefind: true
 ---
 
-
-**Stable 0.2.4.** These signatures match the released npm package.
+**Stable 0.2.4.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/js-rexafs/types.d.ts)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
+
+Supported Fourier-window families. Hanning and FHanning use cosine tapers; Parzen, Welch,
+Gaussian, Sine and KaiserBessel use their named shapes. Forward and inverse settings default
+to KaiserBessel; AUTOBK defaults to Hanning. Parameters dk/dr have shape-dependent meaning,
+and KaiserBessel also uses them as shape parameters. See the [window
+implementation](https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/xafsutils.rs)
+for the exact formulas.
 
 ```typescript
 export type FTWindow = "Hanning" | "Parzen" | "Welch" | "Gaussian" | "Sine" | "KaiserBessel" | "FHanning";

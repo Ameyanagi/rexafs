@@ -1,22 +1,22 @@
 ---
 title: "TypeScript · BackgroundMethod"
-description: "BackgroundMethod declarations and JSDoc."
+description: "BackgroundMethod declarations, defaults and API explanations."
 audience: user
 pagefind: false
 ---
-
 
 **Next API · unreleased.** These signatures describe the source checkout, not npm rexafs@0.2.4.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-## constructor
+Select the background-removal algorithm and hold an owned copy of its settings.
 
-```typescript
-private constructor();
-```
+Use AUTOBK(settings) for a configured spline background or new_autobk() for the recommended
+defaults. The ILPBkg factory is only a placeholder; it does not implement that algorithm.
+Copy this method into Spectrum.set_background_method(), then free() the wrapper when no
+longer needed.
 
 ## free
 
@@ -24,7 +24,8 @@ private constructor();
 free(): void;
 ```
 
-Release native memory. Do not use the object afterwards.
+Release this object's Wasm allocation. Do not call methods, read fields or free it again
+afterwards. Arrays and settings already copied elsewhere remain valid.
 
 ## AUTOBK
 
@@ -32,7 +33,9 @@ Release native memory. Do not use the object afterwards.
 static AUTOBK(parameters: AUTOBK): BackgroundMethod;
 ```
 
-Copy AUTOBK settings into a background method.
+Copy the supplied AUTOBK configuration into a new owned algorithm wrapper. The input
+settings are not consumed. Assign the wrapper to Spectrum.set_background_method(), then
+free() it when no longer needed; the spectrum retains its own copy.
 
 ## new_autobk
 
@@ -40,7 +43,9 @@ Copy AUTOBK settings into a background method.
 static new_autobk(): BackgroundMethod;
 ```
 
-Create the recommended default AUTOBK method.
+Create a new owned AUTOBK wrapper with the recommended LinearDirect/FixedPenalty defaults,
+rbkg=1 angstrom and clamp_lambda=0.001. It does not process any spectrum. Assign it to
+Spectrum.set_background_method() and free() the wrapper when finished.
 
 ## new_ilpbkg
 
@@ -48,4 +53,6 @@ Create the recommended default AUTOBK method.
 static new_ilpbkg(): BackgroundMethod;
 ```
 
-Create an unimplemented ILPBkg placeholder; processing raises an error.
+Create an owned ILPBkg placeholder for API compatibility. This background method is not
+implemented and calc_background() throws if selected. Use new_autobk() for supported
+background removal, and free() any placeholder you create.

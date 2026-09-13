@@ -57,7 +57,7 @@ results and remaining platform qualification in [the release runbook](releasing.
 
 ## Embedded FEFF engines — 7 September 2026
 
-The next desktop release uses [ReFEFF 0.3.0](https://github.com/Ameyanagi/refeff/releases/tag/v0.3.0)
+The September 7 dependency update selected [ReFEFF 0.3.0](https://github.com/Ameyanagi/refeff/releases/tag/v0.3.0)
 (component crates 0.2.0) and [feff10 0.2.3](https://github.com/Ameyanagi/feff10-rs/releases/tag/v0.2.3),
 verified against crates.io and upstream releases. Both use workspace dependency
 requirements, and Cargo.lock records the exact registry artifacts. FEFF10 is the
@@ -76,9 +76,10 @@ nonzero amplitudes. FEFF10 is forced into worker mode in this check, exercising
 re-execution before app initialization. The desktop regression suite additionally
 compares Cu/Ni foil fits from identical inputs with both engines.
 
-The unpublished Windows preview retains ReFEFF only: its GUI uses MSVC, while the
-upstream FEFF10 archive targets MinGW. Windows/Linux desktop downloads remain
-unpublished pending their existing platform qualification. Rust consumers can opt
+The Windows preview retains ReFEFF only: its GUI uses MSVC, while the
+upstream FEFF10 archive targets MinGW. Windows/Linux preview publication began
+with 0.1.3; the [release runbook](releasing.md#published-releases) links the
+qualification records and installation guidance. Rust consumers can opt
 into either backend; Python and Wasm packages keep their existing analysis APIs.
 
 For a single-engine comparison, select that source in **Paths**, choose the desired

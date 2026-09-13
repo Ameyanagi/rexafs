@@ -58,6 +58,13 @@ fn path_param_expr(spec: &PathParamSpec) -> Option<&str> {
     }
 }
 
+/// Builder for one spectrum or a joint fit of several prepared χ(k) datasets.
+///
+/// Start with data(), add_path(), physically supported krange()/rrange(), and
+/// explicit Param values. Configuration methods consume and return the builder;
+/// fit() borrows it and fits copies, so it can be reused. Default settings are
+/// documented by FeffFitDataset and FeffFitOptions. Unspecified noise means
+/// a residual divisor of 1.0 rather than automatic estimation.
 #[derive(Debug, Clone)]
 pub struct FeffFit {
     datasets: Vec<FeffFitDataset>,
@@ -82,64 +89,75 @@ impl Default for FeffFit {
 }
 
 impl FeffFit {
+    /// Create a value with the defaults documented on this type.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Copy the prepared k grid (Å⁻¹) and dimensionless χ(k) arrays into the dataset.
     pub fn data(mut self, k: &DVector<f64>, chi: &DVector<f64>) -> Self {
         self.default_dataset = self.default_dataset.data(k, chi);
         self.has_default = true;
         self
     }
 
+    /// Set the scalar k-space residual divisor; absent settings otherwise use 1.0.
     pub fn epsilon_k(mut self, value: f64) -> Self {
         self.default_dataset = self.default_dataset.epsilon_k(value);
         self.has_default = true;
         self
     }
 
+    /// Append an owned theoretical path to the dataset.
     pub fn add_path(mut self, path: FeffPathModel) -> Self {
         self.default_dataset = self.default_dataset.add_path(path);
         self.has_default = true;
         self
     }
 
+    /// Set the fit interval in k (Å⁻¹); ensure it is supported by measured data.
     pub fn krange(mut self, kmin: f64, kmax: f64) -> Self {
         self.default_dataset = self.default_dataset.krange(kmin, kmax);
         self.has_default = true;
         self
     }
 
+    /// Set the fit interval in R (Å); these Fourier positions are not phase-corrected distances.
     pub fn rrange(mut self, rmin: f64, rmax: f64) -> Self {
         self.default_dataset = self.default_dataset.rrange(rmin, rmax);
         self.has_default = true;
         self
     }
 
+    /// Set the nonnegative real exponent w in k^w; used when kweights is empty.
     pub fn kweight(mut self, value: f64) -> Self {
         self.default_dataset = self.default_dataset.kweight(value);
         self.has_default = true;
         self
     }
 
+    /// Set the low-k window parameter; Kaiser–Bessel also uses it to control shape.
     pub fn dk(mut self, value: f64) -> Self {
         self.default_dataset = self.default_dataset.dk(value);
         self.has_default = true;
         self
     }
 
+    /// Set the k-window family; K-space residuals do not apply this window.
     pub fn window(mut self, value: FTWindow) -> Self {
         self.default_dataset = self.default_dataset.window(value);
         self.has_default = true;
         self
     }
 
+    /// Set the R-window family for R- and Q-space fits.
     pub fn rwindow(mut self, value: FTWindow) -> Self {
         self.default_dataset = self.default_dataset.rwindow(value);
         self.has_default = true;
         self
     }
 
+    /// Set the low-R window parameter (Å for Hanning); default zero gives a hard edge.
     pub fn dr(mut self, value: f64) -> Self {
         self.default_dataset = self.default_dataset.dr(value);
         self.has_default = true;
@@ -168,11 +186,13 @@ impl FeffFit {
         self
     }
 
+    /// Append an owned dataset for a joint fit; equal variable names are shared.
     pub fn add_dataset(mut self, dataset: FeffFitDataset) -> Self {
         self.datasets.push(dataset);
         self
     }
 
+    /// Set or create a varying parameter and initial value; removes an expression constraint.
     pub fn set_init(mut self, name: impl Into<String>, value: f64) -> Self {
         let name = name.into();
         let entry = self
@@ -189,6 +209,7 @@ impl FeffFit {
         self
     }
 
+    /// Apply set_init to each name/value pair, replacing any expression constraints.
     pub fn set_inits<I, S>(mut self, inits: I) -> Self
     where
         I: IntoIterator<Item = (S, f64)>,
@@ -200,6 +221,7 @@ impl FeffFit {
         self
     }
 
+    /// Set inclusive parameter bounds; creates a varying value initialized to zero if absent.
     pub fn set_bounds(mut self, name: impl Into<String>, min: f64, max: f64) -> Self {
         let name = name.into();
         let entry = self
@@ -212,6 +234,7 @@ impl FeffFit {
         self
     }
 
+    /// Set a constant parameter value, disable fitting, and remove any expression constraint.
     pub fn fix(mut self, name: impl Into<String>, value: f64) -> Self {
         let name = name.into();
         let entry = self
@@ -226,6 +249,7 @@ impl FeffFit {
         self
     }
 
+    /// Define a parameter expression and disable independent variation; units are not checked.
     pub fn var_expr(mut self, name: impl Into<String>, expr: impl Into<String>) -> Self {
         let name = name.into();
         let expr = expr.into();
@@ -239,6 +263,7 @@ impl FeffFit {
         self
     }
 
+    /// Insert or replace the supplied parameter specifications by name.
     pub fn params<I>(mut self, params: I) -> Self
     where
         I: IntoIterator<Item = Param>,
@@ -251,21 +276,25 @@ impl FeffFit {
         self
     }
 
+    /// Store a parser-flavor preference. This currently does not change already-loaded paths or fit().
     pub fn set_flavor(mut self, flavor: FeffFlavor) -> Self {
         self.flavor = flavor;
         self
     }
 
+    /// Select the numerical solver; the trust-region option requires its Cargo feature.
     pub fn solver_method(mut self, solver_method: FeffFitSolverMethod) -> Self {
         self.options.solver_method = solver_method;
         self
     }
 
+    /// Select Jacobian assembly for supported solvers; does not change the objective.
     pub fn jacobian_mode(mut self, jacobian_mode: FeffFitJacobianMode) -> Self {
         self.options.jacobian_mode = jacobian_mode;
         self
     }
 
+    /// Replace the numerical solver settings used by this fit.
     pub fn fit_options(mut self, options: FeffFitOptions) -> Self {
         self.options = options;
         self
@@ -375,6 +404,13 @@ impl FeffFit {
         Ok(())
     }
 
+    /// Fit owned copies of the datasets and variables without modifying the builder.
+    ///
+    /// Missing expression symbols are created as varying parameters with typed
+    /// starting values: amplitude/degeneracy 1, σ² 0.003 Å², and other roles 0.
+    /// Inspect returned warnings; explicitly named parameters avoid inferred starts.
+    /// Errors report invalid inputs/expressions/paths or unavailable solvers. An Ok
+    /// result can still report nonconvergence in solver_report.
     pub fn fit(&self) -> Result<FeffFitResult, FittingError> {
         let _ = self.flavor;
         let mut datasets = self.datasets.clone();

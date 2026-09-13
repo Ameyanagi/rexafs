@@ -1,3 +1,8 @@
+//! Historical parameter-container prototype, retained for serialization compatibility.
+//! This type is not wired into the current [`crate::Spectrum`] processing pipeline.
+//! Configure [`crate::PrePostEdge`], [`crate::AUTOBK`], [`crate::XrayFFTF`] and
+//! [`crate::XrayFFTR`] directly through spectrum setters for new applications.
+
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
@@ -27,6 +32,8 @@ use xafsutils::FTWindow;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Default)]
 #[serde(default)]
+/// Legacy collection of optional private settings; default fields are unset.
+/// No public operation applies this container to a spectrum.
 pub struct XASParameters<'a> {
     e0: Option<f64>,
     normalization_method: Option<NormalizationMethod>,
@@ -71,12 +78,16 @@ pub struct XASParameters<'a> {
 }
 
 impl<'a> XASParameters<'a> {
+    /// Create a legacy parameter container with unset fields.
     pub fn new() -> Self {
         XASParameters {
             ..XASParameters::default()
         }
     }
 
+    /// Legacy string selector: a name starting with `m` selects the MBack
+    /// placeholder; every other name selects pre/post-edge normalization.
+    /// This does not configure or process a spectrum.
     pub fn set_normalization_method(
         &mut self,
         normalization_method: &str,
@@ -98,6 +109,8 @@ impl<'a> XASParameters<'a> {
         Ok(self)
     }
 
+    /// Legacy string selector: a name starting with `i` selects the ILPBkg
+    /// placeholder; every other name selects AUTOBK. No calculation runs.
     pub fn set_background_method(
         &mut self,
         background_method: &str,

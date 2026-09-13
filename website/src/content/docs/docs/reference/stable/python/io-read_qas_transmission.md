@@ -1,25 +1,37 @@
 ---
 title: "Python · io.read_qas_transmission"
-description: "io.read_qas_transmission signatures, types and docstrings."
+description: "io.read_qas_transmission signatures, defaults and API explanations."
 audience: user
 pagefind: true
 ---
 
-
-**Stable 0.2.4.** Install the stable package to use these signatures.
-
+**Stable 0.2.4.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
-
-
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/py-rexafs/python/rexafs/io.pyi)
-
-
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/py-rexafs/python/rexafs/io.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/io.pyi)
 
 ## read_qas_transmission
-
 
 ```python
 read_qas_transmission(path: str | PathLike[str]) -> Spectrum
 ```
+
+Read a whitespace-delimited QAS transmission scan into a new Spectrum.
+
+The first three columns are energy in eV, incident intensity I0 and
+transmitted intensity It; additional columns are ignored and # starts
+a comment. The reader computes mu = ln(I0 / It), where ln is the natural
+logarithm and the intensities have matching units. Positive intensities
+give dimensionless optical depth, without dividing by sample thickness.
+This reader is unsuitable for files that already contain absorption mu.
+
+path accepts a filename string or pathlib.Path. The returned spectrum
+owns its data and is unprocessed: call .fft() to run the default pipeline.
+Missing files, unreadable data or fewer than three columns raise
+RuntimeError. The reader does not enforce positive intensities or sort
+energies; non-finite calculated mu and invalid energy order are rejected
+later by processing. Check the measured intensities before taking a ratio.
+
+For the transmission equation and its physical assumptions, see
+[Newville, Fundamentals of XAFS, section 4](https://docs.xrayabsorption.org/tutorials/XAFS_Fundamentals.pdf).

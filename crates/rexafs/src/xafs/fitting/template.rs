@@ -10,9 +10,11 @@
 //! right answer): a MS path's ΔR is the mean of its scatterer legs' shell
 //! `dr_<n>` (each leg counts once, so a Ru–Ru–Ru triangle through shell 1
 //! twice is `dr_1`, and a shell-1/shell-2 path is `(dr_1 + dr_2) / 2`), and
-//! its σ² is the *largest* constituent shell's `ss_<n>` — a MS path is
-//! never sharper than its softest leg, and the sum would over-damp short
-//! triangle paths. Legs that fall in no shell are ignored; a MS path with no
+//! its σ² is the outermost constituent shell's `ss_<n>` (largest shell
+//! index, not largest fitted σ²). These are rexafs starting constraints,
+//! not a derivation of correlated multiple-scattering disorder or a bound
+//! on damping. Review the path geometry and correlations before accepting
+//! them physically. Legs that fall in no shell are ignored; a MS path with no
 //! shell at all gets the first selected shell's parameters.
 
 use std::collections::BTreeSet;
@@ -30,8 +32,8 @@ pub enum ParameterTemplate {
     PerShell,
     /// Shared `s02`, `e0`; `dr_<i>` / `ss_<i>` for every selected path.
     PerPath,
-    /// Shared `s02`, `e0`; only shell 1's ΔR / σ² vary, every other path
-    /// keeps ΔR = 0 and a fixed σ² = 0.003.
+    /// Shared `s02`, `e0`; only the first selected shell's ΔR / σ² vary; others
+    /// keep ΔR = 0 and a fixed σ² = 0.003 Å².
     FirstShellOnly,
     /// No variables: every cell is left empty for the user to fill in.
     Manual,
@@ -122,7 +124,13 @@ fn shared(vars: &mut Vec<TemplateVariable>) {
     vars.push(guess("e0", 0.0, None, None));
 }
 
-/// Build the variables and per-path expressions for `selected` paths.
+/// Build owned variables and expressions without changing the selected paths.
+///
+/// Automatic templates start S₀² at 0.9 with bounds 0.5–1.5, ΔE₀ at 0 eV
+/// without bounds, ΔR at 0 Å with bounds ±0.3 Å, and σ² at 0.003 Å² with
+/// a zero lower bound. These are numerical starting choices, not universal
+/// physical limits. `Manual` creates empty assignments and no variables;
+/// an empty selection returns an empty result. See the module's MS rule.
 pub fn apply_template(template: ParameterTemplate, selected: &[PathInfo]) -> TemplateResult {
     let mut out = TemplateResult::default();
     if selected.is_empty() {
@@ -203,7 +211,7 @@ pub fn apply_template(template: ParameterTemplate, selected: &[PathInfo]) -> Tem
                     } else {
                         if !ms_noted {
                             out.notes.push(
-                                "multiple-scattering paths: ΔR = mean of the legs' shell ΔR, σ² = the largest constituent shell's σ²"
+                                "multiple-scattering paths: ΔR = mean of the legs' shell ΔR; σ² = the outermost constituent shell's σ² (a starting constraint, not a disorder calculation)"
                                     .into(),
                             );
                             ms_noted = true;

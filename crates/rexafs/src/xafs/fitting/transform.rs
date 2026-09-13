@@ -69,13 +69,20 @@ impl DatasetTransform {
     }
 }
 
-/// Larch-style noise estimate from the high-R part of chi(R), one entry per k-weight.
+/// High-R noise estimate, one entry per effective k-weight.
+/// These estimates are returned for inspection; fitting does not apply them automatically.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NoiseEstimate {
+    /// k-space scales inferred from the high-R estimate; see [`estimate_noise`].
     pub epsilon_k: Vec<f64>,
+    /// Root-mean-square scale per real/imaginary R component after window correction.
+    /// This is not identical to the residual scale from [`epsilon_r_for_kweight`].
     pub epsilon_r: Vec<f64>,
 }
 
+/// Check ordered k/R ranges, minimum FFT length, and finite nonnegative weights.
+/// This validates settings only; it does not verify that an input grid is uniform
+/// or that a chosen range is supported by measured data.
 pub fn validate_transform(transform: &FeffFitTransform) -> Result<(), FittingError> {
     if transform.kmax.partial_cmp(&transform.kmin) != Some(Ordering::Greater) {
         return Err(FittingError::InvalidTransform {
@@ -340,7 +347,15 @@ pub fn resolve_epsilon_ks(dataset: &FeffFitDataset) -> Vec<f64> {
         .collect()
 }
 
-/// Larch `set_epsilon_k`: `eps_r = eps_k / (2 sqrt(pi w / (kstep (kmax^w - kmin^w))))`, `w = 2 kw + 1`.
+/// Convert εk to the R-space residual divisor using this implementation's convention.
+///
+/// `eps_r = eps_k / (2 sqrt(pi a / (kstep (kmax^a - kmin^a))))`,
+/// where `a = 2 kweight + 1`, k and kstep are in Å⁻¹, and kweight is a
+/// nonnegative real exponent. Positive denominator/noise floors are 1e-12.
+/// A missing kstep uses 0.05 here, even if the transform inferred another step;
+/// set it explicitly for consistent conversion on a different grid.
+/// [`estimate_noise`] uses a different √2 factor when converting its high-R
+/// estimate to εk; these two public operations are not inverse conversions.
 pub fn epsilon_r_for_kweight(transform: &FeffFitTransform, kweight: f64, epsilon_k: f64) -> f64 {
     let eps_k = epsilon_k.max(1.0e-12);
     let kstep = transform.kstep.unwrap_or(0.05).max(1.0e-12);
@@ -350,6 +365,8 @@ pub fn epsilon_r_for_kweight(transform: &FeffFitTransform, kweight: f64, epsilon
     (eps_k / scale).max(1.0e-12)
 }
 
+/// Convert the scalar `transform.kweight` noise scale; None uses εk = 1.0.
+/// For simultaneous weights, call [`epsilon_r_for_kweight`] for each weight.
 pub fn epsilon_r_from_epsilon_k(transform: &FeffFitTransform, epsilon_k: Option<f64>) -> f64 {
     epsilon_r_for_kweight(transform, transform.kweight, epsilon_k.unwrap_or(1.0))
 }
@@ -515,6 +532,12 @@ pub fn data_residual_in_r_space(
     Ok(DVector::from_vec(residual))
 }
 
+/// Bandwidth information estimate `1 + 2 Δk ΔR / π`, dimensionless.
+///
+/// Δk is in Å⁻¹ and ΔR in Å; negative spans are clamped to zero. This rexafs
+/// counting convention does not multiply by the number of k-weights or FFT bins.
+/// See [Stern (1993)](https://doi.org/10.1103/PhysRevB.48.9825) for the
+/// independent-information question; the additive one is implementation-specific.
 pub fn compute_n_idp(transform: &FeffFitTransform) -> f64 {
     1.0 + 2.0
         * (transform.rmax - transform.rmin).max(0.0)
@@ -522,9 +545,19 @@ pub fn compute_n_idp(transform: &FeffFitTransform) -> f64 {
         / PI
 }
 
-/// Larch `FeffitDataSet.estimate_noise`: estimate `epsilon_r` from the rms of chi(R) between
-/// 15 and 30 Angstrom (scaled by the mean k-window value) and convert it to `epsilon_k` with
-/// Parseval's theorem, for every effective k-weight.
+/// Estimate noise from χ(R) over 15–30 Å for every effective k-weight.
+///
+/// With B selected complex bins, computes `eps_r = sqrt(Σ|χR|²/(2B)) / A`,
+/// where `A = sum(kwin)·kstep/(kmax-kmin)` corrects for the mean window.
+/// Then `eps_k = eps_r sqrt(2πa / (kstep (kmax^a-kmin^a)))`,
+/// with `a = 2 kweight + 1`. This high-R estimate assumes that the selected
+/// region contains noise rather than structural signal or transform artifacts.
+/// It neither measures all systematic errors nor modifies a dataset's settings.
+///
+/// The εk-to-εR residual conversion in [`epsilon_r_for_kweight`] uses a
+/// different factor; passing these εk values back gives εR/√2, before guards.
+/// Inputs must be matching prepared k/χ arrays; an unavailable high-R interval
+/// or invalid transform returns an error. Set kstep explicitly on nondefault grids.
 pub fn estimate_noise(
     k: &DVector<f64>,
     chi: &DVector<f64>,

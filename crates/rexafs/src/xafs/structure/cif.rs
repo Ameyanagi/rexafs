@@ -244,7 +244,13 @@ pub fn parse_number(value: &str) -> Option<f64> {
     v.trim().parse::<f64>().ok()
 }
 
-/// Build a [`Structure`] from CIF text (first block with cell data).
+/// Build an owned structure from the first CIF block containing `_cell_length_a`.
+///
+/// Requires three cell lengths (Å) and fractional atom coordinates; absent or
+/// invalid cell angles default to 90°. CIF standard-uncertainty suffixes are
+/// removed from numbers rather than propagated. Supplied symmetry operations
+/// or a recognized space group expand sites into the cell. Inspect the result's
+/// warnings for skipped sites and fallback behavior; an unusable structure errors.
 pub fn structure_from_cif(text: &str) -> Result<Structure, StructureError> {
     let blocks = parse_cif(text)?;
     let block = blocks

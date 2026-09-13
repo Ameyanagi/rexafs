@@ -1,3 +1,11 @@
+//! Common spectrum, fitting, structure and data-treatment imports.
+//!
+//! Use `use rexafs::prelude::*;` for examples spanning several modules, or import
+//! individual types from the crate root to keep dependencies explicit. This
+//! prelude re-exports existing types and traits; it performs no initialization.
+//! Feature-gated exports, such as plotting and ndarray conversion traits, are
+//! available only when the corresponding Cargo feature is enabled.
+
 pub use crate::xafs::xasgroup::XASGroup;
 pub use crate::xafs::xasspectrum::XASSpectrum;
 

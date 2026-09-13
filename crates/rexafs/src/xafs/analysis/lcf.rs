@@ -12,8 +12,9 @@
 //! min ‖Σᵢ wᵢ Sᵢ(x) − U(x)‖²   s.t.   lo ≤ wᵢ ≤ hi,   (optionally) Σᵢ wᵢ = 1
 //! ```
 //!
-//! solved exactly with a primal active-set method for convex quadratic
-//! programs (Nocedal & Wright, Alg. 16.3): fixed variables sit on their bound,
+//! solved to floating-point tolerances with a primal active-set method for
+//! convex quadratic programs ([Nocedal and Wright, Algorithm 16.3](https://doi.org/10.1007/978-0-387-40065-5)):
+//! fixed variables sit on their bound,
 //! the equality-constrained step on the free variables is a small KKT system
 //! solved by SVD, and bounds are added / released using their Lagrange
 //! multipliers.
@@ -26,8 +27,13 @@
 //! crate, forward-difference Jacobian) on the projected residual. δᵢ is kept
 //! within ±`max_e0_shift` through a `tanh` reparametrisation.
 //!
-//! Standard errors are the usual (JᵀJ)⁻¹·χ²ᵣ estimates over the *free*
-//! parameters; a weight sitting on a bound reports `None`.
+//! Weight errors use inverse curvature of the free linear subproblem, with
+//! fitted shifts held fixed; a weight on a bound reports `None`. Shift errors
+//! use the projected nonlinear residual Jacobian. These are separate local
+//! approximations, not a joint weight/shift covariance or confidence interval.
+//! Neither the objective nor the reported chi-square is divided by measured
+//! noise variance. Inputs are borrowed; results own their arrays and no
+//! processing stages run automatically.
 
 use std::borrow::Borrow;
 
@@ -45,7 +51,7 @@ use crate::xafs::xasspectrum::XASSpectrum;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LcfConfig {
-    /// Array to fit.
+    /// Array to fit; normalized absorption ([`AnalysisSpace::Norm`]) by default.
     pub space: AnalysisSpace,
     /// Fit range: relative to the unknown's E₀ for energy spaces, absolute
     /// k for `Chi`. `None` → Athena's defaults (−20…+30 eV, 3…12 Å⁻¹).
@@ -55,11 +61,13 @@ pub struct LcfConfig {
     /// Lower / upper bound on every weight (Athena default: 0…1). Use
     /// `f64::NEG_INFINITY` / `f64::INFINITY` for unbounded weights.
     pub weight_bounds: (f64, f64),
-    /// Fit an energy shift per standard.
+    /// Fit an axis shift per standard; `false` by default. The shift is in eV
+    /// for energy spaces and Å⁻¹ for `Chi`, despite the historical field name.
     pub fit_e0_shift: bool,
-    /// Maximum |shift| (in x units of the space) when `fit_e0_shift` is on.
+    /// Maximum |shift| in axis units when shifts are fitted; default 5.0.
+    /// Choose a physically meaningful bound, especially for a k-space fit.
     pub max_e0_shift: f64,
-    /// Cap on the number of combinations `lcf_combinatorial` will fit.
+    /// Cap on combinations [`lcf_combinatorial`] will fit; default 1000.
     pub max_combinations: usize,
 }
 
@@ -82,11 +90,14 @@ impl Default for LcfConfig {
 pub struct LcfComponent {
     /// Index of the standard in the slice passed to [`lcf`] / [`lcf_combinatorial`].
     pub index: usize,
+    /// Spectrum name, or `standard{index}` when the input has no name.
     pub name: String,
+    /// Dimensionless coefficient multiplying this interpolated reference.
     pub weight: f64,
     /// Standard error of the weight; `None` if it sits on a bound.
     pub stderr: Option<f64>,
-    /// Energy (or k) shift applied to the standard.
+    /// Shift added to the standard's axis before interpolation, in eV or Å⁻¹.
+    /// Positive values move a standard feature to a larger axis coordinate.
     pub e0_shift: f64,
     /// Standard error of the shift; `None` if the shift was not fitted.
     pub e0_shift_stderr: Option<f64>,
@@ -95,6 +106,7 @@ pub struct LcfComponent {
 /// Result of a linear combination fit.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LcfResult {
+    /// Spectral representation fitted by this result.
     pub space: AnalysisSpace,
     /// Fitted grid (energy or k).
     pub x: DVector<f64>,
@@ -108,14 +120,18 @@ pub struct LcfResult {
     pub weights: Vec<LcfComponent>,
     /// Scaled contributions wᵢ Sᵢ on the grid, in the order of `weights`.
     pub components: Vec<DVector<f64>>,
-    /// Σ(data − fit)² / Σ data².
+    /// Σ(data − fit)² / Σ data²; NaN when data have zero squared norm.
     pub r_factor: f64,
-    /// Σ(data − fit)².
+    /// Unweighted Σ(data − fit)², in squared spectral units; no noise normalization.
     pub chi_square: f64,
-    /// χ² / (n_data − n_vary).
+    /// `chi_square / max(n_data - n_vary, 1)`; not a noise-calibrated statistic.
     pub reduced_chi_square: f64,
+    /// Number of fitted samples, including correlations introduced by interpolation.
     pub n_data: usize,
+    /// Nominal count: standards minus one for sum-to-one, plus fitted shifts.
+    /// Active weight bounds do not reduce this reporting count.
     pub n_vary: usize,
+    /// Sum of fitted coefficients, equal to one when that constraint is enabled.
     pub sum_of_weights: f64,
 }
 
@@ -134,7 +150,14 @@ impl LcfResult {
     }
 }
 
-/// Fit `unknown` as a linear combination of `standards`.
+/// Fit an already-processed `unknown` as a linear combination of `standards`.
+///
+/// Uses the unknown's selected grid; standards are interpolated linearly and
+/// their endpoint values are held outside coverage. Prefer an interval measured
+/// for every spectrum. Requires at least one standard and `standards.len() + 1`
+/// selected unknown samples. Missing arrays, infeasible bounds/sum constraints,
+/// invalid interpolation inputs, or a failed solve return [`AnalysisError`].
+/// Returns owned arrays without modifying the input spectra.
 pub fn lcf<S: Borrow<XASSpectrum>>(
     unknown: &XASSpectrum,
     standards: &[S],

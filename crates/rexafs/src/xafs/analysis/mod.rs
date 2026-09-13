@@ -39,6 +39,8 @@ pub enum AnalysisSpace {
     /// Derivative dμ/dE of the normalized μ(E) (requires `normalize()`).
     Deriv,
     /// k-weighted χ(k)·k^kweight on the k grid (requires `calc_background()`).
+    /// The real exponent is used directly, unlike the processing FFT's floored
+    /// nonnegative integer weight. For dimensionless χ, y has units Å⁻ᵏʷᵉⁱᵍʰᵗ.
     Chi { kweight: f64 },
 }
 
@@ -61,7 +63,9 @@ impl AnalysisSpace {
         }
     }
 
-    /// Arrays `(x, y)` of `spectrum` in this space.
+    /// Owned copies `(x, y)` in this space; does not run preprocessing.
+    /// Energy axes use eV, k axes Å⁻¹. Normalized/flattened μ is dimensionless;
+    /// its derivative has units eV⁻¹. Missing arrays or unequal lengths error.
     pub fn arrays(
         &self,
         spectrum: &XASSpectrum,
@@ -172,7 +176,11 @@ pub(crate) fn on_grid(
     Ok(interp_linear(grid, &x, &y)?)
 }
 
-/// Athena's R-factor: Σ(data − fit)² / Σ data².
+/// Relative squared discrepancy Σ(data − fit)² / Σ data².
+///
+/// Pass equal-length arrays in the same units. Returns NaN when the data norm
+/// is zero. This differs from the EXAFS path fitter's zero-denominator guard.
+/// No measurement-noise weighting or statistical probability is implied.
 pub fn r_factor(data: &DVector<f64>, fit: &DVector<f64>) -> f64 {
     let num: f64 = data
         .iter()

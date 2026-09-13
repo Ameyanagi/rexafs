@@ -32,27 +32,53 @@ use normalization::Normalization;
 
 /// Data and processing parameters for a single XAS spectrum.
 /// Also available as [`crate::Spectrum`]. Use [`Self::from_arrays`] for checked input.
+/// The default is empty; processing creates missing default stage configurations.
+/// Methods mutate this spectrum and getters never run a calculation implicitly.
+///
+/// Prefer getters over the legacy result fields: authoritative outputs live inside
+/// `normalization`, `background`, `xftf` and `xftr`. Directly editing public inputs
+/// or settings requires [`Self::invalidate_derived`] before processing again.
+/// Raw arrays are a working baseline for interpolation, not an immutable archive:
+/// calibration, deglitching, truncation, smoothing and rebinning can modify them.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 #[derive(Default)]
 pub struct XASSpectrum {
+    /// Optional display name; changing it does not affect numerical results.
     pub name: Option<String>,
+    /// Owned baseline energy grid in eV. Data-treatment methods may modify it.
     pub raw_energy: Option<DVector<f64>>,
+    /// Owned baseline absorption values, paired with `raw_energy`.
     pub raw_mu: Option<DVector<f64>>,
+    /// Owned current energy grid in eV used by processing stages.
     pub energy: Option<DVector<f64>>,
+    /// Owned current absorption values, paired with `energy`; units match the input.
     pub mu: Option<DVector<f64>>,
+    /// Selected or estimated edge energy in eV. Prefer [`Self::set_e0`] to edit it.
     pub e0: Option<f64>,
+    /// Legacy result slot; use [`Self::k`] for the background wave-number grid in Å⁻¹.
     pub k: Option<DVector<f64>>,
+    /// Legacy result slot; use [`Self::chi`] for dimensionless unweighted EXAFS.
     pub chi: Option<DVector<f64>>,
+    /// Legacy result slot; use [`Self::chi_kweighted`] to calculate weighted EXAFS.
     pub chi_kweighted: Option<DVector<f64>>,
+    /// Legacy result slot; use [`Self::chir`] for the stored complex Fourier data.
     pub chi_r: Option<DVector<f64>>,
+    /// Legacy result slot; use [`Self::chir_mag`] for Fourier magnitudes.
     pub chi_r_mag: Option<DVector<f64>>,
+    /// Legacy result slot; use [`Self::chir_real`] for the real Fourier component.
     pub chi_r_re: Option<DVector<f64>>,
+    /// Legacy result slot; use [`Self::chir_imag`] for the imaginary Fourier component.
     pub chi_r_im: Option<DVector<f64>>,
+    /// Legacy result slot; use [`Self::q`] for the inverse-transform grid in Å⁻¹.
     pub q: Option<DVector<f64>>,
+    /// Normalization settings and cached outputs; `None` selects default pre/post-edge normalization when needed.
     pub normalization: Option<normalization::NormalizationMethod>,
+    /// Background settings and cached outputs; `None` selects default AUTOBK when needed.
     pub background: Option<background::BackgroundMethod>,
+    /// Forward-transform settings and outputs; `None` selects [`xrayfft::XrayFFTF::default`].
     pub xftf: Option<xrayfft::XrayFFTF>,
+    /// Inverse-transform settings and outputs; `None` selects [`xrayfft::XrayFFTR::default`].
     pub xftr: Option<xrayfft::XrayFFTR>,
     /// Accumulated energy shift (eV) applied by `shift_energy`/`calibrate`/`align_to`.
     pub energy_shift: f64,
@@ -112,6 +138,8 @@ impl XASSpectrum {
         Ok(())
     }
 
+    /// Create an empty spectrum with no data, selected methods or calculated results.
+    /// Use [`Self::from_arrays`] to construct checked input in one call.
     pub fn new() -> XASSpectrum {
         XASSpectrum::default()
     }
@@ -136,7 +164,8 @@ impl XASSpectrum {
         Ok(spectrum)
     }
 
-    /// Borrow the unweighted k grid without cloning its buffer (Å⁻¹).
+    /// Borrow the background k grid without cloning its buffer (Å⁻¹).
+    /// Returns `None` before a valid AUTOBK result; no calculation is triggered.
     pub fn k(&self) -> Option<&[f64]> {
         let background::BackgroundMethod::AUTOBK(autobk) = self.background.as_ref()? else {
             return None;
@@ -151,7 +180,8 @@ impl XASSpectrum {
         }
     }
 
-    /// Borrow unweighted χ(k) without cloning its buffer.
+    /// Borrow dimensionless, unweighted χ(k) without cloning its buffer.
+    /// Returns `None` before a valid AUTOBK result; no calculation is triggered.
     pub fn chi(&self) -> Option<&[f64]> {
         let background::BackgroundMethod::AUTOBK(autobk) = self.background.as_ref()? else {
             return None;
@@ -166,11 +196,20 @@ impl XASSpectrum {
         }
     }
 
+    /// Set the display name without invalidating numerical results.
     pub fn set_name<S: Into<String>>(&mut self, name: S) -> &mut Self {
         self.name = Some(name.into());
         self
     }
 
+    /// Replace the baseline and working arrays, sorting energy and absorption together.
+    /// Energy is in eV. This legacy setter takes ownership after conversion and clones
+    /// the baseline into working arrays. It does not check lengths or finite values;
+    /// prefer [`Self::from_arrays`] for checked input. Clears E0 and derived results
+    /// while retaining other stage settings.
+    ///
+    /// # Panics
+    /// May panic when sorting mismatched arrays. Supply paired finite arrays.
     pub fn set_spectrum<T: Into<DVector<f64>>, M: Into<DVector<f64>>>(
         &mut self,
         energy: T,
@@ -206,6 +245,11 @@ impl XASSpectrum {
         self.invalidate_derived()
     }
 
+    /// Linearly interpolate baseline absorption onto an owned energy grid in eV.
+    /// The baseline arrays remain unchanged; successful interpolation invalidates
+    /// derived results. The interpolation helper holds endpoint values outside the
+    /// baseline range. Missing baseline data or interpolation failures return an error.
+    /// The working energy grid is assigned before interpolation, even if it fails.
     pub fn interpolate_spectrum<T: Into<DVector<f64>>>(
         &mut self,
         energy: T,
@@ -235,6 +279,10 @@ impl XASSpectrum {
         Ok(self.invalidate_derived())
     }
 
+    /// Set the edge energy in eV and propagate it into existing stage configurations.
+    /// Invalidates normalization, background and Fourier results. The value is stored
+    /// as supplied; normalization subsequently rejects a non-finite E0 or one outside
+    /// the measured range. Use [`Self::find_e0`] for an automatic estimate.
     pub fn set_e0<S: Into<f64>>(&mut self, e0: S) -> &mut Self {
         self.invalidate_derived();
         self.e0 = Some(e0.into());
@@ -247,6 +295,10 @@ impl XASSpectrum {
         self
     }
 
+    /// Estimate E0 in eV from the current spectrum using the core edge detector.
+    /// Propagates the result through [`Self::set_e0`] and invalidates derived results.
+    /// Missing, non-finite, mismatched or decreasing data return a typed error; a usable
+    /// absorption edge and enough points are also required by the detector.
     pub fn find_e0(&mut self) -> Result<&mut Self, XAFSError> {
         let energy = self.energy.as_ref().ok_or_else(|| DataError::MissingData {
             field: "energy".to_string(),
@@ -296,10 +348,16 @@ impl XASSpectrum {
         Ok(xafsutils::find_energy_step(energy, frac_ignore, nave, None))
     }
 
+    /// Take ownership of normalization settings and clear dependent results.
+    /// Pass [`crate::PrePostEdge`] directly, a method enum, or an optional enum.
+    /// `None` selects default pre/post-edge normalization. A configured edge energy
+    /// takes precedence over the existing E0; an explicit edge step remains an override.
+    /// No normalization is performed by this setter.
     pub fn set_normalization_method(
         &mut self,
-        method: Option<normalization::NormalizationMethod>,
+        method: impl Into<Option<normalization::NormalizationMethod>>,
     ) -> Result<&mut Self, XAFSError> {
+        let method = method.into();
         self.invalidate_derived();
         if let Some(method) = method {
             self.normalization = Some(method);
@@ -338,7 +396,10 @@ impl XASSpectrum {
     }
 
     /// Normalize using the selected method, resolving E0 and defaults as needed.
-    /// Recomputing this stage invalidates background and Fourier results.
+    /// The default fits pre/post-edge curves and expresses absorption in edge-step
+    /// units. Call [`Self::norm`] or [`Self::flat`] for owned outputs after success.
+    /// Recomputing invalidates background and Fourier results. Missing/invalid data,
+    /// an unusable fitting range, or an unsupported method returns a typed error.
     pub fn normalize(&mut self) -> Result<&mut Self, XAFSError> {
         // Capture explicitly configured edge_step before the algorithm fills it.
         if let Some(method) = &self.normalization {
@@ -393,10 +454,15 @@ impl XASSpectrum {
         Ok(self)
     }
 
+    /// Take ownership of background settings and clear background and Fourier results.
+    /// Pass [`crate::AUTOBK`] directly, a method enum, or an optional enum.
+    /// `None` selects default AUTOBK; existing normalization is retained. No background
+    /// calculation is performed by this setter.
     pub fn set_background_method(
         &mut self,
-        method: Option<background::BackgroundMethod>,
+        method: impl Into<Option<background::BackgroundMethod>>,
     ) -> Result<&mut Self, XAFSError> {
+        let method = method.into();
         self.invalidate_background();
         if let Some(method) = method {
             self.background = Some(method);
@@ -408,7 +474,12 @@ impl XASSpectrum {
         Ok(self)
     }
 
-    /// Remove the background using the selected method; normalize first if needed.
+    /// Remove the smooth background using the selected method; normalize if needed.
+    /// Default nalgebra AUTOBK minimizes low-R content with a fixed endpoint penalty;
+    /// the optional `ndarray-compat` backend retains its historical clamp model.
+    /// Successful results are dimensionless unweighted [`Self::chi`] on [`Self::k`].
+    /// Recomputes this stage and clears Fourier results on every call. Missing data,
+    /// insufficient coverage, invalid settings or solver failure return a typed error.
     pub fn calc_background(&mut self) -> Result<&mut Self, XAFSError> {
         self.invalidate_background();
         if self
@@ -441,14 +512,21 @@ impl XASSpectrum {
         Ok(self)
     }
 
-    /// Configure the forward transform and invalidate its dependent results.
+    /// Take ownership of forward settings and clear forward/inverse results.
+    /// Existing normalization and background results are retained.
     pub fn set_fft(&mut self, parameters: xrayfft::XrayFFTF) -> &mut Self {
         self.xftf = Some(parameters);
         self.invalidate_fft();
         self
     }
 
-    /// Forward transform, computing missing normalization/background stages.
+    /// Weight and window χ(k), then transform it to complex Fourier distance R.
+    /// Computes missing normalization/background stages first, using their defaults.
+    /// The unnormalized negative-exponent FFT is multiplied by `kstep / sqrt(pi)`;
+    /// no extra division by the FFT length or window area is applied.
+    /// Default settings use k-weight 2, a Kaiser–Bessel window and 2048 samples.
+    /// Invalid input/settings or a failed prerequisite returns a typed error.
+    /// Every call recomputes the forward transform and clears inverse results.
     pub fn fft(&mut self) -> Result<&mut Self, XAFSError> {
         self.invalidate_fft();
         if self.k().is_none() || self.chi().is_none() {
@@ -495,7 +573,10 @@ impl XASSpectrum {
         self
     }
 
-    /// Back-transform chi(R), computing missing forward stages first.
+    /// Filter χ(R) and return a real inverse transform, computing missing stages first.
+    /// Uses [`xrayfft::XrayFFTR`] defaults unless inverse settings are configured.
+    /// This preserves the forward weighting/window and is not an unweighted χ(k)
+    /// reconstruction. Invalid inverse settings or prerequisites return an error.
     pub fn ifft(&mut self) -> Result<&mut Self, XAFSError> {
         if self.chir().is_none() {
             self.fft()?;
@@ -907,10 +988,13 @@ impl XASSpectrum {
         Ok(self.invalidate_derived())
     }
 
+    /// Return the selected or estimated edge energy in eV, or `None` before resolution.
     pub fn e0(&self) -> Option<f64> {
         self.e0
     }
 
+    /// Copy normalized absorption in edge-step units on the current energy grid.
+    /// Returns `None` until normalization succeeds or after it is invalidated.
     pub fn norm(&self) -> Option<DVector<f64>> {
         #[cfg(feature = "ndarray-compat")]
         {
@@ -925,6 +1009,9 @@ impl XASSpectrum {
         }
     }
 
+    /// Copy flattened normalized absorption on the current energy grid.
+    /// Flattening removes the fitted post-edge trend; it is a display/analysis result,
+    /// not the input used by AUTOBK. Returns `None` without valid normalization.
     pub fn flat(&self) -> Option<DVector<f64>> {
         #[cfg(feature = "ndarray-compat")]
         {
@@ -939,6 +1026,8 @@ impl XASSpectrum {
         }
     }
 
+    /// Copy the fitted pre-edge baseline on the current energy grid, in input mu units.
+    /// Returns `None` without valid pre/post-edge normalization.
     pub fn pre_edge(&self) -> Option<DVector<f64>> {
         let normalization = self.normalization.as_ref()?;
         match normalization {
@@ -958,6 +1047,8 @@ impl XASSpectrum {
         }
     }
 
+    /// Copy the fitted post-edge normalization curve on the current energy grid,
+    /// in input mu units. Returns `None` without valid pre/post-edge normalization.
     pub fn post_edge(&self) -> Option<DVector<f64>> {
         let normalization = self.normalization.as_ref()?;
         match normalization {
@@ -978,19 +1069,29 @@ impl XASSpectrum {
     }
 
     #[cfg(feature = "ndarray-compat")]
+    /// Borrow the background wave-number grid in Å⁻¹ as an ndarray view.
+    /// Available with `ndarray-compat`; returns `None` before a valid background result.
     pub fn k_view(&self) -> Option<ArrayBase<ViewRepr<&f64>, Ix1>> {
         self.background.as_ref()?.get_k_view()
     }
 
     #[cfg(feature = "ndarray-compat")]
+    /// Borrow dimensionless, unweighted EXAFS as an ndarray view.
+    /// Available with `ndarray-compat`; returns `None` before a valid background result.
     pub fn chi_view(&self) -> Option<ArrayBase<ViewRepr<&f64>, Ix1>> {
         self.background.as_ref()?.get_chi_view()
     }
 
+    /// Borrow the currently stored forward-transform k-weight, if configured.
+    /// Before `fft()` resolves its settings this can be an unresolved user value.
     pub fn kweight(&self) -> Option<&f64> {
         self.xftf.as_ref()?.get_kweight()
     }
 
+    /// Calculate an owned `chi(k) * k^w` vector on the background grid.
+    /// Here `w` is the currently stored forward-transform k-weight; units are Å⁻ʷ.
+    /// This getter applies no window and does not resample onto the Larch FFT grid.
+    /// Returns `None` if background results or the forward k-weight are unavailable.
     pub fn chi_kweighted(&self) -> Option<DVector<f64>> {
         let k = DVector::from_column_slice(self.k()?);
         let chi = DVector::from_column_slice(self.chi()?);
@@ -999,10 +1100,16 @@ impl XASSpectrum {
         Some(chi.component_mul(&k.map(|x| x.powf(kweight.to_owned()))))
     }
 
+    /// Borrow the complete stored one-sided complex real-FFT representation.
+    /// Unlike the component getters, this includes frequencies beyond `rmax_out`.
+    /// Returns `None` without a valid forward transform; no buffer is cloned.
     pub fn chir(&self) -> Option<&DynRealDft<f64>> {
         self.xftf.as_ref()?.get_chir()
     }
 
+    /// Copy the forward-transform magnitude on [`Self::r`], limited by `rmax_out`.
+    /// For dimensionless chi and k-weight w, units are Å⁻⁽ʷ⁺¹⁾. Returns `None` without
+    /// a valid forward transform. These magnitudes are not normalized to a peak height.
     pub fn chir_mag(&self) -> Option<DVector<f64>> {
         #[cfg(feature = "ndarray-compat")]
         {
@@ -1033,6 +1140,9 @@ impl XASSpectrum {
         }
     }
 
+    /// Copy the dimensionless forward-transform window. Pair it with [`Self::kwin_k`],
+    /// which can differ from the background grid in Larch mode. Returns `None` without
+    /// a valid forward transform.
     pub fn kwin(&self) -> Option<DVector<f64>> {
         #[cfg(feature = "ndarray-compat")]
         {
@@ -1047,6 +1157,9 @@ impl XASSpectrum {
         }
     }
 
+    /// Copy the real Fourier component on [`Self::r`], limited by `rmax_out`.
+    /// Units are Å⁻⁽ʷ⁺¹⁾ for dimensionless chi and k-weight w; the forward exponent
+    /// is negative. Returns `None` without a valid forward transform.
     pub fn chir_real(&self) -> Option<DVector<f64>> {
         #[cfg(feature = "ndarray-compat")]
         {
@@ -1061,6 +1174,9 @@ impl XASSpectrum {
         }
     }
 
+    /// Copy the imaginary Fourier component on [`Self::r`], limited by `rmax_out`.
+    /// Units are Å⁻⁽ʷ⁺¹⁾ for dimensionless chi and k-weight w; the forward exponent
+    /// is negative. Returns `None` without a valid forward transform.
     pub fn chir_imag(&self) -> Option<DVector<f64>> {
         #[cfg(feature = "ndarray-compat")]
         {
@@ -1075,6 +1191,9 @@ impl XASSpectrum {
         }
     }
 
+    /// Copy the reported Fourier distance grid in Å, limited by `rmax_out`.
+    /// Scattering phase shifts are not corrected: a peak position is not directly a
+    /// bond length. Returns `None` without a valid forward transform.
     pub fn r(&self) -> Option<DVector<f64>> {
         #[cfg(feature = "ndarray-compat")]
         {
@@ -1089,6 +1208,8 @@ impl XASSpectrum {
         }
     }
 
+    /// Copy the inverse-transform wave-number grid in Å⁻¹, limited by `qmax_out`.
+    /// Returns `None` without a valid inverse transform.
     pub fn q(&self) -> Option<DVector<f64>> {
         #[cfg(feature = "ndarray-compat")]
         {
@@ -1103,6 +1224,10 @@ impl XASSpectrum {
         }
     }
 
+    /// Copy the real inverse-transform signal on [`Self::q`].
+    /// Forward k-weighting and windowing remain in the signal; with inverse r-weight
+    /// zero its units are Å⁻ʷ for forward weight w. Returns `None` without a valid
+    /// inverse transform. This does not reconstruct removed background or lost data.
     pub fn chiq(&self) -> Option<DVector<f64>> {
         #[cfg(feature = "ndarray-compat")]
         {

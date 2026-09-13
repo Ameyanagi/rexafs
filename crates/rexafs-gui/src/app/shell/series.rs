@@ -1,5 +1,6 @@
-//! Series stage (operando / time-resolved): the scan as a time-ordered
-//! matrix. Heatmap with a cursor row on the left, the cursor frame and a
+//! Series stage (operando / time-resolved): a sampled scan overview in
+//! catalog filename order, not a timestamp-derived time axis.
+//! Heatmap with a cursor row on the left, the cursor frame and a
 //! trend on the right; the inspector carries the cursor readout, the trend
 //! table and the batch / LCF-trend cards.
 

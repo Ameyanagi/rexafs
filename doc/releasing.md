@@ -1,14 +1,14 @@
 # Releasing rexafs
 
-## Preparing 0.2.4
+## Historical preparation of 0.2.4
 
-The next patch release improves desktop sizing, empty-workspace actions, text
-editing and bounded folder scanning. It adds Windows core validation and an
+The 0.2.4 patch release improved desktop sizing, empty-workspace actions, text
+editing and bounded folder scanning. It added Windows core validation and an
 X11 smoke check of the packaged Linux application. Version 0.2.3's existing tag
 is preserved. The [release notes](release-notes-0.2.4.md) and
 [qualification record](validation/2026-09-09-release-0.2.4/review.md) track this
-release's source, checks and publication. Numerical defaults are unchanged;
-the release also includes ureq's 3.4.1 HTTP fixes. The [compatibility fixes](fft-grid-compatibility.md)
+release's source, checks and publication. Numerical defaults were unchanged;
+the release also included ureq's 3.4.1 HTTP fixes. The [compatibility fixes](fft-grid-compatibility.md)
 correct legacy derivatives and add an explicit FFT grid choice. The [0.2.3 record](validation/2026-09-10-release-0.2.3/review.md)
 retains that release's completed build, registry, signing and publication history.
 
@@ -79,6 +79,11 @@ separate from the package release process.
 
 ## Local checks
 
+Run these commands from the repository root, with the pinned Rust toolchain and
+Python 3.12+ for repository tools. Local checks support review; the
+[release workflow](../.github/workflows/release-build.yml) defines the complete
+platform and package qualification matrix.
+
 ```bash
 python scripts/check-compatibility-fixtures.py
 cargo fmt --all -- --check
@@ -102,30 +107,41 @@ packaged locally with `--allow-dirty` for review; releases require a reviewed co
 Python:
 
 ```bash
-maturin build --release --locked --manifest-path py-rexafs/Cargo.toml --out dist
-maturin sdist --manifest-path py-rexafs/Cargo.toml --out dist
-python -m pip install dist/rexafs-*.whl
-python py-rexafs/tests/test_api.py
+uv venv --python 3.12 /tmp/rexafs-wheel-check
+uvx maturin build --release --locked --manifest-path py-rexafs/Cargo.toml \
+  --interpreter /tmp/rexafs-wheel-check/bin/python --out /tmp/rexafs-release-check
+uvx maturin sdist --manifest-path py-rexafs/Cargo.toml --out /tmp/rexafs-release-check
+uv pip install --python /tmp/rexafs-wheel-check/bin/python /tmp/rexafs-release-check/rexafs-*.whl
+/tmp/rexafs-wheel-check/bin/python py-rexafs/tests/test_api.py
+npm --prefix js-rexafs ci
+REXAFS_PYTHON=/tmp/rexafs-wheel-check/bin/python npm --prefix js-rexafs run test:python-editor
 ```
 
-Use a fresh environment to install the wheel, and another to rebuild/install the
-sdist. Test each supported CPython minor (3.10–3.14), OS and architecture. Linux
+These shell examples use POSIX temporary paths. On Windows, use an empty
+directory under `$env:TEMP` and the environment's `Scripts/python.exe`. Choose
+fresh output directories so a wildcard cannot select wheels from an earlier build.
+Use another fresh environment to rebuild/install the sdist, run
+`scripts/check-python-sdist.py` on it, and run the same runtime tests. Test each
+supported CPython minor (3.10–3.14), OS and architecture. Linux
 wheels must meet the declared manylinux policy; a local Linux wheel is insufficient.
 
 JavaScript:
 
 ```bash
+mkdir -p /tmp/rexafs-release-check
+npm --prefix js-rexafs ci
+cargo install wasm-pack --locked --version 0.15.0
 npm --prefix js-rexafs run build
 npm --prefix js-rexafs test
-cd js-rexafs
-npm pack
+npm pack --prefix js-rexafs ./js-rexafs --pack-destination /tmp/rexafs-release-check
+node scripts/test-npm-package.mjs /tmp/rexafs-release-check/rexafs-*.tgz
 ```
 
 Install the tarball in a fresh consumer project, type-check its public imports,
 and exercise both the Node and browser entry points with a real spectrum. Include
 the `.wasm` files and license notices; no compiler is required on the consumer side.
 
-Desktop (run on the target platform):
+Desktop on macOS or Linux (run on the target platform):
 
 ```bash
 cargo test --locked --release -p rexafs-gui --no-default-features --features refeff-runner,feff10-runner
@@ -133,6 +149,11 @@ cargo build --locked --release -p rexafs-gui --no-default-features --features re
 python scripts/test-release-archive.py
 python scripts/package-desktop.py
 ```
+
+On Windows, use `--no-default-features --features refeff-runner` for both Cargo
+commands. The MSVC desktop cannot link the upstream MinGW FEFF10 archive. The
+same archive tests and packaging script apply; see the
+[Windows development instructions](desktop-development.md#windows).
 
 Use Python 3.12+ for the release scripts. `package-macos.sh` remains a macOS build
 convenience wrapper. Archives go to `target/distributions/` with version and Rust
@@ -327,7 +348,11 @@ candidates use Cargo/npm `0.1.0-rc.1`, Python `0.1.0rc1`, npm `next` and GitHub'
 prerelease marker. A resumed draft upload may report already-present assets;
 compare their hashes before replacing anything.
 
-## Final repository rename and launch
+## Historical repository rename and launch checklist
+
+This checklist records the initial launch sequence. The repository rename,
+registry publication and GitHub Pages deployment have since been completed.
+For documentation deployment, use the current [website maintenance guide](../website/README.md).
 
 1. Finish local rebranding and artifact qualification.
 2. The existing GitHub repository has been renamed from `ameyanagi/xraytsubaki`
@@ -348,7 +373,9 @@ names. Recheck before the first publish. Registry guidance is linked from the
 [plan](rebranding-plan.md); authentication setup and final remote actions are still
 maintainer release steps.
 
-## Validation record
+<a id="validation-record"></a>
+
+## Historical validation record
 
 Verified locally on Apple Silicon macOS with Rust 1.98.1, 2026-09-06:
 
@@ -391,6 +418,7 @@ The table above records **local** results. The subsequent GitHub pull-request
 matrix passed, as recorded in the current launch status, and the repository rename
 is complete. Automated archive self-checks do not qualify interactive Intel macOS,
 Linux or Windows launches. Registries and the signed macOS desktop release are
-now published, as recorded above; domain deployment is pending. Future releases
+now published, as recorded above. Domain deployment was pending when this record
+was written; the current public manual is hosted at [rexafs.com](https://rexafs.com/). Future releases
 require a successful manual build of their final tag and qualification of the
 actual downloads, including each platform's notices.

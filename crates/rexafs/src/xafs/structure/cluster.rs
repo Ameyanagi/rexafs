@@ -22,19 +22,26 @@ pub enum AbsorberSelection {
 /// How mixed-occupancy sites are resolved into single atoms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum OccupancyPolicy {
-    /// Majority species on every site (deterministic; Larch/pymatgen default
-    /// behaviour when a site is not randomised).
+    /// Highest-occupancy listed species on every site; deterministic and default.
+    /// Minority species are omitted with warnings. Partial occupancy does not
+    /// reduce atom counts or create vacancies.
     #[default]
     Majority,
-    /// Species drawn per atom proportional to occupancy, seeded.
+    /// Draw a species per atom proportional to the listed occupancies, seeded.
+    /// Probabilities are normalized by the total listed occupancy: missing
+    /// occupancy does not create vacancies. The absorber remains its majority
+    /// species. This is one disorder realization, not an ensemble average.
     Random { seed: u64 },
 }
 
+/// Spherical cluster settings; defaults are 8 Å, no hydrogen, and majority species.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClusterOptions {
-    /// Sphere radius in Å.
+    /// Sphere radius in Å; default 8.0 and required to lie strictly between 0.5 and 50.
     pub radius: f64,
+    /// Include non-absorber hydrogen atoms; false by default.
     pub include_hydrogen: bool,
+    /// Resolve mixed sites into atoms; see [`OccupancyPolicy`] for vacancy limitations.
     pub occupancy: OccupancyPolicy,
 }
 
@@ -177,7 +184,15 @@ pub fn absorber_sites(structure: &Structure, symbol: &str) -> Vec<usize> {
     out
 }
 
-/// Build the cluster.
+/// Build an owned spherical cluster from periodic images of an expanded structure.
+///
+/// Positions are in Å relative to the selected absorber, which is placed first
+/// with potential index zero. Other potentials are assigned by element. Input
+/// structures are borrowed and unchanged. Radius violations, missing sites, and
+/// an invalid absorber selection return [`StructureError`]; omitted minority or
+/// unrecognized species are recorded in `Cluster::warnings` where applicable.
+/// Converge cluster radius and scattering-path cutoffs for the analysis rather
+/// than treating the default radius as a physical completeness guarantee.
 pub fn build_cluster(
     structure: &Structure,
     absorber: &AbsorberSelection,

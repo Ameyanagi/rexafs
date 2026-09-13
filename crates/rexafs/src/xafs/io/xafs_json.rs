@@ -1,3 +1,6 @@
+//! Legacy JSON serialization for [`XASGroupFile`].
+//! Writes replace files directly and do not create desktop project backups.
+
 use std::error::Error;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -15,13 +18,18 @@ use crate::xafs::io::xasdatatype::{XASDataType, XASGroupFile};
 use crate::xafs::xasgroup::XASGroup;
 use crate::xafs::xasspectrum::XASSpectrum;
 
+/// Read and write owned group envelopes as JSON; this is not the `.rxs` format.
 pub trait XASJson {
+    /// Replace the envelope after successfully reading plain JSON. I/O or JSON errors leave it unchanged.
     fn read_json(&mut self, filename: &str) -> Result<&mut Self, IOError>;
 
+    /// Update version/type metadata and overwrite the destination with plain JSON. Returns I/O or serialization errors.
     fn write_json(&mut self, filename: &str) -> Result<&mut Self, IOError>;
 
+    /// Read gzip-compressed JSON, except a `.json` filename selects plain JSON. The envelope changes only after successful decoding.
     fn read_jsongz(&mut self, filename: &str) -> Result<&mut Self, IOError>;
 
+    /// Overwrite with gzip-compressed JSON, except a `.json` filename selects plain JSON. Updates version/type metadata before writing.
     fn write_jsongz(&mut self, filename: &str) -> Result<&mut Self, IOError>;
 }
 

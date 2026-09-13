@@ -6,11 +6,15 @@
 //! The spectra are taken in the chosen [`AnalysisSpace`], interpolated onto
 //! the first spectrum's grid restricted to the fit range, and stacked into a
 //! data matrix `D` (n_spectra × n_points). Optionally the mean spectrum is
-//! subtracted (`PcaConfig::center`; **off** by default, like Athena, so that
-//! a set of mixtures of *m* pure species has rank *m*; Larch's `pca_train`
-//! centres). The thin SVD `D = U Σ Vᵀ` gives the components (rows of `Vᵀ`,
-//! orthonormal), the eigenvalues `λᵢ = σᵢ² / n_spectra` of the covariance
-//! matrix, the explained variance `σᵢ² / Σσ²` and the scores `U Σ`.
+//! subtracted (`PcaConfig::center`; **off** by default). Without centering,
+//! ideal linear mixtures of *m* independent species have rank at most *m*;
+//! noise and inconsistent preprocessing can increase the numerical rank.
+//! The thin singular value decomposition (SVD) `D = U Σ Vᵀ` gives orthonormal
+//! components (rows of `Vᵀ`), eigenvalues `λᵢ = σᵢ² / n_spectra` of
+//! `DᵀD / n_spectra`, fractions `σᵢ² / Σσ²`, and scores `U Σ`.
+//! The eigenvalues describe second moments when uncentered, and covariance
+//! with a population denominator `n_spectra` when centered; they are not
+//! unbiased sample variances with denominator `n_spectra - 1`.
 //!
 //! The Malinowski indicator function for `k` retained components is
 //!
@@ -18,11 +22,22 @@
 //! IND(k) = sqrt( Σ_{j>k} λⱼ / (n_points · (n_spectra − k)) ) / (n_spectra − k)²
 //! ```
 //!
-//! whose minimum estimates the number of significant components.
+//! Here eigenvalues are indexed from one, `k` is the retained count, and
+//! `n_points` and `n_spectra` are matrix dimensions. The indicator carries
+//! spectral units because eigenvalues have squared spectral units. Its
+//! minimum is a heuristic rank suggestion, not a chemical-species count.
+//! The displayed equation specifies this implementation's eigenvalue scaling;
+//! see [Malinowski (1977)](https://doi.org/10.1021/ac50012a027) for the
+//! indicator-function method. Missing tail eigenvalues are treated as zero
+//! when there are more spectra than grid points, which can make this
+//! suggestion uninformative.
 //!
 //! A target transform ([`PcaModel::target_transform`]) projects a spectrum
 //! onto the first `n` components (weights = `C · (y − mean)` since the
 //! components are orthonormal) and reports the reconstruction quality.
+//! Inputs are borrowed, results own their arrays, and preprocessing is not
+//! run automatically. See [Larch's PCA guide](https://xraypy.github.io/xraylarch/xafs_xanes.html#principal-component-analysis)
+//! for a centered comparison workflow; rexafs defaults to no centering.
 
 use std::borrow::Borrow;
 
@@ -37,10 +52,11 @@ use crate::xafs::xasspectrum::XASSpectrum;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PcaConfig {
-    /// Array to analyse.
+    /// Array to analyze; defaults to normalized absorption, [`AnalysisSpace::Norm`].
     pub space: AnalysisSpace,
     /// Range: relative to the first spectrum's E₀ for energy spaces,
-    /// absolute k for `Chi`. `None` → Athena's defaults.
+    /// absolute k for `Chi`. `None` selects −20 to +30 eV or 3 to 12 Å⁻¹.
+    /// Reversed bounds are swapped; only reference-grid samples in the range are kept.
     pub range: Option<(f64, f64)>,
     /// Subtract the mean spectrum before the SVD (default `false`).
     pub center: bool,
@@ -59,6 +75,7 @@ impl Default for PcaConfig {
 /// Trained PCA model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PcaModel {
+    /// Spectral representation used for training and target interpolation.
     pub space: AnalysisSpace,
     /// Whether `mean` was subtracted before the decomposition.
     pub centered: bool,
@@ -73,9 +90,11 @@ pub struct PcaModel {
     /// Orthonormal components, one row per component (n_components × n_points),
     /// ordered by decreasing eigenvalue.
     pub components: DMatrix<f64>,
-    /// Eigenvalues of the covariance matrix, `σᵢ² / n_spectra`.
+    /// Eigenvalues of `DᵀD / n_spectra`, in squared spectral units.
+    /// These are second moments when uncentered; see the module's convention.
     pub eigenvalues: Vec<f64>,
-    /// Fraction of the total variance carried by each component.
+    /// Fraction `σᵢ² / Σσ²` of centered variation or uncentered squared signal.
+    /// All fractions are zero for an all-zero training matrix.
     pub variance_explained: Vec<f64>,
     /// Running sum of `variance_explained`.
     pub cumulative_variance: Vec<f64>,
@@ -90,7 +109,9 @@ pub struct PcaModel {
 /// Reconstruction of a spectrum from a subset of components.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PcaFit {
+    /// Number of retained components; zero reconstructs only the stored mean.
     pub n_components: usize,
+    /// Copied model grid: energy in eV or k in Å⁻¹.
     pub x: DVector<f64>,
     /// Input spectrum on the model grid.
     pub data: DVector<f64>,
@@ -102,13 +123,19 @@ pub struct PcaFit {
     pub weights: Vec<f64>,
     /// Σ residual².
     pub chi_square: f64,
-    /// χ² / (n_points − n_components).
+    /// `chi_square / max(n_points - n_components, 1)`, without a noise model.
     pub reduced_chi_square: f64,
-    /// Σ residual² / Σ data².
+    /// Σ residual² / Σ data²; NaN when the input has zero squared norm.
     pub r_factor: f64,
 }
 
-/// Train a PCA model on `spectra`.
+/// Train an owned PCA model from at least two already-processed spectra.
+///
+/// Linear interpolation uses the first spectrum's selected grid and holds the
+/// other spectra's endpoint values outside their coverage. Select a common
+/// measured interval to avoid introducing artificial constant tails. Returns
+/// an error for missing processing arrays, fewer than two selected points,
+/// invalid interpolation inputs, or failed singular-value decomposition.
 pub fn pca_train<S: Borrow<XASSpectrum>>(
     spectra: &[S],
     cfg: &PcaConfig,
@@ -212,10 +239,12 @@ fn malinowski_ind(eigenvalues: &[f64], n_spectra: usize, n_points: usize) -> Vec
 }
 
 impl PcaModel {
+    /// Number of spectra used to train the model.
     pub fn n_spectra(&self) -> usize {
         self.data.nrows()
     }
 
+    /// Number of available SVD components, at most min(spectra, grid points).
     pub fn n_components(&self) -> usize {
         self.components.nrows()
     }
@@ -245,7 +274,9 @@ impl PcaModel {
     }
 
     /// Reconstruct a spectrum given on the model grid from its first
-    /// `n_components` components.
+    /// `n_components` components, returning owned arrays without changing the model.
+    /// The input length must equal the model grid length; no interpolation occurs.
+    /// Zero components returns the mean (zero for an uncentered model).
     pub fn reconstruct(
         &self,
         y: &DVector<f64>,

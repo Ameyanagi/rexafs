@@ -1,3 +1,22 @@
+//! Evaluate the FEFF scattering-path model on a requested k grid.
+//!
+//! [`path2chi`] returns the imaginary part of the complex path expression;
+//! [`ff2chi`] sums enabled paths. Amplitudes include the file's reduction
+//! factor, and total phase is `real_phc + pha_feff`. The energy correction uses
+//! signed `q = sign(k² - e0·ETOK) sqrt(abs(k² - e0·ETOK))`; `e0` is a relative
+//! shift in eV, not the absolute absorption-edge energy.
+//!
+//! FEFF columns are interpolated with a not-a-knot cubic spline (linear for
+//! at most three samples). Outside tabulated k, the end polynomial pieces are
+//! extrapolated; the historical helper name containing `clamped` does not mean
+//! endpoint values are held. Prefer grids inside the available FEFF range.
+//! Small-denominator guards regularize near-zero q, mean free path, and distance.
+//! The first returned complex sample is replaced by `2·sample[1] - sample[2]`
+//! for every input grid. This is an implementation convention, not an extra
+//! physical scattering term. See [`super::types::FeffPathModel`] for parameter
+//! units and [Rehr and Albers (2000)](https://doi.org/10.1103/RevModPhys.72.621)
+//! for the multiple-scattering basis of EXAFS modeling.
+
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -14,8 +33,11 @@ use super::variables::resolve_path_param;
 const SMALL_ENERGY: f64 = 1.0e-6;
 
 #[derive(Debug, Clone)]
+/// Owned total and individual path spectra, without k-weighting or windows.
 pub struct FF2ChiOutput {
+    /// Sum of enabled paths, dimensionless on the supplied k grid.
     pub chi: DVector<f64>,
+    /// Path labels and dimensionless contributions, in enabled input order.
     pub path_chi: Vec<(String, DVector<f64>)>,
 }
 
@@ -31,6 +53,8 @@ pub(crate) struct PathParams {
     fourth: f64,
 }
 
+/// Read a path and initialize corrections to their documented defaults.
+/// See [`super::feffpath`] for supported file flavors and failure conditions.
 pub fn feffpath<P: AsRef<Path>>(
     path: P,
     flavor: FeffFlavor,
@@ -44,6 +68,8 @@ pub fn feffpath<P: AsRef<Path>>(
     Ok(FeffPathModel::from_feffdat(label, parsed))
 }
 
+/// Evaluate one path on a finite k grid in Å⁻¹, returning owned dimensionless χ.
+/// Requires at least three samples; see the module documentation for conventions.
 pub fn path2chi(
     path: &FeffPathModel,
     vars: &FitVariables,
@@ -55,6 +81,8 @@ pub fn path2chi(
     Ok(chi)
 }
 
+/// Sum enabled paths on the supplied k grid and retain each contribution.
+/// Returns an error if no path is enabled or an expression/path cannot be evaluated.
 pub fn ff2chi(
     paths: &[FeffPathModel],
     vars: &FitVariables,

@@ -1,12 +1,12 @@
 //! Ranking and default selection of FEFF scattering paths.
 //!
-//! FEFF writes every path below its `RPATH` cutoff, which for a typical
-//! 6–8 Å cluster is dozens of files, most of which contribute nothing a fit
-//! can resolve. [`rank_paths`] turns the parsed path files into
+//! FEFF path output depends on distance, leg-count, and amplitude cutoffs.
+//! [`rank_paths`] turns the parsed path files into
 //! [`PathInfo`] records with a human label, an importance estimate, a shell
 //! assignment and the constituent shells of multiple-scattering paths, and
 //! [`select_default`] picks the single-scattering shells inside the fit
-//! window that carry real amplitude.
+//! window above a numerical importance threshold. This is a starting selection,
+//! not a test of physical significance; inspect multiple-scattering paths too.
 
 use serde::{Deserialize, Serialize};
 
@@ -14,8 +14,9 @@ use super::element::Element;
 use crate::xafs::fitting::types::FeffDat;
 
 /// Shell grouping tolerance for single-scattering distances (Å): paths
-/// closer than this share a shell (hcp first-shell splits of ~0.05 Å are
-/// fitted with one ΔR / σ², as in common practice).
+/// within this distance of a shell's first path can share a shell when the
+/// scatterer element agrees. This is a rexafs grouping heuristic, not a
+/// measured resolution limit or proof that paths must share fit parameters.
 pub const SHELL_TOL: f64 = 0.1;
 /// Tolerance when matching a scatterer's distance to a shell (Å).
 const LEG_SHELL_TOL: f64 = 0.10;
@@ -35,7 +36,8 @@ pub struct PathInfo {
     pub reff: f64,
     pub degen: f64,
     pub nleg: usize,
-    /// Relative amplitude, 0–100 (100 = strongest path of the set).
+    /// Relative estimated amplitude, 0–100 (100 = strongest in this set).
+    /// This is neither a fitted fraction nor a statistical significance level.
     pub importance: f64,
     /// 1-based single-scattering shell this path belongs to (an SS path's
     /// own shell; for MS paths the outermost constituent shell), 0 when no
@@ -134,6 +136,14 @@ fn raw_importance(dat: &FeffDat) -> f64 {
 
 /// Rank paths: labels, importance (0–100), shells and constituent shells.
 /// The returned vector is in the input order (`index` = position).
+///
+/// Importance averages `N |f(k)| red_fact exp(-2 reff/λ)/(k reff²)` over
+/// available samples from 3–12 Å⁻¹, then divides by the largest path estimate.
+/// Here N is degeneracy, f is FEFF's amplitude in Å, and reff/λ are in Å.
+/// No sample-spacing weights, path interference, fitted disorder, or S₀² are
+/// included. The dimensionless score is a rexafs selection heuristic based on
+/// the EXAFS envelope; see [Rehr and Albers (2000)](https://doi.org/10.1103/RevModPhys.72.621)
+/// for the scattering theory. Relative scores change when the input path set changes.
 pub fn rank_paths(paths: &[FeffDat]) -> Vec<PathInfo> {
     let raw: Vec<f64> = paths.iter().map(raw_importance).collect();
     let max = raw.iter().copied().fold(0.0_f64, f64::max);

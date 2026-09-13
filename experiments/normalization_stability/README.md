@@ -11,14 +11,17 @@ The independent and C1 methods use the two-term Victoreen pre-edge curve
 `a(E0/E)^3 + b(E0/E)^4`. All methods fit only observations in the selected
 pre-edge and post-edge windows. The edge/XANES gap remains excluded.
 
-Run it from anywhere in the repository with:
+Run it from the repository root with:
 
 ```sh
 uv run experiments/normalization_stability/compare.py
 ```
 
 The script uses PEP 723 inline metadata, so `uv` creates the environment and
-installs NumPy automatically. Results are written to `results/`:
+installs NumPy automatically. By default, results are written to
+`experiments/normalization_stability/results/`, regardless of the working
+directory. From another directory, pass the absolute path to `compare.py`.
+The output files are:
 
 - `report.md`: concise comparison tables and metric definitions;
 - `summary.json`: machine-readable aggregate metrics;
@@ -28,8 +31,9 @@ installs NumPy automatically. Results are written to `results/`:
 - `interactive-normalization.html`: interactive comparison using the actual Ru
   and Cu test spectra, including an adjustable E0.
 
-The script asserts exact first-derivative continuity for all three constrained
-models.
+The script checks first-derivative continuity for all three constrained models
+at the nominal windows, using an absolute tolerance of `1e-14` absorption units
+per eV.
 
 ## Scope and reproducibility
 
@@ -94,9 +98,28 @@ the same least-squares problem. The fitted observation sets exclude the edge gap
 The implementations are [`fit_current`, `fit_c1_anchored`, `fit_c1_joint` and
 `fit_shared_polynomial`](compare.py).
 
+Each solve minimizes the unweighted sum of squared differences between the
+selected absorption observations and its model. All observations have equal
+weight, so a region containing more samples contributes more terms; the joint
+models do not balance the two regions by their sample counts or propagate
+measurement uncertainties. The Python implementation calls
+[`numpy.linalg.lstsq`](https://numpy.org/doc/stable/reference/generated/numpy.linalg.lstsq.html)
+with `rcond=None`, using NumPy's default numerical rank cutoff. This specifies
+the numerical solve, not a physical justification for the candidate constraints.
+
+The experiment normalizes each spectrum as $(\mu(E)-p(E))/s$, where $p(E)$ is
+the fitted pre-edge baseline and $s$ is the fitted edge step, both in absorption
+units. Its flattened output uses $(\mu(E)-q(E))/s+1$ from the sample nearest
+$E_0$ onward, where $q(E)$ is the fitted post-edge baseline; earlier samples keep
+the normalized value. Both outputs are dimensionless. `_finish_fit` rejects
+nonfinite steps and steps no greater than `1e-12` in the input absorption units.
+This threshold and the nearest-sample flattening boundary are choices of the
+prototype; they are not definitions of production normalization.
+
 ## Meaning of the stability metrics
 
-For each model and spectrum, the 625 window combinations give fitted steps
+For each model and spectrum, each of the two sweeps in `make_sweeps` has 625
+window combinations for the included Ru/Cu datasets. These give fitted steps
 $s_1,\ldots,s_{625}$. The reported relative step spread is
 
 $$
@@ -105,7 +128,8 @@ $$
 $$
 
 The script uses population standard deviation across the enumerated window
-choices (`ddof=0`). The 5–95% span instead uses the difference between the 95th
+choices ([`numpy.std`, `ddof=0`](https://numpy.org/doc/stable/reference/generated/numpy.std.html)).
+The 5–95% span instead uses the difference between the 95th
 and 5th percentiles, divided by the same absolute median. Neither is a statistical
 confidence interval from repeated independent measurements.
 
