@@ -197,7 +197,7 @@ jobs:
           node-version: '24'
       - name: Restore the pinned browser engine build tool
         id: wasm-pack-cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/wasm-pack
           key: wasm-pack-${{ runner.os }}-${{ runner.arch }}-rust-1.98.1-0.15.0
@@ -325,7 +325,7 @@ jobs:
           name: linux-gui-smoke-${{ matrix.target }}
           path: target/linux-gui-smoke-${{ matrix.target }}.tar.gz
           if-no-files-found: warn
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         if: runner.os == 'Windows'
         with:
           version: '0.12.3'
