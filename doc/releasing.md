@@ -150,16 +150,19 @@ python scripts/test-release-archive.py
 python scripts/package-desktop.py
 ```
 
-On Windows, use `--no-default-features --features refeff-runner` for both Cargo
-commands. The MSVC desktop cannot link the upstream MinGW FEFF10 archive. The
-same archive tests and packaging script apply; see the
+On Windows, use the same `refeff-runner,feff10-runner` features. The MSVC
+desktop cannot link the upstream MinGW FEFF10 archive, so packaging downloads
+the verified `feff10-rs.exe` helper and its runtime DLLs into `resources/feff10`,
+and the packaged `--self-check-feff` runs FEFF10 through that helper. For the
+source-tree tests, stage the helper first with `python scripts/feff10_worker.py
+target/feff10-helper` and point `REXAFS_FEFF10_EXECUTABLE` at it; see the
 [Windows development instructions](desktop-development.md#windows).
 
 Use Python 3.12+ for the release scripts. `package-macos.sh` remains a macOS build
 convenience wrapper. Archives go to `target/distributions/` with version and Rust
 host triple in the filename: macOS `.app` ZIP, Linux `.tar.gz`, Windows ZIP.
-Mac archives contain both ReFEFF and FEFF10, an example, license files, a dependency inventory and build
-metadata, with an adjacent SHA-256 checksum. The script extracts the archive into
+All archives contain both ReFEFF and FEFF10, an example, license files, a dependency inventory and build
+metadata, with an adjacent SHA-256 checksum; Windows carries FEFF10 as the helper process. The script extracts the archive into
 a fresh directory and runs its executable's `--version` and `--self-check`.
 The latter processes the packaged example without relying on the source checkout.
 The additional `--self-check-feff` runs each compiled engine on fcc Cu and checks

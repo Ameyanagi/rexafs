@@ -4,6 +4,10 @@ description: "Resolve common installation, data and processing problems."
 audience: user
 ---
 
+Start with the table below. For questions about scope, licensing, file
+formats and interpretation, see the [FAQ](/docs/faq/); for unfamiliar terms,
+see [concepts and glossary](/docs/concepts/).
+
 | Symptom | Check |
 |---|---|
 | Import remains pending | Select the main signal, assign columns, confirm axis units and revalidate. |

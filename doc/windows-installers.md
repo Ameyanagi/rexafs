@@ -31,7 +31,10 @@ Updating those private DLLs requires an updated rexafs installer.
 
 The v0.1.3 installer contains the same application EXE and resources as the
 already-published Windows ZIP. It includes ReFEFF 0.3.0; the FEFF10 prebuilt
-currently uses MinGW and cannot be linked into this MSVC build. Codex CLI is a
+uses MinGW and could not be linked into that MSVC build. Windows bundles built
+from the current source add FEFF10 as the bundled `resources\feff10\feff10-rs.exe`
+helper process with its MinGW runtime DLLs and notices; the installer copies
+the complete bundle tree, so no installer change is needed. Codex CLI is a
 separate optional installation for the assistant. Packaging this release does
 not add unreleased assistant or other GUI changes.
 

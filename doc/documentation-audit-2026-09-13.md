@@ -192,3 +192,39 @@ numerical algorithms are unchanged. The parser derive was isolated solely to
 scope the generated-documentation lint exception; its public rule type is
 re-exported at the existing path. External FEFF executables and live structure
 services were reviewed from source/contracts, not exercised end to end.
+
+## Third pass: website messaging and onboarding
+
+A third review started from `f7a947e` after the user judged the public site's
+visual design good but its explanation of the application too sparse. This pass
+changed presentation and added user pages; it made no numerical or API changes
+and did not alter the release manifest. The manual still targets published 0.2.4.
+
+Homepage and download page:
+
+- The homepage now states what rexafs is and who it is for in plain terms,
+  with four key facts, an eight-item capability grid linked to the guides, the
+  desktop stage bar in analysis order, a four-figure tour using the existing
+  unedited 0.2.4 screenshots, an interface comparison table that keeps the
+  Python/TypeScript processing-only scope explicit, an eight-question FAQ and
+  a fuller footer. The design language, palette, entry panels and tested
+  entry-point links are unchanged.
+- The download page gained a consistent header and footer, an explanation of
+  what each desktop package contains, per-package scope notes and a social
+  preview image derived from the existing brand banner.
+
+Manual:
+
+- New pages: Concepts and glossary, Science overview, and FAQ. Overview,
+  Desktop overview and Release history were expanded with audience, workflow
+  and per-release summaries. Troubleshooting links the FAQ and glossary.
+- Starlight now shows edit links and last-updated dates. The docs header links
+  Science and Download on wide screens.
+- One wording correction: FEFF10 ships in the macOS and Linux 0.2.4 packages,
+  not only macOS, as recorded in the release-build workflow.
+
+Verification: Astro check, five content checks and six browser/accessibility
+checks passed; the new pages were reviewed in full-page desktop and mobile
+captures. A separate change in the same session bundles FEFF10 with Windows
+builds through the upstream helper process; the public manual keeps describing
+the published 0.2.4 Windows package until that change is released.

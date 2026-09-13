@@ -233,6 +233,8 @@ pub fn compiled_features() -> &'static [&'static str] {
 
 /// Exercise the embedded engines from a fresh package, without a checkout or GUI.
 /// FEFF10 is explicitly run as workers, as it is in an initialized macOS GUI.
+/// On Windows it runs through the bundled helper process discovered by the
+/// core runner, which is the route the packaged desktop uses.
 pub fn check_package_backends() -> Result<(), String> {
     let modes = [
         #[cfg(feature = "refeff-runner")]
@@ -266,7 +268,7 @@ pub fn check_package_backends() -> Result<(), String> {
             let workspace = root.join(i.to_string());
             std::fs::create_dir(&workspace).map_err(|e| e.to_string())?;
             std::fs::write(workspace.join("feff.inp"), &input).map_err(|e| e.to_string())?;
-            #[cfg(feature = "feff10-runner")]
+            #[cfg(all(feature = "feff10-runner", not(windows)))]
             if mode == FeffExecutionMode::Feff10Pipeline {
                 let config = feff10::FeffConfigBuilder::new()
                     .work_dir(&workspace)
@@ -281,7 +283,7 @@ pub fn check_package_backends() -> Result<(), String> {
             } else {
                 run_backend(&workspace, mode)?;
             }
-            #[cfg(not(feature = "feff10-runner"))]
+            #[cfg(not(all(feature = "feff10-runner", not(windows))))]
             run_backend(&workspace, mode)?;
             let file = workspace.join("feff0001.dat");
             let path = feffpath(&file.to_string_lossy(), FeffFlavor::Feff85L)

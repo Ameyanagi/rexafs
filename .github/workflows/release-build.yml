@@ -160,10 +160,10 @@ jobs:
             features: refeff-runner,feff10-runner
           - os: ubuntu-24.04
             features: refeff-runner,feff10-runner
-          # The Windows build uses MSVC; the FEFF10 prebuilt
-          # currently targets MinGW and is not compatible with that toolchain.
+          # The MSVC desktop cannot link the MinGW FEFF10 archive; Windows runs
+          # FEFF10 through the bundled upstream helper executable instead.
           - os: windows-2025
-            features: refeff-runner
+            features: refeff-runner,feff10-runner
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -178,10 +178,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential clang cmake pkg-config libasound2-dev libfontconfig-dev libglib2.0-dev libgtk-3-dev libssl-dev libvulkan-dev libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libzstd-dev libsqlite3-dev fonts-dejavu-core mesa-vulkan-drivers xvfb xauth xdotool imagemagick
+      - name: Stage the verified FEFF10 helper for Windows tests
+        if: runner.os == 'Windows'
+        run: python scripts/feff10_worker.py target/feff10-helper
       - name: Project compatibility, publication and desktop regressions
+        env:
+          # Source-tree tests find the helper here; packaging below must not
+          # inherit it so the extracted bundle proves its own helper works.
+          REXAFS_FEFF10_EXECUTABLE: ${{ runner.os == 'Windows' && format('{0}\target\feff10-helper\feff10-rs.exe', github.workspace) || '' }}
         run: cargo test --locked --release -p rexafs-gui --no-default-features --features ${{ matrix.features }}
       - name: Embedded FEFF runner and fitting integration
-        if: runner.os != 'Windows'
+        env:
+          REXAFS_FEFF10_EXECUTABLE: ${{ runner.os == 'Windows' && format('{0}\target\feff10-helper\feff10-rs.exe', github.workspace) || '' }}
         run: cargo test --locked --release -p rexafs --features refeff-runner,feff10-runner --test refeff_runner --test feff10_s02k_parity
       - name: Archive regression checks
         run: python scripts/test-release-archive.py

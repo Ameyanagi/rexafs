@@ -46,7 +46,8 @@ fn main() {
     attach_parent_console();
 
     // Handle re-executed FEFF stage workers before argument or GUI setup.
-    #[cfg(feature = "feff10-runner")]
+    // Windows runs FEFF10 through the bundled helper process instead.
+    #[cfg(all(feature = "feff10-runner", not(windows)))]
     feff10::worker::init();
 
     let first_arg = std::env::args_os().nth(1);

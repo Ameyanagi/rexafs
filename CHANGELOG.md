@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bundle FEFF10 with the Windows desktop. The MSVC build runs FEFF10 through
+  the verified upstream `feff10-rs.exe` helper process and its MinGW runtime
+  libraries in `resources/feff10`, with their notices; ReFEFF is unchanged.
+  Every desktop package now includes both calculation engines.
 - Expand source-owned API help for errors, numerical utilities, structures,
   fitting results and desktop/maintenance operations. Correct QAS sorting,
   retained automatic settings and policy-specific AUTOBK scaling explanations.
