@@ -82,13 +82,32 @@ jobs:
         run: cargo install wasm-pack --locked --version 0.15.0
       - name: Verify the browser engine build tool version
         run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore Rust and WASM compilation dependencies
+        id: rust-dependencies
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             website/.cache/rustdoc
-          key: website-rustdoc-${{ runner.os }}-1.98.1-${{ hashFiles('website/src/data/release.json', 'website/scripts/rustdoc-header.html') }}
+            !website/.cache/rustdoc/doc
+            website/.cache/wasm
+          key: website-rust-deps-v2-${{ runner.os }}-${{ runner.arch }}-1.98.1-${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'rust-toolchain.toml', '.cargo/config*') }}
+          restore-keys: |
+            website-rust-deps-v2-${{ runner.os }}-${{ runner.arch }}-1.98.1-
+      - name: Identify Rust reference inputs
+        id: rustdoc-keys
+        run: node website/scripts/build-rust-reference.mjs --cache-keys
+      - name: Restore published Stable Rust reference
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: website/.cache/rustdoc-html/stable
+          key: website-rustdoc-stable-v1-${{ steps.rustdoc-keys.outputs.stable }}
+      - name: Restore source-checkout Next Rust reference
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: website/.cache/rustdoc-html/next
+          key: website-rustdoc-next-v1-${{ steps.rustdoc-keys.outputs.next }}
       - name: Install website dependencies
         run: npm --prefix website ci
       - name: Verify documentation inheritance and release boundaries
@@ -105,7 +124,11 @@ jobs:
           DOCS_CARGO_TARGET_DIR: ${{ github.workspace }}/website/.cache/rustdoc
         run: node website/scripts/build-rust-reference.mjs
       - name: Check, build and verify public content
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/website/.cache/wasm
         run: |
+          # Reuse dependency compilation while rebuilding our browser engine.
+          cargo clean --locked --release --target wasm32-unknown-unknown -p rexafs -p rexafs-wasm
           npm --prefix website run check
           npm --prefix website run build
           npm --prefix website test
@@ -114,6 +137,17 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           npm run test:browser
+      - name: Save shared compilation dependencies from main
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.rust-dependencies.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            website/.cache/rustdoc
+            !website/.cache/rustdoc/doc
+            website/.cache/wasm
+          key: ${{ steps.rust-dependencies.outputs.cache-primary-key }}
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:

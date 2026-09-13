@@ -39,14 +39,21 @@ subscript is rendered smaller than its base.
 
 Open the preview's `/rexafs/` path. `npm --prefix website run dev` gives live
 editing; generate Rust reference files first if you want their links to work.
-The Rust generator downloads the published crate, verifies its recorded SHA-256,
-and runs rustdoc with the default backend and optional capabilities, with no
+On a cache miss, the Rust generator downloads the published crate, verifies its
+recorded SHA-256, and runs rustdoc with the default backend and optional capabilities, with no
 dependency documentation. It deliberately excludes `ndarray-compat`, which
 replaces several default numerical modules with legacy implementations. Cargo may
 download optional engine build artifacts. Existing warnings in the published
 crate's rustdoc remain visible in the build log; the website does not patch a
 release's source silently. Set `DOCS_CARGO_TARGET_DIR` to an absolute cache path
-to reuse compilation between local builds.
+to reuse compilation between local builds. Stable and Next HTML are cached
+separately in `website/.cache/rustdoc-html/`; `DOCS_HTML_CACHE_DIR` can select
+another directory. Each restore checks the source identity and every cached
+file's SHA-256. Stable follows the published crate checksum; Next follows the
+checkout's source bytes, including embedded data and local dependencies. Both
+include compiler identity, the header and build policy. Unrelated website copy
+and release download metadata do not require another Rustdoc build. Delete the
+HTML cache to force regeneration.
 
 For browser checks, run these commands inside `website/`:
 
@@ -157,8 +164,9 @@ follow the vendor README and preserve the original notice bytes.
   updated Rust comments and API. Its banner states that it is unreleased and
   links back to Stable. Do not use it as evidence of a released signature.
   Missing public Rust documentation and broken intra-doc links fail the Next
-  build. Generated HTML is cleared between channels while compilation caches
-  are reused, so obsolete pages cannot carry over into the release reference.
+  build. Cache misses clear generated HTML between channels; cache hits verify
+  every retained file. Both completely replace the public output directory,
+  so obsolete pages cannot carry over into the reference.
 - `src/data/api-citations.json` is generated from authored API documentation
   links, including scientific papers, specifications and supporting code. New
   links must still be reviewed for relevance and explained where they are used.

@@ -139,6 +139,23 @@ Use another fresh environment to rebuild/install the sdist, run
 supported CPython minor (3.10–3.14), OS and architecture. Linux
 wheels must meet the declared manylinux policy; a local Linux wheel is insufficient.
 
+For the unreleased ABI3 source profile, build once per platform and install those
+same wheel bytes on all five interpreters. Run `scripts/check-python-wheels.py`
+against the wheel directory before and after installation (`--installed`). Test
+both the latest compatible NumPy and these minimum binary releases:
+
+| CPython | Minimum NumPy wheel |
+|---|---|
+| 3.10 | 1.23.0 |
+| 3.11 | 1.23.4 |
+| 3.12 | 1.26.0 |
+| 3.13 | 2.1.0 |
+| 3.14 | 2.3.3 |
+
+Use `--numpy-version VERSION` to verify each installed minimum. NumPy has its
+own binary compatibility requirements; CPython's stable ABI does not replace
+these runtime checks. See [NumPy's downstream guidance](https://numpy.org/doc/stable/dev/depending_on_numpy.html).
+
 JavaScript:
 
 ```bash
@@ -261,7 +278,9 @@ It builds and tests:
 - the non-GPL dependency license policy across all features and platform branches,
   plus the Apache sum_tree patch's upstream tests;
 - the Rust source crate on Ubuntu;
-- CPython 3.10–3.14 wheels on Ubuntu, Apple Silicon macOS, Intel macOS and Windows;
+- four `cp310-abi3` wheels on Ubuntu x64, Apple Silicon macOS, Intel macOS and
+  Windows x64, with all 20 CPython 3.10–3.14 runtime combinations testing the
+  downloaded wheel against minimum and latest compatible NumPy;
 - the Python sdist, including an installation rebuilt from that source archive;
 - the npm tarball, Node/browser numerical tests and an installed TypeScript consumer;
 - desktop archives on macOS 15 ARM64/Intel, Ubuntu 24.04 x64/ARM64 and Windows
@@ -275,7 +294,19 @@ the extracted archive. Linux GUI evidence uses a separate archive per target so
 its image/log filenames cannot collide in the flat release manifest. Python's
 wheel matrix remains separate; adding a desktop target does not add a wheel.
 
-The final manifest job requires **every** build job to succeed. `SHA256SUMS` uses
+The four-wheel ABI3 profile is **unreleased**; 0.2.5 retains its 20 published
+per-interpreter wheels. PyO3's `abi3-py310` feature selects the CPython stable
+binary interface with a 3.10 minimum. This qualification covers GIL-enabled
+interpreters only; see [PyO3's ABI documentation](https://pyo3.rs/v0.29.2/building-and-distribution.html#py_limited_apiabi3abi3t).
+The workflow verifies wheel names, metadata, platform baselines and installed
+package bytes, preserves the Linux 3.12 editor check, and checks that the sdist
+retains the stable-ABI feature before rebuilding and testing it. Publication
+selects the ABI profile from the immutable source tag: new ABI3 releases require
+exactly four wheels, while historical tags retain their original manifest
+inventory. A future versioned release must qualify this profile before upload;
+do not replace or relabel 0.2.5 assets.
+
+The final manifest job requires **every** build and runtime job to succeed. `SHA256SUMS` uses
 flat asset names so it also works after downloading all GitHub Release assets into
 one directory. A matrix entry is a qualification target, not evidence of support;
 record the actual successful run and perform GUI launch/import/process/project

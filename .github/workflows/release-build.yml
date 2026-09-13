@@ -100,6 +100,7 @@ jobs:
       - run: python scripts/test-release-version.py
       - run: python scripts/test-release-maintenance.py
       - run: python scripts/test-registry-artifacts.py
+      - run: python scripts/test-python-wheels.py
       - run: python scripts/test-release-downloads.py
       - run: python scripts/test-desktop-channels.py
       - run: python scripts/test-macos-installer.py
@@ -123,7 +124,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15, macos-15-intel, windows-2025]
-        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -132,31 +132,68 @@ jobs:
           toolchain: 1.98.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: ${{ matrix.python }}
+          python-version: '3.12'
       - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
         with:
           command: build
-          args: --release --locked --manifest-path py-rexafs/Cargo.toml --out dist --interpreter python${{ matrix.python }}
+          args: --release --locked --manifest-path py-rexafs/Cargo.toml --out dist --interpreter python3.12
+          maturin-version: 'v1.12.6'
           manylinux: auto
           rust-toolchain: '1.98.1'
+      - name: Require one wheel with the intended stable ABI and platform metadata
+        run: python scripts/check-python-wheels.py dist --platform ${{ matrix.os }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wheel-${{ matrix.os }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  python-runtime:
+    name: Python runtime (${{ matrix.os }}, ${{ matrix.runtime.python }})
+    needs: [scope, python]
+    if: needs.scope.outputs.full == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, macos-15-intel, windows-2025]
+        # Earliest NumPy wheel release for each supported CPython minor on all
+        # four platforms. Latest NumPy is tested separately in the same job.
+        runtime:
+          - {python: '3.10', numpy: '1.23.0'}
+          - {python: '3.11', numpy: '1.23.4'}
+          - {python: '3.12', numpy: '1.26.0'}
+          - {python: '3.13', numpy: '2.1.0'}
+          - {python: '3.14', numpy: '2.3.3'}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.runtime.python }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: wheel-${{ matrix.os }}
+          path: dist
+      - run: python scripts/check-python-wheels.py dist --platform ${{ matrix.os }}
       - run: python -m pip install --no-index --find-links dist rexafs --no-deps
-      - run: python -m pip install numpy
+      - run: python -m pip install --only-binary=":all:" numpy==${{ matrix.runtime.numpy }}
+      - name: Verify installed bytes and the minimum NumPy version
+        run: python scripts/check-python-wheels.py dist --platform ${{ matrix.os }} --installed --numpy-version ${{ matrix.runtime.numpy }}
+      - run: python py-rexafs/tests/test_api.py
+      - run: python -m pip install --upgrade --only-binary=":all:" numpy
+      - name: Verify the same wheel with the latest compatible NumPy
+        run: python scripts/check-python-wheels.py dist --platform ${{ matrix.os }} --installed
       - run: python py-rexafs/tests/test_api.py
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: matrix.os == 'ubuntu-24.04' && matrix.python == '3.12'
+        if: matrix.os == 'ubuntu-24.04' && matrix.runtime.python == '3.12'
         with:
           node-version: '24'
       - name: Check installed Python wheel completion and hover help
-        if: matrix.os == 'ubuntu-24.04' && matrix.python == '3.12'
+        if: matrix.os == 'ubuntu-24.04' && matrix.runtime.python == '3.12'
         shell: bash
         run: |
           npm --prefix js-rexafs ci
           REXAFS_PYTHON="$(python -c 'import sys; print(sys.executable)')" npm --prefix js-rexafs run test:python-editor
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: wheel-${{ matrix.os }}-${{ matrix.python }}
-          path: dist/*.whl
-          if-no-files-found: error
 
   sdist:
     needs: scope
@@ -172,7 +209,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install maturin twine
       - run: maturin sdist --manifest-path py-rexafs/Cargo.toml --out dist
-      - run: python scripts/check-python-sdist.py dist/*.tar.gz
+      - run: python scripts/check-python-sdist.py dist/*.tar.gz --require-abi3
       - run: twine check dist/*
       - run: python -m pip install dist/*.tar.gz
       - run: python py-rexafs/tests/test_api.py
@@ -362,7 +399,7 @@ jobs:
           if-no-files-found: error
 
   manifest:
-    needs: [scope, licenses, core, python, sdist, npm, desktop]
+    needs: [scope, licenses, core, python, python-runtime, sdist, npm, desktop]
     if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -374,7 +411,9 @@ jobs:
         with:
           path: artifacts
       - name: Hash every qualified distribution
-        run: python scripts/check-artifacts.py create artifacts SHA256SUMS
+        run: |
+          python scripts/check-python-wheels.py artifacts --inventory
+          python scripts/check-artifacts.py create artifacts SHA256SUMS
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-manifest
@@ -384,7 +423,7 @@ jobs:
   result:
     name: Release checks
     if: always()
-    needs: [scope, licenses, core, python, sdist, npm, desktop, manifest]
+    needs: [scope, licenses, core, python, python-runtime, sdist, npm, desktop, manifest]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -394,4 +433,4 @@ jobs:
       - name: Require all selected checks or an intentional documentation-only skip
         env:
           CI_NEEDS_JSON: ${{ toJSON(needs) }}
-        run: python scripts/check-ci-results.py --selector scope --jobs licenses core python sdist npm desktop manifest
+        run: python scripts/check-ci-results.py --selector scope --jobs licenses core python python-runtime sdist npm desktop manifest
