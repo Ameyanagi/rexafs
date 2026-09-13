@@ -4,8 +4,7 @@ description: "Stages, outputs, units and invalidation across the libraries."
 audience: user
 ---
 
-All interfaces use the same mutable spectrum workflow. A requested stage computes
-missing prerequisites. Explicitly requesting a stage recomputes that stage.
+Each stage computes missing prerequisites and recomputes its own results.
 
 | Stage | Calculation | Results |
 |---|---|---|
@@ -49,14 +48,13 @@ does not reset every inferred parameter: after `fft()`, changing the background
 fresh `XrayFFTF` to infer spacing from the new background grid. After changing
 forward `nfft` or spacing, assign a fresh `XrayFFTR` to infer the inverse grid
 again. Reapply desired window and range overrides to the new configuration.
-This behavior is documented on the generated [transform settings and spectrum
-methods](/docs/reference/); the available setters depend on your installed version.
+Stable 0.2.4 has no Python/TypeScript `set_ifft()`; use a fresh spectrum when
+changing grids after a back-transform, or use the [Next API](/docs/reference/).
 
-Prefer setters to direct Rust field edits; legacy field edits require explicit
-invalidation. Existing project defaults and automatic settings should be recorded
-when reproducing a result in another interface.
+Prefer setters to direct Rust field edits, which require explicit invalidation.
+Record defaults and resolved automatic settings when reproducing an analysis.
 
 Stable 0.2.4 uses zero-argument settings constructors in Python/TypeScript, with
-fields assigned afterward. See [Python](/docs/libraries/python/) and
-[TypeScript](/docs/libraries/typescript/) for complete examples. New constructor
-arguments and inverse setters belong to the [Next API](/docs/reference/).
+fields assigned afterward; Next adds constructor arguments. See
+[Python](/docs/libraries/python/) and [TypeScript](/docs/libraries/typescript/)
+for stable examples.

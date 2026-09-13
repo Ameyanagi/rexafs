@@ -11,15 +11,15 @@ The fixed endpoint penalty below is a **rexafs-specific modification**, not an
 objective attributed to that paper. Start with the
 [processing theory guide](/docs/science/processing/) for the absorption, k and R definitions.
 
-New analyses in the default Rust backend, desktop, Python and Wasm use `LinearDirect` with `clamp_scale_policy = FixedPenalty` and
-`clamp_lambda = 0.001`. This implements the weak fixed penalty tested in the
+In 0.2.4, the default Rust backend, desktop, Python and Wasm use `LinearDirect`
+with `clamp_scale_policy = FixedPenalty` and `clamp_lambda = 0.001`, the weak
+fixed penalty tested in the
 [clamp study](https://github.com/Ameyanagi/rexafs/blob/6cb668dfcba41f02db102fde7c8a091947468f83/doc/benchmarks/2026-09-07-clamp-study/README.md). The study's training
 minimum was $\lambda=0$, with weak penalties practically tied; 0.001 is a conservative
 weak-penalty choice, not a universally optimal value.
 
 The optional Rust `ndarray-compat` feature retains the historical `Fixed` and
 `TwoPass` objectives and does not expose `FixedPenalty` or `clamp_lambda`.
-Do not enable that feature when reproducing the fixed-penalty method below.
 
 For the vector of fitted cubic-spline coefficients $\mathbf c$, let
 $\chi(\mathbf c)$ be the edge-step-normalized spectrum, minus an optional
@@ -86,7 +86,6 @@ kstep and nfft still determine the physical R grid and cutoff. The fixed
 reference amplitude also makes the reported $\lambda$ directly comparable with the
 prototype at both tested k steps; changing the window or k-weight changes the
 objective and can change the effective balance with the endpoint term.
-
 
 ## Spline flexibility and the low-R region
 

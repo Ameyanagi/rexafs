@@ -103,3 +103,87 @@ doc/series.md,user,publish,/docs/desktop/series/,Scan order and sampled overview
 doc/documentation-audit-2026-09-13.md,developer,exclude,,Source-to-documentation audit scope corrections and validation evidence.
 doc/documentation-site-plan.md,developer,exclude,,Historical website implementation plan and content boundary; current maintenance lives in website/README.md.
 website/README.md,developer,exclude,,Website source ownership generation validation and deployment maintenance.
+doc/documentation-api-roadmap.md,developer,exclude,,Documentation review and implementation recommendations; not a public how-to.
+doc/webassembly.md,developer,exclude,,Documentation review and implementation recommendations; not a public how-to.
+website/src/content/docs/docs/libraries/webassembly.md,user,publish,/docs/libraries/webassembly/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/concepts.md,user,publish,/docs/concepts/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/desktop.md,user,publish,/docs/desktop/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/desktop/assistant.md,user,publish,/docs/desktop/assistant/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/desktop/fitting.md,user,publish,/docs/desktop/fitting/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/desktop/import.md,user,publish,/docs/desktop/import/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/desktop/multiple-spectra.md,user,publish,/docs/desktop/multiple-spectra/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/desktop/processing.md,user,publish,/docs/desktop/processing/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/desktop/projects.md,user,publish,/docs/desktop/projects/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/desktop/publication.md,user,publish,/docs/desktop/publication/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/desktop/series.md,user,publish,/docs/desktop/series/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/desktop/structures.md,user,publish,/docs/desktop/structures/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/desktop/xdi.md,user,publish,/docs/desktop/xdi/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/faq.md,user,publish,/docs/faq/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/getting-started.md,user,publish,/docs/getting-started/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/getting-started/first-analysis.md,user,publish,/docs/getting-started/first-analysis/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/getting-started/install.md,user,publish,/docs/getting-started/install/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/getting-started/updates.md,user,publish,/docs/getting-started/updates/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/libraries.md,user,publish,/docs/libraries/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/libraries/python.md,user,publish,/docs/libraries/python/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/libraries/rust.md,user,publish,/docs/libraries/rust/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/libraries/spectrum-api.md,user,publish,/docs/libraries/spectrum-api/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/libraries/typescript.md,user,publish,/docs/libraries/typescript/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/reference.md,user,publish,/docs/reference/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/reference/next/python/autobk.md,user,generated,/docs/reference/next/python/autobk/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/python/backgroundmethod.md,user,generated,/docs/reference/next/python/backgroundmethod/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/python/io-read_qas_transmission.md,user,generated,/docs/reference/next/python/io-read_qas_transmission/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/python/normalizationmethod.md,user,generated,/docs/reference/next/python/normalizationmethod/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/python/prepostedge.md,user,generated,/docs/reference/next/python/prepostedge/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/python/spectrum.md,user,generated,/docs/reference/next/python/spectrum/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/python/types.md,user,generated,/docs/reference/next/python/types/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/python/xrayfftf.md,user,generated,/docs/reference/next/python/xrayfftf/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/python/xrayfftr.md,user,generated,/docs/reference/next/python/xrayfftr/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/autobk.md,user,generated,/docs/reference/next/typescript/autobk/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/autobkclampscalepolicy.md,user,generated,/docs/reference/next/typescript/autobkclampscalepolicy/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/autobkoptions.md,user,generated,/docs/reference/next/typescript/autobkoptions/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/autobksolver.md,user,generated,/docs/reference/next/typescript/autobksolver/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/backgroundmethod.md,user,generated,/docs/reference/next/typescript/backgroundmethod/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/fftgrid.md,user,generated,/docs/reference/next/typescript/fftgrid/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/ftwindow.md,user,generated,/docs/reference/next/typescript/ftwindow/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/init-browser.md,user,generated,/docs/reference/next/typescript/init-browser/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/init-node.md,user,generated,/docs/reference/next/typescript/init-node/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/normalizationmethod.md,user,generated,/docs/reference/next/typescript/normalizationmethod/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/prepostedge.md,user,generated,/docs/reference/next/typescript/prepostedge/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/prepostedgeoptions.md,user,generated,/docs/reference/next/typescript/prepostedgeoptions/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/spectrum.md,user,generated,/docs/reference/next/typescript/spectrum/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/xrayfftf.md,user,generated,/docs/reference/next/typescript/xrayfftf/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/xrayfftfoptions.md,user,generated,/docs/reference/next/typescript/xrayfftfoptions/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/xrayfftr.md,user,generated,/docs/reference/next/typescript/xrayfftr/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/next/typescript/xrayfftroptions.md,user,generated,/docs/reference/next/typescript/xrayfftroptions/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/python/autobk.md,user,generated,/docs/reference/stable/python/autobk/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/python/backgroundmethod.md,user,generated,/docs/reference/stable/python/backgroundmethod/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/python/io-read_qas_transmission.md,user,generated,/docs/reference/stable/python/io-read_qas_transmission/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/python/normalizationmethod.md,user,generated,/docs/reference/stable/python/normalizationmethod/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/python/prepostedge.md,user,generated,/docs/reference/stable/python/prepostedge/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/python/spectrum.md,user,generated,/docs/reference/stable/python/spectrum/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/python/types.md,user,generated,/docs/reference/stable/python/types/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/python/xrayfftf.md,user,generated,/docs/reference/stable/python/xrayfftf/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/autobk.md,user,generated,/docs/reference/stable/typescript/autobk/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/autobkclampscalepolicy.md,user,generated,/docs/reference/stable/typescript/autobkclampscalepolicy/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/autobksolver.md,user,generated,/docs/reference/stable/typescript/autobksolver/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/backgroundmethod.md,user,generated,/docs/reference/stable/typescript/backgroundmethod/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/fftgrid.md,user,generated,/docs/reference/stable/typescript/fftgrid/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/ftwindow.md,user,generated,/docs/reference/stable/typescript/ftwindow/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/init-browser.md,user,generated,/docs/reference/stable/typescript/init-browser/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/init-node.md,user,generated,/docs/reference/stable/typescript/init-node/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/normalizationmethod.md,user,generated,/docs/reference/stable/typescript/normalizationmethod/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/prepostedge.md,user,generated,/docs/reference/stable/typescript/prepostedge/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/spectrum.md,user,generated,/docs/reference/stable/typescript/spectrum/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/xrayfftf.md,user,generated,/docs/reference/stable/typescript/xrayfftf/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/science.md,user,publish,/docs/science/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/science/analysis.md,user,publish,/docs/science/analysis/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/science/autobk.md,user,publish,/docs/science/autobk/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/science/fitting-statistics.md,user,publish,/docs/science/fitting-statistics/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/science/fourier-compatibility.md,user,publish,/docs/science/fourier-compatibility/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/science/processing.md,user,publish,/docs/science/processing/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/science/references.mdx,user,publish,/docs/science/references/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/docs/troubleshooting.md,user,publish,/docs/troubleshooting/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/licenses.md,user,publish,/licenses/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+website/src/content/docs/releases.md,user,publish,/releases/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
+doc/release-notes-0.2.5.md,developer,exclude,,Candidate 0.2.5 release notes; publish with verified artifacts and qualification evidence.
+doc/validation/2026-09-13-release-0.2.5/review.md,developer,exclude,,Release preparation and exact-build/signing/publication evidence; distinguish pending from completed gates.

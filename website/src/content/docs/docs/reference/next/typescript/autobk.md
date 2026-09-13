@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** This reference describes the source checkout, including additions not available in npm rexafs@0.2.4.
+**Next API · unreleased.** This reference describes the source checkout. Compare with stable npm rexafs@0.2.4 before using it with an installed package.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
@@ -45,8 +45,8 @@ are not written back into the original settings object. Resolved scalar defaults
 are retained in the spectrum. Automatic kmax and nknots remain unset in stored settings
 and are calculated locally for each input.
 
-Stable 0.2.4 uses this constructor without arguments, followed by property assignment. Next
-(the source checkout) also accepts the named options object.
+Named options were added in 0.2.5. Version 0.2.4 uses this constructor without
+arguments, followed by property assignment.
 
 ## free
 

@@ -79,7 +79,8 @@ spectrum.chi()[0];
       assert.match(hoverText("spectrum.chir_real", 10), /kstep\/sqrt\(pi\)/);
       assert.match(hoverText("type AUTOBKClampScalePolicy", 5), /optimization objective/);
       assert.match(hoverText("spectrum.set_background_method", 10), /undefined or null restores default AUTOBK settings/);
-      assert.match(hoverText("spectrum.set_background_method", 10), /work in stable 0.2.4 and Next/);
+      assert.match(hoverText("spectrum.set_background_method", 10), /work in 0\.2\.4 and later/);
+      assert.match(hoverText("spectrum.set_background_method", 10), /direct AUTOBK settings were added in 0\.2\.5/);
       const completeSource = source;
       const completion = suffix => {
         source = completeSource + suffix;
@@ -94,7 +95,7 @@ spectrum.chi()[0];
       const signature = service.getSignatureHelpItems(filename, source.length, {});
       assert.ok(signature?.items.some(item => ts.displayPartsToString(item.parameters[0].displayParts).includes("AUTOBKOptions")));
       assert.ok(signature?.items.some(item => ts.displayPartsToString(item.documentation).includes("recommended defaults")));
-      assert.ok(signature?.items.some(item => ts.displayPartsToString(item.documentation).includes("Stable 0.2.4")));
+      assert.ok(signature?.items.some(item => ts.displayPartsToString(item.documentation).includes("Named options were added in 0.2.5")));
     } finally { service.dispose(); }
   });
 }

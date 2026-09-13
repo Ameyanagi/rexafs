@@ -1,5 +1,8 @@
 # Install rexafs
 
+This source guide targets 0.2.5. During release preparation, use the
+[download page](https://rexafs.com/download/) for currently published packages.
+
 ## Desktop
 
 Choose your platform on the [latest release](https://github.com/Ameyanagi/rexafs/releases/latest).
@@ -7,16 +10,20 @@ Choose your platform on the [latest release](https://github.com/Ameyanagi/rexafs
 | Platform | Install |
 |---|---|
 | macOS ARM64 / x86-64 | Open the DMG, drag rexafs to Applications, then eject the DMG. Choose Apple Silicon or Intel. |
-| Windows x86-64 preview | Run the setup executable, or extract the ZIP for a portable copy. |
-| Linux x86-64 preview | Extract the archive and run `./rexafs` from the extracted folder. See the runtime requirements below. |
+| Windows x86-64 / ARM64 preview | Run the matching setup executable, or extract its ZIP for a portable copy. |
+| Linux x86-64 / ARM64 preview | Extract the matching archive and run `./rexafs` from its folder. See the runtime requirements below. |
 
-The latest-release link follows new stable versions automatically. Linux and
-Windows ARM64 downloads are not currently published. Linux ARM64 can be built
-from source; Windows ARM64 has not been qualified.
+The latest-release link follows new stable versions automatically. The 0.2.5
+release adds Linux and Windows ARM64, subject to its
+[qualification gates](validation/2026-09-13-release-0.2.5/review.md). Windows ARM64
+requires Windows 11 because its FEFF10 helper runs as an x64 process; rexafs and
+ReFEFF themselves are native. See [native development](desktop-development.md)
+for source builds.
 
 ### Linux portable archive
 
-Download the `rexafs-VERSION-x86_64-unknown-linux-gnu.tar.gz` asset from the
+Download `rexafs-VERSION-x86_64-unknown-linux-gnu.tar.gz` for Intel/AMD or
+`rexafs-VERSION-aarch64-unknown-linux-gnu.tar.gz` for ARM64 from the
 [latest release](https://github.com/Ameyanagi/rexafs/releases/latest), where
 `VERSION` is the release number. Extract it, open a terminal in the extracted
 folder, and run:
@@ -55,7 +62,7 @@ development-build interaction checks are recorded in the
 [Windows review](validation/2026-09-09-windows-gui/README.md). Final-download
 Windows interaction checks for the new controls remain outstanding. Linux release
 checks use X11 with Mesa software rendering. The
-[qualification record](validation/2026-09-09-release-0.2.4/review.md) additionally
+[historical 0.2.4 qualification record](validation/2026-09-09-release-0.2.4/review.md) additionally
 records local ARM64 checks with an NVIDIA GB10 hardware device and virtual X11
 display. Physical monitors, native Wayland and clean-machine graphical setup
 remain outside those checks. See the
@@ -70,7 +77,7 @@ For Python, create a project with the current stable
 ```sh
 uv init --python 3.12 rexafs-analysis
 cd rexafs-analysis
-uv add rexafs==0.2.4
+uv add rexafs==0.2.5
 uv run python -c "import rexafs; print(rexafs.__version__)"
 ```
 
@@ -80,8 +87,8 @@ activation. Keep the project files with your analysis scripts; see
 [uv's project workflow](https://docs.astral.sh/uv/guides/projects/).
 
 For TypeScript/JavaScript, use the current stable
-[Bun](https://bun.sh/docs/installation) and run `bun add rexafs@0.2.4` in your
-application directory. For Rust, use `cargo add rexafs@0.2.4` in a Cargo project.
+[Bun](https://bun.sh/docs/installation) and run `bun add rexafs@0.2.5` in your
+application directory. For Rust, use `cargo add rexafs@0.2.5` in a Cargo project.
 Package registries supply the Python wheels, source distribution, npm/Wasm
 package, and Rust crate; these are not duplicated in the desktop release assets.
 
@@ -97,7 +104,7 @@ destination. uv does not provide a `pip download` subcommand, so use pip in a
 temporary uv-managed environment for this preparation step:
 
 ```sh
-uv run --no-project --python 3.12 --with pip python -m pip download --only-binary=:all: rexafs==0.2.4 --dest wheelhouse
+uv run --no-project --python 3.12 --with pip python -m pip download --only-binary=:all: rexafs==0.2.5 --dest wheelhouse
 ```
 
 On the offline computer, create the project:
@@ -111,7 +118,7 @@ Copy `wheelhouse` into this project directory, then add the dependency and run
 Python:
 
 ```sh
-uv add --offline --no-index --find-links wheelhouse rexafs==0.2.4
+uv add --offline --no-index --find-links wheelhouse rexafs==0.2.5
 uv run --offline python -c "import rexafs; print(rexafs.__version__)"
 ```
 
@@ -123,14 +130,14 @@ complete cross-platform package archive. See [uv's project
 workflow](https://docs.astral.sh/uv/guides/projects/).
 
 For TypeScript/JavaScript, install Bun on the destination first. Download the
-[published 0.2.4 package archive](https://registry.npmjs.org/rexafs/-/rexafs-0.2.4.tgz)
+[0.2.5 package archive](https://registry.npmjs.org/rexafs/-/rexafs-0.2.5.tgz)
 on the connected computer, copy it to your project on the offline computer, and run:
 
 ```sh
-bun add ./rexafs-0.2.4.tgz
+bun add ./rexafs-0.2.5.tgz
 ```
 
-The rexafs 0.2.4 archive includes its WebAssembly binaries and has no runtime
+The rexafs 0.2.5 archive includes its WebAssembly binaries and has no runtime
 package dependencies. Your application may have other dependencies that need to
 be prepared separately. Bun supports [installing local
 tarballs](https://bun.sh/docs/pm/cli/add). For Rust, use `cargo vendor` in your

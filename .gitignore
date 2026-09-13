@@ -41,3 +41,6 @@ __pycache__/
 /website/public/api/rust-next/
 /website/.venv/
 /website/.cache/
+
+# Browser engine assets rebuilt from the checkout before serving the website.
+/website/public/wasm/

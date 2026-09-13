@@ -1122,8 +1122,8 @@ impl WasmSpectrum {
     /// unweighted chi(k). Throws on inconsistent transform settings or failed prerequisite
     /// stages. At least two reported R samples are required even though filtering uses the full
     /// internal Fourier bins; rmax_out=0 therefore fails. When reusing a spectrum with a
-    /// different forward grid, reset previously resolved inverse settings in Next, or create a
-    /// fresh spectrum in stable 0.2.4.
+    /// different forward grid, reset previously resolved inverse settings with set_ifft()
+    /// (added in 0.2.5), or create a fresh spectrum in 0.2.4.
     pub fn ifft(&mut self) -> Result<(), JsValue> {
         self.inner.ifft().map(|_| ()).map_err(error)
     }

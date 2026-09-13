@@ -27,8 +27,8 @@ also support explicit chaining. The same stage names are used in Python and
 TypeScript. There is no separate `process()` facade.
 
 Configure methods with `NormalizationMethod`, `BackgroundMethod`, `PrePostEdge`,
-`AUTOBK`, `XrayFFTF` and `XrayFFTR` (the inverse-transform settings). In the current
-checkout, pass settings directly; this simpler form is an addition after 0.2.4:
+`AUTOBK`, `XrayFFTF` and `XrayFFTR` (the inverse-transform settings). In 0.2.5 and
+later, pass settings directly:
 
 ```rust,no_run
 use rexafs::{AUTOBK, PrePostEdge, Spectrum};

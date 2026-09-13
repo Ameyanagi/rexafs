@@ -4,12 +4,11 @@ description: "Equations, units, defaults and references for the spectrum pipelin
 audience: user
 ---
 
-This guide explains the calculations behind `Spectrum.normalize()`,
-`calc_background()`, `fft()` and `ifft()`. The equations below describe the
-default Rust backend in 0.2.4 used by the desktop, Python and Wasm bindings.
-The optional ndarray backend has some different historical conventions; see
-[FFT compatibility](/docs/science/fourier-compatibility/). Custom inverse configuration in the Python/TypeScript bindings is documented
-separately in the [unreleased API reference](/docs/reference/).
+The equations describe `Spectrum.normalize()`, `calc_background()`, `fft()` and
+`ifft()` in the default Rust backend used by desktop, Python and Wasm in 0.2.4.
+For the historical ndarray backend, see [FFT compatibility](/docs/science/fourier-compatibility/).
+Custom Python/TypeScript inverse configuration is covered in the
+[unreleased API reference](/docs/reference/).
 
 X-ray absorption spectroscopy (XAS) measures absorption as a function of photon
 energy. Extended X-ray absorption fine structure (EXAFS) is the oscillatory
@@ -281,9 +280,7 @@ None when changing the inverse length or input R spacing. See
 
 ## What processing does not establish
 
-These stages produce a normalized spectrum and its Fourier representations.
 Structural interpretation requires a scattering model and an assessment of
-fit quality, parameter correlations and systematic errors. The
-[fitting-statistics guide](/docs/science/fitting-statistics/) explains those distinctions.
-For practical code and parameter defaults, use the [API guide](/docs/libraries/spectrum-api/),
+fit quality, correlations and systematic errors; see [fit statistics](/docs/science/fitting-statistics/).
+For code and defaults, use the [API guide](/docs/libraries/spectrum-api/),
 [Python guide](/docs/libraries/python/) or [TypeScript guide](/docs/libraries/typescript/).

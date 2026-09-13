@@ -4,14 +4,12 @@ description: "Analyze collections while keeping preprocessing assumptions explic
 audience: user
 ---
 
-These operations are available in the desktop and Rust. The stable Python and
-TypeScript bindings currently expose spectrum processing rather than these tools.
-In the desktop, find data treatment and analysis tools in **Data → Parameters**
-or through the action search.
+These tools are available in the desktop and Rust in 0.2.4; Python and TypeScript
+expose spectrum processing. In the desktop, use **Data → Parameters** or action search.
 
 ## Linear combination fitting
 
-LCF models an unknown spectrum as a weighted sum of reference spectra:
+Linear combination fitting (LCF) models an unknown spectrum as a weighted sum of references:
 
 $$\min_{\mathbf w}\sum_{j=1}^{M}\left[U(x_j)-\sum_{i=1}^{S}w_iS_i(x_j)\right]^2.$$
 
@@ -80,10 +78,9 @@ a pure chemical species. Noise and inconsistent normalization can create
 additional apparent components. Target transformation tests reconstruction using
 selected components, not chemical uniqueness.
 
-The [Rust PCA API](/api/rust/rexafs/xafs/analysis/pca/index.html) includes the actual
-configuration, variance convention, indicator function and target transform.
-[Larch's PCA explanation](https://xraypy.github.io/xraylarch/xafs_xanes.html#principal-component-analysis)
-is useful background; its default centering differs from rexafs.
+See the [Rust PCA API](/api/rust/rexafs/xafs/analysis/pca/index.html) for configuration
+and [Larch's PCA explanation](https://xraypy.github.io/xraylarch/xafs_xanes.html#principal-component-analysis)
+for background; its default centering differs from rexafs.
 
 The API's `eigenvalues` are $\lambda_i=\sigma_i^2/n$, in squared spectral units.
 Without centering these are eigenvalues of the second-moment matrix
@@ -159,7 +156,7 @@ the bin. Empty bins use linear interpolation. The finite outer bin boundaries
 can omit points near the ends of the measured interval; inspect the returned
 grid before interpreting endpoint features. Within-bin standard deviations
 measure variation among the included samples, not propagated measurement errors.
-See [`rebin` in the source](https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/tools.rs).
+See [`rebin` in the source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs/src/xafs/tools.rs).
 
 For a merge, rexafs first interpolates each spectrum onto the chosen grid within
 the shared measured energy interval. At each energy it calculates
@@ -178,7 +175,7 @@ the usual sample standard deviation; see the
 For unequal weights, the denominator is a rexafs choice, not a general unbiased
 weighted variance estimator. Zero-weight members still count in $N$; a single
 member receives zero spread. This is the formula implemented by
-[`merge_spectra`](https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/tools.rs),
+[`merge_spectra`](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs/src/xafs/tools.rs),
 not the standard error of the merged mean. It also does not estimate correlations
 introduced by interpolation. Keep the individual scans when assessing whether
 variation reflects noise, energy drift or an actual change in the sample.

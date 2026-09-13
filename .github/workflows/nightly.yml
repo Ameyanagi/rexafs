@@ -47,6 +47,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python scripts/check-release-version.py
+      - run: python scripts/test-release-version.py
       - run: python scripts/test-release-maintenance.py
       - run: python scripts/test-desktop-channels.py
       - run: python scripts/test-macos-installer.py

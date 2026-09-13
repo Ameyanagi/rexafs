@@ -4,11 +4,10 @@ description: "Interpret residuals, independent information, covariance and R-fac
 audience: user
 ---
 
-This guide describes the current Rust/desktop EXAFS fitting implementation.
-Python and TypeScript currently expose spectrum processing, not these fitting
-classes. Processing produces chi(k); fitting adjusts a scattering-path model
-to that signal. A converged optimizer has satisfied numerical stopping rules.
-It has not established that the chosen structural model is unique or correct.
+EXAFS fitting is available in Rust and desktop in 0.2.4. Python and TypeScript
+expose spectrum processing. Fitting adjusts a scattering-path model to the
+processed $\chi(k)$ signal. Convergence satisfies numerical stopping rules;
+it does not establish that the structural model is unique or correct.
 
 ## From a scattering path to χ(k)
 

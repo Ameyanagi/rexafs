@@ -6,19 +6,20 @@ audience: user
 
 ## Install
 
-We recommend [Bun](https://bun.sh/docs/installation) to install the library:
+Install with [Bun](https://bun.sh/docs/installation):
 
 ```sh
 bun add rexafs@0.2.4
 ```
 
-Run it in Node 22 or newer, or in a browser with WebAssembly support. Bun manages
-the dependency for either runtime. If you already use another package manager,
-`npm install rexafs@0.2.4` or `pnpm add rexafs@0.2.4` installs the same package.
-The package includes TypeScript declarations. Use an ESM project and a TypeScript
-module-resolution mode appropriate to your runtime, such as `NodeNext` for Node
-or `Bundler` for a browser bundler. See the
-[generated reference](/docs/reference/stable/typescript/spectrum/) for the stable API.
+The package runs in Node 22+ and browsers with WebAssembly support. You can also
+install it with `npm install rexafs@0.2.4` or `pnpm add rexafs@0.2.4`.
+Use ECMAScript modules and TypeScript `moduleResolution: "NodeNext"` for Node or
+`"Bundler"` for browser bundlers. Typed declarations are included; see the
+[stable API reference](/docs/reference/stable/typescript/spectrum/).
+
+The package exposes single-spectrum processing. See
+[WebAssembly support](/docs/libraries/webassembly/) for other APIs and ReFEFF status.
 
 ## Node: load and transform a spectrum
 
@@ -44,8 +45,11 @@ try {
 }
 ```
 
-Node initializes the packaged Wasm synchronously. Browser applications initialize
-it explicitly before constructing objects:
+Node initializes the packaged Wasm synchronously.
+
+## Browser initialization
+
+Initialize Wasm before constructing browser objects:
 
 ```typescript
 import init, { Spectrum } from "rexafs/browser";
@@ -97,11 +101,9 @@ See [processing theory](/docs/science/processing/) for weighting, units and cita
 
 ## Read results and editor help
 
-The generated reference explains each configuration field's purpose, units,
-default and effect. It also states which settings are automatic when assigned
-`undefined`. These explanations come from the checked declarations; stable pages
-retain the 0.2.4 signatures. The installed 0.2.4 package has shorter editor help,
-while the source checkout includes the expanded JSDoc used by the site.
+The [reference](/docs/reference/) documents field units, defaults and automatic
+values. Stable pages keep 0.2.4 signatures; expanded installed editor help belongs
+to Next.
 
 `chi()` returns the unweighted, dimensionless background residual on `k()`.
 The `chir_real()`, `chir_imag()` and `chir_mag()` getters return the transform on
@@ -119,12 +121,10 @@ stage again before reading its results.
 
 ## Automatic settings when reusing a spectrum
 
-Automatic values are resolved on the spectrum's copied settings during processing.
-The calculation does not write them back into your original settings object.
-Stored automatic values, such as FFT kstep, remain in the spectrum when calculated
-arrays are invalidated; they are not automatically inferred again for each call.
-AUTOBK's automatic kmax and nknots are different: they remain unset in stored
-settings and are calculated locally for each input.
+Processing resolves automatic values on the spectrum's copied settings, leaving
+your original settings object unchanged. Resolved values such as FFT `kstep`
+persist when results are invalidated. AUTOBK's automatic `kmax` and `nknots`
+remain unset and are recalculated for each input.
 
 For example, after changing the background `kstep`, assign forward settings with
 `kstep = undefined` using `set_fft()` before calling `fft()`. This requests new

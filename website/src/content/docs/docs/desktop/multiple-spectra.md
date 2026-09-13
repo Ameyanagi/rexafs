@@ -4,23 +4,22 @@ description: "Share parameters across spectra or fit a collection independently.
 audience: user
 ---
 
-**Fit → Model → Fit multiple spectra** fits several spectra simultaneously.
-The browser groups paths under their spectrum. Selecting a spectrum shows its
-range and every assigned path's parameter values; selecting a path focuses it.
+**Fit → Model → Fit multiple spectra** fits spectra simultaneously. Select a
+spectrum in the browser to see its range and assigned path parameters; select
+a path to focus it.
 
-For the mathematical objective and the meaning of shared parameters,
-chi-square, covariance and R-factor, see [fitting statistics](/docs/science/fitting-statistics/).
-A joint fit combines residuals under shared parameter constraints; it does not
-make duplicated spectra independent physical measurements.
+A joint fit combines residuals under shared parameter constraints. See
+[fitting statistics](/docs/science/fitting-statistics/) for the objective,
+chi-square, covariance and R-factor. Duplicating a spectrum does not create
+independent physical measurements.
 
 ## Workflow
 
-1. Configure the needed paths in **Paths**, including paths from different
-   calculated structures where needed.
+1. Configure **Paths**. You can combine paths from different calculated structures.
 2. Choose **Fit multiple spectra**. Add the current file, or mark several files
    in the file browser and choose **+ Marked**.
-3. Use **± Paths** beside a spectrum to change its assignments. Each path shows
-   its calculation directory, reference distance, and number of legs.
+3. Use **± Paths** to change a spectrum's assignments. Each path shows its
+   calculation directory, reference distance and number of legs.
 4. Edit the displayed initial values. **Global** uses one variable across spectra;
    **This spectrum** gives that spectrum its own value and Fit toggle. Paths
    referencing the same name within a spectrum still share that variable.
@@ -32,9 +31,9 @@ make duplicated spectra independent physical measurements.
    Editing these does not change other spectra or the source path template.
    Undefined variable names have an **Add parameter** action. A numeric constant
    can become a variable with **Fit this value**.
-7. Run the fit. Select a spectrum above the result plots to inspect its model,
-   residuals, contributions, and R-factor. The result panel includes global
-   statistics and each fitted variable's uncertainty. Re/Im χ(R) are selectable.
+7. Run the fit. Select a spectrum above the plots to inspect its model, residuals,
+   contributions and R-factor. Real/imaginary χ(R) views are available. The panel
+   also shows global statistics and each fitted variable's uncertainty.
 
 Assignments use path file identities rather than catalog indices. Projects and
 history preserve scopes, local starting values, fit/fixed choices, per-spectrum

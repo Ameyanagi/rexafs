@@ -4,18 +4,19 @@ description: "Use the assistant with explicit access controls and project contex
 audience: user
 ---
 
-Open **Assistant** in the top bar. It connects automatically to an installed
-Codex CLI and uses the signed-in Codex account. If connection or sign-in is
-needed, the panel provides Retry and login controls. rexafs does not store a
-separate model API key. Choose the model and reasoning effort in the panel;
-availability comes from the connected server.
+Open **Assistant** in the top bar to connect to an installed Codex CLI using
+your signed-in account. Use the panel's Retry or login controls if needed.
+rexafs stores no separate model API key. Choose a model and reasoning effort
+from those supplied by the connected server.
 
-The Assistant opens at the right of the analysis. Drag its left border to resize
-between 320 and 640 px. **Pop out** moves the same conversation to a separate
-window; **Dock**, or closing that window, brings it back. Closing the docked panel
-keeps its connection and transcript. **Hide side panels / Restore side panels**
-controls Groups and the inspector, which can also collapse automatically to
-leave room for plots. Width and preferred host are computer settings.
+Drag the panel's left border to resize it between 320 and 640 px. **Pop out**
+moves the conversation to a separate window; **Dock**, or closing that window,
+returns it. Closing the docked panel keeps the connection and transcript.
+**Hide side panels / Restore side panels** controls Groups and the inspector;
+they can also collapse automatically to leave room for plots. Panel width and
+window preference are computer settings.
+
+## Controls and access
 
 - **Review** permits inspection and navigation. **Edit analysis** enables the
   supported analysis edits for the current turn. App-authored receipts describe
@@ -23,51 +24,49 @@ leave room for plots. Width and preferred host are computer settings.
 - **Enter** sends; **Shift+Enter** inserts a newline. **Stop** interrupts the
   assistant turn. A calculation already running in the analysis engine can
   finish independently.
-- Thinking is folded initially. Tool activity, processing progress, permission
-  decisions and completed answers remain in the transcript. **Copy conversation**
-  includes the transcript text.
+- Thinking starts folded. Tool activity, processing progress, permission decisions
+  and answers remain in the transcript. **Copy conversation** copies its text.
 - **Web search** can be toggled. Structure retrieval validates destinations and
   the returned structure before importing it. **Extended access** starts off;
   turning it on requires session consent, and command approvals remain explicit.
   It does not silently enable arbitrary analysis edits.
 
-**Conversations** lists the project's saved conversations, their relative update
-time and turn count. **New** starts a fresh conversation on the next Send. Choose
-a saved entry to read it, then **Resume** to continue. A connected client first
-tries the stored server thread. An unavailable thread or unsupported resume
-method falls back to a new thread with the last ten entries as labelled previous
-context. The transcript states which route was used. Resuming applies the current
-session's access policy.
+## Saved conversations
 
-The fallback keeps at most 2000 characters from each of those ten entries, so a
-long previous calculation may need its relevant settings stated again. This is
-historical conversation context, not a replay of its commands or permissions.
-The saved transcript remains available to read in the project.
+**Conversations** lists saved conversations with update times and turn counts.
+**New** starts a fresh conversation on the next Send. Select a saved entry to
+read it, then **Resume** to continue under the current session's access policy.
+The client first tries the stored server thread. If unavailable or unsupported,
+it opens a new thread with the last ten entries as labelled previous context.
+The transcript states which route was used.
 
-Project Save keeps the newest five completed conversations by default. Set
-**Conversations kept per project** in the picker to another count, or zero to
-disable saving. An asterisk in the project label indicates unsaved conversation
-changes. A turn still running is not serialized; the latest completed snapshot
-is retained. Restored thinking starts folded, and saved receipts contain no live
-approval or undo tokens. Older projects start with no conversation history.
+Fallback context keeps at most 2000 characters per entry; restate relevant
+settings from longer calculations. It does not replay commands or permissions.
+The saved transcript remains readable in the project.
 
-Sending shares the current analysis context and enabled plots through the
-configured Codex account. Context includes spectrum names, source paths and
-bounded source comments, requested processing settings, model inputs, fit
-history, additional analyses and the action journal. Imported comments and
-previous-conversation content are labelled as data. Verify the chosen phase,
-paths, ranges and scientific interpretation before relying on a fit.
+Project Save keeps the newest five completed conversations by default. Change
+**Conversations kept per project** in the picker, or set zero to disable saving.
+An asterisk in the project label marks unsaved conversation changes. Running
+turns are not serialized; the latest completed snapshot is retained. Restored
+thinking starts folded, and saved receipts have no live approval or undo tokens.
+Older projects start with no conversation history.
 
-The Assistant follows the app's Data → Normalize → Background → Transform →
-Structure → Calculate → Paths → Model → Results workflow. Each assigned spectrum's
-current processing must be inspected before an Assistant fit can run. Plot access
-lets the model assess the result; it does not certify scientific quality.
+## Shared context and analysis edits
 
-Assistant processing edits target the current spectrum and are validated by
-running the proposed settings before applying them. Column mappings are excluded
-from that processing-edit operation; review import interpretation in the Data
-tools. Pending access requests expire after five minutes, and stopping the turn
-invalidates unapproved requests. A saved conversation does not retain a usable
-approval or undo token. See the [processing tool
+Sending shares analysis context and enabled plots through your Codex account:
+spectrum names, source paths, bounded source comments, requested processing
+settings, model inputs, fit history, additional analyses and the action journal.
+Imported comments and previous conversations are labelled as data. Verify the
+phase, paths, ranges and scientific interpretation before relying on a fit.
+
+The Assistant follows Data → Normalize → Background → Transform → Structure →
+Calculate → Paths → Model → Results. It must inspect each assigned spectrum's
+current processing before fitting. Plot access supports review but cannot
+certify scientific quality.
+
+Processing edits target the current spectrum. Proposed settings are run and
+validated before applying them. Column mappings are excluded; review import
+interpretation in Data. Access requests expire after five minutes; stopping a
+turn invalidates unapproved requests. See the [processing tool
 contract](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/codex_client.rs#L547)
 and [access request lifetime](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/app/shell/assistant.rs#L2127).

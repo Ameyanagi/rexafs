@@ -99,9 +99,9 @@ is retained. The caller keeps ownership of the settings and wrapper and may free
 assignment. Later edits require reassignment. Returns this spectrum.
 
 Omitting the argument, undefined or null restores automatic pre/post-edge settings while
-retaining the selected E0. These reset forms work in stable 0.2.4 and Next. For custom
-settings, stable 0.2.4 accepts a NormalizationMethod wrapper; Next (the source checkout)
-also accepts PrePostEdge directly.
+retaining the selected E0. These reset forms work in 0.2.4 and later. For custom
+settings, 0.2.4 accepts a NormalizationMethod wrapper; direct PrePostEdge settings
+were added in 0.2.5.
 
 ## set_background_method
 
@@ -114,8 +114,8 @@ retaining normalization. The caller keeps ownership of the settings and wrapper 
 free them after assignment. Later edits require reassignment. Returns this spectrum.
 
 Omitting the argument, undefined or null restores default AUTOBK settings. These reset
-forms work in stable 0.2.4 and Next. For custom settings, stable 0.2.4 accepts a
-BackgroundMethod wrapper; Next (the source checkout) also accepts AUTOBK directly. This
+forms work in 0.2.4 and later. For custom settings, 0.2.4 accepts a BackgroundMethod
+wrapper; direct AUTOBK settings were added in 0.2.5. This
 does not reset forward or inverse configuration values that were already resolved
 automatically.
 
@@ -199,8 +199,8 @@ Forward k-weighting and windowing remain in the output, so this is not generally
 chi(k). Throws on inconsistent transform settings or failed prerequisite stages. Returns
 this spectrum. At least two reported R samples are required even though filtering uses the
 full internal Fourier bins; rmax_out=0 therefore fails. When reusing a spectrum with a
-different forward grid, reset previously resolved inverse settings in Next, or create a
-fresh spectrum in stable 0.2.4.
+different forward grid, reset previously resolved inverse settings with set_ifft()
+(added in 0.2.5), or create a fresh spectrum in 0.2.4.
 
 ## invalidate_derived
 

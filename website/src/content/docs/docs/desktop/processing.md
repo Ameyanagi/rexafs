@@ -4,14 +4,11 @@ description: "Use normalization, AUTOBK, forward and inverse transforms."
 audience: user
 ---
 
-For absorption spectra, desktop processing runs **normalization → AUTOBK → forward
-Fourier transform → inverse transform** when the spectrum is loaded or its
-processing settings change. Selecting a stage chooses the display and controls;
-it does not restrict calculation to that stage. In particular, the inverse
-transform is calculated even when its controls are collapsed, so an invalid
-back-transform setting can make processing fail. This is the [desktop
-pipeline](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/params.rs#L1589)
-in 0.2.4.
+Loading an absorption spectrum or changing its settings runs **normalization →
+AUTOBK → forward Fourier transform → inverse transform**. Selecting a stage
+changes the display and controls. The inverse transform runs even with its
+controls collapsed, so invalid back-transform settings can fail processing.
+See the [0.2.4 desktop pipeline](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/params.rs#L1589).
 
 The inspector edits the **current** group. **Apply to N** copies only the selected
 processing stage to eligible marked groups, excluding the current group and
@@ -28,16 +25,21 @@ the pre-edge line and divides by the edge step; **flat** also removes the fitted
 post-edge trend. Inspect the curve rather than treating automatic settings as
 proof of a valid baseline.
 
-Blank fields select Auto, and placeholders report the resolved values. For a new
-0.2.4 desktop analysis, the pre-edge range begins at −200 eV and ends at −30 eV
-relative to $E_0$. The post-edge range begins at +150 eV and ends at the measured
-energy endpoint. The starting post-edge polynomial order is 2, and the Victoreen
-exponent is 0. Ranges are resolved against available data; a short spectrum can
-need manual choices. The edge step is fitted unless you enter a positive measured
-override. Desktop Auto applies these starting choices before calling the core;
-it is not the same as leaving every range and polynomial-order field unset in
-the library. Keep resolved settings with your analysis when comparing interfaces
-or other software.
+Blank fields select Auto; placeholders show the resolved values. New 0.2.4
+desktop analyses start with these choices:
+
+| Setting | Starting value |
+|---|---|
+| Pre-edge range, relative to $E_0$ | −200 to −30 eV |
+| Post-edge range | $E_0+150$ eV to the measured energy endpoint |
+| Post-edge polynomial order | 2 |
+| Victoreen exponent | 0 |
+| Edge step | Fitted, unless a positive measured override is entered |
+
+Ranges adapt to available data; short spectra can need manual choices. Desktop
+Auto applies these choices before calling the core library, whose unset fields
+can resolve differently. Retain resolved settings when comparing interfaces or
+other software.
 
 ## Background
 
@@ -66,7 +68,7 @@ and [AUTOBK objective](/docs/science/autobk/).
 
 [![Full background-removal view showing weighted Cu EXAFS and AUTOBK settings](/screenshots/background.jpg)](/screenshots/background.jpg)
 
-*Background settings control the spline fit, while display weighting controls the plotted oscillations. Full application window, rexafs 0.2.4 on macOS. Select the image to view its full resolution.*
+*Background settings control the spline fit; display weighting controls the plotted oscillations. rexafs 0.2.4 on macOS.*
 
 
 ## Forward transform

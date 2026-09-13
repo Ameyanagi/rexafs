@@ -45,8 +45,8 @@ are not written back into the original settings object. Resolved scalar defaults
 are retained in the spectrum. Automatic kmax and nknots remain unset in stored settings
 and are calculated locally for each input.
 
-Stable 0.2.4 uses this constructor without arguments, followed by property assignment. Next
-(the source checkout) also accepts the named options object.
+Named options were added in 0.2.5. Version 0.2.4 uses this constructor without
+arguments, followed by property assignment.
 
 ## free
 

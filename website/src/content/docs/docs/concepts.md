@@ -4,10 +4,8 @@ description: "The measurements, quantities, symbols and file types used througho
 audience: user
 ---
 
-This page explains the terms that appear in the desktop, the libraries and the
-scientific guides. It is written for a reader who is new to X-ray absorption
-analysis. Each entry links to the guide that describes the calculation in
-detail. Symbols and units follow the [processing guide](/docs/science/processing/).
+Symbols and units follow the [processing guide](/docs/science/processing/).
+Each entry links to the relevant workflow or calculation.
 
 ## The measurement
 
@@ -52,7 +50,7 @@ of neighbors. Extracting and fitting EXAFS is the main purpose of rexafs.
 | **Window** | A taper applied to $\chi(k)$ before the transform to reduce truncation ripples. rexafs starts with a Kaiser–Bessel window from 2 to 15 Å⁻¹. | [Transform](/docs/desktop/processing/#forward-transform) |
 | **$\chi(R)$** | The Fourier transform of weighted, windowed $\chi(k)$, as a function of distance R in Å. Its magnitude has peaks near neighbor distances, shifted by a scattering phase. | [Processing equations](/docs/science/processing/#4-transform-from-k-to-r) |
 | **Phase correction** | The shift between a peak in $\chi(R)$ and the actual interatomic distance. rexafs does not phase-correct plots; fitted distances come from the path model. | [Fit statistics](/docs/science/fitting-statistics/) |
-| **q and $\chi(q)$** | The back-transform of a selected R range, in Å⁻¹. It isolates the contribution of one distance region. | [Back transform](/docs/desktop/processing/#back-transform) |
+| **q and $\chi(q)$** | q is the back-transform coordinate in Å⁻¹; $\chi(q)$ is the signal reconstructed from a selected R range. | [Back transform](/docs/desktop/processing/#back-transform) |
 
 ## Structures and fitting
 
@@ -61,7 +59,7 @@ of neighbors. Extracting and fitting EXAFS is the main purpose of rexafs.
 | **Structure** | A reference geometry: a built-in model, a CIF or XYZ file, or an entry from Materials Project, AMCSD or COD. It defines where neighbors are expected. | [Structures and paths](/docs/desktop/structures/) |
 | **Absorber** | The atom whose edge was measured. The scattering calculation is centered on it. | [Structures and paths](/docs/desktop/structures/#find-a-structure) |
 | **Cluster radius** | The distance in Å around the absorber within which atoms are included in the calculation. The desktop starts at 8 Å. | [Structures and paths](/docs/desktop/structures/#find-a-structure) |
-| **FEFF, ReFEFF and FEFF10** | Programs that compute scattering amplitudes and phases for each path. ReFEFF is embedded in every package; FEFF10 is bundled with the macOS and Linux packages. Record the engine you used. | [Calculate and select paths](/docs/desktop/structures/#calculate-and-select-paths) |
+| **FEFF, ReFEFF and FEFF10** | Programs that compute scattering amplitudes and phases for each path. ReFEFF is embedded in every desktop package; FEFF10 is bundled with the macOS and Linux packages. Record the engine you used. | [Calculate and select paths](/docs/desktop/structures/#calculate-and-select-paths) |
 | **Scattering path** | One route the photoelectron can take from the absorber to one or more neighbors and back. Single-scattering paths visit one neighbor; multiple-scattering paths visit several. | [Structures and paths](/docs/desktop/structures/#path-parameters) |
 | **Shell** | A group of neighbors at about the same distance from the absorber. The **first shell** is the nearest one. | [First fit](/docs/desktop/fitting/) |
 | **Degeneracy (N)** | The number of equivalent paths in the reference structure, equal to the coordination number for a single-scattering shell. | [Path parameters](/docs/desktop/structures/#path-parameters) |
@@ -74,7 +72,7 @@ of neighbors. Extracting and fitting EXAFS is the main purpose of rexafs.
 | **Joint fit** | Fitting several spectra at once with some variables shared and others local to each spectrum. | [Multiple spectra](/docs/desktop/multiple-spectra/) |
 | **Batch** | Fitting every frame of a series independently with the same model, to follow a trend. | [Independent batches](/docs/desktop/multiple-spectra/#independent-batches) |
 | **LCF** | Linear combination fitting: modeling an unknown spectrum as a weighted sum of reference spectra. | [LCF, PCA and data treatment](/docs/science/analysis/) |
-| **PCA** | Principal component analysis: finding how many independent components explain a collection of spectra. | [LCF, PCA and data treatment](/docs/science/analysis/#principal-component-analysis) |
+| **PCA** | Principal component analysis: describing spectral variation with orthogonal components. Their number does not by itself identify chemical species. | [LCF, PCA and data treatment](/docs/science/analysis/#principal-component-analysis) |
 
 ## Desktop objects
 
@@ -98,6 +96,3 @@ of neighbors. Extracting and fitting EXAFS is the main purpose of rexafs.
 | **CIF and XYZ** | Crystal and molecular structure files used to build scattering clusters. |
 | **`.rxs`** | The rexafs project format. |
 | **Athena `.prj`** | Readable through the Rust `io` module for interchange with Demeter/Athena projects. |
-
-If a term you met in the interface is missing here, search the manual or
-[open an issue](https://github.com/Ameyanagi/rexafs/issues) so it can be added.

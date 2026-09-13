@@ -17,6 +17,7 @@ are not supported or retained as compatibility fixtures.
 | `rexafs-0.2.2-links.rxs`, `rexafs-0.2.2-embedded.rxs` | Saved and reopened through the 0.2.2 writer; unchanged format-1 state including recipes, locks, weight links, palettes, publication style and Assistant history |
 | `rexafs-0.2.3-links.rxs`, `rexafs-0.2.3-embedded.rxs` | Saved and reopened through the corrected 0.2.3 writer; unchanged format-1 state |
 | `rexafs-0.2.4-links.rxs`, `rexafs-0.2.4-embedded.rxs` | Saved and reopened through the 0.2.4 writer; unchanged format-1 state |
+| `rexafs-0.2.5-links.rxs`, `rexafs-0.2.5-embedded.rxs` | Saved and reopened through the 0.2.5 writer; format 1 with explicit Input FFT defaults and refreshed save/source metadata |
 | `future-version.rxs` | Future format: reject without modification |
 | `truncated.rxs` | Corrupt/incomplete input: reject without modification |
 | `data/*.xmu`, `feff/*.dat` | Real inputs for relocation, byte recovery and processing checks |

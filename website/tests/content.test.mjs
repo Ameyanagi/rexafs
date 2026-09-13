@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { resolve, relative } from 'node:path';
 import { load } from 'cheerio';
 import sharp from 'sharp';
@@ -8,6 +9,17 @@ const root=resolve(import.meta.dirname,'..');
 const dist=resolve(root,'dist');
 const base=(process.env.SITE_BASE||'/rexafs').replace(/\/$/,'');
 const origin=process.env.SITE_URL||'https://ameyanagi.github.io';
+const release=JSON.parse(readFileSync(resolve(root,'src/data/release.json'),'utf8'));
+const releasedSource=path=>execFileSync('git',['show',`${release.tag}:${path}`],{cwd:resolve(root,'..'),encoding:'utf8'});
+const releasedDeclarations={
+ python:releasedSource('py-rexafs/python/rexafs/__init__.pyi'),
+ typescript:releasedSource('js-rexafs/types.d.ts'),
+};
+const pythonConstructor=releasedDeclarations.python.match(/^class AUTOBK:[\s\S]*?^    def __init__\(([\s\S]*?)\) -> None:/m)?.[1];
+assert(pythonConstructor,'released Python AUTOBK constructor must be present');
+const pythonHasKeywordSettings=/(?:^|,)\s*\*(?:,|$)/.test(pythonConstructor);
+const typescriptConstructor=releasedDeclarations.typescript.match(/^export class AUTOBK\s*\{[\s\S]*?^  (constructor\([^;]*\);)/m)?.[1];
+assert(typescriptConstructor,'released TypeScript AUTOBK constructor must be present');
 function files(dir){return readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?files(resolve(dir,e.name)):[resolve(dir,e.name)]);}
 const pages=files(dist).filter(p=>p.endsWith('.html')&&!/\/api\/rust(?:-next)?\//.test(p));
 const parsed=new Map();
@@ -61,7 +73,8 @@ test('published Rust docs and public API coverage are included',()=>{
   assert(parse(path)('main').text().includes('calc_background'));
  }
  const stable=parse(resolve(dist,'docs/reference/stable/python/autobk/index.html'))('main').text();
- assert(!stable.includes('AUTOBK(rbkg='));
+ if(pythonHasKeywordSettings)assert(stable.includes('AUTOBK(*,'),'released keyword constructor must be rendered');
+ else assert(!stable.includes('AUTOBK(rbkg='),'unreleased keyword constructor must not be rendered');
  assert(parse(resolve(dist,'api/rust/rexafs/xafs/background/struct.AUTOBK.html'))('[id="structfield.clamp_lambda"]').length,'Rust reference must use the default numerical backend');
  assert(existsSync(resolve(dist,'api/rust-next/rexafs/xafs/xasspectrum/struct.XASSpectrum.html')));
 });
@@ -78,15 +91,22 @@ test('generated API members have explanations and retain released signatures',()
  }
  for(const language of ['python','typescript']) {
   const stable=readFileSync(resolve(reference,`stable/${language}/spectrum.md`),'utf8');
-  assert(!/^## set_ifft$/m.test(stable),'unreleased inverse configuration must not enter stable API');
+  const releasedInverse=language==='python'
+   ? /^    def set_ifft\(/m.test(releasedDeclarations.python)
+   : /^  set_ifft\(/m.test(releasedDeclarations.typescript);
+  assert.equal(/^## set_ifft$/m.test(stable),releasedInverse,`${language}: stable inverse setter must match ${release.tag}`);
   const next=readFileSync(resolve(reference,`next/${language}/spectrum.md`),'utf8');
   assert(/^## set_ifft$/m.test(next));
-  assert(!existsSync(resolve(reference,`stable/${language}/xrayfftr.md`)));
+  const releasedInverseSettings=language==='python'
+   ? /^class XrayFFTR:/m.test(releasedDeclarations.python)
+   : /^export class XrayFFTR\s*\{/m.test(releasedDeclarations.typescript);
+  assert.equal(existsSync(resolve(reference,`stable/${language}/xrayfftr.md`)),releasedInverseSettings,`${language}: stable inverse settings must match ${release.tag}`);
   assert(existsSync(resolve(reference,`next/${language}/xrayfftr.md`)));
  }
  const py=readFileSync(resolve(reference,'stable/python/autobk.md'),'utf8');
- assert.match(py,/```python\nAUTOBK\(\)\n```/);
+ if(pythonHasKeywordSettings)assert.match(py,/```python\nAUTOBK\(\*, [^\n]*rbkg: float \| None=1\.0[^\n]*\)\n```/);
+ else assert.match(py,/```python\nAUTOBK\(\)\n```/);
  const ts=readFileSync(resolve(reference,'stable/typescript/autobk.md'),'utf8');
- assert.match(ts,/```typescript\nconstructor\(\);\n```/);
+ assert(ts.includes(`\`\`\`typescript\n${typescriptConstructor}\n\`\`\``),'stable TypeScript constructor must match the release declaration');
  assert(!readFileSync(resolve(reference,'stable/typescript/backgroundmethod.md'),'utf8').includes('private constructor'));
 });

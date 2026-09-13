@@ -8,12 +8,12 @@ audience: user
 
 rexafs is available under the [MIT license](/LICENSE-MIT.txt) or
 [Apache License 2.0](/LICENSE-APACHE.txt), at your option. Copyrights remain with
-its contributors. Dependencies and embedded calculation engines retain their
-own licenses and notices; see **Help → Licenses** in the packaged application.
+its contributors. For dependency and calculation-engine notices, see
+**Help → Licenses** in the desktop.
 
 ## Cu example
 
-[Download cu_150k.xmu](/examples/cu_150k.xmu). The original file contains a Cu foil
+[cu_150k.xmu](/examples/cu_150k.xmu) contains a Cu foil
 measurement at 150 K from NSLS X-11A, September 1992. It is retained without
 numerical changes from the XrayLarch example collection at revision
 `d8678dd666fd95839fe9dc71b4dbe8bedec278ff`. The header also identifies its UWXAFS
@@ -24,14 +24,13 @@ numerical changes from the XrayLarch example collection at revision
 
 ## Documentation screenshots
 
-The desktop guides show full, unedited application-window captures from the
-published macOS ARM64 0.2.4 package. They were captured through computer use on
-13 September 2026 with the Cu example and built-in Cu structure. The fitting
+The desktop guides show full, unedited window captures from the published
+macOS ARM64 0.2.4 package, captured through computer use on 13 September 2026
+with the Cu example and built-in Cu structure. The fitting
 walkthrough uses ReFEFF, an 8 Å cluster and one first-shell path. Values in these
 screenshots describe that demonstration, not a benchmark or universal fit result.
 
 ## Scientific citations
 
-Use the [references and citation guide](/docs/science/references/) for algorithm
-references. Cite the actual measurement, structure source and FEFF backend used
-in your analysis in addition to the software version.
+Use the [citation guide](/docs/science/references/) for algorithm references.
+Cite your measurement, structure source, FEFF backend and software version.

@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** This reference describes the source checkout, including additions not available in rexafs 0.2.4.
+**Next API · unreleased.** This reference describes the source checkout. Compare with stable rexafs 0.2.4 before using it with an installed package.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
@@ -54,7 +54,7 @@ and nfft=2048. Choose a useful k range for your measured data, then call
 spectrum.set_fft(parameters).fft(). Construction does not run a transform;
 numeric validation occurs when fft() processes the data.
 
-Keyword arguments are available in source builds after 0.2.4; published
+Keyword arguments were added in 0.2.5. Published
 0.2.4 settings use construction without arguments followed by field
 assignment. Python type conversion can raise TypeError, and an integer
 outside the native field's representable range can raise OverflowError

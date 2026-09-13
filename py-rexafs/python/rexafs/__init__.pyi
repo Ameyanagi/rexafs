@@ -101,7 +101,7 @@ class PrePostEdge:
         spectrum's normalization stage. Fit ranges and degrees are
         resolved when normalization runs; creating settings does not process data.
 
-        Keyword arguments are available in source builds after 0.2.4; published
+        Keyword arguments were added in 0.2.5. Published
         0.2.4 settings use construction without arguments followed by field
         assignment. Python type conversion can raise TypeError, and an integer
         outside the native field's representable range can raise OverflowError
@@ -234,7 +234,7 @@ class AUTOBK:
         spectrum's background stage. Construction does not fit a spectrum;
         numeric range and solver compatibility checks occur during processing.
 
-        Keyword arguments are available in source builds after 0.2.4; published
+        Keyword arguments were added in 0.2.5. Published
         0.2.4 settings use construction without arguments followed by field
         assignment. Python type conversion can raise TypeError, and an integer
         outside the native field's representable range can raise OverflowError
@@ -476,7 +476,7 @@ class XrayFFTF:
         spectrum.set_fft(parameters).fft(). Construction does not run a transform;
         numeric validation occurs when fft() processes the data.
 
-        Keyword arguments are available in source builds after 0.2.4; published
+        Keyword arguments were added in 0.2.5. Published
         0.2.4 settings use construction without arguments followed by field
         assignment. Python type conversion can raise TypeError, and an integer
         outside the native field's representable range can raise OverflowError
@@ -600,7 +600,7 @@ class XrayFFTR:
 
     Example: p = XrayFFTR(); p.rmin = 1.0; p.rmax = 3.0;
     spectrum.set_ifft(p).ifft(). Settings are copied; reassign after edits.
-    These Python settings and set_ifft() are additions after 0.2.4.
+    These Python settings and set_ifft() were added in 0.2.5.
 
     See the [implemented inverse convention](https://rexafs.com/docs/science/processing/)
     for the scaling, and [Larch's Fourier guide](https://xraypy.github.io/xraylarch/xafs_fourier.html)
@@ -632,7 +632,7 @@ class XrayFFTR:
         The returned signal retains forward weighting and windowing; construction
         alone does not filter a spectrum.
 
-        This settings class is available in source builds after 0.2.4; it is
+        This settings class was added in 0.2.5; it is
         not exported by the published 0.2.4 package. Python type conversion can raise TypeError, and an integer
         outside the native field's representable range can raise OverflowError
         before any numerical processing."""
@@ -847,7 +847,7 @@ class Spectrum:
     ) -> Spectrum:
         """Copy the selected normalization method and clear normalization and later results.
 
-        Source builds accept PrePostEdge settings directly; omitted/None restores
+        Since 0.2.5, PrePostEdge settings are accepted directly; omitted/None restores
         automatic normalization. Published 0.2.4 uses
         NormalizationMethod.PrePostEdge(parameters) or new_prepostedge().
         An explicit E0 in those parameters becomes the spectrum E0; otherwise
@@ -859,7 +859,7 @@ class Spectrum:
     ) -> Spectrum:
         """Copy the selected background method and clear background and Fourier results.
 
-        Source builds accept AUTOBK settings directly; omitted/None restores
+        Since 0.2.5, AUTOBK settings are accepted directly; omitted/None restores
         default AUTOBK. Published 0.2.4 uses BackgroundMethod.AUTOBK(parameters)
         or BackgroundMethod.new_autobk() for recommended defaults. Existing
         normalization results are retained. Later edits to the original settings
@@ -875,7 +875,7 @@ class Spectrum:
         Use XrayFFTR to choose the R window and output q range. Editing the
         original settings later does not change this spectrum; assign again
         to apply changes. Returns this spectrum without filtering. Call ifft()
-        to compute the new result. This binding is an addition after 0.2.4."""
+        to compute the new result. This binding was added in 0.2.5."""
     def set_fft(self, parameters: XrayFFTF) -> Spectrum:
         """Copy forward settings and clear Fourier and inverse results.
 
@@ -952,8 +952,8 @@ class Spectrum:
         an overly small forward rmax_out can therefore prevent inversion.
         After changing the forward R spacing, reassign inverse settings with
         automatic kstep to resolve the new grid instead of retaining an old
-        resolved spacing. Configurable inverse settings require a source build
-        after 0.2.4."""
+        resolved spacing. Configurable inverse settings were added in 0.2.5;
+        use a fresh spectrum in 0.2.4 after changing the forward grid."""
     def invalidate_derived(self) -> Spectrum:
         """Clear normalization, background and Fourier results, keeping stage settings.
 

@@ -25,6 +25,10 @@ Start with the [project README](../README.md), [API guide](api.md),
   clear English, defined symbols/units, verified citations and useful API help.
 - [September 13 source/documentation audit](documentation-audit-2026-09-13.md):
   developer record of reviewed areas, corrections, checks and scope limits.
+- [Documentation and API priorities](documentation-api-roadmap.md): concise
+  website ownership, binding improvements and ARM64 distribution work.
+- [WebAssembly assessment](webassembly.md): successful processing builds,
+  ReFEFF compile/runtime blockers and a staged porting plan.
 
 ## Release and migration
 

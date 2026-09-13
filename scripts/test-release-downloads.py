@@ -4,16 +4,17 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from release_downloads import stage, TARGETS
+from release_downloads import stage, targets_for_version
 
 
 class ReleaseDownloadsTests(unittest.TestCase):
-    def fixture(self, root):
+    def fixture(self, root, version="0.2.0"):
         artifacts = root / "artifacts"
         artifacts.mkdir()
-        names = ["rexafs-0.2.0.crate", "rexafs-0.2.0.tgz", "rexafs-0.2.0.tar.gz", "rexafs-0.2.0-cp312-cp312-win_amd64.whl"]
-        for target, extension in TARGETS.items():
-            stem = f"rexafs-0.2.0-{target}"
+        names = [f"rexafs-{version}{suffix}" for suffix in
+                 (".crate", ".tgz", ".tar.gz", "-cp312-cp312-win_amd64.whl")]
+        for target, extension in targets_for_version(version).items():
+            stem = f"rexafs-{version}-{target}"
             names.extend([stem + extension, stem + extension + ".sha256"])
             if target.endswith("windows-msvc"):
                 names.extend(stem + suffix for suffix in ("-setup.exe", "-setup.exe.sha256", "-setup.build.json", "-setup.exe.qualification.json"))
@@ -59,6 +60,37 @@ class ReleaseDownloadsTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     stage(artifacts, manifest, root / "desktop", "0.3.0" if defect == "version" else "0.2.0")
                 self.assertFalse((root / "desktop").exists())
+
+    def test_next_release_requires_both_arm64_archives_and_windows_installer(self):
+        for version in ["0.2.5", "0.2.5-rc.1", "0.3.0"]:
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                artifacts, manifest = self.fixture(root, version)
+                self.assertEqual(stage(artifacts, manifest, root / "desktop", version), 26)
+                for target in ("aarch64-unknown-linux-gnu", "aarch64-pc-windows-msvc"):
+                    self.assertTrue(any(target in path.name for path in (root / "desktop").iterdir()))
+        for suffix in ("aarch64-unknown-linux-gnu.tar.gz",
+                       "aarch64-unknown-linux-gnu.tar.gz.sha256",
+                       "aarch64-pc-windows-msvc.zip",
+                       "aarch64-pc-windows-msvc-setup.exe",
+                       "aarch64-pc-windows-msvc-setup.exe.qualification.json"):
+            with self.subTest(missing=suffix), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                artifacts, manifest = self.fixture(root, "0.2.5")
+                missing = "rexafs-0.2.5-" + suffix
+                manifest.write_text("".join(line for line in manifest.read_text().splitlines(keepends=True)
+                                            if not line.endswith("  " + missing + "\n")))
+                with self.assertRaises(ValueError):
+                    stage(artifacts, manifest, root / "desktop", "0.2.5")
+                self.assertFalse((root / "desktop").exists())
+
+    def test_published_0_2_4_keeps_its_four_target_manifest(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            artifacts, manifest = self.fixture(root, "0.2.4")
+            self.assertEqual(stage(artifacts, manifest, root / "desktop", "0.2.4"), 18)
+            self.assertFalse(any("aarch64-pc-windows" in path.name or "aarch64-unknown-linux" in path.name
+                                 for path in (root / "desktop").iterdir()))
 
 
 if __name__ == "__main__":

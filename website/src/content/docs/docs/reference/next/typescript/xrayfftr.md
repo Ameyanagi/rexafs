@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** This reference describes the source checkout, including additions not available in npm rexafs@0.2.4.
+**Next API · unreleased.** This reference describes the source checkout. Compare with stable npm rexafs@0.2.4 before using it with an installed package.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
@@ -42,7 +42,7 @@ Automatic fields are resolved on the spectrum's copy during processing; resolved
 are not written back into the original settings object. Resolved values stay in the
 spectrum's settings until those settings are replaced.
 
-This class is available in Next (the source checkout), not npm 0.2.4.
+This class was added in 0.2.5 and is not exported by npm 0.2.4.
 
 ## free
 
