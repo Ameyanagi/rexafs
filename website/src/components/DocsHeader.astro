@@ -8,6 +8,8 @@ import { url } from '../lib/urls';
   <nav aria-label="Main navigation">
     <a href={url('docs/desktop/')}>Desktop</a>
     <a href={url('docs/libraries/')}>Libraries</a>
+    <a class="wide" href={url('docs/science/')}>Science</a>
+    <a class="wide" href={url('download/')}>Download</a>
   </nav>
   <div class="tools"><Search /><ThemeSelect /></div>
 </div>
@@ -19,6 +21,7 @@ import { url } from '../lib/urls';
   nav a {color:var(--sl-color-text);text-decoration:none;font-size:.9rem;font-weight:600;}
   nav a:hover {color:var(--sl-color-text-accent);}
   .tools {margin-left:auto;}
+  @media(max-width:62rem){nav a.wide{display:none}}
   @media(max-width:50rem){.docs-header{gap:1rem}.wordmark span{display:none}nav{gap:.75rem}.tools{gap:.25rem}}
   @media(max-width:24rem){.docs-header{gap:.6rem}.wordmark{font-size:1.25rem}nav a{font-size:.8rem}}
 </style>

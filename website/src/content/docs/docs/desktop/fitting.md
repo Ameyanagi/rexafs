@@ -16,7 +16,7 @@ K edge and a calculation radius of 8 Å. Use **ReFEFF** for this walkthrough and
 choose **Calculate paths**. Wait for the calculation to complete.
 
 The available backend depends on the package/platform. The Windows build uses
-ReFEFF; the Mac package also offers FEFF10. Record the engine actually used.
+ReFEFF; the macOS and Linux packages also offer FEFF10. Record the engine actually used.
 
 
 [![Full structure and calculation setup for the built-in Cu model](/screenshots/structure.jpg)](/screenshots/structure.jpg)

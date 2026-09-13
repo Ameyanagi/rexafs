@@ -4,15 +4,54 @@ description: "Choose desktop analysis or a library, and explore what rexafs can 
 audience: user
 ---
 
-rexafs analyzes X-ray absorption spectra with a shared Rust calculation engine.
-Use the desktop for interactive analysis or the Python, TypeScript and Rust
-libraries for scripts and applications. This manual targets **stable 0.2.4**.
+rexafs is a free, open-source toolkit for X-ray absorption spectroscopy (XAS).
+It takes the spectra you measure at a beamline, normalizes them, extracts the
+extended fine structure (EXAFS), transforms it to real space and fits
+scattering-path models to recover interatomic distances, coordination numbers
+and disorder. A single Rust calculation engine powers the desktop application
+and the Python, TypeScript and Rust libraries, so a spectrum processed in a
+script matches the desktop when the settings match. This manual targets
+**stable 0.2.4**.
+
+## Who this manual is for
+
+- **Analysts and beamline users** who want to inspect, process, fit and
+  publish without programming. Start with the desktop column below.
+- **Programmers** who want the same processing inside NumPy scripts, Jupyter
+  notebooks, browser tools or native applications. Start with the libraries
+  column. A programmer using rexafs is a user; this manual documents the public
+  API, installation, editor setup and defaults.
+- **Readers new to XAS** who want to understand what each step calculates. Read
+  [concepts and glossary](/docs/concepts/) and the [science
+  overview](/docs/science/) alongside the workflow guides.
+
+## Choose your path
 
 | Desktop | Libraries |
 |---|---|
 | [Install the application](/docs/getting-started/install/) | [Choose Python, TypeScript or Rust](/docs/libraries/) |
 | [Follow your first analysis](/docs/getting-started/first-analysis/) | [Run the spectrum pipeline](/docs/libraries/spectrum-api/) |
 | [Build a structural fit](/docs/desktop/fitting/) | [Read the generated API reference](/docs/reference/) |
+
+## A typical analysis
+
+1. **Import** a measured file, confirm which columns hold energy and intensity
+   or absorption, and confirm the energy unit. The desktop shows the parsed
+   spectrum before you accept it.
+2. **Normalize** the absorption so that the edge step is 1, after checking the
+   estimated edge energy and the pre-edge and post-edge baselines.
+3. **Remove the background** with AUTOBK to obtain the EXAFS oscillations
+   χ(k), then **transform** them to χ(R) with a k weight and a window.
+4. **Model and fit**: choose a structure, calculate scattering paths with
+   ReFEFF or FEFF10, select the paths to include, and fit their parameters
+   inside a k and R range. Inspect residuals, uncertainties and correlations.
+5. **Save and publish**: keep everything in a portable `.rxs` project and
+   export figures, data tables, captions and a methods draft.
+
+The bundled Cu foil spectrum and built-in Cu structure let you complete every
+step before importing your own data. [Your first
+analysis](/docs/getting-started/first-analysis/) covers steps 1 to 3 and 5;
+[fit your first coordination shell](/docs/desktop/fitting/) covers step 4.
 
 ## Features by interface
 
