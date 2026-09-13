@@ -2,16 +2,19 @@
 // dependency. Runtime processing tests alone cannot catch missing exports/docs.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+// Microsoft's recommended aliases keep the native compiler alongside the
+// compatibility package that provides the JavaScript language-service API.
 import ts from "typescript";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const directory = mkdtempSync(join(tmpdir(), "rexafs-types-"));
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+const compiler = fileURLToPath(new URL("../node_modules/@typescript/native/bin/tsc", import.meta.url));
 function run(args, cwd) {
   const result = spawnSync(npm, args, { cwd, encoding: "utf8", shell: process.platform === "win32" });
   assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -22,8 +25,15 @@ writeFileSync(join(directory, "package.json"), '{"type":"module","private":true}
 run(["install", "--ignore-scripts", "--no-audit", "--no-fund", join(directory, packed.filename)], directory);
 process.on("exit", () => rmSync(directory, { recursive: true, force: true }));
 
+test("default TypeScript commands select native and compatibility compilers", () => {
+  const nativePackage = new URL("../node_modules/@typescript/native/package.json", import.meta.url);
+  const nativeVersion = JSON.parse(readFileSync(nativePackage, "utf8")).version;
+  assert.equal(run(["exec", "--offline", "--", "tsc", "--version"], root).trim(), `Version ${nativeVersion}`);
+  assert.equal(run(["exec", "--offline", "--", "tsc6", "--version"], root).trim(), `Version ${ts.version}`);
+});
+
 for (const [entry, resolution] of [["rexafs", "NodeNext"], ["rexafs/node", "NodeNext"], ["rexafs/browser", "Bundler"]]) {
-  test(`installed ${entry}: type checking, completion, signature help and hover (${resolution})`, () => {
+  test(`installed ${entry}: TypeScript 7 checking and editor completion, signatures and hover (${resolution})`, () => {
     const filename = join(directory, `example-${entry.replaceAll("/", "-")}.ts`);
     let source = `import init, { Spectrum, AUTOBK, PrePostEdge, XrayFFTF, XrayFFTR,
       type FTWindow, type FFTGrid, type AUTOBKSolver, type AUTOBKClampScalePolicy,
@@ -52,11 +62,22 @@ new XrayFFTF({ window: "Typo" });
 // @ts-expect-error optional result must be narrowed
 spectrum.chi()[0];
 `;
-    const options = {
-      strict: true, exactOptionalPropertyTypes: true, noEmit: true, target: ts.ScriptTarget.ES2022,
-      module: resolution === "Bundler" ? ts.ModuleKind.ESNext : ts.ModuleKind.NodeNext,
-      moduleResolution: ts.ModuleResolutionKind[resolution], types: [],
+    const compilerOptions = {
+      strict: true, exactOptionalPropertyTypes: true, noEmit: true, target: "ES2022",
+      module: resolution === "Bundler" ? "ESNext" : "NodeNext",
+      moduleResolution: resolution, types: [],
     };
+    // Run the current native compiler on the same installed-package fixture,
+    // including @ts-expect-error assertions for invalid options and results.
+    writeFileSync(filename, source);
+    const config = `${filename}.json`;
+    writeFileSync(config, JSON.stringify({ compilerOptions, files: [filename] }));
+    const checked = spawnSync(process.execPath, [compiler, "--project", config, "--pretty", "false"], {
+      cwd: directory, encoding: "utf8",
+    });
+    assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+    const { options, errors } = ts.convertCompilerOptionsFromJson(compilerOptions, directory);
+    assert.deepEqual(errors, []);
     const host = {
       getScriptFileNames: () => [filename], getScriptVersion: () => String(source.length),
       getScriptSnapshot: name => name === filename ? ts.ScriptSnapshot.fromString(source)
