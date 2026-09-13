@@ -1,5 +1,15 @@
-// Keep numerical defaults and validation in Rust. This adapter only initializes
-// named fields, so constructor options behave exactly like assigning properties.
+/**
+ * Build the package's named-options facade over a generated Wasm settings class.
+ * This adapter is internal; consumers import the resulting classes from rexafs.
+ *
+ * Rust supplies defaults and numerical validation. Only own enumerable string
+ * keys are applied, through the same setters used by later property assignment.
+ * Unknown keys, arrays, null and non-object options are rejected before allocation.
+ * A setter failure releases the newly allocated object before propagating the
+ * exception. The ready callback prevents construction before browser init().
+ *
+ * Options constructor signatures and field semantics are documented in types.d.ts.
+ */
 export function bindConfiguration(Core, fields, ready = () => true) {
   const allowed = new Set(fields);
   return class extends Core {

@@ -1,12 +1,46 @@
 //! Crystal structures for EXAFS modelling: CIF import, space-group
 //! expansion, cluster generation around an absorber, `feff.inp` export,
-//! structure databases (local CIF library, AMCSD, Materials Project) and
+//! structure databases (bundled/local CIF libraries, AMCSD, COD, Materials Project) and
 //! FEFF path geometry for visualisation.
 //!
 //! Pipeline: `Structure` (from a CIF, a database, or built by hand) →
 //! [`cluster::build_cluster`] → [`feffinp::write_feff_inp`] → the existing
 //! FEFF runners in [`crate::xafs::fitting::runner`] → path files whose leg
 //! geometry [`paths::PathGeometry`] maps back onto the cluster atoms.
+//!
+//! # Minimal in-memory workflow
+//!
+//! The following face-centered-cubic cell uses an illustrative 3.61 Å lattice
+//! constant; use a structure appropriate to the measured sample. Coordinates
+//! passed to Site::new are fractional, while the generated cluster uses Å.
+//!
+//! ```
+//! use rexafs::structure::{
+//!     build_cluster, write_feff_inp, AbsorberSelection, ClusterOptions,
+//!     FeffInputOptions, Lattice, Site, Structure,
+//! };
+//! # fn main() -> Result<(), rexafs::structure::StructureError> {
+//! let sites = vec![
+//!     Site::new("Cu1", "Cu", [0.0, 0.0, 0.0]),
+//!     Site::new("Cu2", "Cu", [0.0, 0.5, 0.5]),
+//!     Site::new("Cu3", "Cu", [0.5, 0.0, 0.5]),
+//!     Site::new("Cu4", "Cu", [0.5, 0.5, 0.0]),
+//! ];
+//! let structure = Structure::new("Illustrative fcc Cu", Lattice::cubic(3.61)?, sites);
+//! let cluster = build_cluster(
+//!     &structure, &AbsorberSelection::SiteIndex(0), &ClusterOptions::default(),
+//! )?;
+//! let input_text = write_feff_inp(&cluster, &FeffInputOptions::default());
+//! assert!(input_text.contains("ATOMS"));
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! Defaults make an 8 Å periodic cluster without non-absorber hydrogen, resolve
+//! mixed sites to their majority species, and write K-edge EXAFS input text.
+//! This creates no files and runs no scattering calculation. Basis/symmetry
+//! conventions are explained in [`lattice`] and [`symmetry`]; cluster occupancy
+//! choices and their limits are documented on [`OccupancyPolicy`].
 
 pub mod builtin;
 pub mod cif;
@@ -46,33 +80,84 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum StructureError {
     #[error("CIF parse error at line {line}: {message}")]
-    CifParse { line: usize, message: String },
+    /// CIF tokenization or block parsing failed.
+    CifParse {
+        /// One-based input line number reported by the CIF parser.
+        line: usize,
+        /// Human-readable parsing explanation.
+        message: String,
+    },
     #[error("CIF has no crystal structure data: {reason}")]
-    CifNoStructure { reason: String },
+    /// The CIF input does not contain enough usable structural data.
+    CifNoStructure {
+        /// Explanation of the failed validation or underlying operation.
+        reason: String,
+    },
     #[error("unknown element or site label '{label}'")]
-    UnknownElement { label: String },
+    /// An element label could not be resolved by the selected operation.
+    UnknownElement {
+        /// Unresolved element symbol or source label.
+        label: String,
+    },
     #[error("unknown space group ({reason})")]
-    UnknownSpaceGroup { reason: String },
+    /// The requested space-group identity is not supported by the lookup.
+    UnknownSpaceGroup {
+        /// Explanation of the failed validation or underlying operation.
+        reason: String,
+    },
     #[error("invalid symmetry operation '{op}': {reason}")]
-    InvalidSymOp { op: String, reason: String },
+    /// A fractional symmetry-operation string is malformed.
+    InvalidSymOp {
+        /// Fractional-coordinate operation text that could not be parsed.
+        op: String,
+        /// Explanation of the failed validation or underlying operation.
+        reason: String,
+    },
     #[error("invalid lattice: {reason}")]
-    InvalidLattice { reason: String },
+    /// Cell geometry is invalid or its matrix cannot be inverted.
+    InvalidLattice {
+        /// Explanation of the failed validation or underlying operation.
+        reason: String,
+    },
     #[error("absorber not found: {reason}")]
-    AbsorberNotFound { reason: String },
+    /// The selected calculation absorber could not be found or resolved.
+    AbsorberNotFound {
+        /// Explanation of the failed validation or underlying operation.
+        reason: String,
+    },
     #[error("invalid cluster request: {reason}")]
-    InvalidCluster { reason: String },
+    /// A requested atom cluster cannot be constructed from the inputs.
+    InvalidCluster {
+        /// Explanation of the failed validation or underlying operation.
+        reason: String,
+    },
     #[error("structure database error: {reason}")]
-    Database { reason: String },
+    /// A database query, record conversion, or bundled catalog operation failed.
+    Database {
+        /// Explanation of the failed validation or underlying operation.
+        reason: String,
+    },
     #[error("network error: {reason}")]
-    Network { reason: String },
+    /// A remote request or response conversion failed.
+    Network {
+        /// Explanation of the failed validation or underlying operation.
+        reason: String,
+    },
     #[error("I/O error for {path}: {source}")]
+    /// A structure-related filesystem operation failed.
     Io {
+        /// Source or destination filesystem path associated with the failure.
         path: String,
         #[source]
+        /// Underlying operating-system I/O error.
         source: std::io::Error,
     },
     #[error("path geometry error: {reason}")]
-    PathGeometry { reason: String },
+    /// Path atom coordinates cannot be interpreted or mapped as requested.
+    PathGeometry {
+        /// Explanation of the failed validation or underlying operation.
+        reason: String,
+    },
 }
 
 impl From<serde_json::Error> for StructureError {

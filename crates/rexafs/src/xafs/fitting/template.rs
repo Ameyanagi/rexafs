@@ -40,6 +40,7 @@ pub enum ParameterTemplate {
 }
 
 impl ParameterTemplate {
+    /// Available template choices in their display order.
     pub const ALL: [ParameterTemplate; 4] = [
         ParameterTemplate::PerShell,
         ParameterTemplate::PerPath,
@@ -47,6 +48,7 @@ impl ParameterTemplate {
         ParameterTemplate::Manual,
     ];
 
+    /// Short name of this template for non-GUI consumers; desktop controls may use different wording.
     pub fn label(self) -> &'static str {
         match self {
             ParameterTemplate::PerShell => "Per shell",
@@ -56,6 +58,7 @@ impl ParameterTemplate {
         }
     }
 
+    /// Plain-language description of the parameter-sharing policy.
     pub fn description(self) -> &'static str {
         match self {
             ParameterTemplate::PerShell => {
@@ -73,10 +76,15 @@ impl ParameterTemplate {
 /// A fit variable produced by a template.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TemplateVariable {
+    /// Variable identifier referenced by generated path expressions.
     pub name: String,
+    /// Initial value, with units determined by the corresponding path parameter.
     pub value: f64,
+    /// Whether this parameter varies independently in the initial template.
     pub vary: bool,
+    /// Optional lower bound in the parameter’s units; None leaves it unbounded.
     pub min: Option<f64>,
+    /// Optional upper bound in the parameter’s units; None leaves it unbounded.
     pub max: Option<f64>,
     /// A defined (derived) variable, when `Some`.
     pub expr: Option<String>,
@@ -87,16 +95,22 @@ pub struct TemplateVariable {
 pub struct PathAssignment {
     /// `PathInfo::index`.
     pub index: usize,
+    /// Dimensionless amplitude expression; empty for a manual assignment.
     pub s02: String,
+    /// Relative threshold-shift expression, evaluated in eV.
     pub e0: String,
+    /// Half-path-length correction expression, evaluated in Å.
     pub deltar: String,
+    /// Second-cumulant expression, evaluated in Å².
     pub sigma2: String,
 }
 
 /// Result of [`apply_template`].
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct TemplateResult {
+    /// Generated parameter definitions and numerical starting values.
     pub variables: Vec<TemplateVariable>,
+    /// One expression assignment per selected path, in selection order.
     pub assignments: Vec<PathAssignment>,
     /// Human notes (e.g. which MS rule applied).
     pub notes: Vec<String>,

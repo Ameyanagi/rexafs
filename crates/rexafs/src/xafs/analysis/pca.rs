@@ -265,6 +265,8 @@ impl PcaModel {
 
     /// Smallest number of components whose cumulative explained variance
     /// reaches `threshold` (e.g. `0.999`).
+    /// Use a finite fraction from 0 to 1; the argument is not validated.
+    /// Returns all available components if the threshold is never reached.
     pub fn suggested_components_variance(&self, threshold: f64) -> usize {
         self.cumulative_variance
             .iter()

@@ -90,7 +90,11 @@ test("invalid inputs and FFT settings throw errors and allow recovery", () => {
 test("browser glue initializes from bytes and matches Node", async () => {
   assert.throws(() => new BrowserSpectrum(energy, mu), /init/);
   assert.throws(() => new BrowserAUTOBK({ rbkg: 1.2 }), /init/);
+  await assert.rejects(browserInit(new Uint8Array([0, 1, 2])));
+  assert.throws(() => new BrowserSpectrum(energy, mu), /init/);
   await browserInit(await readFile(new URL("../dist/web/rexafs_wasm_bg.wasm", import.meta.url)));
+  // A completed initialization reuses its engine rather than loading another asset.
+  await browserInit(new Uint8Array([0, 1, 2]));
   const spectrum = BrowserSpectrum.from_arrays(energy, mu).fft();
   verify(spectrum);
   const background = new BrowserAUTOBK({ rbkg: 1.2 });
@@ -181,12 +185,36 @@ test("options constructors preserve defaults, accept direct settings and reject 
     finally { norm.free(); }
     assert.deepEqual(s.chi(), explicit.chi());
     assert.deepEqual(s.chir_mag(), explicit.chir_mag());
+    assert.equal(f.kstep, undefined); // The spectrum resolved its own copied settings.
+    assert.equal(n.norm_end, undefined);
     b.rbkg = 2;
     assert.deepEqual(s.calc_background().chi(), explicit.chi()); // Settings were copied.
     assert.throws(() => new AUTOBK({ rbkg_typo: 1 }), /Unknown configuration/);
     assert.throws(() => new XrayFFTF({ window: "Typo" }), /FTWindow/);
     assert.throws(() => new XrayFFTF(null), /options must be an object/);
   } finally { b.free(); f.free(); n.free(); method.free(); s.free(); explicit.free(); }
+});
+
+test("automatic spacing can be resolved again after changing the background grid", () => {
+  const forward = new XrayFFTF();
+  const inverse = new api.XrayFFTR();
+  const background = new AUTOBK({ kstep: 0.1 });
+  const spectrum = new Spectrum(energy, mu).set_fft(forward).set_ifft(inverse).ifft();
+  try {
+    const initialRstep = spectrum.r()[1];
+    spectrum.set_background_method(background).fft();
+    assert.equal(spectrum.k()[1], 0.1);
+    assert.equal(spectrum.r()[1], initialRstep); // Previously resolved FFT settings remain.
+    spectrum.set_fft(forward).fft();
+    assert.ok(Math.abs(spectrum.r()[1] - initialRstep / 2) < 1e-14);
+    assert.throws(() => spectrum.ifft(), /kstep\/nfft/);
+    spectrum.set_ifft(inverse).ifft();
+    assert.ok(Math.abs(spectrum.q()[1] - 0.1) < 1e-14);
+    assert.equal(forward.kstep, undefined);
+    assert.equal(inverse.kstep, undefined);
+    spectrum.set_normalization_method(null).set_background_method(null).set_fft(forward).fft();
+    verify(spectrum);
+  } finally { spectrum.free(); forward.free(); inverse.free(); background.free(); }
 });
 
 test("inverse configuration invalidates only inverse results and copies settings", () => {

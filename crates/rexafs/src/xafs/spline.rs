@@ -1,14 +1,39 @@
 //! Interpolating B-splines used by AUTOBK and FEFF path resampling.
 //!
-//! Coefficients are solved directly from the B-spline collocation matrix using
-//! QR factorization. Evaluation and derivatives share the same basis. AUTOBK
-//! clamps to the boundary; FEFF interpolation extends the end polynomial pieces.
-//! See <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.BSpline.html>.
+//! [`interpolate`] solves cubic coefficients from the B-spline collocation matrix
+//! using QR factorization; linear coefficients equal the sampled values.
+//! [`cubic_resample`] instead solves a tridiagonal system for first derivatives.
+//! Both construct exact interpolants, without smoothing or statistical weights.
+//! Default `FixedPenalty` AUTOBK and FEFF resampling extend the end polynomial
+//! pieces. The legacy AUTOBK evaluator instead holds boundary values outside the
+//! knot interval. Such coordinate clamping does not impose zero derivatives at
+//! the endpoints (the different meaning of a "clamped" spline boundary condition).
+//!
+//! A spline is `S(q) = sum_j c[j] * B[j](q)`, where `q` is a query coordinate,
+//! `c[j]` is coefficient `j`, and `B[j]` is a dimensionless B-spline basis function
+//! determined by the knots and degree. Coefficients and `S` have the value units;
+//! knots and query coordinates share coordinate units. Consequently the derivative
+//! of `S` with respect to `c[j]` is simply `B[j]`, which [`coefficient_jacobian`]
+//! evaluates analytically. This is not a derivative with respect to `q`.
+//! The [SciPy B-spline reference](https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.BSpline.html)
+//! gives the basis recurrence used by [`basis`].
 
 use nalgebra::{DMatrix, DVector};
 
-/// Fit an interpolating spline and retain the historical zero-padded coefficient
-/// layout used by the AUTOBK solvers. Cubic interpolation is not-a-knot.
+/// Interpolate paired `x`/`y` samples with degree 1 (linear) or 3 (cubic).
+///
+/// Cubic interpolation uses not-a-knot boundaries: the first two pieces, and the
+/// last two pieces, share their cubic polynomial. See the
+/// [SciPy boundary definition](https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.CubicSpline.html).
+/// The output owns a knot vector of length `x.len() + degree + 1` and equally long
+/// coefficients. Only the first `x.len()` coefficients are active; the trailing
+/// zeros retain the historical layout expected by AUTOBK. Knots have the units
+/// of `x`, and coefficients the units of `y`. Inputs are borrowed without changes.
+///
+/// Returns an error for unsupported degree, mismatched lengths, fewer than
+/// `degree + 1` points, non-finite samples, non-increasing `x`, a singular cubic
+/// system or non-finite coefficients. Small, distinct knot spacings may still
+/// cause ill-conditioning; no condition-number threshold is enforced here.
 pub(crate) fn interpolate(
     x: &[f64],
     y: &[f64],
@@ -54,7 +79,13 @@ pub(crate) fn interpolate(
     Ok((knots, coefficients))
 }
 
-/// The not-a-knot cubic knot vector; no initial coefficient solve is needed.
+/// Build the not-a-knot cubic knot vector without fitting coefficients.
+///
+/// Repeats each endpoint four times and omits the second and penultimate sample
+/// coordinates from the interior knots, giving `x.len() + 4` entries in the units
+/// of `x`. Returns an error unless there are at least four finite, strictly
+/// increasing points. AUTOBK's direct solver uses this when an initial interpolant
+/// is unnecessary; [`interpolate`] describes the boundary convention.
 pub(crate) fn cubic_knots(x: &[f64]) -> Result<Vec<f64>, String> {
     if x.len() < 4 || x.iter().any(|v| !v.is_finite()) || x.windows(2).any(|w| w[0] >= w[1]) {
         return Err("cubic knots require at least four finite, strictly increasing points".into());
@@ -65,11 +96,23 @@ pub(crate) fn cubic_knots(x: &[f64]) -> Result<Vec<f64>, String> {
     Ok(knots)
 }
 
-/// O(n) not-a-knot cubic interpolation, extrapolating the end polynomials.
-/// Solve the tridiagonal first-derivative system, then evaluate Hermite pieces.
-/// This is equivalent to an interpolating cubic B-spline without a dense n²
-/// collocation matrix. See SciPy CubicSpline's not-a-knot boundary equations:
+/// Resample a not-a-knot cubic interpolant, extrapolating the end polynomials.
+///
+/// Solves the tridiagonal first-derivative system in O(n) time and memory for
+/// `n = x.len()`, then locates each of `m = query.len()` points by binary search.
+/// Total time is O(n + m log n). Each located interval is evaluated as a Hermite
+/// cubic, specified by its endpoint values and first derivatives. This avoids a
+/// dense collocation matrix while representing the same cubic as [`interpolate`].
+/// See SciPy CubicSpline's not-a-knot boundary equations:
 /// <https://github.com/scipy/scipy/blob/v1.17.1/scipy/interpolate/_cubic.py>.
+///
+/// Returns a new vector in query order, with the units of `y`. Queries may be
+/// unsorted or empty; all coordinates use the units of `x`. Extrapolation can
+/// overshoot the measured values and is not constrained to remain positive.
+/// Returns an error for fewer than four samples, mismatched lengths, non-finite
+/// samples/queries, non-increasing `x`, or non-finite derivatives/results.
+/// Unlike SciPy's general constructor, this helper does not special-case grids
+/// with two or three samples; callers must select linear interpolation there.
 pub(crate) fn cubic_resample(x: &[f64], y: &[f64], query: &[f64]) -> Result<Vec<f64>, String> {
     if x.len() < 4
         || x.len() != y.len()
@@ -129,8 +172,18 @@ pub(crate) fn cubic_resample(x: &[f64], y: &[f64], query: &[f64]) -> Result<Vec<
     Ok(values)
 }
 
-/// Indices and values of the degree+1 nonzero basis functions at one point.
-/// The span is kept inside the base interval for polynomial extrapolation.
+/// Return the first active coefficient index and up to `degree + 1` basis weights.
+///
+/// Uses the B-spline recurrence described in the module documentation, assigning
+/// zero to a term whose knot-span denominator vanishes. Only the first
+/// `degree + 1` entries of the six-element workspace are meaningful. With
+/// `count = knots.len() - degree - 1`, `clamp` clips `x` to the base interval
+/// `knots[degree]..=knots[count]`; otherwise the span stays in that interval but
+/// `x` does not, extending its end polynomial pieces. Weights are dimensionless.
+///
+/// Callers must supply finite, nondecreasing knots and a finite query. Panics when
+/// `degree > 5`, there are fewer than `2 * (degree + 1)` knots, or clamping sees an
+/// invalid base interval. This low-level helper does not validate the full geometry.
 fn basis(knots: &[f64], degree: usize, x: f64, clamp: bool) -> (usize, [f64; 6]) {
     assert!(degree <= 5 && knots.len() >= 2 * (degree + 1));
     let count = knots.len() - degree - 1;
@@ -166,6 +219,14 @@ fn basis(knots: &[f64], degree: usize, x: f64, clamp: bool) -> (usize, [f64; 6])
     (span - degree, weights)
 }
 
+/// Evaluate the spline on borrowed query coordinates, allocating one value per query.
+///
+/// The sum and units are defined in the module documentation. `clamp` holds the
+/// endpoint value outside the base interval; false extends the end polynomials.
+/// Query order is preserved and empty queries produce an empty vector. Missing
+/// coefficients contribute zero; extra historical padding coefficients are ignored.
+/// No finiteness check is performed, and invalid geometry can panic as described
+/// in [`basis`]. Prefer knot vectors validated by [`interpolate`] or [`cubic_knots`].
 pub(crate) fn evaluate(
     knots: &[f64],
     coefficients: &[f64],
@@ -187,6 +248,13 @@ pub(crate) fn evaluate(
         .collect()
 }
 
+/// Allocate the derivative of spline values with respect to their coefficients.
+///
+/// Matrix entry `(i, j)` is the dimensionless basis weight `B[j](x[i])`. Rows follow
+/// query order; there are exactly `coefficient_count` columns. The result does not
+/// depend on coefficient values. Columns beyond the active basis remain zero;
+/// a smaller requested count omits later basis functions. `clamp` and geometry
+/// requirements match [`evaluate`]. Empty queries give a zero-row matrix.
 pub(crate) fn coefficient_jacobian(
     knots: &[f64],
     coefficient_count: usize,

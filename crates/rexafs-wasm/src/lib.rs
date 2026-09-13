@@ -24,7 +24,10 @@ pub struct WasmPrePostEdge {
 }
 #[wasm_bindgen(js_class = PrePostEdge)]
 impl WasmPrePostEdge {
-    /// Create owned settings with the recommended Rust defaults.
+    /// Create owned settings with the recommended Rust defaults. Automatic fields are resolved
+    /// on the spectrum's copy during processing; resolved values are not written back into
+    /// the original settings object. Resolved values stay in the spectrum's settings until
+    /// those settings are replaced.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
@@ -142,8 +145,8 @@ impl WasmPrePostEdge {
     }
 }
 
-/// Settings for extracting extended X-ray absorption fine structure, chi(k), with a smooth
-/// spline background.
+/// Settings for extracting extended X-ray absorption fine structure, chi(k), with a cubic
+/// spline background in photoelectron wavenumber k.
 ///
 /// AUTOBK separates slowly varying atomic absorption from oscillations associated with
 /// neighboring atoms by suppressing low-R Fourier residuals. Recommended starting values are
@@ -166,7 +169,11 @@ pub struct WasmAUTOBK {
 }
 #[wasm_bindgen(js_class = AUTOBK)]
 impl WasmAUTOBK {
-    /// Create owned settings with the recommended Rust defaults.
+    /// Create owned settings with the recommended Rust defaults. Automatic fields are resolved
+    /// on the spectrum's copy during processing; resolved values are not written back into
+    /// the original settings object. Resolved scalar defaults and ek0 are retained in the
+    /// spectrum. Automatic kmax and nknots remain unset in stored settings and are calculated
+    /// locally for each input.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
@@ -295,11 +302,17 @@ impl WasmAUTOBK {
     pub fn set_clamp_hi(&mut self, value: Option<i32>) {
         self.inner.clamp_hi = value;
     }
-    /// Dimensionless strength of the FixedPenalty endpoint term. Recommended default: 0.001;
+    /// Numerical strength of the FixedPenalty endpoint term. Recommended default: 0.001;
     /// undefined restores this default. The objective adds lambda times the mean squared
     /// active, weighted endpoint chi residual to the mean squared low-R residual. Require a
-    /// finite nonnegative value; 0 disables the endpoint term. This rexafs-specific penalty is
-    /// separate from the original AUTOBK objective.
+    /// finite nonnegative value; 0 disables the endpoint term.
+    ///
+    /// This empirical balance is tied to the implemented residual convention: the FixedPenalty
+    /// Fourier residual uses the fixed numerical factor 0.05/sqrt(pi), while the endpoint
+    /// residual uses unweighted, edge-step-normalized chi. Changing kweight or the window
+    /// changes the balance at a fixed lambda. The parameter is unused by legacy endpoint
+    /// policies; it is not a universal physical constant. See [the fixed-penalty
+    /// objective](https://rexafs.com/docs/science/autobk/).
     #[wasm_bindgen(getter)]
     pub fn clamp_lambda(&self) -> Option<f64> {
         self.inner.clamp_lambda
@@ -536,9 +549,11 @@ impl WasmAUTOBK {
 /// preserves the background grid; automatic kstep normally resolves to AUTOBK's 0.05 inverse
 /// angstroms.
 ///
-/// For prepared `g[j] = chi(k[j]) * k[j]^w * window[j]`, the code computes `chiR[m] = (kstep /
+/// For a uniform zero-origin grid `k[j]=j*kstep`, prepare
+/// `g[j] = chi(k[j]) * k[j]^w * window[j]`. The code computes `chiR[m] = (kstep /
 /// sqrt(pi)) * sum_j g[j] * exp(-2*pi*i*j*m/N)`, with N=nfft, w=kweight, i^2=-1 and
-/// `R[m]=pi*m/(N*kstep)`. The sum uses the first N prepared samples and zeros for missing
+/// `R[m]=pi*m/(N*kstep)`. Here j indexes prepared k samples and m indexes nonnegative
+/// Fourier bins. The sum uses the first N prepared samples and zeros for missing
 /// samples. There is no 1/N forward normalization or window-area correction. For dimensionless
 /// chi, chi(R) has units angstrom^(-(w+1)).
 ///
@@ -556,7 +571,10 @@ pub struct WasmXrayFFTF {
 }
 #[wasm_bindgen(js_class = XrayFFTF)]
 impl WasmXrayFFTF {
-    /// Create owned settings with the recommended Rust defaults.
+    /// Create owned settings with the recommended Rust defaults. Automatic fields are resolved
+    /// on the spectrum's copy during processing; resolved values are not written back into
+    /// the original settings object. Resolved values stay in the spectrum's settings until
+    /// those settings are replaced.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
@@ -573,6 +591,8 @@ impl WasmXrayFFTF {
     }
     /// Store the grid setting; see [`Self::grid`] for units, defaults and effects.
     /// Configurations previously copied into a spectrum are unchanged.
+    /// Names are case-sensitive. An unsupported name returns a JavaScript string exception
+    /// without changing the current grid.
     #[wasm_bindgen(setter)]
     pub fn set_grid(&mut self, value: &str) -> Result<(), JsValue> {
         self.inner.grid = match value {
@@ -584,7 +604,9 @@ impl WasmXrayFFTF {
     }
     /// Maximum reported R in angstroms. Default: 10.0; undefined restores this default. This
     /// limits the r() and chir_*() output arrays, not the internally retained Fourier bins used
-    /// by ifft(). It does not change the transform amplitude or frequency resolution.
+    /// by ifft(). It does not change the transform amplitude or frequency resolution. ifft()
+    /// nevertheless needs at least two reported R samples to infer/validate their spacing, so
+    /// rmax_out=0 is insufficient for a back-transform.
     #[wasm_bindgen(getter)]
     pub fn rmax_out(&self) -> Option<f64> {
         self.inner.rmax_out
@@ -623,8 +645,9 @@ impl WasmXrayFFTF {
         self.inner.dk2 = value;
     }
     /// Lower Fourier window bound in inverse angstroms. Default: 2.0; explicitly assigning
-    /// undefined uses the first prepared k sample. Require kmin < kmax. Select this above the
-    /// region where the EXAFS approximation or background subtraction is unreliable.
+    /// undefined uses the first prepared k sample. Both bounds must be finite with kmin < kmax;
+    /// negative bounds are accepted. Select this above the region where the EXAFS approximation
+    /// or background subtraction is unreliable.
     #[wasm_bindgen(getter)]
     pub fn kmin(&self) -> Option<f64> {
         self.inner.kmin
@@ -679,7 +702,9 @@ impl WasmXrayFFTF {
     /// k spacing used to scale the transform and label R, in inverse angstroms. Default:
     /// undefined infers the first spacing of the prepared k grid (normally 0.05 from AUTOBK
     /// defaults). Larch also uses this spacing to resample chi. Input does not resample, so
-    /// keep it consistent with the input grid. Require a finite positive value.
+    /// keep it consistent with the input grid. Require a finite positive value. The inferred
+    /// value is retained in the spectrum's copied FFT settings. After changing the background
+    /// grid, reassign FFT settings with kstep undefined to infer the new spacing.
     #[wasm_bindgen(getter)]
     pub fn kstep(&self) -> Option<f64> {
         self.inner.kstep
@@ -742,7 +767,10 @@ pub struct WasmXrayFFTR {
 }
 #[wasm_bindgen(js_class = XrayFFTR)]
 impl WasmXrayFFTR {
-    /// Create owned settings with the recommended Rust defaults.
+    /// Create owned settings with the recommended Rust defaults. Automatic fields are resolved
+    /// on the spectrum's copy during processing; resolved values are not written back into
+    /// the original settings object. Resolved values stay in the spectrum's settings until
+    /// those settings are replaced.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
@@ -846,6 +874,8 @@ impl WasmXrayFFTR {
     /// Output q spacing in inverse angstroms. Default: undefined computes pi / (nfft *
     /// delta_R), where delta_R is the input R spacing in angstroms. An explicit value must
     /// agree with that relationship or processing throws. Leave automatic when changing nfft.
+    /// The resolved value is retained in the spectrum's copy. After changing the forward R
+    /// grid, reassign inverse settings whose kstep is undefined to resolve it again.
     #[wasm_bindgen(getter)]
     pub fn kstep(&self) -> Option<f64> {
         self.inner.kstep
@@ -1012,6 +1042,8 @@ impl WasmSpectrum {
     /// discarding the measured inputs, selected E0 or stage settings. User-specified edge-step
     /// overrides are retained; a previously estimated step is recomputed by the next
     /// normalization. Subsequent getters return undefined until their stages run again.
+    /// Resolved automatic settings, such as FFT kstep, are retained. Reassign the affected
+    /// stage settings to request fresh automatic values for changed input grids.
     pub fn invalidate_derived(&mut self) {
         self.inner.invalidate_derived();
     }
@@ -1025,7 +1057,9 @@ impl WasmSpectrum {
     /// Copy forward-transform settings and clear r(), chir_*(), kwin(), kwin_k(), q() and
     /// chiq(). Normalization and background k()/chi() are preserved. Settings can be freed
     /// after assignment; later edits require reassignment. Invalid numerical settings are
-    /// reported when fft() runs.
+    /// reported when fft() runs. Assign settings with kstep undefined to request fresh spacing
+    /// inference, for example after changing AUTOBK.kstep. Inverse settings are retained; if
+    /// their spacing was already resolved, they may also need replacement before ifft().
     pub fn set_fft(&mut self, parameters: &WasmXrayFFTF) {
         self.inner.set_fft(parameters.inner.clone());
     }
@@ -1086,7 +1120,10 @@ impl WasmSpectrum {
     /// a conjugate-symmetric inverse transform. Runs missing forward and prerequisite stages
     /// first. Forward k-weighting and windowing remain in the output, so this is not generally
     /// unweighted chi(k). Throws on inconsistent transform settings or failed prerequisite
-    /// stages.
+    /// stages. At least two reported R samples are required even though filtering uses the full
+    /// internal Fourier bins; rmax_out=0 therefore fails. When reusing a spectrum with a
+    /// different forward grid, reset previously resolved inverse settings in Next, or create a
+    /// fresh spectrum in stable 0.2.4.
     pub fn ifft(&mut self) -> Result<(), JsValue> {
         self.inner.ifft().map(|_| ()).map_err(error)
     }

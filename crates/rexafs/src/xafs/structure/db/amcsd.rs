@@ -2,7 +2,9 @@
 //! shipped by Larch/larixite (`amcsd_cif1.db` trimmed, `amcsd_cif2.db`
 //! full): tables `cif`, `minerals`, `spacegroups` (H-M symbol + JSON list
 //! of `x,y,z` operations), `cif_elements`, `publications`, `authors`.
-//! Coordinates are stored as base64 of int32 × 4·10⁶.
+//! Coordinates are stored as base64-encoded little-endian integers: a decoded
+//! value is the stored int32 divided by 4·10⁶. This is a database packaging
+//! convention, not an experimental precision or uncertainty estimate.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -20,10 +22,11 @@ use crate::xafs::structure::StructureError;
 pub const AMCSD_FULL: &str = "amcsd_cif2.db";
 /// File name of the trimmed database bundled with larixite.
 pub const AMCSD_TRIM: &str = "amcsd_cif1.db";
-/// Mirrors tried in order by [`download_amcsd`]. These are the same
-/// mirrors larixite (Larch's structure toolkit) uses for the SQLite build of
-/// the database; the first two serve the file directly, the figshare entry
-/// answers with a deferred download and is kept last as a fallback.
+/// Configured mirrors tried in order by [`download_amcsd`], following the
+/// SQLite distribution used by larixite (Larch's structure toolkit).
+/// The final entry is a direct figshare file URL; [`mirror_url`] appends the
+/// database file name to the preceding base URLs. Availability is checked at
+/// download time, not when these constants are accessed.
 pub const SOURCE_URLS: [&str; 3] = [
     "https://docs.xrayabsorption.org/databases",
     "https://millenia.cars.aps.anl.gov/xraylarch/downloads",
@@ -59,7 +62,11 @@ fn db_err<E: std::fmt::Display>(e: E) -> StructureError {
     }
 }
 
-/// Decode larixite's packed float arrays (`'0'` means absent).
+/// Decode larixite's packed float arrays into dimensionless values or missing entries.
+/// `'0'`, empty text, or invalid base64 returns an empty vector. Complete four-byte
+/// little-endian integers are divided by 4e6; decoded sentinel values near 2 or 3
+/// become None. Trailing incomplete bytes are ignored. This helper does not
+/// validate that the returned array has the same length as a site's label array.
 pub fn decode_farray(text: &str) -> Vec<Option<f64>> {
     let text = text.trim();
     if text.is_empty() || text == "0" {
@@ -99,18 +106,31 @@ impl std::fmt::Debug for Amcsd {
 /// A CIF record as stored in the database (cell + sites + symmetry).
 #[derive(Debug, Clone)]
 pub struct AmcsdRecord {
+    /// AMCSD record identifier in the local SQLite database.
     pub id: i64,
+    /// Mineral name when present in the record.
     pub mineral: Option<String>,
+    /// Formula text recorded by the database.
     pub formula: String,
+    /// Hermann–Mauguin space-group symbol from the database.
     pub hm_symbol: String,
+    /// Fractional-coordinate symmetry operations such as x,-y,z+1/2.
     pub symmetry_xyz: Vec<String>,
+    /// Cell parameters [a, b, c, alpha, beta, gamma]; lengths in Å and angles in degrees.
     pub cell: [f64; 6],
+    /// Site labels in database order, matching the coordinate/occupancy arrays.
     pub sites: Vec<String>,
+    /// Fractional x coordinates; None represents missing source values.
     pub x: Vec<Option<f64>>,
+    /// Fractional y coordinates; None represents missing source values.
     pub y: Vec<Option<f64>>,
+    /// Fractional z coordinates; None represents missing source values.
     pub z: Vec<Option<f64>>,
+    /// Dimensionless site occupancies; an empty array means the field was absent.
     pub occupancy: Vec<Option<f64>>,
+    /// Original record URL, when present.
     pub url: Option<String>,
+    /// Source publication/title text, when present.
     pub publication: Option<String>,
 }
 
@@ -167,6 +187,11 @@ impl AmcsdRecord {
         out
     }
 
+    /// Create and expand an owned structure through the shared CIF reader.
+    ///
+    /// Coordinates are formatted to six decimal places by to_cif first. Source and
+    /// mineral naming are retained. Missing/invalid cell or site data return errors;
+    /// inspect structure warnings for skipped source values. No database is modified.
     pub fn to_structure(&self) -> Result<Structure, StructureError> {
         let mut s = structure_from_cif(&self.to_cif())?;
         s.source = format!("amcsd:{}", self.id);
@@ -198,10 +223,12 @@ impl Amcsd {
         Ok(Self { conn, path })
     }
 
+    /// Borrow the path of the read-only SQLite database.
     pub fn path(&self) -> &Path {
         &self.path
     }
 
+    /// Query the number of CIF records; database/query failures return an error.
     pub fn len(&self) -> Result<usize, StructureError> {
         self.conn
             .query_row("select count(*) from cif", [], |r| r.get::<_, i64>(0))
@@ -209,6 +236,7 @@ impl Amcsd {
             .map_err(db_err)
     }
 
+    /// Query whether the database has no CIF records; propagates database errors.
     pub fn is_empty(&self) -> Result<bool, StructureError> {
         Ok(self.len()? == 0)
     }
@@ -432,7 +460,7 @@ pub fn download_amcsd<P: AsRef<Path>>(
 ///
 /// A cancelled download removes its partial file and returns
 /// [`StructureError::Network`] with the reason `"cancelled"`. Requires the
-/// `materials-project` feature's HTTP client.
+/// `http` feature (also enabled by `materials-project` and `cod`).
 #[cfg(feature = "http")]
 pub fn download_amcsd_cancellable<P: AsRef<Path>>(
     dest: P,

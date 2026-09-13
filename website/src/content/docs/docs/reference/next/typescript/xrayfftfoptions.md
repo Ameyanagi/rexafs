@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** These signatures describe the source checkout, not npm rexafs@0.2.4.
+**Next API · unreleased.** This reference describes the source checkout, including additions not available in npm rexafs@0.2.4.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
@@ -35,7 +35,9 @@ rmax_out?: number | undefined;
 
 Maximum reported R in angstroms. Default: 10.0; undefined restores this default. This
 limits the r() and chir_*() output arrays, not the internally retained Fourier bins used by
-ifft(). It does not change the transform amplitude or frequency resolution.
+ifft(). It does not change the transform amplitude or frequency resolution. ifft()
+nevertheless needs at least two reported R samples to infer/validate their spacing, so
+rmax_out=0 is insufficient for a back-transform.
 
 ## dk
 
@@ -65,8 +67,9 @@ kmin?: number | undefined;
 ```
 
 Lower Fourier window bound in inverse angstroms. Default: 2.0; explicitly assigning
-undefined uses the first prepared k sample. Require kmin < kmax. Select this above the
-region where the EXAFS approximation or background subtraction is unreliable.
+undefined uses the first prepared k sample. Both bounds must be finite with kmin < kmax;
+negative bounds are accepted. Select this above the region where the EXAFS approximation or
+background subtraction is unreliable.
 
 ## kmax
 
@@ -109,7 +112,9 @@ kstep?: number | undefined;
 k spacing used to scale the transform and label R, in inverse angstroms. Default: undefined
 infers the first spacing of the prepared k grid (normally 0.05 from AUTOBK defaults). Larch
 also uses this spacing to resample chi. Input does not resample, so keep it consistent with
-the input grid. Require a finite positive value.
+the input grid. Require a finite positive value. The inferred value is retained in the
+spectrum's copied FFT settings. After changing the background grid, reassign FFT settings
+with kstep undefined to infer the new spacing.
 
 ## window
 

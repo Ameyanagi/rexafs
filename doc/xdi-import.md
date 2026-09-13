@@ -69,6 +69,17 @@ signal for the core convenience conversion. `to_spectrum` sorts energy and μ
 together using the existing spectrum API; it does not modify the original XdiFile.
 Metadata remains on XdiFile rather than being embedded in XASSpectrum.
 
+The core conversion returns an error for the first invalid intensity ratio; it
+does not drop rows using the desktop's import diagnostics policy. Transmission
+and reference intensity ratios require positive numerator and denominator.
+Fluorescence requires a positive denominator but permits zero or negative
+numerators, as can occur in background-subtracted detector signals. Precomputed
+`mu*`/`norm*` columns take precedence even in explicit signal modes and are copied
+without additional normalization. Parsing checks finite table values and declared
+units; whether an axis/unit pair supports energy conversion is checked only by
+`energy_ev()` or `to_spectrum()`. Successful conversion still retains repeated
+energies, which later checked processing rejects.
+
 Tests include the unmodified [Ni metal foil XDI from XrayLarch's pinned
 fixture revision](https://github.com/xraypy/xraylarch/blob/d8678dd666fd95839fe9dc71b4dbe8bedec278ff/examples/xafsdata/ni_metal_rt.xdi),
 plus declarations without labels, signal math, unit conversion, angle conversion,

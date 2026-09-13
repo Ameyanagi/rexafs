@@ -21,12 +21,24 @@ def sha256(path):
 
 
 def require_main(env):
+    """Require a scheduled/manual run on this repository's main branch.
+
+    Read the supplied environment mapping without changing it. Other refs,
+    repositories or event types raise ValueError before publication work starts.
+    """
     if (env.get("GITHUB_REF") != "refs/heads/main" or env.get("GITHUB_REPOSITORY") != REPOSITORY
             or env.get("GITHUB_EVENT_NAME") not in {"schedule", "workflow_dispatch"}):
         raise ValueError("Nightly publication is restricted to this repository's main branch")
 
 
 def build_plan(run, version, commit, run_id):
+    """Return a nightly identity tied to one main-branch Actions run.
+
+    Validate run ID, source SHA, branch and event, then derive the dated tag and
+    UTC timestamp from the run's creation time. Rerunning the same run preserves
+    this identity even after midnight. The plan does not establish that builds
+    or signing have succeeded; qualify performs the artifact checks later.
+    """
     if (str(run.get("id")) != run_id or run.get("head_sha") != commit
             or run.get("head_branch") != "main" or run.get("event") not in {"schedule", "workflow_dispatch"}):
         raise ValueError("Nightly run does not match the main-branch source")
@@ -36,6 +48,13 @@ def build_plan(run, version, commit, run_id):
 
 
 def qualify(archives, version, commit, run_id, tag):
+    """Return hashes only when both Mac architectures have complete evidence.
+
+    Require matching source/signing metadata, checksums, the Nightly app name
+    and qualified DMG sidecars for each ZIP. This reads files and evidence;
+    it does not rerun graphical tests, Apple's checks, or publish anything.
+    Missing/duplicate targets and inconsistent provenance raise ValueError.
+    """
     if not re.fullmatch(r"nightly-\d{8}-\d+", tag) or not tag.endswith("-" + run_id):
         raise ValueError("Nightly tag does not identify this run")
     targets = set()
@@ -71,6 +90,12 @@ def qualify(archives, version, commit, run_id, tag):
 
 
 def get_draft_release(tag):
+    """Read the matching draft through gh and return its full release JSON.
+
+    Resolve the draft's database ID before calling the REST API because the
+    release-by-tag endpoint does not resolve these drafts. Reject a public or
+    differently named release; this operation does not modify GitHub state.
+    """
     # GitHub's release-by-tag endpoint does not resolve the draft created below.
     # gh release view resolves drafts; use its database ID for the API asset data.
     resolved = json.loads(subprocess.check_output([
@@ -88,6 +113,14 @@ def get_draft_release(tag):
 
 
 def publish(directory, version, commit, run_id, tag):
+    """Publish qualified nightly desktop artifacts, preserving an existing tag.
+
+    Validate both architectures and installers before creating or resuming a
+    draft. Write local notes/checksums, upload the qualified files, verify remote
+    asset digests, then make the draft public. Refuse to replace a public nightly
+    or reuse a tag pointing at another commit. This performs GitHub mutations;
+    it does not publish registry packages or rebuild executables.
+    """
     archives = sorted(directory.rglob("*.zip"))
     hashes = qualify(archives, version, commit, run_id, tag)
     installers = list(directory.rglob("*.dmg"))

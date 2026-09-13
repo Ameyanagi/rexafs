@@ -43,6 +43,15 @@ owned vectors. No getter runs a calculation implicitly.
   object alone does not change the spectrum.
 - Rust setters take ownership. Use `.clone()` to keep a reusable configuration.
 
+Successful stages retain their resolved automatic settings. Clearing a result
+does not reset every inferred parameter: after `fft()`, changing the background
+`kstep` leaves the transform's previously inferred `kstep` in place. Assign a
+fresh `XrayFFTF` to infer spacing from the new background grid. After changing
+forward `nfft` or spacing, assign a fresh `XrayFFTR` to infer the inverse grid
+again. Reapply desired window and range overrides to the new configuration.
+This behavior is documented on the generated [transform settings and spectrum
+methods](/docs/reference/); the available setters depend on your installed version.
+
 Prefer setters to direct Rust field edits; legacy field edits require explicit
 invalidation. Existing project defaults and automatic settings should be recorded
 when reproducing a result in another interface.

@@ -172,6 +172,9 @@ pub fn lcf<S: Borrow<XASSpectrum>>(
 /// results sorted by R-factor (best first), as Athena's "fit all
 /// combinations". Fails with [`AnalysisError::TooManyCombinations`] if the
 /// number of combinations exceeds `cfg.max_combinations`.
+/// `max_standards` is clamped to 1 through the available standard count;
+/// zero therefore still requests one-standard fits. Any failed subset aborts
+/// the call instead of being skipped, including infeasible one-standard bounds.
 pub fn lcf_combinatorial<S: Borrow<XASSpectrum>>(
     unknown: &XASSpectrum,
     standards: &[S],
@@ -339,6 +342,11 @@ fn design_matrix(
 
 /// Solve `min ‖A w − y‖²` subject to `lo ≤ w ≤ hi` and optionally `Σ w = sum_to`
 /// with a primal active-set method.
+/// A has one row per sample and one column per standard; y must have the same
+/// row count, and lo/hi each need one bound per column. Inputs should be finite
+/// except for deliberately infinite bounds. Matrix dimensions are a caller
+/// precondition; inconsistent dimensions can panic in linear algebra operations.
+/// Infeasible sum/bound constraints and failed numerical solves return errors.
 pub fn bounded_lstsq(
     a: &DMatrix<f64>,
     y: &DVector<f64>,

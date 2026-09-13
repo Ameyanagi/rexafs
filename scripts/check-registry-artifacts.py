@@ -6,6 +6,12 @@ import re
 
 
 def read_manifest(path):
+    """Read a flat SHA256SUMS file into a basename-to-hex-digest dictionary.
+
+    Entries must use lowercase 64-character digests and unique names without
+    path separators. Malformed or repeated entries raise ValueError. No files
+    are modified or fetched.
+    """
     entries = {}
     for line in path.read_text().splitlines():
         digest, name = line.split("  ", 1)
@@ -17,6 +23,14 @@ def read_manifest(path):
 
 
 def required_names(channel, version, entries):
+    """Select all manifest entries required for one coordinated registry release.
+
+    Cargo and npm require one source crate or tarball. PyPI requires the source
+    archive and every wheel in the qualified manifest; it does not infer a new
+    platform matrix. Cargo alpha/beta/rc suffixes are converted to Python's
+    a/b/rc spelling. Unsupported versions/channels or missing assets raise
+    ValueError. The input manifest is left unchanged.
+    """
     match = re.fullmatch(r"(\d+\.\d+\.\d+)(?:-(alpha|beta|rc)\.(\d+))?", version)
     if not match:
         raise ValueError("Expected a coordinated release version")
@@ -40,6 +54,14 @@ def required_names(channel, version, entries):
 
 
 def verify(channel, artifacts, manifest, version):
+    """Return the verified file count for one registry's downloaded artifacts.
+
+    Recursively hash files below artifacts, excluding manifest itself, and
+    require exact equality with required_names. Unexpected files and duplicate
+    basenames fail, even when required packages are also present. This read-only
+    check permits each registry to be resumed without downloading unrelated
+    desktop assets; it does not authenticate the original GitHub run.
+    """
     entries = read_manifest(manifest)
     names = required_names(channel, version, entries)
     actual = {}

@@ -14,7 +14,8 @@ audience: user
 | The edge is at the wrong energy | Check eV versus keV and calibration; an automatic edge estimate is not a reference calibration. |
 | Input arrays are rejected | Match lengths, remove non-finite values deliberately, and provide a strictly increasing energy axis. |
 | `chi()`, `r()` or a window is unavailable | Run the required stage and handle `None`/`undefined` before using the result. |
-| Python import/completion uses the wrong package | Select the same virtual environment in your terminal, editor and Jupyter kernel. |
+| Python import/completion uses the wrong package | Run scripts with `uv run` from your analysis project and select that project's `.venv` in the editor and Jupyter kernel. |
+| The Fourier spacing does not change after changing the background k step | Inferred settings are retained after calculation. Assign a fresh `XrayFFTF` configuration and rerun `fft()` to infer spacing from the new grid; see the language guide. |
 | Constructor arguments are rejected | Check the version: stable 0.2.4 uses zero-argument settings constructors. Next API is unreleased. |
 | Browser objects fail during construction | Await Wasm initialization and make sure the bundler serves the `.wasm` asset. |
 | A TypeScript object fails after cleanup | `free()` ends its lifetime. Create a new object before using the API again. |

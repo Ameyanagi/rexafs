@@ -23,6 +23,13 @@ def sha256(path):
 
 
 def installer_name(metadata):
+    """Return the version/architecture DMG filename after validating both fields.
+
+    metadata must identify a stable or nightly channel and one of the two Mac
+    targets. The filename uses the library version for both channels; channel
+    identity is retained in the app name and build evidence. Invalid metadata
+    raises ValueError.
+    """
     channel = metadata.get("channel", "stable")
     app_name(channel)
     version, target = metadata["version"], metadata["target"]
@@ -69,6 +76,13 @@ def check_payload(root, metadata):
 
 
 def build_installer(bundle, output, metadata):
+    """Build an unsigned compressed DMG around the existing channel's app.
+
+    Include installation instructions, build metadata and an Applications link.
+    The caller must prepare notices before signing the app; this function does
+    not add notices or sign/notarize the image. Existing output is rejected.
+    Requires macOS and dmgbuild; build/filesystem errors propagate.
+    """
     # Imported lazily: source/provenance tests run on Linux without macOS tools.
     import dmgbuild
 
@@ -125,7 +139,15 @@ def mounted_image(image):
 
 
 def verify_installation(image, metadata, verify_app=None):
-    """Exercise the installed app in a temporary folder, not /Applications."""
+    """Mount the DMG and exercise an installed copy in a temporary directory.
+
+    Verify payload/build identity, signatures, architecture and calculation
+    self-checks, then return the copied executable's SHA-256 digest. verify_app
+    optionally supplies Developer ID/notarization checks; otherwise codesign
+    validates the preview's signature. The FEFF self-check runs when the recorded
+    features include feff10-runner. This does not launch or validate the GUI.
+    Mounted images and temporary copies are cleaned up on exit.
+    """
     subprocess.run(["hdiutil", "verify", str(image)], check=True)
     with mounted_image(image) as mounted:
         if json.loads((mounted / "build.json").read_text()) != metadata:
@@ -160,7 +182,14 @@ def verify_installation(image, metadata, verify_app=None):
 
 
 def qualify_installer(image, metadata, archive):
-    """Check CI signing/install evidence before an installer may be uploaded."""
+    """Check a DMG's retained CI evidence against its qualified signed ZIP.
+
+    Require matching metadata, hashes, signing/notarization/install records and
+    executable bytes. Return hashes for the image, checksum and JSON sidecars.
+    This read-only provenance check does not rerun Apple's tools; those checks
+    are performed by sign-macos-release.py and recorded in the evidence.
+    Mismatches raise ValueError; missing files and archive errors propagate.
+    """
     if image.name != installer_name(metadata):
         raise ValueError("Unexpected installer name")
     evidence_file = Path(str(image) + ".json")

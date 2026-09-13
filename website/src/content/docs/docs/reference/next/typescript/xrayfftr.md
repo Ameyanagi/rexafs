@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** These signatures describe the source checkout, not npm rexafs@0.2.4.
+**Next API · unreleased.** This reference describes the source checkout, including additions not available in npm rexafs@0.2.4.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
@@ -37,6 +37,12 @@ constructor(options?: XrayFFTROptions);
 Create owned settings with the recommended defaults described below. Browser callers must
 await init() first. Edit the fields, copy the settings into the appropriate spectrum stage,
 and free() this object when finished.
+
+Automatic fields are resolved on the spectrum's copy during processing; resolved values
+are not written back into the original settings object. Resolved values stay in the
+spectrum's settings until those settings are replaced.
+
+This class is available in Next (the source checkout), not npm 0.2.4.
 
 ## free
 
@@ -128,7 +134,9 @@ kstep: number | undefined;
 
 Output q spacing in inverse angstroms. Default: undefined computes pi / (nfft * delta_R),
 where delta_R is the input R spacing in angstroms. An explicit value must agree with that
-relationship or processing throws. Leave automatic when changing nfft.
+relationship or processing throws. Leave automatic when changing nfft. The resolved value
+is retained in the spectrum's copy. After changing the forward R grid, reassign inverse
+settings whose kstep is undefined to resolve it again.
 
 ## window
 

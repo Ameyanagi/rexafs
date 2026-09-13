@@ -19,19 +19,30 @@ const NOISE_RMIN: f64 = 15.0;
 const NOISE_RMAX: f64 = 30.0;
 
 #[derive(Debug, Clone)]
+/// Owned forward-transform output, with separate plotting and fitting arrays.
+/// The complex `chir` applies the R-window; scalar real/imaginary/magnitude
+/// arrays retain the transform before that window. All share the returned r grid.
 pub struct TransformOutput {
+    /// Nonnegative Fourier-distance grid in Å, truncated to the plotting limit of 10 Å.
     pub r: DVector<f64>,
+    /// Dimensionless k-window on the input k grid.
     pub kwin: DVector<f64>,
+    /// Complex transform after the R-window, used to construct fit residuals.
     pub chir: Vec<Complex64>,
+    /// Real part before R-windowing, for plotting; units Å^(-(w+1)).
     pub chir_re: DVector<f64>,
+    /// Imaginary part before R-windowing, for plotting; units Å^(-(w+1)).
     pub chir_im: DVector<f64>,
+    /// Magnitude before R-windowing, for plotting; units Å^(-(w+1)).
     pub chir_mag: DVector<f64>,
+    /// Indices of r selected by the inclusive R fit range.
     pub mask_indices: Vec<usize>,
 }
 
 /// Transformed arrays of one spectrum for a single k-weight.
 #[derive(Debug, Clone)]
 pub struct KweightTransform {
+    /// Real exponent w applied to k in Å⁻¹; not rounded to an integer.
     pub kweight: f64,
     /// `k^w * chi(k)` without window (Larch k-space residual input).
     pub chik: DVector<f64>,
@@ -59,6 +70,7 @@ impl KweightTransform {
 /// Transformed arrays of one spectrum for every effective k-weight of a transform.
 #[derive(Debug, Clone)]
 pub struct DatasetTransform {
+    /// Owned transforms in effective-kweight order; the first supplies primary plot arrays.
     pub blocks: Vec<KweightTransform>,
 }
 
@@ -469,6 +481,13 @@ pub fn residual_for_dataset(
     Ok(DVector::from_vec(residual))
 }
 
+/// Return interleaved real/imaginary data-minus-model residuals on the data R mask.
+///
+/// Divides both components by [`epsilon_r_from_epsilon_k`]; None means εk = 1.
+/// Inputs must describe the same R grid and window. The implementation checks
+/// grid lengths, not coordinate equality, skips out-of-bounds mask indices, and
+/// errors when no entries remain. This legacy single-weight helper uses
+/// `transform.kweight`; use [`residual_for_dataset`] for simultaneous weights.
 pub fn residual_in_r_space(
     data: &TransformOutput,
     model: &TransformOutput,
@@ -506,6 +525,10 @@ pub fn residual_in_r_space(
     Ok(DVector::from_vec(residual))
 }
 
+/// Return the interleaved, noise-scaled real/imaginary data entries on its R mask.
+/// Used for a data norm in the same representation as [`residual_in_r_space`].
+/// Invalid mask indices are skipped; an empty result returns an error. Inputs
+/// are borrowed and unchanged; None uses εk = 1 before conversion to εR.
 pub fn data_residual_in_r_space(
     data: &TransformOutput,
     transform: &FeffFitTransform,

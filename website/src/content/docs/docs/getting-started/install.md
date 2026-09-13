@@ -57,13 +57,26 @@ match the published checksum for that exact file.
 
 ## Libraries
 
-- [Python / Jupyter](/docs/libraries/python/): create an environment with `uv venv`, then run `uv pip install rexafs==0.2.4`.
+- [Python / Jupyter](/docs/libraries/python/): create a uv project, add rexafs, and run Python through that project:
+
+  ```sh
+  uv init --python 3.12 rexafs-analysis
+  cd rexafs-analysis
+  uv add rexafs==0.2.4
+  uv run python -c "import rexafs; print(rexafs.__version__)"
+  ```
+
 - [TypeScript / JavaScript](/docs/libraries/typescript/): `bun add rexafs@0.2.4`.
 - [Rust](/docs/libraries/rust/): `cargo add rexafs@0.2.4`.
 
 We recommend the current stable [uv](https://docs.astral.sh/uv/getting-started/installation/)
 and [Bun](https://bun.sh/docs/installation) for package management. The library
 guides include the complete environment setup and alternatives.
+
+For Python, `uv add` records the dependency in `pyproject.toml`, updates `uv.lock`,
+and prepares the project environment. `uv run` uses that environment, so manual
+activation is unnecessary. Keep both project files with your scripts; see
+[uv's project workflow](https://docs.astral.sh/uv/guides/projects/).
 
 Python supports CPython 3.10–3.14. Node requires version 22 or newer. The browser
 package requires WebAssembly initialization. Use the linked guides for a complete

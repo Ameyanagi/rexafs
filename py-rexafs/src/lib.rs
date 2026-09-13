@@ -51,6 +51,13 @@ fn arrays(
 /// [Newville, Fundamentals of XAFS, sections 4 and 5](https://docs.xrayabsorption.org/tutorials/XAFS_Fundamentals.pdf).
 /// Automatic range selection and the numerical safeguards are rexafs choices;
 /// see [processing theory](https://rexafs.com/docs/science/processing/).
+///
+/// Resolved fit ranges, polynomial degree and Victoreen exponent are retained
+/// inside the spectrum. An automatically estimated edge step is recalculated
+/// after normalization results are invalidated.
+/// Processing does not replace None fields in your original settings object.
+/// Reassign fresh or reset settings when you want retained automatic choices
+/// recalculated after changing the data or an earlier stage.
 #[pyclass(name = "PrePostEdge", module = "rexafs", skip_from_py_object)]
 #[derive(Clone)]
 struct PyPrePostEdge {
@@ -63,6 +70,16 @@ impl PyPrePostEdge {
     /// Set only the fields your data require, then assign the settings to the
     /// spectrum's normalization stage. Fit ranges and degrees are
     /// resolved when normalization runs; creating settings does not process data.
+    ///
+    /// Keyword arguments are available in source builds after 0.2.4; published
+    /// 0.2.4 settings use construction without arguments followed by field
+    /// assignment. Python type conversion can raise TypeError, and an integer
+    /// outside the native field's representable range can raise OverflowError
+    /// before any numerical processing.
+    ///
+    /// Normalization fit choices are validated when a stage runs. To see the
+    /// effect of a change, inspect pre_edge(), post_edge(), norm() and flat()
+    /// after assigning the settings and calling normalize().
     #[new]
     #[pyo3(
         text_signature = "(*, pre_edge_start=None, pre_edge_end=None, norm_start=None, norm_end=None, norm_polyorder=None, n_victoreen=None, e0=None, edge_step=None)"
@@ -232,6 +249,13 @@ impl PyPrePostEdge {
 /// Original AUTOBK method: [Newville et al. (1993)](https://doi.org/10.1103/PhysRevB.47.14126).
 /// The fixed endpoint penalty and linear solution are rexafs-specific choices;
 /// see the [implemented AUTOBK objective](https://rexafs.com/docs/science/autobk/).
+///
+/// Resolved scalar defaults and ek0 are retained inside the spectrum.
+/// Automatic kmax and nknots remain unset in the settings and are calculated
+/// locally from the current input on each background call.
+/// Processing does not replace None fields in your original settings object.
+/// Reassign fresh or reset settings when you want retained automatic choices
+/// recalculated after changing the data or an earlier stage.
 #[pyclass(name = "AUTOBK", module = "rexafs", skip_from_py_object)]
 #[derive(Clone)]
 struct PyAUTOBK {
@@ -245,6 +269,12 @@ impl PyAUTOBK {
     /// Edit only the fields your data require, then assign the settings to the
     /// spectrum's background stage. Construction does not fit a spectrum;
     /// numeric range and solver compatibility checks occur during processing.
+    ///
+    /// Keyword arguments are available in source builds after 0.2.4; published
+    /// 0.2.4 settings use construction without arguments followed by field
+    /// assignment. Python type conversion can raise TypeError, and an integer
+    /// outside the native field's representable range can raise OverflowError
+    /// before any numerical processing.
     #[new]
     #[pyo3(
         text_signature = "(*, ek0=None, rbkg=1.0, nknots=None, kmin=0.0, kmax=None, kstep=0.05, nclamp=3, clamp_lo=0, clamp_hi=1, clamp_lambda=0.001, nfft=2048, kweight=1, dk=0.1, linear_regularization=0.0001, linear_condition_limit=100000000.0, linear_residual_ratio_limit=1.05, linear_fallback_to_lm=True, linear_workspace_cache=True, window='Hanning', solver='LinearDirect', linear_fallback_solver='TrustRegionDogLeg', clamp_scale_policy='FixedPenalty')"
@@ -382,6 +412,13 @@ impl PyAUTOBK {
     /// Smaller steps produce more interpolated samples without adding measured
     /// information. This usually supplies the automatic spacing of the later
     /// forward transform.
+    ///
+    /// For FixedPenalty, the internal objective FFT uses a fixed amplitude
+    /// reference of 0.05 / sqrt(pi); kstep still sets the physical R spacing
+    /// and low-R cutoff. Legacy clamp policies use kstep / sqrt(pi) instead.
+    /// This internal convention is separate from the public forward transform.
+    /// If that transform has already run, assign fresh XrayFFTF settings when
+    /// changing this step so its automatic spacing is resolved again.
     #[getter]
     fn kstep(&self) -> Option<f64> {
         self.inner.kstep
@@ -442,6 +479,11 @@ impl PyAUTOBK {
     /// value favors smaller endpoint oscillations over the low-R objective.
     /// Its numerical meaning depends on the implemented Fourier scaling and
     /// weights; it is not an uncertainty estimate. Unused by Fixed and TwoPass.
+    ///
+    /// FixedPenalty evaluates its low-R residual with an internal FFT factor
+    /// of 0.05 / sqrt(pi). Changing the background k weight or window changes
+    /// the numerical balance against the endpoint penalty, even with unchanged
+    /// lambda. See the [implemented objective](https://rexafs.com/docs/science/autobk/).
     #[getter]
     fn clamp_lambda(&self) -> Option<f64> {
         self.inner.clamp_lambda
@@ -571,7 +613,10 @@ impl PyAUTOBK {
     ///
     /// None selects Hanning. A window reduces artifacts from abrupt k truncation;
     /// its shape changes the objective and can change the extracted background.
-    /// See FTWindow for accepted names and shape-dependent taper behavior.
+    /// Accepted case-sensitive names are Hanning, Parzen, Welch, Gaussian,
+    /// Sine, KaiserBessel and FHanning. See the
+    /// [window reference](https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow)
+    /// for the shape-dependent parameter conventions.
     /// An unsupported name raises ValueError when assigned.
     #[getter]
     fn window(&self) -> Option<String> {
@@ -656,8 +701,8 @@ impl PyAUTOBK {
     /// None resolves to FixedPenalty, which requires LinearDirect and uses
     /// clamp_lambda as a fixed mean-square penalty strength. Fixed and TwoPass
     /// retain older residual-dependent clamp models; their results need not
-    /// match the recommended objective. See AUTOBKClampScalePolicy for the
-    /// distinction. Unknown names raise ValueError when assigned.
+    /// match the recommended objective. See the [AUTOBK objective](https://rexafs.com/docs/science/autobk/) for
+    /// the distinction. Unknown names raise ValueError when assigned.
     #[getter]
     fn clamp_scale_policy(&self) -> Option<String> {
         self.inner.clamp_scale_policy.map(|v| format!("{v:?}"))
@@ -703,6 +748,12 @@ impl PyAUTOBK {
 /// Physical interpretation: [Rehr and Albers (2000)](https://doi.org/10.1103/RevModPhys.72.621).
 /// See [processing theory](https://rexafs.com/docs/science/processing/) for the
 /// equation and links to the implementing Rust functions.
+///
+/// Resolved automatic k limits, k spacing and numeric defaults are retained
+/// inside the spectrum. An unset window still selects Hanning when used.
+/// Processing does not replace None fields in your original settings object.
+/// Reassign fresh or reset settings when you want retained automatic choices
+/// recalculated after changing the data or an earlier stage.
 #[pyclass(name = "XrayFFTF", module = "rexafs", skip_from_py_object)]
 #[derive(Clone)]
 struct PyXrayFFTF {
@@ -716,6 +767,12 @@ impl PyXrayFFTF {
     /// and nfft=2048. Choose a useful k range for your measured data, then call
     /// spectrum.set_fft(parameters).fft(). Construction does not run a transform;
     /// numeric validation occurs when fft() processes the data.
+    ///
+    /// Keyword arguments are available in source builds after 0.2.4; published
+    /// 0.2.4 settings use construction without arguments followed by field
+    /// assignment. Python type conversion can raise TypeError, and an integer
+    /// outside the native field's representable range can raise OverflowError
+    /// before any numerical processing.
     #[new]
     #[pyo3(
         text_signature = "(*, grid='Input', rmax_out=10.0, dk=1.0, dk2=None, kmin=2.0, kmax=15.0, kweight=2.0, nfft=2048, kstep=None, window='KaiserBessel')"
@@ -779,6 +836,11 @@ impl PyXrayFFTF {
     /// nonnegative. This limits returned display arrays; the complete internal
     /// forward transform is retained for inverse filtering. Increasing it does not
     /// improve spatial resolution or apply a structural shell filter.
+    ///
+    /// Keep at least two returned R samples if you plan to call ifft(): its
+    /// grid validation uses r() even though filtering uses the full stored
+    /// Fourier coefficients. For example, rmax_out=0 permits a forward result
+    /// but makes a subsequent inverse fail with RuntimeError.
     #[getter]
     fn rmax_out(&self) -> Option<f64> {
         self.inner.rmax_out
@@ -794,6 +856,12 @@ impl PyXrayFFTF {
     /// so it is not a universally comparable taper width. Larger tapers generally
     /// soften truncation at the cost of a broader R response. Use kwin_k()/kwin()
     /// to inspect the actual window.
+    ///
+    /// FHanning uses a fractional taper parameter. For Gaussian, dk is the
+    /// standard-deviation scale in inverse angstroms and the window has tails
+    /// beyond the nominal bounds. It is not a low-end-only width for those
+    /// families. See the [window reference](https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow)
+    /// for their distinct conventions.
     #[getter]
     fn dk(&self) -> Option<f64> {
         self.inner.dk
@@ -808,6 +876,11 @@ impl PyXrayFFTF {
     /// width-based windows. Set it separately for an asymmetric taper.
     /// Window families interpret taper parameters differently; KaiserBessel's
     /// Bessel-function shape is controlled by dk, not an independent dk2 shape.
+    ///
+    /// For Gaussian, dk2 affects the window domain and center but is not a
+    /// second standard deviation. FHanning interprets it as a fractional taper
+    /// parameter. See the [window reference](https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow)
+    /// before comparing settings between families.
     #[getter]
     fn dk2(&self) -> Option<f64> {
         self.inner.dk2
@@ -820,8 +893,10 @@ impl PyXrayFFTF {
     ///
     /// Explicit None uses the first background k sample, usually zero. Raising
     /// the limit suppresses low-k contributions but shortens the effective
-    /// transform range. It must be finite, nonnegative and below kmax.
-    /// The taper can extend below this nominal limit.
+    /// transform range. The implementation requires finite bounds with kmin
+    /// below kmax; negative lower bounds are accepted, but the window is clipped
+    /// to its sampled domain. Use a nonnegative bound for the physical k range.
+    /// The taper can extend below the nominal limit.
     #[getter]
     fn kmin(&self) -> Option<f64> {
         self.inner.kmin
@@ -882,6 +957,11 @@ impl PyXrayFFTF {
     /// positive. Input does not resample, so keep this equal to its actual grid
     /// spacing. Use grid="Larch" when requesting resampling at a different step.
     /// The forward amplitude multiplier is kstep / sqrt(pi).
+    ///
+    /// Once resolved, the spectrum retains this spacing on later fft() calls.
+    /// Changing the background k grid does not automatically reset it. Reassign
+    /// an XrayFFTF with kstep=None to infer the new spacing; the original
+    /// settings object remains unchanged by processing.
     #[getter]
     fn kstep(&self) -> Option<f64> {
         self.inner.kstep
@@ -894,8 +974,10 @@ impl PyXrayFFTF {
     ///
     /// Explicit None selects Hanning, which differs from leaving the default
     /// unchanged. The window reduces truncation ringing and broadens the R
-    /// response; it is not normalized by its area. See FTWindow for accepted
-    /// names. Unknown names raise ValueError when assigned.
+    /// response; it is not normalized by its area. Accepted case-sensitive names are Hanning, Parzen, Welch, Gaussian,
+    /// Sine, KaiserBessel and FHanning. See the
+    /// [window reference](https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow)
+    /// for the shape-dependent parameter conventions. Unknown names raise ValueError when assigned.
     #[getter]
     fn window(&self) -> Option<String> {
         self.inner.window.map(|v| format!("{v:?}"))
@@ -943,6 +1025,13 @@ impl PyXrayFFTF {
 /// See the [implemented inverse convention](https://rexafs.com/docs/science/processing/)
 /// for the scaling, and [Larch's Fourier guide](https://xraypy.github.io/xraylarch/xafs_fourier.html)
 /// for windowing concepts rather than an assertion of identical inverse output.
+///
+/// Resolved automatic R limits, q spacing and numeric defaults are retained
+/// inside the spectrum. Unset dr2 and window continue to select dr and
+/// Hanning when the window is calculated.
+/// Processing does not replace None fields in your original settings object.
+/// Reassign fresh or reset settings when you want retained automatic choices
+/// recalculated after changing the data or an earlier stage.
 #[pyclass(name = "XrayFFTR", module = "rexafs", skip_from_py_object)]
 #[derive(Clone)]
 struct PyXrayFFTR {
@@ -956,6 +1045,11 @@ impl PyXrayFFTR {
     /// weighting is intended. Assign with spectrum.set_ifft(parameters).ifft().
     /// The returned signal retains forward weighting and windowing; construction
     /// alone does not filter a spectrum.
+    ///
+    /// This settings class is available in source builds after 0.2.4; it is
+    /// not exported by the published 0.2.4 package. Python type conversion can raise TypeError, and an integer
+    /// outside the native field's representable range can raise OverflowError
+    /// before any numerical processing.
     #[new]
     #[pyo3(
         text_signature = "(*, qmax_out=10.0, dr=1.0, dr2=None, rmin=0.0, rmax=20.0, rweight=0.0, nfft=2048, kstep=None, window='KaiserBessel')"
@@ -1007,6 +1101,10 @@ impl PyXrayFFTR {
     /// numeric value as its Bessel-function shape parameter. A wider taper smooths
     /// the selected R boundary but mixes a broader range of distances into the
     /// filtered signal.
+    ///
+    /// FHanning instead uses a fractional taper parameter. Gaussian uses dr
+    /// as its standard-deviation scale in angstroms and has nonzero tails
+    /// beyond the nominal R interval.
     #[getter]
     fn dr(&self) -> Option<f64> {
         self.inner.dr
@@ -1020,6 +1118,10 @@ impl PyXrayFFTR {
     /// Use a separate value for asymmetric R-window geometry. The unit is
     /// angstroms for width-based windows; KaiserBessel's Bessel-function shape
     /// uses dr, so dr2 does not define an independent high-end shape.
+    ///
+    /// Gaussian uses dr for its standard deviation; dr2 affects the domain
+    /// and center rather than providing a second Gaussian width. FHanning
+    /// uses a fractional taper parameter.
     #[getter]
     fn dr2(&self) -> Option<f64> {
         self.inner.dr2
@@ -1091,6 +1193,11 @@ impl PyXrayFFTR {
     /// between the first two R samples in angstroms. An explicit positive value
     /// must agree with that spacing or processing raises RuntimeError. Keep it
     /// automatic when changing nfft so the physical Fourier grid stays consistent.
+    ///
+    /// Automatic spacing is retained inside the spectrum after the first
+    /// inverse. If the forward R grid changes, assign fresh inverse settings
+    /// with kstep=None before calling ifft() again. The earlier resolved value
+    /// otherwise remains subject to the same consistency check.
     #[getter]
     fn kstep(&self) -> Option<f64> {
         self.inner.kstep
@@ -1104,7 +1211,10 @@ impl PyXrayFFTR {
     /// Explicit None selects Hanning, unlike leaving the default unchanged.
     /// The window selects and tapers R contributions before the real inverse;
     /// it cannot undo the weighting or information lost in the forward window.
-    /// See FTWindow for choices. Unknown names raise ValueError when assigned.
+    /// Accepted case-sensitive names are Hanning, Parzen, Welch, Gaussian,
+    /// Sine, KaiserBessel and FHanning. See the
+    /// [window reference](https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow)
+    /// for the shape-dependent parameter conventions. Unknown names raise ValueError when assigned.
     #[getter]
     fn window(&self) -> Option<String> {
         self.inner.window.map(|v| format!("{v:?}"))
@@ -1263,6 +1373,11 @@ impl PySpectrum {
     /// have at least two samples, and have strictly increasing energy.
     /// Invalid shapes or data raise ValueError. No processing runs here;
     /// call fft() for the default pipeline or normalize() for just normalization.
+    ///
+    /// The two-sample minimum only permits storage. Automatic edge detection
+    /// requires at least three samples, and baseline/spline fitting needs enough
+    /// points on the appropriate sides of the edge. Supply real numeric input;
+    /// NumPy conversion errors for unsupported objects propagate to the caller.
     #[new]
     fn new(py: Python<'_>, energy: &Bound<'_, PyAny>, mu: &Bound<'_, PyAny>) -> PyResult<Self> {
         Ok(Self {
@@ -1275,6 +1390,10 @@ impl PySpectrum {
     /// copies them to owned float64 storage. Inputs must be finite, one-dimensional,
     /// equal-length, with at least two samples and strictly increasing energy.
     /// Invalid data raise ValueError. Derived results are initially unavailable.
+    ///
+    /// As with the constructor, two samples are enough to create the object
+    /// but not enough for automatic edge detection or a useful EXAFS pipeline.
+    /// Array conversion follows NumPy's float64 conversion rules.
     #[staticmethod]
     fn from_arrays(
         py: Python<'_>,
@@ -1290,6 +1409,11 @@ impl PySpectrum {
     /// least two samples. Invalid input raises ValueError before replacing data.
     /// Stage settings are retained, but old calculated edge values and arrays
     /// are discarded. Returns this spectrum; call a processing stage to recompute.
+    ///
+    /// Unlike the QAS reader, this method rejects unordered input rather than
+    /// sorting it. Previously resolved automatic fit ranges and FFT spacings
+    /// are retained with the other settings. Reassign automatic settings if
+    /// the new scan needs those choices inferred again.
     fn set_spectrum<'py>(
         mut slf: PyRefMut<'py, Self>,
         energy: &Bound<'py, PyAny>,
@@ -1327,6 +1451,10 @@ impl PySpectrum {
     /// None until their stages run again. Ordinary setters already invalidate
     /// the affected results; use this method when you need a full recomputation.
     /// Returns this spectrum without running any calculations.
+    ///
+    /// Resolved fit ranges and FFT spacings are retained along with explicit
+    /// parameters. They are not restored to their original None values; reassign
+    /// fresh settings if you want automatic ranges or spacings inferred again.
     fn invalidate_derived(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
         slf.inner.invalidate_derived();
         slf
@@ -1347,6 +1475,11 @@ impl PySpectrum {
     /// XrayFFTF to choose k weights, the window and grid convention. Editing
     /// the original settings later has no effect until you assign them again.
     /// Returns this spectrum without transforming; call fft() to recompute.
+    ///
+    /// If ifft() has already resolved its automatic kstep and this change
+    /// alters the R-grid spacing, reassign inverse settings with kstep=None
+    /// before the next inverse. This setter clears results, not the resolved
+    /// parameters of the inverse stage.
     fn set_fft<'py>(mut slf: PyRefMut<'py, Self>, parameters: &PyXrayFFTF) -> PyRefMut<'py, Self> {
         slf.inner.set_fft(parameters.inner.clone());
         slf
@@ -1395,6 +1528,10 @@ impl PySpectrum {
     /// normalization results are retained. Later edits to the original settings
     /// do not propagate: assign them again to apply changes. Returns this
     /// spectrum without fitting; call calc_background() or a later stage.
+    ///
+    /// If changing kstep after fft() has already run, also reassign XrayFFTF
+    /// settings with kstep=None. Clearing the Fourier results does not reset
+    /// its previously resolved automatic spacing.
     #[pyo3(signature = (method=None))]
     fn set_background_method<'py>(
         mut slf: PyRefMut<'py, Self>,
@@ -1425,6 +1562,9 @@ impl PySpectrum {
     /// this spectrum, stores E0 in eV and clears normalization and all later
     /// results. Inspect the result for noisy spectra or multiple edges;
     /// automatic detection is not energy calibration. Invalid data raise ValueError.
+    ///
+    /// At least three energy/mu samples are required, even though the
+    /// constructor can store two. An insufficient scan raises ValueError.
     fn find_e0(mut slf: PyRefMut<'_, Self>) -> PyResult<PyRefMut<'_, Self>> {
         let py = slf.py();
         let inner = &mut slf.inner;
@@ -1487,6 +1627,13 @@ impl PySpectrum {
     /// inverse rweight=0, chiq() has units inverse square angstroms.
     /// This recomputes the inverse and returns this spectrum. Invalid inverse
     /// grids or settings raise RuntimeError; prerequisite errors propagate.
+    ///
+    /// At least two entries must be present in the displayed r() array;
+    /// an overly small forward rmax_out can therefore prevent inversion.
+    /// After changing the forward R spacing, reassign inverse settings with
+    /// automatic kstep to resolve the new grid instead of retaining an old
+    /// resolved spacing. Configurable inverse settings require a source build
+    /// after 0.2.4.
     fn ifft(mut slf: PyRefMut<'_, Self>) -> PyResult<PyRefMut<'_, Self>> {
         let py = slf.py();
         let inner = &mut slf.inner;
@@ -1705,6 +1852,17 @@ impl PySpectrum {
             .map(|v| PyArray1::from_vec(py, v.as_slice().to_vec()))
     }
 }
+/// Read a QAS transmission text file through the native reader.
+///
+/// `path` is a filename string. The first three whitespace-separated columns
+/// contain energy in eV and incident/transmitted intensities; mu is their
+/// natural log ratio. Energy and mu are sorted together when needed, while
+/// duplicate rows remain. The reader does not validate positive intensities.
+/// It returns an owned, unprocessed spectrum; file/parse errors become
+/// RuntimeError and processing performs later numerical validation.
+/// Public callers should use rexafs.io.read_qas_transmission, which also
+/// converts pathlib.Path and provides the measurement explanation/citation.
+/// Transmission convention: [Newville, Fundamentals of XAFS, section 4](https://docs.xrayabsorption.org/tutorials/XAFS_Fundamentals.pdf).
 #[pyfunction]
 fn read_qas_transmission(path: &str) -> PyResult<PySpectrum> {
     Ok(PySpectrum {

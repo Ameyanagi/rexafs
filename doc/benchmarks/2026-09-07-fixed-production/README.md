@@ -1,5 +1,10 @@
 # Production fixed-λ AUTOBK: accuracy, timing and profiles
 
+Historical measurements from the September 7, 2026 implementation rollout.
+“New”, “current” and the test counts below refer to that measured source and
+environment. They do not promise current package performance; the linked
+objective guide describes the maintained algorithm.
+
 The Rust implementation now reproduces the study's fixed objective with
 `clamp_lambda = 0.001`, a configurable endpoint regularizer, and one linear
 coefficient solve. It does **not** add a separate coefficient/ridge penalty.

@@ -21,6 +21,9 @@ use super::mathutils::MathUtils;
 use crate::xafs::mathutils::index_of;
 
 // Constants
+/// Conventional small energy scale in eV used by energy-step utilities.
+/// The default backend returns this fallback when an averaging slice is empty;
+/// it is a numerical default, not a measured energy resolution.
 pub const TINY_ENERGY: f64 = 0.005;
 
 /// Physical constants used in rexafs
@@ -34,10 +37,20 @@ pub const TINY_ENERGY: f64 = 0.005;
 #[path = "constants.rs"]
 pub mod constants;
 
-/// Trait for xafs utilities
-/// functions for f64, Vec<f64>, and ArrayBase<OwnedRepr<f64>, Ix1>
+/// Convert excess photon energy E−E0 (eV) and photoelectron wave number k (Å⁻¹).
+///
+/// The nonrelativistic relation is E−E0 = hbar²*k²/(2*m_e), with unit conversion
+/// encoded by `constants::KTOE` ≈ 3.809982110968585 eV Å². Subtract E0 before
+/// calling `etok`; these helpers do not know the absorption-edge energy.
+/// Vector implementations allocate results and leave borrowed inputs unchanged.
 pub trait XAFSUtils {
+    /// Return sqrt((E−E0)*ETOK) in Å⁻¹. Scalar, Vec and DVector values below
+    /// zero are clamped to zero; NaNs propagate. The legacy ndarray-array
+    /// implementation instead takes the raw square root and returns NaN for
+    /// negative excess energy. AUTOBK uses a separate signed interpolation grid.
     fn etok(&self) -> Self;
+    /// Return k²*KTOE in eV; E0 is not added. Negative k is squared, so its
+    /// sign is lost. No finiteness validation is performed.
     fn ktoe(&self) -> Self;
 }
 
@@ -91,43 +104,45 @@ impl XAFSUtils for ArrayBase<OwnedRepr<f64>, Ix1> {
     }
 }
 
+/// Line-profile family used for smoothing by convolution.
+/// Widths use the same units as the supplied x axis; these kernels are not the
+/// Fourier-window families in `FTWindow`. See
+/// [SciPy's Voigt-profile definition](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.voigt_profile.html).
 #[derive(Debug, Clone, Copy, Default)]
 pub enum ConvolveForm {
+    /// Lorentzian kernel; sigma is its half width at half maximum.
     #[default]
     Lorentzian,
+    /// Gaussian kernel; sigma is its standard deviation.
     Gaussian,
+    /// Gaussian–Lorentzian convolution; sigma is the Gaussian standard deviation
+    /// and gamma is the Lorentzian half width at half maximum.
     Voigt,
 }
-/// Smooth a funtion y(x) by convoluting with a lorentzian, gaussian, or voigt function.
+/// Smooth y(x) by interpolation, reflected extension and direct convolution.
 ///
-/// The function is sampled at intervals xstep, and the convolution is performed
-/// using FFT convolution. The function is padded with npad points on each side
-/// before convolution. The function is interpolated onto a uniform grid with
-/// spacing xstep before convolution. The function is returned on the original
-/// grid.
+/// Returns a newly allocated array on the original x coordinates, in the same
+/// y units. Widths sigma (default 1.0) and gamma (default sigma) use x units.
+/// Lorentzian uses sigma as half width at half maximum and ignores gamma;
+/// Gaussian uses sigma as standard deviation; Voigt uses both widths.
+/// Increasing the width suppresses narrow features as well as noise.
 ///
-/// # Arguments
-/// * `x` - x values of the function
-/// * `y` - y values of the function
-/// * `sigma` - primary width parameter for convolving function (default: 1.0)
-/// * `gamma` - secondary width parameter for convolving function (default: sigma)
-/// * `xstep` - step size for uniform grid onto which the function is interpolated (default: min(x.di/ff())
-/// * `npad` - number of points to pad onto each side of the function before convolution (default: 5)/
-/// * `conv_form` - form of the convolving function (default: lorentzian)
+/// The requested xstep defaults to the smallest successive x difference.
+/// npad defaults to 5 and extends the interpolation domain by that many requested
+/// steps on each side. The code reflects the interpolated signal, constructs a
+/// sampled kernel, normalizes its sum, and evaluates a direct valid convolution;
+/// it does not call an FFT. See the convolution definition in
+/// [NumPy's reference](https://numpy.org/doc/stable/reference/generated/numpy.convolve.html).
+/// The interpolation array is capped at 50 times the input length. If that cap
+/// is reached, its actual spacing differs from xstep while kernel widths still
+/// use the requested step; avoid excessively fine xstep values.
 ///
-/// # Returns
-/// * Result<Array1<f64>, Box<dyn Error>> - smoothed function
-///
-/// # Example
-/// ```
-/// use ndarray::Array1;
-/// use rexafs::xafs::xafsutils::{smooth, ConvolveForm};
-///
-/// let x: Array1<f64> = Array1::range(0.0, 10.0, 1.0);
-/// let y: Array1<f64> = Array1::range(0.0, 10.0, 1.0);
-///
-/// let result = smooth(x, y, None, None, None, None, ConvolveForm::Lorentzian);
-/// ```
+/// Use matching finite arrays on a strictly increasing x axis and positive finite
+/// widths and spacing. Interpolation or invalid convolution dimensions can return
+/// an error. This low-level helper does not validate every nonfinite value.
+/// The ndarray compatibility helper takes ownership through `Into<Array1>`.
+/// It does not clamp npad or validate short/mismatched arrays before indexing;
+/// short arrays, invalid ranges or xstep below 1e-12 can panic.
 pub fn smooth<T: Into<Array1<f64>>>(
     x: T,
     y: T,
@@ -230,29 +245,20 @@ fn convolve_valid(
     Ok(out)
 }
 
-/// Function to remove duplicated successive values of an array that is expected to be monotonically increasing.
+/// Nudge nearly repeated coordinates without deleting any samples.
 ///
-/// For repeated value, the second encountered occurrence (at index i) will be increased by an amount that is the larget of:
-/// 1. tiny (default 1e-7)
-/// 2. frac (default 1e-6) times the difference between the previous and next values.
+/// Takes ownership through `Into<Array1>` and returns an array with the same length. For a difference d
+/// between the current and preceding non-NaN original values, if abs(d) < tiny,
+/// the added offset accumulates by max(tiny, frac * abs(d)). Defaults are
+/// tiny=1e-7 in coordinate units and dimensionless frac=1e-6. The increment does
+/// not use the next sample. This is a numerical coordinate adjustment, not an
+/// averaging or merging operation on paired absorption values.
 ///
-/// # Arguments
-/// * `arr` - Array of values to be checked for duplicates
-/// * `tiny` - Minimum value to be added to a duplicate value (default 1e-7)
-/// * `frac` - Fraction of the difference between the previous and next values to be added to a duplicate value (default 1e-6)
-///
-/// # Returns
-/// * `arr` - Array with duplicates removed
-///
-/// # Example
-/// ```
-/// use rexafs::xafs::xafsutils::remove_dups_array1;
-/// use ndarray::Array1;
-///
-/// let arr = Array1::from_vec(vec![0.0, 1.1, 2.2, 2.2, 3.3]);
-/// let arr = remove_dups_array1(arr, None, None, None);
-/// assert_eq!(arr, Array1::from_vec(vec![0., 1.1, 2.2, 2.2000001, 3.3]));
-/// ```
+/// `sort=Some(true)` sorts a copy first; None/false retain the input order.
+/// Use finite values when sorting: the floating-point comparison unwraps and
+/// panics on NaN. Without sorting, NaNs are retained and skipped when tracking
+/// the previous value. This helper neither guarantees strict monotonicity after
+/// nudging nor changes an associated mu array.
 #[cfg(feature = "ndarray-compat")]
 pub fn remove_dups_array1<T: Into<ArrayBase<OwnedRepr<f64>, Ix1>>>(
     arr: T,
@@ -299,20 +305,20 @@ pub fn remove_dups_array1<T: Into<ArrayBase<OwnedRepr<f64>, Ix1>>>(
     arr
 }
 
-/// Function to remove duplicated successive values of a DVector that is expected to be monotonically increasing.
+/// Nudge nearly repeated coordinates without deleting any samples.
 ///
-/// For repeated value, the second encountered occurrence (at index i) will be increased by an amount that is the largest of:
-/// 1. tiny (default 1e-7)
-/// 2. frac (default 1e-6) times the difference between the previous and next values.
+/// Returns a newly allocated vector with the same length. For a difference d
+/// between the current and preceding non-NaN original values, if abs(d) < tiny,
+/// the added offset accumulates by max(tiny, frac * abs(d)). Defaults are
+/// tiny=1e-7 in coordinate units and dimensionless frac=1e-6. The increment does
+/// not use the next sample. This is a numerical coordinate adjustment, not an
+/// averaging or merging operation on paired absorption values.
 ///
-/// # Arguments
-/// * `arr` - DVector of values to be checked for duplicates
-/// * `tiny` - Minimum value to be added to a duplicate value (default 1e-7)
-/// * `frac` - Fraction of the difference between the previous and next values to be added to a duplicate value (default 1e-6)
-/// * `sort` - Sort the vector before removing duplicates (default false)
-///
-/// # Returns
-/// * `DVector<f64>` - Vector with duplicates removed
+/// `sort=Some(true)` sorts a copy first; None/false retain the input order.
+/// Use finite values when sorting: the floating-point comparison unwraps and
+/// panics on NaN. Without sorting, NaNs are retained and skipped when tracking
+/// the previous value. This helper neither guarantees strict monotonicity after
+/// nudging nor changes an associated mu array.
 pub fn remove_dups(
     arr: &DVector<f64>,
     tiny: Option<f64>,
@@ -357,6 +363,11 @@ pub fn remove_dups(
     arr + add
 }
 
+/// Allocate paired arrays retaining only entries where both values are finite.
+///
+/// Despite the historical name, infinities are removed as well as NaNs. The
+/// inputs are borrowed views; iteration stops at the shorter input, so unequal
+/// lengths silently discard an unmatched tail. Units and retained order are unchanged.
 pub fn remove_nan2(
     arr1: ArrayView1<'_, f64>,
     arr2: ArrayView1<'_, f64>,
@@ -370,27 +381,21 @@ pub fn remove_nan2(
     (arr1.into(), arr2.into())
 }
 
-/// Function to find the energy step of an array of energies.
-/// It ignores the smallest fraction of energy steps (frac_ignore) and then averages the next nave steps.
+/// Estimate a small representative energy interval in eV.
 ///
-/// # Arguments
-/// * `energy` - Array of energies
-/// * `frac_ignore` - Fraction of energy steps to ignore (default 0.01)
-/// * `nave` - Number of energy steps to average (default 10)
-/// * `sort` - Sort the array before finding the energy step (default false)
+/// Defaults are frac_ignore=0.01, nave=10 and sort=false. Differences between
+/// successive energy values are sorted. With n input energies, start is
+/// floor(frac_ignore*n), and end is min(start+nave, n-2). The mean uses the
+/// half-open difference slice [start,end), so the largest interval is excluded.
+/// The ignored count is based on energy sample count, not difference count.
 ///
-/// # Returns
-/// * `estep` - Average energy step
-///
-/// # Example
-/// ```
-/// use rexafs::xafs::xafsutils::find_energy_step_array1;
-/// use ndarray::array;
-///
-/// let energy = array![0.0, 1.1, 2.2, 2.2, 3.3];
-/// let estep = find_energy_step_array1(energy, None, None, None);
-/// assert_eq!(estep, 0.7333333333333333);
-/// ```
+/// This heuristic supplies smoothing scales for edge finding; it is not an
+/// energy calibration or an uncertainty estimate. Borrowed input is unchanged.
+/// Use finite energies and finite nonnegative fraction settings: comparison of
+/// NaNs can panic. Sorting, when requested, operates on a copy.
+/// The input is consumed through `Into<Array1>`. This legacy helper does not use
+/// the default backend's 0.005 eV fallback. A short array or unusable averaging
+/// slice can panic or return NaN.
 #[cfg(feature = "ndarray-compat")]
 pub fn find_energy_step_array1<T: Into<ArrayBase<OwnedRepr<f64>, Ix1>>>(
     energy: T,
@@ -420,31 +425,20 @@ pub fn find_energy_step_array1<T: Into<ArrayBase<OwnedRepr<f64>, Ix1>>>(
 
     return ediff[nskip..ediff_end].iter().sum::<f64>() / (ediff_end - nskip) as f64;
 }
-/// Calculate the $E_0$, the energy threshold of absoption, or the edge energy, given $\mu(E)$.
+/// Estimate an absorption edge in eV from the derivative of mu(E).
 ///
-/// $E_0$ is found as the point with maximum derivative with some checks to avoid spurious glitches.
-///
-/// # Arguments
-/// * `energy` - Array of energies
-/// * `mu` - Array of absorption coefficients
-///
-/// # Returns
-/// Result<e0: f64, Box<dyn Error>>
-/// * `e0` - Energy threshold of absoption, or the edge energy
-///
-/// # Example
-/// ```
-/// use rexafs::xafs::xafsutils::find_e0_array1;
-/// use ndarray::Array1;
-///
-/// let energy:Array1<f64> = Array1::linspace(0.0, 100.0, 1000);
-/// let mu = &energy.map(|x| (x-50.0).powi(3) - (x-50.0).powi(2) + x);
-/// let result = find_e0_array1(energy.clone(), mu.clone());
-/// assert_eq!(result.unwrap(), 0.4004004004004004);
-///
-/// // Result calculated by Larch is 0.3003003003003003
-/// ```
-
+/// Runs `_find_e0` on the full spectrum, then refines a neighborhood extending
+/// up to 75 samples on each side of the candidate. A peak requires adjacent
+/// high-derivative samples to reduce isolated-glitch sensitivity. This is a
+/// numerical edge estimate, not independent energy calibration or evidence that
+/// an edge is physically unique. Inspect noisy, multi-edge or narrow scans.
+/// See [Larch's edge-finding reference](https://xraypy.github.io/xraylarch/xafs_preedge.html#the-find-e0-function)
+/// for the method's purpose; detailed thresholds and fallback rules here are
+/// implementation choices.
+/// This legacy ndarray routine consumes its arrays and performs a smoothed
+/// second pass. The numerical result can differ from the default backend,
+/// including endpoint handling; no universal Larch equivalence is promised.
+/// Unlike the default backend, invalid or short refinement ranges can panic.
 #[cfg(feature = "ndarray-compat")]
 pub fn find_e0_array1<T: Into<ArrayBase<OwnedRepr<f64>, Ix1>>>(
     energy: T,
@@ -471,33 +465,24 @@ pub fn find_e0_array1<T: Into<ArrayBase<OwnedRepr<f64>, Ix1>>>(
     Ok(e0)
 }
 
-/// Internal function used for find_e0.
+/// Find one derivative-based edge candidate and return (energy_eV, index, step_eV).
 ///
-/// # Arguments
-/// * `energy` - Array of energies
-/// * `mu` - Array of absorption coefficients
-/// * `estep` - Energy step (default: find_energy_step(energy)/2.0)
-/// * `use_smooth` - Use smoothed derivative (default: false)
+/// The estimate uses gradient(mu)/gradient(energy) after nudging duplicate
+/// energy coordinates. A normalized derivative threshold starts at 0.60 for
+/// more than 20 samples and 0.30 otherwise, and can be halved twice. A selected
+/// peak must also have neighboring samples above the threshold; end regions
+/// are excluded. These numerical thresholds are rexafs choices, not confidence
+/// levels. If no candidate passes, the initial index zero can be returned.
 ///
-/// # Returns
-/// Result<(e0: f64, imax: usize, estep: f64), Box<dyn Error>>
-/// * `e0` - Energy threshold of absoption, or the edge energy
-/// * `imax` - Index of maximum derivative
-/// * `estep` - Energy step
-///
-/// # Example
-/// ```
-/// use rexafs::xafs::xafsutils::_find_e0_array1;
-/// use ndarray::Array1;
-///
-/// let energy:Array1<f64> = Array1::linspace(0.0, 100.0, 1000);
-/// let mu = &energy.map(|x| (x-50.0).powi(3) - (x-50.0).powi(2) + x);
-///
-/// let result = _find_e0_array1(energy.clone(), mu.clone(), None, None);
-/// assert_eq!(result.unwrap(), (1.001001001001001, 10, 0.05005005005004648));
-///
-/// // the result obtained by xraylarch is (1.001001001001001, 10, 0.05005005005004648)
-/// ```
+/// `estep=None` uses half `find_energy_step`; `use_smooth=None` is false.
+/// Smoothing, when used, is Lorentzian with width 3*estep and sample spacing
+/// estep. The index refers to the supplied sample order; duplicate nudging may
+/// shift the returned energy slightly. Finite increasing energy in eV and
+/// matched absorption samples are the intended inputs.
+/// This historical ndarray implementation consumes its arrays and lacks
+/// comprehensive length/finiteness/range checks. Optional smoothing is performed,
+/// but its error is unwrapped; malformed input can therefore panic.
+/// The DVector helper under ndarray-compat does not perform that smoothing.
 #[cfg(feature = "ndarray-compat")]
 pub fn _find_e0_array1<T: Into<ArrayBase<OwnedRepr<f64>, Ix1>> + Clone>(
     energy: T,
@@ -604,17 +589,21 @@ pub fn _find_e0_array1<T: Into<ArrayBase<OwnedRepr<f64>, Ix1>> + Clone>(
     Ok((en[imax], imax, estep))
 }
 
-/// DVector version: Find the energy step of an array of energies.
-/// It ignores the smallest fraction of energy steps (frac_ignore) and then averages the next nave steps.
+/// Estimate a small representative energy interval in eV.
 ///
-/// # Arguments
-/// * `energy` - DVector of energies
-/// * `frac_ignore` - Fraction of energy steps to ignore (default 0.01)
-/// * `nave` - Number of energy steps to average (default 10)
-/// * `sort` - Sort the array before finding the energy step (default false)
+/// Defaults are frac_ignore=0.01, nave=10 and sort=false. Differences between
+/// successive energy values are sorted. With n input energies, start is
+/// floor(frac_ignore*n), and end is min(start+nave, n-2). The mean uses the
+/// half-open difference slice [start,end), so the largest interval is excluded.
+/// The ignored count is based on energy sample count, not difference count.
 ///
-/// # Returns
-/// * `estep` - Average energy step
+/// This heuristic supplies smoothing scales for edge finding; it is not an
+/// energy calibration or an uncertainty estimate. Borrowed input is unchanged.
+/// Use finite energies and finite nonnegative fraction settings: comparison of
+/// NaNs can panic. Sorting, when requested, operates on a copy.
+/// This compatibility helper does not supply the default backend's empty-slice
+/// fallback. Empty/short arrays or an invalid averaging slice can panic or
+/// return NaN; provide a nonempty usable averaging slice.
 pub fn find_energy_step(
     energy: &DVector<f64>,
     frac_ignore: Option<f64>,
@@ -647,19 +636,23 @@ pub fn find_energy_step(
     ediff[nskip..ediff_end].iter().sum::<f64>() / (ediff_end - nskip) as f64
 }
 
-/// DVector version: Internal function used for find_e0.
+/// Find one derivative-based edge candidate and return (energy_eV, index, step_eV).
 ///
-/// # Arguments
-/// * `energy` - DVector of energies
-/// * `mu` - DVector of absorption coefficients
-/// * `estep` - Energy step (default: find_energy_step(energy)/2.0)
-/// * `use_smooth` - Use smoothed derivative (default: false)
+/// The estimate uses gradient(mu)/gradient(energy) after nudging duplicate
+/// energy coordinates. A normalized derivative threshold starts at 0.60 for
+/// more than 20 samples and 0.30 otherwise, and can be halved twice. A selected
+/// peak must also have neighboring samples above the threshold; end regions
+/// are excluded. These numerical thresholds are rexafs choices, not confidence
+/// levels. If no candidate passes, the initial index zero can be returned.
 ///
-/// # Returns
-/// Result<(e0: f64, imax: usize, estep: f64), Box<dyn Error>>
-/// * `e0` - Energy threshold of absorption, or the edge energy
-/// * `imax` - Index of maximum derivative
-/// * `estep` - Energy step
+/// `estep=None` uses half `find_energy_step`; `use_smooth=None` is false.
+/// Smoothing, when used, is Lorentzian with width 3*estep and sample spacing
+/// estep. The index refers to the supplied sample order; duplicate nudging may
+/// shift the returned energy slightly. Finite increasing energy in eV and
+/// matched absorption samples are the intended inputs.
+/// The ndarray-feature DVector variant currently ignores use_smooth and always
+/// uses the unsmoothed derivative. Its short-array/range checks are historical
+/// and can panic; it is not the same routine as `_find_e0_array1`.
 pub fn _find_e0(
     energy: &DVector<f64>,
     mu: &DVector<f64>,
@@ -782,17 +775,19 @@ pub fn _find_e0(
     Ok((en[imax], imax, estep))
 }
 
-/// DVector version: Calculate the E_0, the energy threshold of absorption, or the edge energy, given μ(E).
+/// Estimate an absorption edge in eV from the derivative of mu(E).
 ///
-/// E_0 is found as the point with maximum derivative with some checks to avoid spurious glitches.
-///
-/// # Arguments
-/// * `energy` - DVector of energies
-/// * `mu` - DVector of absorption coefficients
-///
-/// # Returns
-/// Result<e0: f64, Box<dyn Error>>
-/// * `e0` - Energy threshold of absorption, or the edge energy
+/// Runs `_find_e0` on the full spectrum, then refines a neighborhood extending
+/// up to 75 samples on each side of the candidate. A peak requires adjacent
+/// high-derivative samples to reduce isolated-glitch sensitivity. This is a
+/// numerical edge estimate, not independent energy calibration or evidence that
+/// an edge is physically unique. Inspect noisy, multi-edge or narrow scans.
+/// See [Larch's edge-finding reference](https://xraypy.github.io/xraylarch/xafs_preedge.html#the-find-e0-function)
+/// for the method's purpose; detailed thresholds and fallback rules here are
+/// implementation choices.
+/// This ndarray-feature DVector entry point uses its unsmoothed legacy helper
+/// in both passes. It lacks the default backend's short-window fallback and
+/// can panic on short or malformed arrays. Inputs are borrowed unchanged.
 pub fn find_e0(energy: &DVector<f64>, mu: &DVector<f64>) -> Result<f64, Box<dyn Error>> {
     let (e1, ie0, estep) = _find_e0(energy, mu, None, None)?;
     let istart = (ie0 as i32 - 75).max(2) as usize;

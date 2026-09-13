@@ -1,23 +1,47 @@
+//! Parsing rules for scalar path-parameter expressions.
+//! The public Rule enum is generated from this grammar; callers normally use
+//! eval_expression_with rather than inspecting parser rules directly.
+//! Its generated all_rules() method returns a borrowed static slice of the
+//! grammar's declared rules in definition order, excluding the built-in EOI
+//! (end-of-input) rule. It does not parse or evaluate an expression.
+
+/// Insignificant spaces, tabs, and line breaks between expression tokens.
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 
+/// A complete expression with no unconsumed leading or trailing tokens.
 complete_expression = { SOI ~ expression ~ EOI }
+/// Top-level arithmetic expression.
 expression = { sum }
+/// Left-associative addition and subtraction of products.
 sum = { product ~ (add_op ~ product)* }
+/// Addition or subtraction operator.
 add_op = { "+" | "-" }
 
+/// Left-associative multiplication and division of powers.
 product = { power ~ (mul_op ~ power)* }
+/// Multiplication or division operator.
 mul_op = { "*" | "/" }
 
+/// Right-associative exponentiation; unary signs bind before the power operator.
 power = { unary ~ (pow_op ~ power)? }
+/// Exponentiation operator; this grammar uses ^ rather than **.
 pow_op = { "^" }
 
+/// Zero or more unary signs applied to a primary expression.
 unary = { sign* ~ primary }
+/// Unary plus or minus.
 sign = { "+" | "-" }
 
+/// Function, constant, variable, number, or parenthesized expression.
 primary = { function_call | constant | identifier | number | "(" ~ expression ~ ")" }
+/// Named function with a comma-separated argument list; arity is checked on evaluation.
 function_call = { identifier ~ "(" ~ expr_list? ~ ")" }
+/// One or more function-argument expressions in input order.
 expr_list = { expression ~ ("," ~ expression)* }
 
+/// Built-in dimensionless constants pi and e, recognized as complete tokens.
 constant = @{ ("pi" | "e") ~ !(ASCII_ALPHANUMERIC | "_") }
+/// ASCII variable/function name beginning with a letter or underscore.
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+/// Unsigned decimal or scientific-notation literal; unary signs are parsed separately.
 number = @{ (ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? | "." ~ ASCII_DIGIT+) ~ (("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+)? }

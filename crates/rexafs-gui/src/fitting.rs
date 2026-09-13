@@ -215,6 +215,11 @@ impl FitSpaceSpec {
     }
 }
 
+/// Desktop fit intervals and weighting, copied into a core fit transform.
+///
+/// A new model follows the processing k-weight. Call [`Self::resolved`] with
+/// the spectrum's effective processing weight before constructing a fit. The
+/// stored multi-weight list is used only when following is disabled.
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct FitRanges {
@@ -222,18 +227,28 @@ pub struct FitRanges {
     /// their explicitly saved weights when this field is absent.
     #[serde(default)]
     pub follow_transform: bool,
+    /// Lower k bound in Å⁻¹; default 2.0.
     pub kmin: f64,
+    /// Upper k bound in Å⁻¹; default 12.0. Must exceed `kmin`.
     pub kmax: f64,
+    /// Lower R bound in Å; default 1.0. Must be at least the spectrum's Rbkg.
     pub rmin: f64,
+    /// Upper R bound in Å; default 3.0. Must exceed `rmin`.
     pub rmax: f64,
-    /// Plot / primary k-weight.
+    /// Dimensionless primary exponent for plots and result arrays; default 2.0.
     pub kweight: f64,
-    /// k-weights fit simultaneously (Artemis default 1, 2, 3). Empty means
-    /// `kweight` alone.
+    /// Dimensionless exponents for simultaneous residual blocks when
+    /// `follow_transform` is false. The stored default is `[1, 2, 3]`; an empty
+    /// list uses `kweight` alone. Extra weights do not create independent data.
     pub kweights: Vec<f64>,
+    /// Residual domain; default R. The k and R ranges still define the transform.
     pub fitspace: FitSpaceSpec,
-    /// Scale each residual block by the noise estimated from the high-R
-    /// part of χ(R) (Larch `estimate_noise`), so χ² is meaningful.
+    /// Estimate white-noise amplitude from high-R χ(R) before fitting; default
+    /// false uses the core's unit noise scale. The estimate assumes that the
+    /// selected high-R region contains noise rather than physical signal.
+    /// It sets the residual scale, but does not establish model correctness or
+    /// guarantee calibrated parameter uncertainties. See the core
+    /// `fitting::transform::estimate_noise` documentation for its normalization.
     pub noise: bool,
 }
 
@@ -272,6 +287,9 @@ impl FitRanges {
         Ok(())
     }
 
+    /// Clone these settings, resolving the processing weight when following
+    /// is enabled. Missing processing weight uses 2.0; following replaces the
+    /// clone's multi-weight list with that single weight. Does not mutate self.
     pub fn resolved(&self, transform_kweight: Option<f64>) -> Self {
         let mut result = self.clone();
         if self.follow_transform {
@@ -281,6 +299,8 @@ impl FitRanges {
         result
     }
 
+    /// Check finite, increasing, nonnegative k/R ranges and finite effective
+    /// weights. This does not compare R min with Rbkg or validate sample data.
     pub fn valid(&self) -> bool {
         [self.kmin, self.kmax, self.rmin, self.rmax]
             .iter()
@@ -292,7 +312,9 @@ impl FitRanges {
             && self.effective_kweights().iter().all(|v| v.is_finite())
     }
 
-    /// The k-weights actually fit (falls back to the primary weight).
+    /// Return an owned weight list, with the primary weight first if present
+    /// and other weights sorted. An empty stored list falls back to the primary
+    /// weight. This does not resolve `follow_transform` or remove duplicates.
     pub fn effective_kweights(&self) -> Vec<f64> {
         if self.kweights.is_empty() {
             return vec![self.kweight];
@@ -308,6 +330,9 @@ impl FitRanges {
         ks
     }
 
+    /// Switch to explicit weights and add/remove this exponent in place.
+    /// The last remaining stored weight cannot be removed. Matching uses an
+    /// absolute tolerance of 1e-9; callers must supply a finite exponent.
     pub fn toggle_kweight(&mut self, kw: f64) {
         self.follow_transform = false;
         if let Some(pos) = self.kweights.iter().position(|k| (*k - kw).abs() < 1e-9) {
@@ -320,7 +345,12 @@ impl FitRanges {
         self.kweights.sort_by(|a, b| a.total_cmp(b));
     }
 
-    /// Nidp = 2ΔkΔR/π + 1 (Larch), the information content of the fit.
+    /// Estimate independent data as `Nidp = 1 + 2 Δk ΔR / π`, where Δk is the
+    /// fitted k interval in Å⁻¹ and ΔR is the fitted R interval in Å. The result
+    /// is dimensionless. The additive one matches the core fit convention;
+    /// denser zero-padding and simultaneous k-weights do not increase it.
+    /// See [`rexafs::xafs::fitting::FeffFitResult`] for statistical assumptions
+    /// and references. Callers should validate the ranges first.
     pub fn n_idp(&self) -> f64 {
         2.0 * (self.kmax - self.kmin) * (self.rmax - self.rmin) / std::f64::consts::PI + 1.0
     }

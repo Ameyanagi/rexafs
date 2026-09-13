@@ -1,4 +1,13 @@
 //! Fixed mean-square endpoint penalty with reusable column-scaled SVD factors.
+//!
+//! For a normalized residual chi(c)=y−B*c and m low-R real/imaginary entries,
+//! minimize mean(h²)+lambda*sum(weight²*chi_endpoint²)/N_active. Scaling endpoint
+//! rows by sqrt(lambda*m/N_active) turns this into one ordinary least-squares
+//! system with the same minimizer. The Fourier head uses a fixed 0.05/sqrt(pi)
+//! numerical amplitude scale; the physical R grid still uses the actual kstep.
+//! This fixed penalty is a rexafs choice, not an objective attributed to
+//! [Newville et al.'s original AUTOBK paper](https://doi.org/10.1103/PhysRevB.47.14126).
+//! Cached geometry/factors never replace per-spectrum right-hand-side solves.
 use super::*;
 
 #[derive(Clone, PartialEq)]
@@ -85,7 +94,8 @@ impl Geometry {
         );
         // Interpolation of a sampled spline reproduces the same spline if all
         // its interior breakpoints are also interior knots of the raw-data
-        // interpolant. Otherwise resample each column explicitly (still O(n)).
+        // interpolant. Otherwise resample each column explicitly: O(nraw) setup
+        // plus O(nout log nraw) evaluation from per-query interval searches.
         let direct = self.knots.as_slice()[4..count].iter().all(|&k| {
             if k <= self.kraw[0] || k >= self.kraw[self.kraw.len() - 1] {
                 return true;

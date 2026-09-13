@@ -15,6 +15,14 @@ TARGETS = {
 
 
 def desktop_names(entries, version):
+    """Select desktop assets for a coordinated version from manifest entries.
+
+    All four native archives and their sidecars are required, as are the Windows
+    installer and build/qualification records. Mac DMGs are optional at this
+    staging step, but a DMG, its checksum and its evidence must appear together.
+    This checks naming/completeness, not signing evidence or file contents.
+    Invalid versions or incomplete sets raise ValueError.
+    """
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?", version):
         raise ValueError("Expected a coordinated release version")
     required, allowed = set(), set()
@@ -35,6 +43,15 @@ def desktop_names(entries, version):
 
 
 def stage(artifacts, manifest, output, version):
+    """Copy verified desktop assets to a new directory and write SHA256SUMS.
+
+    Validate selected files against the complete build manifest before creating
+    output. Registry files remain in artifacts and are not staged. output must
+    not already exist, preventing files from different attempts being mixed.
+    Return the copied asset count, excluding the new desktop-only manifest.
+    Validation failures raise ValueError; filesystem errors propagate. This
+    function stages files locally and does not publish a release.
+    """
     entries = {}
     for line in manifest.read_text().splitlines():
         digest, name = line.split("  ", 1)

@@ -1,4 +1,13 @@
 //! Crystal lattice: cell parameters ↔ 3×3 matrix, fractional ↔ Cartesian.
+//!
+//! The stored matrix A has lattice vectors as rows in Å. For a dimensionless
+//! fractional column vector f, [`Lattice::to_cart`] returns r = Aᵀ f in Å,
+//! while [`Lattice::to_frac`] uses (A⁻¹)ᵀ r. Thus a fractional displacement
+//! Δf has squared Cartesian length Δfᵀ A Aᵀ Δf, and the cell volume is
+//! |det(A)| in Å³. These expressions follow directly from the stored basis;
+//! no minimum-image wrapping is applied by the conversion or distance methods.
+//! Compare [spglib's basis definitions](https://spglib.readthedocs.io/en/stable/definition.html),
+//! whose mathematical notation groups lattice vectors as columns.
 
 use serde::{Deserialize, Serialize};
 

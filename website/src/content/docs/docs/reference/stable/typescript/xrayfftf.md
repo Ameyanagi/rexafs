@@ -18,9 +18,11 @@ dk=1 and nfft=2048. Adapt the k interval to the useful measured data. The defaul
 preserves the background grid; automatic kstep normally resolves to AUTOBK's 0.05 inverse
 angstroms.
 
-For prepared `g[j] = chi(k[j]) * k[j]^w * window[j]`, the code computes `chiR[m] = (kstep /
+For a uniform zero-origin grid `k[j]=j*kstep`, prepare
+`g[j] = chi(k[j]) * k[j]^w * window[j]`. The code computes `chiR[m] = (kstep /
 sqrt(pi)) * sum_j g[j] * exp(-2*pi*i*j*m/N)`, with N=nfft, w=kweight, i^2=-1 and
-`R[m]=pi*m/(N*kstep)`. The sum uses the first N prepared samples and zeros for missing
+`R[m]=pi*m/(N*kstep)`. Here j indexes prepared k samples and m indexes nonnegative
+Fourier bins. The sum uses the first N prepared samples and zeros for missing
 samples. There is no 1/N forward normalization or window-area correction. For dimensionless
 chi, chi(R) has units angstrom^(-(w+1)).
 
@@ -54,6 +56,13 @@ Create owned settings with the recommended defaults described below. Browser cal
 await init() first. Edit the fields, copy the settings into the appropriate spectrum stage,
 and free() this object when finished.
 
+Automatic fields are resolved on the spectrum's copy during processing; resolved values
+are not written back into the original settings object. Resolved values stay in the
+spectrum's settings until those settings are replaced.
+
+Stable 0.2.4 uses this constructor without arguments, followed by property assignment. Next
+(the source checkout) also accepts the named options object.
+
 ## free
 
 ```typescript
@@ -71,7 +80,9 @@ rmax_out: number | undefined;
 
 Maximum reported R in angstroms. Default: 10.0; undefined restores this default. This
 limits the r() and chir_*() output arrays, not the internally retained Fourier bins used by
-ifft(). It does not change the transform amplitude or frequency resolution.
+ifft(). It does not change the transform amplitude or frequency resolution. ifft()
+nevertheless needs at least two reported R samples to infer/validate their spacing, so
+rmax_out=0 is insufficient for a back-transform.
 
 ## dk
 
@@ -101,8 +112,9 @@ kmin: number | undefined;
 ```
 
 Lower Fourier window bound in inverse angstroms. Default: 2.0; explicitly assigning
-undefined uses the first prepared k sample. Require kmin < kmax. Select this above the
-region where the EXAFS approximation or background subtraction is unreliable.
+undefined uses the first prepared k sample. Both bounds must be finite with kmin < kmax;
+negative bounds are accepted. Select this above the region where the EXAFS approximation or
+background subtraction is unreliable.
 
 ## kmax
 
@@ -145,7 +157,9 @@ kstep: number | undefined;
 k spacing used to scale the transform and label R, in inverse angstroms. Default: undefined
 infers the first spacing of the prepared k grid (normally 0.05 from AUTOBK defaults). Larch
 also uses this spacing to resample chi. Input does not resample, so keep it consistent with
-the input grid. Require a finite positive value.
+the input grid. Require a finite positive value. The inferred value is retained in the
+spectrum's copied FFT settings. After changing the background grid, reassign FFT settings
+with kstep undefined to infer the new spacing.
 
 ## window
 

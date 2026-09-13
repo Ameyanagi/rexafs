@@ -2,6 +2,14 @@ import { bindConfiguration } from "./configuration.js";
 import initialize, * as core from "./dist/web/rexafs_wasm.js";
 import { bindSpectrum } from "./spectrum.js";
 let ready = false;
+/**
+ * Initialize the browser engine before creating spectra or settings.
+ * An omitted argument loads the packaged Wasm beside its generated JavaScript;
+ * an explicit URL, response, byte buffer or compiled module selects another asset.
+ * A rejected load leaves the facade uninitialized. Once initialization succeeds,
+ * the generated loader reuses that engine and ignores subsequent asset arguments.
+ * The public signature and detailed hover help are maintained in index.d.ts.
+ */
 export default async function init(wasm) {
   await initialize(wasm === undefined ? undefined : { module_or_path: wasm });
   ready = true;

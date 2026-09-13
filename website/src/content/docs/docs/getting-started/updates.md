@@ -24,6 +24,13 @@ or Linux, follow the release link and choose the matching package from the
 [download page](/download/). This distinction comes from the supported targets in
 the [update client](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/updates.rs#L59).
 
+An already downloaded archive is checked again before reuse. If that cached file
+fails its size or SHA-256 check, the error identifies its path; remove the damaged
+download and retry. rexafs does not open it or replace it silently. A failed new
+download discards its temporary file. A network error during **Check for updates**
+does not establish that the installed version is current; retry when GitHub is
+reachable or check the release page manually.
+
 Keep a backup when moving between versions. New releases read earlier released
 project formats; an older executable may not preserve newer features when saving.
 
@@ -43,17 +50,27 @@ temporary uv-managed environment for this preparation step:
 uv run --no-project --python 3.12 --with pip python -m pip download --only-binary=:all: rexafs==0.2.4 --dest wheelhouse
 ```
 
-Copy the directory to the offline computer, then create an environment and
-install from the local wheels:
+On the offline computer, create the project:
 
 ```sh
-uv venv --offline --python 3.12
-uv pip install --offline --no-index --find-links wheelhouse rexafs==0.2.4
+uv init --offline --python 3.12 rexafs-analysis
+cd rexafs-analysis
 ```
 
-The `--offline` option prevents network access; creating the environment requires
-the interpreter to be installed already. See [uv package
-installation](https://docs.astral.sh/uv/pip/packages/).
+Copy `wheelhouse` into this project directory, then add the dependency and run
+Python:
+
+```sh
+uv add --offline --no-index --find-links wheelhouse rexafs==0.2.4
+uv run --offline python -c "import rexafs; print(rexafs.__version__)"
+```
+
+The `--offline` option prevents network access; the Python interpreter must be
+installed already. Keep `pyproject.toml`, `uv.lock`, `.python-version` and the
+wheelhouse with the project so its environment can be recreated. These wheels
+target the machine/Python version selected during download; they are not a
+complete cross-platform package archive. See [uv's project
+workflow](https://docs.astral.sh/uv/guides/projects/).
 
 For TypeScript/JavaScript, install Bun on the destination first. Download the
 [published 0.2.4 package archive](https://registry.npmjs.org/rexafs/-/rexafs-0.2.4.tgz)

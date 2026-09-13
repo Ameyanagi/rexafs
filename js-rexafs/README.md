@@ -20,7 +20,7 @@ install the package for either runtime; `npm install rexafs` and
 [npm package](https://www.npmjs.com/package/rexafs) includes the Wasm binaries;
 Rust is not required to use it. Imports are ECMAScript modules.
 
-**Version note:** options constructors, direct configuration setters and
+**Version note:** options constructors, direct configuration arguments and
 `XrayFFTR` below are additions after 0.2.4. Until released, install a tarball from
 this checkout using [Build from source](#build-from-source). The basic pipeline
 works in 0.2.4.
@@ -57,10 +57,15 @@ is a no-op in Node, useful for code shared with browsers.
 import init, { Spectrum } from "rexafs/browser";
 await init(); // Required before constructing spectra or settings.
 // energy and mu are Float64Arrays loaded by your application.
-const spectrum = new Spectrum(energy, mu).fft();
-const r = spectrum.r();
-const magnitude = spectrum.chir_mag();
-spectrum.free(); // The copied result arrays remain valid.
+const spectrum = new Spectrum(energy, mu);
+try {
+  spectrum.fft();
+  const r = spectrum.r();
+  const magnitude = spectrum.chir_mag();
+  // Use the copied arrays here, or retain them outside this block.
+} finally {
+  spectrum.free(); // Copied arrays remain valid, including if processing failed.
+}
 ```
 
 Serve the packaged Wasm asset alongside its glue module. `init(wasmUrl)` or
@@ -103,8 +108,17 @@ names and stage names match Rust; no additional pipeline object is needed.
 Omitted options retain the constructor defaults. Explicit `undefined` requests
 automatic resolution for optional fields; for example `{ kmax: undefined }`
 uses the available k range rather than the forward default of 15 Å⁻¹.
+Automatic values are resolved on the spectrum's copied settings. The original
+settings object still reports the values you assigned, so its unset fields do
+not become a record of the resolved calculation parameters.
 Use `new PrePostEdge({ ... })` with `set_normalization_method()` for custom
 normalization and `set_e0(eV)` to override the edge energy.
+
+In both stable 0.2.4 and the source checkout, calling `set_normalization_method()` or
+`set_background_method()` without an argument restores that stage's recommended
+defaults. `null` and `undefined` have the same effect. For custom settings,
+0.2.4 accepts algorithm wrappers; the source checkout also accepts `PrePostEdge`
+and `AUTOBK` settings directly.
 
 ## What the calculations mean
 

@@ -1,5 +1,10 @@
 # Fitting workspace redesign
 
+Historical design and qualification record from September 2026. The implementation
+milestones and measured test counts below refer to their stated revisions. Use
+the [fitting guide](https://rexafs.com/docs/desktop/fitting/) for the current
+workflow and [fitting statistics](fitting-statistics.md) for interpretation.
+
 ## Research and design rationale
 
 Reviewed primary documentation on 2026-09-05. These are design references, not claims of comparative user-study results.

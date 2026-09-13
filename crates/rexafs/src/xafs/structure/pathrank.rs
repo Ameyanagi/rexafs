@@ -33,8 +33,11 @@ pub struct PathInfo {
     pub filename: String,
     /// Absorber–scatterer chain, e.g. `Ru–Ru` or `Ru–O–Ru`.
     pub label: String,
+    /// Reference half-path length in Å; not a phase-corrected Fourier peak position.
     pub reff: f64,
+    /// Dimensionless path multiplicity from the file.
     pub degen: f64,
+    /// Number of legs in the closed scattering path.
     pub nleg: usize,
     /// Relative estimated amplitude, 0–100 (100 = strongest in this set).
     /// This is neither a fitted fraction nor a statistical significance level.
@@ -45,6 +48,7 @@ pub struct PathInfo {
     pub shell: usize,
     /// For every scatterer leg, the 1-based shell it sits in (0 = none).
     pub leg_shells: Vec<usize>,
+    /// True for nleg <= 2, the classification used by ranking and templates.
     pub is_single_scattering: bool,
 }
 
@@ -64,6 +68,7 @@ impl PathInfo {
 pub struct ShellInfo {
     /// 1-based shell number, by increasing distance.
     pub number: usize,
+    /// Reference distance in Å of the first path assigned to this shell.
     pub reff: f64,
     /// Scatterer element (of the first path in the shell).
     pub symbol: String,

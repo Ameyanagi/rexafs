@@ -1,4 +1,11 @@
-"""Resolve a release tag and require its successful, manually dispatched build."""
+"""Resolve a source tag and require its successful, manually dispatched build.
+
+The CLI takes TAG RUN_ID, reads the tag's Cargo version using Git, and queries
+the run through gh in GITHUB_REPOSITORY. On success it appends commit, version
+and tag to GITHUB_OUTPUT for downstream jobs. It does not move tags, build
+packages, or inspect artifact bytes; the publication workflow performs the
+separate artifact checks after this source validation.
+"""
 import json
 import os
 import re
@@ -8,6 +15,14 @@ import tomllib
 
 
 def validate(run, tag, commit, version):
+    """Require a successful release-build.yml dispatch for this exact source.
+
+    run is the GitHub Actions run JSON; tag must equal ``v`` plus the coordinated
+    Cargo version. The head SHA, tag name, event, workflow path and conclusion
+    must all match. Pull-request builds cannot qualify a release, even if they
+    tested the same commit. Raises ValueError on a mismatch and otherwise
+    returns None without network access or mutation.
+    """
     if not re.fullmatch(r"v\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?", tag):
         raise ValueError("Expected a coordinated release tag")
     if tag != f"v{version}":

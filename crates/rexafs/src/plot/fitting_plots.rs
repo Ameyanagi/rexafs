@@ -533,7 +533,7 @@ mod tests {
     }
 
     #[test]
-    fn r_panel_ylabel_uses_dataset_kweight_units() {
+    fn r_panel_ylabel_includes_integration_measure_with_dataset_weight() {
         let mut fit = FeffFitResult::default();
         let mut dataset = DatasetResult::default();
         dataset.kweight = 3.0;
@@ -551,6 +551,6 @@ mod tests {
             .expect("panel should build");
 
         assert!(data.ylabel.contains("|chi(R)|"));
-        assert!(data.ylabel.contains("angstrom^(-3)"));
+        assert!(data.ylabel.contains("angstrom^(-4)"));
     }
 }

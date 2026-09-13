@@ -5,14 +5,14 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** These signatures describe the source checkout, not npm rexafs@0.2.4.
+**Next API · unreleased.** This reference describes the source checkout, including additions not available in npm rexafs@0.2.4.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Settings for extracting extended X-ray absorption fine structure, chi(k), with a smooth
-spline background.
+Settings for extracting extended X-ray absorption fine structure, chi(k), with a cubic
+spline background in photoelectron wavenumber k.
 
 AUTOBK separates slowly varying atomic absorption from oscillations associated with
 neighboring atoms by suppressing low-R Fourier residuals. Recommended starting values are
@@ -39,6 +39,14 @@ constructor(options?: AUTOBKOptions);
 Create owned settings with the recommended defaults described below. Browser callers must
 await init() first. Edit the fields, copy the settings into the appropriate spectrum stage,
 and free() this object when finished.
+
+Automatic fields are resolved on the spectrum's copy during processing; resolved values
+are not written back into the original settings object. Resolved scalar defaults and ek0
+are retained in the spectrum. Automatic kmax and nknots remain unset in stored settings
+and are calculated locally for each input.
+
+Stable 0.2.4 uses this constructor without arguments, followed by property assignment. Next
+(the source checkout) also accepts the named options object.
 
 ## free
 
@@ -150,11 +158,17 @@ contribution before averaging. Use 0 to disable the high-k endpoint penalty.
 clamp_lambda: number | undefined;
 ```
 
-Dimensionless strength of the FixedPenalty endpoint term. Recommended default: 0.001;
-undefined restores this default. The objective adds lambda times the mean squared active,
-weighted endpoint chi residual to the mean squared low-R residual. Require a finite
-nonnegative value; 0 disables the endpoint term. This rexafs-specific penalty is separate
-from the original AUTOBK objective.
+Numerical strength of the FixedPenalty endpoint term. Recommended default: 0.001; undefined
+restores this default. The objective adds lambda times the mean squared active, weighted
+endpoint chi residual to the mean squared low-R residual. Require a finite nonnegative
+value; 0 disables the endpoint term.
+
+This empirical balance is tied to the implemented residual convention: the FixedPenalty
+Fourier residual uses the fixed numerical factor 0.05/sqrt(pi), while the endpoint residual
+uses unweighted, edge-step-normalized chi. Changing kweight or the window changes the
+balance at a fixed lambda. The parameter is unused by legacy endpoint policies; it is not a
+universal physical constant. See [the fixed-penalty
+objective](https://rexafs.com/docs/science/autobk/).
 
 ## nfft
 

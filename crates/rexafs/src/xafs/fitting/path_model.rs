@@ -6,6 +6,41 @@
 //! signed `q = sign(k² - e0·ETOK) sqrt(abs(k² - e0·ETOK))`; `e0` is a relative
 //! shift in eV, not the absolute absorption-edge energy.
 //!
+//! # Implemented path equation
+//!
+//! To calculate the signal contributed by one path, the implementation uses
+//! the following expression away from its numerical guards:
+//!
+//! ```text
+//! q = sign(k² - α ΔE₀) sqrt(|k² - α ΔE₀|)
+//! p = sqrt((p_re(q) + i/λ(q))² + i α E_i)
+//! X = N S₀² F(q) / [q (R₀ + ΔR)²]
+//!     · exp(-2 R₀ Im(p) - 2 p²(σ² - p² C₄/3)
+//!           + i[2 q R₀ + φ(q) + 2 p(ΔR - 2 σ²/R₀ - 2 p² C₃/3)])
+//! χ(k) = Im(X)
+//! ```
+//!
+//! Here `α` is [`ETOK`] in Å⁻²/eV; `k`, shifted wave number `q`, and complex
+//! momentum `p` use Å⁻¹. `p_re` and mean free path `λ` (Å) come from the file.
+//! `R₀` is the reference half-path length in Å, `N` the dimensionless
+//! degeneracy, and `S₀²` the dimensionless amplitude correction. `ΔE₀` and
+//! `E_i` are real and imaginary energy corrections in eV. `ΔR` uses Å;
+//! the distance cumulants `σ²`, `C₃`, and `C₄` use Å², Å³, and Å⁴.
+//! `F = mag_feff · red_fact` is the reduced amplitude in Å, while
+//! `φ = real_phc + pha_feff` is the total phase in radians; `i² = -1` and
+//! the complex square root uses its principal branch. Consequently the
+//! exponent and χ are dimensionless. The first exponential term describes
+//! propagation loss, the cumulants describe disorder, and the phase controls
+//! the oscillations. Larger positive σ² generally suppresses high-k signal.
+//! `N` and `S₀²` enter only through their product and cannot be inferred
+//! independently from that product alone.
+//!
+//! This is a truncated cumulant/reference-path model: large distance changes
+//! or strongly non-Gaussian disorder need additional physical justification.
+//! Varying these parameters does not rerun the underlying scattering calculation.
+//! The equation is traced directly to `calc_path_chi`; the published
+//! multiple-scattering theory is described by Rehr and Albers, cited below.
+//!
 //! FEFF columns are interpolated with a not-a-knot cubic spline (linear for
 //! at most three samples). Outside tabulated k, the end polynomial pieces are
 //! extrapolated; the historical helper name containing `clamped` does not mean

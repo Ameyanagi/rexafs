@@ -34,11 +34,15 @@ Prebuilt Python wheels and the npm Wasm package do not require a Rust compiler.
 Use a Python virtual environment to keep project dependencies separate:
 
 ```bash
-uv init my-analysis
+uv init --python 3.12 my-analysis
 cd my-analysis
 uv add rexafs numpy
 uv run python
 ```
+
+`uv add` records dependencies in `pyproject.toml` and `uv.lock`; `uv run` keeps
+the project's `.venv` synchronized before starting Python. Commit the project
+files and lockfile with your analysis code to record its dependency resolution.
 
 In VS Code, select this environment with **Python: Select Interpreter**; in
 Jupyter, select its kernel. The Python package includes `py.typed` and type
@@ -110,20 +114,20 @@ Install the development dependencies for your platform first; see
 use the ReFEFF-only command below because the FEFF10 prebuilt uses MinGW.
 
 ```bash
-cargo test -p rexafs
-cargo run --release -p rexafs-gui
+cargo test --locked -p rexafs
+cargo run --locked --release -p rexafs-gui
 ```
 
 The desktop executable is `target/release/rexafs`. To build only the ReFEFF backend:
 
 ```bash
-cargo build --release -p rexafs-gui --no-default-features --features refeff-runner
+cargo build --locked --release -p rexafs-gui --no-default-features --features refeff-runner
 ```
 
 Install repository hooks once per checkout (Python 3.12+):
 
 ```bash
-uv tool install pre-commit==4.5.1
+uv tool install --python 3.12 pre-commit==4.5.1
 pre-commit install --install-hooks
 pre-commit run --all-files
 ```
@@ -139,13 +143,21 @@ uv pip install maturin numpy
 uv run --no-project maturin develop --release
 ```
 
-JavaScript build (Bun, Node 22+, Rust Wasm target and `wasm-pack` on PATH):
+JavaScript build (Bun, Node 22+, and the pinned Rust toolchain):
 
 ```bash
 rustup target add wasm32-unknown-unknown
+cargo install wasm-pack --locked --version 0.15.0
+bun install --cwd js-rexafs
 bun --cwd js-rexafs run build
 bun --cwd js-rexafs run test
 ```
+
+Ensure Cargo's binary directory is on `PATH` so the build can find `wasm-pack`.
+The tests include completion, signature and hover checks on an installed npm
+tarball; the [binding test guide](js-rexafs/test/README.md) also explains the
+installed Python wheel checks. Release CI uses the committed npm lockfile for
+its dependency installation.
 
 ## Spectrum API
 

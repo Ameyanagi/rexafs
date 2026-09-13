@@ -116,3 +116,28 @@ resample and extend the window domain while the background `k()` and `chi()` sta
 unchanged. Getter calls do not run processing, and their copied arrays remain
 valid after the spectrum is freed. After changing a stage's settings, run that
 stage again before reading its results.
+
+## Automatic settings when reusing a spectrum
+
+Automatic values are resolved on the spectrum's copied settings during processing.
+The calculation does not write them back into your original settings object.
+Stored automatic values, such as FFT kstep, remain in the spectrum when calculated
+arrays are invalidated; they are not automatically inferred again for each call.
+AUTOBK's automatic kmax and nknots are different: they remain unset in stored
+settings and are calculated locally for each input.
+
+For example, after changing the background `kstep`, assign forward settings with
+`kstep = undefined` using `set_fft()` before calling `fft()`. This requests new
+spacing inference for the changed background grid. If an inverse transform has
+already resolved its spacing, Next also requires reassigning inverse settings with
+automatic `kstep` through `set_ifft()`. Stable 0.2.4 does not expose inverse settings;
+use a fresh spectrum when changing those grids after a back-transform.
+
+Calling `set_normalization_method()` or
+`set_background_method()` with no argument, `undefined` or `null` restores that
+stage's default settings in both stable 0.2.4 and Next; the selected E0 is retained.
+For custom settings, stable 0.2.4 uses algorithm wrappers as shown above, while Next
+also accepts `PrePostEdge` and `AUTOBK` settings objects directly.
+
+The source JSDoc for [Spectrum](/docs/reference/next/typescript/spectrum/) documents
+these version differences and which stages each operation invalidates.

@@ -37,13 +37,16 @@ impl PanelKind {
     }
 }
 
+/// Label Fourier values for dimensionless chi(k) and the supplied k weight.
+/// The transform's integration measure adds one inverse-angstrom power, so
+/// magnitude, real and imaginary components all have units Å^(-(kweight + 1)).
 pub fn r_component_ylabel(
     kweight: f64,
     show_mag: bool,
     show_real: bool,
     show_imag: bool,
 ) -> String {
-    let weight = fmt_kweight(kweight);
+    let weight = fmt_kweight(kweight + 1.0);
     let head = match (show_mag, show_real, show_imag) {
         (true, false, false) => "$|chi(R)|$",
         (false, true, false) => "$Re[chi(R)]$",
@@ -303,6 +306,25 @@ pub fn range_marker_traces(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fourier_labels_include_the_inverse_length_from_integration() {
+        for (weight, units) in [(0.0, "1"), (2.0, "3"), (2.5, "3.5")] {
+            for (mag, real, imag, component) in [
+                (true, false, false, "$|chi(R)|$"),
+                (false, true, false, "$Re[chi(R)]$"),
+                (false, false, true, "$Im[chi(R)]$"),
+                (true, true, true, "$chi(R)$"),
+            ] {
+                assert_eq!(
+                    r_component_ylabel(weight, mag, real, imag),
+                    format!("{component} [$angstrom^(-{units})$]")
+                );
+            }
+        }
+        assert_eq!(PanelKind::R.ylabel(2.0), "$|chi(R)|$ [$angstrom^(-3)$]");
+        assert_eq!(PanelKind::K.ylabel(2.0), "$k^(2) chi(k)$ [$angstrom^(-2)$]");
+    }
 
     #[test]
     fn range_markers_share_group_and_color() {

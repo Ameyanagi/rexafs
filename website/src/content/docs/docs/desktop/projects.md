@@ -50,6 +50,12 @@ Their recorded hashes identify the bytes present at save time. Use embedded mode
 for a portable input snapshot. Switching an opened embedded project to paths
 references its currently extracted cache files; keep embedded mode for sharing it.
 
+Opening a paths project restores its references without comparing today's linked
+bytes against those hashes. Processing therefore reads the currently available
+source content, which can differ from the content present at save time. Embedded
+mode checks its stored payload hashes during extraction. See the [project
+loader](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/project/storage.rs#L547).
+
 Processed spectra are recomputed when reopening. Derived spectra created inside
 the app retain full energy and μ arrays in both modes. Historical fit statistics
 and models remain saved; historical curve arrays are available through analysis

@@ -1,4 +1,15 @@
-"""Create/verify checksums with flat asset names suitable for GitHub Releases."""
+"""Create or verify SHA-256 manifests for a complete release artifact tree.
+
+Run ``python scripts/check-artifacts.py create ARTIFACTS SHA256SUMS`` to write
+one sorted ``digest  basename`` line per file below ARTIFACTS. This overwrites
+the output manifest, excluding the manifest itself from the inventory. Basenames
+must be unique even when GitHub downloads put assets in separate directories.
+
+The ``verify`` mode reads that manifest and requires exact inventory/hash equality;
+missing, extra, duplicate or modified files fail. This checks byte consistency,
+not build provenance or publisher signatures. check-release-source.py verifies
+the source run before the publication workflow downloads its artifacts.
+"""
 import argparse
 import hashlib
 from pathlib import Path

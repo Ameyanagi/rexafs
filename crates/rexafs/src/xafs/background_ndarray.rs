@@ -218,6 +218,21 @@ impl BackgroundMethod {
 /// is then divided by the edge step. See
 /// [Newville et al. (1993)](https://doi.org/10.1103/PhysRevB.47.14126)
 /// for AUTOBK's low-R background-removal principle.
+///
+/// For coefficients c, the residual head h contains real and imaginary low-R
+/// FFT values of the weighted, windowed spline-subtracted absorption. The FFT
+/// uses the actual kstep/sqrt(pi), as in `xftf_fast`, before edge-step division.
+/// Endpoint residual rows are `weight * s(c) * chi(c)`, where
+/// `s(c) = 1 + 100*mean(h(c)^2)` and chi here is still in absorption units.
+/// The legacy direct solver freezes this scale (or updates it for a second
+/// solve); iterative solvers differentiate the dynamic scale. These numerical
+/// clamp choices are implementation conventions, not a physical uncertainty
+/// model or a claim about the original AUTOBK paper's exact objective.
+///
+/// Scalar defaults filled by `fill_parameter` and the energy origin resolved by
+/// `calc_background` are retained on this object. Automatic kmax and nknots are
+/// computed locally and remain None. Reset ek0 to None, or create fresh settings,
+/// to infer a new background origin from a different normalization.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AUTOBK {
@@ -232,7 +247,8 @@ pub struct AUTOBK {
     pub kmin: Option<f64>,
     /// Upper spline/window boundary in Å⁻¹; automatic uses the available range.
     pub kmax: Option<f64>,
-    /// Output k spacing in Å⁻¹; default 0.05. Controls the R grid and cutoff.
+    /// Output k spacing in Å⁻¹; default 0.05. Controls the R grid and cutoff;
+    /// the legacy internal FFT amplitude also uses this actual kstep/sqrt(pi).
     pub kstep: Option<f64>,
     /// Legacy endpoint sample count; default 3. The high-end slice excludes the
     /// last chi sample, unlike the default backend's FixedPenalty endpoint term.
@@ -327,7 +343,12 @@ impl AUTOBK {
         AUTOBK::default()
     }
 
-    /// Fill in default values for parameters that are not set
+    /// Fill missing scalar defaults in place, retaining them for later calls.
+    ///
+    /// This does not inspect data, calculate a background or resolve the
+    /// data-dependent ek0, kmax or nknots. Existing values are preserved rather
+    /// than validated here. Returns success after assigning defaults; invalid
+    /// data and geometry are checked by `calc_background`.
     pub fn fill_parameter(&mut self) -> Result<(), BackgroundError> {
         if self.rbkg.is_none() {
             self.rbkg = Some(1.0);
@@ -644,22 +665,19 @@ impl AUTOBK {
         }
     }
 
-    /// Calculate background
+    /// Fit legacy AUTOBK to matching energy (eV) and absorption arrays.
     ///
-    /// # Arguments
+    /// Missing normalization is created and calculated through the mutable
+    /// normalization parameter. The fit replaces bkg on the input energy grid
+    /// in absorption units, chie=(mu-bkg)/edge_step, and dimensionless unweighted
+    /// chi on the zero-origin output k grid (Å⁻¹). Inputs are borrowed unchanged;
+    /// duplicate energies may be nudged in an internal copy. Returns this object
+    /// for chaining. Defaults and the resolved ek0 are retained as described on
+    /// `AUTOBK`; this is the legacy objective, with no FixedPenalty option.
     ///
-    /// * `energy` - 1-d array of x-ray energies, in eV, or group
-    /// * `mu` - 1-d array of mu(E)
-    /// * `normalization_param` - rexafs::normalization::NormalizationMethod struct which contains parameters for normalization
-    ///
-    /// # Example
-    ///
-    /// TODO: Add example
-    ///
-    /// Calculate the selected legacy background using energy in eV and matching mu.
-    /// Missing normalization is calculated and cached outputs are replaced. Input
-    /// arrays remain unchanged; invalid inputs, geometry or failed solves return
-    /// `BackgroundError`. ILPBkg is unavailable and None explicitly skips this stage.
+    /// Invalid input lengths, nonfinite or nonmonotonic data, invalid geometry,
+    /// unavailable solver features and failed solves return `BackgroundError`.
+    /// Earlier parameter filling and normalization can remain after an error.
     pub fn calc_background(
         &mut self,
         energy: &DVector<f64>,
@@ -989,7 +1007,8 @@ impl AUTOBK {
 
     /// Read the stored value without recalculating.
     ///
-    /// Output k spacing in Å⁻¹; default 0.05. Controls the R grid and cutoff.
+    /// Output k spacing in Å⁻¹; default 0.05. Controls the R grid and cutoff;
+    /// the legacy internal FFT amplitude also uses this actual kstep/sqrt(pi).
     pub fn get_kstep(&self) -> Option<&f64> {
         self.kstep.as_ref()
     }
@@ -1251,7 +1270,10 @@ impl AUTOBKSpline {
         1.0 + 100.0 * out.dot(&out) / out.len() as f64
     }
 
-    /// The Loss function in 1-d array for the Levenberg-Marquardt optimization
+    /// Build legacy FFT and endpoint residuals with dynamic or frozen clamp scale.
+    /// The FFT head uses actual kstep/sqrt(pi). Endpoint rows include zero-weight
+    /// rows, and the high-end slice excludes the final chi sample. This objective
+    /// operates before edge-step division and is not FixedPenalty.
     pub fn residual_vec_with_scale(
         &self,
         coefs: &DVector<f64>,
@@ -1279,10 +1301,13 @@ impl AUTOBKSpline {
         out
     }
 
+    /// Evaluate the residual with the coefficient-dependent endpoint scale.
     pub fn residual_vec(&self, coefs: &DVector<f64>) -> DVector<f64> {
         self.residual_vec_with_scale(coefs, None)
     }
 
+    /// Differentiate residuals with respect to spline coefficients, including
+    /// the scale/chi product rule unless the caller explicitly freezes the scale.
     pub fn residual_jacobian_with_scale(
         &self,
         coefs: &DVector<f64>,

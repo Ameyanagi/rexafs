@@ -4,7 +4,8 @@
 //! <https://github.com/XraySpectroscopy/XAS-Data-Interchange/tree/master/specification>.
 //! This is an importer, not a complete metadata-dictionary validator. It keeps
 //! unknown metadata and comments, reports missing descriptive fields as warnings,
-//! and rejects ambiguous axes or damaged numeric tables instead of guessing.
+//! and rejects damaged numeric tables. Parsing retains declared axes and units;
+//! converting the table to an energy spectrum rejects unsupported axes or units.
 
 use std::{collections::BTreeMap, path::Path};
 
@@ -27,6 +28,8 @@ pub struct XdiHeader {
     /// Ordered application/version tokens from the first line.
     pub applications: Vec<String>,
     /// Case-folded `family.field` keys; duplicate fields use their last value.
+    /// Keep keys in ASCII lowercase when editing this public map so [`Self::get`]
+    /// continues to provide case-insensitive lookup.
     pub metadata: BTreeMap<String, String>,
     /// User comments, including empty lines and interior whitespace.
     pub comments: Vec<String>,
@@ -124,6 +127,10 @@ impl XdiHeader {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 /// Owned XDI header and rectangular numeric table, retaining original units.
+/// Parsing checks that rows are nonempty, finite and consistent with the column
+/// definitions. Maintain those invariants when editing the public fields:
+/// conversion methods index declared columns directly and can panic on a row
+/// made too short by manual edits.
 pub struct XdiFile {
     /// Parsed metadata, signal definitions and import warnings.
     pub header: XdiHeader,
@@ -200,8 +207,14 @@ impl XdiFile {
         Self::parse(&text)
     }
 
-    /// Parse XDI 1.x text without reading a file. Rejects damaged tables and
-    /// ambiguous axes; missing descriptive metadata is recorded as warnings.
+    /// Parse XDI 1.x text without reading a file.
+    ///
+    /// Requires a declared first column with units and a finite rectangular
+    /// table. Conflicting column labels and damaged rows return errors; missing
+    /// descriptive metadata becomes warnings. Unsupported axis labels or unit
+    /// tokens are retained here and rejected by [`Self::energy_ev`] or
+    /// [`Self::to_spectrum`] when conversion is requested. No energy sorting,
+    /// detector arithmetic or spectrum processing happens during parsing.
     pub fn parse(text: &str) -> Result<Self, XdiError> {
         // All three line endings named by the specification, plus a UTF-8 BOM.
         let normalized = text
@@ -409,8 +422,12 @@ impl XdiFile {
     /// over intensity ratios; their prior normalization is not undone. Ratio
     /// formulas are listed on [`XdiSignal`]. Invalid denominators or non-finite
     /// ratios return errors. Fluorescence numerators may be zero or negative.
+    /// The first invalid converted row aborts this operation; no rows are dropped.
     /// The returned spectrum sorts energy and absorption together but does not
-    /// normalize, remove background, or correct detector effects automatically.
+    /// merge repeated energies, normalize, remove background, or correct detector
+    /// effects automatically. It uses the legacy sorting setter, so successful
+    /// conversion is not a guarantee that the checked processing stages will
+    /// accept duplicate energies or insufficient data coverage.
     pub fn to_spectrum(&self, signal: XdiSignal) -> Result<super::XASSpectrum, XdiError> {
         let find = |names: &[&str]| names.iter().find_map(|name| self.header.column_index(name));
         let direct = |signal| match signal {

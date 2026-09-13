@@ -34,6 +34,13 @@ For the measurement and normalization convention, see
 Automatic range selection and the numerical safeguards are rexafs choices;
 see [processing theory](https://rexafs.com/docs/science/processing/).
 
+Resolved fit ranges, polynomial degree and Victoreen exponent are retained
+inside the spectrum. An automatically estimated edge step is recalculated
+after normalization results are invalidated.
+Processing does not replace None fields in your original settings object.
+Reassign fresh or reset settings when you want retained automatic choices
+recalculated after changing the data or an earlier stage.
+
 ## PrePostEdge
 
 ```python
@@ -45,6 +52,16 @@ Create automatic pre/post-edge settings, with every field initially None.
 Set only the fields your data require, then assign the settings to the
 spectrum's normalization stage. Fit ranges and degrees are
 resolved when normalization runs; creating settings does not process data.
+
+Keyword arguments are available in source builds after 0.2.4; published
+0.2.4 settings use construction without arguments followed by field
+assignment. Python type conversion can raise TypeError, and an integer
+outside the native field's representable range can raise OverflowError
+before any numerical processing.
+
+Normalization fit choices are validated when a stage runs. To see the
+effect of a change, inspect pre_edge(), post_edge(), norm() and flat()
+after assigning the settings and calling normalize().
 
 ## pre_edge_start
 

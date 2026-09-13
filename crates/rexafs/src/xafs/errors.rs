@@ -10,172 +10,378 @@ use thiserror::Error;
 #[derive(Error, Debug, Clone)]
 pub enum DataError {
     #[error("insufficient data: need at least {min} points, got {actual}")]
-    InsufficientData { min: usize, actual: usize },
+    /// The operation received fewer samples than its minimum requirement.
+    InsufficientData {
+        /// Minimum required sample count.
+        min: usize,
+        /// Actual sample count.
+        actual: usize,
+    },
 
     #[error("data array length mismatch: energy has {energy_len} points, mu has {mu_len} points")]
-    LengthMismatch { energy_len: usize, mu_len: usize },
+    /// Paired arrays or related lists have different lengths. Some tools reuse these field names for non-energy arrays.
+    LengthMismatch {
+        /// Length of the first array/list, normally energy.
+        energy_len: usize,
+        /// Length of the second array/list, normally absorption.
+        mu_len: usize,
+    },
 
     #[error("invalid energy range: min={min}, max={max}")]
-    InvalidEnergyRange { min: f64, max: f64 },
+    /// The selected energy bounds do not describe a usable interval.
+    InvalidEnergyRange {
+        /// Lower energy bound, in eV.
+        min: f64,
+        /// Upper energy bound, in eV.
+        max: f64,
+    },
 
     #[error(
         "energy must be monotonic non-decreasing, but energy[{index}]={curr} is smaller than previous value {prev}"
     )]
-    NonMonotonicEnergy { index: usize, prev: f64, curr: f64 },
+    /// An energy sample is smaller than its predecessor; reorder paired energy and absorption together.
+    NonMonotonicEnergy {
+        /// Zero-based failing index.
+        index: usize,
+        /// Previous energy sample, in eV.
+        prev: f64,
+        /// Current energy sample, in eV.
+        curr: f64,
+    },
 
     #[error("duplicate energy at index {index}: {energy}; expected strictly increasing energy")]
-    DuplicateEnergy { index: usize, energy: f64 },
+    /// The checked constructor found repeated energy; combine or remove duplicate measurements explicitly.
+    DuplicateEnergy {
+        /// Zero-based failing index.
+        index: usize,
+        /// Repeated energy value, in eV.
+        energy: f64,
+    },
 
     #[error("data contains non-finite values at indices: {indices:?}")]
-    NonFiniteValues { indices: Vec<usize> },
+    /// Input validation found NaN or infinite values; indices refer to the original paired samples.
+    NonFiniteValues {
+        /// Zero-based indices containing non-finite values.
+        indices: Vec<usize>,
+    },
 
     #[error("missing required data: {field}")]
-    MissingData { field: String },
+    /// A required array, stage result or configuration value is unavailable.
+    MissingData {
+        /// Missing field or result name.
+        field: String,
+    },
 
     #[error("index out of range: index={index}, length={length}")]
-    IndexOutOfRange { index: usize, length: usize },
+    /// A checked collection/list operation received an invalid zero-based index.
+    IndexOutOfRange {
+        /// Zero-based failing index.
+        index: usize,
+        /// Number of elements in the collection.
+        length: usize,
+    },
 
     #[error("group is empty")]
+    /// The requested operation needs at least one spectrum.
     EmptyGroup,
 
     #[error("feature not implemented: {feature}")]
-    NotImplemented { feature: String },
+    /// The selected feature exists as a placeholder and has no implementation.
+    NotImplemented {
+        /// Name of the unimplemented feature.
+        feature: String,
+    },
 }
 
 /// Errors related to pre/post-edge normalization operations.
 #[derive(Error, Debug, Clone)]
 pub enum NormalizationError {
     #[error("edge energy (e0={e0}) is outside data range [{data_min}, {data_max}]")]
+    /// The edge energy is non-finite or not strictly inside the measured energy interval.
     E0OutOfRange {
+        /// Configured edge energy, in eV.
         e0: f64,
+        /// Minimum measured energy, in eV.
         data_min: f64,
+        /// Maximum measured energy, in eV.
         data_max: f64,
     },
 
     #[error("pre-edge fitting failed: not enough points in range [{start}, {end}]")]
-    PreEdgeFitFailed { start: f64, end: f64 },
+    /// The selected absolute pre-edge interval contains insufficient usable points for a baseline fit.
+    PreEdgeFitFailed {
+        /// Requested absolute start energy, in eV.
+        start: f64,
+        /// Requested absolute end energy, in eV.
+        end: f64,
+    },
 
     #[error("post-edge fitting failed: polynomial order {order} too high for {n_points} points")]
-    PostEdgeFitFailed { order: usize, n_points: usize },
+    /// The requested post-edge polynomial cannot be determined from the available points.
+    PostEdgeFitFailed {
+        /// Requested polynomial degree.
+        order: usize,
+        /// Number of usable selected points.
+        n_points: usize,
+    },
 
     #[error("edge step is too small: {edge_step} (minimum: {min})")]
-    EdgeStepTooSmall { edge_step: f64, min: f64 },
+    /// The normalization scale is too small for stable division; inspect the selected edge and fitting ranges.
+    EdgeStepTooSmall {
+        /// Estimated or configured scale, in the input absorption units.
+        edge_step: f64,
+        /// Minimum accepted scale in the input absorption units.
+        min: f64,
+    },
 
     #[error("normalization method not implemented: {method}")]
-    NotImplemented { method: String },
+    /// The chosen normalization method is a placeholder; no default algorithm was substituted.
+    NotImplemented {
+        /// Name of the selected normalization method.
+        method: String,
+    },
 
     #[error("normalization failed: {message}")]
-    Other { message: String },
+    /// A normalization failure represented by its diagnostic text, including converted lower-level errors.
+    Other {
+        /// Human-readable diagnostic from the failing operation.
+        message: String,
+    },
 }
 
 /// Errors related to AUTOBK background removal algorithm.
 #[derive(Error, Debug, Clone)]
 pub enum BackgroundError {
     #[error("AUTOBK optimization failed: {reason}")]
-    OptimizationFailed { reason: String },
+    /// The background optimizer failed; the diagnostic describes the solver or objective failure.
+    OptimizationFailed {
+        /// Human-readable failure reason.
+        reason: String,
+    },
 
     #[error("AUTOBK direct linear solver failed: {reason}")]
-    DirectSolverFailed { reason: String },
+    /// The direct spline-coefficient solve failed numerically.
+    DirectSolverFailed {
+        /// Human-readable failure reason.
+        reason: String,
+    },
 
     #[error(
         "AUTOBK direct solver rejected ill-conditioned system: condition proxy {condition_proxy} exceeds limit {limit}"
     )]
-    DirectSolverIllConditioned { condition_proxy: f64, limit: f64 },
+    /// A legacy direct-solver conditioning check exceeded its configured limit. The proxy is not an exact matrix condition number.
+    DirectSolverIllConditioned {
+        /// Dimensionless conditioning proxy reported by the legacy solve.
+        condition_proxy: f64,
+        /// Configured maximum acceptable conditioning proxy.
+        limit: f64,
+    },
 
     #[error("invalid rbkg parameter: {rbkg} (must be > 0)")]
-    InvalidRbkg { rbkg: f64 },
+    /// The requested low-R background cutoff is invalid.
+    InvalidRbkg {
+        /// Requested background cutoff, in Å.
+        rbkg: f64,
+    },
 
     #[error("spline knot calculation failed: insufficient k-range [{kmin}, {kmax}]")]
-    SplineKnotsFailed { kmin: f64, kmax: f64 },
+    /// The selected wave-number range cannot support the requested spline basis.
+    SplineKnotsFailed {
+        /// Wave-number interval start, in Å⁻¹; can be zero when the range could not be resolved.
+        kmin: f64,
+        /// Wave-number interval end, in Å⁻¹; can be zero when the range could not be resolved.
+        kmax: f64,
+    },
 
     #[error("Levenberg-Marquardt did not converge after {iterations} iterations")]
-    ConvergenceFailure { iterations: usize },
+    /// A Levenberg–Marquardt background solve reached its reported iteration limit without convergence.
+    ConvergenceFailure {
+        /// Number of optimizer iterations reported at failure.
+        iterations: usize,
+    },
 
     #[error("background removal feature not implemented: {feature}")]
-    NotImplemented { feature: String },
+    /// The selected background feature is not implemented; no alternative is silently chosen.
+    NotImplemented {
+        /// Name of the unimplemented feature.
+        feature: String,
+    },
 
     #[error("background calculation failed: {message}")]
-    Other { message: String },
+    /// A background failure represented by text, including converted data, normalization or interpolation errors.
+    Other {
+        /// Human-readable diagnostic from the failing operation.
+        message: String,
+    },
 }
 
 /// Errors related to Fourier transform operations.
 #[derive(Error, Debug, Clone)]
 pub enum FFTError {
     #[error("invalid FFT parameter {parameter}: {reason}")]
-    InvalidParameter { parameter: String, reason: String },
+    /// A Fourier setting is invalid or incompatible with the supplied grid.
+    InvalidParameter {
+        /// Name of the invalid Fourier setting.
+        parameter: String,
+        /// Human-readable failure reason.
+        reason: String,
+    },
 
     #[error("FFT requires at least {min} points for k-range [{kmin}, {kmax}], got {actual}")]
+    /// The forward transform received too few wave-number samples.
     InsufficientPoints {
+        /// Minimum required sample count.
         min: usize,
+        /// Actual sample count.
         actual: usize,
+        /// Wave-number interval start, in Å⁻¹; can be zero when the range could not be resolved.
         kmin: f64,
+        /// Wave-number interval end, in Å⁻¹; can be zero when the range could not be resolved.
         kmax: f64,
     },
 
     #[error("invalid FFT window: {window}")]
-    InvalidWindow { window: String },
+    /// The requested Fourier window is not supported by the operation.
+    InvalidWindow {
+        /// Requested window name.
+        window: String,
+    },
 
     #[error("IFFT failed: chi(R) array has {actual} points, expected {expected}")]
-    IFFTSizeMismatch { expected: usize, actual: usize },
+    /// The stored complex Fourier representation has the wrong length for the inverse transform.
+    IFFTSizeMismatch {
+        /// Required number of complex Fourier samples.
+        expected: usize,
+        /// Actual number of complex Fourier samples.
+        actual: usize,
+    },
 
     #[error("interpolation failed: {reason}")]
-    InterpolationFailed { reason: String },
+    /// Fourier grid preparation or paired input validation failed.
+    InterpolationFailed {
+        /// Human-readable failure reason.
+        reason: String,
+    },
 
     #[error("window function calculation failed: {reason}")]
-    WindowCalculationFailed { reason: String },
+    /// The window could not be evaluated for the supplied grid/settings.
+    WindowCalculationFailed {
+        /// Human-readable failure reason.
+        reason: String,
+    },
 }
 
 /// Errors related to file I/O and serialization operations.
 #[derive(Error, Debug, Clone)]
 pub enum IOError {
     #[error("file not found: {path}")]
-    FileNotFound { path: String },
+    /// The requested file could not be found.
+    FileNotFound {
+        /// Filesystem path involved in the operation.
+        path: String,
+    },
 
     #[error("failed to read file {path}: {kind}")]
+    /// Opening or reading a file failed. Legacy JSON/BSON writers also use this variant for file-creation failures.
     ReadFailed {
+        /// Filesystem path involved in the operation.
         path: String,
+        /// Underlying operating-system I/O error category.
         kind: std::io::ErrorKind,
     },
 
     #[error("JSON deserialization failed: {message}")]
-    JsonError { message: String },
+    /// JSON serialization or deserialization failed; the legacy display label mentions only deserialization.
+    JsonError {
+        /// Human-readable diagnostic from the failing operation.
+        message: String,
+    },
 
     #[error("BSON deserialization failed: {message}")]
-    BsonError { message: String },
+    /// BSON serialization or deserialization failed; the legacy display label mentions only deserialization.
+    BsonError {
+        /// Human-readable diagnostic from the failing operation.
+        message: String,
+    },
 
     #[error("compression error: {message}")]
-    CompressionError { message: String },
+    /// Compression or decompression failed, including malformed compressed input.
+    CompressionError {
+        /// Human-readable diagnostic from the failing operation.
+        message: String,
+    },
 
     #[error("failed to write file {path}: {kind}")]
+    /// Writing, creating or flushing an output file failed.
     WriteFailed {
+        /// Filesystem path involved in the operation.
         path: String,
+        /// Underlying operating-system I/O error category.
         kind: std::io::ErrorKind,
     },
 
     #[error("not an Athena project file: {reason}")]
-    NotAthenaProject { reason: String },
+    /// The input does not identify a supported Athena project.
+    NotAthenaProject {
+        /// Human-readable failure reason.
+        reason: String,
+    },
 
     #[error("Athena project parse error at line {line}: {message}")]
-    AthenaParse { line: usize, message: String },
+    /// An Athena project statement could not be parsed at the reported source line.
+    AthenaParse {
+        /// One-based source line number.
+        line: usize,
+        /// Human-readable diagnostic from the failing operation.
+        message: String,
+    },
 
     #[error("cannot export to Athena project: {reason}")]
-    AthenaExport { reason: String },
+    /// Spectrum content cannot be represented by the Athena exporter.
+    AthenaExport {
+        /// Human-readable failure reason.
+        reason: String,
+    },
 }
 
 /// Errors related to mathematical operations.
 #[derive(Error, Debug, Clone)]
 pub enum MathError {
     #[error("interpolation failed: x value {x} is outside range [{xmin}, {xmax}]")]
-    InterpolationOutOfBounds { x: f64, xmin: f64, xmax: f64 },
+    /// A query falls outside the interpolation interval for an operation that forbids extrapolation.
+    InterpolationOutOfBounds {
+        /// Query coordinate in the units of the interpolation/spline input.
+        x: f64,
+        /// Lower interpolation bound in the query coordinate units.
+        xmin: f64,
+        /// Upper interpolation bound in the query coordinate units.
+        xmax: f64,
+    },
 
     #[error("polynomial fit failed: {reason}")]
-    PolyfitFailed { reason: String },
+    /// A polynomial fit failed, for example because its coordinates are degenerate.
+    PolyfitFailed {
+        /// Human-readable failure reason.
+        reason: String,
+    },
 
     #[error("spline evaluation failed at x={x}: {reason}")]
-    SplineEvalFailed { x: f64, reason: String },
+    /// Spline construction/evaluation failed. Some wrappers use x = 0 as a placeholder rather than a failing sample.
+    SplineEvalFailed {
+        /// Query coordinate in the units of the interpolation/spline input.
+        x: f64,
+        /// Human-readable failure reason.
+        reason: String,
+    },
 
     #[error("index {index} out of bounds for array of length {len}")]
-    IndexOutOfBounds { index: usize, len: usize },
+    /// An index is invalid for the given array length.
+    IndexOutOfBounds {
+        /// Zero-based failing index.
+        index: usize,
+        /// Number of elements in the array or collection.
+        len: usize,
+    },
 }
 
 impl From<MathError> for NormalizationError {
@@ -262,37 +468,78 @@ impl From<Box<dyn std::error::Error>> for BackgroundError {
 #[derive(Error, Debug, Clone)]
 pub enum AnalysisError {
     #[error("missing array for analysis: {field}")]
-    MissingArray { field: String },
+    /// The chosen analysis space requires an array that has not been calculated.
+    MissingArray {
+        /// Missing field or result name.
+        field: String,
+    },
 
     #[error("no standards / spectra supplied")]
+    /// No standards or training spectra were supplied.
     NoSpectra,
 
     #[error("insufficient spectra: need at least {min}, got {actual}")]
-    InsufficientSpectra { min: usize, actual: usize },
+    /// Too few spectra were supplied for the analysis.
+    InsufficientSpectra {
+        /// Minimum required spectrum count.
+        min: usize,
+        /// Number of supplied spectra.
+        actual: usize,
+    },
 
     #[error("fit range [{lo}, {hi}] selects only {n_points} points (need at least {min})")]
+    /// The selected analysis interval contains fewer usable points than required.
     EmptyRange {
+        /// Lower bound in the selected analysis-axis units (eV or Å⁻¹).
         lo: f64,
+        /// Upper bound in the selected analysis-axis units (eV or Å⁻¹).
         hi: f64,
+        /// Number of usable selected points.
         n_points: usize,
+        /// Minimum required sample count.
         min: usize,
     },
 
     #[error(
         "weight constraints are infeasible: sum-to-one target {target} not within [{lo}, {hi}]"
     )]
-    InfeasibleConstraints { target: f64, lo: f64, hi: f64 },
+    /// The sum-to-one target lies outside the combined permitted weight bounds.
+    InfeasibleConstraints {
+        /// Required dimensionless sum of component weights.
+        target: f64,
+        /// Sum of component lower weight bounds, dimensionless.
+        lo: f64,
+        /// Sum of component upper weight bounds, dimensionless.
+        hi: f64,
+    },
 
     #[error("{count} standard combinations requested, exceeding the cap of {max}")]
-    TooManyCombinations { count: usize, max: usize },
+    /// The requested combinatorial search exceeds the configured cap.
+    TooManyCombinations {
+        /// Number of candidate combinations.
+        count: usize,
+        /// Configured maximum number of candidate combinations.
+        max: usize,
+    },
 
     #[error("requested {requested} components but the model has only {available}")]
-    TooManyComponents { requested: usize, available: usize },
+    /// The requested reconstruction rank exceeds the stored component count.
+    TooManyComponents {
+        /// Requested number of components.
+        requested: usize,
+        /// Number of components present in the model.
+        available: usize,
+    },
 
     #[error("linear algebra failed: {reason}")]
-    LinearAlgebra { reason: String },
+    /// The matrix solve or decomposition failed numerically.
+    LinearAlgebra {
+        /// Human-readable failure reason.
+        reason: String,
+    },
 
     #[error(transparent)]
+    /// A typed lower-level spectrum error propagated into the analysis.
     Xafs(#[from] super::XAFSError),
 }
 

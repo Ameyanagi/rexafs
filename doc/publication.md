@@ -59,3 +59,11 @@ experimental/model uncertainty. R-space coordinates are not phase corrected.
 Review unavailable arrays and stale-fit notices before selecting results for a
 paper. The export preserves evidence for that review; it does not certify a fit's
 scientific validity or compliance with every journal's submission rules.
+
+An export can finish with notices about failed spectra, unavailable historical
+curves or failed figures; review `manifest.json`, `README.md` and `report.html`
+before using its contents. A filesystem failure can instead stop the export
+early and leave a partial directory, possibly without a manifest. Resolve the
+reported cause and retry into a new directory. The analysis folder is written
+file by file; it does not have the atomic replacement/backup behavior of a saved
+`.rxs` project. See the [folder exporter](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/publication.rs#L248).

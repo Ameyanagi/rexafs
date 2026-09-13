@@ -8,15 +8,24 @@ use super::cluster::Cluster;
 /// Absorption edge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Edge {
+    /// K absorption edge; default, written as FEFF HOLE index 1.
     #[default]
     K,
+    /// L1 absorption edge, written as FEFF HOLE index 2.
     L1,
+    /// L2 absorption edge, written as FEFF HOLE index 3.
     L2,
+    /// L3 absorption edge, written as FEFF HOLE index 4.
     L3,
+    /// M1 absorption edge, written as FEFF HOLE index 5.
     M1,
+    /// M2 absorption edge, written as FEFF HOLE index 6.
     M2,
+    /// M3 absorption edge, written as FEFF HOLE index 7.
     M3,
+    /// M4 absorption edge, written as FEFF HOLE index 8.
     M4,
+    /// M5 absorption edge, written as FEFF HOLE index 9.
     M5,
 }
 
@@ -36,6 +45,7 @@ impl Edge {
         }
     }
 
+    /// Conventional edge label, such as K or L3.
     pub fn label(self) -> &'static str {
         match self {
             Edge::K => "K",
@@ -50,6 +60,8 @@ impl Edge {
         }
     }
 
+    /// Parse a trimmed edge label ignoring ASCII case; L aliases L3 and M aliases M5.
+    /// Unknown labels return None.
     pub fn parse(text: &str) -> Option<Edge> {
         match text.trim().to_ascii_uppercase().as_str() {
             "K" => Some(Edge::K),
@@ -74,6 +86,7 @@ impl Edge {
         }
     }
 
+    /// Supported absorption-edge labels in increasing shell-index order.
     pub const ALL: [Edge; 9] = [
         Edge::K,
         Edge::L1,

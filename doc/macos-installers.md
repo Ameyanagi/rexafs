@@ -16,14 +16,24 @@ The reviewed Stable signing workflow produces these artifacts for maintainer qua
 
 ## Local preview
 
-On a Mac, in a dedicated Python 3.12+ virtual environment:
+On a Mac, create a dedicated uv project for the packaging tools. Replace the
+repository and extracted-build paths below with your local paths:
 
 ```sh
-python -m pip install -r scripts/macos-installer-requirements.txt
-python scripts/preview-macos-installer.py /path/to/extracted/rexafs-VERSION-TARGET ./installer-preview
+uv init --python 3.12 rexafs-installer-tools
+cd rexafs-installer-tools
+uv add -r /path/to/rexafs/scripts/macos-installer-requirements.txt
+uv run python /path/to/rexafs/scripts/preview-macos-installer.py /path/to/extracted/rexafs-VERSION-TARGET ./installer-preview
 open ./installer-preview/*-preview.dmg
 ```
 
-The input is the packaged directory containing `build.json`, notices and the `.app`. A preview modifies only a temporary copy, uses an ad hoc app signature, and is visibly named `-preview.dmg`. It is **unsigned and not notarized**, and is never a release installer. The release-build pull request jobs exercise this preview on both Mac architectures without signing credentials; signed installers are produced only by the reviewed Stable or main-branch Nightly workflows.
+`uv add` records the dependencies in `pyproject.toml` and `uv.lock`; `uv run`
+uses the project's environment without manual activation. The input is the
+packaged directory containing `build.json`, notices and the `.app`. A preview
+modifies only a temporary copy, uses an ad hoc app signature, and is visibly
+named `-preview.dmg`. It is **unsigned and not notarized**, and is never a release
+installer. The release-build pull request jobs exercise this preview on both Mac
+architectures without signing credentials; signed installers are produced only
+by the reviewed Stable or main-branch Nightly workflows.
 
 `dmgbuild` and its two dependencies are pinned in `scripts/macos-installer-requirements.txt`. They are packaging tools and are not embedded in the app. The layout uses the app's existing icon and Finder's system background, which respects light/dark appearance.

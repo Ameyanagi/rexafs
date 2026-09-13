@@ -1,6 +1,16 @@
 import { validate } from "./validate.js";
 
-// Only ownership and fluent return values are adapted here. Rust runs every stage.
+/**
+ * Create the package's Spectrum facade for one generated Wasm module instance.
+ * This internal adapter owns one native spectrum per constructed object; callers
+ * release it with free(). Array copying, stage execution and cache invalidation
+ * occur in Rust. Public signatures, units and stage behavior live in types.d.ts.
+ *
+ * The facade adds JavaScript type checks, browser readiness checks, fluent return
+ * values and direct configuration arguments. It creates temporary algorithm
+ * wrappers for direct settings/defaults and frees only those temporary wrappers.
+ * Caller-owned settings and algorithm wrappers are borrowed, never consumed.
+ */
 export function bindSpectrum(core, ready = () => true) {
   return class Spectrum {
     #inner;

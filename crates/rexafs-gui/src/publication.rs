@@ -244,7 +244,19 @@ pub(crate) fn resolved_settings(sp: &XASSpectrum) -> Value {
     }
     Value::Object(out)
 }
-/// Never overwrites an existing bundle. Errors remain explicit in the manifest.
+/// Export a snapshot into a newly created analysis directory.
+///
+/// Writes the selected project storage mode, processed spectrum arrays, available
+/// fit arrays, PNG/SVG/CSV figures, captions, methods and reference drafts.
+/// Per-spectrum processing failures, failed figures and unavailable historical
+/// arrays are retained as notices; a successful return can therefore describe an
+/// incomplete analysis. Inspect `manifest.json`, the report and the README.
+///
+/// An existing destination is rejected. Directory/file write failures abort with
+/// an error and can leave a partial directory, possibly before a manifest exists.
+/// The folder is not transactional and is not removed on failure. Input files and
+/// the live analysis are unchanged; retry into a new directory after resolving
+/// the reported cause.
 pub(crate) fn export(mut snapshot: Snapshot, destination: &Path) -> Result<PathBuf, String> {
     fs::create_dir(destination).map_err(|e| format!("{}: {e}", destination.display()))?;
     let figs = destination.join("figures");

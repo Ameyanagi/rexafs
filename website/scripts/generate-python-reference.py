@@ -8,6 +8,7 @@ signatures and the Next guide. Missing help is a build error.
 
 from __future__ import annotations
 
+import argparse
 import ast
 import copy
 import inspect
@@ -17,16 +18,15 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "website/src/content/docs/docs/reference"
-TAG = json.loads((ROOT / "website/src/data/release.json").read_text())["tag"]
 
 
-def source(path: str, channel: str) -> str:
+def source(root: Path, tag: str, path: str, channel: str) -> str:
+    """Read released declarations from Git or maintained help from the checkout."""
     if channel == "stable":
         return subprocess.check_output(
-            ["git", "show", f"{TAG}:{path}"], cwd=ROOT, text=True
+            ["git", "show", f"{tag}:{path}"], cwd=root, text=True
         )
-    return (ROOT / path).read_text()
+    return (root / path).read_text()
 
 
 def name(node: ast.AST) -> str | None:
@@ -38,6 +38,7 @@ def name(node: ast.AST) -> str | None:
 
 
 def documented_nodes(nodes: list[ast.stmt]) -> dict[str, tuple[ast.AST, str]]:
+    """Index definitions and PEP 257 attribute docstrings without importing code."""
     result = {}
     for index, node in enumerate(nodes):
         key = name(node)
@@ -76,9 +77,11 @@ def signature(node: ast.FunctionDef, class_name: str | None = None) -> str:
     return ast.unparse(rendered).split(":\n", 1)[0].removeprefix("def ")
 
 
-def write_page(path: Path, title: str, channel: str, declaration: str, body: list[str]):
+def write_page(
+    path: Path, title: str, channel: str, tag: str, declaration: str, body: list[str]
+):
     status = (
-        "Stable " + TAG.removeprefix("v")
+        "Stable " + tag.removeprefix("v")
         if channel == "stable"
         else "Next API · unreleased"
     )
@@ -88,10 +91,10 @@ def write_page(path: Path, title: str, channel: str, declaration: str, body: lis
         + (
             "These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release."
             if channel == "stable"
-            else f"These signatures describe the source checkout. They are not available in rexafs {TAG.removeprefix('v')}."
+            else f"This reference describes the source checkout, including additions not available in rexafs {tag.removeprefix('v')}."
         ),
         "[Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)",
-        f"[Declaration source](https://github.com/Ameyanagi/rexafs/blob/{TAG if channel == 'stable' else 'main'}/{declaration}) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/{declaration})",
+        f"[Declaration source](https://github.com/Ameyanagi/rexafs/blob/{tag if channel == 'stable' else 'main'}/{declaration}) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/{declaration})",
         *body,
     ]
     text = "\n\n".join(lines)
@@ -99,10 +102,18 @@ def write_page(path: Path, title: str, channel: str, declaration: str, body: lis
     path.write_text(text + "\n")
 
 
-def generate():
+def generate(root: Path = ROOT):
+    """Regenerate both channels from source; missing public help raises ValueError.
+
+    ``root`` selects a checkout with its release tag available locally. Only the
+    generated Python reference directory is replaced; installed packages and
+    source declarations are never modified.
+    """
+    out = root / "website/src/content/docs/docs/reference"
+    tag = json.loads((root / "website/src/data/release.json").read_text())["tag"]
     counts = {}
     for channel in ["stable", "next"]:
-        channel_dir = OUT / channel / "python"
+        channel_dir = out / channel / "python"
         channel_dir.mkdir(parents=True, exist_ok=True)
         for old in channel_dir.glob("*.md"):
             old.unlink()
@@ -112,8 +123,8 @@ def generate():
             ("io.pyi", "rexafs.io"),
         ]:
             path = "py-rexafs/python/rexafs/" + relative
-            tree = ast.parse(source(path, channel))
-            current = documented_nodes(ast.parse(source(path, "next")).body)
+            tree = ast.parse(source(root, tag, path, channel))
+            current = documented_nodes(ast.parse(source(root, tag, path, "next")).body)
             for node in tree.body:
                 if not isinstance(
                     node, (ast.ClassDef, ast.FunctionDef)
@@ -147,6 +158,7 @@ def generate():
                     channel_dir / (title.lower().replace(".", "-") + ".md"),
                     title,
                     channel,
+                    tag,
                     path,
                     body,
                 )
@@ -163,11 +175,15 @@ def generate():
                             help_for(current, key, module_name),
                         ]
                 write_page(
-                    channel_dir / "types.md", "type aliases", channel, path, body
+                    channel_dir / "types.md", "types and version", channel, tag, path, body
                 )
         counts[channel] = count
     print("Generated Python documented members:", counts)
 
 
 if __name__ == "__main__":
-    generate()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--root", type=Path, default=ROOT, help="Repository checkout to document."
+    )
+    generate(parser.parse_args().root.resolve())

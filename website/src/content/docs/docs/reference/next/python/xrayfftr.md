@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** These signatures describe the source checkout. They are not available in rexafs 0.2.4.
+**Next API · unreleased.** This reference describes the source checkout, including additions not available in rexafs 0.2.4.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
@@ -33,6 +33,13 @@ See the [implemented inverse convention](https://rexafs.com/docs/science/process
 for the scaling, and [Larch's Fourier guide](https://xraypy.github.io/xraylarch/xafs_fourier.html)
 for windowing concepts rather than an assertion of identical inverse output.
 
+Resolved automatic R limits, q spacing and numeric defaults are retained
+inside the spectrum. Unset dr2 and window continue to select dr and
+Hanning when the window is calculated.
+Processing does not replace None fields in your original settings object.
+Reassign fresh or reset settings when you want retained automatic choices
+recalculated after changing the data or an earlier stage.
+
 ## XrayFFTR
 
 ```python
@@ -45,6 +52,11 @@ Set rmin/rmax to select an R region and use rweight=0 unless extra R
 weighting is intended. Assign with spectrum.set_ifft(parameters).ifft().
 The returned signal retains forward weighting and windowing; construction
 alone does not filter a spectrum.
+
+This settings class is available in source builds after 0.2.4; it is
+not exported by the published 0.2.4 package. Python type conversion can raise TypeError, and an integer
+outside the native field's representable range can raise OverflowError
+before any numerical processing.
 
 ## qmax_out
 
@@ -72,6 +84,10 @@ numeric value as its Bessel-function shape parameter. A wider taper smooths
 the selected R boundary but mixes a broader range of distances into the
 filtered signal.
 
+FHanning instead uses a fractional taper parameter. Gaussian uses dr
+as its standard-deviation scale in angstroms and has nonzero tails
+beyond the nominal R interval.
+
 ## dr2
 
 ```python
@@ -83,6 +99,10 @@ High-R window taper parameter. Default None uses dr.
 Use a separate value for asymmetric R-window geometry. The unit is
 angstroms for width-based windows; KaiserBessel's Bessel-function shape
 uses dr, so dr2 does not define an independent high-end shape.
+
+Gaussian uses dr for its standard deviation; dr2 affects the domain
+and center rather than providing a second Gaussian width. FHanning
+uses a fractional taper parameter.
 
 ## rmin
 
@@ -150,6 +170,11 @@ between the first two R samples in angstroms. An explicit positive value
 must agree with that spacing or processing raises RuntimeError. Keep it
 automatic when changing nfft so the physical Fourier grid stays consistent.
 
+Automatic spacing is retained inside the spectrum after the first
+inverse. If the forward R grid changes, assign fresh inverse settings
+with kstep=None before calling ifft() again. The earlier resolved value
+otherwise remains subject to the same consistency check.
+
 ## window
 
 ```python
@@ -161,4 +186,7 @@ R-space Fourier-window shape. Constructor default: "KaiserBessel".
 Explicit None selects Hanning, unlike leaving the default unchanged.
 The window selects and tapers R contributions before the real inverse;
 it cannot undo the weighting or information lost in the forward window.
-See FTWindow for choices. Unknown names raise ValueError when assigned.
+Accepted case-sensitive names are Hanning, Parzen, Welch, Gaussian,
+Sine, KaiserBessel and FHanning. See the
+[window reference](https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow)
+for the shape-dependent parameter conventions. Unknown names raise ValueError when assigned.

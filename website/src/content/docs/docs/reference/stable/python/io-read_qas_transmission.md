@@ -29,9 +29,13 @@ This reader is unsuitable for files that already contain absorption mu.
 path accepts a filename string or pathlib.Path. The returned spectrum
 owns its data and is unprocessed: call .fft() to run the default pipeline.
 Missing files, unreadable data or fewer than three columns raise
-RuntimeError. The reader does not enforce positive intensities or sort
-energies; non-finite calculated mu and invalid energy order are rejected
-later by processing. Check the measured intensities before taking a ratio.
+RuntimeError. The reader sorts energy and its calculated mu together
+into increasing order when needed, but retains duplicate energy rows.
+It does not enforce positive intensities or finite ratios: check both
+measured intensities before taking the ratio. Later processing rejects
+non-finite data; duplicate energies may require cleanup for the selected
+numerical stage. This permissive reader differs from the strict array
+constructor, which rejects unordered or duplicate energy values.
 
 For the transmission equation and its physical assumptions, see
 [Newville, Fundamentals of XAFS, section 4](https://docs.xrayabsorption.org/tutorials/XAFS_Fundamentals.pdf).

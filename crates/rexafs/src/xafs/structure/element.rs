@@ -5,12 +5,19 @@ use super::element_table::ELEMENTS;
 /// Static element data. Radii in Å, mass in u, colour as RGB (Jmol CPK).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Element {
+    /// Atomic number; the bundled table spans 1 through 103.
     pub z: u8,
+    /// Standard chemical symbol, such as Cu.
     pub symbol: &'static str,
+    /// English element name stored in the bundled table.
     pub name: &'static str,
+    /// Tabulated atomic mass in unified atomic mass units (u), not an isotope-specific fit value.
     pub mass: f64,
+    /// Tabulated covalent radius in Å, used for structure display heuristics.
     pub covalent_radius: f64,
+    /// Tabulated atomic radius in Å; not an experimentally inferred bond distance.
     pub atomic_radius: f64,
+    /// Jmol/CPK display color as red, green, blue bytes from 0 to 255.
     pub cpk: [u8; 3],
 }
 
@@ -37,9 +44,11 @@ impl Element {
     }
 
     /// Look up from a CIF-style label or type symbol: `Fe2+`, `O1`, `RuA`,
-    /// `Ca2`, `Wat` (→ none), `D` (→ H). Tries the leading two letters first
+    /// `Ca2`, `Wat` (→ W), `D` or `T` (→ H). Tries the leading two letters first
     /// (`Ru` in `RuA`), then one (`O` in `O1`), so `Co1` is cobalt while
     /// `CO` … is also cobalt — CIF labels are element-first by convention.
+    /// This heuristic is not strict chemical-name validation; prefer an explicit
+    /// element symbol when labels contain descriptive words or isotope information.
     pub fn from_label(label: &str) -> Option<&'static Element> {
         let letters: String = label
             .trim()

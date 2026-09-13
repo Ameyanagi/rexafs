@@ -681,7 +681,10 @@ fn resolve_import(data: &ParsedData, import: &ImportConfig) -> ResolvedImport {
     }
 }
 
-/// Parse a column list like "4, 6-8" (commas/spaces, inclusive ranges).
+/// Parse zero-based column indices such as `"4, 6-8"`.
+/// Commas and spaces separate entries; ranges include both endpoints.
+/// Returns sorted unique indices, or `None` for empty/malformed/reversed input.
+/// Bounds against an actual source table are checked by the mapping validator.
 pub fn parse_cols(text: &str) -> Option<Vec<usize>> {
     let mut out = Vec::new();
     for token in text.split([',', ' ']).filter(|t| !t.is_empty()) {
@@ -798,7 +801,13 @@ pub fn preview_import(
     Ok(preview_import_raw(path, import)?.0)
 }
 
-/// Read once: the table retains source values while the plot uses converted eV.
+/// Read source metadata, original preview rows and converted signal arrays once.
+///
+/// The outer result reports file/parse failures. The inner result separately
+/// reports conversion failures, allowing the editor to show usable column
+/// metadata even while its plotted signal is invalid. Original preview values
+/// retain their source units; successful [`RawData`] owns energy in eV and μ
+/// after detector arithmetic, with all-row exclusion diagnostics.
 pub fn preview_import_raw(
     path: &std::path::Path,
     import: &ImportConfig,
@@ -841,6 +850,14 @@ pub fn load_mu(
     Ok((raw.energy, raw.mu))
 }
 
+/// Read owned energy/μ arrays and the parser decisions that produced them.
+///
+/// Energy is converted to eV; μ follows the selected detector ratio or supplied
+/// μ column. Non-finite calculated pairs are excluded and counted with source
+/// lines, then remaining pairs are sorted by energy without averaging duplicates.
+/// Requires at least two finite pairs. Ordinary text parsing can skip damaged
+/// rows with diagnostics; XDI parsing rejects malformed numeric tables.
+/// Source files and the borrowed import settings are unchanged.
 pub fn load_mu_with_diagnostics(
     path: &std::path::Path,
     import: &ImportConfig,
@@ -978,11 +995,16 @@ fn construct_mu(
 /// Unweighted standard χ(k), embedded in the project for reproducibility.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChiStandard {
+    /// Display/provenance label; loading a file uses its filename.
     pub label: String,
+    /// Finite, strictly increasing, nonnegative wave numbers in Å⁻¹.
     pub k: Vec<f64>,
+    /// Matching unweighted, dimensionless χ(k), with no forward window applied.
     pub chi: Vec<f64>,
 }
 impl ChiStandard {
+    /// Check matching finite arrays, at least two samples and an increasing k axis.
+    /// Validation borrows the arrays; it does not sort, reweight or resample them.
     pub fn validate(&self) -> Result<(), String> {
         if self.k.len() < 2
             || self.k.len() != self.chi.len()
@@ -994,6 +1016,11 @@ impl ChiStandard {
         }
         Ok(())
     }
+    /// Load exactly two numeric columns: k in Å⁻¹ and unweighted χ(k).
+    /// Whitespace or commas separate columns; blank lines and lines beginning
+    /// with `#` or `*` are ignored. Extra columns and malformed rows are errors,
+    /// reported with a one-based line number. Returns validated owned arrays;
+    /// the desktop embeds these values in the project instead of a live file link.
     pub fn load(path: &std::path::Path) -> Result<Self, String> {
         let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
         let mut rows = Vec::new();
@@ -1034,35 +1061,53 @@ impl ChiStandard {
 #[derive(Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PipelineParams {
+    /// Column assignments and axis conversion, copied with this settings object.
     pub import: ImportConfig,
-    /// Shift each spectrum's energy axis so its reference-channel E0 lands
-    /// on `align_target` (requires an Ir column; no-op when target unset).
+    /// Shift each spectrum's energy axis so its reference-channel E₀ lands
+    /// on `align_target`. Requires a usable reference μ column or It/Ir pair;
+    /// no shift is applied when the target is unset. Disabled by default.
     pub align_to_ref: bool,
+    /// Desired reference-channel E₀ in eV. None applies no reference alignment.
     pub align_target: Option<f64>,
     // Normalization (pre/post-edge); energies relative to E0.
+    /// Normalization edge energy in eV. None estimates the maximum-derivative edge.
     pub e0: Option<f64>,
     /// Positive measured edge-step override; None derives it from the fits.
     pub edge_step: Option<f64>,
+    /// Pre-edge fit start relative to E₀ in eV. Desktop Auto starts at -200 eV.
     pub pre_edge_start: Option<f64>,
+    /// Pre-edge fit end relative to E₀ in eV. Desktop Auto starts at -30 eV.
     pub pre_edge_end: Option<f64>,
+    /// Post-edge fit start relative to E₀ in eV. Desktop Auto starts at +150 eV.
     pub norm_start: Option<f64>,
+    /// Post-edge fit end relative to E₀ in eV. Auto follows this spectrum's measured
+    /// endpoint.
     pub norm_end: Option<f64>,
-    /// Advanced: polynomial order of the post-edge fit.
+    /// Polynomial order of the post-edge fit; desktop Auto uses 2.
     pub norm_polyorder: Option<i32>,
-    /// Advanced: Victoreen exponent for the pre-edge fit.
+    /// Victoreen exponent for the pre-edge fit; desktop Auto uses 0.
     pub n_victoreen: Option<i32>,
     // AUTOBK background.
+    /// AUTOBK low-R cutoff in Å; Auto uses 1.0. Increasing it can remove structural signal.
     pub rbkg: Option<f64>,
+    /// AUTOBK fitting/window lower wave number in Å⁻¹; Auto uses 0.
     pub bkg_kmin: Option<f64>,
+    /// AUTOBK fitting/window upper wave number in Å⁻¹; Auto follows available data.
     pub bkg_kmax: Option<f64>,
     // Advanced AUTOBK.
+    /// Uniform AUTOBK output spacing in Å⁻¹; Auto uses 0.05.
     pub bkg_kstep: Option<f64>,
+    /// Number of spline knots; Auto derives it from rbkg and the fitted k range.
     pub bkg_nknots: Option<i32>,
+    /// Integer background-objective k exponent; Auto uses 1, independently of forward
+    /// weighting.
     pub bkg_kweight: Option<i32>,
     /// Opt-in: follow the effective forward-transform weight without replacing
     /// the independent background setting, so unlinking restores it.
     pub bkg_kweight_linked: bool,
+    /// Low-k endpoint clamp multiplier; Auto uses 0 (disabled).
     pub bkg_clamp_lo: Option<i32>,
+    /// High-k endpoint clamp multiplier; Auto uses 1.
     pub bkg_clamp_hi: Option<i32>,
     /// Number of points at each active clamp endpoint (default 3).
     pub bkg_nclamp: Option<i32>,
@@ -1071,39 +1116,85 @@ pub struct PipelineParams {
     pub bkg_clamp_policy: AUTOBKClampScalePolicy,
     /// None selects the fixed penalty default (0.001); zero disables it.
     pub bkg_clamp_lambda: Option<f64>,
+    /// Background-objective window family; Auto uses Hanning.
     pub bkg_window: Option<FTWindow>,
+    /// Background window taper parameter; Auto uses 0.1 Å⁻¹ for Hanning.
     pub bkg_dk: Option<f64>,
+    /// Background optimizer; Auto uses LinearDirect. Preserve this with the clamp policy.
     pub bkg_solver: Option<AUTOBKSolver>,
+    /// Background FFT length; Auto uses 2048.
     pub bkg_nfft: Option<i32>,
+    /// Background k-origin energy in eV; Auto follows normalization E₀. An override must
+    /// lie inside the measured energy range.
     pub bkg_ek0: Option<f64>,
+    /// Legacy linear-solver regularization. Unset uses the core default; FixedPenalty does
+    /// not use this field.
     pub bkg_linear_regularization: Option<f64>,
+    /// Maximum accepted scaled-system condition ratio; Auto uses 1e8.
+    /// FixedPenalty reports an error above this limit rather than adding a ridge.
     pub bkg_linear_condition_limit: Option<f64>,
+    /// Legacy solver acceptance ratio. FixedPenalty ignores this historical fallback
+    /// criterion.
     pub bkg_linear_residual_ratio_limit: Option<f64>,
+    /// Allow the legacy nonlinear fallback; ignored by the recommended FixedPenalty
+    /// objective.
     pub bkg_linear_fallback_to_lm: Option<bool>,
+    /// Reuse compatible AUTOBK linear workspaces; Auto enables caching without changing the
+    /// objective.
     pub bkg_linear_workspace_cache: Option<bool>,
+    /// Fallback optimizer for the historical clamp objective; FixedPenalty does not use
+    /// nonlinear fallback.
     pub bkg_linear_fallback_solver: Option<AUTOBKSolver>,
+    /// Optional unweighted standard χ(k), owned and saved inside the project. None fits
+    /// without a standard.
     pub bkg_standard: Option<ChiStandard>,
     // Forward FFT.
+    /// Forward-window lower wave number in Å⁻¹; Auto uses 2.
     pub fft_kmin: Option<f64>,
+    /// Forward-window upper wave number in Å⁻¹; Auto uses 15. Choose a measured signal
+    /// range.
     pub fft_kmax: Option<f64>,
+    /// Forward-window parameter; Auto uses 1.0. Kaiser–Bessel also uses it to control
+    /// window shape.
     pub fft_dk: Option<f64>,
+    /// Forward k exponent; Auto uses 2. The core floors a nonnegative value to an integer.
     pub fft_kweight: Option<f64>,
     // Advanced FFT.
+    /// High-k window parameter; Auto follows fft_dk.
     pub fft_dk2: Option<f64>,
+    /// Maximum displayed forward-transform R in Å; Auto uses 10. This does not define a
+    /// fitted shell range.
     pub fft_rmax: Option<f64>,
+    /// Forward-window family; Auto uses KaiserBessel.
     pub fft_window: Option<FTWindow>,
+    /// Forward grid convention; Input by default. Larch explicitly resamples for
+    /// compatibility.
     pub fft_grid: rexafs::FFTGrid,
+    /// Forward-transform k spacing in Å⁻¹; Auto infers it from the prepared background
+    /// grid.
     pub fft_kstep: Option<f64>,
+    /// Forward FFT length; Auto uses 2048. Padding changes R sample spacing, not
+    /// experimental resolution.
     pub fft_nfft: Option<i32>,
     // Back FT (R -> q).
+    /// Inverse-window lower radius in Å; Auto uses 0.
     pub bft_rmin: Option<f64>,
+    /// Inverse-window upper radius in Å; Auto uses 20.
     pub bft_rmax: Option<f64>,
+    /// Inverse-window taper/shape parameter; Auto uses 1.0.
     pub bft_dr: Option<f64>,
+    /// Inverse-window family; Auto uses KaiserBessel.
     pub bft_window: Option<FTWindow>,
+    /// Maximum returned q in Å⁻¹; Auto uses 10. It changes extent, not sampling.
     pub bft_qmax: Option<f64>,
+    /// High-R inverse-window parameter; Auto follows bft_dr.
     pub bft_dr2: Option<f64>,
+    /// Power of R for the inverse window; Auto uses 0. Nonnegative fractional
+    /// values are floored to an integer by the core.
     pub bft_rweight: Option<f64>,
+    /// Inverse q spacing in Å⁻¹; Auto derives it from R spacing and inverse NFFT.
     pub bft_kstep: Option<f64>,
+    /// Inverse FFT length; Auto uses 2048. Must be compatible with the supplied R spectrum.
     pub bft_nfft: Option<i32>,
 }
 
@@ -1267,8 +1358,13 @@ impl PipelineParams {
     }
 }
 
-/// Load a file and run the full pipeline with the given parameters.
-/// Runs on the background executor.
+/// Read one source and compute normalization, AUTOBK, forward and inverse FFTs.
+///
+/// Import conversion and optional reference alignment happen before processing.
+/// The result owns all generated arrays; file contents and borrowed settings are
+/// unchanged. Errors identify import or calculation failures, including an
+/// invalid inverse transform even when its UI controls are collapsed. This is a
+/// synchronous function; the desktop calls it on a background executor.
 pub fn process_file(
     path: &std::path::Path,
     params: &PipelineParams,
@@ -1501,6 +1597,10 @@ pub struct StreamingAverage {
 }
 
 impl StreamingAverage {
+    /// Start an equal-weight mean using the first spectrum's owned buffers.
+    /// Energy is in eV and μ keeps its input units. Callers must supply matching
+    /// finite arrays with at least two points and an increasing energy axis.
+    /// This low-level accumulator does not perform input validation.
     pub fn new(energy: Vec<f64>, mu: Vec<f64>) -> Self {
         let lo = *energy.first().unwrap_or(&f64::MAX);
         let hi = *energy.last().unwrap_or(&f64::MIN);
@@ -1513,8 +1613,11 @@ impl StreamingAverage {
         }
     }
 
-    /// Fold one spectrum (>= 2 points, ascending energy — what `load_raw`
-    /// guarantees) into the running sum via clamped linear interpolation.
+    /// Add a borrowed spectrum with the same units and equal statistical weight.
+    /// Requires matching arrays with at least two points and increasing energy;
+    /// invalid lengths can panic. Linear interpolation contributes to the first
+    /// input's grid. Values outside this input are temporarily clamped, but
+    /// [`Self::finish`] discards every point outside the common energy overlap.
     pub fn add(&mut self, energy: &[f64], mu: &[f64]) {
         self.lo = self.lo.max(*energy.first().unwrap_or(&f64::MAX));
         self.hi = self.hi.min(*energy.last().unwrap_or(&f64::MIN));
@@ -1534,6 +1637,11 @@ impl StreamingAverage {
         self.count += 1;
     }
 
+    /// Consume the accumulator and return energy plus the arithmetic mean μ.
+    /// Only first-grid points inside every input's range survive; units are
+    /// unchanged. Errors if fewer than two spectra were added, ranges do not
+    /// overlap, or fewer than two first-grid points remain. No uncertainty or
+    /// inverse-variance weighting is calculated.
     pub fn finish(self) -> Result<(Vec<f64>, Vec<f64>), String> {
         if self.count < 2 {
             return Err("need at least 2 spectra to merge".into());
@@ -1573,7 +1681,11 @@ pub fn average_spectra(inputs: &[(Vec<f64>, Vec<f64>)]) -> Result<(Vec<f64>, Vec
     acc.finish()
 }
 
-/// E0 of the reference channel ln(It/Ir) of this file.
+/// Estimate the reference-channel edge energy in eV without shifting the data.
+/// Uses an assigned/detected reference μ column when available, otherwise
+/// ln(It/Ir), then the core maximum-derivative edge finder. The import settings
+/// are cloned before choosing Reference mode. Unreadable channels and failed
+/// edge finding return errors; this is an estimate, not an absolute calibration.
 pub fn reference_e0(path: &std::path::Path, import: &ImportConfig) -> Result<f64, String> {
     let mut ref_import = import.clone();
     ref_import.mode = DetectionMode::Reference;
@@ -1585,8 +1697,19 @@ pub fn reference_e0(path: &std::path::Path, import: &ImportConfig) -> Result<f64
     sp.e0().ok_or_else(|| "reference E0 not found".to_string())
 }
 
-/// Normalize/AUTOBK/FFT chain on raw arrays (shared by file loads and
-/// derived/merged spectra).
+/// Compute the desktop absorption pipeline from owned energy/μ arrays.
+///
+/// Energy is in eV, μ is the detector-derived or supplied absorption signal.
+/// The input buffers are moved into the result; settings are borrowed. Unlike
+/// an arbitrary core configuration with all fields unset, desktop Auto supplies
+/// pre-edge offsets -200/-30 eV, post-edge start +150 eV and order 2, while the
+/// post-edge end follows this spectrum's measured endpoint. Background and
+/// transform settings are resolved for this spectrum without altering `params`.
+///
+/// Runs normalization, AUTOBK, forward FFT and inverse FFT on every successful
+/// call. Invalid settings or failed prerequisites return an error, including
+/// errors in the inverse stage. This helper does not read files or apply
+/// reference-channel alignment; use [`load_raw`] or [`process_file`] for that.
 pub fn process_arrays(
     energy: Vec<f64>,
     mu: Vec<f64>,

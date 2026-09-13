@@ -42,6 +42,21 @@ and `get_chir_mag()` becomes `chir_mag()`. Use `k()` and `chi()` in place of
 TypeScript continue to return independent arrays. `set_xftf(parameters)` is now
 `set_fft(parameters)`. `calc_background()` and the other setters keep their names.
 
+## Configuration after 0.2.4
+
+The current checkout accepts `PrePostEdge` and `AUTOBK` directly in Rust setters:
+`spectrum.set_normalization_method(prepost)?` and
+`spectrum.set_background_method(background)?`. Stable 0.2.4 requires
+`Some(NormalizationMethod::PrePostEdge(prepost))` and
+`Some(BackgroundMethod::AUTOBK(background))`, respectively. Those enum forms and
+`None` for default settings remain supported in the current checkout. This is
+an ergonomic addition; it does not change the numerical algorithms.
+
+Python keyword settings constructors, TypeScript options constructors and their
+inverse-transform setters also belong to the unreleased API. Follow the
+[versioned reference](https://rexafs.com/docs/reference/) for the package you
+installed, or the source-installation instructions for Next.
+
 ## Existing desktop data
 
 - `.rxs` is the first release project format and the only supported suffix.
@@ -66,11 +81,9 @@ TypeScript continue to return independent arrays. `set_xftf(parameters)` is now
 The GitHub repository has been renamed from `ameyanagi/xraytsubaki` to
 [`Ameyanagi/rexafs`](https://github.com/Ameyanagi/rexafs). Update existing clones with
 `git remote set-url origin https://github.com/Ameyanagi/rexafs.git`. Package metadata
-uses the new URL. Initial registry authentication is configured; crates.io/npm
-trusted publishers follow their first uploads as described in the
+uses the new URL. Maintainer publishing procedures are in the
 [release runbook](releasing.md). The local checkout folder name is not a
-package identifier. `rexafs.com` is the project domain; publication and hosting
-status are tracked separately.
+package identifier. `rexafs.com` is the project documentation domain.
 
 Historical profiler images can contain codename labels; fixture provenance and
 scientific citations remain unchanged. They are records of earlier runs.

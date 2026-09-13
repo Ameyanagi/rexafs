@@ -1,6 +1,12 @@
 //! Materials Project v2 REST client (`https://api.materialsproject.org`).
 //! Only what a structure browser needs: search summaries by formula /
 //! chemical system / elements and fetch one structure by `mp-id`.
+//!
+//! Credentials are sent to the configured API server; obtain the key from the
+//! [Materials Project API setup](https://docs.materialsproject.org/downloading-data/using-the-api/getting-started).
+//! Construction makes no request. Search/fetch methods block on HTTP and return
+//! owned structures without changing a remote record. This client requests one
+//! response page and does not promise an exhaustive database search.
 
 use std::collections::BTreeMap;
 
@@ -13,17 +19,23 @@ use crate::xafs::structure::model::{Site, SpaceGroupInfo, Species, Structure};
 use crate::xafs::structure::symmetry::{wrap_unit, SymOp};
 use crate::xafs::structure::StructureError;
 
+/// Materials Project API server root used by MaterialsProjectConfig::new.
 pub const DEFAULT_BASE_URL: &str = "https://api.materialsproject.org";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// API credential, server, and timeout settings stored by a Materials Project client.
 pub struct MaterialsProjectConfig {
+    /// Credential sent in the X-API-KEY header to the configured server; copied into this settings object.
     pub api_key: String,
+    /// API server root; new() uses <https://api.materialsproject.org>.
     pub base_url: String,
-    /// Request timeout in seconds.
+    /// Global timeout per HTTP request in seconds; new() uses 30.
     pub timeout_sec: u64,
 }
 
 impl MaterialsProjectConfig {
+    /// Copy a trimmed API key and select the public server with a 30-second timeout.
+    /// Empty keys are allowed here but cause a Network error when making a request.
     pub fn new(api_key: &str) -> Self {
         Self {
             api_key: api_key.trim().to_string(),
@@ -43,10 +55,12 @@ const SUMMARY_FIELDS: &str =
     "material_id,formula_pretty,symmetry,structure,energy_above_hull,is_stable,nsites,volume,density";
 
 impl MaterialsProject {
+    /// Own these settings without contacting or validating the server.
     pub fn new(config: MaterialsProjectConfig) -> Self {
         Self { config }
     }
 
+    /// Borrow stored server, credential, and timeout settings.
     pub fn config(&self) -> &MaterialsProjectConfig {
         &self.config
     }
@@ -83,7 +97,11 @@ impl MaterialsProject {
             })
     }
 
-    /// Build the summary query string for a [`StructureQuery`].
+    /// Build one summary request without making an HTTP call.
+    /// Text is interpreted as an mp-/mvc- identifier, a hyphenated chemical
+    /// system, or a formula (not a free-text name search). A zero limit requests
+    /// 50 results, sorted by energy above hull. The helper does not percent-encode
+    /// arbitrary query text; supply ordinary identifiers, formulas, and symbols.
     pub fn summary_query(query: &StructureQuery) -> String {
         let mut params: Vec<String> = Vec::new();
         let text = query

@@ -4,6 +4,8 @@
 //! not a replacement for [`crate::Spectrum::from_arrays`] input validation.
 //! Coordinates may use any consistent unit; line-shape densities have inverse
 //! coordinate units, while finite differences retain the input value units.
+//! This is the default nalgebra implementation. Enabling `ndarray-compat`
+//! selects a separate legacy implementation under the same module path.
 
 use enterpolation::{
     linear::{Linear, LinearError},
@@ -25,17 +27,24 @@ use super::errors::MathError;
 /// delta-function limits separately.
 pub trait MathUtils {
     /// Linearly interpolate paired knots `x`/`y` at the coordinates in `self`.
-    /// Holds endpoint values outside the knot interval. Supply nonempty finite knots
-    /// in increasing order; invalid spline structure returns `LinearError`, while empty
-    /// or NaN knot arrays can panic before that validation.
+    /// Holds endpoint values outside the knot interval. Supply matching finite
+    /// `x`/`y` arrays with at least two knots and strictly increasing `x`.
+    /// Between knots, the result is `y[j] + u * (y[j+1] - y[j])`, where
+    /// `u = (q - x[j]) / (x[j+1] - x[j])` and `q` is a query coordinate.
+    /// Query and knot coordinates use the same units; output has the units of `y`
+    /// and the same length as `self`, including an empty result for no queries.
+    /// Length/order errors return `LinearError`, while empty or NaN knot arrays
+    /// can panic before that validation. Non-finite values are not otherwise checked.
     fn interpolate(&self, x: &[f64], y: &[f64]) -> Result<Self, LinearError>
     where
         Self: Sized;
 
     /// Return whether coordinates are nondecreasing; duplicate values are allowed.
+    /// Empty and one-point vectors return true. This does not validate finiteness.
     fn is_sorted(&self) -> bool;
 
-    /// Return indices that sort finite values in ascending order. NaN comparisons panic.
+    /// Return indices that sort finite values in ascending order, without changing
+    /// the input. Equal values preserve their original order. NaN comparisons panic.
     fn argsort(&self) -> Vec<usize>;
 
     /// Evaluate a unit-area Gaussian density at these coordinates. `sigma` is its
@@ -66,7 +75,7 @@ pub trait MathUtils {
 
     /// Evaluate the unit-area convolution of Gaussian and Lorentzian profiles.
     /// `sigma` is the Gaussian standard deviation and `gamma` the Lorentzian half width
-    /// at half maximum. Uses the real Faddeeva function with argument
+    /// at half maximum. Uses the real part of the complex Faddeeva function with argument
     /// ((x-center)+i*gamma)/(sigma*sqrt(2)), divided by sigma*sqrt(2*pi).
     /// Both widths are clamped to at least machine epsilon.
     fn voigt(self, center: f64, sigma: f64, gamma: f64) -> DVector<f64>
@@ -94,7 +103,10 @@ pub trait MathUtils {
     /// Return successive differences `x[i+1]-x[i]`, with length n-1 (zero when empty).
     fn diff(&self) -> Self;
     /// Return derivatives with respect to sample index, using centered differences
-    /// inside and one-sided differences at the ends. No physical grid spacing is applied.
+    /// inside and one-sided differences at the ends. Interior entry `i` is
+    /// `(self[i+1] - self[i-1]) / 2`; endpoints use the adjacent difference.
+    /// No physical grid spacing is applied, so output retains input value units.
+    /// Divide by the spacing for a physical derivative on a uniform grid.
     /// Empty or one-point vectors return equally sized zeros.
     fn gradient(&self) -> Self;
 }
@@ -223,19 +235,28 @@ impl MathUtils for DVector<f64> {
     }
 }
 
+/// Check adjacent comparisons without allocating or rejecting isolated NaNs.
 fn is_sorted(data: &[f64]) -> bool {
     data.windows(2).all(|pair| pair[0] <= pair[1])
 }
 
+/// Stable ascending indirect sort; unordered floating-point comparisons panic.
 fn argsort(v: &[f64]) -> Vec<usize> {
     let mut idx = (0..v.len()).collect::<Vec<_>>();
     idx.sort_by(|a, b| v[*a].partial_cmp(&v[*b]).unwrap());
     idx
 }
 
-/// Find the preceding index on an ascending finite array, clamped to its ends.
+/// Return the final index at or below a finite `value`, clamped to the array ends.
+/// The input must be finite and ascending; equal coordinates are allowed.
 /// Returns an error when empty. This linear-search legacy helper assumes sorted
-/// data despite its name; unsorted/NaN arrays can panic.
+/// data despite its name; unsorted/NaN arrays can panic. Coordinates and `value`
+/// use the same units, and the input is unchanged.
+///
+/// ```
+/// use rexafs::xafs::mathutils::index_of;
+/// assert_eq!(index_of(&[1.0, 2.0, 3.0, 4.0], &3.4).unwrap(), 2);
+/// ```
 pub fn index_of(array: &[f64], value: &f64) -> Result<usize, MathError> {
     if array.is_empty() {
         return Err(MathError::IndexOutOfBounds { index: 0, len: 0 });
@@ -257,8 +278,11 @@ pub fn index_of(array: &[f64], value: &f64) -> Result<usize, MathError> {
         .unwrap_or(array.len() - 1))
 }
 
-/// Find the final coordinate at or below `value` on a sorted finite array.
-/// Uses binary partitioning, clamps outside values to the ends and errors when empty.
+/// Return the final index at or below a finite `value` on a sorted finite array.
+/// Uses binary partitioning, clamps outside values to the ends and errors when
+/// empty. Equal coordinates are allowed, with the last exact match selected.
+/// Coordinates and `value` use the same units. Sorting/finiteness are assumed,
+/// not checked; neither the input nor its order is changed.
 pub fn index_of_sorted(array: &[f64], value: &f64) -> Result<usize, MathError> {
     if array.is_empty() {
         return Err(MathError::IndexOutOfBounds { index: 0, len: 0 });
@@ -268,8 +292,15 @@ pub fn index_of_sorted(array: &[f64], value: &f64) -> Result<usize, MathError> {
 }
 
 /// Find the index minimizing absolute distance to `value`; the first tie wins.
-/// Legacy behavior panics for empty arrays or NaN comparisons. Use
+/// The array need not be sorted. Supply finite coordinates and a finite `value`
+/// in the same units; inputs are unchanged. Legacy behavior panics for empty
+/// arrays or NaN comparisons despite the `Result` return type. Use
 /// [`index_nearest_sorted`] for checked empty-input handling on sorted grids.
+///
+/// ```
+/// use rexafs::xafs::mathutils::index_nearest;
+/// assert_eq!(index_nearest(&[1.0, 2.0, 3.0, 4.0], &3.4).unwrap(), 2);
+/// ```
 pub fn index_nearest(array: &[f64], value: &f64) -> Result<usize, MathError> {
     Ok(array
         .iter()
@@ -279,9 +310,12 @@ pub fn index_nearest(array: &[f64], value: &f64) -> Result<usize, MathError> {
         .0)
 }
 
-/// Find the nearest coordinate by binary search on a sorted finite array.
-/// Ties choose the lower index, out-of-range values choose the nearest endpoint,
-/// and an empty array returns `MathError`.
+/// Return the nearest index by binary search on a sorted finite array.
+/// A distance tie chooses the lower of the two bracketing indices; an exact
+/// duplicate match selects the first duplicate. Out-of-range values choose the
+/// nearest endpoint, and an empty array returns `MathError`. Supply a finite
+/// `value` in the coordinate units. Sorting/finiteness are assumed, not checked;
+/// inputs are unchanged.
 pub fn index_nearest_sorted(array: &[f64], value: &f64) -> Result<usize, MathError> {
     if array.is_empty() {
         return Err(MathError::IndexOutOfBounds { index: 0, len: 0 });
@@ -306,9 +340,12 @@ pub fn index_nearest_sorted(array: &[f64], value: &f64) -> Result<usize, MathErr
 
 #[allow(non_snake_case)]
 /// Evaluate the modified Bessel function I0 by its power series for a
-/// dimensionless argument. This legacy helper stops when the sum no longer changes
-/// or becomes non-finite; large inputs can overflow. The FFT window implementation
-/// uses the dedicated Bessel helper in its own module. The defining series is
+/// dimensionless argument, returning a dimensionless value. It accumulates
+/// `sum_{j=0..infinity} (x*x/4)^j / (j!)^2`, where `j` is a nonnegative integer.
+/// This legacy helper stops when the sum no longer changes or becomes non-finite;
+/// large inputs can overflow. There is no error estimate or user-set tolerance.
+/// The FFT window implementation uses [`super::bessel_i0::bessel_i0`] instead.
+/// The defining series is
 /// [DLMF equation 10.25.2](https://dlmf.nist.gov/10.25.E2) at order zero.
 pub fn bessel_I0(x: f64) -> f64 {
     let base = x * x / 4.0;
@@ -331,8 +368,17 @@ pub fn bessel_I0(x: f64) -> f64 {
 /// in those coefficients. `t` supplies knots, `k` the spline degree, and `e == 3`
 /// requests endpoint clamping. Coordinates and knots must use the same units;
 /// the basis derivatives with respect to coefficients are dimensionless.
-/// Delegates to `spline::coefficient_jacobian`; this legacy wrapper has
-/// no separate validation or error return.
+/// For the spline `S(x) = sum_j c[j] * B[j](x)`, the entry `(i, j)` is `B[j](x[i])`,
+/// not the derivative with respect to the coordinate. Missing coefficient columns
+/// are omitted and historical zero-padding columns remain zero. All values of `e`
+/// other than 3 extend the endpoint polynomial pieces; they do not select other
+/// FITPACK error modes. The [SciPy B-spline reference](https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.BSpline.html)
+/// defines this basis convention.
+///
+/// This legacy wrapper consumes its vector arguments and allocates the result.
+/// It does not validate inputs: `k` must be at most 5, and `t` must contain at least
+/// `2 * (k + 1)` finite, nondecreasing knots with a valid base interval. Invalid
+/// dimensions can panic. This is the same basis used by the internal spline evaluator.
 pub fn splev_jacobian(t: Vec<f64>, c: Vec<f64>, k: usize, x: Vec<f64>, e: usize) -> DMatrix<f64> {
     super::spline::coefficient_jacobian(&t, c.len(), k, &x, e == 3)
 }

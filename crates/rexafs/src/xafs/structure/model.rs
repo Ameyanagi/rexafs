@@ -1,6 +1,7 @@
 //! Structure model: species, sites, space-group info and the `Structure`
-//! container (expanded conventional cell plus the asymmetric unit it came
-//! from).
+//! container (the supplied expanded unit cell plus its asymmetric-unit
+//! provenance). A supplied cell need not be conventional: this module does not
+//! standardize the lattice or transform its coordinate setting.
 
 use std::collections::BTreeMap;
 
@@ -131,7 +132,7 @@ pub struct Structure {
     pub source: String,
     /// Unit-cell geometry, with lengths in Å and angles in degrees.
     pub lattice: Lattice,
-    /// All sites of the conventional cell.
+    /// All explicitly stored sites of the supplied unit cell.
     pub sites: Vec<Site>,
     /// The asymmetric unit as read from the source (may equal `sites`).
     pub asymmetric_sites: Vec<Site>,
@@ -167,7 +168,8 @@ impl Structure {
         self.sites.len()
     }
 
-    /// Cartesian coordinates of site `i` (Å).
+    /// Cartesian coordinates of site `i` in Å, without periodic wrapping.
+    /// Panics if `i` is outside the stored site list.
     pub fn cart(&self, i: usize) -> [f64; 3] {
         self.lattice.to_cart(self.sites[i].frac)
     }
@@ -196,8 +198,16 @@ impl Structure {
         comp
     }
 
-    /// Reduced formula with integer counts (`RuO2`, `FeS2`), elements in
-    /// order of first appearance (metals usually come first in CIFs).
+    /// Heuristic integer display formula (`RuO2`, `FeS2`), with elements in
+    /// order of first appearance. Does not use [`Structure::formula_sum`].
+    ///
+    /// Occupancy-weighted counts are divided by the smallest count (floored at
+    /// `1e-9`). The first multiplier from 1 through 12 that puts every scaled
+    /// count within `0.02` of an integer is used; if none qualifies, the
+    /// multiplier is one. Counts are then rounded. This project-specific display
+    /// heuristic can approximate fractional stoichiometry and is not a
+    /// lossless composition representation; use [`Structure::composition`] for
+    /// the unrounded counts. An empty structure returns an empty string.
     pub fn formula(&self) -> String {
         let comp = self.composition();
         if comp.is_empty() {
@@ -230,7 +240,9 @@ impl Structure {
         out
     }
 
-    /// Indices of the sites whose majority species is `symbol`.
+    /// Indices of sites containing any listed species matching `symbol`,
+    /// ignoring ASCII letter case. Minority and zero-occupancy entries also
+    /// match; this does not apply the cluster's occupancy-selection policy.
     pub fn sites_of(&self, symbol: &str) -> Vec<usize> {
         self.sites
             .iter()
@@ -240,7 +252,12 @@ impl Structure {
             .collect()
     }
 
-    /// Sites grouped by the asymmetric-unit site they descend from.
+    /// Stored site indices sharing the asymmetric-unit index of site `i`.
+    ///
+    /// This groups recorded provenance; it does not discover crystallographic
+    /// equivalence from coordinates. If `i` has no asymmetric-unit index, or is
+    /// outside the site list, returns `[i]`; pass a valid site index when using
+    /// the returned indices to access sites.
     pub fn equivalent_sites(&self, i: usize) -> Vec<usize> {
         match self.sites.get(i).and_then(|s| s.asym_index) {
             Some(asym) => self

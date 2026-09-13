@@ -6,7 +6,8 @@
  * JavaScript glue module. Supply a URL, Request, Response, byte buffer or compiled
  * WebAssembly.Module when a bundler moves the asset. Fetch, compilation and instantiation
  * failures reject the promise. Calling init again after a successful initialization reuses the
- * initialized engine.
+ * initialized engine and ignores a different Wasm argument. Await one initialization before
+ * starting processing; init() is not a way to replace an engine already in use.
  *
  * The Node entry point loads its local Wasm automatically; init is a no-op there.
  */

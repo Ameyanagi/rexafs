@@ -37,8 +37,9 @@ Here, `||h||²` is the sum of squared entries, and each endpoint sum uses the
 corresponding elements of χ(c). λ is `clamp_lambda`; `w_lo` and `w_hi` are the
 absolute endpoint weights. The division by `m` makes the first term a mean
 squared residual, and the division by `N_active` averages over enabled endpoint
-samples. These are numerical residual conventions with the Fourier amplitude
-scale specified below; λ is not a physical material property.
+samples. λ is a numerical penalty strength tied to the Fourier amplitude scale
+and k-weight units specified below; it is not a universal dimensionless physical
+constant or a physical material property.
 
 A zero weight excludes that end from both the sum and its denominator. If both
 weights are zero, `nclamp = 0`, or `clamp_lambda = 0`, the endpoint term is absent.
@@ -121,10 +122,13 @@ See [NIST CODATA 2022](https://physics.nist.gov/cuu/pdf/wall_2022.pdf).
 The coefficient count uses `1 + floor(2 rbkg (kmax-kmin) / pi)`, bounded to 5–128,
 with optional explicit nknots. The low-R cutoff uses floor. Cubic not-a-knot
 interpolation and polynomial extrapolation reproduce the Larch model used in
-the study. Raw-data interpolation uses O(n) memory/time rather than a dense
-n-by-n solve. When possible, resampling the spline basis is eliminated using
-the fact that its interior knots are a subset of the raw interpolant's knots;
-otherwise each basis column is resampled explicitly in O(n).
+the study. The raw-data spline setup uses linear memory and time in the number
+of raw samples. Evaluating `nout` output positions performs a binary interval
+search per position, for total time `O(nraw + nout log nraw)` and memory
+`O(nraw + nout)`, where `nraw` and `nout` are sample counts. When possible,
+resampling the spline basis is eliminated because its interior knots are a
+subset of the raw interpolant's knots; otherwise each basis column uses that
+same explicit resampling procedure.
 
 For fixed settings, write χ(c) = y − Bc, where y is the normalized data
 minus any objective-only standard and each column of B is one normalized spline
