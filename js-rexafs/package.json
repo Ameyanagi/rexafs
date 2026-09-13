@@ -59,6 +59,7 @@
     "access": "public"
   },
   "devDependencies": {
+    "@typescript/typescript6": "6.0.2",
     "pyright": "1.1.414",
     "typescript": "7.0.2"
   }

@@ -9,10 +9,13 @@ staged Rust pipeline. These are software regression checks, not experimental val
 ## Editor contract checks
 
 `npm ci && npm run build && npm test` also packs/installs the actual npm tarball
-in a temporary application. `editor.test.mjs` uses TypeScript's language service
-to verify root/Node/browser exports, strict type checking, invalid-option errors,
-member/options/string completion, signature help and parameter/method hover text.
-TypeScript 5.9.3 is pinned for its public JavaScript language-service API.
+in a temporary application. `editor.test.mjs` checks root/Node/browser exports
+with the pinned TypeScript 7.0.2 native compiler, including strict type checking
+and invalid-option errors. It uses `@typescript/typescript6` 6.0.2 to retain
+language-service checks for member/options/string completion, signature help and
+parameter/method hover text. This follows Microsoft's
+[compatibility guidance](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6-0):
+TypeScript 7 does not expose the earlier JavaScript language-service API.
 
 For Python, first build and install the wheel into a virtual environment, then:
 

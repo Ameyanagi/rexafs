@@ -7,11 +7,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import ts from "typescript";
+// TypeScript 7 ships the native compiler; Microsoft provides the previous
+// JavaScript language-service API through this compatibility package.
+import ts from "@typescript/typescript6";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const directory = mkdtempSync(join(tmpdir(), "rexafs-types-"));
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+const compiler = fileURLToPath(new URL("../node_modules/typescript/bin/tsc", import.meta.url));
 function run(args, cwd) {
   const result = spawnSync(npm, args, { cwd, encoding: "utf8", shell: process.platform === "win32" });
   assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -23,7 +26,7 @@ run(["install", "--ignore-scripts", "--no-audit", "--no-fund", join(directory, p
 process.on("exit", () => rmSync(directory, { recursive: true, force: true }));
 
 for (const [entry, resolution] of [["rexafs", "NodeNext"], ["rexafs/node", "NodeNext"], ["rexafs/browser", "Bundler"]]) {
-  test(`installed ${entry}: type checking, completion, signature help and hover (${resolution})`, () => {
+  test(`installed ${entry}: TypeScript 7 checking and editor completion, signatures and hover (${resolution})`, () => {
     const filename = join(directory, `example-${entry.replaceAll("/", "-")}.ts`);
     let source = `import init, { Spectrum, AUTOBK, PrePostEdge, XrayFFTF, XrayFFTR,
       type FTWindow, type FFTGrid, type AUTOBKSolver, type AUTOBKClampScalePolicy,
@@ -52,11 +55,22 @@ new XrayFFTF({ window: "Typo" });
 // @ts-expect-error optional result must be narrowed
 spectrum.chi()[0];
 `;
-    const options = {
-      strict: true, exactOptionalPropertyTypes: true, noEmit: true, target: ts.ScriptTarget.ES2022,
-      module: resolution === "Bundler" ? ts.ModuleKind.ESNext : ts.ModuleKind.NodeNext,
-      moduleResolution: ts.ModuleResolutionKind[resolution], types: [],
+    const compilerOptions = {
+      strict: true, exactOptionalPropertyTypes: true, noEmit: true, target: "ES2022",
+      module: resolution === "Bundler" ? "ESNext" : "NodeNext",
+      moduleResolution: resolution, types: [],
     };
+    // Run the current native compiler on the same installed-package fixture,
+    // including @ts-expect-error assertions for invalid options and results.
+    writeFileSync(filename, source);
+    const config = `${filename}.json`;
+    writeFileSync(config, JSON.stringify({ compilerOptions, files: [filename] }));
+    const checked = spawnSync(process.execPath, [compiler, "--project", config, "--pretty", "false"], {
+      cwd: directory, encoding: "utf8",
+    });
+    assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+    const { options, errors } = ts.convertCompilerOptionsFromJson(compilerOptions, directory);
+    assert.deepEqual(errors, []);
     const host = {
       getScriptFileNames: () => [filename], getScriptVersion: () => String(source.length),
       getScriptSnapshot: name => name === filename ? ts.ScriptSnapshot.fromString(source)
