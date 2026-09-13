@@ -43,7 +43,7 @@ Python version. Replace 3.12 below with the destination version. Use pip in a
 temporary uv environment because uv has no `pip download` command:
 
 ```sh
-uv run --no-project --python 3.12 --with pip python -m pip download --only-binary=:all: rexafs==0.2.4 --dest wheelhouse
+uv run --no-project --python 3.12 --with pip python -m pip download --only-binary=:all: rexafs==0.2.5 --dest wheelhouse
 ```
 
 On the offline computer, create the project:
@@ -56,7 +56,7 @@ cd rexafs-analysis
 Copy `wheelhouse` into the project, then run:
 
 ```sh
-uv add --offline --no-index --find-links wheelhouse rexafs==0.2.4
+uv add --offline --no-index --find-links wheelhouse rexafs==0.2.5
 uv run --offline python -c "import rexafs; print(rexafs.__version__)"
 ```
 
@@ -66,14 +66,14 @@ version used for the download. See [uv's project
 workflow](https://docs.astral.sh/uv/guides/projects/).
 
 For TypeScript/JavaScript, install Bun on the destination first. Download the
-[published 0.2.4 package archive](https://registry.npmjs.org/rexafs/-/rexafs-0.2.4.tgz)
+[published 0.2.5 package archive](https://registry.npmjs.org/rexafs/-/rexafs-0.2.5.tgz)
 on the connected computer, copy it to your project on the offline computer, and run:
 
 ```sh
-bun add ./rexafs-0.2.4.tgz
+bun add ./rexafs-0.2.5.tgz
 ```
 
-The rexafs 0.2.4 archive includes its WebAssembly binaries and has no runtime
+The rexafs 0.2.5 archive includes its WebAssembly binaries and has no runtime
 package dependencies. Your application may have other dependencies that need to
 be prepared separately. Bun supports [installing local
 tarballs](https://bun.sh/docs/pm/cli/add). For Rust, use `cargo vendor` in your

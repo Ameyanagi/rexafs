@@ -169,6 +169,14 @@ is `rexafs`; `_core` is an implementation detail.
 
 ## Build from source
 
+**Unreleased packaging change:** this checkout enables PyO3's `abi3-py310`
+feature, sharing one wheel per platform across GIL-enabled CPython 3.10–3.14.
+The published 0.2.5 wheels remain unchanged. The release workflow tests the same
+wheel on every supported interpreter with its minimum available NumPy wheel
+and the latest compatible NumPy. Free-threaded Python is not qualified.
+See the [release checks](../doc/releasing.md#github-is-the-release-build-authority)
+and [PyO3's stable ABI guide](https://pyo3.rs/v0.29.2/building-and-distribution.html#py_limited_apiabi3abi3t).
+
 From the repository root, with the pinned Rust toolchain installed, use an
 isolated build environment. This development workflow uses `uv venv` and
 `uv run --no-project` so installing the local extension does not change the

@@ -29,15 +29,17 @@ series.
 | Use case | Install | Start here |
 |---|---|---|
 | Desktop analysis, fitting and plots | [Download the latest release](https://github.com/Ameyanagi/rexafs/releases/latest) | [Desktop installation](#install-the-desktop) |
-| Spectrum processing in the browser | [Open the browser preview](https://rexafs.com/app/) | [WASM scope and limitations](website/src/content/docs/docs/libraries/webassembly.md) |
+| Spectrum processing in the browser | [Analyze a spectrum](https://rexafs.com/app/) | [WASM scope and limitations](website/src/content/docs/docs/libraries/webassembly.md) |
+| ReFEFF in the browser | [Calculate scattering](https://rexafs.com/app/scattering/) | [ReFEFF 0.4.0 integration](doc/webassembly.md#refeff-040-integration) |
 | Python / Jupyter with NumPy | `uv add rexafs` | [Python guide](py-rexafs/README.md) |
 | TypeScript / JavaScript, Node or browser | `bun add rexafs` | [TypeScript guide](js-rexafs/README.md) |
 | Rust applications | `cargo add rexafs` | [Rust API](https://docs.rs/rexafs) |
 
 Python supports CPython 3.10–3.14. Node requires version 22 or newer.
 Prebuilt Python wheels and the npm Wasm package do not require a Rust compiler.
-The browser workspace uses the source-checkout engine and processes local files
-without uploading them. It is separate from the published 0.2.4 packages.
+Browser processing uses the source-checkout engine; scattering loads ReFEFF
+0.4.0 separately. Both operate on local files without uploading them. Website
+deployment is separate from the versioned packages.
 Use a Python virtual environment to keep project dependencies separate:
 
 ```bash
@@ -74,7 +76,9 @@ each new stable release automatically.
 | macOS | Apple Silicon (ARM64) | Open the `aarch64-apple-darwin.dmg` installer and drag rexafs to Applications; a ZIP is also available. |
 | macOS | Intel (x86-64) | Open the `x86_64-apple-darwin.dmg` installer and drag rexafs to Applications; a ZIP is also available. |
 | Windows preview | Intel / AMD (x86-64) | Run the `x86_64-pc-windows-msvc-setup.exe` installer, or extract the portable ZIP. |
+| Windows preview | ARM64 | Run the `aarch64-pc-windows-msvc-setup.exe` installer, or extract the portable ZIP. Requires Windows 11. |
 | Linux preview | Intel / AMD (x86-64) | Extract the `x86_64-unknown-linux-gnu.tar.gz` archive and run `./rexafs` from its folder. |
+| Linux preview | ARM64 | Extract the `aarch64-unknown-linux-gnu.tar.gz` archive and run `./rexafs` from its folder. |
 
 Asset names begin with `rexafs-` and the release version. Keep portable folders
 together: they contain the executable, resources, examples and licenses. The
@@ -82,9 +86,8 @@ desktop does not require Rust or Python to be installed. Linux uses the Ubuntu
 24.04 runtime baseline and requires a graphical session and Vulkan driver; see
 the [Linux requirements](doc/installing.md#linux-portable-archive).
 
-Linux and Windows ARM64 downloads are not currently published. You can build
-Linux ARM64 using the [source-build instructions](#build-from-source); Windows
-ARM64 is not yet qualified.
+Windows ARM64 runs rexafs and ReFEFF natively; its bundled x64 FEFF10 helper
+uses Windows 11 emulation. Linux ARM64 runs both engines natively.
 
 The [release build workflow](https://github.com/Ameyanagi/rexafs/actions/workflows/release-build.yml)
 builds and tests optimized desktop binaries with `cargo build --release`.
@@ -110,8 +113,7 @@ structure databases and plotting. The Python and JavaScript packages expose the
 small processing API; they do not yet expose all Rust fitting and structure APIs.
 See the [WebAssembly assessment](doc/webassembly.md) for build results and the
 [documentation and API priorities](doc/documentation-api-roadmap.md) for next steps.
-Desktop packages built from this checkout include both ReFEFF and FEFF10 on
-every platform; the published 0.2.4 Windows package includes ReFEFF only.
+Desktop packages include both ReFEFF and FEFF10 on every platform from 0.2.5.
 The desktop uses the published [`xraydb`](https://crates.io/crates/xraydb) crate
 from [`xraydb-rs`](https://github.com/Ameyanagi/xraydb-rs) for absorption-edge
 identification. The desktop's experimental assistant is optional.

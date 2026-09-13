@@ -12,9 +12,12 @@ analysis project. rexafs supports CPython 3.10–3.14; this example uses 3.12:
 ```sh
 uv init --python 3.12 rexafs-analysis
 cd rexafs-analysis
-uv add rexafs==0.2.4 numpy
+uv add rexafs==0.2.5 numpy
 uv run python -c "import rexafs; print(rexafs.__version__)"
 ```
+
+Prebuilt wheels cover Linux x64, Windows x64, and macOS x64/ARM64. For other
+architectures, see [source builds](https://github.com/Ameyanagi/rexafs/tree/main/py-rexafs#build-from-source).
 
 `uv run` uses the project's `.venv` automatically. Commit `pyproject.toml`,
 `.python-version` and `uv.lock` to preserve dependencies; exclude `.venv`.
@@ -22,9 +25,9 @@ NumPy is explicit because the example imports it. See
 [uv's project guide](https://docs.astral.sh/uv/guides/projects/).
 
 In VS Code, select `.venv` with **Python: Select Interpreter** for completion and
-hover help. The [stable reference](/docs/reference/stable/python/spectrum/) adds
-reviewed explanations to the released signatures. Expanded installed help and
-keyword constructors are [unreleased Next additions](/docs/reference/).
+hover help. Installed docstrings and the
+[stable reference](/docs/reference/stable/python/spectrum/) explain settings,
+units, defaults and errors.
 
 ### Jupyter
 
@@ -68,21 +71,29 @@ Fourier magnitude has units Å⁻³ because `kweight=2` and the amplitude factor
 $\delta k/\sqrt{\pi}$ for the k step $\delta k$ (`kstep`), with no additional
 FFT-length normalization.
 
-## Configure stable 0.2.4
+<span id="configure-stable-024"></span>
 
-Assign fields after constructing settings. In 0.2.4, background and normalization
-settings require algorithm wrappers:
+## Configure processing
+
+Use keyword arguments and pass settings directly. This example filters the
+R=1–3 Å interval and back-transforms it to q:
 
 ```python
-from rexafs import AUTOBK, BackgroundMethod, XrayFFTF
+from rexafs import AUTOBK, XrayFFTF, XrayFFTR
 
-background = AUTOBK()
-background.rbkg = 1.0
-spectrum.set_background_method(BackgroundMethod.AUTOBK(background))
-transform = XrayFFTF()
-transform.kweight = 2.0
-spectrum.set_fft(transform).fft()
+background = AUTOBK(rbkg=1.0)
+transform = XrayFFTF(kweight=2.0)
+inverse = XrayFFTR(rmin=1.0, rmax=3.0)
+spectrum.set_background_method(background).set_fft(transform).set_ifft(inverse).ifft()
+print("q (inverse angstrom):", spectrum.q())
+print("Filtered chi(q):", spectrum.chiq())
 ```
+
+`ifft()` calculates missing forward stages. With forward `kweight=2` and default
+inverse `rweight=0`, `chiq()` has units Å⁻²: it retains the forward weighting and
+window. The R interval is not a phase-corrected bond-distance range. Inspect the
+data before choosing it. Normalization similarly accepts `PrePostEdge` directly;
+the older method wrappers and field assignments remain supported.
 
 Settings are copied. Reassign them after editing to apply the change. Some
 automatic values, including fit ranges and FFT spacings, are retained inside
@@ -90,10 +101,9 @@ the spectrum for later calculations; AUTOBK's automatic `kmax` and `nknots` are
 instead calculated from each input. Processing does not update the original
 settings object. If you change the background
 k spacing after a transform, reassign an `XrayFFTF` with `kstep=None` before
-calling `fft()` so it infers the new spacing. In this release, `.ifft()` uses
-the available inverse defaults; the `XrayFFTR` constructor and `.set_ifft()`
-binding are unreleased additions. After changing the forward R spacing, use a
-fresh spectrum for the stable inverse or use the configurable Next inverse.
+calling `fft()` so it infers the new spacing. After changing the forward R
+spacing or inverse FFT length, also reassign an `XrayFFTR` with `kstep=None`
+before `ifft()`. Reapply the desired window and range settings.
 
 ## Read transmission data
 

@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.4.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
+**Stable 0.2.5.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.5/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
 Mutable absorption spectrum processed by the Rust engine in WebAssembly.
 
@@ -90,7 +90,7 @@ RangeError for a nonfinite value. Returns this spectrum.
 ## set_normalization_method
 
 ```typescript
-set_normalization_method(method?: NormalizationMethod | null): this;
+set_normalization_method(method?: PrePostEdge | NormalizationMethod | null): this;
 ```
 
 Copy the selected normalization method and clear normalization, background, forward and
@@ -106,7 +106,7 @@ were added in 0.2.5.
 ## set_background_method
 
 ```typescript
-set_background_method(method?: BackgroundMethod | null): this;
+set_background_method(method?: AUTOBK | BackgroundMethod | null): this;
 ```
 
 Copy the selected background method and clear background, forward and inverse results while
@@ -118,6 +118,18 @@ forms work in 0.2.4 and later. For custom settings, 0.2.4 accepts a BackgroundMe
 wrapper; direct AUTOBK settings were added in 0.2.5. This
 does not reset forward or inverse configuration values that were already resolved
 automatically.
+
+## set_ifft
+
+```typescript
+set_ifft(parameters: XrayFFTR): this;
+```
+
+Copy inverse-transform settings and clear q()/chiq() while preserving normalization,
+background and forward results. Settings can be freed after assignment; later edits require
+reassignment. Invalid R ranges or inconsistent kstep/nfft are reported when ifft() runs.
+Returns this spectrum. Assign settings with kstep undefined to resolve spacing again after
+changing the forward grid. This method and XrayFFTR were added in 0.2.5.
 
 ## set_fft
 

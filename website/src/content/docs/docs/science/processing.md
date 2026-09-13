@@ -5,10 +5,12 @@ audience: user
 ---
 
 The equations describe `Spectrum.normalize()`, `calc_background()`, `fft()` and
-`ifft()` in the default Rust backend used by desktop, Python and Wasm in 0.2.4.
+`ifft()` in the default Rust backend used by desktop, Python and Wasm. These
+calculations and defaults are shared by 0.2.4 and 0.2.5; implementation links
+remain pinned to 0.2.4.
 For the historical ndarray backend, see [FFT compatibility](/docs/science/fourier-compatibility/).
-Custom Python/TypeScript inverse configuration is covered in the
-[unreleased API reference](/docs/reference/).
+Custom Python/TypeScript inverse configuration, added in 0.2.5, is covered in the
+[Stable API reference](/docs/reference/).
 
 X-ray absorption spectroscopy (XAS) measures absorption as a function of photon
 energy. Extended X-ray absorption fine structure (EXAFS) is the oscillatory

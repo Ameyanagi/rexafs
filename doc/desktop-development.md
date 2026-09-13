@@ -24,9 +24,9 @@ cargo run --locked --release -p rexafs-gui
 
 Use these commands on either x64 or ARM64 hardware with the corresponding
 native Rust toolchain. The FEFF10 dependency supplies a prebuilt Linux ARM64
-archive. The next-release CI adds `ubuntu-24.04-arm`; it must pass the packaged
-engine and graphical checks before an ARM64 download is released. Published
-0.2.4 has no Linux ARM64 desktop archive.
+archive. Release CI uses `ubuntu-24.04-arm` for its native packaged-engine and
+graphical checks. Linux ARM64 downloads are available from 0.2.5; see its
+[qualification record](validation/2026-09-13-release-0.2.5/review.md).
 
 The desktop supports X11 and Wayland and requires a Vulkan driver. Native file
 dialogs require a running session D-Bus and an XDG desktop portal file chooser
@@ -78,7 +78,7 @@ $env:REXAFS_EXPECTED_TARGET = "aarch64-pc-windows-msvc"
 The expected target is checked by desktop packaging. A native ARM64 rexafs
 executable and ReFEFF backend still use the existing x64 FEFF10 helper.
 [Windows 11 provides x64 application emulation](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation);
-Windows 10 ARM64 does not. The next-release matrix tests this mixed setup on
+Windows 10 ARM64 does not. Release CI tests this mixed setup on
 `windows-11-arm`, including installed FEFF10 calculations. Adding the job is
 not evidence that it passed; native ARM64 qualification remains required.
 
@@ -96,6 +96,9 @@ Windows fields use Consolas, and shortcuts use Ctrl. See
 [Windows installation](windows-installers.md) for the installer and portable ZIP.
 
 ## Repository checks
+
+See [CI selection and release coverage](ci.md) for changed-file selection,
+aggregate checks and the measured build bottlenecks.
 
 ```bash
 uv tool install --python 3.12 pre-commit==4.5.1

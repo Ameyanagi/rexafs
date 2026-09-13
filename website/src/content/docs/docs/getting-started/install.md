@@ -15,7 +15,9 @@ Use the [download page](/download/) to select your operating system and processo
 | macOS Apple Silicon | Open the ARM64 DMG and drag rexafs into Applications | Signed and notarized |
 | macOS Intel | Open the Intel DMG and drag rexafs into Applications | Signed and notarized |
 | Windows x64 | Run the setup EXE; launch rexafs from the Start menu | Preview; Windows 10 2004 or newer / Windows 11 |
+| Windows ARM64 | Run the ARM64 setup EXE; launch rexafs from the Start menu | Preview; Windows 11 |
 | Linux x64 | Extract the archive; run `./rexafs` inside its folder | Preview; Ubuntu 24.04 runtime baseline |
+| Linux ARM64 | Extract the ARM64 archive; run `./rexafs` inside its folder | Preview; Ubuntu 24.04 runtime baseline |
 
 Keep portable folders together, including their resources, examples and licenses.
 Save your project and close the application before replacing it.
@@ -26,15 +28,15 @@ The rexafs Windows executable and installer are not publisher-signed in this rel
 
 ### ARM64 availability
 
-**Windows ARM64 and Linux ARM64 have no published desktop packages in 0.2.4.**
-Only macOS has an ARM64 download.
+**ARM64 downloads are available for macOS, Windows and Linux in 0.2.5.**
+Select your architecture on the [download page](/download/). Windows and Linux
+remain desktop previews.
 
-The next-release pipeline adds native Linux and Windows ARM64 builds, subject to
-CI qualification. Linux includes native ReFEFF and FEFF10. Windows includes native
-rexafs/ReFEFF and an x64 FEFF10 helper, which requires Windows 11 emulation.
-Downloads will appear after the packages pass qualification and are released.
-See the [source-build guide](https://github.com/Ameyanagi/rexafs/blob/main/doc/desktop-development.md)
-for current build prerequisites.
+Linux ARM64 runs rexafs, ReFEFF and FEFF10 natively. Windows ARM64 runs rexafs
+and ReFEFF natively; its bundled x64 FEFF10 helper uses [Windows 11
+emulation](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation).
+The Windows ARM64 package therefore requires Windows 11. Both Windows
+architectures include FEFF10.
 
 ### Linux runtime
 
@@ -57,9 +59,9 @@ checksum file before opening the package. For example:
 
 ```sh
 # macOS
-shasum -a 256 rexafs-0.2.4-aarch64-apple-darwin.dmg
+shasum -a 256 rexafs-0.2.5-aarch64-apple-darwin.dmg
 # Linux
-sha256sum rexafs-0.2.4-x86_64-unknown-linux-gnu.tar.gz
+sha256sum rexafs-0.2.5-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 On Windows, use `Get-FileHash -Algorithm SHA256` in PowerShell. The hash should
@@ -72,12 +74,12 @@ match the published checksum for that exact file.
   ```sh
   uv init --python 3.12 rexafs-analysis
   cd rexafs-analysis
-  uv add rexafs==0.2.4
+  uv add rexafs==0.2.5
   uv run python -c "import rexafs; print(rexafs.__version__)"
   ```
 
-- [TypeScript / JavaScript](/docs/libraries/typescript/): `bun add rexafs@0.2.4`.
-- [Rust](/docs/libraries/rust/): `cargo add rexafs@0.2.4`.
+- [TypeScript / JavaScript](/docs/libraries/typescript/): `bun add rexafs@0.2.5`.
+- [Rust](/docs/libraries/rust/): `cargo add rexafs@0.2.5`.
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for the
 Python commands or [Bun](https://bun.sh/docs/installation) for the JavaScript

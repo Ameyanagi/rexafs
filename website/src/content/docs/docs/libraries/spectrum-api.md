@@ -38,6 +38,7 @@ owned vectors. No getter runs a calculation implicitly.
 - Changing normalization invalidates background and both transforms.
 - Changing background invalidates both transforms.
 - Changing forward-transform settings invalidates forward and inverse results.
+- Changing inverse-transform settings invalidates inverse results only.
 - Python and TypeScript settings are copied when assigned; editing the original
   object alone does not change the spectrum.
 - Rust setters take ownership. Use `.clone()` to keep a reusable configuration.
@@ -48,13 +49,11 @@ does not reset every inferred parameter: after `fft()`, changing the background
 fresh `XrayFFTF` to infer spacing from the new background grid. After changing
 forward `nfft` or spacing, assign a fresh `XrayFFTR` to infer the inverse grid
 again. Reapply desired window and range overrides to the new configuration.
-Stable 0.2.4 has no Python/TypeScript `set_ifft()`; use a fresh spectrum when
-changing grids after a back-transform, or use the [Next API](/docs/reference/).
 
 Prefer setters to direct Rust field edits, which require explicit invalidation.
 Record defaults and resolved automatic settings when reproducing an analysis.
 
-Stable 0.2.4 uses zero-argument settings constructors in Python/TypeScript, with
-fields assigned afterward; Next adds constructor arguments. See
+Use keyword constructors in Python and options constructors in TypeScript;
+normalization and background setters accept their settings directly. See
 [Python](/docs/libraries/python/) and [TypeScript](/docs/libraries/typescript/)
-for stable examples.
+for examples, including `XrayFFTR` and `set_ifft()` for inverse configuration.

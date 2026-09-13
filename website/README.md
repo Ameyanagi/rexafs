@@ -39,14 +39,21 @@ subscript is rendered smaller than its base.
 
 Open the preview's `/rexafs/` path. `npm --prefix website run dev` gives live
 editing; generate Rust reference files first if you want their links to work.
-The Rust generator downloads the published crate, verifies its recorded SHA-256,
-and runs rustdoc with the default backend and optional capabilities, with no
+On a cache miss, the Rust generator downloads the published crate, verifies its
+recorded SHA-256, and runs rustdoc with the default backend and optional capabilities, with no
 dependency documentation. It deliberately excludes `ndarray-compat`, which
 replaces several default numerical modules with legacy implementations. Cargo may
 download optional engine build artifacts. Existing warnings in the published
 crate's rustdoc remain visible in the build log; the website does not patch a
 release's source silently. Set `DOCS_CARGO_TARGET_DIR` to an absolute cache path
-to reuse compilation between local builds.
+to reuse compilation between local builds. Stable and Next HTML are cached
+separately in `website/.cache/rustdoc-html/`; `DOCS_HTML_CACHE_DIR` can select
+another directory. Each restore checks the source identity and every cached
+file's SHA-256. Stable follows the published crate checksum; Next follows the
+checkout's source bytes, including embedded data and local dependencies. Both
+include compiler identity, the header and build policy. Unrelated website copy
+and release download metadata do not require another Rustdoc build. Delete the
+HTML cache to force regeneration.
 
 For browser checks, run these commands inside `website/`:
 
@@ -69,10 +76,14 @@ removing a public member's help fails generation.
 `/app/` runs spectrum processing locally in a module Worker, using this checkout's
 WASM bindings. It is labeled as an unreleased preview. It supports numeric
 text/CSV import, explicit column roles and energy units, normalization, AUTOBK,
-forward Fourier transforms and CSV/JSON export. ReFEFF execution remains upstream
-work; this preview does not include it.
+forward Fourier transforms and CSV/JSON export.
 
-`npm run dev` and `npm run build` first run `build:wasm`. Install `wasm-pack 0.15.0`
+`/app/scattering/` runs the published ReFEFF 0.4.0 WASI engine through its browser
+Worker. It accepts a FEFF input, displays calculated EXAFS and offers generated
+files and a provenance record for download. Native rexafs 0.2.5 retains its
+ReFEFF 0.3.0 dependency; the two browser engines have separate manifests.
+
+`npm run dev` and `npm run build` first prepare both engines. Install `wasm-pack 0.15.0`
 and the `wasm32-unknown-unknown` target before either command. Cargo's binary
 directory must be on `PATH`; `REXAFS_WASM_PACK` can select an explicit executable.
 The build stages only browser runtime assets in ignored `public/wasm/` and writes
@@ -99,12 +110,42 @@ Cancel terminates the Worker and discards its state; progress reports stage
 boundaries. The JSON export records requested settings and resolved E0; other
 inferred settings are not exposed by the current bindings.
 
+ReFEFF assets come from the pinned upstream release archive, verified by SHA-256
+during staging. The build retains engine, adapter and third-party notices in
+ignored `public/refeff/`. No ReFEFF source build is needed for this website.
+Staging uses Python 3's standard ZIP reader; `REXAFS_PYTHON` can select it.
+`REXAFS_REFEFF_ARCHIVE` accepts a local copy of the pinned archive for offline
+builds without bypassing checksum verification.
+The browser verifies the WASM bytes before starting a calculation and loads
+them only on demand. Its tests compare all ZnSe `chi.dat`/`xmu.dat` numeric
+columns with retained serial native 0.4.0 output at the upstream tolerance,
+`5e-8 + 5e-5 * abs(reference)`. That case does not qualify every FEFF workflow.
+The unchanged upstream input includes a Kr scatterer; preserve this distinction
+when describing the example.
+
+`vendor/refeff-0.4.0/` retains the Cargo dependency notices and source inventory.
+Ordinary builds verify and copy these files. When updating the pinned engine,
+follow the [notice generation instructions](vendor/refeff-0.4.0/README.md) and
+update the staging hashes with the reviewed outputs. The Python 3.12 generator
+reads the pinned upstream commit without modifying its checkout or rebuilding
+WebAssembly. From the repository root, verify the retained outputs with:
+
+```sh
+uv run --no-project --python 3.12 website/scripts/generate-refeff-notices.py \
+  --refeff-repository ../refeff --check
+```
+
+The same directory retains runtime notices from the identified Rust distribution
+and its WASI libc sources. Their inventory records exact source URLs, hashes and
+retained byte ranges. They are refreshed separately from the Cargo generator;
+follow the vendor README and preserve the original notice bytes.
+
 ## Content ownership
 
 - `src/content/docs/` owns the curated public manual. Every page requires
   `audience: user`; the collection schema rejects any other audience.
 - `doc/` retains source-checkout guides and historical records. Website guides
-  target published 0.2.4; they intentionally differ from checkout guides that
+  target published 0.2.5; they intentionally differ from checkout guides that
   document unreleased APIs. Keep shared scientific explanations synchronized
   when the underlying method changes. Do not import `doc/` recursively.
 - `src/content/docs/docs/reference/{stable,next}/` is generated. Edit Python
@@ -123,8 +164,9 @@ inferred settings are not exposed by the current bindings.
   updated Rust comments and API. Its banner states that it is unreleased and
   links back to Stable. Do not use it as evidence of a released signature.
   Missing public Rust documentation and broken intra-doc links fail the Next
-  build. Generated HTML is cleared between channels while compilation caches
-  are reused, so obsolete pages cannot carry over into the release reference.
+  build. Cache misses clear generated HTML between channels; cache hits verify
+  every retained file. Both completely replace the public output directory,
+  so obsolete pages cannot carry over into the reference.
 - `src/data/api-citations.json` is generated from authored API documentation
   links, including scientific papers, specifications and supporting code. New
   links must still be reviewed for relevance and explained where they are used.

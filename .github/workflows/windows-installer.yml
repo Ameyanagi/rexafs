@@ -2,6 +2,7 @@ name: Windows installer
 
 on:
   push:
+    branches: [main]
     paths:
       - '.github/workflows/windows-installer.yml'
       - 'scripts/windows_installer.py'
@@ -9,6 +10,7 @@ on:
       - 'scripts/test-windows-installer*'
       - 'scripts/release_archive.py'
       - 'scripts/feff10_worker.py'
+      - 'website/src/data/release.json'
   pull_request:
     paths:
       - '.github/workflows/windows-installer.yml'
@@ -17,15 +19,15 @@ on:
       - 'scripts/test-windows-installer*'
       - 'scripts/release_archive.py'
       - 'scripts/feff10_worker.py'
+      - 'website/src/data/release.json'
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing release with a qualified Windows ZIP to wrap
+        description: Existing release with a qualified Windows ZIP (blank uses the website's verified stable release)
         type: string
-        default: v0.2.4
-        required: true
+        required: false
       target:
-        description: Target of an existing release ZIP (0.2.4 has x64 only)
+        description: Target of an existing release ZIP (ARM64 requires 0.2.5 or later)
         type: choice
         options: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
         default: x86_64-pc-windows-msvc
@@ -46,7 +48,7 @@ jobs:
       INSTALLER_TARGET: ${{ inputs.target || 'x86_64-pc-windows-msvc' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: '0.12.3'
           python-version: '3.12'
@@ -59,8 +61,14 @@ jobs:
       - name: Build installer from the existing release ZIP
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag || 'v0.2.4' }}
-        run: uv run --no-project python scripts/windows_installer.py windows-installer --release $env:RELEASE_TAG --target $env:INSTALLER_TARGET
+          REQUESTED_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          $releaseTag = $env:REQUESTED_RELEASE_TAG
+          if (-not $releaseTag) {
+            $releaseTag = (Get-Content website/src/data/release.json -Raw | ConvertFrom-Json).tag
+          }
+          Write-Host "Wrapping the qualified Windows ZIP from $releaseTag"
+          uv run --no-project python scripts/windows_installer.py windows-installer --release $releaseTag --target $env:INSTALLER_TARGET
       - name: Install, reinstall and uninstall the complete payload
         run: ./scripts/test-windows-installer.ps1 -Directory windows-installer
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.4.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
+**Stable 0.2.5.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.5/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
 Configure the weighted Fourier transform from photoelectron k to distance R.
 
@@ -41,24 +41,10 @@ Processing does not replace None fields in your original settings object.
 Reassign fresh or reset settings when you want retained automatic choices
 recalculated after changing the data or an earlier stage.
 
-## grid
-
-```python
-grid: str
-```
-
-Sampling/window convention. Default: "Input".
-
-Input keeps the existing background samples and does not resample them
-when kstep changes. Larch linearly interpolates onto a zero-origin grid
-with the requested kstep and extends the window domain through the upper
-taper. Both preserve Spectrum.k()/chi(); kwin_k() returns the matching
-window axis. Unknown names raise ValueError when assigned.
-
 ## XrayFFTF
 
 ```python
-XrayFFTF()
+XrayFFTF(*, grid: FFTGrid='Input', rmax_out: float | None=10.0, dk: float | None=1.0, dk2: float | None=None, kmin: float | None=2.0, kmax: float | None=15.0, kweight: float | None=2.0, nfft: int | None=2048, kstep: float | None=None, window: FTWindow | None='KaiserBessel')
 ```
 
 Create forward-transform settings with the recommended Rust defaults.
@@ -73,6 +59,20 @@ Keyword arguments were added in 0.2.5. Published
 assignment. Python type conversion can raise TypeError, and an integer
 outside the native field's representable range can raise OverflowError
 before any numerical processing.
+
+## grid
+
+```python
+grid: FFTGrid
+```
+
+Sampling/window convention. Default: "Input".
+
+Input keeps the existing background samples and does not resample them
+when kstep changes. Larch linearly interpolates onto a zero-origin grid
+with the requested kstep and extends the window domain through the upper
+taper. Both preserve Spectrum.k()/chi(); kwin_k() returns the matching
+window axis. Unknown names raise ValueError when assigned.
 
 ## rmax_out
 
@@ -209,7 +209,7 @@ settings object remains unchanged by processing.
 ## window
 
 ```python
-window: str | None
+window: FTWindow | None
 ```
 
 Forward Fourier-window shape. Constructor default: "KaiserBessel".

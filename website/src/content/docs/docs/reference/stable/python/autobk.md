@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.4.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
+**Stable 0.2.5.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.5/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
 Fit a smooth atomic background and extract the EXAFS oscillation chi(k).
 
@@ -46,7 +46,7 @@ recalculated after changing the data or an earlier stage.
 ## AUTOBK
 
 ```python
-AUTOBK()
+AUTOBK(*, ek0: float | None=None, rbkg: float | None=1.0, nknots: int | None=None, kmin: float | None=0.0, kmax: float | None=None, kstep: float | None=0.05, nclamp: int | None=3, clamp_lo: int | None=0, clamp_hi: int | None=1, clamp_lambda: float | None=0.001, nfft: int | None=2048, kweight: int | None=1, dk: float | None=0.1, linear_regularization: float | None=0.0001, linear_condition_limit: float | None=100000000.0, linear_residual_ratio_limit: float | None=1.05, linear_fallback_to_lm: bool | None=True, linear_workspace_cache: bool | None=True, window: FTWindow | None='Hanning', solver: AUTOBKSolver | None='LinearDirect', linear_fallback_solver: AUTOBKSolver | None='TrustRegionDogLeg', clamp_scale_policy: AUTOBKClampScalePolicy | None='FixedPenalty')
 ```
 
 Create AUTOBK settings with the recommended Rust defaults.
@@ -324,7 +324,7 @@ the cache does not reuse a previous spectrum's chi().
 ## window
 
 ```python
-window: str | None
+window: FTWindow | None
 ```
 
 Fourier window used inside the background objective. Default: "Hanning".
@@ -340,7 +340,7 @@ An unsupported name raises ValueError when assigned.
 ## solver
 
 ```python
-solver: str | None
+solver: AUTOBKSolver | None
 ```
 
 Solver used for the spline coefficients. Recommended default: "LinearDirect".
@@ -354,7 +354,7 @@ raise ValueError; incompatible solver/objective pairs fail during processing.
 ## linear_fallback_solver
 
 ```python
-linear_fallback_solver: str | None
+linear_fallback_solver: AUTOBKSolver | None
 ```
 
 Solver used after a rejected legacy LinearDirect solve.
@@ -368,7 +368,7 @@ falls back. Unknown names raise ValueError when assigned.
 ## clamp_scale_policy
 
 ```python
-clamp_scale_policy: str | None
+clamp_scale_policy: AUTOBKClampScalePolicy | None
 ```
 
 Endpoint model for background removal. Recommended default: "FixedPenalty".

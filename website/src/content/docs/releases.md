@@ -5,13 +5,44 @@ audience: user
 ---
 
 Published changes and migration notes are listed below. Back up projects before
-updating. Source-only API additions are documented in the [Next API
+updating. Source-checkout APIs are documented in the [Next API
 reference](/docs/reference/).
 
-## Stable 0.2.4
+## Stable 0.2.5
 
-[Download 0.2.4](/download/) or read the
-[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.4).
+[Download 0.2.5](/download/) or read the
+[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.5).
+
+- ARM64 desktop previews for Windows and Linux, alongside the existing x64
+  packages. Windows ARM64 requires Windows 11.
+- FEFF10 in both Windows packages. rexafs and ReFEFF run natively on Windows
+  ARM64; the x64 FEFF10 helper runs under emulation. Linux ARM64 includes native
+  ReFEFF and FEFF10. See [platform requirements](/docs/getting-started/install/).
+- Python keyword constructors and TypeScript options constructors, direct
+  normalization/background settings, and `XrayFFTR`/`Spectrum.set_ifft()` for
+  inverse configuration. Existing construction and setter forms remain valid.
+- Expanded editor help and shorter workflow guides. Rust Fourier plot-axis
+  labels now include the integration measure; calculated amplitudes are unchanged.
+- Existing format-1 `.rxs` projects remain supported. Numerical defaults are
+  unchanged.
+
+## Website previews
+
+- [Spectrum processing](/app/): local text/CSV import, processing, plots and
+  CSV/provenance exports using the source-checkout engine.
+- [Scattering calculations](/app/scattering/): ReFEFF 0.4.0 in a cancellable
+  browser Worker, with generated FEFF files and a provenance record.
+
+These follow website deployment, separately from the versioned npm API. Native
+rexafs 0.2.5 retains ReFEFF 0.3.0. See [WASM scope](/docs/libraries/webassembly/).
+
+## Earlier releases
+
+<span id="stable-024"></span>
+
+### 0.2.4
+
+[Release 0.2.4](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.4).
 
 - The window fits the available display, and the empty workspace shows the
   import, project and Cu example actions directly.
@@ -22,8 +53,6 @@ reference](/docs/reference/).
 - Explicit Larch FFT-grid selection and corrections to the legacy iterative
   AUTOBK derivative. The fixed-penalty default is unchanged.
 - Existing format-1 `.rxs` projects remain supported.
-
-## Earlier releases
 
 | Release | What changed for users |
 |---|---|
@@ -50,7 +79,9 @@ and checksums.
   penalty. Older projects preserve their saved clamp policy, so check it before
   comparing results with a new project. See the [AUTOBK
   objective](/docs/science/autobk/).
-- **Library APIs.** Stable 0.2.4 uses zero-argument settings constructors in
-  Python and TypeScript with fields assigned afterward. Keyword and options
-  constructors, direct settings assignment and `XrayFFTR` inverse configuration
-  are documented as the unreleased [Next API](/docs/reference/).
+- **Library APIs.** Version 0.2.5 adds Python keyword constructors, TypeScript
+  options constructors and direct normalization/background settings. It also
+  exposes `XrayFFTR` and `Spectrum.set_ifft()` in Python/TypeScript and adds the
+  spectrum setter in Rust. Version 0.2.4 needs zero-argument Python/TypeScript
+  settings constructors followed by field assignment; those forms remain valid
+  in 0.2.5. See the [Stable API reference](/docs/reference/).
