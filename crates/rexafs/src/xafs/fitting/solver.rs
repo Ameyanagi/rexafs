@@ -426,6 +426,10 @@ fn dataset_varying_names(
         .collect())
 }
 
+/// Fit each dataset from an independent copy of the supplied initial variables.
+/// Returns one result per input dataset in the same order; failures do not omit
+/// entries. Batch options select scheduling and solver settings, not shared fit
+/// parameters. See [`super::feffit_independent`] for the public workflow.
 pub fn feffit_independent(
     datasets: &[FeffFitDataset],
     variables: &FitVariables,

@@ -1,6 +1,6 @@
 # Multiple spectra and independent batches
 
-**Model & fit → Fit multiple spectra** fits several spectra simultaneously.
+**Fit → Model → Fit multiple spectra** fits several spectra simultaneously.
 The browser groups paths under their spectrum. Selecting a spectrum shows its
 range and every assigned path's parameter values; selecting a path focuses it.
 
@@ -44,7 +44,7 @@ omits a dataset.
 
 ## Independent batches
 
-**Results & batch → Batch** fits each frame independently, using its effective
+**Fit → Results → Batch** fits each frame independently, using its effective
 processing parameters. Automatic fit weights also follow each frame's transform.
 Select **Single spectrum** before starting a batch. Each row has solver status
 and uncertainties; failures appear in Problems. CSV exports values and errors.

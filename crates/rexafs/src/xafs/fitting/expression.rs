@@ -1,15 +1,24 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 
+use super::errors::FittingError;
 use pest::iterators::Pair;
 use pest::Parser;
-use pest_derive::Parser;
 
-use super::errors::FittingError;
+#[expect(
+    missing_docs,
+    reason = "pest 2.9 generates Rule::all_rules without a documentation hook; Rule and its variants are documented in expression.pest"
+)]
+mod generated_grammar {
+    use pest_derive::Parser;
 
-#[derive(Parser)]
-#[grammar = "xafs/fitting/expression.pest"]
-struct ExprGrammar;
+    #[derive(Parser)]
+    #[grammar = "xafs/fitting/expression.pest"]
+    pub(super) struct ExprGrammar;
+}
+
+use generated_grammar::ExprGrammar;
+pub use generated_grammar::Rule;
 
 #[derive(Debug, Clone)]
 enum UnaryOp {
@@ -324,6 +333,8 @@ where
 /// radians. No physical-unit checking is performed: expressions must preserve
 /// the units required by their path fields. Parse errors, resolver errors,
 /// invalid function calls, and nonfinite results return [`FittingError`].
+/// Unary signs bind before exponentiation: `-2^2` evaluates to 4; write
+/// `-(2^2)` for -4. `log` means natural logarithm and `log10` means base ten.
 pub fn eval_expression_with<F>(expr: &str, mut resolver: F) -> Result<f64, FittingError>
 where
     F: FnMut(&str) -> Result<f64, FittingError>,

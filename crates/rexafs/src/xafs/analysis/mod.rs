@@ -41,7 +41,11 @@ pub enum AnalysisSpace {
     /// k-weighted χ(k)·k^kweight on the k grid (requires `calc_background()`).
     /// The real exponent is used directly, unlike the processing FFT's floored
     /// nonnegative integer weight. For dimensionless χ, y has units Å⁻ᵏʷᵉⁱᵍʰᵗ.
-    Chi { kweight: f64 },
+    Chi {
+        /// Real exponent applied directly to k in Å⁻¹; choose a finite value.
+        /// Noninteger or negative values require care at k = 0.
+        kweight: f64,
+    },
 }
 
 /// Alias used by the LCF API.

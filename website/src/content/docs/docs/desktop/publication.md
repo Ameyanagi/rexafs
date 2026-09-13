@@ -86,6 +86,14 @@ Scope is the current spectrum, marked spectra, assigned fit spectra and recorded
 
 An existing destination is never overwritten. The project uses the selected raw-data mode: relative links by default, or losslessly compressed original spectra and referenced FEFF inputs with **Raw: embedded**. Its metadata header records sources and checksums. Full processed arrays are included. Archived fit statistics remain exportable when their plot arrays are unavailable; the manifest reports the missing figures. Auto requests and historical settings are explicitly distinguished from current, resolved values. The methods text is a draft, not an invented experimental record.
 
+An export can finish with notices about failed spectra, unavailable historical
+curves or failed figures; review `manifest.json`, `README.md` and `report.html`
+before using its contents. A filesystem failure can instead stop the export
+early and leave a partial directory, possibly without a manifest. Resolve the
+reported cause and retry into a new directory. The analysis folder is written
+file by file; it does not have the atomic replacement/backup behavior of a saved
+`.rxs` project. See the [folder exporter](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/publication.rs#L248).
+
 
 [![Full publication editor showing a vector Cu fit figure and output controls](/screenshots/publication.jpg)](/screenshots/publication.jpg)
 

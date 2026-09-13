@@ -157,15 +157,36 @@ impl ProjectFile {
 pub const PROJECT_VERSION: u32 = 1;
 pub const PROJECT_EXTENSION: &str = "rxs";
 
+/// Test only whether the path has a case-insensitive `.rxs` extension.
+/// This does not read or validate the file; use [`load`] to decode a project.
 pub fn is_project(path: &Path) -> bool {
     path.extension()
         .is_some_and(|ext| ext.eq_ignore_ascii_case(PROJECT_EXTENSION))
 }
 
+/// Save a format-1 `.rxs` snapshot using the project's selected storage mode.
+///
+/// The input model is borrowed and cloned during preparation; the caller's
+/// paths, settings and conversation history are not changed. See
+/// [`save_with_storage`] for source-file requirements and replacement behavior.
 pub fn save(path: &Path, project: &ProjectFile) -> Result<(), String> {
     save_with_storage(path, project, project.data_storage).map(|_| ())
 }
 
+/// Serialize a project and return the metadata header written to disk.
+///
+/// Paths mode records linked inputs and allows unavailable sources. Embedded
+/// mode reads every required input, preserves its original bytes, and fails if
+/// a required source cannot be read. References are made relative to the new
+/// project directory. Completed conversations are pruned to the selected limit
+/// in the saved copy; processed caches and the session undo stack are not saved.
+///
+/// Serialization and the 512 MiB project limit are checked before replacement.
+/// An existing destination is copied to `<path>.bak`, then an atomic write
+/// replaces the project. Only one previous save is retained. A final write
+/// failure can leave the backup updated while the previous project stays intact.
+/// Invalid suffixes, unsupported project versions, serialization failures and
+/// filesystem errors return a message without modifying the borrowed model.
 pub fn save_with_storage(
     path: &Path,
     project: &ProjectFile,
@@ -203,6 +224,17 @@ pub fn save_with_storage(
     Ok(prepared.header.unwrap())
 }
 
+/// Read and validate a `.rxs` project without rewriting its source file.
+///
+/// Relative input paths resolve against the project directory. Embedded inputs
+/// are size/hash checked and extracted into the private project-data cache;
+/// originals are never replaced. Paths mode restores references without checking
+/// their current bytes against the recorded source hashes. Missing linked files
+/// are reported when a subsequent operation tries to read them.
+///
+/// Rejects unsupported formats, malformed metadata, files larger than 512 MiB,
+/// unsafe embedded paths and damaged payloads. Returns a fresh owned model;
+/// the application applies it only after loading succeeds.
 pub fn load(path: &Path) -> Result<ProjectFile, String> {
     load_with_cache_root(path, || {
         crate::settings::app_dir().ok_or("Project cache directory unavailable".into())

@@ -124,8 +124,11 @@ impl Conversation {
         }
     }
 
-    /// Bounded context is explicitly labelled as historical data, with only
-    /// the last ten display entries. It carries no executable permissions.
+    /// Render historical context for a new server thread when resume fails.
+    /// Includes only the last ten display entries, truncated to 2000 characters
+    /// each; this leaves the saved conversation untouched. The returned string
+    /// explicitly labels the content as historical data, not executable commands
+    /// or current permissions.
     pub fn previous_context(&self) -> String {
         let entries = self
             .entries
@@ -166,6 +169,8 @@ pub fn conversation_title(prompt: &str) -> String {
 }
 
 impl AssistantHistory {
+    /// Replace the snapshot with this conversation ID, then sort newest first.
+    /// This changes in-memory history only; project Save persists the snapshots.
     pub fn upsert(&mut self, conversation: Conversation) {
         self.conversations.retain(|c| c.id != conversation.id);
         self.conversations.push(conversation);
@@ -181,6 +186,9 @@ impl AssistantHistory {
         });
     }
 
+    /// Retain the newest distinct completed snapshots for project serialization.
+    /// The runtime limit defaults to five; zero removes all saved snapshots.
+    /// Older on-disk history changes only when the project is saved again.
     pub fn prune_for_save(&mut self) {
         self.sort();
         let mut seen = std::collections::BTreeSet::new();

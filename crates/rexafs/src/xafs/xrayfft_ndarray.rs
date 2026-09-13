@@ -29,6 +29,24 @@ use crate::xafs::xafsutils::FTWindow;
 ///
 /// The sign and FFT normalization match the
 /// [NumPy convention](https://numpy.org/doc/stable/reference/routines.fft.html#normalization).
+///
+/// On the zero-origin uniform grid k_j=j*dk, let
+/// g_j=chi(k_j)*k_j^w*W(k_j), with w the integer k-weight and W the window.
+/// For N=`nfft`, dk=`kstep` in Å⁻¹ and i²=−1, the implementation is
+///
+/// ```text
+/// chi_R[m] = dk/sqrt(pi) * sum(j=0..N-1, g_j * exp(-2*pi*i*j*m/N))
+/// R[m]     = pi*m/(N*dk)
+/// ```
+///
+/// Zero padding supplies g_j=0 beyond the prepared data. R is in Å, and
+/// chi_R has units Å^(-(w+1)) when chi is dimensionless. This sum approximates
+/// the convention `1/sqrt(pi) * integral(chi(k)*k^w*W(k)*exp(-2*i*k*R), dk)`.
+/// The kernel's 2*k*R is the EXAFS path oscillation; scattering phase means an
+/// uncorrected peak R is not directly a bond length. See
+/// [Rehr and Albers (2000)](https://doi.org/10.1103/RevModPhys.72.621).
+/// Resolved automatic parameters are retained in this object, not recomputed
+/// from each new input; clear the relevant field to None or use fresh settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct XrayFFTF {
@@ -130,6 +148,8 @@ impl XrayFFTF {
     ///
     /// Prefer the validated transform method for public input. This lower-level
     /// helper indexes the supplied grid directly and can panic on an empty grid.
+    /// Only None fields are resolved; their resulting values remain stored when
+    /// later inputs change. Reset them to None to infer from a new grid.
     pub fn fill_parameter(&mut self, k: ArrayBase<ViewRepr<&f64>, Ix1>) -> &mut Self {
         if self.kweight.is_none() {
             self.kweight = Some(2.0);
@@ -443,6 +463,22 @@ impl XrayFFTF {
 /// the forward weighted/windowed signal, not unweighted chi. This real-output
 /// convention differs from Larch's complex analytic inverse.
 ///
+/// For unchanged transform length N and sample spacing dk in Å⁻¹, let
+/// `H_m=chi_R[m]*W_R(R_m)*R_m^u`, where u is the floored nonnegative R-weight.
+/// The full N-bin sum includes the conjugate-symmetric negative frequencies:
+///
+/// ```text
+/// chi_q[j] = sqrt(pi)/(N*dk) * sum(m=0..N-1, H_m * exp(2*pi*i*j*m/N))
+/// q[j]     = j*dk
+/// ```
+///
+/// q is in Å⁻¹ and chi_q has units Å^(u-w), where w was the forward k-weight.
+/// With zero R-weight and an all-pass window, this recovers the forward
+/// weighted/windowed input. A shell-selecting window discards information;
+/// it does not undo absorption normalization or background removal.
+/// Inferred kstep is stored. After changing nfft or the input R spacing, set
+/// kstep=None or construct fresh settings before recalculating.
+///
 /// Change settings through `Spectrum::set_ifft` to invalidate dependent caches.
 /// Direct field mutation requires an explicit `xftr` call.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -511,6 +547,8 @@ impl XrayFFTR {
     ///
     /// Prefer the validated transform method for public input. This lower-level
     /// helper indexes the supplied grid directly and can panic on an empty grid.
+    /// Only None fields are resolved; their resulting values remain stored when
+    /// later inputs change. Reset them to None to infer from a new grid.
     pub fn fill_parameter(&mut self, r: ArrayBase<ViewRepr<&f64>, Ix1>) -> &mut Self {
         if self.rweight.is_none() {
             self.rweight = Some(0.0);
@@ -544,6 +582,10 @@ impl XrayFFTR {
         self
     }
 
+    /// Validate inverse settings and allocate `(filtered_coefficients, R_filter)`.
+    /// The filter includes `R.powf(rweight)` and all positive-frequency bins,
+    /// independently of the displayed R length. Only unset settings are
+    /// resolved; no inverse signal is calculated or cached by this step.
     pub fn xftr_prep(
         &mut self,
         r: ArrayBase<ViewRepr<&f64>, Ix1>,

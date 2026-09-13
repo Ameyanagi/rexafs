@@ -229,6 +229,9 @@ make different window families equivalent. See the
 `XrayFFTF` defaults to `nfft=2048` and automatic `kstep`, which uses the first
 input spacing. The usual `kstep=0.05` Å⁻¹ comes from AUTOBK's default output
 grid. Together these give adjacent R samples approximately **0.03068 Å** apart.
+Resolved settings are retained after calculation: automatic does not mean
+continuously linked to a later background grid. Assign a fresh `XrayFFTF` (or
+clear its `kstep` in the lower-level Rust API) when the input spacing changes.
 Increasing `nfft` by adding zeros makes this display grid finer while preserving
 amplitudes at shared R samples. It does not add experimental information or
 resolve arbitrarily close shells.
@@ -271,7 +274,9 @@ Choose `rmin` and `rmax` for the shell region of interest, and use `dr`/`dr2`
 to control its window. `qmax_out` limits the returned q range. If inverse
 `nfft` differs from the forward length, the implementation resizes the real
 Fourier spectrum and infers the consistent q spacing from R; leave `kstep`
-automatic unless you deliberately supply a compatible value. See
+automatic unless you deliberately supply a compatible value. Once inferred,
+that value is retained; assign fresh `XrayFFTR` settings or reset its kstep to
+None when changing the inverse length or input R spacing. See
 [inverse_fft.rs](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs/src/xafs/inverse_fft.rs).
 
 ## What processing does not establish

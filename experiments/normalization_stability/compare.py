@@ -23,6 +23,13 @@ The four models are:
 
 Only observations inside the selected pre-edge and post-edge windows enter a
 fit.  No observations in the edge/XANES gap are fitted.
+
+Energies and window offsets are in eV. Fits use unweighted linear least squares
+with numpy.linalg.lstsq(..., rcond=None); the candidate constraints are properties
+of this prototype, not established physical continuity laws. The adjacent
+README.md defines the models and metrics and links the production theory.
+Numerical solve reference:
+https://numpy.org/doc/stable/reference/generated/numpy.linalg.lstsq.html
 """
 
 from __future__ import annotations
@@ -52,6 +59,13 @@ METHOD_LABELS = {
 
 @dataclass(frozen=True)
 class Dataset:
+    """Measured energy/absorption arrays and a fixed edge energy in eV.
+
+    source records a repository-relative provenance path. Absorption may have
+    arbitrary measurement units; normalized outputs are dimensionless. The
+    frozen dataclass prevents field reassignment, not mutation of its arrays.
+    """
+
     key: str
     label: str
     source: str
@@ -66,6 +80,12 @@ class Dataset:
 
 @dataclass(frozen=True)
 class Window:
+    """Pre/post fit endpoints expressed as eV offsets from Dataset.e0.
+
+    _regions maps these offsets to end-exclusive sample slices. The edge gap
+    between the two regions is not fitted.
+    """
+
     pre_start: float
     pre_end: float
     post_start: float
@@ -74,6 +94,14 @@ class Window:
 
 @dataclass
 class FitResult:
+    """Fitted baselines, step, normalized curves, and continuity diagnostics.
+
+    Baselines, edge_step and model coefficients have the input absorption units.
+    norm and flat are dimensionless; slopes and derivative_jump are absorption
+    units per eV. Baseline/curve arrays cover the full input energy grid. These
+    results contain no parameter covariance or measurement-noise estimate.
+    """
+
     edge_step: float
     pre_edge: FloatArray
     post_edge: FloatArray
@@ -90,6 +118,8 @@ class FitResult:
 
 @dataclass(frozen=True)
 class Sweep:
+    """Named collection of endpoint combinations for a window-sensitivity study."""
+
     key: str
     label: str
     windows: tuple[Window, ...]
@@ -103,6 +133,14 @@ def _load_table(path: Path) -> FloatArray:
 
 
 def load_datasets(repo_root: Path) -> list[Dataset]:
+    """Load retained Ru QAS and Cu foil fixtures with fixed reference E0 values.
+
+    Ru absorption is the natural logarithm of columns I0/It; Cu absorption is
+    read directly from the fixture's second column. These data are reused for
+    comparing candidate models, not synthetic truth for a baseline. No library
+    normalization or automatic edge finder is called here. File/parse errors
+    propagate from NumPy.
+    """
     testfiles = repo_root / "crates/rexafs/tests/testfiles"
 
     ru_path = testfiles / "Ru_QAS.dat"
@@ -145,7 +183,13 @@ def _nearest_index(values: FloatArray, target: float) -> int:
 
 
 def _rust_style_slice(energy: FloatArray, start: float, end: float) -> slice:
-    """Match the end-exclusive index convention in normalization.rs."""
+    """Map eV boundaries using the prototype's retained end-exclusive convention.
+
+    Start at the last sample no greater than start, or index zero. Stop before
+    the nearest sample to end; _nearest_index breaks a tie toward the earlier
+    sample. This can include a point below the requested lower boundary. Raise
+    ValueError if the resulting slice is empty.
+    """
 
     first = max(0, int(np.searchsorted(energy, start, side="right")) - 1)
     last = _nearest_index(energy, end)
@@ -177,7 +221,7 @@ def _victoreen_basis(energy: FloatArray, e0: float) -> FloatArray:
     """Return a well-scaled basis for a/E^3 + b/E^4.
 
     Using (E0/E)^3 and (E0/E)^4 keeps the fitted coefficients near the scale
-    of mu without changing the classical two-term Victoreen curve.
+    of mu without changing the two-term curve chosen for this experiment.
     """
 
     ratio = e0 / energy
@@ -203,6 +247,13 @@ def _finish_fit(
     post_slope_at_e0: float,
     coefficients: Iterable[float],
 ) -> FitResult:
+    """Build dimensionless normalized/flattened outputs on the measured grid.
+
+    Normalize as (mu - pre_edge)/edge_step. From the sample nearest E0 onward,
+    flat instead uses (mu - post_edge)/edge_step + 1; earlier flat samples retain
+    norm. Reject nonfinite steps and steps <= 1e-12 absorption units. Baseline
+    arrays are retained by reference; norm and flat are newly allocated arrays.
+    """
     if not np.isfinite(edge_step) or edge_step <= 1.0e-12:
         raise ValueError(f"invalid edge step: {edge_step}")
 
@@ -224,7 +275,12 @@ def _finish_fit(
 
 
 def fit_current(dataset: Dataset, window: Window) -> FitResult:
-    """Independent Victoreen pre-edge and quadratic post-edge fits."""
+    """Fit independent two-term pre-edge and quadratic post-edge baselines.
+
+    ``current`` is a historical model label, not the current Rust normalization
+    implementation. Each selected region receives a separate unweighted solve;
+    the fitted edge step is the post-minus-pre baseline difference at E0.
+    """
 
     pre, post, x = _regions(dataset, window)
     x_post = x[post]
@@ -255,13 +311,15 @@ def fit_current(dataset: Dataset, window: Window) -> FitResult:
 def fit_c1_anchored(dataset: Dataset, window: Window) -> FitResult:
     """Preserve the Victoreen pre-edge, then optimize step and post curvature.
 
-    With x = (E-E0)/1000, the model is
+    With E and E0 in eV and dimensionless x = (E-E0)/(1000 eV), the model is
 
         pre:  V(E) = a3*(E0/E)^3 + a4*(E0/E)^4
         post: V(E) + step + a2*x^2
 
     so subtracting ``step`` from the post-edge model makes its value and first
-    derivative match the Victoreen curve exactly at E0.
+    derivative match the pre-edge curve at E0. All fitted coefficients have
+    absorption units. Fit a3/a4 only to the pre-edge observations, then hold them
+    fixed while fitting step/a2 to the post-edge observations.
     """
 
     pre, post, x = _regions(dataset, window)
@@ -292,7 +350,13 @@ def fit_c1_anchored(dataset: Dataset, window: Window) -> FitResult:
 
 
 def fit_c1_joint(dataset: Dataset, window: Window) -> FitResult:
-    """Joint least-squares fit of the same hard C1-continuous model."""
+    """Fit all four coefficients of the C1 model to both regions together.
+
+    The pre-edge is V(E); the post-edge is V(E) + step + curvature*x**2, with
+    dimensionless x defined in fit_c1_anchored. After subtracting step, values
+    and slopes meet at E0. Each observation has equal weight, so the region with
+    more samples contributes more residual terms. No noise weights are fitted.
+    """
 
     pre, post, x = _regions(dataset, window)
     x_post = x[post]
@@ -330,7 +394,14 @@ def fit_c1_joint(dataset: Dataset, window: Window) -> FitResult:
 
 
 def fit_shared_polynomial(dataset: Dataset, window: Window) -> FitResult:
-    """One quadratic baseline for both regions plus a post-edge step."""
+    """Fit one quadratic baseline and a constant post-edge offset jointly.
+
+    The shared polynomial is intercept + slope*x + curvature*x**2 with
+    dimensionless x = (E-E0)/(1000 eV). A fourth coefficient adds step only to
+    post-edge observations. All observations have equal weight and all four
+    coefficients have absorption units. Sharing curvature is a prototype
+    assumption; a good fit does not establish a physically correct background.
+    """
 
     pre, post, x = _regions(dataset, window)
     x_pre = x[pre]
@@ -372,6 +443,13 @@ FIT_METHODS: dict[str, Callable[[Dataset, Window], FitResult]] = {
 
 
 def make_sweeps(dataset: Dataset) -> list[Sweep]:
+    """Return two factorial sweeps of pre/post endpoints relative to E0 in eV.
+
+    Five choices per endpoint give 625 windows per sweep for the included data.
+    The first sweep drops post-end choices beyond the dataset's available span;
+    the second chooses five ends from max(300 eV, 40% of that span) to its end.
+    This deterministic sensitivity grid is not a random uncertainty sample.
+    """
     pre_starts = (-200.0, -180.0, -160.0, -140.0, -120.0)
     pre_ends = (-90.0, -75.0, -65.0, -50.0, -35.0)
     post_starts = (25.0, 50.0, 75.0, 100.0, 150.0)
@@ -406,7 +484,11 @@ def make_sweeps(dataset: Dataset) -> list[Sweep]:
 
 
 def nominal_window(dataset: Dataset) -> Window:
-    # Mirrors the current automatic/default regions for these files.
+    """Use the experiment's reference windows, independent of library defaults.
+
+    The pre-edge range is [-200, -65] eV relative to E0; the post-edge range is
+    [25 eV, last measured energy - E0]. Sample boundaries use _regions.
+    """
     return Window(-200.0, -65.0, 25.0, float(dataset.relative_energy[-1]))
 
 
@@ -428,6 +510,15 @@ def analyze_sweep(
     dataset: Dataset,
     sweep: Sweep,
 ) -> tuple[dict[str, dict[str, float | int]], list[dict[str, float | str]]]:
+    """Summarize window sensitivity and return successful per-window records.
+
+    SD uses population normalization (ddof=0) across successful fits. Failed
+    windows are counted and omitted; all failures for a model raise RuntimeError.
+    Curve spread is RMS pointwise SD, over 0 to at most 800 eV above E0 for norm
+    and 50 to at most 800 eV for flat. Neither spread is a confidence interval.
+    Baseline RMSE is evaluated on common regions, divided by each fit's positive
+    step, and summarized by its median. README.md defines the full equations.
+    """
     pre_eval, post_eval = _evaluation_slices(dataset, sweep)
     upper_curve_energy = min(800.0, max(window.post_end for window in sweep.windows))
     norm_eval = (dataset.relative_energy >= 0.0) & (
@@ -515,6 +606,11 @@ def nominal_results(dataset: Dataset) -> dict[str, FitResult]:
 
 
 def self_check(datasets: list[Dataset]) -> None:
+    """Require derivative jumps <= 1e-14 absorption units/eV at nominal windows.
+
+    This checks the three constrained model implementations only; it does not
+    establish physical continuity or audit every perturbed window fit.
+    """
     # The constrained models must be C1 to floating-point precision.
     for dataset in datasets:
         window = nominal_window(dataset)
@@ -653,6 +749,14 @@ def write_report(path: Path, payload: dict[str, object]) -> None:
 
 
 def write_interactive_example(path: Path, datasets: list[Dataset]) -> None:
+    """Write a standalone browser comparison using the local HTML template.
+
+    Embed measured points with relative energies rounded to four decimal places
+    in eV and absorption rounded to eight decimal places. This compact display
+    payload does not replace the full-precision arrays used for report metrics.
+    The template must contain exactly one spectra marker or RuntimeError is
+    raised. An existing output file is overwritten.
+    """
     template_path = Path(__file__).resolve().parent / "interactive-template.html"
     template = template_path.read_text(encoding="utf-8")
     marker = "/*__SPECTRA__*/"
@@ -678,6 +782,13 @@ def write_interactive_example(path: Path, datasets: list[Dataset]) -> None:
 
 
 def run(repo_root: Path, output_dir: Path) -> dict[str, object]:
+    """Run both measured datasets and write JSON, CSV, Markdown and HTML outputs.
+
+    Return the same summary payload written to summary.json. The directory is
+    created as needed and existing named outputs are overwritten; use a separate
+    output directory to preserve archived evidence. Model/input/file errors
+    propagate, with per-window fit failures handled by analyze_sweep.
+    """
     datasets = load_datasets(repo_root)
     self_check(datasets)
 

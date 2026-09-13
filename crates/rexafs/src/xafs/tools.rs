@@ -21,9 +21,12 @@
 //!
 //! # Semantics where Athena and Larch differ
 //!
-//! * Rebinning follows Athena's default region boundaries and steps
-//!   (pre-edge 10 eV up to E0−30, XANES 0.5 eV up to E0+50, EXAFS 0.05 Å⁻¹)
-//!   and Larch's grid construction (three segments, EXAFS uniform in k).
+//! * Rebinning uses a conventional three-region scan, as described in the
+//!   [Athena rebinning guide](https://bruceravel.github.io/demeter/aug/process/rebin.html).
+//!   rexafs defaults to pre-edge steps of 10 eV up to E0−30, XANES steps of
+//!   0.5 eV up to E0+50, and EXAFS steps of 0.05 Å⁻¹. Like Larch, the EXAFS
+//!   region is uniform in k, but boundaries, steps and endpoint construction
+//!   are not guaranteed to match another program's defaults.
 //!   [`RebinMethod::Boxcar`] averages the raw points falling in each bin;
 //!   [`RebinMethod::Centroid`] also places the output energy at the centroid
 //!   of the raw points in the bin (Larch's "centroid" is instead an
@@ -80,7 +83,11 @@ fn check_pair(energy: &DVector<f64>, mu: &DVector<f64>, min: usize) -> Result<()
     Ok(())
 }
 
-/// Linear interpolation of `(x, y)` onto `xnew` (clamped at the ends).
+/// Copy paired `(x, y)` data onto `xnew` using piecewise linear interpolation.
+/// Queries beyond the input range receive endpoint values. Coordinates must use
+/// consistent units and `x` must be finite and strictly increasing. Requires at
+/// least two paired samples; length/interpolation errors return [`XAFSError`].
+/// This helper does not validate all finite-value assumptions or sort inputs.
 pub fn interp_linear(
     xnew: &DVector<f64>,
     x: &DVector<f64>,
@@ -95,7 +102,11 @@ pub fn interp_linear(
     })
 }
 
-/// Numerical derivative dμ/dE using central differences.
+/// Estimate dμ/dE by dividing centered sample-index differences of μ and E.
+/// Endpoints use one-sided differences. The output has input absorption units
+/// per eV. Spacings with absolute magnitude at most `1e-12` eV return zero.
+/// Supply equal-length finite arrays; this helper does not validate lengths and
+/// can panic when the energy vector is shorter. It does not smooth the data.
 pub fn dmude(energy: &DVector<f64>, mu: &DVector<f64>) -> DVector<f64> {
     let de = energy.gradient();
     let dm = mu.gradient();
@@ -108,7 +119,10 @@ pub fn dmude(energy: &DVector<f64>, mu: &DVector<f64>) -> DVector<f64> {
     })
 }
 
-/// Typical energy step of a grid: the median of the positive point spacings.
+/// Typical grid spacing in eV: the middle positive spacing, sorted ascending.
+/// For an even count, selects the upper middle value rather than averaging the
+/// middle pair. Returns [`TINY_ENERGY`] when no positive spacings exist. This
+/// low-level helper does not validate finite/sorted input.
 pub fn energy_step(energy: &DVector<f64>) -> f64 {
     let mut diffs: Vec<f64> = energy
         .as_slice()
@@ -146,9 +160,15 @@ fn smooth_vec(
     }
 }
 
-/// Smooth μ(E) by convolution with a Lorentzian, Gaussian or Voigt profile
-/// of width `sigma` (`gamma` = Lorentzian width of the Voigt; defaults to
-/// `sigma`). Thin wrapper around [`xafsutils::smooth`].
+/// Copy μ(E) smoothed by a Lorentzian, Gaussian or Voigt convolution.
+/// Widths are in eV: `sigma` is a Gaussian standard deviation or Lorentzian
+/// half width at half maximum; for Voigt, `sigma` is the Gaussian width and
+/// `gamma` the Lorentzian half width. Defaults are `sigma = 1.0` eV and
+/// `gamma = sigma`. The selected kernel is passed to [`xafsutils::smooth`],
+/// using the smallest input energy spacing for its intermediate uniform grid.
+/// Supply at least three finite, paired points with strictly increasing energy;
+/// insufficient points, mismatched lengths or an unusable spacing return errors.
+/// Smoothing retains absorption units and changes signal as well as noise.
 pub fn smooth_mu(
     energy: &DVector<f64>,
     mu: &DVector<f64>,
@@ -160,7 +180,9 @@ pub fn smooth_mu(
     smooth_vec(energy, mu, sigma, gamma, None, form)
 }
 
-/// Remove the (sorted, deduplicated) `indices` from `v`.
+/// Copy `v` while excluding the given zero-based indices.
+/// Indices may be unsorted or repeated; each valid index is removed once, and
+/// oversized indices are ignored. Remaining values retain their order.
 pub fn remove_indices(v: &DVector<f64>, indices: &[usize]) -> DVector<f64> {
     let mut keep = vec![true; v.len()];
     for &i in indices {
@@ -178,7 +200,9 @@ pub fn remove_indices(v: &DVector<f64>, indices: &[usize]) -> DVector<f64> {
 }
 
 /// Indices of the points of the sorted grid `energy` closest to each target
-/// energy (sorted, deduplicated).
+/// energy in eV; returned indices are sorted and deduplicated.
+/// Out-of-range targets select the nearest endpoint, ties select the lower index,
+/// and an empty energy grid returns no indices.
 pub fn nearest_indices(energy: &DVector<f64>, targets: &[f64]) -> Vec<usize> {
     let mut idx: Vec<usize> = targets
         .iter()
@@ -189,7 +213,9 @@ pub fn nearest_indices(energy: &DVector<f64>, targets: &[f64]) -> Vec<usize> {
     idx
 }
 
-/// Indices of the points of `energy` lying in `[lo, hi]` (inclusive).
+/// Indices of energy samples inside `[lo, hi]`, including both bounds, in eV.
+/// Reversed bounds are swapped. Indices retain input order, and the input grid
+/// does not need to be sorted for this operation.
 pub fn indices_in_range(energy: &DVector<f64>, lo: f64, hi: f64) -> Vec<usize> {
     let (lo, hi) = if lo <= hi { (lo, hi) } else { (hi, lo) };
     energy
@@ -244,9 +270,14 @@ pub fn derivative_max_energy(energy: &DVector<f64>, mu: &DVector<f64>) -> Result
 /// derivative maximum.
 ///
 /// The first derivative is smoothed with a Lorentzian of width `3·ΔE/2` in a
-/// window of ±75 points around the derivative maximum (mirroring `find_e0`),
-/// the second derivative is taken by central differences, and the sign change
-/// closest to the derivative maximum is interpolated linearly.
+/// window of up to ±75 points around the initial edge estimate. Here ΔE is
+/// [`energy_step`] in that window. The second derivative uses central differences;
+/// the nearest positive-to-negative crossing within four points of a locally
+/// refined derivative maximum is interpolated linearly. With fewer than five
+/// local points, returns the initial estimate; without a nearby crossing, returns
+/// the local maximum's energy. A failed smoothing step uses the unsmoothed first
+/// derivative. These fallback rules are rexafs choices, not a guaranteed physical
+/// edge definition. Inputs/output energies are in eV.
 pub fn second_derivative_zero_energy(
     energy: &DVector<f64>,
     mu: &DVector<f64>,
@@ -301,7 +332,14 @@ pub fn second_derivative_zero_energy(
 }
 
 /// Energy at which the flattened normalized spectrum `flat` first crosses 0.5
-/// on the rising edge around `e0`.
+/// on the rising edge around `e0`, with energies in eV.
+/// Searches down from the nearest E0 sample and then upward, interpolating the
+/// selected pair with a fraction clamped to [0, 1]. Assumes a meaningful rising
+/// edge normalized near zero/one. It does not prove a crossing is bracketed: a
+/// signal already above 0.5 at the first sample can return that endpoint. Returns
+/// an error if fewer than three paired points exist or the upward search runs
+/// beyond the last sample. Use [`XASSpectrum::edge_feature_energy`] to calculate
+/// a missing flattened spectrum automatically.
 pub fn half_step_energy(
     energy: &DVector<f64>,
     flat: &DVector<f64>,
@@ -337,13 +375,39 @@ pub fn half_step_energy(
 // Alignment
 // ---------------------------------------------------------------------------
 
-/// Find the energy shift `s` to add to `e_dat` so that `y_dat(E + s)` best
-/// overlays `y_ref(E)` (with a free multiplicative scale) over the reference
-/// points in `[lo, hi]`.
+/// Find an energy-axis shift `s` that overlays data onto the reference.
+/// Adding `s` to each `e_dat` coordinate means evaluating the original data at
+/// `E - s` for a reference coordinate `E`, not at `E + s`. The function minimizes
+/// `Σ[a * y_dat(E_j - s) - y_ref(E_j)]²` over selected reference samples `j`.
+/// The multiplicative scale `a` is solved analytically for each trial shift and
+/// is not returned. Both spectra must have compatible y units; energy coordinates,
+/// `lo`, `hi`, `search_range` and `coarse_step` are in eV.
 ///
 /// A coarse grid search over `±search_range` in steps of `coarse_step`, a fine
 /// search in steps of `coarse_step/10`, and a final parabolic refinement are
-/// used. Returns the shift in eV.
+/// used. Fine/refined trials may lie slightly outside the coarse search interval.
+/// `search_range` and `coarse_step` use their absolute values, with minimum coarse
+/// step `1e-4` eV. Interpolation holds endpoint values outside measured coverage.
+/// Requires at least three paired samples in each input and three selected
+/// reference points. Use finite, sorted grids; no spectrum is mutated. The
+/// returned shift is in eV, and no uncertainty estimate is calculated.
+/// The squared-residual criterion follows ordinary least squares; see the
+/// [NIST least-squares reference](https://www.itl.nist.gov/div898/handbook/pmd/section4/pmd431.htm).
+/// The interpolation, search grid and refinement are rexafs implementation choices.
+///
+/// ```
+/// use nalgebra::DVector;
+/// use rexafs::tools::find_energy_shift;
+/// let reference_energy = DVector::from_iterator(401, (0..401).map(|i| 8900.0 + i as f64 * 0.5));
+/// let signal = reference_energy.map(|e| (-((e - 9000.0) / 3.0).powi(2)).exp());
+/// let shifted_energy = reference_energy.add_scalar(2.0);
+/// let correction = find_energy_shift(
+///     &shifted_energy, &signal, &reference_energy, &signal,
+///     8990.0, 9010.0, 10.0, 0.1,
+/// )?;
+/// assert!((correction + 2.0).abs() < 1e-8); // Add -2 eV to the shifted axis.
+/// # Ok::<(), rexafs::Error>(())
+/// ```
 #[allow(clippy::too_many_arguments)]
 pub fn find_energy_shift(
     e_dat: &DVector<f64>,
@@ -425,6 +489,10 @@ pub fn find_energy_shift(
 /// Athena's margin deglitch: fit a straight line to μ(E) over `[e_lo, e_hi]`
 /// and return the indices of the points in that range lying more than
 /// `upper_margin` above or `lower_margin` below the line (in μ units).
+/// Energy bounds are in eV and swapped when reversed; margins use absolute values.
+/// Requires at least two paired/selected points and a nondegenerate fitted interval.
+/// Returns zero-based indices without modifying the input. A large genuine edge
+/// or peak can exceed these margins, so select a locally appropriate interval.
 pub fn margin_outliers(
     energy: &DVector<f64>,
     mu: &DVector<f64>,
@@ -475,25 +543,27 @@ pub enum RebinMethod {
     Centroid,
 }
 
-/// Configuration of the three-region rebinning grid (Athena defaults).
+/// Configuration of the three-region rebinning grid.
 ///
 /// All boundaries are relative to `e0`. Pre-edge: `[E_min, pre_end)` in steps
 /// of `pre_step`; XANES: `[pre_end, xanes_end)` in steps of `xanes_step`;
 /// EXAFS: `[xanes_end, E_max)` uniform in k with `exafs_kstep`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct RebinConfig {
-    /// Edge energy. `None` → determined with `find_e0`.
+    /// Edge energy in eV. Default `None` lets [`rebin`] estimate it with `find_e0`.
+    /// [`XASSpectrum::rebin`] first reuses the spectrum's E0 when available.
     pub e0: Option<f64>,
-    /// Pre-edge step (eV). Athena default 10.
+    /// Pre-edge step (eV). Default: 10.
     pub pre_step: f64,
-    /// End of the pre-edge region relative to e0 (eV). Athena default −30.
+    /// End of the pre-edge region relative to e0 (eV). Default: −30.
     pub pre_end: f64,
-    /// XANES step (eV). Athena default 0.5.
+    /// XANES step (eV). Default: 0.5.
     pub xanes_step: f64,
-    /// End of the XANES region relative to e0 (eV). Athena default +50.
+    /// End of the XANES region relative to e0 (eV). Default: +50.
     pub xanes_end: f64,
-    /// EXAFS step in k (Å⁻¹). Athena default 0.05.
+    /// EXAFS step in k (Å⁻¹). Default: 0.05.
     pub exafs_kstep: f64,
+    /// Bin averaging/energy-placement policy. Default: `Boxcar` on the nominal grid.
     pub method: RebinMethod,
 }
 
@@ -514,7 +584,9 @@ impl Default for RebinConfig {
 /// Result of [`rebin`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct RebinOutput {
+    /// Owned output energy coordinates in eV, after the selected bin-placement policy.
     pub energy: DVector<f64>,
+    /// Owned bin means or interpolated values, in the input absorption units.
     pub mu: DVector<f64>,
     /// Sample standard deviation of the raw points in each bin (0 when the
     /// bin holds fewer than two points).
@@ -523,7 +595,13 @@ pub struct RebinOutput {
     pub e0: f64,
 }
 
-/// Build the nominal rebin grid (absolute energies) for the given data range.
+/// Build an owned nominal energy grid in eV within `emin`/`emax`.
+/// The explicit `e0` argument sets the energy reference; `cfg.e0` is ignored by
+/// this grid-only helper. Region endpoints are clipped to data coverage and
+/// adjusted to stay ordered. Positive steps are recommended; the implementation
+/// takes absolute values, with minimum energy step [`TINY_ENERGY`] and minimum
+/// k step `1e-4` Å⁻¹. The final endpoint is excluded. Invalid/non-finite settings
+/// are not comprehensively checked by this low-level constructor.
 pub fn rebin_grid(emin: f64, emax: f64, cfg: &RebinConfig, e0: f64) -> Vec<f64> {
     let rmin = emin - e0;
     let rmax = emax - e0;
@@ -695,10 +773,13 @@ pub enum MergeWeight {
     /// Plain average.
     #[default]
     Equal,
-    /// Athena "importance" weights, one per member.
+    /// Relative nonnegative, finite importance weights, one per member.
+    /// Their sum must be positive; they are not interpreted as repeat counts.
     Importance(Vec<f64>),
     /// Weight each member by `1/σ²`, where σ is the standard deviation of μ
-    /// around a straight line fitted in the pre-edge noise region.
+    /// around a straight line fitted in the pre-edge noise region. A floor of
+    /// `1e-12` in absorption units prevents division by zero. This estimates one
+    /// weight per spectrum rather than an independent weight for each energy.
     NoiseInverse,
 }
 
@@ -732,7 +813,15 @@ fn working_arrays(s: &XASSpectrum) -> Result<(&DVector<f64>, &DVector<f64>), XAF
 }
 
 /// Standard deviation of μ around a straight line fitted in the pre-edge
-/// region `[e0 + region.0, e0 + region.1]`.
+/// region `[e0 + region.0, e0 + region.1]`, with all energy values in eV.
+/// Fits `mu(E) = a + b E`, then returns `sqrt(Σ residual² / (n - 2))`, where
+/// `n` counts selected samples and the two fitted coefficients consume two
+/// degrees of freedom; see the [NIST residual standard deviation](https://www.itl.nist.gov/div898/handbook/pmd/section4/pmd431.htm).
+/// The result retains absorption units. Requires at least
+/// three selected points and a nondegenerate energy range. The caller must
+/// supply paired finite arrays; this helper does not validate their full lengths.
+/// This estimates variation around a line, not photon-counting uncertainty or
+/// necessarily stationary noise across the full spectrum.
 pub fn pre_edge_noise(
     energy: &DVector<f64>,
     mu: &DVector<f64>,

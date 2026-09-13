@@ -10,29 +10,33 @@ Energy is in **eV**, k/q in **Å⁻¹**, and R in **Å**.
 ## Install
 
 We recommend [uv](https://docs.astral.sh/uv/getting-started/installation/) to
-create an isolated Python environment and install rexafs. CPython 3.10–3.14
-is supported; this example chooses Python 3.12 and the stable package:
+manage an analysis project's Python version, dependencies and commands.
+CPython 3.10–3.14 is supported; start a Python 3.12 project with the stable
+package:
 
 ```bash
-uv venv --python 3.12
-uv pip install rexafs==0.2.4
-# macOS/Linux:
-source .venv/bin/activate
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-python -c "import rexafs; print(rexafs.__version__)"
+uv init --python 3.12 rexafs-analysis
+cd rexafs-analysis
+uv add rexafs==0.2.4 numpy
+uv run python -c "import rexafs; print(rexafs.__version__)"
 ```
 
+`uv add` records dependencies in `pyproject.toml` and resolves their versions in
+`uv.lock`. `uv run` uses the project's `.venv` automatically; no shell activation
+is needed. Commit `pyproject.toml`, `.python-version` and `uv.lock` with your
+analysis, and leave `.venv` out of version control. NumPy is listed explicitly
+because the examples import it. See [uv's project guide](https://docs.astral.sh/uv/guides/projects/).
+
 [PyPI](https://pypi.org/project/rexafs/) provides platform wheels. Rust is needed
-only when building from source. NumPy is installed as a dependency. See
-[uv's environment guide](https://docs.astral.sh/uv/pip/environments/) for
-environment selection. If you already use pip, the equivalent install in an
-activated environment is `python -m pip install rexafs==0.2.4`.
+only when building rexafs from source.
 
 **Version note:** keyword constructors, direct configuration setters and
 `XrayFFTR` below are additions after 0.2.4. Until released, install this checkout
 using [Build from source](#build-from-source). The basic example works in 0.2.4.
 
 ## Load and process a spectrum
+
+Save this as `analyze.py` inside the project, beside your data file:
 
 ```python
 import numpy as np
@@ -44,6 +48,9 @@ spectrum = Spectrum(data[:, 0], data[:, 1]).fft()
 r, magnitude = spectrum.r(), spectrum.chir_mag()
 print(spectrum.e0(), r, magnitude)
 ```
+
+Run it with `uv run python analyze.py`. In your editor, select the Python
+interpreter from this project's `.venv` for completion and hover help.
 
 For QAS transmission files, `rexafs.io.read_qas_transmission(path)` returns a
 Spectrum using `mu = ln(I0 / It)`, the natural logarithm of incident intensity
@@ -58,9 +65,12 @@ from rexafs import io
 spectrum = io.read_qas_transmission("Ru_QAS.dat").fft()
 ```
 
-File/parse failures raise `RuntimeError`. The reader does not enforce positive
-intensities or sort energies; invalid derived data are rejected when a processing
-stage runs. Check the raw intensities and energy ordering before analysis.
+File/parse failures raise `RuntimeError`. The reader sorts energy and calculated
+mu together when needed, retaining duplicate energy rows. It does not enforce
+positive intensities or finite ratios; processing rejects non-finite data, and
+duplicates can require cleanup for the selected numerical stage. Check the raw
+intensities before analysis. The array constructor instead rejects unordered
+or duplicate energy values.
 
 `normalize()`, `calc_background()`, `fft()` and `ifft()` return the same spectrum.
 Missing prerequisite stages run automatically. Results are copied NumPy float64
@@ -106,6 +116,25 @@ later requires calling the setter again. `set_e0(eV)` clears normalization and
 all later results; `set_fft()` preserves chi(k); `set_ifft()` preserves chi(R).
 Calling a stage explicitly recomputes it. See the [shared API guide](../doc/api.md).
 
+Some automatic values, including fit ranges and FFT spacings, are retained inside
+the spectrum on subsequent calls; clearing results does not reset them to `None`.
+AUTOBK's automatic `kmax` and `nknots` are instead calculated from each input.
+The original settings
+object remains unchanged. For example, after changing the background k spacing,
+reassign forward and inverse settings so their automatic spacings are inferred
+again:
+
+```python
+# Source checkout after 0.2.4; continue with the spectrum above.
+spectrum.set_background_method(AUTOBK(kstep=0.1))
+spectrum.set_fft(XrayFFTF(kstep=None))
+spectrum.set_ifft(XrayFFTR(kstep=None)).ifft()
+```
+
+Apply the same principle to a new scan with a different normalization range:
+reassign fresh automatic normalization settings instead of retaining the prior
+scan's resolved bounds. The generated member help explains these choices.
+
 ## What the calculations mean
 
 Normalization subtracts a fitted pre-edge baseline and divides absorption by
@@ -129,7 +158,7 @@ when interpreting structural fits and uncertainties.
 ## Completion, hover help and errors
 
 The installed package includes `py.typed`, annotated `.pyi` files and native
-runtime docstrings. Select the environment containing rexafs in your editor
+runtime docstrings. Select the project's `.venv` interpreter in your editor
 (Pylance/Pyright, for example). Hover over parameters for units, defaults and
 behavior; `help(AUTOBK)` and `help(Spectrum.fft)` also work in a terminal.
 `FTWindow`, `FFTGrid`, `AUTOBKSolver` and `AUTOBKClampScalePolicy` are Literal
@@ -141,7 +170,10 @@ is `rexafs`; `_core` is an implementation detail.
 
 ## Build from source
 
-From the repository root, with the pinned Rust toolchain installed:
+From the repository root, with the pinned Rust toolchain installed, use an
+isolated build environment. This development workflow uses `uv venv` and
+`uv run --no-project` so installing the local extension does not change the
+library's dependency manifest with analysis-project dependencies:
 
 ```bash
 uv venv --python 3.14

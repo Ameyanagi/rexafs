@@ -250,8 +250,8 @@ macro_rules! athena_params {
     ($( $(#[$doc:meta])* $field:ident : $ty:ty => $key:literal ),* $(,)?) => {
         /// Typed view of the Athena per-group parameters we understand.
         ///
-        /// Every field is optional: `None` means the key was absent from the
-        /// file (or is unknown for a freshly created group). Unknown keys are
+        /// Every field is optional: `None` means the key was absent, could not be
+        /// parsed as that field's type, or is unset in a new group. Unknown keys are
         /// kept verbatim in [`AthenaGroup::args`].
         #[derive(Debug, Clone, Default, PartialEq)]
         pub struct AthenaParams {
@@ -262,7 +262,8 @@ macro_rules! athena_params {
             /// Athena key for each typed field, in declaration order.
             pub const KEYS: &'static [&'static str] = &[ $( $key ),* ];
 
-            /// Build the typed view from a raw args list.
+            /// Build the typed view from a raw args list without changing it.
+            /// Keys match exactly and case-sensitively; the first duplicate wins.
             pub fn from_args(args: &[(String, AthenaValue)]) -> Self {
                 Self {
                     $( $field: lookup(args, $key).and_then(<$ty as ParamValue>::from_value), )*
@@ -270,6 +271,8 @@ macro_rules! athena_params {
             }
 
             /// Write every `Some` field back into `args`.
+            /// `None` leaves the existing raw argument intact; it does not remove
+            /// that key. Equal values retain their original text and quote style.
             pub fn apply_to_args(&self, args: &mut Vec<(String, AthenaValue)>) {
                 $( if let Some(v) = &self.$field { apply(args, $key, v); } )*
             }
@@ -362,7 +365,9 @@ athena_params! {
 // Window names
 // ---------------------------------------------------------------------------
 
-/// Map an Athena window name to our [`FTWindow`].
+/// Map an Athena window name to [`FTWindow`], ignoring outer whitespace and case.
+/// Unknown names return `None`; `kaiser`, `kaiser-bessel`, `kaiserbessel` and `kb`
+/// all select the Kaiser–Bessel window.
 pub fn window_from_name(name: &str) -> Option<FTWindow> {
     match name.trim().to_ascii_lowercase().as_str() {
         "hanning" => Some(FTWindow::Hanning),
@@ -376,7 +381,7 @@ pub fn window_from_name(name: &str) -> Option<FTWindow> {
     }
 }
 
-/// Athena window name for an [`FTWindow`].
+/// Return the canonical lowercase Athena name for an [`FTWindow`].
 pub fn window_name(window: FTWindow) -> &'static str {
     match window {
         FTWindow::Hanning => "hanning",
@@ -419,17 +424,19 @@ pub struct AthenaGroup {
 }
 
 impl AthenaGroup {
-    /// Raw value of an arg.
+    /// Borrow the first raw argument with this exact, case-sensitive key.
+    /// Missing keys return `None`; typed parameter edits are not consulted.
     pub fn arg(&self, key: &str) -> Option<&AthenaValue> {
         lookup(&self.args, key)
     }
 
-    /// Scalar text of an arg.
+    /// Borrow scalar text from [`Self::arg`]; missing keys and arrays return `None`.
     pub fn arg_str(&self, key: &str) -> Option<&str> {
         self.arg(key).and_then(AthenaValue::as_str)
     }
 
-    /// Numeric value of an arg.
+    /// Parse a raw scalar argument as f64; missing, array or unparseable values
+    /// return `None`. A parsed non-finite float is not rejected here.
     pub fn arg_f64(&self, key: &str) -> Option<f64> {
         self.arg(key).and_then(AthenaValue::as_f64)
     }
@@ -585,9 +592,15 @@ impl AthenaGroup {
 
     /// Build an Athena record from an [`XASSpectrum`].
     ///
-    /// The raw energy/mu arrays become `@x`/`@y`; normalization, AUTOBK and
-    /// FFT settings are translated to Athena keys; everything else gets
-    /// Athena defaults so that Athena and Larch can open the file.
+    /// Each raw energy/mu array is preferred, falling back to its working array
+    /// when absent. The selected arrays are copied to `@x`/`@y`; missing arrays
+    /// or unequal lengths return errors. No processing stage is run.
+    ///
+    /// The supported normalization, AUTOBK and Fourier settings are translated
+    /// to Athena keys; other required arguments receive the exporter's Athena
+    /// defaults. This is interchange of data and selected settings, not a full
+    /// result archive: detector channels, fitted curves and `mu_stddev` are not
+    /// exported. `tag` supplies the record key and the fallback display label.
     pub fn from_spectrum(spectrum: &XASSpectrum, tag: &str) -> Result<AthenaGroup, IOError> {
         let energy = spectrum
             .raw_energy
@@ -1016,7 +1029,9 @@ impl AthenaProject {
         out
     }
 
-    /// Build a project from spectra, one group per spectrum.
+    /// Build a project from spectra in slice order, with one generated tag per
+    /// spectrum and conversion rules from [`AthenaGroup::from_spectrum`].
+    /// Returns the first export error without changing any input spectrum.
     pub fn from_spectra(spectra: &[XASSpectrum]) -> Result<Self, IOError> {
         let mut project = Self::new();
         for (index, spectrum) in spectra.iter().enumerate() {
@@ -1028,12 +1043,14 @@ impl AthenaProject {
         Ok(project)
     }
 
-    /// Convert every group to an [`XASSpectrum`].
+    /// Convert every group to an owned [`XASSpectrum`] in project order.
+    /// Uses [`AthenaGroup::to_spectrum`] and returns its first error; a partial
+    /// result list is not returned and the project is unchanged.
     pub fn to_spectra(&self) -> Result<Vec<XASSpectrum>, XAFSError> {
         self.groups.iter().map(AthenaGroup::to_spectrum).collect()
     }
 
-    /// Group lookup by label.
+    /// Borrow the first group with an exact, case-sensitive label, or `None`.
     pub fn group_by_label(&self, label: &str) -> Option<&AthenaGroup> {
         self.groups.iter().find(|g| g.label == label)
     }

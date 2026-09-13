@@ -54,7 +54,8 @@
 //! `amcsd` enables a local structure catalog; `materials-project` and `cod` enable
 //! online sources through the shared `http` feature. `ndarray-compat` selects the
 //! historical ndarray implementation instead of the default nalgebra path.
-//! An all-features reference lists APIs that may need extra platform dependencies.
+//! Optional backends may need extra platform dependencies. Enabling every feature
+//! also selects `ndarray-compat`, so it does not describe the default numerical backend.
 //!
 //! See the [user guide](https://rexafs.com/docs/libraries/rust/) and
 //! [processing theory](https://rexafs.com/docs/science/processing/) for workflows

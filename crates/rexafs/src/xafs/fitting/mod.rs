@@ -21,16 +21,25 @@
 //! [Larch's path reference](https://xraypy.github.io/xraylarch/xafs_feffpaths.html)
 //! explains the related path-parameter convention.
 
+/// Convenience builder for prepared spectra, paths, and shared fit parameters.
 pub mod builder;
+/// Typed errors from model evaluation, fitting, files, and scattering backends.
 pub mod errors;
+/// Mathematical expressions used to constrain path and fit parameters.
 pub mod expression;
+/// Parsing of supported FEFF path columns, metadata, and atom geometry.
 pub mod feffdat;
 pub mod path_model;
+/// Backend execution and collection of generated scattering-path files.
 pub mod runner;
+/// Joint and independent nonlinear least-squares fits and result statistics.
 pub mod solver;
 pub mod template;
+/// Weighted k/R/q representations, noise divisors, and fit residuals.
 pub mod transform;
+/// Configuration, path-parameter, backend, and fit-result data structures.
 pub mod types;
+/// Named variable resolution, parameter vectors, and expression dependencies.
 pub mod variables;
 
 use nalgebra::DVector;

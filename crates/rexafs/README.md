@@ -88,6 +88,10 @@ Licensed under MIT OR Apache-2.0; dependency and fixture notices remain applicab
 ## Plotting (Feature-Gated)
 
 Core plotting is available behind the `plotting` feature using `ruviz`.
+The complete `plot_demo` also runs external FEFF85L modules. Install the FEFF
+binaries supplied with XrayLarch and set `REXAFS_FEFF8L_RDINP` to the path of
+`feff8l_rdinp` if the example cannot discover it. The plotting builders themselves
+do not require that executable when plotting existing spectra or fit results.
 
 ```bash
 cargo run -p rexafs --features plotting --example plot_demo
@@ -113,7 +117,7 @@ To regenerate Cu/ZnSe fit references directly from XrayLarch:
 uv run --with xraylarch python crates/rexafs/scripts/generate_larch_fit_references.py
 ```
 
-Strict FEFF fit parity is regression-tested against these regenerated Cu/ZnSe fixtures:
+FEFF fit compatibility is regression-tested against these regenerated Cu/ZnSe fixtures:
 - compared fields: `amp`, `de0`, `sig2`, `dr` values and `stderr`
 - compared stats: `chi_square`, `reduced_chi_square`, `n_idp`, `r_factor`
 - tolerance policy: relative tolerance `20%` with absolute fallback `1e-8` (`de0` value uses `0.2 eV` absolute fallback near zero)

@@ -1,5 +1,10 @@
 # Remaining work plan — 2026-09-08
 
+This is a historical handoff at the 0.2.0 release. Its completed and outstanding
+items refer to that date, not the current checkout. Consult the
+[release runbook](releasing.md) and [documentation index](README.md) for current
+maintenance and user guides.
+
 Releases 0.1.4 and [0.2.0](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.0)
 are published on GitHub and all three package registries. Phase 1, Phase 2.1–2.7,
 and concrete follow-up gaps D1–D4 are implemented and merged in

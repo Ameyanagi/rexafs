@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** These signatures describe the source checkout, not npm rexafs@0.2.4.
+**Next API · unreleased.** This reference describes the source checkout, including additions not available in npm rexafs@0.2.4.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
@@ -17,6 +17,8 @@ to KaiserBessel; AUTOBK defaults to Hanning. Parameters dk/dr have shape-depende
 and KaiserBessel also uses them as shape parameters. See the [window
 implementation](https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/xafsutils.rs)
 for the exact formulas.
+Names are case-sensitive. An unsupported name throws an Error immediately during property
+assignment, leaving the existing window selection unchanged.
 
 ```typescript
 export type FTWindow = "Hanning" | "Parzen" | "Welch" | "Gaussian" | "Sine" | "KaiserBessel" | "FHanning";

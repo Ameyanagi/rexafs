@@ -25,9 +25,11 @@ pub struct StructureHit {
     pub id: String,
     /// Source name (`local`, `amcsd`, `materials-project`).
     pub source: String,
+    /// Source formula text; its formatting may differ among databases.
     pub formula: String,
     /// Mineral or compound name.
     pub name: Option<String>,
+    /// Source-provided space-group symbol, when known.
     pub space_group: Option<String>,
     /// Element symbols present.
     pub elements: Vec<String>,
@@ -35,10 +37,15 @@ pub struct StructureHit {
     pub extra: BTreeMap<String, String>,
 }
 
-/// Search terms; all constraints are ANDed.
+/// Structure-search terms; element constraints are combined with source-specific text semantics.
+///
+/// Defaults are no text, no required/excluded elements, exact_elements=false,
+/// and limit=0. Local/bundled matching supports names and simple formula ratios;
+/// Materials Project interprets text as an identifier, chemical system, or formula.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct StructureQuery {
-    /// Free text: substring of formula, name or id (case-insensitive).
+    /// Search text; local matching checks formula, name, ID, and space-group
+    /// metadata, while network sources translate it to their endpoint parameters.
     pub text: Option<String>,
     /// Every listed element must be present.
     pub elements: Vec<String>,
@@ -46,11 +53,13 @@ pub struct StructureQuery {
     pub exclude: Vec<String>,
     /// Restrict to exactly these elements (chemical system) when set.
     pub exact_elements: bool,
-    /// Maximum number of hits (0 = source default).
+    /// Requested result cap; zero uses the source default. This is not a promise
+    /// of exhaustive server pagination or a total count of all database matches.
     pub limit: usize,
 }
 
 impl StructureQuery {
+    /// Create a query with copied text, no element filters, and a source-default limit.
     pub fn text(text: &str) -> Self {
         Self {
             text: Some(text.to_string()),
@@ -58,6 +67,7 @@ impl StructureQuery {
         }
     }
 
+    /// Replace required element symbols with owned copies; other query settings remain unchanged.
     pub fn with_elements<I: IntoIterator<Item = S>, S: AsRef<str>>(mut self, elements: I) -> Self {
         self.elements = elements
             .into_iter()
@@ -169,8 +179,15 @@ pub fn parse_formula(text: &str) -> BTreeMap<String, f64> {
 
 /// A searchable source of crystal structures.
 pub trait StructureSource {
+    /// Borrow the source's identifying name.
     fn name(&self) -> &str;
+    /// Find owned hits according to this source's query semantics and limits.
+    /// Network implementations block on requests; local sources read their index
+    /// or database. Database/network failures return StructureError.
     fn search(&self, query: &StructureQuery) -> Result<Vec<StructureHit>, StructureError>;
+    /// Load an owned structure from a hit belonging to this source.
+    /// Remote sources download it; local sources may reread its source file.
+    /// Source availability, parsing, and conversion errors are returned to the caller.
     fn fetch(&self, hit: &StructureHit) -> Result<Structure, StructureError>;
 }
 
@@ -185,7 +202,10 @@ pub struct LocalCifLibrary {
 
 impl LocalCifLibrary {
     /// Scan `root` recursively for `*.cif` (case-insensitive) and index
-    /// them by parsing each file's header block.
+    /// them by loading each file through the structure/CIF conversion pipeline.
+    /// Failed files are retained in failures rather than aborting the index;
+    /// directory traversal failures can abort the scan. This snapshot is not
+    /// refreshed automatically when files change. Fetching rereads the current file.
     pub fn scan<P: AsRef<Path>>(root: P) -> Result<Self, StructureError> {
         let root = root.as_ref().to_path_buf();
         let mut files = Vec::new();
@@ -208,18 +228,22 @@ impl LocalCifLibrary {
         Ok(lib)
     }
 
+    /// Borrow the root directory recorded when this library was scanned.
     pub fn root(&self) -> &Path {
         &self.root
     }
 
+    /// Number of successfully parsed/indexed CIF files; excludes failures.
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
+    /// Whether the index contains no successfully parsed CIF files.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
+    /// Borrow indexed hits in sorted source-file order without reading files again.
     pub fn hits(&self) -> impl Iterator<Item = &StructureHit> {
         self.entries.iter().map(|(_, h)| h)
     }

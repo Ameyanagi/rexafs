@@ -13,6 +13,7 @@ use crate::{
     params::{DetectionMode, ImportConfig, ImportPreview},
 };
 
+/// Stable recipe identity and immutable revision stored with an import use.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecipeRef {
     pub id: String,
@@ -27,6 +28,9 @@ pub enum RecipeScope {
 }
 
 impl RecipeScope {
+    /// Restrict reuse to the declared instrument, or the source's folder tree.
+    /// Instrument identity uses facility, beamline and instrument metadata when
+    /// present. It does not compare the scientific content of the spectra.
     pub fn for_source(path: &Path, header: Option<&XdiHeader>) -> Self {
         let identity = instrument(header);
         if identity.is_empty() {
@@ -102,6 +106,14 @@ impl RecipeVersion {
         format!("{} · v{}", self.name, self.reference.version)
     }
 
+    /// Build an owned, reusable interpretation from the reviewed column layout.
+    ///
+    /// Requires a nonempty name, one explicit primary detection mode, distinct
+    /// output channels and valid column/axis assignments. Missing source units
+    /// need explicit confirmation; the chosen conversion is saved in the recipe.
+    /// The preview and input configurations are borrowed and left unchanged.
+    /// This validates interpretation metadata, not every future file's signals;
+    /// later imports still run their own signal validation and diagnostics.
     pub fn from_review(
         name: &str,
         scope: RecipeScope,
@@ -209,7 +221,11 @@ impl RecipeLibrary {
         self.versions.iter().find(|v| v.reference == *reference)
     }
 
-    /// A named edit creates a successor; existing references stay immutable.
+    /// Save a reviewed recipe without rewriting earlier interpretations.
+    ///
+    /// An unchanged reusable recipe with the same name/scope reuses its revision.
+    /// A changed interpretation creates the next revision under the same ID.
+    /// Existing project import applications keep their original references.
     pub fn commit_review(&mut self, mut recipe: RecipeVersion) -> RecipeVersion {
         if let Some(previous) = self
             .versions
@@ -250,12 +266,18 @@ impl RecipeLibrary {
         Ok(())
     }
 
+    /// Disable future automatic reuse of every revision with this ID.
+    /// Saved interpretations and groups already imported from them are retained.
     pub fn stop_reusing(&mut self, id: &str) {
         for recipe in self.versions.iter_mut().filter(|v| v.reference.id == id) {
             recipe.reuse = false;
         }
     }
 
+    /// Return latest enabled revisions matching the full layout and source scope.
+    /// Column names/order, units, parser dialect and conversion metadata all
+    /// participate in matching. Disabling a newer revision does not reactivate
+    /// an older one automatically. Matching is not scientific signal validation.
     pub fn eligible(
         &self,
         key: &LayoutKey,
@@ -318,6 +340,13 @@ pub enum Dispatch {
 }
 
 impl DispatchContext {
+    /// Choose detection, one compatible recipe, or an explicit review request.
+    ///
+    /// Matching project recipes take priority over computer recipes. Conflicting
+    /// interpretations require review. Unnamed columns need a representative
+    /// confirmation in each new batch even when a previous recipe matches; changed
+    /// units or conversion metadata also require review instead of alias fallback.
+    /// This reads libraries only and does not import files or create groups.
     pub fn resolve(&self, key: &LayoutKey, path: &Path, header: Option<&XdiHeader>) -> Dispatch {
         let project = self.project.eligible(key, path, header);
         let candidates = if project.is_empty() {

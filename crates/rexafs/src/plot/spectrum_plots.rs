@@ -257,6 +257,7 @@ mod tests {
         let data = extract_spectrum_panel_data(&mut spectrum, &panel).expect("panel should build");
         assert!(!data.traces.is_empty());
         assert_eq!(data.xlim, Some((0.0, DEFAULT_R_XMAX)));
+        assert_eq!(data.ylabel, "$|chi(R)|$ [$angstrom^(-3)$]");
         assert!(spectrum.r().is_some());
     }
 
@@ -327,6 +328,7 @@ mod tests {
         assert!(data.traces.iter().any(|trace| trace.label == "Re[chi(R)]"));
         assert!(!data.traces.iter().any(|trace| trace.label == "Im[chi(R)]"));
         assert_eq!(data.traces.len(), 1);
+        assert_eq!(data.ylabel, "$Re[chi(R)]$ [$angstrom^(-3)$]");
     }
 
     #[test]

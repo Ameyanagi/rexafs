@@ -3,6 +3,8 @@
  * constructs a zero-origin uniform grid with linear resampling and an extended window domain.
  * The default is Input. This choice affects Fourier preparation only, not the background
  * k()/chi() arrays.
+ * Names are case-sensitive. Assigning an unsupported grid throws a string exception and
+ * leaves the existing selection unchanged.
  */
 export type FFTGrid = "Input" | "Larch";
 /**
@@ -12,6 +14,8 @@ export type FFTGrid = "Input" | "Larch";
  * and KaiserBessel also uses them as shape parameters. See the [window
  * implementation](https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/xafsutils.rs)
  * for the exact formulas.
+ * Names are case-sensitive. An unsupported name throws an Error immediately during property
+ * assignment, leaving the existing window selection unchanged.
  */
 export type FTWindow = "Hanning" | "Parzen" | "Welch" | "Gaussian" | "Sine" | "KaiserBessel" | "FHanning";
 /**
@@ -19,6 +23,8 @@ export type FTWindow = "Hanning" | "Parzen" | "Welch" | "Gaussian" | "Sine" | "K
  * FixedPenalty. LegacyLm is the iterative Levenberg-Marquardt solver for legacy objectives.
  * TrustRegionDogLeg requires a native Rust feature and is unavailable in the distributed Wasm
  * build; selecting it throws during processing.
+ * An unrecognized name throws an Error immediately during property assignment and leaves the
+ * existing selection unchanged.
  */
 export type AUTOBKSolver = "TrustRegionDogLeg" | "LegacyLm" | "LinearDirect";
 /**
@@ -26,6 +32,8 @@ export type AUTOBKSolver = "TrustRegionDogLeg" | "LegacyLm" | "LinearDirect";
  * penalty, controlled by clamp_lambda and solved by LinearDirect. Fixed and TwoPass retain
  * historical residual-dependent scaling behavior. Selecting a policy changes the optimization
  * objective, not merely the numerical solver.
+ * Names are case-sensitive; an unsupported name throws an Error during property assignment
+ * without changing the existing selection.
  */
 export type AUTOBKClampScalePolicy = "FixedPenalty" | "Fixed" | "TwoPass";
 
@@ -111,6 +119,13 @@ export class PrePostEdge {
    * Create owned settings with the recommended defaults described below. Browser callers must
    * await init() first. Edit the fields, copy the settings into the appropriate spectrum stage,
    * and free() this object when finished.
+   *
+   * Automatic fields are resolved on the spectrum's copy during processing; resolved values
+   * are not written back into the original settings object. Resolved values stay in the
+   * spectrum's settings until those settings are replaced.
+   *
+   * Stable 0.2.4 uses this constructor without arguments, followed by property assignment. Next
+   * (the source checkout) also accepts the named options object.
    */
   constructor(options?: PrePostEdgeOptions);
   /**
@@ -240,11 +255,17 @@ export interface AUTOBKOptions {
    */
   clamp_hi?: number | undefined;
   /**
-   * Dimensionless strength of the FixedPenalty endpoint term. Recommended default: 0.001;
-   * undefined restores this default. The objective adds lambda times the mean squared active,
-   * weighted endpoint chi residual to the mean squared low-R residual. Require a finite
-   * nonnegative value; 0 disables the endpoint term. This rexafs-specific penalty is separate
-   * from the original AUTOBK objective.
+   * Numerical strength of the FixedPenalty endpoint term. Recommended default: 0.001; undefined
+   * restores this default. The objective adds lambda times the mean squared active, weighted
+   * endpoint chi residual to the mean squared low-R residual. Require a finite nonnegative
+   * value; 0 disables the endpoint term.
+   *
+   * This empirical balance is tied to the implemented residual convention: the FixedPenalty
+   * Fourier residual uses the fixed numerical factor 0.05/sqrt(pi), while the endpoint residual
+   * uses unweighted, edge-step-normalized chi. Changing kweight or the window changes the
+   * balance at a fixed lambda. The parameter is unused by legacy endpoint policies; it is not a
+   * universal physical constant. See [the fixed-penalty
+   * objective](https://rexafs.com/docs/science/autobk/).
    */
   clamp_lambda?: number | undefined;
   /**
@@ -332,8 +353,8 @@ export interface AUTOBKOptions {
   clamp_scale_policy?: AUTOBKClampScalePolicy | undefined;
 }
 /**
- * Settings for extracting extended X-ray absorption fine structure, chi(k), with a smooth
- * spline background.
+ * Settings for extracting extended X-ray absorption fine structure, chi(k), with a cubic
+ * spline background in photoelectron wavenumber k.
  *
  * AUTOBK separates slowly varying atomic absorption from oscillations associated with
  * neighboring atoms by suppressing low-R Fourier residuals. Recommended starting values are
@@ -356,6 +377,14 @@ export class AUTOBK {
    * Create owned settings with the recommended defaults described below. Browser callers must
    * await init() first. Edit the fields, copy the settings into the appropriate spectrum stage,
    * and free() this object when finished.
+   *
+   * Automatic fields are resolved on the spectrum's copy during processing; resolved values
+   * are not written back into the original settings object. Resolved scalar defaults and ek0
+   * are retained in the spectrum. Automatic kmax and nknots remain unset in stored settings
+   * and are calculated locally for each input.
+   *
+   * Stable 0.2.4 uses this constructor without arguments, followed by property assignment. Next
+   * (the source checkout) also accepts the named options object.
    */
   constructor(options?: AUTOBKOptions);
   /**
@@ -423,11 +452,17 @@ export class AUTOBK {
    */
   clamp_hi: number | undefined;
   /**
-   * Dimensionless strength of the FixedPenalty endpoint term. Recommended default: 0.001;
-   * undefined restores this default. The objective adds lambda times the mean squared active,
-   * weighted endpoint chi residual to the mean squared low-R residual. Require a finite
-   * nonnegative value; 0 disables the endpoint term. This rexafs-specific penalty is separate
-   * from the original AUTOBK objective.
+   * Numerical strength of the FixedPenalty endpoint term. Recommended default: 0.001; undefined
+   * restores this default. The objective adds lambda times the mean squared active, weighted
+   * endpoint chi residual to the mean squared low-R residual. Require a finite nonnegative
+   * value; 0 disables the endpoint term.
+   *
+   * This empirical balance is tied to the implemented residual convention: the FixedPenalty
+   * Fourier residual uses the fixed numerical factor 0.05/sqrt(pi), while the endpoint residual
+   * uses unweighted, edge-step-normalized chi. Changing kweight or the window changes the
+   * balance at a fixed lambda. The parameter is unused by legacy endpoint policies; it is not a
+   * universal physical constant. See [the fixed-penalty
+   * objective](https://rexafs.com/docs/science/autobk/).
    */
   clamp_lambda: number | undefined;
   /**
@@ -532,7 +567,9 @@ export interface XrayFFTFOptions {
   /**
    * Maximum reported R in angstroms. Default: 10.0; undefined restores this default. This
    * limits the r() and chir_*() output arrays, not the internally retained Fourier bins used by
-   * ifft(). It does not change the transform amplitude or frequency resolution.
+   * ifft(). It does not change the transform amplitude or frequency resolution. ifft()
+   * nevertheless needs at least two reported R samples to infer/validate their spacing, so
+   * rmax_out=0 is insufficient for a back-transform.
    */
   rmax_out?: number | undefined;
   /**
@@ -550,8 +587,9 @@ export interface XrayFFTFOptions {
   dk2?: number | undefined;
   /**
    * Lower Fourier window bound in inverse angstroms. Default: 2.0; explicitly assigning
-   * undefined uses the first prepared k sample. Require kmin < kmax. Select this above the
-   * region where the EXAFS approximation or background subtraction is unreliable.
+   * undefined uses the first prepared k sample. Both bounds must be finite with kmin < kmax;
+   * negative bounds are accepted. Select this above the region where the EXAFS approximation or
+   * background subtraction is unreliable.
    */
   kmin?: number | undefined;
   /**
@@ -578,7 +616,9 @@ export interface XrayFFTFOptions {
    * k spacing used to scale the transform and label R, in inverse angstroms. Default: undefined
    * infers the first spacing of the prepared k grid (normally 0.05 from AUTOBK defaults). Larch
    * also uses this spacing to resample chi. Input does not resample, so keep it consistent with
-   * the input grid. Require a finite positive value.
+   * the input grid. Require a finite positive value. The inferred value is retained in the
+   * spectrum's copied FFT settings. After changing the background grid, reassign FFT settings
+   * with kstep undefined to infer the new spacing.
    */
   kstep?: number | undefined;
   /**
@@ -597,9 +637,11 @@ export interface XrayFFTFOptions {
  * preserves the background grid; automatic kstep normally resolves to AUTOBK's 0.05 inverse
  * angstroms.
  *
- * For prepared `g[j] = chi(k[j]) * k[j]^w * window[j]`, the code computes `chiR[m] = (kstep /
+ * For a uniform zero-origin grid `k[j]=j*kstep`, prepare
+ * `g[j] = chi(k[j]) * k[j]^w * window[j]`. The code computes `chiR[m] = (kstep /
  * sqrt(pi)) * sum_j g[j] * exp(-2*pi*i*j*m/N)`, with N=nfft, w=kweight, i^2=-1 and
- * `R[m]=pi*m/(N*kstep)`. The sum uses the first N prepared samples and zeros for missing
+ * `R[m]=pi*m/(N*kstep)`. Here j indexes prepared k samples and m indexes nonnegative
+ * Fourier bins. The sum uses the first N prepared samples and zeros for missing
  * samples. There is no 1/N forward normalization or window-area correction. For dimensionless
  * chi, chi(R) has units angstrom^(-(w+1)).
  *
@@ -617,6 +659,13 @@ export class XrayFFTF {
    * Create owned settings with the recommended defaults described below. Browser callers must
    * await init() first. Edit the fields, copy the settings into the appropriate spectrum stage,
    * and free() this object when finished.
+   *
+   * Automatic fields are resolved on the spectrum's copy during processing; resolved values
+   * are not written back into the original settings object. Resolved values stay in the
+   * spectrum's settings until those settings are replaced.
+   *
+   * Stable 0.2.4 uses this constructor without arguments, followed by property assignment. Next
+   * (the source checkout) also accepts the named options object.
    */
   constructor(options?: XrayFFTFOptions);
   /**
@@ -634,7 +683,9 @@ export class XrayFFTF {
   /**
    * Maximum reported R in angstroms. Default: 10.0; undefined restores this default. This
    * limits the r() and chir_*() output arrays, not the internally retained Fourier bins used by
-   * ifft(). It does not change the transform amplitude or frequency resolution.
+   * ifft(). It does not change the transform amplitude or frequency resolution. ifft()
+   * nevertheless needs at least two reported R samples to infer/validate their spacing, so
+   * rmax_out=0 is insufficient for a back-transform.
    */
   rmax_out: number | undefined;
   /**
@@ -652,8 +703,9 @@ export class XrayFFTF {
   dk2: number | undefined;
   /**
    * Lower Fourier window bound in inverse angstroms. Default: 2.0; explicitly assigning
-   * undefined uses the first prepared k sample. Require kmin < kmax. Select this above the
-   * region where the EXAFS approximation or background subtraction is unreliable.
+   * undefined uses the first prepared k sample. Both bounds must be finite with kmin < kmax;
+   * negative bounds are accepted. Select this above the region where the EXAFS approximation or
+   * background subtraction is unreliable.
    */
   kmin: number | undefined;
   /**
@@ -680,7 +732,9 @@ export class XrayFFTF {
    * k spacing used to scale the transform and label R, in inverse angstroms. Default: undefined
    * infers the first spacing of the prepared k grid (normally 0.05 from AUTOBK defaults). Larch
    * also uses this spacing to resample chi. Input does not resample, so keep it consistent with
-   * the input grid. Require a finite positive value.
+   * the input grid. Require a finite positive value. The inferred value is retained in the
+   * spectrum's copied FFT settings. After changing the background grid, reassign FFT settings
+   * with kstep undefined to infer the new spacing.
    */
   kstep: number | undefined;
   /**
@@ -747,7 +801,9 @@ export interface XrayFFTROptions {
   /**
    * Output q spacing in inverse angstroms. Default: undefined computes pi / (nfft * delta_R),
    * where delta_R is the input R spacing in angstroms. An explicit value must agree with that
-   * relationship or processing throws. Leave automatic when changing nfft.
+   * relationship or processing throws. Leave automatic when changing nfft. The resolved value
+   * is retained in the spectrum's copy. After changing the forward R grid, reassign inverse
+   * settings whose kstep is undefined to resolve it again.
    */
   kstep?: number | undefined;
   /**
@@ -780,6 +836,12 @@ export class XrayFFTR {
    * Create owned settings with the recommended defaults described below. Browser callers must
    * await init() first. Edit the fields, copy the settings into the appropriate spectrum stage,
    * and free() this object when finished.
+   *
+   * Automatic fields are resolved on the spectrum's copy during processing; resolved values
+   * are not written back into the original settings object. Resolved values stay in the
+   * spectrum's settings until those settings are replaced.
+   *
+   * This class is available in Next (the source checkout), not npm 0.2.4.
    */
   constructor(options?: XrayFFTROptions);
   /**
@@ -835,7 +897,9 @@ export class XrayFFTR {
   /**
    * Output q spacing in inverse angstroms. Default: undefined computes pi / (nfft * delta_R),
    * where delta_R is the input R spacing in angstroms. An explicit value must agree with that
-   * relationship or processing throws. Leave automatic when changing nfft.
+   * relationship or processing throws. Leave automatic when changing nfft. The resolved value
+   * is retained in the spectrum's copy. After changing the forward R grid, reassign inverse
+   * settings whose kstep is undefined to resolve it again.
    */
   kstep: number | undefined;
   /**
@@ -978,26 +1042,40 @@ export class Spectrum {
    * inverse results. A specified method E0 overrides the spectrum E0; otherwise the existing E0
    * is retained. The caller keeps ownership of the settings and wrapper and may free them after
    * assignment. Later edits require reassignment. Returns this spectrum.
+   *
+   * Omitting the argument, undefined or null restores automatic pre/post-edge settings while
+   * retaining the selected E0. These reset forms work in stable 0.2.4 and Next. For custom
+   * settings, stable 0.2.4 accepts a NormalizationMethod wrapper; Next (the source checkout)
+   * also accepts PrePostEdge directly.
    */
   set_normalization_method(method?: PrePostEdge | NormalizationMethod | null): this;
   /**
    * Copy the selected background method and clear background, forward and inverse results while
    * retaining normalization. The caller keeps ownership of the settings and wrapper and may
    * free them after assignment. Later edits require reassignment. Returns this spectrum.
+   *
+   * Omitting the argument, undefined or null restores default AUTOBK settings. These reset
+   * forms work in stable 0.2.4 and Next. For custom settings, stable 0.2.4 accepts a
+   * BackgroundMethod wrapper; Next (the source checkout) also accepts AUTOBK directly. This
+   * does not reset forward or inverse configuration values that were already resolved
+   * automatically.
    */
   set_background_method(method?: AUTOBK | BackgroundMethod | null): this;
   /**
    * Copy inverse-transform settings and clear q()/chiq() while preserving normalization,
    * background and forward results. Settings can be freed after assignment; later edits require
    * reassignment. Invalid R ranges or inconsistent kstep/nfft are reported when ifft() runs.
-   * Returns this spectrum.
+   * Returns this spectrum. Assign settings with kstep undefined to resolve spacing again after
+   * changing the forward grid. This method and XrayFFTR are Next additions after 0.2.4.
    */
   set_ifft(parameters: XrayFFTR): this;
   /**
    * Copy forward-transform settings and clear r(), chir_*(), kwin(), kwin_k(), q() and chiq().
    * Normalization and background k()/chi() are preserved. Settings can be freed after
    * assignment; later edits require reassignment. Invalid numerical settings are reported when
-   * fft() runs. Returns this spectrum.
+   * fft() runs. Returns this spectrum. Assign settings with kstep undefined to request fresh
+   * spacing inference, for example after changing AUTOBK.kstep. Inverse settings are retained;
+   * if their spacing was already resolved, they may also need replacement before ifft().
    */
   set_fft(parameters: XrayFFTF): this;
   /**
@@ -1040,14 +1118,19 @@ export class Spectrum {
    * conjugate-symmetric inverse transform. Runs missing forward and prerequisite stages first.
    * Forward k-weighting and windowing remain in the output, so this is not generally unweighted
    * chi(k). Throws on inconsistent transform settings or failed prerequisite stages. Returns
-   * this spectrum.
+   * this spectrum. At least two reported R samples are required even though filtering uses the
+   * full internal Fourier bins; rmax_out=0 therefore fails. When reusing a spectrum with a
+   * different forward grid, reset previously resolved inverse settings in Next, or create a
+   * fresh spectrum in stable 0.2.4.
    */
   ifft(): this;
   /**
    * Clear normalization, background, forward and inverse calculated arrays without discarding
    * the measured inputs, selected E0 or stage settings. User-specified edge-step overrides are
    * retained; a previously estimated step is recomputed by the next normalization. Returns this
-   * spectrum. Subsequent getters return undefined until their stages run again.
+   * spectrum. Subsequent getters return undefined until their stages run again. Resolved
+   * automatic settings, such as FFT kstep, are retained. Reassign the affected stage settings
+   * to request fresh automatic values for changed input grids.
    */
   invalidate_derived(): this;
   /**

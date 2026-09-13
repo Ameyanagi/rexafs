@@ -15,11 +15,19 @@ const MAX_RAW_BYTES: u64 = 1024 * 1024 * 1024;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DataStorage {
+    /// Record portable references and available metadata without input payloads.
+    /// The linked bytes may change after saving; this is the desktop default.
     #[default]
     Paths,
+    /// Save losslessly compressed input bytes and verify them during extraction.
+    /// Required inputs must be readable, with at most 1 GiB expanded in total.
     Embedded,
 }
 
+/// Provenance and portable source references written at the start of a project.
+///
+/// Source hashes describe bytes read at save time. They are enforced for
+/// embedded payloads, but are not a live integrity check for linked files.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ProjectHeader {
     pub format: String,

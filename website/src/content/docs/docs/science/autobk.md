@@ -41,8 +41,9 @@ Here, `||h||²` is the sum of squared entries, and each endpoint sum uses the
 corresponding elements of χ(c). λ is `clamp_lambda`; `w_lo` and `w_hi` are the
 absolute endpoint weights. The division by `m` makes the first term a mean
 squared residual, and the division by `N_active` averages over enabled endpoint
-samples. These are numerical residual conventions with the Fourier amplitude
-scale specified below; λ is not a physical material property.
+samples. λ is a numerical penalty strength tied to the Fourier amplitude scale
+and k-weight units specified below; it is not a universal dimensionless physical
+constant or a physical material property.
 
 A zero weight excludes that end from both the sum and its denominator. If both
 weights are zero, `nclamp = 0`, or `clamp_lambda = 0`, the endpoint term is absent.

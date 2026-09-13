@@ -487,6 +487,12 @@ fn run_refeff_pipeline(request: &FeffRunRequest) -> Result<FeffRunResult, Fittin
     })
 }
 
+/// Run the requested backend, then read its output files into owned path models.
+///
+/// This has the filesystem/process side effects of run_feff. Use Feff85L for
+/// current compatible path output, including FEFF10/ReFEFF calculations; the
+/// Feff10 parser flavor remains unsupported. Returns the first execution or
+/// parse error rather than a partial list of successful paths.
 pub fn run_feff_and_load_paths(
     request: &FeffRunRequest,
     flavor: FeffFlavor,
@@ -495,6 +501,10 @@ pub fn run_feff_and_load_paths(
     load_paths_from_run_result(&result, flavor)
 }
 
+/// Parse the recorded path-file list in order without rerunning the calculation.
+/// The files must still exist. An empty list returns an empty vector; any file
+/// or format failure returns an error instead of a partial result. Loaded
+/// models own their data and use the parser's documented correction defaults.
 pub fn load_paths_from_run_result(
     result: &FeffRunResult,
     flavor: FeffFlavor,

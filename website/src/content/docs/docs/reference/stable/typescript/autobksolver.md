@@ -15,6 +15,8 @@ Background spline solver. LinearDirect is the recommended default and is require
 FixedPenalty. LegacyLm is the iterative Levenberg-Marquardt solver for legacy objectives.
 TrustRegionDogLeg requires a native Rust feature and is unavailable in the distributed Wasm
 build; selecting it throws during processing.
+An unrecognized name throws an Error immediately during property assignment and leaves the
+existing selection unchanged.
 
 ```typescript
 export type AUTOBKSolver = "TrustRegionDogLeg" | "LegacyLm" | "LinearDirect";

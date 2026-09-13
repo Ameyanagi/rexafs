@@ -101,3 +101,5 @@ supportinginfo/uncertainty2.md,developer,exclude,,Historical teaching notes; pub
 vendor/sum_tree/README.rexafs.md,developer,exclude,,Vendored patch and attribution record; retain required notices separately from website prose.
 doc/series.md,user,publish,/docs/desktop/series/,Scan order and sampled overview limits; implemented trend definitions and calculation scope.
 doc/documentation-audit-2026-09-13.md,developer,exclude,,Source-to-documentation audit scope corrections and validation evidence.
+doc/documentation-site-plan.md,developer,exclude,,Historical website implementation plan and content boundary; current maintenance lives in website/README.md.
+website/README.md,developer,exclude,,Website source ownership generation validation and deployment maintenance.

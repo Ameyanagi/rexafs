@@ -11,17 +11,21 @@ Use Node 24, Python 3.12 and Rust 1.98.1. From the repository root:
 
 ```sh
 npm --prefix website ci
-python3.12 -m venv website/.venv
-website/.venv/bin/python -m pip install rexafs==0.2.4 numpy
-website/.venv/bin/python website/scripts/generate-python-reference.py
+uv run --no-project --python 3.12 website/scripts/generate-python-reference.py
 node website/scripts/generate-typescript-reference.mjs
 node website/scripts/generate-citations.mjs
 node website/scripts/build-rust-reference.mjs
 npm --prefix website run check
+npm --prefix website run test:generators
 npm --prefix website run build
 npm --prefix website test
 npm --prefix website run preview
 ```
+
+The Python generator parses source declarations with the standard library; it
+does not import rexafs or require a package installation. `--no-project` avoids
+building the repository's Python package just to render its documentation.
+User analysis projects use the [uv init/add/run workflow](src/content/docs/docs/libraries/python.md).
 
 Open the preview's `/rexafs/` path. `npm --prefix website run dev` gives live
 editing; generate Rust reference files first if you want their links to work.
@@ -46,6 +50,9 @@ math rendering, citation links, original screenshot dimensions, generated API
 coverage, code tabs, search, mobile overflow and automated accessibility checks.
 Browser screenshots are retained in `test-results/` for visual review. Automated
 checks supplement review of the prose, figures, source claims and citations.
+Generator tests use temporary release tags and edited source docstrings to check
+that explanations propagate, unreleased signatures stay out of Stable, and
+removing a public member's help fails generation.
 
 ## Content ownership
 
@@ -70,9 +77,14 @@ checks supplement review of the prose, figures, source claims and citations.
 - `public/api/rust-next/` is generated separately from the checkout, with its
   updated Rust comments and API. Its banner states that it is unreleased and
   links back to Stable. Do not use it as evidence of a released signature.
+  Missing public Rust documentation and broken intra-doc links fail the Next
+  build. Generated HTML is cleared between channels while compilation caches
+  are reused, so obsolete pages cannot carry over into the release reference.
 - `src/data/api-citations.json` is generated from authored API documentation
   links, including scientific papers, specifications and supporting code. New
   links must still be reviewed for relevance and explained where they are used.
+  Extraction includes the Python declarations/native help, every TypeScript
+  entry-point declaration, Wasm help and the Rust core's public documentation.
 - `public/` contains only selected public assets. Application screenshots are
   full, unedited 1192 × 768 JPEG captures made with computer use from the official
   macOS ARM64 0.2.4 release. Keep their version, input and capture provenance in
@@ -87,8 +99,9 @@ rexafs's own source and described with appropriate citations.
 
 Update `src/data/release.json` only after desktop assets, PyPI, npm and crates.io
 are actually published. Verify every asset and checksum URL. Record the exact tag,
-commit and crate checksum. Install the matching Python wheel, update versioned
-installation examples and the workflow pin, regenerate all API pages, and review
+commit and crate checksum. Install the matching Python wheel in a separate uv
+analysis project to verify the examples, update versioned installation examples,
+regenerate all API pages, and review
 which Next changes have become stable. Regenerate screenshots when their workflow
 changes; retain their actual software version in captions. Run the documented
 Python and Node Cu examples with the corresponding published packages.
@@ -103,11 +116,18 @@ The Pages publishing source must be **GitHub Actions**. No generated `dist/` or
 The repository's Pages custom domain is `rexafs.com`; its Actions variables are
 `SITE_URL=https://rexafs.com` and `SITE_BASE=/`. DNS and certificate provisioning
 must complete before the custom address is reachable. The domain uses Cloudflare
-nameservers. Set the four apex A records from
-[GitHub's custom-domain guide](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site)
-and `www` CNAME to `ameyanagi.github.io`, using DNS-only records during setup.
-Preserve unrelated DNS records, including mail and verification records. Enable
-**Enforce HTTPS** once GitHub's certificate is ready.
+nameservers. The configuration verified on 2026-09-13 has both `rexafs.com` and
+`www.rexafs.com` as proxied CNAME records targeting `ameyanagi.github.io`, with
+automatic TTL. Cloudflare supports the apex record through
+[CNAME flattening](https://developers.cloudflare.com/dns/cname-flattening/).
+The browser connects to Cloudflare; successful public HTTPS checks alone do not
+verify the separate Cloudflare-to-GitHub TLS settings. The `www` address redirects
+to `https://rexafs.com/`.
+
+If intentionally moving away from Cloudflare's proxy, follow
+[GitHub's custom-domain guide](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site),
+verify GitHub's certificate for the custom hostname, then enable **Enforce HTTPS**.
+Preserve unrelated mail and verification records in either configuration.
 
 These two build variables change navigation, assets, canonical URLs, sitemap and
 search together. The fallback without variables is the original project path,

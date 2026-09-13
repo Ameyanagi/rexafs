@@ -25,6 +25,10 @@ pub trait Normalization {
     /// Normalize absorption using the selected method and refresh cached outputs.
     /// Energy is in eV. Use matching finite arrays with sufficient fit points;
     /// method-specific failures are returned as `NormalizationError`.
+    /// The low-level PrePostEdge implementation zips its inputs and filters
+    /// nonfinite pairs before fitting: unequal lengths can discard the longer
+    /// tail, and result arrays then describe only retained pairs. Spectrum
+    /// validates finite matching arrays before this step; prefer that contract.
     fn normalize(
         &mut self,
         energy: &DVector<f64>,
@@ -119,9 +123,12 @@ impl NormalizationMethod {
 
     /// Run the selected normalization method and replace its cached results.
     ///
-    /// Input energy is in eV and mu has a consistent absorption scale. Invalid
-    /// data, insufficient fit points or failed fits return `NormalizationError`;
-    /// MBACK always returns `NotImplemented`. Borrowed inputs are unchanged.
+    /// Input energy is in eV and mu has a consistent absorption scale.
+    /// Insufficient fit points or failed fits return `NormalizationError`.
+    /// The low-level PrePostEdge path zips and filters input pairs before
+    /// validation, so unequal tails/nonfinite pairs may be discarded; Spectrum
+    /// instead rejects such inputs before dispatch. MBACK always returns
+    /// `NotImplemented`. Borrowed inputs themselves are unchanged.
     pub fn normalize(
         &mut self,
         energy: &DVector<f64>,
@@ -224,6 +231,25 @@ impl NormalizationMethod {
 /// and fits a post-edge polynomial to estimate the edge step. See
 /// [Newville, Fundamentals of XAFS](https://docs.xrayabsorption.org/tutorials/XAFS_Fundamentals.pdf).
 /// The precise automatic ranges and flattening convention are rexafs choices.
+///
+/// For photon energy E in eV and input absorption mu(E), the fitted models are
+/// `p(E) = (a + b*E) * E^(-v)` and a polynomial P(E) fitted to `mu(E)-p(E)`.
+/// Here v is `n_victoreen`; coefficients have the units required to match mu.
+/// `pre_edge` is p(E), and `post_edge` is p(E)+P(E). If E* is the measured
+/// energy nearest E0, the automatic jump is P(E*), in mu units. With the
+/// resolved jump D, the dimensionless outputs are
+///
+/// ```text
+/// norm(E) = (mu(E) - p(E)) / D
+/// flat(E) = norm(E)                              for E < E*
+///         = norm(E) - (P(E) - P(E*)) / D          for E >= E*
+/// ```
+///
+/// The jump must be finite and is floored at 1e-12. This numerical floor is not
+/// evidence of a usable absorption edge. Flattening is a separate display
+/// output; AUTOBK uses the original absorption and resolved edge step.
+/// Automatic values filled into this object are retained. Set a field back to
+/// None, or construct fresh settings, to request its automatic resolution again.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PrePostEdge {
@@ -328,6 +354,8 @@ impl PrePostEdge {
     ///
     /// Requires at least two samples and nondecreasing energy in eV. This mutates
     /// settings but does not fit the backgrounds or refresh result arrays.
+    /// Resolved values remain stored; reset a field to None or create a fresh
+    /// object to request automatic selection again.
     pub fn fill_parameter(
         &mut self,
         energy: &DVector<f64>,

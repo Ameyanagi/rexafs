@@ -60,9 +60,10 @@ Matching the public FFT grid does not remove these background differences.
 Desktop, Python and Wasm use the default backend.
 
 Both public forward FFT implementations use the actual `kstep / sqrt(pi)`
-amplitude factor after an unnormalized negative-exponent FFT. AUTOBK's internal
-low-R objective instead uses the fixed reference multiplier `0.05 / sqrt(pi)`;
-its selected kstep still controls the R axis. These are separate operations.
+amplitude factor after an unnormalized negative-exponent FFT. FixedPenalty
+AUTOBK instead uses the fixed internal reference multiplier `0.05 / sqrt(pi)`;
+its selected kstep still controls the R axis. Legacy AUTOBK policies use the
+actual kstep for both scale and R axis. These are separate objective conventions.
 
 ## Explicit output FFT grid
 

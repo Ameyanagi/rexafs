@@ -16,7 +16,12 @@ pub enum AbsorberSelection {
     Element(String),
     /// The `nth` (0-based) crystallographically distinct site of the element,
     /// counted over the asymmetric unit.
-    ElementSite { symbol: String, nth: usize },
+    ElementSite {
+        /// Element that must be the selected site's majority species.
+        symbol: String,
+        /// Zero-based index among that element's distinct absorber sites.
+        nth: usize,
+    },
 }
 
 /// How mixed-occupancy sites are resolved into single atoms.
@@ -31,7 +36,10 @@ pub enum OccupancyPolicy {
     /// Probabilities are normalized by the total listed occupancy: missing
     /// occupancy does not create vacancies. The absorber remains its majority
     /// species. This is one disorder realization, not an ensemble average.
-    Random { seed: u64 },
+    Random {
+        /// Seed for repeatable atom-by-atom species choices on the same geometry.
+        seed: u64,
+    },
 }
 
 /// Spherical cluster settings; defaults are 8 Å, no hydrogen, and majority species.
@@ -60,8 +68,11 @@ impl Default for ClusterOptions {
 pub struct ClusterAtom {
     /// Cartesian position relative to the absorber (Å).
     pub cart: [f64; 3],
+    /// Distance from the calculation absorber in Å.
     pub distance: f64,
+    /// Resolved element symbol for this atom.
     pub symbol: String,
+    /// Atomic number used to assign the scattering potential.
     pub z: u8,
     /// Index into `Structure::sites`.
     pub site_index: usize,
@@ -74,6 +85,7 @@ pub struct ClusterAtom {
 }
 
 impl ClusterAtom {
+    /// Borrow static element metadata; panics if a manually constructed atom has an invalid atomic number.
     pub fn element(&self) -> &'static Element {
         Element::from_z(self.z).expect("cluster atoms carry a valid Z")
     }
@@ -82,8 +94,11 @@ impl ClusterAtom {
 /// A FEFF potential.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Potential {
+    /// FEFF potential index; zero is reserved for the absorber.
     pub ipot: u16,
+    /// Element represented by this potential.
     pub symbol: String,
+    /// Atomic number of the represented element.
     pub z: u8,
     /// Number of cluster atoms using it.
     pub count: usize,
@@ -92,28 +107,41 @@ pub struct Potential {
 /// A neighbour shell: atoms of one element at one distance.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Shell {
+    /// Mean absorber–neighbor distance of this grouped shell in Å.
     pub distance: f64,
+    /// Common element symbol of the grouped neighbors.
     pub symbol: String,
+    /// Number of explicit cluster atoms in the shell, not an occupancy-weighted coordination number.
     pub count: usize,
     /// Indices into `Cluster::atoms`.
     pub atoms: Vec<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Owned atoms and scattering potentials centered on one calculation absorber.
+/// Construct with build_cluster or Xyz::to_cluster to establish absorber-first
+/// ordering and potential indices; direct field construction does not validate them.
 pub struct Cluster {
+    /// Index of the selected site in the source structure, or atom in an XYZ input.
     pub absorber_site: usize,
     /// Atoms sorted by distance; `atoms[0]` is the absorber.
     pub atoms: Vec<ClusterAtom>,
+    /// Absorber potential followed by distinct scatterer-element potentials.
     pub potentials: Vec<Potential>,
+    /// Requested sphere radius in Å, or the retained extent for an unbounded XYZ input.
     pub radius: f64,
+    /// Messages about omitted, unresolved, or simplified source information.
     pub warnings: Vec<String>,
     /// Formula/title of the parent structure, for feff.inp titles.
     pub structure_title: String,
+    /// Formula associated with the parent structure, retained for input-file provenance.
     pub formula: String,
+    /// Parent space-group symbol when known; None for nonperiodic input.
     pub space_group: Option<String>,
 }
 
 impl Cluster {
+    /// Borrow the first cluster atom, the calculation absorber; requires a nonempty cluster.
     pub fn absorber(&self) -> &ClusterAtom {
         &self.atoms[0]
     }

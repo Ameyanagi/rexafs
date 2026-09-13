@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expand source-owned API help for errors, numerical utilities, structures,
+  fitting results and desktop/maintenance operations. Correct QAS sorting,
+  retained automatic settings and policy-specific AUTOBK scaling explanations.
+- Use uv's project workflow (`uv init`, `uv add`, `uv run`) in Python quickstarts,
+  and enforce generated-reference inheritance and documented Rust APIs in CI.
+- Correct Rust Fourier plot-axis units to include the integration measure:
+  Å⁻⁽ʷ⁺¹⁾ for k-weight `w`. Calculated amplitudes are unchanged.
 - Accept `AUTOBK` and `PrePostEdge` directly in Rust spectrum settings setters,
   preserving existing enum, `Some(...)` and `None` calls on both backends.
 - Audit API help and scientific guides against the implementation, including

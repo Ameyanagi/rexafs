@@ -1,7 +1,19 @@
 //! Shared inverse-FFT validation and real-spectrum resizing for both array backends.
+//!
+//! The input stores only the positive-frequency half of a real forward signal.
+//! Conjugate symmetry supplies the negative half. The underlying inverse FFT is
+//! unnormalized, so `sqrt(pi)/(kstep*nfft)` cancels both its length factor and
+//! the public forward multiplier `kstep/sqrt(pi)`. This gives a real result;
+//! it is not a complex analytic-signal inverse.
+//! A changed nfft preserves available positive bins, pads with zeros or drops
+//! high bins, and forces an even-length Nyquist coefficient to be real.
 use super::{errors::FFTError, xrayfft::XrayFFTR};
 use easyfft::{dyn_size::realfft::DynRealDft, num_complex::Complex, prelude::DynRealIfft};
 
+/// Check the zero-origin uniform R grid and inverse scalar settings.
+/// R is in Å. The absolute grid tolerance is `1e-8 * max(abs(R_step), 1)` Å.
+/// Explicit kstep must imply the same R spacing through pi/(nfft*kstep).
+/// This does not check the separate complex coefficients for finite values.
 pub(super) fn validate(r: &[f64], settings: &XrayFFTR) -> Result<(), FFTError> {
     let invalid = |parameter: &str, reason: &str| FFTError::InvalidParameter {
         parameter: parameter.into(),
@@ -63,6 +75,9 @@ pub(super) fn validate(r: &[f64], settings: &XrayFFTR) -> Result<(), FFTError> {
     Ok(())
 }
 
+/// Allocate q=j*step (Å⁻¹), ending at the largest available index not above maximum.
+/// The caller supplies positive finite step and at least one available sample;
+/// this helper does not validate those preconditions or stretch the final point.
 pub(super) fn q_grid(maximum: f64, step: f64, available: usize) -> Vec<f64> {
     let length = (maximum / step)
         .floor()

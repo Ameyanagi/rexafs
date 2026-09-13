@@ -192,6 +192,13 @@ fn agent(seconds: u64) -> ureq::Agent {
         .build()
         .into()
 }
+/// Query official GitHub releases for the requested channel without installing.
+///
+/// Stable uses the latest stable release endpoint; Nightly selects from the most
+/// recent 100 release records. The request has a 15-second total timeout. A
+/// release can be discoverable while its verified archive is unavailable for
+/// this platform: built-in downloads support macOS only in 0.2.4.
+/// Network and malformed-response failures return an explanatory message.
 pub fn check(channel: UpdateChannel) -> Result<UpdateCheck, String> {
     let mut response = agent(15)
         .get(if channel == UpdateChannel::Stable {
@@ -250,6 +257,14 @@ fn verify_stream(
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
+/// Download a release archive and return its verified local cache path.
+///
+/// The byte count and SHA-256 must match GitHub's published asset metadata.
+/// Existing cached files are checked again and reused only when they match;
+/// a damaged cache entry is reported with its path and is not silently replaced.
+/// New downloads use a temporary file and a 180-second network timeout. Failed
+/// temporary downloads are removed. No installer is opened and no running app
+/// or project is replaced; installation remains a separate user action.
 pub fn download(release: &AvailableRelease) -> Result<PathBuf, String> {
     let asset = release
         .asset

@@ -36,6 +36,13 @@ Original AUTOBK method: [Newville et al. (1993)](https://doi.org/10.1103/PhysRev
 The fixed endpoint penalty and linear solution are rexafs-specific choices;
 see the [implemented AUTOBK objective](https://rexafs.com/docs/science/autobk/).
 
+Resolved scalar defaults and ek0 are retained inside the spectrum.
+Automatic kmax and nknots remain unset in the settings and are calculated
+locally from the current input on each background call.
+Processing does not replace None fields in your original settings object.
+Reassign fresh or reset settings when you want retained automatic choices
+recalculated after changing the data or an earlier stage.
+
 ## AUTOBK
 
 ```python
@@ -48,6 +55,12 @@ Begin with rbkg=1.0 angstrom and the LinearDirect/FixedPenalty pair.
 Edit only the fields your data require, then assign the settings to the
 spectrum's background stage. Construction does not fit a spectrum;
 numeric range and solver compatibility checks occur during processing.
+
+Keyword arguments are available in source builds after 0.2.4; published
+0.2.4 settings use construction without arguments followed by field
+assignment. Python type conversion can raise TypeError, and an integer
+outside the native field's representable range can raise OverflowError
+before any numerical processing.
 
 ## ek0
 
@@ -131,6 +144,13 @@ Smaller steps produce more interpolated samples without adding measured
 information. This usually supplies the automatic spacing of the later
 forward transform.
 
+For FixedPenalty, the internal objective FFT uses a fixed amplitude
+reference of 0.05 / sqrt(pi); kstep still sets the physical R spacing
+and low-R cutoff. Legacy clamp policies use kstep / sqrt(pi) instead.
+This internal convention is separate from the public forward transform.
+If that transform has already run, assign fresh XrayFFTF settings when
+changing this step so its automatic spacing is resolved again.
+
 ## nclamp
 
 ```python
@@ -186,6 +206,11 @@ their weights. Values must be finite and nonnegative. Increasing this
 value favors smaller endpoint oscillations over the low-R objective.
 Its numerical meaning depends on the implemented Fourier scaling and
 weights; it is not an uncertainty estimate. Unused by Fixed and TwoPass.
+
+FixedPenalty evaluates its low-R residual with an internal FFT factor
+of 0.05 / sqrt(pi). Changing the background k weight or window changes
+the numerical balance against the endpoint penalty, even with unchanged
+lambda. See the [implemented objective](https://rexafs.com/docs/science/autobk/).
 
 ## nfft
 
@@ -306,7 +331,10 @@ Fourier window used inside the background objective. Default: "Hanning".
 
 None selects Hanning. A window reduces artifacts from abrupt k truncation;
 its shape changes the objective and can change the extracted background.
-See FTWindow for accepted names and shape-dependent taper behavior.
+Accepted case-sensitive names are Hanning, Parzen, Welch, Gaussian,
+Sine, KaiserBessel and FHanning. See the
+[window reference](https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow)
+for the shape-dependent parameter conventions.
 An unsupported name raises ValueError when assigned.
 
 ## solver
@@ -348,5 +376,5 @@ Endpoint model for background removal. Recommended default: "FixedPenalty".
 None resolves to FixedPenalty, which requires LinearDirect and uses
 clamp_lambda as a fixed mean-square penalty strength. Fixed and TwoPass
 retain older residual-dependent clamp models; their results need not
-match the recommended objective. See AUTOBKClampScalePolicy for the
-distinction. Unknown names raise ValueError when assigned.
+match the recommended objective. See the [AUTOBK objective](https://rexafs.com/docs/science/autobk/) for
+the distinction. Unknown names raise ValueError when assigned.

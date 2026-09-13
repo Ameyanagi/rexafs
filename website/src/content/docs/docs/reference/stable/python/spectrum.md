@@ -47,6 +47,11 @@ have at least two samples, and have strictly increasing energy.
 Invalid shapes or data raise ValueError. No processing runs here;
 call fft() for the default pipeline or normalize() for just normalization.
 
+The two-sample minimum only permits storage. Automatic edge detection
+requires at least three samples, and baseline/spline fitting needs enough
+points on the appropriate sides of the edge. Supply real numeric input;
+NumPy conversion errors for unsupported objects propagate to the caller.
+
 ## from_arrays
 
 ```python
@@ -59,6 +64,10 @@ Equivalent to Spectrum(energy, mu): it accepts array-like inputs and
 copies them to owned float64 storage. Inputs must be finite, one-dimensional,
 equal-length, with at least two samples and strictly increasing energy.
 Invalid data raise ValueError. Derived results are initially unavailable.
+
+As with the constructor, two samples are enough to create the object
+but not enough for automatic edge detection or a useful EXAFS pipeline.
+Array conversion follows NumPy's float64 conversion rules.
 
 ## set_spectrum
 
@@ -73,6 +82,11 @@ matching one-dimensional arrays with strictly increasing energy and at
 least two samples. Invalid input raises ValueError before replacing data.
 Stage settings are retained, but old calculated edge values and arrays
 are discarded. Returns this spectrum; call a processing stage to recompute.
+
+Unlike the QAS reader, this method rejects unordered input rather than
+sorting it. Previously resolved automatic fit ranges and FFT spacings
+are retained with the other settings. Reassign automatic settings if
+the new scan needs those choices inferred again.
 
 ## set_e0
 
@@ -119,6 +133,10 @@ normalization results are retained. Later edits to the original settings
 do not propagate: assign them again to apply changes. Returns this
 spectrum without fitting; call calc_background() or a later stage.
 
+If changing kstep after fft() has already run, also reassign XrayFFTF
+settings with kstep=None. Clearing the Fourier results does not reset
+its previously resolved automatic spacing.
+
 ## set_fft
 
 ```python
@@ -131,6 +149,11 @@ Normalization and the background k()/chi() arrays are retained. Use
 XrayFFTF to choose k weights, the window and grid convention. Editing
 the original settings later has no effect until you assign them again.
 Returns this spectrum without transforming; call fft() to recompute.
+
+If ifft() has already resolved its automatic kstep and this change
+alters the R-grid spacing, reassign inverse settings with kstep=None
+before the next inverse. This setter clears results, not the resolved
+parameters of the inverse stage.
 
 ## e0
 
@@ -158,6 +181,9 @@ samples and refines its search around the candidate edge. It returns
 this spectrum, stores E0 in eV and clears normalization and all later
 results. Inspect the result for noisy spectra or multiple edges;
 automatic detection is not energy calibration. Invalid data raise ValueError.
+
+At least three energy/mu samples are required, even though the
+constructor can store two. An insufficient scan raises ValueError.
 
 ## normalize
 
@@ -224,6 +250,13 @@ inverse rweight=0, chiq() has units inverse square angstroms.
 This recomputes the inverse and returns this spectrum. Invalid inverse
 grids or settings raise RuntimeError; prerequisite errors propagate.
 
+At least two entries must be present in the displayed r() array;
+an overly small forward rmax_out can therefore prevent inversion.
+After changing the forward R spacing, reassign inverse settings with
+automatic kstep to resolve the new grid instead of retaining an old
+resolved spacing. Configurable inverse settings require a source build
+after 0.2.4.
+
 ## invalidate_derived
 
 ```python
@@ -237,6 +270,10 @@ settings needed for recomputation. Getters for cleared arrays return
 None until their stages run again. Ordinary setters already invalidate
 the affected results; use this method when you need a full recomputation.
 Returns this spectrum without running any calculations.
+
+Resolved fit ranges and FFT spacings are retained along with explicit
+parameters. They are not restored to their original None values; reassign
+fresh settings if you want automatic ranges or spacings inferred again.
 
 ## k
 

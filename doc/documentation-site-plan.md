@@ -3,7 +3,8 @@
 Status: implemented in `website/`, 13 September 2026. This developer planning
 record is not included in the public website. See the
 [maintenance guide](../website/README.md) for the actual build, content ownership
-and future custom-domain steps. The sections below preserve the design rationale.
+and custom-domain maintenance. GitHub Pages now serves the public site at
+[rexafs.com](https://rexafs.com/). The sections below preserve the design rationale.
 
 The initial migration retains checkout guides because they describe unreleased
 APIs, while curated website guides target stable 0.2.4. Shared science text must

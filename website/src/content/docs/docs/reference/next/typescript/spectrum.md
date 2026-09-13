@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** These signatures describe the source checkout, not npm rexafs@0.2.4.
+**Next API · unreleased.** This reference describes the source checkout, including additions not available in npm rexafs@0.2.4.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
@@ -98,6 +98,11 @@ inverse results. A specified method E0 overrides the spectrum E0; otherwise the 
 is retained. The caller keeps ownership of the settings and wrapper and may free them after
 assignment. Later edits require reassignment. Returns this spectrum.
 
+Omitting the argument, undefined or null restores automatic pre/post-edge settings while
+retaining the selected E0. These reset forms work in stable 0.2.4 and Next. For custom
+settings, stable 0.2.4 accepts a NormalizationMethod wrapper; Next (the source checkout)
+also accepts PrePostEdge directly.
+
 ## set_background_method
 
 ```typescript
@@ -108,6 +113,12 @@ Copy the selected background method and clear background, forward and inverse re
 retaining normalization. The caller keeps ownership of the settings and wrapper and may
 free them after assignment. Later edits require reassignment. Returns this spectrum.
 
+Omitting the argument, undefined or null restores default AUTOBK settings. These reset
+forms work in stable 0.2.4 and Next. For custom settings, stable 0.2.4 accepts a
+BackgroundMethod wrapper; Next (the source checkout) also accepts AUTOBK directly. This
+does not reset forward or inverse configuration values that were already resolved
+automatically.
+
 ## set_ifft
 
 ```typescript
@@ -117,7 +128,8 @@ set_ifft(parameters: XrayFFTR): this;
 Copy inverse-transform settings and clear q()/chiq() while preserving normalization,
 background and forward results. Settings can be freed after assignment; later edits require
 reassignment. Invalid R ranges or inconsistent kstep/nfft are reported when ifft() runs.
-Returns this spectrum.
+Returns this spectrum. Assign settings with kstep undefined to resolve spacing again after
+changing the forward grid. This method and XrayFFTR are Next additions after 0.2.4.
 
 ## set_fft
 
@@ -128,7 +140,9 @@ set_fft(parameters: XrayFFTF): this;
 Copy forward-transform settings and clear r(), chir_*(), kwin(), kwin_k(), q() and chiq().
 Normalization and background k()/chi() are preserved. Settings can be freed after
 assignment; later edits require reassignment. Invalid numerical settings are reported when
-fft() runs. Returns this spectrum.
+fft() runs. Returns this spectrum. Assign settings with kstep undefined to request fresh
+spacing inference, for example after changing AUTOBK.kstep. Inverse settings are retained;
+if their spacing was already resolved, they may also need replacement before ifft().
 
 ## e0
 
@@ -195,7 +209,10 @@ Calculate real chi(q) by windowing the retained complex Fourier bins in R and pe
 conjugate-symmetric inverse transform. Runs missing forward and prerequisite stages first.
 Forward k-weighting and windowing remain in the output, so this is not generally unweighted
 chi(k). Throws on inconsistent transform settings or failed prerequisite stages. Returns
-this spectrum.
+this spectrum. At least two reported R samples are required even though filtering uses the
+full internal Fourier bins; rmax_out=0 therefore fails. When reusing a spectrum with a
+different forward grid, reset previously resolved inverse settings in Next, or create a
+fresh spectrum in stable 0.2.4.
 
 ## invalidate_derived
 
@@ -206,7 +223,9 @@ invalidate_derived(): this;
 Clear normalization, background, forward and inverse calculated arrays without discarding
 the measured inputs, selected E0 or stage settings. User-specified edge-step overrides are
 retained; a previously estimated step is recomputed by the next normalization. Returns this
-spectrum. Subsequent getters return undefined until their stages run again.
+spectrum. Subsequent getters return undefined until their stages run again. Resolved
+automatic settings, such as FFT kstep, are retained. Reassign the affected stage settings
+to request fresh automatic values for changed input grids.
 
 ## k
 

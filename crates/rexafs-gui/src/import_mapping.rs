@@ -11,12 +11,18 @@ pub enum AxisConversion {
     /// Preserve the released behavior: XDI metadata, otherwise an eV axis.
     #[default]
     Auto,
+    /// Treat each source value as photon energy in eV, without scaling.
     EnergyEv,
+    /// Convert photon energy from keV to eV by multiplying by 1000.
     EnergyKev,
+    /// Convert the monochromator Bragg angle θ in degrees using first order.
     AngleDegrees {
+        /// Spacing of the reflecting crystal planes in Å; finite and positive.
         d_spacing: f64,
     },
+    /// Convert the monochromator Bragg angle θ in radians using first order.
     AngleRadians {
+        /// Spacing of the reflecting crystal planes in Å; finite and positive.
         d_spacing: f64,
     },
 }
@@ -31,6 +37,19 @@ impl AxisConversion {
         hash.finish()
     }
 
+    /// Convert one original axis value to photon energy in eV.
+    ///
+    /// `Auto` delegates to XDI column metadata when supplied; an ordinary text
+    /// table otherwise uses eV. `column` is a zero-based source-column index.
+    /// Explicit angular modes use E = hc / (2 d sin θ), with
+    /// hc = 12398.419843320026 eV Å, plane spacing d in Å and Bragg angle θ.
+    /// This assumes first-order diffraction and θ, not the total scattering
+    /// angle 2θ; see [IUCr's Bragg-law reference](https://dictionary.iucr.org/Bragg%27s_law).
+    ///
+    /// Angular conversion rejects nonpositive/non-finite d and angles outside
+    /// 0 < θ <= π/2. Explicit energy modes only rescale the input: callers must
+    /// still check whether the resulting energy is finite. No source values or
+    /// metadata are mutated.
     pub fn energy_ev(
         self,
         header: Option<&XdiHeader>,

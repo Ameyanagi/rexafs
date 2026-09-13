@@ -1,6 +1,6 @@
 ---
-title: "Python · type aliases"
-description: "type aliases signatures, defaults and API explanations."
+title: "Python · types and version"
+description: "types and version signatures, defaults and API explanations."
 audience: user
 pagefind: true
 ---

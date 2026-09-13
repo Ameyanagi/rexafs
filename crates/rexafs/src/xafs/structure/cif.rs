@@ -1,5 +1,16 @@
 //! Tolerant CIF 1.1 reader (the subset written by AMCSD, COD, the Materials
 //! Project and pymatgen) and a P1 writer.
+//!
+//! CIF is the Crystallographic Information File format; its text syntax is
+//! defined by the [IUCr CIF 1.1 specification](https://www.iucr.org/what-we-do/digital-standards/cif/cif1).
+//! This reader implements a practical subset rather than a full dictionary
+//! validator. Parsing retains string tokens; structure conversion interprets
+//! cell lengths in Å, angles in degrees, and fractional atom coordinates.
+//! A value such as 1.234(5) supplies the nominal number 1.234; its uncertainty
+//! is not propagated. Missing/incomplete sites can be omitted with warnings.
+//! [`structure_to_cif`] writes expanded sites with P1 symmetry, so it is a
+//! structure interchange representation rather than a lossless archive of
+//! source formatting, all metadata, or the original asymmetric-unit description.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -13,15 +24,19 @@ use super::StructureError;
 /// A `loop_` block: tag names and rows of values.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CifLoop {
+    /// Column tag names in file order.
     pub tags: Vec<String>,
+    /// Owned string values in row/column order; missing-value tokens are retained.
     pub rows: Vec<Vec<String>>,
 }
 
 impl CifLoop {
+    /// Return the first matching column index, ignoring ASCII letter case, or None.
     pub fn column(&self, tag: &str) -> Option<usize> {
         self.tags.iter().position(|t| t.eq_ignore_ascii_case(tag))
     }
 
+    /// Whether this loop contains the requested tag, ignoring ASCII letter case.
     pub fn has(&self, tag: &str) -> bool {
         self.column(tag).is_some()
     }
@@ -30,13 +45,16 @@ impl CifLoop {
 /// One `data_` block.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CifBlock {
+    /// Name after data_ in the source, or empty for an implicit block.
     pub name: String,
     /// Non-loop items, keys lower-cased.
     pub items: HashMap<String, String>,
+    /// Parsed loop blocks in file order.
     pub loops: Vec<CifLoop>,
 }
 
 impl CifBlock {
+    /// Borrow a non-loop item using a case-insensitive tag, or None when absent.
     pub fn get(&self, tag: &str) -> Option<&str> {
         self.items
             .get(&tag.to_ascii_lowercase())
@@ -48,10 +66,12 @@ impl CifBlock {
         tags.iter().find_map(|t| self.get(t))
     }
 
+    /// Parse a non-loop numeric item, discarding its standard-uncertainty suffix; absent/missing/invalid values return None.
     pub fn number(&self, tag: &str) -> Option<f64> {
         self.get(tag).and_then(parse_number)
     }
 
+    /// Borrow the first loop containing this tag, or None if no loop matches.
     pub fn loop_with(&self, tag: &str) -> Option<&CifLoop> {
         self.loops.iter().find(|l| l.has(tag))
     }

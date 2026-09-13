@@ -208,6 +208,30 @@ impl BackgroundMethod {
 /// FixedPenalty is a rexafs modification: one linear least-squares solve of
 /// mean squared low-R residual plus a fixed weighted endpoint penalty.
 ///
+/// For fixed grid/window/edge step, chi(c)=y−B*c is affine in cubic spline
+/// coefficients c. Here y is normalized data, optionally minus an objective-only
+/// standard, and B contains the spline basis on the output k grid. If h(c)
+/// stacks m real/imaginary low-R Fourier entries, the objective is
+///
+/// ```text
+/// J(c) = sum(h(c)^2)/m
+///      + lambda * sum(active endpoint weight^2 * chi(c)^2)/N_active
+/// ```
+///
+/// N_active counts enabled endpoint rows; zero weight omits an endpoint and
+/// lambda=0 or nclamp=0 omits the penalty. Each enabled end contributes up to
+/// nclamp output samples. A row may appear at both ends when the sets overlap;
+/// those occurrences are counted separately. lambda is a numerical penalty
+/// strength tied to the chosen Fourier/k-weight units, not a universal
+/// dimensionless physical quantity or confidence level. The fixed residual
+/// FFT uses 0.05/sqrt(pi), while legacy policies use the actual kstep/sqrt(pi).
+///
+/// The single least-squares system stacks h and endpoint rows multiplied by
+/// sqrt(lambda*m/N_active). Column scaling and singular-value decomposition
+/// solve it without adding regularization. Rank, conditioning and stationarity
+/// failures return errors instead of changing lambda or falling back.
+/// This fixed objective is implemented in the private `background::fixed` module.
+///
 /// `calc_background` computes missing normalization and stores new background,
 /// k and chi arrays. Directly editing fields does not invalidate existing
 /// spectrum results; use `Spectrum::set_background_method` for managed updates.
@@ -232,8 +256,9 @@ pub struct AUTOBK {
     /// an explicit value is capped at that range. Must exceed `kmin`.
     pub kmax: Option<f64>,
     /// Uniform output k spacing in Å⁻¹; default 0.05, finite and positive.
-    /// This sets the physical R grid of the internal objective; its amplitude
-    /// reference remains fixed at `0.05 / sqrt(pi)`.
+    /// This sets the physical R grid. FixedPenalty uses the fixed numerical
+    /// amplitude reference `0.05 / sqrt(pi)`; legacy policies instead use the
+    /// actual `kstep / sqrt(pi)`.
     pub kstep: Option<f64>,
     /// Number of output k samples penalized at each enabled end; default 3.
     /// FixedPenalty uses up to the available point count and includes the last sample.
@@ -271,15 +296,16 @@ pub struct AUTOBK {
     /// Spline solver; recommended default `LinearDirect`. FixedPenalty requires
     /// this solver and returns failures as errors instead of falling back.
     pub solver: Option<AUTOBKSolver>,
-    /// Clamp model. FixedPenalty requires LinearDirect; Fixed and TwoPass select legacy behavior.
     #[serde(default = "legacy_clamp_policy")]
     /// Endpoint objective; recommended default `FixedPenalty`. `Fixed` and
     /// `TwoPass` retain legacy scale models. Older serialized settings lacking this
     /// field restore `Fixed` for historical compatibility.
     pub clamp_scale_policy: Option<AUTOBKClampScalePolicy>,
     /// FixedPenalty endpoint strength; recommended default 0.001. Must be finite
-    /// and nonnegative; zero removes endpoint rows. This is an empirical rexafs
-    /// choice, not a physical constant or the dynamic clamp model in stock Larch.
+    /// and nonnegative; zero removes endpoint rows. Its numerical balance is tied
+    /// to the fixed 0.05/sqrt(pi) FFT scale, k-weight and window. This is an
+    /// empirical rexafs choice, not a universal dimensionless physical constant
+    /// or the dynamic clamp model in stock Larch.
     pub clamp_lambda: Option<f64>,
     /// Legacy Fixed/TwoPass ridge magnitude; default 1e-4.
     /// Unused by FixedPenalty, which never adds a ridge to force a solution.
@@ -361,6 +387,9 @@ impl AUTOBK {
 
     /// Resolve unset scalar defaults without fitting a background.
     /// Data-dependent E0, maximum k and coefficient count are resolved later.
+    /// Filled scalar values are retained. calc_background also stores its
+    /// resolved ek0, but automatic kmax/nknots remain None and are calculated
+    /// locally from the current data.
     pub fn fill_parameter(&mut self) -> Result<(), BackgroundError> {
         if self.rbkg.is_none() {
             self.rbkg = Some(1.0);
@@ -686,25 +715,20 @@ impl AUTOBK {
         }
     }
 
-    /// Calculate background
-    ///
-    /// # Arguments
-    ///
-    /// * `energy` - 1-d array of x-ray energies, in eV, or group
-    /// * `mu` - 1-d array of mu(E)
-    /// * `normalization_param` - rexafs::normalization::NormalizationMethod struct which contains parameters for normalization
-    ///
-    /// # Example
-    ///
-    /// TODO: Add example
-    ///
     /// Fit a smooth background from borrowed energy (eV) and absorption arrays.
     ///
     /// Calculates missing normalization, mutates the supplied normalization settings
-    /// and replaces this object's cached outputs. Inputs must be finite, matched
-    /// and increasing with enough post-edge points. Invalid cutoffs, spline geometry
-    /// or failed solves return `BackgroundError`; unavailable algorithms return
-    /// `NotImplemented`. Input arrays themselves are unchanged.
+    /// and replaces this object's cached outputs: bkg in absorption units and
+    /// dimensionless chie on the energy grid, plus dimensionless unweighted chi on
+    /// the zero-origin k grid in Å⁻¹. Returns this object for chaining. Scalar
+    /// defaults and the resolved ek0 are retained; automatic kmax/nknots remain
+    /// local. Earlier parameter filling and normalization can remain after failure.
+    ///
+    /// Inputs must be finite, matched and nondecreasing with enough post-edge
+    /// points; duplicate energies may be nudged in an internal copy. Invalid
+    /// cutoffs, spline geometry, unavailable solver features or failed solves
+    /// return `BackgroundError`. FixedPenalty requires LinearDirect and never
+    /// switches to a legacy fallback objective. Input arrays are unchanged.
     pub fn calc_background(
         &mut self,
         energy: &DVector<f64>,
@@ -1071,8 +1095,9 @@ impl AUTOBK {
     /// Read the stored value without recalculating.
     ///
     /// Uniform output k spacing in Å⁻¹; default 0.05, finite and positive.
-    /// This sets the physical R grid of the internal objective; its amplitude
-    /// reference remains fixed at `0.05 / sqrt(pi)`.
+    /// This sets the physical R grid. FixedPenalty uses the fixed numerical
+    /// amplitude reference `0.05 / sqrt(pi)`; legacy policies instead use the
+    /// actual `kstep / sqrt(pi)`.
     pub fn get_kstep(&self) -> Option<&f64> {
         self.kstep.as_ref()
     }
@@ -1378,7 +1403,11 @@ impl AUTOBKSpline {
         1.0 + 100.0 * out.dot(&out) / out.len() as f64
     }
 
-    /// The Loss function in 1-d array for the Levenberg-Marquardt optimization
+    /// Build the historical residual with dynamic or explicitly frozen clamp scale.
+    /// The head contains real/imaginary FFT entries scaled by actual kstep/sqrt(pi).
+    /// Dynamic s(c)=1+100*mean(head(c)^2); endpoint rows are weight*s(c)*chi(c).
+    /// Both ends contribute rows, including zero-weight rows, and the high-end
+    /// slice excludes the final chi sample. This is not FixedPenalty.
     pub fn residual_vec_with_scale(
         &self,
         coefs: &DVector<f64>,
@@ -1410,6 +1439,11 @@ impl AUTOBKSpline {
         self.residual_vec_with_scale(coefs, None)
     }
 
+    /// Differentiate the historical residual with respect to spline coefficients.
+    /// For dynamic clamps the product rule gives
+    /// d(weight*s*chi)/dc = weight*(s*dchi/dc + chi*ds/dc), with
+    /// ds/dc = 200*dot(head,dhead/dc)/len(head). A frozen scale has ds/dc=0.
+    /// The complete term matches the actual residual since 0.2.4.
     pub fn residual_jacobian_with_scale(
         &self,
         coefs: &DVector<f64>,

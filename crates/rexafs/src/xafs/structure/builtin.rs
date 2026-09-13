@@ -25,31 +25,44 @@ static BLOB: &[u8] = include_bytes!("builtin_library.json.gz");
 pub struct BuiltinEntry {
     /// Stable key (`ru_hcp`, `fe2o3_hematite`).
     pub key: String,
+    /// Display name assigned to this bundled reference or visualization example.
     pub name: String,
     /// Hill formula as recorded by the source.
     pub formula: String,
+    /// International Tables space-group number recorded in the catalog.
     pub sg_number: u16,
+    /// Optional space-group symbol from the source catalog.
     #[serde(default)]
     pub sg: Option<String>,
     /// `metal` / `oxide` / `sulfide` / `molecule` / `other`.
     pub category: String,
+    /// Origin of the structure record, retained for attribution.
     pub source: String,
     /// Source record id (`cod-4105040`).
     pub id: String,
+    /// Optional source-record URL for checking provenance.
     #[serde(default)]
     pub url: Option<String>,
+    /// Publication year text supplied by the source, when available.
     #[serde(default)]
     pub year: Option<String>,
+    /// Source publication’s journal title, when available.
     #[serde(default)]
     pub journal: Option<String>,
+    /// Source publication’s author text, when available.
     #[serde(default)]
     pub authors: Option<String>,
+    /// Source publication’s DOI, when available; not generated from the structure.
     #[serde(default)]
     pub doi: Option<String>,
+    /// Data-license statement retained from the catalog.
     pub license: String,
+    /// Attribution text for this structure’s source.
     pub citation: String,
+    /// Interpretation or provenance note; empty when none is recorded.
     #[serde(default)]
     pub note: String,
+    /// Bundled CIF text parsed when this entry is loaded; no network fetch is needed.
     pub cif: String,
 }
 
@@ -106,18 +119,22 @@ impl BuiltinLibrary {
         Ok(Self { entries, hits })
     }
 
+    /// Borrow all catalog records in bundled order, including citations and CIF text.
     pub fn entries(&self) -> &[BuiltinEntry] {
         &self.entries
     }
 
+    /// Number of bundled catalog records.
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
+    /// Whether the bundled catalog contains no records.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
+    /// Borrow the record with this exact stable key, or None when no key matches.
     pub fn entry(&self, key: &str) -> Option<&BuiltinEntry> {
         self.entries.iter().find(|e| e.key == key)
     }

@@ -52,6 +52,17 @@ forward-transform window. The fixed endpoint penalty is a rexafs choice describe
 in the [AUTOBK objective](/docs/science/autobk/). Older projects preserve their
 saved clamp policy, so check it before comparing their results with a new project.
 
+**Background options → Load standard…** accepts an optional χ(k) reference.
+Supply exactly two numeric columns: increasing, nonnegative k in Å⁻¹ and matching
+finite, unweighted, dimensionless χ(k). Separate columns with whitespace or
+commas; begin comments with `#` or `*`. At least two points are required, and
+extra columns or malformed rows produce an error. This input is a reference for
+the background objective, not a new μ(E) spectrum or an already-windowed Fourier
+curve. Its arrays are stored inside the project. Leave it unset for the normal
+starting workflow; use **Clear standard** to remove it. See the [standard
+reader](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/params.rs#L983)
+and [AUTOBK objective](/docs/science/autobk/).
+
 
 [![Full background-removal view showing weighted Cu EXAFS and AUTOBK settings](/screenshots/background.jpg)](/screenshots/background.jpg)
 

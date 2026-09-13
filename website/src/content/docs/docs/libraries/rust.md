@@ -42,6 +42,12 @@ comments, types, methods and module explanations. The mutually alternative
 the primary implementation in this reference. You can also use
 [versioned docs.rs](https://docs.rs/rexafs/0.2.4/rexafs/).
 
+The [Next Rust reference](/api/rust-next/rexafs/index.html) is generated from the
+current checkout's source comments with the same backend and optional features.
+It includes unreleased API additions and corrected explanations. Use its newer
+signatures only when building the matching checkout; stable and Next references
+are labeled separately.
+
 | Module | Operations |
 |---|---|
 | `Spectrum`, `Group` | Normalization, background, FFT/IFFT, collections and parallel processing |

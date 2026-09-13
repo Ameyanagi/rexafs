@@ -1,5 +1,17 @@
 //! Symmetry operations (`x,-y+1/2,z`), the bundled space-group table
 //! (spglib's 530 Hall settings) and asymmetric-unit expansion.
+//!
+//! [`SymOp::apply`] maps a fractional position f to f' = R f + t: f and t
+//! are dimensionless three-component column vectors, and R is a 3×3 integer
+//! matrix. This relocates a site by the supplied crystal operation; it does
+//! not change the unit-cell basis. See the official
+//! [spglib definitions](https://spglib.readthedocs.io/en/stable/definition.html)
+//! for the operation/basis distinction. rexafs reads a bundled table generated
+//! from spglib; it does not run spglib to discover symmetry from noisy coordinates.
+//! [`expand_sites`] applies supplied operations, wraps into the unit cell,
+//! and merges periodically close positions using a fractional-coordinate tolerance.
+//! That tolerance is a numerical deduplication choice, not a distance resolution
+//! in Å or a test of whether two chemical sites should be physically equivalent.
 
 use std::io::Read;
 use std::sync::OnceLock;
@@ -14,11 +26,13 @@ use super::StructureError;
 pub struct SymOp {
     /// Integer rotation matrix (rows act on `[x, y, z]`).
     pub rot: [[i8; 3]; 3],
-    /// Translation, each component in [0, 1).
+    /// Dimensionless fractional translation; parse() wraps each component into
+    /// [0, 1), while direct struct construction does not validate or wrap it.
     pub trans: [f64; 3],
 }
 
 impl SymOp {
+    /// Create the fractional-coordinate identity operation with no translation.
     pub fn identity() -> Self {
         Self {
             rot: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
@@ -30,6 +44,9 @@ impl SymOp {
     /// `1/2+x,1/2-y,-z` or `0.5-x, y, z`. Letters may be upper case;
     /// separators are commas (or whitespace when there are exactly three
     /// terms without commas).
+    /// Malformed components or zero fraction denominators return InvalidSymOp.
+    /// This parses the representation; it does not validate group membership
+    /// or whether the resulting matrix preserves a supplied cell metric.
     pub fn parse(text: &str) -> Result<Self, StructureError> {
         let err = |reason: &str| StructureError::InvalidSymOp {
             op: text.to_string(),
@@ -134,7 +151,9 @@ impl SymOp {
         out
     }
 
-    /// Canonical string form (`-y,x-y,z+1/2`).
+    /// Format as an x,y,z operation, using common rational translations when close.
+    /// Other translations use four decimal places, so arbitrary inputs need not
+    /// round-trip exactly. Directly constructed operations are not validated here.
     pub fn to_xyz(&self) -> String {
         let names = ['x', 'y', 'z'];
         let mut parts = Vec::new();
@@ -194,19 +213,27 @@ fn fraction_string(t: f64) -> String {
 /// One Hall setting of the bundled space-group table.
 #[derive(Debug, Clone, Deserialize)]
 pub struct SpaceGroupEntry {
+    /// Index of the Hall setting in the bundled spglib table, from 1 through 530.
     pub hall_number: u16,
     /// International Tables number.
     pub number: u16,
+    /// Hall symbol specifying this setting.
     pub hall: String,
+    /// Short Hermann–Mauguin symbol in the table.
     pub hm_short: String,
+    /// Full Hermann–Mauguin symbol in the table.
     pub hm_full: String,
+    /// Alternative International symbol retained for lookup.
     pub hm: String,
+    /// Origin/axis/setting choice string from the table; empty when unspecified.
     pub choice: String,
     /// Operations as `x,y,z` strings.
     pub ops: Vec<String>,
 }
 
 impl SpaceGroupEntry {
+    /// Parse this setting’s operation strings into owned operations.
+    /// Malformed strings are silently omitted; bundled entries are validated by project tests.
     pub fn operations(&self) -> Vec<SymOp> {
         self.ops
             .iter()
@@ -231,7 +258,8 @@ pub fn space_group_table() -> &'static [SpaceGroupEntry] {
 }
 
 /// Normalise an H-M or Hall symbol for comparison: lower case, no spaces,
-/// no underscores, setting suffix after `:` dropped, `\-3` → `-3`.
+/// no underscores or quotes, and setting suffix after `:` dropped.
+/// Backslashes are preserved. This is textual comparison, not a basis/origin transform.
 pub fn normalize_symbol(symbol: &str) -> String {
     let s = symbol.trim();
     let s = s.split(':').next().unwrap_or(s);
@@ -242,8 +270,11 @@ pub fn normalize_symbol(symbol: &str) -> String {
 }
 
 /// Resolve a space group from what a CIF offers: Hall symbol first, then
-/// the H-M symbol (short or full spelling), then the IT number (its
-/// standard setting = first table entry).
+/// the H-M symbol (short or full spelling), then the International Tables number.
+/// Number-only fallback selects the first matching bundled setting. Ambiguous
+/// settings and suffixes are not resolved by transforming the cell or coordinates;
+/// prefer explicit CIF operations or a Hall symbol when the setting matters.
+/// Returns None when no supported table entry matches.
 pub fn find_space_group(
     number: Option<u16>,
     hm_symbol: Option<&str>,
@@ -292,6 +323,10 @@ pub fn find_space_group(
 /// within `tol` (fractional, periodic) are merged; species landing on the
 /// same position from different asymmetric sites are combined (partial
 /// occupancy).
+/// Empty ops uses identity; the input sites are borrowed and the output owns
+/// copies. Equal species from different source sites have occupancies summed
+/// and capped individually at one; total mixed-species occupancy is not normalized.
+/// Choose a positive tol in fractional units (the CIF reader uses 1e-3).
 pub fn expand_sites(asym: &[Site], ops: &[SymOp], tol: f64) -> Vec<Site> {
     let ops: Vec<SymOp> = if ops.is_empty() {
         vec![SymOp::identity()]
@@ -343,7 +378,9 @@ fn merge_species(target: &mut Vec<Species>, sp: &Species) {
     }
 }
 
-/// Periodic closeness in fractional coordinates.
+/// Whether all three fractional differences, including unit-cell wrap, are < tol.
+/// Inputs should already lie in [0, 1). This coordinate-wise criterion is not
+/// a Cartesian Euclidean distance and depends on the unit-cell basis.
 pub fn frac_close(a: [f64; 3], b: [f64; 3], tol: f64) -> bool {
     (0..3).all(|i| {
         let d = (a[i] - b[i]).abs();

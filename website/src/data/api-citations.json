@@ -6,21 +6,58 @@
     ]
   },
   {
+    "url": "https://bruceravel.github.io/demeter/aug/process/rebin.html",
+    "sources": [
+      "crates/rexafs/src/xafs/tools.rs"
+    ]
+  },
+  {
     "url": "https://dlmf.nist.gov/10.25.E2",
     "sources": [
-      "crates/rexafs/src/xafs/mathutils.rs"
+      "crates/rexafs/src/xafs/bessel_i0.rs",
+      "crates/rexafs/src/xafs/mathutils.rs",
+      "crates/rexafs/src/xafs/mathutils_ndarray.rs"
+    ]
+  },
+  {
+    "url": "https://docs.materialsproject.org/downloading-data/using-the-api/getting-started",
+    "sources": [
+      "crates/rexafs/src/xafs/structure/db/mp.rs"
     ]
   },
   {
     "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.BSpline.html",
     "sources": [
+      "crates/rexafs/src/xafs/mathutils.rs",
+      "crates/rexafs/src/xafs/mathutils_ndarray.rs",
       "crates/rexafs/src/xafs/spline.rs"
+    ]
+  },
+  {
+    "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.CubicSpline.html",
+    "sources": [
+      "crates/rexafs/src/xafs/spline.rs"
+    ]
+  },
+  {
+    "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html",
+    "sources": [
+      "crates/rexafs/src/xafs/lmutils.rs"
+    ]
+  },
+  {
+    "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.leastsq.html",
+    "sources": [
+      "crates/rexafs/src/xafs/fitting/types.rs"
     ]
   },
   {
     "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.voigt_profile.html",
     "sources": [
-      "crates/rexafs/src/xafs/mathutils.rs"
+      "crates/rexafs/src/xafs/mathutils.rs",
+      "crates/rexafs/src/xafs/mathutils_ndarray.rs",
+      "crates/rexafs/src/xafs/xafsutils.rs",
+      "crates/rexafs/src/xafs/xafsutils_ndarray.rs"
     ]
   },
   {
@@ -29,6 +66,7 @@
       "py-rexafs/python/rexafs/__init__.pyi",
       "py-rexafs/python/rexafs/io.pyi",
       "py-rexafs/src/lib.rs",
+      "crates/rexafs-wasm/src/lib.rs",
       "js-rexafs/types.d.ts",
       "crates/rexafs/src/xafs/normalization.rs",
       "crates/rexafs/src/xafs/normalization_ndarray.rs"
@@ -51,8 +89,10 @@
     "sources": [
       "py-rexafs/python/rexafs/__init__.pyi",
       "py-rexafs/src/lib.rs",
+      "crates/rexafs-wasm/src/lib.rs",
       "js-rexafs/types.d.ts",
       "crates/rexafs/src/lib.rs",
+      "crates/rexafs/src/xafs/background/fixed.rs",
       "crates/rexafs/src/xafs/background.rs",
       "crates/rexafs/src/xafs/background_ndarray.rs"
     ]
@@ -60,7 +100,8 @@
   {
     "url": "https://doi.org/10.1103/PhysRevB.48.9825",
     "sources": [
-      "crates/rexafs/src/xafs/fitting/transform.rs"
+      "crates/rexafs/src/xafs/fitting/transform.rs",
+      "crates/rexafs/src/xafs/fitting/types.rs"
     ]
   },
   {
@@ -68,11 +109,14 @@
     "sources": [
       "py-rexafs/python/rexafs/__init__.pyi",
       "py-rexafs/src/lib.rs",
+      "crates/rexafs-wasm/src/lib.rs",
       "js-rexafs/types.d.ts",
       "crates/rexafs/src/lib.rs",
       "crates/rexafs/src/xafs/fitting/mod.rs",
       "crates/rexafs/src/xafs/fitting/path_model.rs",
-      "crates/rexafs/src/xafs/structure/pathrank.rs"
+      "crates/rexafs/src/xafs/structure/pathrank.rs",
+      "crates/rexafs/src/xafs/xrayfft.rs",
+      "crates/rexafs/src/xafs/xrayfft_ndarray.rs"
     ]
   },
   {
@@ -91,18 +135,21 @@
   {
     "url": "https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/background/fixed.rs",
     "sources": [
+      "crates/rexafs-wasm/src/lib.rs",
       "js-rexafs/types.d.ts"
     ]
   },
   {
     "url": "https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/inverse_fft.rs",
     "sources": [
+      "crates/rexafs-wasm/src/lib.rs",
       "js-rexafs/types.d.ts"
     ]
   },
   {
     "url": "https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/normalization.rs",
     "sources": [
+      "crates/rexafs-wasm/src/lib.rs",
       "js-rexafs/types.d.ts"
     ]
   },
@@ -115,7 +162,14 @@
   {
     "url": "https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/xrayfft.rs",
     "sources": [
+      "crates/rexafs-wasm/src/lib.rs",
       "js-rexafs/types.d.ts"
+    ]
+  },
+  {
+    "url": "https://github.com/scipy/scipy/blob/v1.15.3/scipy/special/xsf/cephes/i0.h",
+    "sources": [
+      "crates/rexafs/src/xafs/bessel_i0.rs"
     ]
   },
   {
@@ -150,16 +204,31 @@
     ]
   },
   {
+    "url": "https://netlib.org/cephes/doubldoc.html#chbevl",
+    "sources": [
+      "crates/rexafs/src/xafs/bessel_i0.rs"
+    ]
+  },
+  {
+    "url": "https://numpy.org/doc/stable/reference/generated/numpy.convolve.html",
+    "sources": [
+      "crates/rexafs/src/xafs/xafsutils.rs",
+      "crates/rexafs/src/xafs/xafsutils_ndarray.rs"
+    ]
+  },
+  {
     "url": "https://numpy.org/doc/stable/reference/routines.fft.html#implementation-details",
     "sources": [
       "py-rexafs/python/rexafs/__init__.pyi",
       "py-rexafs/src/lib.rs",
+      "crates/rexafs-wasm/src/lib.rs",
       "js-rexafs/types.d.ts"
     ]
   },
   {
     "url": "https://numpy.org/doc/stable/reference/routines.fft.html#normalization",
     "sources": [
+      "crates/rexafs-wasm/src/lib.rs",
       "js-rexafs/types.d.ts",
       "crates/rexafs/src/xafs/xrayfft.rs",
       "crates/rexafs/src/xafs/xrayfft_ndarray.rs"
@@ -181,7 +250,9 @@
     "url": "https://rexafs.com/docs/science/autobk/",
     "sources": [
       "py-rexafs/python/rexafs/__init__.pyi",
-      "py-rexafs/src/lib.rs"
+      "py-rexafs/src/lib.rs",
+      "crates/rexafs-wasm/src/lib.rs",
+      "js-rexafs/types.d.ts"
     ]
   },
   {
@@ -207,7 +278,20 @@
     ]
   },
   {
+    "url": "https://spglib.readthedocs.io/en/stable/definition.html",
+    "sources": [
+      "crates/rexafs/src/xafs/structure/lattice.rs",
+      "crates/rexafs/src/xafs/structure/symmetry.rs"
+    ]
+  },
+  {
     "url": "https://wiki.crystallography.net/RESTful_API/",
+    "sources": [
+      "crates/rexafs/src/xafs/structure/db/cod.rs"
+    ]
+  },
+  {
+    "url": "https://www.crystallography.net/cod",
     "sources": [
       "crates/rexafs/src/xafs/structure/db/cod.rs"
     ]
@@ -222,6 +306,18 @@
     "url": "https://www.itl.nist.gov/div898/handbook/eda/section3/eda356.htm",
     "sources": [
       "crates/rexafs/src/xafs/tools.rs"
+    ]
+  },
+  {
+    "url": "https://www.itl.nist.gov/div898/handbook/pmd/section4/pmd431.htm",
+    "sources": [
+      "crates/rexafs/src/xafs/tools.rs"
+    ]
+  },
+  {
+    "url": "https://www.iucr.org/what-we-do/digital-standards/cif/cif1",
+    "sources": [
+      "crates/rexafs/src/xafs/structure/cif.rs"
     ]
   },
   {
@@ -240,11 +336,19 @@
   {
     "url": "https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow",
     "sources": [
-      "py-rexafs/python/rexafs/__init__.pyi"
+      "py-rexafs/python/rexafs/__init__.pyi",
+      "py-rexafs/src/lib.rs"
     ]
   },
   {
     "url": "https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow-generating-fourier-transform-windows",
+    "sources": [
+      "crates/rexafs/src/xafs/xafsutils.rs",
+      "crates/rexafs/src/xafs/xafsutils_ndarray.rs"
+    ]
+  },
+  {
+    "url": "https://xraypy.github.io/xraylarch/xafs_preedge.html#the-find-e0-function",
     "sources": [
       "crates/rexafs/src/xafs/xafsutils.rs",
       "crates/rexafs/src/xafs/xafsutils_ndarray.rs"

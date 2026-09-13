@@ -11,15 +11,20 @@ use super::StructureError;
 /// One atom of an XYZ file.
 #[derive(Debug, Clone, PartialEq)]
 pub struct XyzAtom {
+    /// Resolved chemical symbol; isotopic D/T labels resolve to H.
     pub symbol: String,
+    /// Atomic number corresponding to symbol.
     pub z: u8,
+    /// Cartesian coordinates in Å, retained in the input coordinate system.
     pub cart: [f64; 3],
 }
 
 /// A parsed XYZ file.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Xyz {
+    /// Second-line XYZ comment retained for display and provenance.
     pub comment: String,
+    /// Owned nonperiodic atoms in input order.
     pub atoms: Vec<XyzAtom>,
 }
 

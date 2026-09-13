@@ -82,9 +82,13 @@ pub struct XASSpectrum {
     pub xftr: Option<xrayfft::XrayFFTR>,
     /// Accumulated energy shift (eV) applied by `shift_energy`/`calibrate`/`align_to`.
     pub energy_shift: f64,
-    /// Per-point standard deviation of `mu` (set by merge/rebin).
+    /// Per-point spread stored by merge/rebin, in input absorption units.
+    /// Other data edits do not consistently propagate, resize or clear this field;
+    /// verify alignment with `energy`/`mu` before reuse. It is not automatically
+    /// consumed as an uncertainty model by spectrum processing.
     pub mu_stddev: Option<DVector<f64>>,
-    /// Whether `energy`/`mu` are the result of `rebin`.
+    /// Marker set by rebinning. Later data replacement does not reset it, so it
+    /// records a past operation rather than validating the current arrays.
     pub rebinned: bool,
     /// Explicit normalization scale, distinct from the scale inferred by a stage.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -513,7 +517,9 @@ impl XASSpectrum {
     }
 
     /// Take ownership of forward settings and clear forward/inverse results.
-    /// Existing normalization and background results are retained.
+    /// Existing normalization and background results are retained. Values already
+    /// inferred inside `parameters`, such as `kstep`, stay explicit; use a fresh
+    /// configuration or reset such fields to `None` to request new inference.
     pub fn set_fft(&mut self, parameters: xrayfft::XrayFFTF) -> &mut Self {
         self.xftf = Some(parameters);
         self.invalidate_fft();
@@ -527,6 +533,8 @@ impl XASSpectrum {
     /// Default settings use k-weight 2, a Kaiser–Bessel window and 2048 samples.
     /// Invalid input/settings or a failed prerequisite returns a typed error.
     /// Every call recomputes the forward transform and clears inverse results.
+    /// Successful calls retain resolved settings: an inferred `kstep` is reused
+    /// after later background-grid changes unless reset through [`Self::set_fft`].
     pub fn fft(&mut self) -> Result<&mut Self, XAFSError> {
         self.invalidate_fft();
         if self.k().is_none() || self.chi().is_none() {
@@ -563,7 +571,10 @@ impl XASSpectrum {
         Ok(self)
     }
 
-    /// Configure the inverse transform, preserving forward results and clearing q/chi(q).
+    /// Take ownership of inverse settings, preserving forward results and clearing q/chi(q).
+    /// Previously inferred `kstep`/`nfft` values in the supplied settings remain
+    /// explicit. Pass a fresh configuration after changing forward-grid geometry
+    /// when you want the inverse grid to be inferred again.
     pub fn set_ifft(&mut self, mut parameters: xrayfft::XrayFFTR) -> &mut Self {
         parameters.q = None;
         parameters.chiq = None;
@@ -577,6 +588,8 @@ impl XASSpectrum {
     /// Uses [`xrayfft::XrayFFTR`] defaults unless inverse settings are configured.
     /// This preserves the forward weighting/window and is not an unweighted χ(k)
     /// reconstruction. Invalid inverse settings or prerequisites return an error.
+    /// Resolved inverse grid settings persist across calls; after changing forward
+    /// `nfft` or spacing, reset them with [`Self::set_ifft`] to request inference.
     pub fn ifft(&mut self) -> Result<&mut Self, XAFSError> {
         if self.chir().is_none() {
             self.fft()?;
@@ -629,7 +642,10 @@ impl XASSpectrum {
 
     /// Clear every result derived from `energy`/`mu` (normalization outputs,
     /// background, χ(k), χ(R), χ(q)) while keeping the stage parameters, so
-    /// the pipeline recomputes from the modified data.
+    /// the pipeline recomputes from the modified data. Resolved automatic settings
+    /// are retained along with explicit settings: clearing a result does not set
+    /// its inferred `kstep`, `nfft` or fitting ranges back to `None`. This also leaves
+    /// `mu_stddev`, `rebinned` and the selected E0 unchanged.
     pub fn invalidate_derived(&mut self) -> &mut Self {
         if let Some(last_result) = self.normalization_edge_step_last_result.take() {
             let current = self.normalization.as_ref().and_then(|m| m.get_edge_step());
@@ -716,7 +732,8 @@ impl XASSpectrum {
 
     /// Shift the energy axis (working and raw) by `delta_ev`, moving `e0` and
     /// the e0-like stage parameters along with it. The shift accumulates in
-    /// `energy_shift`. Derived results are invalidated.
+    /// `energy_shift`. Derived results are invalidated. The shift is in eV and
+    /// must be finite; this setter stores it without immediate validation.
     pub fn shift_energy(&mut self, delta_ev: f64) -> &mut Self {
         if let Some(e) = self.energy.as_mut() {
             e.add_scalar_mut(delta_ev);
@@ -769,7 +786,12 @@ impl XASSpectrum {
     }
 
     /// Calibrate: shift the spectrum so that `feature` lands on `target_ev`
-    /// and set `e0 = target_ev` (as Athena does). Returns the shift applied.
+    /// and set the spectrum/normalization E0 to `target_ev`, in eV. Returns the
+    /// shift applied in eV and invalidates derived results. A feature-detection
+    /// failure is returned before shifting. The target must be finite; no immediate
+    /// target validation is performed. Existing AUTOBK `ek0` is shifted with the
+    /// axes and can differ from the target when its old reference differed from
+    /// the selected feature; use [`Self::set_e0`] to synchronize it explicitly.
     pub fn calibrate(
         &mut self,
         feature: tools::EdgeFeature,
@@ -787,7 +809,11 @@ impl XASSpectrum {
 
     /// Align this spectrum to `reference` by overlaying dμ/dE within
     /// `window` (eV, relative to the reference e0). The best shift (searched
-    /// over ±20 eV) is applied with [`Self::shift_energy`] and returned.
+    /// on a coarse ±20 eV interval with 0.1 eV steps) is applied with
+    /// [`Self::shift_energy`] and returned in eV. Refinement can move slightly
+    /// outside that interval. The reference is not mutated; insufficient coverage
+    /// or an invalid prerequisite returns an error. See [`tools::find_energy_shift`]
+    /// for the sign convention and free amplitude scaling.
     pub fn align_to(
         &mut self,
         reference: &XASSpectrum,
@@ -852,12 +878,19 @@ impl XASSpectrum {
         Ok(idx.len())
     }
 
-    /// Deglitch: remove the data points nearest to each of `energies_to_remove`.
+    /// Remove working samples nearest to target energies in eV.
+    /// Returns the number of distinct working samples removed; repeated targets
+    /// remove a sample once and out-of-range targets select an endpoint. When
+    /// usable raw arrays exist, removes their nearest samples too. Invalidates
+    /// derived results and errors if fewer than two working samples would remain.
+    /// Stored `mu_stddev` is not resized or recalculated.
     pub fn deglitch_points(&mut self, energies_to_remove: &[f64]) -> Result<usize, XAFSError> {
         self.remove_points_at(energies_to_remove)
     }
 
-    /// Deglitch: remove every point with `e_lo <= E <= e_hi`.
+    /// Remove every working point in an inclusive energy interval, in eV.
+    /// Reversed bounds are swapped. Delegates the selected energies to
+    /// [`Self::deglitch_points`], including its raw-array and uncertainty behavior.
     pub fn deglitch_range(&mut self, e_lo: f64, e_hi: f64) -> Result<usize, XAFSError> {
         let (energy, _) = self.working_pair()?;
         let targets: Vec<f64> = tools::indices_in_range(energy, e_lo, e_hi)
@@ -869,7 +902,10 @@ impl XASSpectrum {
 
     /// Athena's margin deglitch: fit a line to μ(E) over `[e_lo, e_hi]` and
     /// remove the points lying more than `upper_margin` above or
-    /// `lower_margin` below it. Returns the energies removed.
+    /// `lower_margin` below it. Bounds are in eV and margins in absorption units;
+    /// negative margins use their absolute values. Returns removed energies in eV.
+    /// At least two selected points must support the fitted line and two working
+    /// samples must remain. Data mutation follows [`Self::deglitch_points`].
     pub fn deglitch_margin(
         &mut self,
         e_lo: f64,
@@ -888,7 +924,10 @@ impl XASSpectrum {
     }
 
     /// Truncate: keep only points with `before <= E <= after` (either bound
-    /// may be `None`).
+    /// may be `None` for no bound). Bounds are in eV and are not automatically
+    /// swapped. Errors before mutation if fewer than two working samples remain.
+    /// Raw arrays are truncated too when at least two raw points remain; otherwise
+    /// they stay unchanged. Clears derived results but does not resize `mu_stddev`.
     pub fn truncate(
         &mut self,
         before: Option<f64>,
@@ -934,7 +973,11 @@ impl XASSpectrum {
 
     /// Rebin onto Athena's three-region grid (see [`tools::rebin`]). The raw
     /// arrays are replaced by the rebinned data, `mu_stddev` holds the
-    /// per-bin standard deviation and `rebinned` is set.
+    /// per-bin standard deviation and `rebinned` is set. E0 comes from `cfg.e0`,
+    /// then the current spectrum E0, then an automatic estimate used for the grid.
+    /// The automatically estimated grid E0 is not copied into `self.e0` by this
+    /// method. Errors from [`tools::rebin`] leave the arrays unchanged. Subsequent
+    /// stages are invalidated, while their resolved parameters remain stored.
     pub fn rebin(&mut self, cfg: &tools::RebinConfig) -> Result<&mut Self, XAFSError> {
         let (energy, mu) = self.working_pair()?;
         let cfg = tools::RebinConfig {
@@ -951,7 +994,9 @@ impl XASSpectrum {
         Ok(self.invalidate_derived())
     }
 
-    /// Non-mutating variant of [`Self::rebin`].
+    /// Clone the spectrum and apply [`Self::rebin`] to the clone.
+    /// A named result receives the suffix ` (rebinned)`; the original arrays,
+    /// settings and results remain unchanged. Returns the same rebin errors.
     pub fn rebinned(&self, cfg: &tools::RebinConfig) -> Result<XASSpectrum, XAFSError> {
         let mut out = self.clone();
         out.rebin(cfg)?;
@@ -961,8 +1006,12 @@ impl XASSpectrum {
         Ok(out)
     }
 
-    /// Smooth μ(E) by convolution with a Lorentzian/Gaussian/Voigt of width
-    /// `sigma` (and `gamma`), replacing `mu` and `raw_mu`.
+    /// Replace working μ(E) with a Lorentzian/Gaussian/Voigt smoothed copy.
+    /// Width definitions and defaults (`sigma = 1` eV, `gamma = sigma`) follow
+    /// [`tools::smooth_mu`]. Matching raw arrays receive the same result; a
+    /// different usable raw grid is smoothed independently, otherwise raw data is
+    /// retained. Invalidates derived results. A smoothing failure returns before
+    /// arrays are replaced. Stored `mu_stddev` is not propagated through the filter.
     pub fn smooth_mu(
         &mut self,
         form: xafsutils::ConvolveForm,

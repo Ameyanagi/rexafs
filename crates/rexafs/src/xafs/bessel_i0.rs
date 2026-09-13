@@ -1,3 +1,13 @@
+//! Modified Bessel function of the first kind, order zero, for FFT windows.
+//!
+//! [`bessel_i0`] uses the Cephes polynomial coefficients and interval mapping
+//! documented in the [SciPy Cephes source](https://github.com/scipy/scipy/blob/v1.15.3/scipy/special/xsf/cephes/i0.h).
+//! That source attributes the approximation to Stephen L. Moshier, Cephes Math
+//! Library release 2.8. Coefficients are retained here without refitting.
+//! The function and its argument are dimensionless. It supplies the shape of
+//! the Kaiser–Bessel window; it does not set the Fourier amplitude normalization.
+
+/// Chebyshev coefficients for `exp(-x) * I0(x)` on `0 <= x <= 8`.
 const A: &[f64] = &[
     -4.415_341_646_479_339_5E-18,
     3.330_794_518_822_238_4E-17,
@@ -31,6 +41,8 @@ const A: &[f64] = &[
     6.767_952_744_094_761E-1,
 ];
 
+/// Chebyshev coefficients for `exp(-x) * sqrt(x) * I0(x)` on `x >= 8`,
+/// evaluated after the reciprocal mapping `32 / x - 2`.
 const B: &[f64] = &[
     -7.233_180_487_874_754E-18,
     -4.830_504_485_944_182E-18,
@@ -59,6 +71,18 @@ const B: &[f64] = &[
     8.044_904_110_141_088E-1,
 ];
 
+/// Evaluate a Chebyshev series using the Cephes recurrence without allocation.
+///
+/// If `array` contains `[a[n], ..., a[0]]`, returns
+/// `a[0] / 2 + sum_{j=1..n} a[j] * T[j](x / 2)`, where `T[j]` is the
+/// degree-j Chebyshev polynomial. The argument is dimensionless; the output
+/// shares the coefficient units. The reversed coefficient order, halved
+/// constant term and `x / 2` argument follow
+/// [Cephes chbevl](https://netlib.org/cephes/doubldoc.html#chbevl).
+///
+/// The approximation tables in this module map their domains to `-2 <= x <= 2`.
+/// This helper itself does not restrict `x` or check finiteness; large values can
+/// overflow. An empty coefficient slice panics.
 pub fn chvevl(x: f64, array: &[f64]) -> f64 {
     let mut b0: f64 = array[0];
     let mut b1: f64 = 0.0;
@@ -73,6 +97,18 @@ pub fn chvevl(x: f64, array: &[f64]) -> f64 {
     0.5 * (b0 - b2)
 }
 
+/// Approximate the dimensionless modified Bessel function `I0(x)` for real `x`.
+///
+/// The defining series is `sum_{j=0..infinity} (x*x/4)^j / (j!)^2`, with `j`
+/// a nonnegative integer and `I0(0) = 1`; see
+/// [DLMF equation 10.25.2](https://dlmf.nist.gov/10.25.E2) at order zero.
+/// Evaluation uses the even symmetry `I0(-x) = I0(x)` and separate Chebyshev
+/// approximations below and above `abs(x) = 8`, followed by exponential scaling.
+/// Increasing a positive argument increases the Kaiser–Bessel shape contribution.
+///
+/// This is the unscaled function. Large finite arguments can overflow the
+/// intermediate exponential even when the final mathematical value is finite;
+/// NaN and infinite inputs produce NaN. No validation or error return is provided.
 pub fn bessel_i0(mut x: f64) -> f64 {
     let y: f64;
 

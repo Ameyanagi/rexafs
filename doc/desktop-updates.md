@@ -11,6 +11,13 @@ The built-in verified-download action supports macOS in 0.2.4. Windows and Linux
 users should follow the release link and download the matching installer or
 portable archive manually; see [installation](installing.md).
 
+An already downloaded archive is checked again before reuse. If that cached file
+fails its size or SHA-256 check, the error identifies its path; remove the damaged
+download and retry. rexafs does not open it or replace it silently. A failed new
+download discards its temporary file. A network error during **Check for updates**
+does not establish that the installed version is current; retry when GitHub is
+reachable or check the release page manually.
+
 A Nightly label includes the immutable build tag. `rexafs --build-info` reports the library version, channel, release tag, source commit and optional nightly build time. Each packaged archive contains the same identity and signing/notarization provenance in `build.json`.
 
 ## Updating to 0.2.4

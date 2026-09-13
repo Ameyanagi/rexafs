@@ -1,6 +1,11 @@
 import { bindConfiguration } from "./configuration.js";
 import core from "./dist/node/rexafs_wasm.js";
 import { bindSpectrum } from "./spectrum.js";
+/**
+ * Resolve without loading another engine: importing the generated Node module
+ * already initializes its packaged Wasm synchronously. This function supports
+ * code shared with the browser entry point; see node.d.ts for public hover help.
+ */
 export default async function init() {}
 export const Spectrum = bindSpectrum(core);
 export const PrePostEdge = bindConfiguration(core.PrePostEdge, ["pre_edge_start", "pre_edge_end", "norm_start", "norm_end", "norm_polyorder", "n_victoreen", "e0", "edge_step"]);

@@ -183,7 +183,8 @@ impl<'a> XASPlotBuilder<'a> {
 
     /// Append Fourier components against distance in Å, initially magnitude only.
     /// Computes a missing forward transform; the default displayed interval is 0–6 Å.
-    /// No scattering phase correction is applied.
+    /// Component units are Å^(-(w + 1)) for the forward transform's k weight `w`
+    /// and dimensionless chi(k). No scattering phase correction is applied.
     pub fn r(mut self) -> Self {
         self.panels.push(PanelSpec::new(PanelKind::R));
         self

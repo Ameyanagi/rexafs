@@ -10,13 +10,28 @@ use serde::{Deserialize, Serialize};
 use super::bessel_i0;
 use super::mathutils::{index_nearest_sorted, MathUtils};
 
+/// Conventional small energy scale in eV used by energy-step utilities.
+/// The default backend returns this fallback when an averaging slice is empty;
+/// it is a numerical default, not a measured energy resolution.
 pub const TINY_ENERGY: f64 = 0.005;
 
 #[path = "constants.rs"]
 pub mod constants;
 
+/// Convert excess photon energy E−E0 (eV) and photoelectron wave number k (Å⁻¹).
+///
+/// The nonrelativistic relation is E−E0 = hbar²*k²/(2*m_e), with unit conversion
+/// encoded by `constants::KTOE` ≈ 3.809982110968585 eV Å². Subtract E0 before
+/// calling `etok`; these helpers do not know the absorption-edge energy.
+/// Vector implementations allocate results and leave borrowed inputs unchanged.
 pub trait XAFSUtils {
+    /// Return sqrt((E−E0)*ETOK) in Å⁻¹. Scalar, Vec and DVector values below
+    /// zero are clamped to zero; NaNs propagate. The legacy ndarray-array
+    /// implementation instead takes the raw square root and returns NaN for
+    /// negative excess energy. AUTOBK uses a separate signed interpolation grid.
     fn etok(&self) -> Self;
+    /// Return k²*KTOE in eV; E0 is not added. Negative k is squared, so its
+    /// sign is lost. No finiteness validation is performed.
     fn ktoe(&self) -> Self;
 }
 
@@ -60,14 +75,46 @@ impl XAFSUtils for DVector<f64> {
     }
 }
 
+/// Line-profile family used for smoothing by convolution.
+/// Widths use the same units as the supplied x axis; these kernels are not the
+/// Fourier-window families in `FTWindow`. See
+/// [SciPy's Voigt-profile definition](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.voigt_profile.html).
 #[derive(Debug, Clone, Copy, Default)]
 pub enum ConvolveForm {
+    /// Lorentzian kernel; sigma is its half width at half maximum.
     #[default]
     Lorentzian,
+    /// Gaussian kernel; sigma is its standard deviation.
     Gaussian,
+    /// Gaussian–Lorentzian convolution; sigma is the Gaussian standard deviation
+    /// and gamma is the Lorentzian half width at half maximum.
     Voigt,
 }
 
+/// Smooth y(x) by interpolation, reflected extension and direct convolution.
+///
+/// Returns a newly allocated array on the original x coordinates, in the same
+/// y units. Widths sigma (default 1.0) and gamma (default sigma) use x units.
+/// Lorentzian uses sigma as half width at half maximum and ignores gamma;
+/// Gaussian uses sigma as standard deviation; Voigt uses both widths.
+/// Increasing the width suppresses narrow features as well as noise.
+///
+/// The requested xstep defaults to the smallest successive x difference.
+/// npad defaults to 5 and extends the interpolation domain by that many requested
+/// steps on each side. The code reflects the interpolated signal, constructs a
+/// sampled kernel, normalizes its sum, and evaluates a direct valid convolution;
+/// it does not call an FFT. See the convolution definition in
+/// [NumPy's reference](https://numpy.org/doc/stable/reference/generated/numpy.convolve.html).
+/// The interpolation array is capped at 50 times the input length. If that cap
+/// is reached, its actual spacing differs from xstep while kernel widths still
+/// use the requested step; avoid excessively fine xstep values.
+///
+/// Use matching finite arrays on a strictly increasing x axis and positive finite
+/// widths and spacing. Interpolation or invalid convolution dimensions can return
+/// an error. This low-level helper does not validate every nonfinite value.
+/// The default backend borrows inputs, requires matching arrays with at least
+/// three samples, clamps npad to at least 1, and returns an error for xstep below
+/// 1e-12. Invalid finite-range geometry is not comprehensively checked.
 pub fn smooth(
     x: &DVector<f64>,
     y: &DVector<f64>,
@@ -179,6 +226,20 @@ fn linspace(start: f64, end: f64, n: usize) -> DVector<f64> {
     DVector::from_iterator(n, (0..n).map(|i| start + i as f64 * step))
 }
 
+/// Estimate a small representative energy interval in eV.
+///
+/// Defaults are frac_ignore=0.01, nave=10 and sort=false. Differences between
+/// successive energy values are sorted. With n input energies, start is
+/// floor(frac_ignore*n), and end is min(start+nave, n-2). The mean uses the
+/// half-open difference slice [start,end), so the largest interval is excluded.
+/// The ignored count is based on energy sample count, not difference count.
+///
+/// This heuristic supplies smoothing scales for edge finding; it is not an
+/// energy calibration or an uncertainty estimate. Borrowed input is unchanged.
+/// Use finite energies and finite nonnegative fraction settings: comparison of
+/// NaNs can panic. Sorting, when requested, operates on a copy.
+/// The default backend returns TINY_ENERGY (0.005 eV) when no differences or
+/// no averaging entries remain.
 pub fn find_energy_step(
     energy: &DVector<f64>,
     frac_ignore: Option<f64>,
@@ -215,6 +276,20 @@ pub fn find_energy_step(
     }
 }
 
+/// Nudge nearly repeated coordinates without deleting any samples.
+///
+/// Returns a newly allocated vector with the same length. For a difference d
+/// between the current and preceding non-NaN original values, if abs(d) < tiny,
+/// the added offset accumulates by max(tiny, frac * abs(d)). Defaults are
+/// tiny=1e-7 in coordinate units and dimensionless frac=1e-6. The increment does
+/// not use the next sample. This is a numerical coordinate adjustment, not an
+/// averaging or merging operation on paired absorption values.
+///
+/// `sort=Some(true)` sorts a copy first; None/false retain the input order.
+/// Use finite values when sorting: the floating-point comparison unwraps and
+/// panics on NaN. Without sorting, NaNs are retained and skipped when tracking
+/// the previous value. This helper neither guarantees strict monotonicity after
+/// nudging nor changes an associated mu array.
 pub fn remove_dups(
     arr: &DVector<f64>,
     tiny: Option<f64>,
@@ -258,6 +333,23 @@ pub fn remove_dups(
     arr + add
 }
 
+/// Find one derivative-based edge candidate and return (energy_eV, index, step_eV).
+///
+/// The estimate uses gradient(mu)/gradient(energy) after nudging duplicate
+/// energy coordinates. A normalized derivative threshold starts at 0.60 for
+/// more than 20 samples and 0.30 otherwise, and can be halved twice. A selected
+/// peak must also have neighboring samples above the threshold; end regions
+/// are excluded. These numerical thresholds are rexafs choices, not confidence
+/// levels. If no candidate passes, the initial index zero can be returned.
+///
+/// `estep=None` uses half `find_energy_step`; `use_smooth=None` is false.
+/// Smoothing, when used, is Lorentzian with width 3*estep and sample spacing
+/// estep. The index refers to the supplied sample order; duplicate nudging may
+/// shift the returned energy slightly. Finite increasing energy in eV and
+/// matched absorption samples are the intended inputs.
+/// The default backend rejects length mismatch or fewer than three samples.
+/// A failed optional smoothing step falls back to the raw derivative; broader
+/// nonfinite-input checks belong to Spectrum.
 pub fn _find_e0(
     energy: &DVector<f64>,
     mu: &DVector<f64>,
@@ -406,6 +498,19 @@ pub fn _find_e0(
     Ok((en[imax], imax, estep))
 }
 
+/// Estimate an absorption edge in eV from the derivative of mu(E).
+///
+/// Runs `_find_e0` on the full spectrum, then refines a neighborhood extending
+/// up to 75 samples on each side of the candidate. A peak requires adjacent
+/// high-derivative samples to reduce isolated-glitch sensitivity. This is a
+/// numerical edge estimate, not independent energy calibration or evidence that
+/// an edge is physically unique. Inspect noisy, multi-edge or narrow scans.
+/// See [Larch's edge-finding reference](https://xraypy.github.io/xraylarch/xafs_preedge.html#the-find-e0-function)
+/// for the method's purpose; detailed thresholds and fallback rules here are
+/// implementation choices.
+/// Inputs are borrowed unchanged. Length mismatch or fewer than three points
+/// return an error. If the refinement window is too short or refinement fails,
+/// the first estimate is returned.
 pub fn find_e0(energy: &DVector<f64>, mu: &DVector<f64>) -> Result<f64, Box<dyn Error>> {
     if energy.len() != mu.len() {
         return Err("energy and mu length mismatch".into());

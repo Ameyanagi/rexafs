@@ -22,6 +22,14 @@ def digest(path):
 
 
 def check_source(archive, manifest, version, commit, run_id, target, channel="stable", release_tag=None):
+    """Return unsigned archive metadata after matching its source build identity.
+
+    Check the archive's SHA-256 against the supplied manifest, validate member
+    paths, and require the expected clean commit/run/version/target/channel.
+    release_tag is checked only when supplied. This reads the archive without
+    extraction and raises ValueError on mismatches; check-release-source.py
+    separately verifies the GitHub run before these artifacts are downloaded.
+    """
     app_name(channel)
     expected_name = f"rexafs-{version}-{target}.zip"
     if archive.name != expected_name:
@@ -48,6 +56,12 @@ def check_source(archive, manifest, version, commit, run_id, target, channel="st
 
 
 def private_run(command):
+    """Run a credential-bearing command with captured output and redacted errors.
+
+    Return stdout on success. On failure, raise RuntimeError containing only
+    the executable and exit status; callers must not log the returned output
+    when it contains credentials.
+    """
     # Credential-bearing command lines must never appear in exceptions or logs.
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode:
@@ -57,6 +71,14 @@ def private_run(command):
 
 @contextmanager
 def signing_keychain(directory):
+    """Yield a temporary keychain containing the configured Developer ID identity.
+
+    Read the six macos-signing settings named below, import the certificate and
+    store a notarytool profile. During use the keychain joins the user's search
+    list. The finally block attempts to restore that list and removes the
+    temporary keychain/certificate. This mutates signing state on a macOS runner
+    and is intended for the signing workflow, not ordinary documentation builds.
+    """
     required = ["MACOS_CERTIFICATE_P12_BASE64", "MACOS_CERTIFICATE_PASSWORD",
                 "APPLE_ID", "APPLE_APP_SPECIFIC_PASSWORD", "APPLE_TEAM_ID", "MACOS_SIGNING_IDENTITY"]
     missing = [name for name in required if not os.environ.get(name)]
@@ -97,6 +119,12 @@ def run(command):
 
 
 def verify_app(app, team):
+    """Require a timestamped Developer ID app signature and accepted notarization.
+
+    Run codesign, stapler and Gatekeeper checks for the expected Apple team.
+    This checks the signed app bundle; it does not launch its graphical UI.
+    Tool failures propagate and mismatched signature details raise ValueError.
+    """
     run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", app])
     details = subprocess.run(["codesign", "-d", "--verbose=4", str(app)], check=True,
                              capture_output=True, text=True).stderr
@@ -108,6 +136,12 @@ def verify_app(app, team):
 
 
 def notarize(submission, keychain, directory, label):
+    """Submit to Apple and return the accepted notarization submission ID.
+
+    Use the keychain's rexafs-release profile, wait up to 45 minutes, and save
+    the service log under directory using label. An unaccepted result raises
+    ValueError; this step does not staple the ticket or verify Gatekeeper.
+    """
     auth = ["--keychain-profile", "rexafs-release", "--keychain", str(keychain)]
     result = json.loads(subprocess.check_output([
         "xcrun", "notarytool", "submit", str(submission), *auth, "--wait", "--timeout", "45m",
@@ -121,6 +155,13 @@ def notarize(submission, keychain, directory, label):
 
 
 def sign_installer(bundle, archive, output, metadata, keychain, directory):
+    """Create, sign, notarize, staple and qualify the bundle's DMG installer.
+
+    Write the image, SHA-256 sidecar and JSON qualification evidence into output.
+    Verify a copied installation and record its executable hash alongside the
+    signed ZIP hash. Existing installer output is rejected by build_installer.
+    Requires Apple's tools and submits the image to Apple's notary service.
+    """
     image = output / installer_name(metadata)
     build_installer(bundle, image, metadata)
     run(["codesign", "--sign", metadata["signing_identity"], "--keychain", keychain, "--timestamp", image])
@@ -144,6 +185,15 @@ def sign_installer(bundle, archive, output, metadata, keychain, directory):
 
 
 def sign_archive(archive, output, metadata, keychain, directory, dmg=False):
+    """Sign the already-qualified native app and write a fresh release archive.
+
+    Use check_source's metadata; update that dictionary in place with signing
+    provenance. Repackage and re-extract the signed/stapled app, then verify its
+    signature and calculation self-checks before writing the checksum. With
+    dmg=True also retain in-app notices and produce a qualified DMG. Executables
+    are signed but not rebuilt. Existing ZIP/checksum paths may be overwritten;
+    callers should supply a fresh workflow output directory.
+    """
     unpacked = directory / "unpacked"
     run(["ditto", "-x", "-k", archive, unpacked])
     bundle = unpacked / archive.stem

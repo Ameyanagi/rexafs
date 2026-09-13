@@ -9,7 +9,7 @@
 //!
 //! COD asks for polite use of the public server: requests carry a
 //! descriptive `User-Agent`, run with a timeout, and are throttled to a
-//! minimum spacing per client.
+//! minimum spacing shared across COD clients in the process.
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
@@ -23,6 +23,7 @@ use crate::xafs::structure::cif::structure_from_cif;
 use crate::xafs::structure::model::Structure;
 use crate::xafs::structure::StructureError;
 
+/// Public COD server root used by default settings.
 pub const DEFAULT_BASE_URL: &str = "https://www.crystallography.net/cod";
 /// Citation shown next to COD results.
 pub const CITATION: &str = "Gražulis et al. (2012) Nucleic Acids Res. 40, D420–D427; \
@@ -54,9 +55,12 @@ fn throttle() {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// COD server settings; defaults use the public server and a 30-second timeout.
+/// Clients require no API key; network methods return owned results.
 pub struct CodConfig {
+    /// Server root; defaults to <https://www.crystallography.net/cod>.
     pub base_url: String,
-    /// Request timeout in seconds.
+    /// Global timeout per HTTP request in seconds; default 30.
     pub timeout_sec: u64,
 }
 
@@ -76,10 +80,12 @@ pub struct Cod {
 }
 
 impl Cod {
+    /// Store settings without making a request or validating server availability.
     pub fn new(config: CodConfig) -> Self {
         Self { config }
     }
 
+    /// Borrow server/timeout settings; cloning the client copies these settings.
     pub fn config(&self) -> &CodConfig {
         &self.config
     }
@@ -107,6 +113,9 @@ impl Cod {
     /// `formula=` in Hill notation instead, which is what COD indexes.
     /// Required elements map to `el1..el8`, exclusions to `nel1..nel4`, and
     /// an exact element set to `strictmin`/`strictmax`.
+    /// This only constructs text and makes no request. Required/excluded element
+    /// lists are limited to the endpoint's eight/four query slots. Search applies
+    /// the full element filters locally afterward; no automatic pagination occurs.
     pub fn result_query(query: &StructureQuery) -> String {
         let mut parts: Vec<String> = vec!["format=json".to_string()];
         if let Some(text) = query
@@ -165,7 +174,9 @@ impl Cod {
             })
     }
 
-    /// Download the CIF text of one COD entry.
+    /// Download owned CIF text for a COD identifier; no structure parsing occurs.
+    /// Blocks for process-wide throttling and the HTTP request. Network/read errors
+    /// return StructureError. Use entry() to parse and expand the structure too.
     pub fn cif_text(&self, id: &str) -> Result<String, StructureError> {
         let id = normalise_id(id);
         let url = self.url(&format!("{id}.cif"));

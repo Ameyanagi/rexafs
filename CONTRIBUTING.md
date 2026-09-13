@@ -20,6 +20,12 @@ results are invalidated, and which prerequisite stages run automatically.
 State which release implements the behavior. Python and TypeScript hover help
 must convey the essentials without requiring the user to open another page.
 
+Write API explanations in the source docstrings, Rust comments or TypeScript
+declarations that supply editor help, then regenerate the API reference. Follow
+the [website maintenance guide](website/README.md) for generation and version
+selection. Stable reference pages must keep the released signatures and describe
+released behavior; source-checkout additions must be labeled as unreleased.
+
 When an equation helps explain an algorithm:
 
 1. State the physical or numerical question it answers.

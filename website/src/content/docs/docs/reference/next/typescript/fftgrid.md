@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** These signatures describe the source checkout, not npm rexafs@0.2.4.
+**Next API · unreleased.** This reference describes the source checkout, including additions not available in npm rexafs@0.2.4.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
@@ -15,6 +15,8 @@ Forward-transform sampling convention. Input preserves the background k grid; La
 constructs a zero-origin uniform grid with linear resampling and an extended window domain.
 The default is Input. This choice affects Fourier preparation only, not the background
 k()/chi() arrays.
+Names are case-sensitive. Assigning an unsupported grid throws a string exception and
+leaves the existing selection unchanged.
 
 ```typescript
 export type FFTGrid = "Input" | "Larch";

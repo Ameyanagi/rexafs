@@ -39,6 +39,11 @@ method falls back to a new thread with the last ten entries as labelled previous
 context. The transcript states which route was used. Resuming applies the current
 session's access policy.
 
+The fallback keeps at most 2000 characters from each of those ten entries, so a
+long previous calculation may need its relevant settings stated again. This is
+historical conversation context, not a replay of its commands or permissions.
+The saved transcript remains available to read in the project.
+
 Project Save keeps the newest five completed conversations by default. Set
 **Conversations kept per project** in the picker to another count, or zero to
 disable saving. An asterisk in the project label indicates unsaved conversation
@@ -57,3 +62,12 @@ The Assistant follows the app's Data → Normalize → Background → Transform 
 Structure → Calculate → Paths → Model → Results workflow. Each assigned spectrum's
 current processing must be inspected before an Assistant fit can run. Plot access
 lets the model assess the result; it does not certify scientific quality.
+
+Assistant processing edits target the current spectrum and are validated by
+running the proposed settings before applying them. Column mappings are excluded
+from that processing-edit operation; review import interpretation in the Data
+tools. Pending access requests expire after five minutes, and stopping the turn
+invalidates unapproved requests. A saved conversation does not retain a usable
+approval or undo token. See the [processing tool
+contract](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/codex_client.rs#L547)
+and [access request lifetime](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/app/shell/assistant.rs#L2127).

@@ -17,24 +17,47 @@ fn weighted_chi_label(weight: f64) -> String {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+/// Presentation settings for one figure type, shared across exported spectra.
+///
+/// These settings change labels, appearance and visible series, not calculated
+/// scientific arrays. CSV uses full visible-series arrays even when plot limits
+/// show only a smaller region. See [`Self::validate`] for output-size limits.
 pub(crate) struct FigureOptions {
+    /// Canvas width in inches; None uses the plotting library's 6.4-inch default.
     pub width: Option<f64>,
+    /// Canvas height in inches; None uses the plotting library's 4.8-inch default.
     pub height: Option<f64>,
+    /// Integer raster dots per inch; None selects rexafs's 300 DPI default.
     pub dpi: Option<f64>,
+    /// Font size in points, 4–48 when supplied; None preserves renderer defaults.
     pub font_size: Option<f64>,
+    /// Curve width in points, 0.1–12 when supplied; None preserves defaults.
     pub line_width: Option<f64>,
+    /// Display title override; None uses the figure's generated title.
     pub title: Option<String>,
+    /// User caption; None uses a factual caption derived from visible curves.
     pub caption: Option<String>,
+    /// Horizontal-axis label override; it does not convert the data's units.
     pub xlabel: Option<String>,
+    /// Vertical-axis label override; it does not rescale the curve values.
     pub ylabel: Option<String>,
+    /// Lower x display limit in the figure's axis units; set together with xmax.
     pub xmin: Option<f64>,
+    /// Upper x display limit; must exceed xmin. None uses the figure's range.
     pub xmax: Option<f64>,
+    /// Lower y display limit in the figure's axis units; set together with ymax.
     pub ymin: Option<f64>,
+    /// Upper y display limit; must exceed ymin. None selects automatic limits.
     pub ymax: Option<f64>,
+    /// Show the visible-series legend; true by default.
     pub legend: bool,
+    /// Show the plot grid; None defaults to true.
     pub grid: Option<bool>,
+    /// Draw applicable processing guides; false by default.
     pub guides: bool,
+    /// Series keys explicitly hidden from figures and their CSV exports.
     pub hidden: BTreeSet<String>,
+    /// Optional series keys explicitly enabled, unless also hidden.
     pub shown: BTreeSet<String>,
     /// Energy figures default to the library's flattened array.
     pub normalized: bool,
@@ -74,12 +97,15 @@ pub(crate) struct FigureSettings {
     pub table_captions: BTreeMap<String, String>,
 }
 impl FigureSettings {
+    /// Return an owned copy of settings for a figure type, or its defaults.
     pub fn options(&self, key: &str) -> FigureOptions {
         self.figures.get(key).cloned().unwrap_or_default()
     }
 }
 
 impl FigureOptions {
+    /// Resolve canvas width/height in inches and raster resolution in DPI.
+    /// This fills defaults without changing stored options or validating limits.
     pub fn dimensions(&self) -> (f64, f64, f64) {
         let default = Plot::new();
         let figure = &default.get_config().figure;
@@ -90,6 +116,10 @@ impl FigureOptions {
         )
     }
 
+    /// Validate dimensions, point sizes and paired axis limits before rendering.
+    /// Requires finite dimensions of 1–30 inches, integer DPI of 72–1200 and at
+    /// most 25 million raster pixels. Axis limits must be finite, paired and
+    /// increasing. Errors leave the options and scientific data unchanged.
     pub fn validate(&self) -> Result<(), String> {
         let (width, height, dpi) = self.dimensions();
         if ![width, height, dpi].iter().all(|v| v.is_finite())

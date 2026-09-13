@@ -49,7 +49,10 @@ pub enum FeffBatchExecutionStrategy {
     #[default]
     GlobalPool,
     /// Use a separate Rayon pool with a positive number of worker threads.
-    DedicatedPool { threads: NonZeroUsize },
+    DedicatedPool {
+        /// Positive number of workers created for this independent batch.
+        threads: NonZeroUsize,
+    },
 }
 
 /// Nonlinear least-squares solver; convergence does not validate the physical model.
@@ -81,7 +84,8 @@ fn default_feff_fit_solver_method() -> FeffFitSolverMethod {
 /// Levenberg–Marquardt uses its dense finite-difference path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum FeffFitJacobianMode {
-    /// Let the implementation choose from dataset/parameter sparsity; recommended.
+    /// Select sparse assembly for multiple datasets, dense for a single dataset;
+    /// the recommended default. The choice is based on dataset count.
     #[default]
     Auto,
     /// Assemble a dense residual-by-parameter matrix.
@@ -253,6 +257,7 @@ impl Default for FeffRunRequest {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+/// One external executable or internal backend stage in a resolved calculation.
 pub struct FeffModuleCommand {
     /// Backend module or stage name, in execution order.
     pub module: String,
@@ -271,6 +276,7 @@ impl Default for FeffModuleCommand {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+/// Selected backend and its ordered stages; resolving this value does not run them.
 pub struct FeffResolvedCommands {
     /// Scattering backend selected for this calculation.
     pub mode: FeffExecutionMode,
@@ -289,6 +295,8 @@ impl Default for FeffResolvedCommands {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+/// Owned paths and execution metadata from a completed scattering calculation.
+/// This records filesystem locations; it does not embed the generated files.
 pub struct FeffRunResult {
     /// Scattering backend selected for this calculation.
     pub mode: FeffExecutionMode,
@@ -970,6 +978,8 @@ impl FeffFitDataset {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+/// One enabled path's owned χ(k), χ(R), and filtered χ(q) plot arrays.
+/// Transform arrays use the dataset's primary k-weight and the fitter's conventions.
 pub struct PathContribution {
     /// Human-readable path or atom identifier.
     pub label: String,
@@ -1061,6 +1071,9 @@ impl Default for KweightResult {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+/// One dataset's fit statistics, unweighted χ(k), and weighted transform arrays.
+/// Real and imaginary plot arrays precede R-windowing; residuals apply that window.
+/// See [`FeffFitResult`] for reporting formulas and their statistical limitations.
 pub struct DatasetResult {
     /// Number of scalar residual entries, including every k-weight and R component.
     pub n_data: usize,
@@ -1154,6 +1167,8 @@ impl Default for DatasetResult {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+/// Explanation of a variable inferred by the convenience fit builder.
+/// Check the starting value and role instead of interpreting inference as a physical prior.
 pub struct FitWarning {
     /// Variable name whose starting value was inferred by the builder.
     pub symbol: String,
@@ -1198,6 +1213,51 @@ pub struct FitSolverReport {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+/// Owned fitted parameters, diagnostics, and primary/per-dataset output arrays.
+///
+/// # Statistics implemented by the solver
+///
+/// Let r be the concatenated real residual after the selected transforms,
+/// windows, k-weights, and noise divisors. R-space contributes real and
+/// imaginary entries separately. The optimizer minimizes S = sum(r_i²).
+/// With M residual entries, p independently varying parameters, and
+/// N_idp = sum_d[1 + 2 Δk_d ΔR_d / π], the reporting conventions are:
+///
+/// ```text
+/// dof = max(N_idp - p, 1e-12)
+/// chi_square = S · N_idp / max(M, 1)
+/// reduced_chi_square = chi_square / dof
+/// covariance ≈ [S / dof] · inverse(JᵀJ)
+/// stderr_j = sqrt(covariance[j,j])
+/// correlation[i,j] = covariance[i,j] / sqrt(covariance[i,i] covariance[j,j])
+/// ```
+///
+/// Here d indexes datasets; Δk is the selected span in Å⁻¹, ΔR is in Å,
+/// and N_idp is dimensionless. J has entries ∂r_i/∂θ_j for independently
+/// varying physical parameters θ. Covariance units are products of parameter
+/// units; standard errors have parameter units. This local linear approximation
+/// assumes an adequate model and meaningful noise scales; it is not a confidence
+/// interval or protection against nonidentifiability. Covariance is absent
+/// when an inverse cannot be formed, and active bounds can make symmetric
+/// standard errors misleading. The positive denominator guard is numerical,
+/// not statistical justification for too many parameters.
+///
+/// The additive one in N_idp and the raw-S covariance scaling specify rexafs;
+/// see [`super::transform::compute_n_idp`] and [`super::solver`]. Related
+/// information-counting theory is discussed by
+/// [Stern (1993)](https://doi.org/10.1103/PhysRevB.48.9825), while the
+/// [SciPy leastsq reference](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.leastsq.html)
+/// explains inverse-curvature covariance and residual-variance scaling.
+///
+/// R-factor is sum ||data-model||² / sum ||data||² in the same scaled
+/// representation, combining dataset numerators and denominators before division.
+/// It is dimensionless and returns zero for a numerically zero data denominator;
+/// that special value does not certify a fit to an absent signal. Compare R-factors
+/// only with compatible fit spaces, scales, and intervals.
+///
+/// Top-level plotting fields mirror the first dataset, while global statistics
+/// combine all datasets. Inputs remain unchanged. Inspect `solver_report` even
+/// when the fit returned Ok: optimizer convergence does not validate the physics.
 pub struct FeffFitResult {
     /// Absent in results saved before optimizer diagnostics were recorded.
     pub solver_report: Option<FitSolverReport>,

@@ -3,6 +3,7 @@
 import json
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import numpy as np
 import rexafs
@@ -280,6 +281,49 @@ class SpectrumTests(unittest.TestCase):
             "run_batch_qas_trans",
         ):
             self.assertFalse(hasattr(rexafs, name), name)
+
+    def test_reader_sorts_paired_rows_but_array_constructor_rejects_them(self):
+        data = np.loadtxt(FIXTURE)
+        expected = self.spectrum().fft()
+        with TemporaryDirectory() as directory:
+            descending = Path(directory) / "descending_qas.dat"
+            np.savetxt(descending, data[::-1])
+            actual = rexafs.io.read_qas_transmission(descending).fft()
+        for name in ("norm", "chi", "chir_mag"):
+            np.testing.assert_allclose(
+                getattr(actual, name)(),
+                getattr(expected, name)(),
+                rtol=1e-11,
+                atol=1e-12,
+            )
+        with self.assertRaises(ValueError):
+            rexafs.Spectrum(self.energy[::-1], self.mu[::-1])
+
+    def test_reassigning_automatic_settings_resolves_changed_grids(self):
+        spectrum = self.spectrum().ifft()
+        background = rexafs.AUTOBK(kstep=0.1)
+        forward = rexafs.XrayFFTF(nfft=4096)
+        inverse = rexafs.XrayFFTR(nfft=2048)
+        spectrum.set_background_method(background).set_fft(forward).set_ifft(
+            inverse
+        ).ifft()
+
+        # Grid relations independently determine the expected physical spacings.
+        np.testing.assert_allclose(np.diff(spectrum.k()), 0.1, rtol=0, atol=1e-14)
+        np.testing.assert_allclose(
+            np.diff(spectrum.r()), np.pi / (4096 * 0.1), rtol=0, atol=1e-14
+        )
+        np.testing.assert_allclose(np.diff(spectrum.q()), 0.2, rtol=0, atol=1e-14)
+        self.assertTrue(np.isfinite(spectrum.chiq()).all())
+        # Automatic values resolve in copied settings, leaving caller inputs intact.
+        self.assertIsNone(forward.kstep)
+        self.assertIsNone(inverse.kstep)
+
+    def test_storing_two_samples_does_not_guarantee_edge_detection(self):
+        spectrum = rexafs.Spectrum([1.0, 2.0], [1.0, 2.0])
+        self.assertIsNone(spectrum.e0())
+        with self.assertRaisesRegex(ValueError, "at least 3"):
+            spectrum.find_e0()
 
 
 if __name__ == "__main__":

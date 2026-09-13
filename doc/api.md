@@ -121,6 +121,18 @@ changing forward-transform parameters invalidates forward/reverse results.
 Unchanged prerequisite results are reused. Calling a stage explicitly recomputes
 that stage. Replacing spectrum data clears the old E0 and derived results.
 
+Automatic values are resolved into the spectrum's stored settings when a stage
+succeeds. Invalidation clears results but retains those resolved settings. For
+example, after the first `fft()`, changing the AUTOBK `kstep` does not reset the
+forward transform's previously inferred `kstep`. Assign a fresh `XrayFFTF` when
+you want it to infer spacing from the new background grid. Likewise, assign a
+fresh `XrayFFTR` after changing forward `nfft` or spacing if you want the inverse
+grid to be inferred again. Restore any desired window/range overrides on the new
+settings. Rust callers can instead set the relevant optional fields to `None`
+and pass the configuration through its setter. See the source documentation for
+[`fft`](../crates/rexafs/src/xafs/xasspectrum.rs) and
+[`XrayFFTR`](../crates/rexafs/src/xafs/inverse_fft.rs).
+
 Rust's legacy public fields remain accessible. After modifying input data or
 stage parameters directly, call `invalidate_derived()` before requesting another
 stage; prefer setters to invalidate automatically.
@@ -166,5 +178,7 @@ JavaScript's `set_e0()` rejects non-finite values immediately, leaving the
 existing configuration and results intact.
 
 Python's `rexafs.io.read_qas_transmission(path)` returns a spectrum, matching
-Rust's reader. For multiple files, load spectra and call their stage methods.
+Rust's reader. This reader sorts energy and absorption together and retains
+duplicate energies; it does not have the checked constructor's ordering contract.
+For multiple files, load spectra and call their stage methods.
 Fitting, structures, plotting and other advanced modules remain Rust/desktop APIs.

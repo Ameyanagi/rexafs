@@ -1,11 +1,11 @@
 ---
-title: "Python · type aliases"
-description: "type aliases signatures, defaults and API explanations."
+title: "Python · types and version"
+description: "types and version signatures, defaults and API explanations."
 audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** These signatures describe the source checkout. They are not available in rexafs 0.2.4.
+**Next API · unreleased.** This reference describes the source checkout, including additions not available in rexafs 0.2.4.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
@@ -47,6 +47,13 @@ Taper parameters are shape-dependent: KaiserBessel also uses dk/dr to control
 its shape, so equal parameter values do not make the windows equivalent.
 Use the default for each processing stage as a starting point and inspect
 the resulting window. See [Larch's window reference](https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow).
+
+Names are case-sensitive. FHanning interprets its taper parameters as
+fractions of the selected interval rather than ordinary absolute widths.
+Gaussian uses dk/dr as its standard-deviation scale and has nonzero tails
+outside the nominal interval; dk2/dr2 affects the domain geometry rather
+than defining a separate Gaussian width. Inspect the generated window
+when choosing any family; there is no area normalization.
 
 ## AUTOBKSolver
 

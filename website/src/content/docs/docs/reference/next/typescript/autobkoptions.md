@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** These signatures describe the source checkout, not npm rexafs@0.2.4.
+**Next API · unreleased.** This reference describes the source checkout, including additions not available in npm rexafs@0.2.4.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
@@ -117,11 +117,17 @@ contribution before averaging. Use 0 to disable the high-k endpoint penalty.
 clamp_lambda?: number | undefined;
 ```
 
-Dimensionless strength of the FixedPenalty endpoint term. Recommended default: 0.001;
-undefined restores this default. The objective adds lambda times the mean squared active,
-weighted endpoint chi residual to the mean squared low-R residual. Require a finite
-nonnegative value; 0 disables the endpoint term. This rexafs-specific penalty is separate
-from the original AUTOBK objective.
+Numerical strength of the FixedPenalty endpoint term. Recommended default: 0.001; undefined
+restores this default. The objective adds lambda times the mean squared active, weighted
+endpoint chi residual to the mean squared low-R residual. Require a finite nonnegative
+value; 0 disables the endpoint term.
+
+This empirical balance is tied to the implemented residual convention: the FixedPenalty
+Fourier residual uses the fixed numerical factor 0.05/sqrt(pi), while the endpoint residual
+uses unweighted, edge-step-normalized chi. Changing kweight or the window changes the
+balance at a fixed lambda. The parameter is unused by legacy endpoint policies; it is not a
+universal physical constant. See [the fixed-penalty
+objective](https://rexafs.com/docs/science/autobk/).
 
 ## nfft
 

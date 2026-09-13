@@ -36,6 +36,13 @@ Create owned settings with the recommended defaults described below. Browser cal
 await init() first. Edit the fields, copy the settings into the appropriate spectrum stage,
 and free() this object when finished.
 
+Automatic fields are resolved on the spectrum's copy during processing; resolved values
+are not written back into the original settings object. Resolved values stay in the
+spectrum's settings until those settings are replaced.
+
+Stable 0.2.4 uses this constructor without arguments, followed by property assignment. Next
+(the source checkout) also accepts the named options object.
+
 ## free
 
 ```typescript

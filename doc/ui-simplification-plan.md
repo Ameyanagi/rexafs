@@ -1,5 +1,9 @@
 # UI simplification handoff
 
+Historical candidate handoff from September 2026. The status and check counts
+below describe that candidate. For the current interface, use the
+[desktop guide](https://rexafs.com/docs/desktop/).
+
 Status: implemented on `feat/ui-simplification`, based on
 [PR #45](https://github.com/Ameyanagi/rexafs/pull/45). This is an unreleased candidate.
 Validation and remaining native checks are recorded in

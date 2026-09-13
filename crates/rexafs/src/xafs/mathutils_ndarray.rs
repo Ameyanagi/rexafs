@@ -1,3 +1,11 @@
+//! Legacy interpolation, finite-difference and line-shape helpers.
+//!
+//! Enabling `ndarray-compat` selects this implementation as `xafs::mathutils`.
+//! It supports owned Vec, DVector and Array1 inputs. Line-shape methods return
+//! Array1 densities in inverse coordinate units; differences retain value units.
+//! Inputs are not validated as spectra. In particular, `diff` requires a nonempty
+//! vector in this backend, unlike the default nalgebra implementation.
+
 use enterpolation::{
     linear::{Linear, LinearError},
     Signal,
@@ -12,15 +20,40 @@ use super::errors::MathError;
 
 #[deny(clippy::reversed_empty_ranges)]
 
+/// Numerical helpers for owned one-dimensional arrays in the legacy backend.
+///
+/// Returned arrays own new buffers; borrowed inputs are unchanged. Line-shape
+/// methods consume the coordinate array. Centers and widths use the coordinate
+/// unit, and continuous unit area does not guarantee a sampled or truncated
+/// density sums to one. Widths below machine epsilon are clamped to epsilon;
+/// this does not implement exact delta-function limits. See the
+/// [SciPy Voigt reference](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.voigt_profile.html)
+/// for the Gaussian/Lorentzian width and Faddeeva conventions.
 pub trait MathUtils {
+    /// Linearly interpolate paired knots `x`/`y` at the coordinates in `self`.
+    /// Holds endpoint values outside the knot interval. Supply matching finite
+    /// `x`/`y` arrays with at least two knots and strictly increasing `x`.
+    /// Between knots, the result is `y[j] + u * (y[j+1] - y[j])`, where
+    /// `u = (q - x[j]) / (x[j+1] - x[j])` and `q` is a query coordinate.
+    /// Query and knot coordinates use the same units; output has the units of `y`
+    /// and the same length as `self`, including an empty result for no queries.
+    /// Length/order errors return `LinearError`, while empty or NaN knot arrays
+    /// can panic before that validation. Non-finite values are not otherwise checked.
     fn interpolate(&self, x: &[f64], y: &[f64]) -> Result<Self, LinearError>
     where
         Self: Sized;
 
+    /// Return whether coordinates are nondecreasing; duplicate values are allowed.
+    /// Empty and one-point vectors return true. This does not validate finiteness.
     fn is_sorted(&self) -> bool;
 
+    /// Return indices that sort finite values in ascending order, without changing
+    /// the input. Equal values preserve their original order. NaN comparisons panic.
     fn argsort(&self) -> Vec<usize>;
 
+    /// Evaluate a unit-area Gaussian density at these coordinates. `sigma` is its
+    /// standard deviation and `center` its mean. Uses exp(-(x-center)^2/(2*sigma^2))
+    /// / (sigma*sqrt(2*pi)); nonpositive widths are clamped to machine epsilon.
     fn gaussian(self, center: f64, sigma: f64) -> Array1<f64>
     where
         Self: Into<Array1<f64>>,
@@ -31,6 +64,9 @@ pub trait MathUtils {
         x.map(|x| (-x.powi(2) / (2.0 * sigma.powi(2))).exp() / inverse_of_coefficient)
     }
 
+    /// Evaluate a unit-area Lorentzian density at these coordinates. `sigma` is the
+    /// half width at half maximum, not a standard deviation. The formula is
+    /// sigma / (pi*((x-center)^2+sigma^2)); nonpositive widths are clamped to epsilon.
     fn lorentzian(self, center: f64, sigma: f64) -> Array1<f64>
     where
         Self: Into<Array1<f64>>,
@@ -41,6 +77,11 @@ pub trait MathUtils {
         x.map(|x| coefficient / (x.powi(2) + sigma.powi(2)))
     }
 
+    /// Evaluate the unit-area convolution of Gaussian and Lorentzian profiles.
+    /// `sigma` is the Gaussian standard deviation and `gamma` the Lorentzian half width
+    /// at half maximum. Uses the real part of the complex Faddeeva function with argument
+    /// ((x-center)+i*gamma)/(sigma*sqrt(2)), divided by sigma*sqrt(2*pi).
+    /// Both widths are clamped to at least machine epsilon.
     fn voigt(self, center: f64, sigma: f64, gamma: f64) -> Array1<f64>
     where
         Self: Into<Array1<f64>>,
@@ -58,10 +99,23 @@ pub trait MathUtils {
             .collect()
     }
 
+    /// Return the minimum value. Empty arrays or NaN comparisons can panic.
     fn min(&self) -> f64;
+    /// Return the maximum value. Empty arrays or NaN comparisons can panic.
     fn max(&self) -> f64;
+    /// Return successive differences `x[i+1] - x[i]` in a new array of length n-1.
+    /// Values keep the input units. This legacy backend requires at least one
+    /// sample; empty vectors can panic through subtraction underflow or slicing.
     fn diff(&self) -> Self;
+    /// Return derivatives with respect to sample index, using centered differences
+    /// inside and one-sided differences at the ends. Interior entry `i` is
+    /// `(self[i+1] - self[i-1]) / 2`; endpoints use the adjacent difference.
+    /// No physical grid spacing is applied, so output retains input value units.
+    /// Divide by the spacing for a physical derivative on a uniform grid.
+    /// Empty or one-point vectors return equally sized zeros.
     fn gradient(&self) -> Self;
+    /// Return the peak-to-peak range, `max() - min()`, in input value units.
+    /// Empty inputs or unordered NaN comparisons can panic.
     fn ptp(&self) -> f64
     where
         Self: IntoIterator<Item = f64> + Sized,
@@ -69,6 +123,8 @@ pub trait MathUtils {
         self.max() - self.min()
     }
 
+    /// Return the first index of the minimum value.
+    /// Clones the input for iteration; empty arrays or NaN comparisons can panic.
     fn argmin(&self) -> usize
     where
         Self: IntoIterator<Item = f64> + Sized + Clone,
@@ -81,6 +137,8 @@ pub trait MathUtils {
             .0
     }
 
+    /// Return the last index of the maximum value when values tie.
+    /// Clones the input for iteration; empty arrays or NaN comparisons can panic.
     fn argmax(&self) -> usize
     where
         Self: IntoIterator<Item = f64> + Sized + Clone,
@@ -93,6 +151,8 @@ pub trait MathUtils {
             .0
     }
 
+    /// Return the first index with the smallest absolute value.
+    /// Clones the input for iteration; empty arrays or NaN comparisons can panic.
     fn abs_argmin(&self) -> usize
     where
         Self: IntoIterator<Item = f64> + Sized + Clone,
@@ -151,7 +211,7 @@ impl MathUtils for Vec<f64> {
         result
     }
 
-    /// Calculate the central difference gradient of the vector
+    /// Estimate the derivative with respect to sample index using central differences.
     ///
     /// # Example
     /// ```
@@ -229,7 +289,7 @@ impl MathUtils for nalgebra::DVector<f64> {
         Self::from_vec(result)
     }
 
-    /// Calculate the central difference gradient of the DVector
+    /// Estimate the derivative with respect to sample index using central differences.
     ///
     /// # Example
     /// ```
@@ -332,7 +392,7 @@ impl MathUtils for ArrayBase<OwnedRepr<f64>, Ix1> {
             })
             .collect()
     }
-    /// Calculate the central difference gradient of the Array
+    /// Estimate the derivative with respect to sample index using central differences.
     ///
     /// # Example
     /// ```
@@ -372,6 +432,7 @@ impl MathUtils for ArrayBase<OwnedRepr<f64>, Ix1> {
     }
 }
 
+/// Check adjacent comparisons without allocating or rejecting isolated NaNs.
 fn is_sorted<I>(data: I) -> bool
 where
     I: IntoIterator,
@@ -390,12 +451,14 @@ where
     }
 }
 
+/// Stable ascending indirect sort; unordered floating-point comparisons panic.
 fn argsort<T: PartialOrd>(v: &[T]) -> Vec<usize> {
     let mut idx = (0..v.len()).collect::<Vec<_>>();
     idx.sort_by(|a, b| v[*a].partial_cmp(&v[*b]).unwrap());
     idx
 }
 
+/// Standalone equivalent of [`MathUtils::gaussian`], with the same width and unit conventions.
 fn gaussian<T: Into<Array1<f64>>>(x: T, center: f64, sigma: f64) -> Array1<f64> {
     let x: Array1<f64> = x.into() - center;
     let sigma = sigma.max(f64::EPSILON);
@@ -403,6 +466,7 @@ fn gaussian<T: Into<Array1<f64>>>(x: T, center: f64, sigma: f64) -> Array1<f64> 
     x.map(|x| (-x.powi(2) / (2.0 * sigma.powi(2))).exp() / inverse_of_coefficient)
 }
 
+/// Standalone equivalent of [`MathUtils::lorentzian`], with the same width and unit conventions.
 fn lorentzian<T: Into<Array1<f64>>>(x: T, center: f64, sigma: f64) -> Array1<f64> {
     let x: Array1<f64> = x.into() - center;
     let sigma = sigma.max(f64::EPSILON);
@@ -410,6 +474,7 @@ fn lorentzian<T: Into<Array1<f64>>>(x: T, center: f64, sigma: f64) -> Array1<f64
     x.map(|x| coefficient / (x.powi(2) + sigma.powi(2)))
 }
 
+/// Standalone equivalent of [`MathUtils::voigt`], with the same width and unit conventions.
 fn voigt<T: Into<Array1<f64>>>(x: T, center: f64, sigma: f64, gamma: f64) -> Array1<f64> {
     let x: Array1<f64> = x.into() - center;
     let sigma = sigma.max(f64::EPSILON);
@@ -423,24 +488,16 @@ fn voigt<T: Into<Array1<f64>>>(x: T, center: f64, sigma: f64, gamma: f64) -> Arr
         })
         .collect()
 }
-/// Find the index of array *at or below* the value
-/// returns 0 if the value is below the minimum of the array
+/// Return the final index at or below a finite `value`, clamped to the array ends.
+/// The input must be finite and ascending; equal coordinates are allowed.
+/// Returns an error when empty. This linear-search legacy helper assumes sorted
+/// data despite its name; unsorted/NaN arrays can panic. Coordinates and `value`
+/// use the same units, and the input is unchanged.
 ///
-/// # Arguments
-/// * `array` - The array to search
-/// * `value` - The value to search for
-///
-/// # Returns
-/// Result<usize, MathError>
-///
-/// # Example
 /// ```
 /// use rexafs::xafs::mathutils::index_of;
-/// let array = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-/// let value = 3.4;
-/// assert_eq!(index_of(&array, &value).unwrap(), 2);
+/// assert_eq!(index_of(&[1.0, 2.0, 3.0, 4.0], &3.4).unwrap(), 2);
 /// ```
-
 pub fn index_of(array: &[f64], value: &f64) -> Result<usize, MathError> {
     if array.is_empty() {
         return Err(MathError::IndexOutOfBounds { index: 0, len: 0 });
@@ -462,7 +519,11 @@ pub fn index_of(array: &[f64], value: &f64) -> Result<usize, MathError> {
         .unwrap_or(array.len() - 1))
 }
 
-/// Find the index of sorted array *at or below* the value using binary search.
+/// Return the final index at or below a finite `value` on a sorted finite array.
+/// Uses binary partitioning, clamps outside values to the ends and errors when
+/// empty. Equal coordinates are allowed, with the last exact match selected.
+/// Coordinates and `value` use the same units. Sorting/finiteness are assumed,
+/// not checked; neither the input nor its order is changed.
 pub fn index_of_sorted(array: &[f64], value: &f64) -> Result<usize, MathError> {
     if array.is_empty() {
         return Err(MathError::IndexOutOfBounds { index: 0, len: 0 });
@@ -471,21 +532,15 @@ pub fn index_of_sorted(array: &[f64], value: &f64) -> Result<usize, MathError> {
     Ok(idx.saturating_sub(1))
 }
 
-/// Find the index of the nearest value in the array
+/// Find the index minimizing absolute distance to `value`; the first tie wins.
+/// The array need not be sorted. Supply finite coordinates and a finite `value`
+/// in the same units; inputs are unchanged. Legacy behavior panics for empty
+/// arrays or NaN comparisons despite the `Result` return type. Use
+/// [`index_nearest_sorted`] for checked empty-input handling on sorted grids.
 ///
-/// # Arguments
-/// * `array` - The array to search
-/// * `value` - The value to search for
-///
-/// # Returns
-/// Result<usize, MathError>
-///
-/// # Example
 /// ```
 /// use rexafs::xafs::mathutils::index_nearest;
-/// let array = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-/// let value = 3.4;
-/// assert_eq!(index_nearest(&array, &value).unwrap(), 2);
+/// assert_eq!(index_nearest(&[1.0, 2.0, 3.0, 4.0], &3.4).unwrap(), 2);
 /// ```
 pub fn index_nearest(array: &[f64], value: &f64) -> Result<usize, MathError> {
     Ok(array
@@ -496,7 +551,12 @@ pub fn index_nearest(array: &[f64], value: &f64) -> Result<usize, MathError> {
         .0)
 }
 
-/// Find the nearest index in a sorted array using binary search.
+/// Return the nearest index by binary search on a sorted finite array.
+/// A distance tie chooses the lower of the two bracketing indices; an exact
+/// duplicate match selects the first duplicate. Out-of-range values choose the
+/// nearest endpoint, and an empty array returns `MathError`. Supply a finite
+/// `value` in the coordinate units. Sorting/finiteness are assumed, not checked;
+/// inputs are unchanged.
 pub fn index_nearest_sorted(array: &[f64], value: &f64) -> Result<usize, MathError> {
     if array.is_empty() {
         return Err(MathError::IndexOutOfBounds { index: 0, len: 0 });
@@ -520,6 +580,14 @@ pub fn index_nearest_sorted(array: &[f64], value: &f64) -> Result<usize, MathErr
 }
 
 #[allow(non_snake_case)]
+/// Evaluate the modified Bessel function I0 by its power series for a
+/// dimensionless argument, returning a dimensionless value. It accumulates
+/// `sum_{j=0..infinity} (x*x/4)^j / (j!)^2`, where `j` is a nonnegative integer.
+/// This legacy helper stops when the sum no longer changes or becomes non-finite;
+/// large inputs can overflow. There is no error estimate or user-set tolerance.
+/// The FFT window implementation uses [`super::bessel_i0::bessel_i0`] instead.
+/// The defining series is
+/// [DLMF equation 10.25.2](https://dlmf.nist.gov/10.25.E2) at order zero.
 pub fn bessel_I0(x: f64) -> f64 {
     let base = x * x / 4.0;
     let mut addend = 1.0;
@@ -535,9 +603,23 @@ pub fn bessel_I0(x: f64) -> f64 {
     sum
 }
 
-/// Calculation jacobian of splev respect to c_i
+/// Evaluate the B-spline Jacobian with respect to its coefficients.
+/// Rows correspond to query coordinates `x`; columns to the length of `c`.
+/// The coefficient values themselves are unused because the spline is linear
+/// in those coefficients. `t` supplies knots, `k` the spline degree, and `e == 3`
+/// requests endpoint clamping. Coordinates and knots must use the same units;
+/// the basis derivatives with respect to coefficients are dimensionless.
+/// For the spline `S(x) = sum_j c[j] * B[j](x)`, the entry `(i, j)` is `B[j](x[i])`,
+/// not the derivative with respect to the coordinate. Missing coefficient columns
+/// are omitted and historical zero-padding columns remain zero. All values of `e`
+/// other than 3 extend the endpoint polynomial pieces; they do not select other
+/// FITPACK error modes. The [SciPy B-spline reference](https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.BSpline.html)
+/// defines this basis convention.
 ///
-///
+/// This legacy wrapper consumes its vector arguments and allocates the result.
+/// It does not validate inputs: `k` must be at most 5, and `t` must contain at least
+/// `2 * (k + 1)` finite, nondecreasing knots with a valid base interval. Invalid
+/// dimensions can panic. This is the same basis used by the internal spline evaluator.
 pub fn splev_jacobian(t: Vec<f64>, c: Vec<f64>, k: usize, x: Vec<f64>, e: usize) -> DMatrix<f64> {
     super::spline::coefficient_jacobian(&t, c.len(), k, &x, e == 3)
 }

@@ -28,6 +28,13 @@ def digest(path: Path) -> str:
 
 
 def bundle_identity(bundle: Path) -> dict[str, Any]:
+    """Return metadata for a clean x86-64 MSVC bundle with required payload files.
+
+    Validate stable/nightly tag identity, source commit, example and notice
+    files, and reject symlinks. This checks the local tree's recorded identity;
+    callers obtaining a ZIP from GitHub use extract_release to verify its
+    checksum and expected source commit first. Mismatches raise ValueError.
+    """
     metadata = json.loads((bundle / "build.json").read_text(encoding="utf-8"))
     version = metadata.get("version", "")
     if not isinstance(version, str) or not VERSION.fullmatch(version):
@@ -65,6 +72,11 @@ def bundle_identity(bundle: Path) -> dict[str, Any]:
 
 
 def output_name(metadata: dict[str, Any]) -> str:
+    """Return the installer stem for already-validated bundle metadata.
+
+    Stable uses the package version; nightly uses the dated release tag so
+    different nightly runs produce distinct installer names. No files are made.
+    """
     label = (
         metadata["release_tag"]
         if metadata["channel"] == "nightly"
@@ -214,6 +226,15 @@ def build(
     runtime: Path | None = None,
     compiler: Path | None = None,
 ) -> Path:
+    """Build an unsigned per-user installer and write its provenance sidecars.
+
+    Run on Windows with an existing qualified bundle. Defaults locate Inno Setup
+    6 under ProgramFiles(x86) and the Microsoft redistributable runtime through
+    runtime_directory. Copy the bundle into temporary staging, verify runtime
+    DLL signatures/architecture, compile the installer, and record source and
+    payload hashes. Existing installer output is rejected. Return the EXE path;
+    installation/reinstallation/uninstallation smoke checks run separately.
+    """
     if os.name != "nt":
         raise ValueError("Compile Windows installers on Windows")
     bundle = bundle.resolve()
