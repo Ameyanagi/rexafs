@@ -47,7 +47,7 @@ XrayLarch examples retain their upstream commit and measurement provenance in
 Source packages retain their existing fixture provenance. Qualify the fixture
 redistribution notices alongside dependency notices before public publication.
 
-The next desktop build exposes these texts offline through Help → Licenses.
+The published 0.2.4 desktop exposes these texts offline through Help → Licenses.
 The application licenses are embedded in the executable; dependency notices and
 example provenance are read from the installed package. Mac archives include
 notices inside the app before signing, so copying only the app retains them.

@@ -1,0 +1,105 @@
+---
+import { url } from '../lib/urls';
+import '../styles/browser-app.css';
+const canonical = new URL(url('app/'), Astro.site).href;
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Analyze a spectrum · rexafs browser preview</title>
+  <meta name="description" content="Process X-ray absorption spectra locally in your browser with rexafs WebAssembly. Import a spectrum, normalize, remove its background and Fourier transform." />
+  <link rel="icon" href={url('favicon.svg')} />
+  <link rel="canonical" href={canonical} />
+</head>
+<body>
+  <a class="skip" href="#main">Skip to analysis</a>
+  <header class="app-header">
+    <a class="brand" href={url()}><img src={url('favicon.svg')} width="28" height="28" alt="" />rexafs</a>
+    <span class="preview-label">Browser preview · unreleased</span>
+    <nav aria-label="Main navigation">
+      <a href={url('docs/science/processing/')}>Processing guide</a>
+      <a href={url('docs/libraries/typescript/')}>TypeScript API</a>
+      <a href={url('download/')}>Desktop</a>
+    </nav>
+  </header>
+  <main id="main">
+    <div id="browser-app" data-base={url()}>
+      <div class="app-intro">
+        <div><p class="eyebrow">X-RAY ABSORPTION ANALYSIS</p><h1>Analyze a spectrum.</h1></div>
+        <p>Load a file or try the Cu example.<br /> Your data stays in this browser.</p>
+      </div>
+      <noscript><p class="error-box">Enable JavaScript to run this WebAssembly analysis workspace.</p></noscript>
+      <div class="analysis-layout">
+        <aside class="controls" aria-label="Analysis controls">
+          <section class="source-controls" aria-labelledby="source-title">
+            <h2 id="source-title"><span class="section-number">01</span> Spectrum</h2>
+            <label class="file-label" for="source-file">Open a data file</label>
+            <input id="source-file" type="file" accept=".txt,.dat,.csv,.xmu,.xdi,text/plain,text/csv" aria-describedby="source-help" />
+            <p class="field-help" id="source-help">Numeric text or CSV, up to 8 MiB and 100,000 rows. Begin header lines with #.</p>
+            <button id="load-example" class="secondary-button" type="button">Load Cu example</button>
+            <p id="source-name" class="source-name">No spectrum loaded</p>
+            <p id="source-details" class="field-help"></p>
+          </section>
+          <form id="analysis-form">
+            <fieldset id="data-mapping" disabled>
+              <legend>Columns and units</legend>
+              <div class="field-grid">
+                <div class="field"><label for="energy-column">Energy column</label><select id="energy-column" name="energy-column"></select></div>
+                <div class="field"><label for="energy-unit">Energy unit</label><select id="energy-unit" name="energy-unit"><option value="eV">eV</option><option value="keV">keV</option></select></div>
+                <div class="field full-field"><label for="signal-quantity">Signal type</label><select id="signal-quantity" name="signal-quantity"><option value="mu">Absorption μ(E)</option><option value="transmission">Transmission: ln(I₀ / Iₜ)</option></select></div>
+                <div class="field"><label id="signal-column-label" for="signal-column">Absorption column</label><select id="signal-column" name="signal-column"></select></div>
+                <div class="field" id="reference-field" hidden><label for="reference-column">Incident I₀ column</label><select id="reference-column" name="reference-column"></select></div>
+              </div>
+              <p id="transmission-help" class="field-help" hidden>I₀ and Iₜ must be positive intensities in matching units.</p>
+            </fieldset>
+            <fieldset class="processing-settings">
+              <legend><span class="section-number">02</span> Processing</legend>
+              <div class="field-grid">
+                <div class="field"><label for="setting-e0">Edge E₀ <span>eV</span></label><input id="setting-e0" name="e0" type="number" step="any" min="0" max="1000000" placeholder="Automatic" aria-describedby="e0-help" /></div>
+                <div class="field"><label for="setting-rbkg">Background cutoff <span>Å</span></label><input id="setting-rbkg" name="rbkg" type="number" step="any" min="0" max="10" value="1" required aria-describedby="rbkg-help" /></div>
+              </div>
+              <p class="field-help" id="e0-help">Leave E₀ blank to estimate the absorption edge.</p>
+              <p class="field-help" id="rbkg-help">AUTOBK removes the smooth background. Start with a 1 Å cutoff.</p>
+              <h3>Fourier transform</h3>
+              <div class="field-grid">
+                <div class="field"><label for="setting-kmin">k minimum <span>Å⁻¹</span></label><input id="setting-kmin" name="kmin" type="number" step="any" min="0" max="100" value="2" required /></div>
+                <div class="field"><label for="setting-kmax">k maximum <span>Å⁻¹</span></label><input id="setting-kmax" name="kmax" type="number" step="any" min="0" max="100" value="15" required /></div>
+                <div class="field"><label for="setting-kweight">k weight</label><input id="setting-kweight" name="kweight" type="number" step="1" min="0" max="3" value="2" required /></div>
+                <div class="field"><label for="setting-dk">Window taper <span>Å⁻¹</span></label><input id="setting-dk" name="dk" type="number" step="any" min="0" max="100" value="1" required /></div>
+                <div class="field"><label for="setting-nfft">FFT points</label><select id="setting-nfft" name="nfft"><option>256</option><option>512</option><option>1024</option><option selected>2048</option><option>4096</option><option>8192</option><option>16384</option></select></div>
+                <div class="field"><label for="setting-grid">Fourier grid</label><select id="setting-grid" name="grid" aria-describedby="grid-help"><option value="Input">Input</option><option value="Larch">Larch</option></select></div>
+              </div>
+              <p class="field-help" id="grid-help">Input keeps the calculated k grid; Larch resamples from k = 0.</p>
+              <a class="settings-guide" href={url('docs/science/processing/#4-transform-from-k-to-r')}>Settings and equations →</a>
+            </fieldset>
+            <div class="process-actions"><button id="process" class="primary-button" type="submit" disabled>Process spectrum</button><button id="cancel" class="secondary-button" type="button" disabled>Cancel</button></div>
+          </form>
+        </aside>
+        <section id="workspace" class="workspace" aria-label="Spectrum results" aria-busy="false">
+          <div class="workspace-heading"><h2>Results</h2><div class="result-meta"><span id="result-count"></span><span id="result-e0"></span></div></div>
+          <p id="analysis-status" class="analysis-status" role="status" aria-live="polite">Load a spectrum to begin.</p>
+          <p id="analysis-error" class="error-box" role="alert" hidden></p>
+          <p id="result-stale" class="stale-notice" hidden>Settings changed. Process again to update these plots and exports.</p>
+          <div class="view-tabs" role="tablist" aria-label="Spectrum view">
+            <button type="button" role="tab" id="view-raw" aria-selected="true" aria-controls="plot-panel" tabindex="0" data-view="raw">Raw</button>
+            <button type="button" role="tab" id="view-normalized" aria-selected="false" aria-controls="plot-panel" tabindex="-1" data-view="normalized">Normalized</button>
+            <button type="button" role="tab" id="view-chi" aria-selected="false" aria-controls="plot-panel" tabindex="-1" data-view="chi">χ(k)</button>
+            <button type="button" role="tab" id="view-fourier" aria-selected="false" aria-controls="plot-panel" tabindex="-1" data-view="fourier">|χ(R)|</button>
+          </div>
+          <div id="plot-panel" class="plot-panel" role="tabpanel" aria-labelledby="view-raw" tabindex="0">
+            <div id="plot-empty" class="plot-empty"><span aria-hidden="true">μ(E)</span><h3>Your spectrum goes here.</h3><p>Choose a file or load the Cu example, then process it.</p></div>
+            <svg id="plot" class="spectrum-plot" role="img" aria-labelledby="plot-title plot-description" viewBox="0 0 900 440" aria-hidden="true" style="display:none"></svg>
+          </div>
+          <div class="plot-footer"><p id="plot-summary" class="field-help">Normalization, background removal and Fourier transformation run in WebAssembly.</p><button id="export-csv" class="secondary-button" type="button" disabled>Export view CSV</button></div>
+          <div class="analysis-record"><div><h3>Analysis record</h3><p>Export the source fingerprint, engine version and processing settings.</p></div><button id="export-provenance" class="text-button" type="button" disabled>Export provenance JSON ↓</button></div>
+          <p class="preview-note">This preview uses the source-checkout API. <a href={url('docs/reference/')}>Stable and unreleased APIs →</a></p>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer class="app-footer"><span>rexafs · MIT or Apache-2.0</span><nav aria-label="Footer"><a href={url('licenses/')}>Licenses and example data</a><a href={url('docs/science/processing/')}>Processing theory</a><a href="https://github.com/Ameyanagi/rexafs/issues">Report an issue ↗</a></nav></footer>
+  <script>import '../browser/app';</script>
+</body>
+</html>

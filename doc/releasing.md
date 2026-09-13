@@ -158,6 +158,13 @@ source-tree tests, stage the helper first with `python scripts/feff10_worker.py
 target/feff10-helper` and point `REXAFS_FEFF10_EXECUTABLE` at it; see the
 [Windows development instructions](desktop-development.md#windows).
 
+The next-release matrix adds native Linux and Windows ARM64 builds. Linux uses
+the upstream ARM64 FEFF10 archive. Windows ARM64 builds rexafs and ReFEFF natively
+but runs the x64 FEFF10 helper through Windows 11 emulation; this must not be
+reported as native ARM64 FEFF10. `build.json` records each engine's execution
+mode. The packaged and installed self-checks must pass on the matching native
+runner before releasing either new target. Published 0.2.4 has neither package.
+
 Use Python 3.12+ for the release scripts. `package-macos.sh` remains a macOS build
 convenience wrapper. Archives go to `target/distributions/` with version and Rust
 host triple in the filename: macOS `.app` ZIP, Linux `.tar.gz`, Windows ZIP.
@@ -170,6 +177,9 @@ first-shell geometry and amplitudes, including the FEFF10 worker process route.
 Neither check tests GPU rendering or replaces an interactive launch check.
 Windows ZIP packaging clamps upstream file dates to ZIP's supported range
 (1980–2107), preserving file contents and leaving source timestamps untouched.
+It stages the matching, signed Microsoft C++ runtime before executing the copied
+application and records DLL provenance in `build.json`. The installer revalidates
+and preserves those same files, so the ZIP and installer use the same runtime.
 
 The macOS package rejects Homebrew/local dynamic libraries; Linux rejects unresolved
 linked libraries. Inspect `linked-libraries.txt` and qualify a clean installation.
@@ -240,7 +250,16 @@ It builds and tests:
 - CPython 3.10–3.14 wheels on Ubuntu, Apple Silicon macOS, Intel macOS and Windows;
 - the Python sdist, including an installation rebuilt from that source archive;
 - the npm tarball, Node/browser numerical tests and an installed TypeScript consumer;
-- desktop archives on macOS 15 ARM64/Intel, Ubuntu 24.04 x86_64 and Windows 2025 x86_64.
+- desktop archives on macOS 15 ARM64/Intel, Ubuntu 24.04 x64/ARM64 and Windows
+  x64/ARM64, using the native `ubuntu-24.04-arm` and `windows-11-arm` runners for
+  the new targets. These labels are listed in the official
+  [GitHub runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+
+Desktop jobs select a host-specific Rust toolchain and require its target to
+match the matrix. Packaging checks the executable's machine type, then tests
+the extracted archive. Linux GUI evidence uses a separate archive per target so
+its image/log filenames cannot collide in the flat release manifest. Python's
+wheel matrix remains separate; adding a desktop target does not add a wheel.
 
 The final manifest job requires **every** build job to succeed. `SHA256SUMS` uses
 flat asset names so it also works after downloading all GitHub Release assets into
@@ -271,9 +290,11 @@ wrong-version, or modified packages fail verification. GitHub draft creation sti
 requires the complete artifact set. A desktop artifact transfer failure therefore
 cannot block publication of already-qualified registry packages.
 
-GitHub's public download list is desktop-only. `release_downloads.py` stages the
-four platform archives, Windows installer, checksums, and available Mac installer
-evidence after verifying their original build hashes. Registry artifacts stay in
+GitHub's public download list is desktop-only. `release_downloads.py` requires
+all six platform archives, both Windows installers and their qualification
+records for versions after 0.2.4. Historical versions through 0.2.4 retain their
+four-target requirement. Checksums and available Mac installer evidence are
+staged after verifying the original build hashes. Registry artifacts stay in
 the successful build and their registries. The staged `SHA256SUMS` covers only
 the files being uploaded; retain the original complete build manifest separately.
 After signing, replace the Mac archives, add their installers/evidence, and

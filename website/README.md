@@ -10,6 +10,8 @@ The [audience inventory](../doc/documentation-audience.csv) and
 Use Node 24, Python 3.12 and Rust 1.98.1. From the repository root:
 
 ```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack --locked --version 0.15.0
 npm --prefix website ci
 uv run --no-project --python 3.12 website/scripts/generate-python-reference.py
 node website/scripts/generate-typescript-reference.mjs
@@ -61,6 +63,41 @@ checks supplement review of the prose, figures, source claims and citations.
 Generator tests use temporary release tags and edited source docstrings to check
 that explanations propagate, unreleased signatures stay out of Stable, and
 removing a public member's help fails generation.
+
+## Browser workspace
+
+`/app/` runs spectrum processing locally in a module Worker, using this checkout's
+WASM bindings. It is labeled as an unreleased preview. It supports numeric
+text/CSV import, explicit column roles and energy units, normalization, AUTOBK,
+forward Fourier transforms and CSV/JSON export. ReFEFF execution remains upstream
+work; this preview does not include it.
+
+`npm run dev` and `npm run build` first run `build:wasm`. Install `wasm-pack 0.15.0`
+and the `wasm32-unknown-unknown` target before either command. Cargo's binary
+directory must be on `PATH`; `REXAFS_WASM_PACK` can select an explicit executable.
+The build stages only browser runtime assets in ignored `public/wasm/` and writes
+a manifest with the source commit, uncommitted-change flag and WASM SHA-256. The Worker verifies that hash
+before initialization; no source files are uploaded for processing.
+
+Import/setting limits are documented in `src/browser/input.ts` and tested with
+`npm test`. After normalization resolves E0, the preview checks that the inferred
+AUTOBK grid fits its unchanged default of 2048 points at 0.05 Å⁻¹ spacing. Both
+forward-transform grid choices must fit the calculated k grid and upper window
+extent within the selected FFT length; insufficient lengths produce an error
+instead of silent truncation. A preview-specific budget also limits each
+estimated dense spline basis to 2 million double-precision values (16 MB).
+The estimate multiplies the larger of the post-edge raw/grid counts by AUTOBK's
+automatic knot count, including its 5–128 knot bounds. It does not bound total
+browser memory. These guards reject input without cropping or resampling it;
+they do not change the core numerical API. See the implementing
+[AUTOBK grid](../crates/rexafs/src/xafs/background.rs) and
+[basis allocation](../crates/rexafs/src/xafs/background/fixed.rs).
+
+Browser tests process the real Cu fixture, compare exports with Node,
+check cancellation/recovery and verify that edited settings invalidate exports.
+Cancel terminates the Worker and discards its state; progress reports stage
+boundaries. The JSON export records requested settings and resolved E0; other
+inferred settings are not exposed by the current bindings.
 
 ## Content ownership
 

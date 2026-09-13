@@ -4,26 +4,15 @@ description: "Choose desktop analysis or a library, and explore what rexafs can 
 audience: user
 ---
 
-rexafs is a free, open-source toolkit for X-ray absorption spectroscopy (XAS).
-It takes the spectra you measure at a beamline, normalizes them, extracts the
-extended fine structure (EXAFS), transforms it to real space and fits
-scattering-path models to recover interatomic distances, coordination numbers
-and disorder. A single Rust calculation engine powers the desktop application
-and the Python, TypeScript and Rust libraries, so a spectrum processed in a
-script matches the desktop when the settings match. This manual targets
+rexafs provides tools for X-ray absorption spectroscopy (XAS), with a desktop
+application and Python, TypeScript and Rust libraries. This manual covers
 **stable 0.2.4**.
 
 ## Who this manual is for
 
-- **Analysts and beamline users** who want to inspect, process, fit and
-  publish without programming. Start with the desktop column below.
-- **Programmers** who want the same processing inside NumPy scripts, Jupyter
-  notebooks, browser tools or native applications. Start with the libraries
-  column. A programmer using rexafs is a user; this manual documents the public
-  API, installation, editor setup and defaults.
-- **Readers new to XAS** who want to understand what each step calculates. Read
-  [concepts and glossary](/docs/concepts/) and the [science
-  overview](/docs/science/) alongside the workflow guides.
+- **Desktop users:** follow the analysis and fitting guides below.
+- **Programmers:** choose a library and its versioned API reference.
+- **New to XAS:** start with [concepts and glossary](/docs/concepts/).
 
 ## Choose your path
 
@@ -35,29 +24,20 @@ script matches the desktop when the settings match. This manual targets
 
 ## A typical analysis
 
-1. **Import** a measured file, confirm which columns hold energy and intensity
-   or absorption, and confirm the energy unit. The desktop shows the parsed
-   spectrum before you accept it.
-2. **Normalize** the absorption so that the edge step is 1, after checking the
-   estimated edge energy and the pre-edge and post-edge baselines.
-3. **Remove the background** with AUTOBK to obtain the EXAFS oscillations
-   $\chi(k)$, then **transform** them to $\chi(R)$ with a k weight and a window.
-4. **Model and fit**: choose a structure, calculate scattering paths with
-   ReFEFF or FEFF10, select the paths to include, and fit their parameters
-   inside a k and R range. Inspect residuals, uncertainties and correlations.
-5. **Save and publish**: keep everything in a portable `.rxs` project and
-   export figures, data tables, captions and a methods draft.
+1. **Import** a spectrum and check its columns and energy unit.
+2. **Normalize** after checking the edge energy and baseline windows.
+3. **Extract and transform EXAFS** with AUTOBK and a Fourier transform.
+4. **Fit** scattering paths from a structure; inspect residuals and correlations.
+5. **Save and export** a `.rxs` project, figures and data.
 
-The bundled Cu foil spectrum and built-in Cu structure let you complete every
-step before importing your own data. [Your first
-analysis](/docs/getting-started/first-analysis/) covers steps 1 to 3 and 5;
-[fit your first coordination shell](/docs/desktop/fitting/) covers step 4.
+Use the bundled Cu example for [your first
+analysis](/docs/getting-started/first-analysis/), then [fit a coordination
+shell](/docs/desktop/fitting/).
 
 ## Features by interface
 
-“Rust” includes optional features where indicated. The smaller bindings expose
-spectrum processing; additional Rust functionality is not automatically available
-in Python or TypeScript.
+Python and TypeScript expose spectrum processing. Rust includes the additional
+capabilities below, with optional features where indicated.
 
 | Feature | Desktop | Python | TypeScript / JS | Rust |
 |---|:---:|:---:|:---:|:---:|
@@ -75,9 +55,8 @@ in Python or TypeScript.
 | Publication figures, captions, data and methods exports | Yes | Use plotting tools | Use plotting tools | Optional plotting |
 | Optional analysis assistant | Yes | — | — | — |
 
-Next API means documented source additions that have **not** been published in
-0.2.4. Stable examples below use the released interfaces. See the
-[API version guide](/docs/reference/) before using a next-version signature.
+**Next API** is unreleased. Use the [API version guide](/docs/reference/) to
+select documentation matching your installed package.
 
 ## Know your data
 

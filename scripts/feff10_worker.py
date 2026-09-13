@@ -7,12 +7,18 @@ downloads that executable and its MinGW runtime libraries from the pinned
 feff10-rs release, verifies every SHA-256 against the values recorded here,
 and writes them to a destination directory. Nothing is executed.
 
+The helper and its DLLs are x64 on both Windows targets. The ARM64 desktop
+runs natively and needs Windows 11's x64 emulation for this separate helper
+process. Native installer and archive smoke tests must qualify that combination.
+
 Usage: python scripts/feff10_worker.py DESTINATION
 """
 import hashlib
 import sys
 import urllib.request
 from pathlib import Path
+
+from release_archive import validate_pe_binary
 
 RELEASE = "v0.2.3"
 BASE_URL = f"https://github.com/Ameyanagi/feff10-rs/releases/download/{RELEASE}/"
@@ -53,10 +59,16 @@ def download(asset: str, expected_sha256: str) -> bytes:
 
 
 def install_helper(destination: Path) -> Path:
-    """Write the verified helper executable and runtime libraries; return the executable path."""
+    """Write the checksum-verified x64 helper and DLLs; return its executable path.
+
+    Check each file's PE architecture after download. This does not execute the
+    helper or establish its compatibility with a particular Windows host.
+    """
     destination.mkdir(parents=True, exist_ok=True)
     for asset, (name, expected) in ASSETS.items():
-        (destination / name).write_bytes(download(asset, expected))
+        binary = destination / name
+        binary.write_bytes(download(asset, expected))
+        validate_pe_binary(binary, 0x8664)
     return destination / HELPER_EXECUTABLE
 
 

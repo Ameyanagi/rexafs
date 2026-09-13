@@ -4,11 +4,9 @@ description: "Compare sampling conventions and legacy AUTOBK behavior."
 audience: user
 ---
 
-Issue [#20](https://github.com/Ameyanagi/rexafs/issues/20) separated differences in
-background removal from differences in the public output transform. The
-[fixed-λ AUTOBK change](/docs/science/autobk/) previously resolved the default
-background objective. Version 0.2.4 addresses the remaining legacy derivative
-and FFT grid questions.
+Version 0.2.4 adds an explicit Fourier sampling grid and corrects the legacy
+AUTOBK derivative, addressing [#20](https://github.com/Ameyanagi/rexafs/issues/20).
+The default [fixed-λ AUTOBK objective](/docs/science/autobk/) is unchanged.
 
 ## Legacy iterative AUTOBK
 
@@ -21,7 +19,7 @@ s(\mathbf c)=1+\frac{100}{L}\sum_{j=1}^{L}h_j(\mathbf c)^2 ,
 $$
 
 with $\mathbf h(\mathbf c)$ the $L$ real and imaginary low-R residual entries.
-Its derivative with respect to one spline coefficient $c_k$ is now
+Its derivative with respect to one spline coefficient $c_k$ is
 
 $$
 \frac{\partial}{\partial c_k}\bigl[w\,s\,\chi_i\bigr]
@@ -45,7 +43,7 @@ Both array backends include the previously omitted second term. The FFT head
 and spectrum used by that term are computed once per Jacobian. The frozen-scale
 linear design matrix still uses zero scale derivative. Residual weights, scale,
 slices (including the legacy high-end exclusion of the last sample), and default
-fixed-λ objective are unchanged. A failed/nonfinite legacy LM solve now returns
+fixed-λ objective are unchanged. A failed/nonfinite legacy LM solve returns
 an error instead of returning its last coefficients as a successful result.
 
 Central differences cover 64 combinations of clamp length, endpoint weights,

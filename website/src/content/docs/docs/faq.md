@@ -7,16 +7,13 @@ audience: user
 ## About rexafs
 
 **What is rexafs?**
-rexafs is an open-source toolkit for X-ray absorption spectroscopy. It processes
-measured spectra, extracts EXAFS, computes Fourier transforms and fits
-scattering-path models. One Rust numerical engine powers a desktop application
-and Python, TypeScript and Rust libraries. The [overview](/docs/getting-started/)
-lists the features of each interface.
+An open-source toolkit for processing and fitting X-ray absorption spectra,
+with a desktop application and Python, TypeScript and Rust libraries. See the
+[feature map](/docs/getting-started/#features-by-interface).
 
 **Is it free? Can I use it at a company or beamline?**
-Yes. The project is licensed under MIT or Apache-2.0, at your option, with no
-usage restrictions beyond those licenses. Bundled calculation engines,
-dependencies and example data keep their own notices; see
+Yes, under your choice of MIT or Apache-2.0. Bundled engines, dependencies and
+example data keep their own notices; see
 [licenses and example data](/licenses/).
 
 **What does the name mean?**
@@ -25,30 +22,32 @@ wheel for EXAFS analysis. The project began with the need to process large
 in-situ measurement series quickly and reproducibly.
 
 **Is the software finished?**
-The desktop is stable on macOS and available as previews on Windows and Linux.
-Numerical defaults and the project format are documented and covered by
-regression tests for every release. The manual states which release it
-describes and labels unreleased additions separately. See
+The desktop is stable on macOS, with Windows and Linux previews. This manual
+covers 0.2.4 and labels unreleased API additions as **Next**. See
 [release history](/releases/).
 
 ## Scope
 
 **Do I need to program to use rexafs?**
-No. The desktop covers import, processing, structures, fitting, series and
-publication without code. Start with [your first
+No. Start with the desktop guide to [your first
 analysis](/docs/getting-started/first-analysis/).
 
 **What do the Python and TypeScript packages include?**
-Spectrum processing: edge finding, normalization, AUTOBK, forward and inverse
-Fourier transforms, with configurable settings and array results. They do not
-yet expose groups, data treatment, LCF, PCA, structures or fitting. Those are
-available in the desktop and the Rust crate. See the [feature
-map](/docs/getting-started/#features-by-interface).
+Edge finding, normalization, AUTOBK, and forward and inverse Fourier transforms.
+Groups, data treatment, LCF, PCA, structures and fitting are currently available
+in the desktop and Rust only. See the [feature
+map](/docs/getting-started/#features-by-interface), including differences between
+Stable and Next configuration APIs.
 
 **Can I use it for XANES?**
 rexafs normalizes and flattens XANES, overlays spectra, and offers linear
 combination fitting and principal component analysis in the desktop and Rust.
 It does not perform XANES multiple-scattering simulations or edge fitting.
+
+**Are there Windows or Linux ARM64 downloads?**
+No ARM64 desktop packages are published for either platform in 0.2.4. macOS has
+Apple Silicon and Intel packages; Windows and Linux have x64 packages. See
+[ARM64 availability](/docs/getting-started/install/#arm64-availability).
 
 **Which scattering engine is used?**
 ReFEFF is embedded in every desktop package and available as a Rust feature.
@@ -79,10 +78,12 @@ using the monochromator spacing you enter. Do not relabel degrees as eV. See
 [import and groups](/docs/desktop/import/).
 
 **Is my data uploaded anywhere?**
-No. Processing and fitting run locally. The only network features are the
-online structure databases, the update check and the optional assistant, each
-of which you invoke explicitly. The [assistant guide](/docs/desktop/assistant/)
-lists exactly what it shares when you use it.
+Processing and fitting run locally. Startup update checks are enabled by
+default; they contact GitHub without uploading spectra. Turn them off in
+**Help → Updates**. Online structure searches and the optional assistant also
+use the network when you use those features; the [assistant
+guide](/docs/desktop/assistant/) explains what it shares. See [updates and
+offline use](/docs/getting-started/updates/).
 
 **How do I share an analysis with a colleague?**
 Save the project with **Raw: embedded** so original spectra and FEFF inputs are
@@ -91,9 +92,8 @@ writes figures, tables, processed data, a methods draft and references. See
 [projects](/docs/desktop/projects/) and [publication](/docs/desktop/publication/).
 
 **Can I recover a project after a bad save or a crash?**
-The previous completed save is kept as `.rxs.bak` beside the project. Copy it to
-a new `.rxs` name and open it. Saving is atomic, so a failed write leaves the
-previous file intact. See [troubleshooting](/docs/troubleshooting/#recover-a-project).
+Copy the `.rxs.bak` file beside your project to a new `.rxs` filename and open it.
+See [project recovery](/docs/troubleshooting/#recover-a-project).
 
 ## Results
 
@@ -124,17 +124,13 @@ lists them, and the analysis export writes `references.md` and
 `references.bib`. There is no journal paper for rexafs itself to cite at present.
 
 **Where do I report a problem or ask a question?**
-Check [troubleshooting](/docs/troubleshooting/), then open a
-[GitHub issue](https://github.com/Ameyanagi/rexafs/issues) with the rexafs
-version, operating system, interface, exact error and a small reproducible
-example you are able to share.
+Check [troubleshooting](/docs/troubleshooting/), then [report the problem with a
+reproducible example](/docs/troubleshooting/#ask-for-help).
 
 **How do I get updates?**
-The desktop checks GitHub for releases on startup, without installing anything
-automatically. Libraries follow the usual package managers. See [updates and
-offline use](/docs/getting-started/updates/).
+Use **Help → Updates** in the desktop, or your library package manager. See
+[updates and offline use](/docs/getting-started/updates/).
 
 **Can I contribute?**
-Yes. The repository's contributing guide describes the documentation and
-scientific standards every change must meet. Issues and pull requests are
-welcome on [GitHub](https://github.com/Ameyanagi/rexafs).
+Yes. Read [CONTRIBUTING.md](https://github.com/Ameyanagi/rexafs/blob/main/CONTRIBUTING.md)
+before submitting a pull request.

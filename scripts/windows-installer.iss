@@ -1,4 +1,7 @@
 ; Compile with windows_installer.py, which validates and stages the payload.
+#if Target != "x86_64-pc-windows-msvc" && Target != "aarch64-pc-windows-msvc"
+  #error Unsupported desktop target
+#endif
 #if Channel == "nightly"
   #define ProductName "rexafs Nightly"
   #define ProductId "rexafs.desktop.nightly"
@@ -19,9 +22,11 @@ DefaultDirName={localappdata}\Programs\{#ProductName}
 DefaultGroupName={#ProductName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
-MinVersion=10.0.19041
+; ARM64 uses "arm64 and x64compatible" for its native app and x64 FEFF10 helper.
+; https://jrsoftware.org/ishelp/topic_setup_architecturesallowed.htm
+ArchitecturesAllowed={#ArchitecturesAllowed}
+ArchitecturesInstallIn64BitMode={#ArchitecturesAllowed}
+MinVersion={#MinVersion}
 OutputDir={#OutputDir}
 OutputBaseFilename={#OutputName}
 SetupIconFile={#BundleDir}\resources\rexafs.ico

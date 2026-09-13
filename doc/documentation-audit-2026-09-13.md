@@ -228,3 +228,90 @@ checks passed; the new pages were reviewed in full-page desktop and mobile
 captures. A separate change in the same session bundles FEFF10 with Windows
 builds through the upstream helper process; the public manual keeps describing
 the published 0.2.4 Windows package until that change is released.
+
+## Fourth pass: concise website, API priorities and WASM feasibility
+
+This pass started from `0e3572f5a7931244214b9f92bbd0046cc6f5f504`. At the
+user's request, eight subagents divided the homepage, onboarding, desktop,
+libraries, science, repository review and portability assessment. A further
+integration review checked the combined edits. The starting inventory contained
+182 prose files; it now covers all 185, including the new recommendations and
+WASM guides. Generated reference explanations remain sourced from declarations.
+
+The editorial goal was to remove repeated promotional copy while retaining
+theory and practical instructions. Homepage capability/FAQ duplication was
+removed; the download page now groups architectures under three operating-system
+cards, states missing Windows/Linux ARM64 packages, and links detailed setup.
+Manual sections were shortened mainly in introductions, navigation, repeated
+instructions and screenshot captions. All science display equations, original
+screenshot assets, historical measurements and input fixtures are unchanged.
+
+Source-checked corrections include the FAQ's automatic startup update checks,
+AUTOBK's locally resolved `kmax`/`nknots`, released versus checkout Windows
+FEFF10 support, the already-shipped offline license reader, and figure CSV
+exports. JavaScript examples now establish `try`/`finally` before processing so
+failed stages do not skip `free()`.
+
+Validation in this pass:
+
+- Astro check: no errors, warnings or hints; production build passed.
+- Both reference-generator regression tests, all five content tests and all six
+  browser/accessibility tests passed at the `/rexafs/` deployment base.
+- Python/TypeScript reference and citation regeneration produced no drift.
+- Desktop/mobile download captures were reviewed; each published package appears
+  once, each operating system has one heading, and both missing ARM64 packages
+  are explicit. Existing released assets were verified through the GitHub API.
+- All non-website prose local file targets were checked; the public content test
+  checks rendered site destinations and anchors. The inventory covers every
+  tracked/new prose document, including generated references.
+- Both release WASM package targets built; all 13 Node runtime/editor tests and
+  the separate Chromium processing/asset-loading check passed. The core without
+  default features also passed its WASM compile check.
+- Default-core and ReFEFF-enabled WASM probes failed. These are recorded failures,
+  not new supported configurations. See the [build assessment](webassembly.md).
+
+The [prioritized recommendations](documentation-api-roadmap.md) cover source-owned
+documentation, API reproducibility, batches, advanced bindings, ARM64 distribution
+and ReFEFF portability. No numerical implementation, package release or website
+deployment was performed. This review did not re-derive every archived scientific
+claim or run every native desktop workflow again.
+
+## Browser workspace and next-release ARM64 implementation
+
+The follow-up request added a browser processing workspace at `/app/` and native
+Windows/Linux ARM64 jobs to the next-release pipeline. ReFEFF WASM support is
+being handled upstream; this change does not modify its source or dependencies.
+
+The workspace imports numeric text/CSV with explicit columns and eV/keV units,
+then runs normalization, AUTOBK and a forward transform in a cancellable Worker.
+It plots full processing results and exports full-resolution CSV and a JSON
+record containing requested settings, resolved E0, source-text and WASM hashes,
+source commit and build status. Inferred background settings that the binding
+does not expose are explicitly identified as unavailable. Display reduction
+retains sample extrema; exported arrays are not reduced. Browser-specific input,
+FFT coverage and spline-workspace limits reject unsupported work before AUTOBK
+instead of silently truncating the transform. The Rust algorithms are unchanged.
+
+Release packaging now validates six native desktop architectures. Windows ARM64
+uses native rexafs/ReFEFF and a separately identified x64 FEFF10 helper through
+Windows 11 emulation. Windows ZIPs include signed, architecture-checked Microsoft
+runtime DLLs, and installer builds revalidate their recorded provenance. Versions
+after 0.2.4 require both new archives and Windows installer evidence; historical
+release checks remain compatible. The public download page retains actual 0.2.4
+assets and links to the next-release plans.
+
+Validation:
+
+- Astro check reports no errors, warnings or hints; the production root-path
+  build and Stable/Next Rust reference generation pass.
+- All ten content/input tests, two reference-generator tests and ten browser
+  tests pass at `SITE_BASE=/`. Browser tests compare the Cu Fourier CSV with
+  Node results, exercise transmission/keV import, cancellation, invalid input,
+  stale exports and short-FFT rejection/recovery. Accessibility checks pass.
+- The earlier `/rexafs/` build also passed the browser processing/import/export
+  checks. Desktop/mobile captures were reviewed, including axis-label spacing.
+- All 58 release-tooling tests across eight suites pass. Workflow lint and
+  `git diff --check` pass.
+
+Native ARM64 builds, packaged engine execution and installer qualification still
+require their CI jobs. No release or website deployment was performed locally.

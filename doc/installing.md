@@ -10,9 +10,12 @@ Choose your platform on the [latest release](https://github.com/Ameyanagi/rexafs
 | Windows x86-64 preview | Run the setup executable, or extract the ZIP for a portable copy. |
 | Linux x86-64 preview | Extract the archive and run `./rexafs` from the extracted folder. See the runtime requirements below. |
 
-The latest-release link follows new stable versions automatically. Linux and
-Windows ARM64 downloads are not currently published. Linux ARM64 can be built
-from source; Windows ARM64 has not been qualified.
+The latest-release link follows new stable versions automatically. Published
+0.2.4 has no Linux or Windows ARM64 downloads. The source checkout adds both to
+the next-release build and qualification pipeline; these are not published or
+qualified packages yet. See [native development](desktop-development.md) for
+source builds. The Windows ARM64 candidate requires Windows 11 because its
+FEFF10 helper runs as an x64 process; rexafs and ReFEFF themselves are native.
 
 ### Linux portable archive
 

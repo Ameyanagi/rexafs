@@ -34,25 +34,19 @@ after direct edits to legacy public fields, call `invalidate_derived()`.
 
 ## Full API reference
 
-The [generated Rust documentation](/api/rust/rexafs/index.html) is built from the
-published 0.2.4 crate with the default nalgebra backend and optional plotting,
-solver, calculation-backend and structure-source features. It includes API
-comments, types, methods and module explanations. The mutually alternative
-`ndarray-compat` backend is excluded so its historical defaults do not replace
-the primary implementation in this reference. You can also use
-[versioned docs.rs](https://docs.rs/rexafs/0.2.4/rexafs/).
+The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.4 crate
+with the default nalgebra backend and optional features. It excludes the legacy
+`ndarray-compat` backend, which replaces parts of that API and has different
+defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.4/rexafs/) is also available.
 
-The [Next Rust reference](/api/rust-next/rexafs/index.html) is generated from the
-current checkout's source comments with the same backend and optional features.
-It includes unreleased API additions and corrected explanations. Use its newer
-signatures only when building the matching checkout; stable and Next references
-are labeled separately.
+The [Next reference](/api/rust-next/rexafs/index.html) uses the checkout with the
+same features. Its unreleased signatures require that checkout.
 
 | Module | Operations |
 |---|---|
 | `Spectrum`, `Group` | Normalization, background, FFT/IFFT, collections and parallel processing |
 | `tools` | Calibration, alignment, deglitching, truncation, smoothing, rebinning, merging and differences |
-| `analysis` | Bounded linear combination fitting, combination searches, PCA and target transformation |
+| `analysis` | Bounded linear combination fitting, combination searches, principal component analysis and target transformation |
 | `io` | Text/QAS/XDI readers and conversion to spectra |
 | `structure` | CIF/XYZ models, symmetry, clusters, neighbors, structure databases and FEFF input |
 | `fitting` | FEFF paths, variables/expressions, k/R/q transforms, joint and independent fitting |
@@ -71,13 +65,12 @@ are labeled separately.
 | `ndarray-compat` | Legacy ndarray compatibility backend |
 
 For example, `cargo add rexafs@0.2.4 --features plotting,refeff-runner` enables
-plotting and the ReFEFF backend. Features describe library capabilities; the
-generated reference does not mean every backend is available on every OS.
+plotting and ReFEFF. Backend availability depends on the platform; see
+[WebAssembly support](/docs/libraries/webassembly/) for browser limits.
 
 Follow [theory and units](/docs/science/processing/),
 [structural fitting](/docs/desktop/structures/) and
 [statistics](/docs/science/fitting-statistics/) when designing an analysis.
-
 
 ## Configure a stage
 
@@ -94,11 +87,10 @@ fn configure(spectrum: &mut Spectrum) -> rexafs::Result<()> {
 }
 ```
 
-The next release accepts `spectrum.set_background_method(background)?` directly,
-and `set_normalization_method(prepost)?` for `PrePostEdge`. Existing enum forms
-and `None` for default settings remain supported. Forward and inverse settings
-already use `set_fft(transform)` and `set_ifft(inverse)` directly. Follow the
-signature shown for your installed version in the API reference.
+The unreleased Next API also accepts `set_background_method(background)?` and
+`set_normalization_method(prepost)?` directly. Existing enum forms and `None` for
+default settings remain supported. Forward and inverse settings already use
+`set_fft(transform)` and `set_ifft(inverse)` directly in 0.2.4.
 
 ## Collections and errors
 

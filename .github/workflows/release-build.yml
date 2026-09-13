@@ -155,21 +155,36 @@ jobs:
       matrix:
         include:
           - os: macos-15
+            target: aarch64-apple-darwin
             features: refeff-runner,feff10-runner
           - os: macos-15-intel
+            target: x86_64-apple-darwin
             features: refeff-runner,feff10-runner
           - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            features: refeff-runner,feff10-runner
+          # Native ARM64 runners: https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
             features: refeff-runner,feff10-runner
           # The MSVC desktop cannot link the MinGW FEFF10 archive; Windows runs
-          # FEFF10 through the bundled upstream helper executable instead.
+          # FEFF10 through the bundled x64 helper executable. On Windows ARM64
+          # the app and ReFEFF are native; FEFF10 requires Windows 11 emulation.
           - os: windows-2025
+            target: x86_64-pc-windows-msvc
+            features: refeff-runner,feff10-runner
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
             features: refeff-runner,feff10-runner
     runs-on: ${{ matrix.os }}
+    env:
+      RUSTUP_TOOLCHAIN: 1.98.1-${{ matrix.target }}
+      REXAFS_EXPECTED_TARGET: ${{ matrix.target }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
-          toolchain: 1.98.1
+          toolchain: 1.98.1-${{ matrix.target }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
@@ -206,11 +221,17 @@ jobs:
           xvfb-run -a -s "-screen 0 1366x768x24" python scripts/smoke-linux-gui.py \
             target/distributions/rexafs-*-unknown-linux-gnu/rexafs \
             crates/rexafs-gui/tests/fixtures/projects/rexafs-0.2.3-embedded.rxs
+      - name: Archive target-specific Linux GUI evidence
+        if: always() && runner.os == 'Linux'
+        run: |
+          if [ -d target/gui-smoke ]; then
+            tar -czf "target/linux-gui-smoke-${REXAFS_EXPECTED_TARGET}.tar.gz" -C target gui-smoke
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always() && runner.os == 'Linux'
         with:
-          name: linux-gui-smoke
-          path: target/gui-smoke/
+          name: linux-gui-smoke-${{ matrix.target }}
+          path: target/linux-gui-smoke-${{ matrix.target }}.tar.gz
           if-no-files-found: warn
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         if: runner.os == 'Windows'

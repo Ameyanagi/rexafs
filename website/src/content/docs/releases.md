@@ -4,12 +4,9 @@ description: "Published rexafs versions, what changed for users, and migration g
 audience: user
 ---
 
-Each stable release publishes desktop packages for macOS, Windows and Linux
-together with the Python, npm and Rust packages. Every release also adds
-saved-project fixtures to the regression suite, so a new release reads the
-projects of every earlier release. Save and back up your project before
-updating. Changes on the source branch are described in the [Next API
-reference](/docs/reference/), separately from these published versions.
+Published changes and migration notes are listed below. Back up projects before
+updating. Source-only API additions are documented in the [Next API
+reference](/docs/reference/).
 
 ## Stable 0.2.4
 

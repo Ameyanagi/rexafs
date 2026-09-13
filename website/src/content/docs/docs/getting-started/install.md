@@ -4,8 +4,7 @@ description: "Install the desktop or stable Python, TypeScript and Rust packages
 audience: user
 ---
 
-Choose the interface that suits your work. The desktop and prebuilt Python/npm
-packages do not require a Rust compiler.
+The desktop and prebuilt Python/npm packages do not require a Rust compiler.
 
 ## Desktop
 
@@ -19,12 +18,23 @@ Use the [download page](/download/) to select your operating system and processo
 | Linux x64 | Extract the archive; run `./rexafs` inside its folder | Preview; Ubuntu 24.04 runtime baseline |
 
 Keep portable folders together, including their resources, examples and licenses.
-There are no published Linux or Windows ARM64 desktop packages in 0.2.4.
-Save your project and close an older application before replacing it.
+Save your project and close the application before replacing it.
 
 The Windows installer uses your user directory and does not require administrator
 rights. Uninstall through **Settings → Apps**; your `.rxs` projects remain separate.
 The rexafs Windows executable and installer are not publisher-signed in this release.
+
+### ARM64 availability
+
+**Windows ARM64 and Linux ARM64 have no published desktop packages in 0.2.4.**
+Only macOS has an ARM64 download.
+
+The next-release pipeline adds native Linux and Windows ARM64 builds, subject to
+CI qualification. Linux includes native ReFEFF and FEFF10. Windows includes native
+rexafs/ReFEFF and an x64 FEFF10 helper, which requires Windows 11 emulation.
+Downloads will appear after the packages pass qualification and are released.
+See the [source-build guide](https://github.com/Ameyanagi/rexafs/blob/main/doc/desktop-development.md)
+for current build prerequisites.
 
 ### Linux runtime
 
@@ -69,22 +79,12 @@ match the published checksum for that exact file.
 - [TypeScript / JavaScript](/docs/libraries/typescript/): `bun add rexafs@0.2.4`.
 - [Rust](/docs/libraries/rust/): `cargo add rexafs@0.2.4`.
 
-We recommend the current stable [uv](https://docs.astral.sh/uv/getting-started/installation/)
-and [Bun](https://bun.sh/docs/installation) for package management. The library
-guides include the complete environment setup and alternatives.
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for the
+Python commands or [Bun](https://bun.sh/docs/installation) for the JavaScript
+command. The language guides cover alternatives, environment setup and editor
+configuration.
 
-For Python, `uv add` records the dependency in `pyproject.toml`, updates `uv.lock`,
-and prepares the project environment. `uv run` uses that environment, so manual
-activation is unnecessary. Keep both project files with your scripts; see
-[uv's project workflow](https://docs.astral.sh/uv/guides/projects/).
-
-Python supports CPython 3.10–3.14. Node requires version 22 or newer. The browser
-package requires WebAssembly initialization. Use the linked guides for a complete
-example and editor configuration.
-
-
-[![The complete rexafs welcome window with import, project and Cu example actions](/screenshots/welcome.jpg)](/screenshots/welcome.jpg)
-
-*The empty workspace offers the three starting actions. Full application window, rexafs 0.2.4 on macOS. Select the image to view its full resolution.*
+Python supports CPython 3.10–3.14; Node requires 22 or newer. Browser use requires
+WebAssembly initialization.
 
 Continue with [your first analysis](/docs/getting-started/first-analysis/).

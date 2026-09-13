@@ -4,22 +4,21 @@ description: "Choose structures, inspect an absorber and build a FEFF path model
 audience: user
 ---
 
-The **Fit** workspace separates **Structure**, **Calculate**, **Paths**, **Model**
-and **Results**. A structure supplies the reference geometry for scattering
-calculations; measured EXAFS supplies the observations used in fitting.
+A structure supplies the reference geometry for scattering calculations;
+measured EXAFS supplies the observations used in fitting. Follow the **Fit**
+stages: **Structure → Calculate → Paths → Model → Results**.
 
 ## Find a structure
 
-Choose a built-in **Curated** structure for an offline example, import CIF/XYZ,
-or search an available database. The interface offers Materials Project, AMCSD
-and COD; connectivity, downloaded catalogs and credentials depend on the source.
+Choose an offline **Curated** example, import CIF/XYZ, or search Materials
+Project, AMCSD or COD. Connectivity, downloaded catalogs and credentials depend
+on the source.
 Materials Project credentials belong to computer settings, not the saved project.
 Retain the structure's database identifier and attribution.
 
-Select the absorber and edge deliberately. The inspection center in a 3D view
-can differ from the calculation absorber. A visual selection does not itself
-change the scattering calculation. Check the lattice, coordination and occupancy
-against what is known about your sample.
+Select the absorber and edge, then check the lattice, coordination and occupancy
+against your sample. The 3D inspection center can differ from the calculation
+absorber; selecting an atom in the view does not change the calculation.
 
 The desktop starts with an 8 Å cluster radius and accepts 2–12 Å. For periodic
 CIF structures, it uses the majority species at a partially occupied site and
@@ -31,9 +30,9 @@ construction](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/
 
 ## Calculate and select paths
 
-Choose the engine and cluster radius, then **Calculate paths**. ReFEFF and FEFF10
-are different backends; availability depends on the installed package. Windows
-0.2.4 uses ReFEFF. Record the actual engine and settings in your methods.
+Choose the engine and cluster radius, then **Calculate paths**. Windows 0.2.4
+uses ReFEFF; macOS and Linux packages also offer FEFF10. Record the engine and
+settings in your methods.
 
 In Paths, use **First shell**, **To fit R max** or the importance filter as a
 starting selection, then inspect individual paths. Single and multiple scattering
@@ -47,13 +46,13 @@ heuristic, not a fitted fraction, probability or statistical significance.
 **To fit R max** includes paths with reference half-length up to the fit's R
 maximum plus 0.3 Å; that margin is a UI choice, not a phase correction. Presets
 apply to the visible calculation source and preserve selections from other
-sources. Inspect multiple-scattering contributions explicitly where relevant.
+sources.
 See the [path presets](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/app/shell/path_picker.rs#L60).
 
 
 [![Full path selection view showing Cu geometry and shell-grouped scattering paths](/screenshots/paths.jpg)](/screenshots/paths.jpg)
 
-*The first-shell shortcut selects a starting model; it does not validate that model for every sample. Full application window, rexafs 0.2.4 on macOS. Select the image to view its full resolution.*
+*First-shell path selection. Full window, rexafs 0.2.4 on macOS; select to enlarge.*
 
 
 ## Path parameters
@@ -85,9 +84,8 @@ covariance when propagating uncertainty through an expression. See
 
 ## Parameter templates
 
-The Model stage offers four starting arrangements. Inspect the generated values,
-bounds and expressions before fitting; the template cannot establish which
-constraints your material obeys.
+Inspect the Model template's values, bounds and expressions before fitting;
+check that its constraints suit your material.
 
 | Desktop choice | Parameters it creates or preserves |
 |---|---|
@@ -113,5 +111,4 @@ effects. Center focus and depth cue help expose the neighborhood. Slice/depth
 controls change what is visible; they do not remove atoms from the calculation.
 A display bond is a geometric heuristic, not a bond-order measurement.
 
-The [first-fit tutorial](/docs/desktop/fitting/) shows the complete sequence with
-one Cu spectrum and its full application screenshots.
+Follow the [first-fit tutorial](/docs/desktop/fitting/) for a worked Cu example.

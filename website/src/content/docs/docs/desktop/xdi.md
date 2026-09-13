@@ -9,17 +9,15 @@ specification](https://github.com/XraySpectroscopy/XAS-Data-Interchange/blob/mas
 and [metadata dictionary](https://github.com/XraySpectroscopy/XAS-Data-Interchange/blob/master/specification/dictionary.md),
 reviewed on 2026-09-05. This is XAS Data Interchange, not the unrelated OASIS XDI format.
 
-The desktop app discovers `.xdi` and `.XDI` files in folder scans. A file with
-the `# XDI/1.x` signature is also recognized when its extension is `.dat` or
-another supported text extension. Files named `.xdi` without the signature
-produce an import error. The normal import, normalization, background removal,
-fit, project reopen, and batch workflows share this reader.
+Import `.xdi` and `.XDI` files directly or through folder scans. The
+`# XDI/1.x` signature also identifies XDI in `.dat` and other supported text files.
+A `.xdi` file without that signature is an import error. Project reopen and batch
+calculations use the same reader.
 
-The Import panel shows the XDI version, sample, absorber, edge and axis units.
-Expanding it shows measurement details, user comments, original numeric values
-and the assigned columns. The preview keeps the file's original units; the
-processing pipeline always receives energy in eV. Scan.edge_energy remains
-metadata and does not overwrite the user's E0 processing setting.
+The Import panel shows the version, sample, absorber, edge and axis units. Expand
+it for measurement details, comments, original values and column assignments.
+The preview keeps original units; processing receives energy in eV.
+`Scan.edge_energy` is metadata and does not override the processing $E_0$.
 
 ## Interpretation
 
@@ -41,13 +39,12 @@ metadata and does not overwrite the user's E0 processing setting.
   not silently skipped. Missing absorber/edge descriptions and malformed metadata
   fields produce warnings. The reader is not a full metadata-dictionary validator.
 
-These strict numeric-row checks occur before detector arithmetic. During
-conversion to μ(E), a finite input row can still produce an undefined logarithm
-or division, for example when the transmitted intensity is zero. The desktop
-excludes a non-finite calculated signal and reports the affected point count and
-source lines in import diagnostics. Review those exclusions before accepting the
-mapping. Conversion also sorts energy and μ together by increasing energy; it
-does not merge repeated energies. See the [shared desktop signal
+Numeric-row checks precede detector arithmetic. A finite input can still produce
+an undefined logarithm or division, for example with zero transmitted intensity.
+The desktop excludes non-finite calculated signals; review the affected point
+count and source lines in import diagnostics before accepting the mapping.
+Conversion sorts energy/μ pairs by increasing energy without merging duplicates.
+See the [shared desktop signal
 conversion](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/params.rs#L913).
 
 Pixel and motor-step energy calibrations, χ(k)/χ(R) import into the μ(E)

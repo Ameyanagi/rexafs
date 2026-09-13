@@ -7,18 +7,26 @@ on:
       - 'website/**'
       - 'py-rexafs/python/rexafs/*.pyi'
       - 'py-rexafs/src/lib.rs'
-      - 'js-rexafs/*.d.ts'
+      - 'js-rexafs/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
       - 'crates/rexafs/src/**'
-      - 'crates/rexafs-wasm/src/lib.rs'
+      - 'crates/rexafs/Cargo.toml'
+      - 'crates/rexafs-wasm/**'
       - '.github/workflows/website.yml'
   pull_request:
     paths:
       - 'website/**'
       - 'py-rexafs/python/rexafs/*.pyi'
       - 'py-rexafs/src/lib.rs'
-      - 'js-rexafs/*.d.ts'
+      - 'js-rexafs/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
       - 'crates/rexafs/src/**'
-      - 'crates/rexafs-wasm/src/lib.rs'
+      - 'crates/rexafs/Cargo.toml'
+      - 'crates/rexafs-wasm/**'
       - '.github/workflows/website.yml'
   workflow_dispatch:
 
@@ -51,6 +59,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: '1.98.1'
+          targets: wasm32-unknown-unknown
+      - name: Install the browser engine build tool
+        run: cargo install wasm-pack --locked --version 0.15.0
       - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |

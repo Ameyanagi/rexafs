@@ -22,6 +22,12 @@ cargo test --locked -p rexafs-gui
 cargo run --locked --release -p rexafs-gui
 ```
 
+Use these commands on either x64 or ARM64 hardware with the corresponding
+native Rust toolchain. The FEFF10 dependency supplies a prebuilt Linux ARM64
+archive. The next-release CI adds `ubuntu-24.04-arm`; it must pass the packaged
+engine and graphical checks before an ARM64 download is released. Published
+0.2.4 has no Linux ARM64 desktop archive.
+
 The desktop supports X11 and Wayland and requires a Vulkan driver. Native file
 dialogs require a running session D-Bus and an XDG desktop portal file chooser
 backend. GNOME/KDE installations normally provide their own backend; the GTK
@@ -59,6 +65,22 @@ cargo check --locked -p rexafs --all-targets
 cargo test --locked -p rexafs-gui
 cargo run --locked --release -p rexafs-gui
 ```
+
+For an ARM64 source build, use Windows 11 ARM64, the Visual Studio ARM64 C++
+tools and the native Rust toolchain. Before the commands above, select it with:
+
+```powershell
+rustup toolchain install 1.98.1-aarch64-pc-windows-msvc
+$env:RUSTUP_TOOLCHAIN = "1.98.1-aarch64-pc-windows-msvc"
+$env:REXAFS_EXPECTED_TARGET = "aarch64-pc-windows-msvc"
+```
+
+The expected target is checked by desktop packaging. A native ARM64 rexafs
+executable and ReFEFF backend still use the existing x64 FEFF10 helper.
+[Windows 11 provides x64 application emulation](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation);
+Windows 10 ARM64 does not. The next-release matrix tests this mixed setup on
+`windows-11-arm`, including installed FEFF10 calculations. Adding the job is
+not evidence that it passed; native ARM64 qualification remains required.
 
 FEFF10's Windows prebuilt targets MinGW, which the MSVC desktop cannot link.
 Windows builds therefore keep the `feff10-runner` feature but run FEFF10

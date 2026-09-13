@@ -25,12 +25,15 @@ series.
 | Use case | Install | Start here |
 |---|---|---|
 | Desktop analysis, fitting and plots | [Download the latest release](https://github.com/Ameyanagi/rexafs/releases/latest) | [Desktop installation](#install-the-desktop) |
+| Spectrum processing in the browser | [Open the browser preview](https://rexafs.com/app/) | [WASM scope and limitations](website/src/content/docs/docs/libraries/webassembly.md) |
 | Python / Jupyter with NumPy | `uv add rexafs` | [Python guide](py-rexafs/README.md) |
 | TypeScript / JavaScript, Node or browser | `bun add rexafs` | [TypeScript guide](js-rexafs/README.md) |
 | Rust applications | `cargo add rexafs` | [Rust API](https://docs.rs/rexafs) |
 
 Python supports CPython 3.10–3.14. Node requires version 22 or newer.
 Prebuilt Python wheels and the npm Wasm package do not require a Rust compiler.
+The browser workspace uses the source-checkout engine and processes local files
+without uploading them. It is separate from the published 0.2.4 packages.
 Use a Python virtual environment to keep project dependencies separate:
 
 ```bash
@@ -100,6 +103,8 @@ details. See [Windows installation](doc/windows-installers.md),
 Optional Rust integrations include [ReFEFF](https://crates.io/crates/refeff), FEFF10,
 structure databases and plotting. The Python and JavaScript packages expose the
 small processing API; they do not yet expose all Rust fitting and structure APIs.
+See the [WebAssembly assessment](doc/webassembly.md) for build results and the
+[documentation and API priorities](doc/documentation-api-roadmap.md) for next steps.
 Desktop packages built from this checkout include both ReFEFF and FEFF10 on
 every platform; the published 0.2.4 Windows package includes ReFEFF only.
 The desktop uses the published [`xraydb`](https://crates.io/crates/xraydb) crate
@@ -193,9 +198,13 @@ print(spectrum.e0(), spectrum.k(), spectrum.chi())
 import init, { Spectrum } from "rexafs";
 await init();
 // energy and mu are Float64Arrays containing your measured spectrum.
-const spectrum = Spectrum.from_arrays(energy, mu).fft();
-console.log(spectrum.r(), spectrum.chir_mag());
-spectrum.free();
+const spectrum = Spectrum.from_arrays(energy, mu);
+try {
+  spectrum.fft();
+  console.log(spectrum.r(), spectrum.chir_mag());
+} finally {
+  spectrum.free();
+}
 ```
 
 Call only the stage you need: `.normalize()`, `.calc_background()`, `.fft()` or

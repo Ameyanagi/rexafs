@@ -76,8 +76,10 @@ nonzero amplitudes. FEFF10 is forced into worker mode in this check, exercising
 re-execution before app initialization. The desktop regression suite additionally
 compares Cu/Ni foil fits from identical inputs with both engines.
 
-The Windows preview retains ReFEFF only: its GUI uses MSVC, while the
-upstream FEFF10 archive targets MinGW. Windows/Linux preview publication began
+The published 0.2.4 Windows preview includes ReFEFF only: its GUI uses MSVC,
+while the upstream FEFF10 archive targets MinGW. The current checkout runs
+FEFF10 through a separate helper process; see the
+[Windows development guide](desktop-development.md#windows). Windows/Linux preview publication began
 with 0.1.3; the [release runbook](releasing.md#published-releases) links the
 qualification records and installation guidance. Rust consumers can opt
 into either backend; Python and Wasm packages keep their existing analysis APIs.

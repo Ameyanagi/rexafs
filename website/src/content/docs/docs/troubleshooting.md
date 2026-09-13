@@ -4,9 +4,8 @@ description: "Resolve common installation, data and processing problems."
 audience: user
 ---
 
-Start with the table below. For questions about scope, licensing, file
-formats and interpretation, see the [FAQ](/docs/faq/); for unfamiliar terms,
-see [concepts and glossary](/docs/concepts/).
+For scope and compatibility, see the [FAQ](/docs/faq/). For unfamiliar terms,
+see the [glossary](/docs/concepts/).
 
 | Symptom | Check |
 |---|---|
@@ -29,9 +28,8 @@ see [concepts and glossary](/docs/concepts/).
 
 ## Recover a project
 
-The previous save is retained as `.rxs.bak`. Copy it to a new `.rxs` filename
-and open the copy. Keep independent backups of important experiments; a previous
-save on the same disk is not an archival backup.
+Copy the previous save, `.rxs.bak`, to a new `.rxs` filename and open it.
+Keep independent backups of important experiments.
 
 ## Ask for help
 

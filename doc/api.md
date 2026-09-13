@@ -19,9 +19,14 @@ chi = spectrum.chi()
 ```typescript
 import init, { Spectrum } from "rexafs";
 await init();
-const spectrum = Spectrum.from_arrays(energy, mu).fft();
-const chi = spectrum.chi();
-spectrum.free();
+const spectrum = Spectrum.from_arrays(energy, mu);
+try {
+  spectrum.fft();
+  const chi = spectrum.chi();
+  // chi is an independent copy and can be retained after free().
+} finally {
+  spectrum.free();
+}
 ```
 
 ## Scientific meaning
@@ -121,8 +126,10 @@ changing forward-transform parameters invalidates forward/reverse results.
 Unchanged prerequisite results are reused. Calling a stage explicitly recomputes
 that stage. Replacing spectrum data clears the old E0 and derived results.
 
-Automatic values are resolved into the spectrum's stored settings when a stage
-succeeds. Invalidation clears results but retains those resolved settings. For
+Some automatic values, including normalization ranges and FFT spacing, are
+resolved into the spectrum's stored settings. AUTOBK's automatic `kmax` and
+`nknots` remain unset and are calculated from each input instead. Invalidation
+clears results but retains previously resolved settings. For
 example, after the first `fft()`, changing the AUTOBK `kstep` does not reset the
 forward transform's previously inferred `kstep`. Assign a fresh `XrayFFTF` when
 you want it to infer spacing from the new background grid. Likewise, assign a

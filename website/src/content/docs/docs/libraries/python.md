@@ -6,9 +6,8 @@ audience: user
 
 ## Install
 
-We recommend [uv](https://docs.astral.sh/uv/getting-started/installation/) to
-manage your analysis as a Python project. CPython 3.10–3.14 is supported;
-this example creates a Python 3.12 project:
+Use [uv](https://docs.astral.sh/uv/getting-started/installation/) to create an
+analysis project. rexafs supports CPython 3.10–3.14; this example uses 3.12:
 
 ```sh
 uv init --python 3.12 rexafs-analysis
@@ -17,37 +16,32 @@ uv add rexafs==0.2.4 numpy
 uv run python -c "import rexafs; print(rexafs.__version__)"
 ```
 
-`uv add` records the dependencies in `pyproject.toml`, saves exact resolved
-versions in `uv.lock`, and installs them in the project's `.venv`. `uv run`
-uses that environment automatically without shell activation. Commit
-`pyproject.toml`, `.python-version` and `uv.lock` with your analysis; exclude
-`.venv` from version control. NumPy is listed explicitly because the example
-imports it. See [uv's project guide](https://docs.astral.sh/uv/guides/projects/).
+`uv run` uses the project's `.venv` automatically. Commit `pyproject.toml`,
+`.python-version` and `uv.lock` to preserve dependencies; exclude `.venv`.
+NumPy is explicit because the example imports it. See
+[uv's project guide](https://docs.astral.sh/uv/guides/projects/).
 
-In VS Code, select the project's `.venv` with **Python: Select Interpreter**. The
-package includes `py.typed` and type stubs. The
-[stable reference](/docs/reference/stable/python/spectrum/) preserves the released
-signatures and adds explanations reviewed against the implementation. Improved
-installed hover help and keyword constructors appear in the
-[Next API](/docs/reference/next/python/spectrum/) until a new package release.
-Updating the website does not replace the stubs in an existing installation.
+In VS Code, select `.venv` with **Python: Select Interpreter** for completion and
+hover help. The [stable reference](/docs/reference/stable/python/spectrum/) adds
+reviewed explanations to the released signatures. Expanded installed help and
+keyword constructors are [unreleased Next additions](/docs/reference/).
 
-For Jupyter, add the kernel as a development dependency of this same project:
+### Jupyter
+
+Add a notebook kernel to the same project:
 
 ```sh
 uv add --dev ipykernel
 uv run python -m ipykernel install --user --name rexafs-analysis --display-name "Python (rexafs analysis)"
 ```
 
-Select **Python (rexafs analysis)** in your notebook's kernel menu. In VS Code,
-you can also select the project's `.venv` directly as the notebook kernel.
+Select **Python (rexafs analysis)** in your notebook, or `.venv` in VS Code.
 See [uv's Jupyter guide](https://docs.astral.sh/uv/guides/integration/jupyter/).
 
 ## Load and transform a measured spectrum
 
-Download [cu_150k.xmu](/examples/cu_150k.xmu) into the project, and save the
-following script as `analyze.py` beside it.
-This file already contains energy in eV and absorption in its first two columns.
+Download [cu_150k.xmu](/examples/cu_150k.xmu) and save this script as `analyze.py`
+beside it. The first two data columns contain energy in eV and absorption.
 
 ```python
 import numpy as np
@@ -76,8 +70,8 @@ FFT-length normalization.
 
 ## Configure stable 0.2.4
 
-Construct a settings object, assign only the fields you need, and pass it to the
-appropriate setter. In 0.2.4, background/normalization settings use their wrappers:
+Assign fields after constructing settings. In 0.2.4, background and normalization
+settings require algorithm wrappers:
 
 ```python
 from rexafs import AUTOBK, BackgroundMethod, XrayFFTF
@@ -100,6 +94,8 @@ calling `fft()` so it infers the new spacing. In this release, `.ifft()` uses
 the available inverse defaults; the `XrayFFTR` constructor and `.set_ifft()`
 binding are unreleased additions. After changing the forward R spacing, use a
 fresh spectrum for the stable inverse or use the configurable Next inverse.
+
+## Read transmission data
 
 For QAS transmission files with energy, incident intensity and transmitted intensity
 in the first three columns, use `rexafs.io.read_qas_transmission(path)`. It computes
@@ -124,5 +120,5 @@ starting points; inspect the windows and noise, and remember that uncorrected
 R peaks are not directly bond distances.
 
 [Processing theory](/docs/science/processing/) explains the equations and references.
-For repeated spectra, loop over `Spectrum` objects; the Python package does not
-currently expose Rust's Group, LCF/PCA or structural fitting APIs.
+For repeated spectra, loop over `Spectrum` objects. Python currently exposes
+[single-spectrum processing](/docs/libraries/#available-operations).

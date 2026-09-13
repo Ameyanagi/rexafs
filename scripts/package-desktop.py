@@ -5,15 +5,15 @@ import os
 import platform
 import plistlib
 import shutil
-import struct
 import subprocess
 import tempfile
 from pathlib import Path
 
-from release_archive import zip_bundle
+from release_archive import engine_execution, validate_desktop_binary, validate_desktop_target, zip_bundle
 from desktop_channels import app_name, identity
 from feff10_worker import install_helper
 from macos_installer import include_notices
+from windows_installer import stage_runtime
 
 root = Path(__file__).resolve().parents[1]
 metadata = json.loads(subprocess.check_output(
@@ -24,8 +24,8 @@ nightly = build_identity["channel"] == "nightly"
 application_name = app_name(build_identity["channel"])
 target = subprocess.check_output(["rustc", "-vV"], text=True).split("host: ")[1].splitlines()[0]
 system = platform.system()
-if system not in {"Darwin", "Linux", "Windows"}:
-    raise SystemExit(f"Unsupported desktop host: {system}")
+validate_desktop_target(target, system, os.environ.get("REXAFS_EXPECTED_TARGET"))
+engines = engine_execution(target)
 stem = f"rexafs-{version}-{target}"
 out = root / "target/distributions"
 bundle = out / stem
@@ -36,18 +36,12 @@ binary_relative = Path(application_name) / "Contents/MacOS/rexafs" if system == 
 binary = bundle / binary_relative
 binary.parent.mkdir(parents=True, exist_ok=True)
 shutil.copy2(Path(metadata["target_directory"]) / "release" / binary_name, binary)
+validate_desktop_binary(binary, target)
+platform_metadata = {}
 if system == "Windows":
-    # IMAGE_SUBSYSTEM_WINDOWS_GUI prevents a console opening with the app.
-    # Qualify the actual release EXE so a linker/config regression cannot ship.
-    with binary.open("rb") as executable:
-        executable.seek(0x3C)
-        pe_offset = struct.unpack("<I", executable.read(4))[0]
-        executable.seek(pe_offset)
-        if executable.read(4) != b"PE\0\0":
-            raise SystemExit("Windows desktop executable has no PE header")
-        executable.seek(pe_offset + 24 + 68)
-        if struct.unpack("<H", executable.read(2))[0] != 2:
-            raise SystemExit("Windows desktop must use the GUI subsystem (no console window)")
+    # Stage the app-local MSVC runtime before launching the copied executable.
+    # The build host's installed runtime must not be required by the ZIP.
+    platform_metadata["microsoft_runtime"] = stage_runtime(bundle, target)
 resources = bundle / (f"{application_name}/Contents/Resources" if system == "Darwin" else "resources")
 compiled_identity = json.loads(subprocess.check_output([str(binary), "--build-info"], text=True))
 features = compiled_identity.get("features")
@@ -133,6 +127,8 @@ if system == "Darwin":
     f"Open {application_name} on macOS or run rexafs / rexafs.exe on Linux / Windows.\n"
     "Help contains the optional Cu example and offline licenses.\n"
     + ("On Windows, FEFF10 runs through the bundled resources\\feff10\\feff10-rs.exe helper process.\n" if system == "Windows" else "")
+    + ("Windows ARM64 requires Windows 11: rexafs and ReFEFF run natively; FEFF10 uses x64 emulation.\n"
+       if target == "aarch64-pc-windows-msvc" else "")
     + "This archive has no publisher code signature; macOS notarization is not included.\n"
     "Linux requires a graphical session, Vulkan-capable driver, GTK 3, fontconfig and xkbcommon.\n"
     "Save .rxs projects with relative source paths (default), or select Raw: embedded for portable originals.\n"
@@ -149,7 +145,8 @@ if system in {"Darwin", "Linux"}:
             raise SystemExit(f"Non-system dynamic library:\n{linked}")
     (bundle / "linked-libraries.txt").write_text(linked)
 (bundle / "build.json").write_text(json.dumps({
-    "version": version, "target": target, "features": features, **build_identity,
+    "version": version, "target": target, "features": features,
+    "engine_execution": engines, **platform_metadata, **build_identity,
     "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
     "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root)),
@@ -165,15 +162,19 @@ elif system == "Windows":
 else:
     archive = Path(shutil.make_archive(str(out / stem), "gztar", out, stem))
 # Check the extracted archive in a fresh location, not just the build tree.
+# An override used for source-tree tests must not bypass the bundled helper.
+smoke_environment = os.environ.copy()
+smoke_environment.pop("REXAFS_FEFF10_EXECUTABLE", None)
 with tempfile.TemporaryDirectory(prefix="rexafs-package-") as directory:
     if system == "Darwin":
         subprocess.run(["ditto", "-x", "-k", str(archive), directory], check=True)
     else:
         shutil.unpack_archive(archive, directory)
     extracted = Path(directory) / stem / binary_relative
-    subprocess.run([str(extracted), "--version"], cwd=directory, check=True)
-    subprocess.run([str(extracted), "--self-check"], cwd=directory, check=True)
-    subprocess.run([str(extracted), "--self-check-feff"], cwd=directory, check=True, timeout=600)
+    validate_desktop_binary(extracted, target)
+    subprocess.run([str(extracted), "--version"], cwd=directory, env=smoke_environment, check=True)
+    subprocess.run([str(extracted), "--self-check"], cwd=directory, env=smoke_environment, check=True)
+    subprocess.run([str(extracted), "--self-check-feff"], cwd=directory, env=smoke_environment, check=True, timeout=600)
 checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
 Path(str(archive) + ".sha256").write_text(f"{checksum}  {archive.name}\n")
 print(archive)

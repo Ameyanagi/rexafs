@@ -4,24 +4,23 @@ description: "Build and inspect a one-shell Cu EXAFS model."
 audience: user
 ---
 
-This example continues the [Cu processing walkthrough](/docs/getting-started/first-analysis/).
-It illustrates how to construct a fit, not how to establish a unique structural
-interpretation. Use ranges and constraints appropriate to your actual sample.
+Continue the [Cu processing walkthrough](/docs/getting-started/first-analysis/)
+with a one-shell model. For your own samples, choose appropriate ranges and
+constraints; this example does not establish a unique structural interpretation.
 
 ## 1. Choose a structure and calculate paths
 
-Open **Fit → Structure**. In **Curated**, choose the built-in **Cu / Copper**
-structure. Choose **Use structure →**. In Calculate, select Cu as absorber, the
-K edge and a calculation radius of 8 Å. Use **ReFEFF** for this walkthrough and
-choose **Calculate paths**. Wait for the calculation to complete.
+Open **Fit → Structure → Curated**, select **Cu / Copper**, then
+**Use structure →**. In Calculate, select Cu as absorber, the K edge, an 8 Å
+radius and **ReFEFF**. Choose **Calculate paths** and wait for completion.
 
-The available backend depends on the package/platform. The Windows build uses
-ReFEFF; the macOS and Linux packages also offer FEFF10. Record the engine actually used.
+Windows 0.2.4 uses ReFEFF; macOS and Linux packages also offer FEFF10.
+Record the engine used.
 
 
 [![Full structure and calculation setup for the built-in Cu model](/screenshots/structure.jpg)](/screenshots/structure.jpg)
 
-*The absorber, edge and cluster radius define the scattering calculation. Full application window, rexafs 0.2.4 on macOS. Select the image to view its full resolution.*
+*Cu scattering setup. Full window, rexafs 0.2.4 on macOS; select to enlarge.*
 
 
 ## 2. Select a model
@@ -33,7 +32,7 @@ degeneracy describe the reference structure, not fitted results.
 
 [![Full Paths stage with first-shell Cu scattering selected](/screenshots/paths.jpg)](/screenshots/paths.jpg)
 
-*One path is selected from the calculated Cu path collection. Full application window, rexafs 0.2.4 on macOS. Select the image to view its full resolution.*
+*First-shell Cu path. Full window, rexafs 0.2.4 on macOS; select to enlarge.*
 
 
 Inspect the model's amplitude, energy shift, distance change and disorder
@@ -46,7 +45,7 @@ the selected fitting range.
 
 [![Full model view with k and R fitting limits](/screenshots/fit-ranges.jpg)](/screenshots/fit-ranges.jpg)
 
-*The chosen fit domain and independent-variable count determine how to interpret the statistics. Full application window, rexafs 0.2.4 on macOS. Select the image to view its full resolution.*
+*R-space fit limits. Full window, rexafs 0.2.4 on macOS; select to enlarge.*
 
 
 ## 3. Run and inspect
@@ -59,7 +58,7 @@ or physically complete.
 
 [![Full Cu first-shell fit result with curves, residuals, parameters and statistics](/screenshots/fit-result.jpg)](/screenshots/fit-result.jpg)
 
-*Illustrative ReFEFF first-shell fit: the higher-shell signal is outside this model’s selected R range. Full application window, rexafs 0.2.4 on macOS. Select the image to view its full resolution.*
+*ReFEFF first-shell fit; higher shells lie outside the selected R range. Full window, rexafs 0.2.4 on macOS; select to enlarge.*
 
 
 The screenshot's noise scale is 1. Its uncertainties therefore depend on that

@@ -11,22 +11,40 @@ TARGETS = {
     "x86_64-apple-darwin": ".zip",
     "x86_64-pc-windows-msvc": ".zip",
     "x86_64-unknown-linux-gnu": ".tar.gz",
+    "aarch64-pc-windows-msvc": ".zip",
+    "aarch64-unknown-linux-gnu": ".tar.gz",
 }
+LEGACY_TARGETS = {target: extension for target, extension in TARGETS.items()
+                  if target not in {"aarch64-pc-windows-msvc", "aarch64-unknown-linux-gnu"}}
+
+
+def targets_for_version(version):
+    """Return the required desktop targets, preserving historical releases.
+
+    Releases through 0.2.4 had four desktop targets. Subsequent coordinated
+    versions require native ARM64 Windows and Linux archives too. This policy
+    permits checks of old release evidence without weakening the next release's
+    six-target gate. Prereleases use their numeric release version.
+    """
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-(?:alpha|beta|rc)\.\d+)?", version)
+    if not match:
+        raise ValueError("Expected a coordinated release version")
+    numeric = tuple(int(part) for part in match.groups())
+    return LEGACY_TARGETS if numeric <= (0, 2, 4) else TARGETS
 
 
 def desktop_names(entries, version):
     """Select desktop assets for a coordinated version from manifest entries.
 
-    All four native archives and their sidecars are required, as are the Windows
-    installer and build/qualification records. Mac DMGs are optional at this
+    All native archives and their sidecars for targets_for_version are required,
+    as are each Windows target's installer and build/qualification records.
+    Mac DMGs are optional at this
     staging step, but a DMG, its checksum and its evidence must appear together.
     This checks naming/completeness, not signing evidence or file contents.
     Invalid versions or incomplete sets raise ValueError.
     """
-    if not re.fullmatch(r"\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?", version):
-        raise ValueError("Expected a coordinated release version")
     required, allowed = set(), set()
-    for target, extension in TARGETS.items():
+    for target, extension in targets_for_version(version).items():
         stem = f"rexafs-{version}-{target}"
         required.update((stem + extension, stem + extension + ".sha256"))
         if target.endswith("windows-msvc"):
