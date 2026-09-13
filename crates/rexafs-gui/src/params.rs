@@ -1,6 +1,9 @@
-//! Pipeline parameters edited in the context panel. `None` = let the core
-//! library auto-determine ("auto" in the UI). The fingerprint keys the
-//! processed-spectrum cache so edits invalidate exactly what they change.
+//! Pipeline parameters edited in the context panel. `None` requests the
+//! desktop's default or automatic value, resolved in [`process_arrays`].
+//! For example, normalization keeps default pre-edge offsets but follows
+//! each spectrum's measured endpoint for the post-edge upper limit.
+//! The full fingerprint keys a processed spectrum; a separate raw-input
+//! fingerprint allows input arrays to survive processing-only edits.
 
 use rexafs::prelude::AUTOBKClampScalePolicy;
 use std::hash::{Hash, Hasher};

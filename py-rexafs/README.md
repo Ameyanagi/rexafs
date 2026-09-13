@@ -9,18 +9,24 @@ Energy is in **eV**, k/q in **Å⁻¹**, and R in **Å**.
 
 ## Install
 
-Use CPython 3.10–3.14 in a virtual environment:
+We recommend [uv](https://docs.astral.sh/uv/getting-started/installation/) to
+create an isolated Python environment and install rexafs. CPython 3.10–3.14
+is supported; this example chooses Python 3.12 and the stable package:
 
 ```bash
-python -m venv .venv
+uv venv --python 3.12
+uv pip install rexafs==0.2.4
 # macOS/Linux:
 source .venv/bin/activate
 # Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install --upgrade rexafs
+python -c "import rexafs; print(rexafs.__version__)"
 ```
 
 [PyPI](https://pypi.org/project/rexafs/) provides platform wheels. Rust is needed
-only when building from source. NumPy is installed as a dependency.
+only when building from source. NumPy is installed as a dependency. See
+[uv's environment guide](https://docs.astral.sh/uv/pip/environments/) for
+environment selection. If you already use pip, the equivalent install in an
+activated environment is `python -m pip install rexafs==0.2.4`.
 
 **Version note:** keyword constructors, direct configuration setters and
 `XrayFFTR` below are additions after 0.2.4. Until released, install this checkout
@@ -43,12 +49,18 @@ For QAS transmission files, `rexafs.io.read_qas_transmission(path)` returns a
 Spectrum using `mu = ln(I0 / It)`, the natural logarithm of incident intensity
 I0 divided by transmitted intensity It. Both intensities must be positive and
 in matching units; this produces optical depth rather than an absolute absorption
-coefficient. It accepts `str` or `pathlib.Path`:
+coefficient. The first three whitespace-delimited columns are energy, I0 and
+It; `#` starts a comment and additional columns are ignored. Do not use this
+reader on a file that already contains mu. It accepts `str` or `pathlib.Path`:
 
 ```python
 from rexafs import io
 spectrum = io.read_qas_transmission("Ru_QAS.dat").fft()
 ```
+
+File/parse failures raise `RuntimeError`. The reader does not enforce positive
+intensities or sort energies; invalid derived data are rejected when a processing
+stage runs. Check the raw intensities and energy ordering before analysis.
 
 `normalize()`, `calc_background()`, `fft()` and `ifft()` return the same spectrum.
 Missing prerequisite stages run automatically. Results are copied NumPy float64
@@ -101,6 +113,13 @@ its edge step. AUTOBK estimates the smooth background to obtain the EXAFS
 oscillations, chi(k). The Fourier transform weights and windows those oscillations
 to display them against R; its peaks are not automatically phase-corrected bond
 lengths. An inverse transform filters selected R contributions back into q space.
+
+The forward code multiplies an unnormalized, negative-exponent FFT by
+`kstep / sqrt(pi)`, with no extra division by FFT length. For dimensionless chi
+and forward exponent `w`, chi(R) has units Å⁻⁽ʷ⁺¹⁾; the default `w=2` gives
+Å⁻³. The real inverse retains the forward weighting and window, so with default
+inverse `rweight=0`, its signal has units Å⁻ʷ and is generally not the original
+unweighted chi(k).
 
 The [processing theory guide](../doc/processing-theory.md) explains the
 equations, symbols, units, assumptions and implementation choices, with scientific

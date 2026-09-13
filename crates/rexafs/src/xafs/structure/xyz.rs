@@ -30,7 +30,7 @@ pub enum XyzAbsorber {
     Index(usize),
     /// First atom of this element (`Fe`).
     Element(String),
-    /// The atom closest to the centroid of the given element.
+    /// Atom of the requested element nearest the unweighted centroid of all atoms.
     CentralOf(String),
 }
 
@@ -156,6 +156,9 @@ impl Xyz {
     /// A cluster centred on the absorber, truncated to `radius` (Å) when
     /// given. FEFF potentials: 0 = absorber, then one per element by first
     /// appearance in distance order.
+    /// None retains all listed atoms, including hydrogen; no periodic images
+    /// or occupancy sampling are added. Input coordinates and radius use Å.
+    /// The absorber is always retained. Invalid absorber selections return an error.
     pub fn to_cluster(
         &self,
         sel: &XyzAbsorber,

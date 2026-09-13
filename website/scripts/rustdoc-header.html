@@ -1,2 +1,38 @@
-<style>.rexafs-api-banner{padding:12px 20px;background:#fff1e4;color:#43220d;font:14px system-ui}.rexafs-api-banner a{color:#713811}</style>
-<script>document.addEventListener('DOMContentLoaded',()=>{const banner=document.createElement('nav');banner.className='rexafs-api-banner';const root=location.pathname.split('/api/rust/')[0];const link=document.createElement('a');link.href=root+'/docs/libraries/rust/';link.textContent='← rexafs user guide';banner.append(link,document.createTextNode(' · Stable Rust API 0.2.4 · all features'));document.body.prepend(banner);});</script>
+<style>
+  .rexafs-api-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 16px;
+    margin-bottom: 18px;
+    padding: 10px 0 14px;
+    border-bottom: 1px solid var(--headings-border-bottom-color);
+    color: var(--main-color);
+    font: 14px/1.5 system-ui, sans-serif;
+  }
+  .rexafs-api-banner a { color: var(--link-color); text-decoration: underline; text-underline-offset: 3px; }
+  .rexafs-api-banner a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+</style>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // rustdoc's body is a horizontal flex container for its sidebar and main.
+    // Put this link inside main so it cannot create a third column.
+    const content = document.querySelector('main > .width-limiter');
+    if (!content) return;
+    const banner = document.createElement('nav');
+    banner.className = 'rexafs-api-banner';
+    banner.setAttribute('aria-label', 'rexafs documentation');
+    const root = location.pathname.split(/\/api\/rust(?:-next)?\//)[0];
+    const isNext = location.pathname.includes('/api/rust-next/');
+    const link = document.createElement('a');
+    link.href = root + '/docs/libraries/rust/';
+    link.textContent = '← rexafs user guide';
+    const version = document.createElement('span');
+    version.textContent = isNext ? 'Next Rust API · unreleased · default backend' : 'Stable Rust API __REXAFS_VERSION__ · default backend';
+    const other = document.createElement('a');
+    other.href = root + (isNext ? '/api/rust/rexafs/index.html' : '/api/rust-next/rexafs/index.html');
+    other.textContent = isNext ? 'Stable API' : 'Next API';
+    banner.append(link, version, other);
+    content.prepend(banner);
+  });
+</script>

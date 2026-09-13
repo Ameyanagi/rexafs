@@ -4,16 +4,23 @@ use serde::{Deserialize, Serialize};
 
 use super::StructureError;
 
-/// Lattice with row vectors `a`, `b`, `c` in Å (crystallographic setting:
-/// `a` along x, `b` in the xy plane).
+/// Lattice with row vectors `a`, `b`, `c` in Å.
+/// [`Self::from_parameters`] places a along x and b in the xy plane;
+/// [`Self::from_matrix`] preserves the supplied orientation. Reconstruct the
+/// lattice when changing geometry so its cached inverse stays consistent.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Lattice {
+    /// Length of lattice vector a in Å.
     pub a: f64,
+    /// Length of lattice vector b in Å.
     pub b: f64,
+    /// Length of lattice vector c in Å.
     pub c: f64,
-    /// Degrees.
+    /// Angle between b and c in degrees.
     pub alpha: f64,
+    /// Angle between a and c in degrees.
     pub beta: f64,
+    /// Angle between a and b in degrees.
     pub gamma: f64,
     /// Row vectors: `matrix[0]` = a, `matrix[1]` = b, `matrix[2]` = c.
     pub matrix: [[f64; 3]; 3],
@@ -21,7 +28,8 @@ pub struct Lattice {
 }
 
 impl Lattice {
-    /// Build from cell parameters (lengths in Å, angles in degrees).
+    /// Build from positive finite lengths in Å and angles strictly between 0° and 180°.
+    /// Returns `InvalidLattice` when the angles do not form a nonsingular 3D cell.
     pub fn from_parameters(
         a: f64,
         b: f64,
@@ -77,7 +85,8 @@ impl Lattice {
         })
     }
 
-    /// Build from row vectors.
+    /// Build from three Cartesian row vectors in Å, preserving their orientation.
+    /// Returns `InvalidLattice` if the matrix cannot be inverted.
     pub fn from_matrix(matrix: [[f64; 3]; 3]) -> Result<Self, StructureError> {
         let len = |v: &[f64; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
         let angle = |u: &[f64; 3], v: &[f64; 3]| {
@@ -100,10 +109,12 @@ impl Lattice {
         })
     }
 
+    /// Build an orthogonal cubic cell with edge length a in Å.
     pub fn cubic(a: f64) -> Result<Self, StructureError> {
         Self::from_parameters(a, a, a, 90.0, 90.0, 90.0)
     }
 
+    /// Absolute determinant of the lattice matrix, giving cell volume in Å³.
     pub fn volume(&self) -> f64 {
         det3(&self.matrix).abs()
     }
@@ -142,7 +153,8 @@ impl Lattice {
         self.volume() / n
     }
 
-    /// Cartesian distance between two fractional positions (no wrapping).
+    /// Cartesian distance in Å between two fractional positions, without wrapping.
+    /// This is not the minimum-image distance across periodic boundaries.
     pub fn distance(&self, f1: [f64; 3], f2: [f64; 3]) -> f64 {
         let c1 = self.to_cart(f1);
         let c2 = self.to_cart(f2);

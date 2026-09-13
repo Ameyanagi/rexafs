@@ -57,9 +57,13 @@ match the published checksum for that exact file.
 
 ## Libraries
 
-- [Python / Jupyter](/docs/libraries/python/): `python -m pip install rexafs==0.2.4`.
-- [TypeScript / JavaScript](/docs/libraries/typescript/): `npm install rexafs@0.2.4`.
+- [Python / Jupyter](/docs/libraries/python/): create an environment with `uv venv`, then run `uv pip install rexafs==0.2.4`.
+- [TypeScript / JavaScript](/docs/libraries/typescript/): `bun add rexafs@0.2.4`.
 - [Rust](/docs/libraries/rust/): `cargo add rexafs@0.2.4`.
+
+We recommend the current stable [uv](https://docs.astral.sh/uv/getting-started/installation/)
+and [Bun](https://bun.sh/docs/installation) for package management. The library
+guides include the complete environment setup and alternatives.
 
 Python supports CPython 3.10–3.14. Node requires version 22 or newer. The browser
 package requires WebAssembly initialization. Use the linked guides for a complete

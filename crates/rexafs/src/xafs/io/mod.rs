@@ -1,3 +1,14 @@
+//! Readers and interchange formats for measured XAS data.
+//!
+//! [`read_qas_transmission`] reads whitespace-delimited energy/I0/It columns.
+//! [`XdiFile`] imports self-described XAS Data Interchange files and retains
+//! metadata; [`AthenaProject`] reads and writes Athena `.prj` collections.
+//! These readers return owned data and do not normalize or transform it.
+//!
+//! The [`xafs_json`] and [`xafs_bson`] modules serialize legacy Rust group
+//! envelopes. They are separate from the desktop `.rxs` project format and do
+//! not provide that format's portability, migration, backup or atomic-save policy.
+
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
@@ -18,6 +29,22 @@ use data_reader::reader::{load_txt_f64, Delimiter, ReaderParams};
 use std::error::Error;
 use std::path::Path;
 
+/// Read a QAS-style transmission scan into an unprocessed, owned spectrum.
+///
+/// The first three whitespace-delimited columns must be energy (eV), incident
+/// intensity `I0`, and transmitted intensity `It`; lines starting with `#` are
+/// comments. Extra columns are ignored. The stored absorption is the natural
+/// logarithm `mu = ln(I0 / It)`, a dimensionless optical thickness. Dividing by
+/// sample thickness to obtain an absorption coefficient is the caller's choice.
+/// See [Newville, Fundamentals of XAFS (2014)](https://doi.org/10.2138/rmg.2014.78.2)
+/// for the transmission measurement convention.
+/// Both intensities should be positive for a physically meaningful transmission
+/// measurement. This legacy reader does not reject invalid intensity ratios:
+/// they may yield non-finite absorption that later processing rejects.
+///
+/// Returns [`IOError`] for unreadable/invalid tables or fewer than three columns.
+/// Energy is sorted together with absorption by the legacy spectrum setter;
+/// duplicate energies are not removed. Also exported as [`read_qas_transmission`].
 #[allow(non_snake_case)]
 pub fn load_spectrum_QAS_trans<P: AsRef<Path>>(path: P) -> Result<XASSpectrum, IOError> {
     let path_ref = path.as_ref();

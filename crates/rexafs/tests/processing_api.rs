@@ -113,6 +113,66 @@ fn stage_configuration_is_respected_and_only_dependents_are_invalidated() {
 }
 
 #[test]
+fn direct_settings_match_enum_and_optional_enum_configuration() {
+    let mut normalization = PrePostEdge::new();
+    normalization.pre_edge_start = Some(-200.0);
+    normalization.pre_edge_end = Some(-65.0);
+    let mut background = AUTOBK::new();
+    background.rbkg = Some(1.2);
+
+    let mut direct = sample();
+    direct
+        .set_normalization_method(normalization.clone())
+        .unwrap()
+        .set_background_method(background.clone())
+        .unwrap()
+        .fft()
+        .unwrap();
+
+    let mut enum_form = sample();
+    enum_form
+        .set_normalization_method(NormalizationMethod::from(normalization.clone()))
+        .unwrap()
+        .set_background_method(BackgroundMethod::from(background.clone()))
+        .unwrap()
+        .fft()
+        .unwrap();
+
+    let mut optional_form = sample();
+    optional_form
+        .set_normalization_method(Some(NormalizationMethod::PrePostEdge(normalization)))
+        .unwrap()
+        .set_background_method(Some(BackgroundMethod::AUTOBK(background)))
+        .unwrap()
+        .fft()
+        .unwrap();
+
+    for other in [&enum_form, &optional_form] {
+        assert_eq!(direct.norm(), other.norm());
+        assert_eq!(direct.chi(), other.chi());
+        assert_eq!(direct.chir_mag(), other.chir_mag());
+    }
+
+    let norm = direct.norm().unwrap();
+    direct.set_background_method(AUTOBK::new()).unwrap();
+    assert_eq!(direct.norm().unwrap(), norm);
+    assert!(direct.chi().is_none());
+    assert!(direct.chir().is_none());
+    direct.set_normalization_method(PrePostEdge::new()).unwrap();
+    assert!(direct.norm().is_none());
+
+    // These unannotated calls must continue to infer the original enum types.
+    direct.set_normalization_method(None).unwrap();
+    direct.set_background_method(None).unwrap();
+    direct.fft().unwrap();
+    let mut defaults = sample();
+    defaults.fft().unwrap();
+    assert_eq!(direct.norm(), defaults.norm());
+    assert_eq!(direct.chi(), defaults.chi());
+    assert_eq!(direct.chir_mag(), defaults.chir_mag());
+}
+
+#[test]
 fn unsupported_selected_algorithms_never_fall_back_to_defaults() {
     let mut spectrum = sample();
     spectrum.fft().unwrap();

@@ -9,7 +9,7 @@ const dist=resolve(root,'dist');
 const base=(process.env.SITE_BASE||'/rexafs').replace(/\/$/,'');
 const origin=process.env.SITE_URL||'https://ameyanagi.github.io';
 function files(dir){return readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?files(resolve(dir,e.name)):[resolve(dir,e.name)]);}
-const pages=files(dist).filter(p=>p.endsWith('.html')&&!p.includes('/api/rust/'));
+const pages=files(dist).filter(p=>p.endsWith('.html')&&!/\/api\/rust(?:-next)?\//.test(p));
 const parsed=new Map();
 const parse=file=>{if(!parsed.has(file))parsed.set(file,load(readFileSync(file,'utf8')));return parsed.get(file);};
 test('public pages have working internal links, images and anchors at the deployment base',()=>{
@@ -26,7 +26,7 @@ test('public pages have working internal links, images and anchors at the deploy
    if(path.endsWith('/'))path+='index.html';
    let dest=resolve(dist,'.'+path);
    if(!existsSync(dest)){failures.push(`${relative(dist,file)}: missing ${value}`);return;}
-   if(target.hash&&dest.endsWith('.html')&&!dest.includes('/api/rust/')){
+   if(target.hash&&dest.endsWith('.html')&&!/\/api\/rust(?:-next)?\//.test(dest)){
     const id=decodeURIComponent(target.hash.slice(1));
     if(!parse(dest)('[id]').toArray().some(n=>parse(dest)(n).attr('id')===id))failures.push(`${relative(dist,file)}: missing anchor ${value}`);
    }
@@ -62,4 +62,31 @@ test('published Rust docs and public API coverage are included',()=>{
  }
  const stable=parse(resolve(dist,'docs/reference/stable/python/autobk/index.html'))('main').text();
  assert(!stable.includes('AUTOBK(rbkg='));
+ assert(parse(resolve(dist,'api/rust/rexafs/xafs/background/struct.AUTOBK.html'))('[id="structfield.clamp_lambda"]').length,'Rust reference must use the default numerical backend');
+ assert(existsSync(resolve(dist,'api/rust-next/rexafs/xafs/xasspectrum/struct.XASSpectrum.html')));
+});
+
+test('generated API members have explanations and retain released signatures',()=>{
+ const reference=resolve(root,'src/content/docs/docs/reference');
+ for(const path of files(reference).filter(p=>p.endsWith('.md'))) {
+  const text=readFileSync(path,'utf8');
+  assert(!text.includes('Initialize self. See help(type(self))'),path);
+  for(const section of text.split(/^## /m).slice(1)) {
+   const afterSignature=section.replace(/^[\s\S]*?```[\s\S]*?```/,'').trim();
+   assert(afterSignature.length>20,`${relative(root,path)}: undocumented ${section.split('\n')[0]}`);
+  }
+ }
+ for(const language of ['python','typescript']) {
+  const stable=readFileSync(resolve(reference,`stable/${language}/spectrum.md`),'utf8');
+  assert(!/^## set_ifft$/m.test(stable),'unreleased inverse configuration must not enter stable API');
+  const next=readFileSync(resolve(reference,`next/${language}/spectrum.md`),'utf8');
+  assert(/^## set_ifft$/m.test(next));
+  assert(!existsSync(resolve(reference,`stable/${language}/xrayfftr.md`)));
+  assert(existsSync(resolve(reference,`next/${language}/xrayfftr.md`)));
+ }
+ const py=readFileSync(resolve(reference,'stable/python/autobk.md'),'utf8');
+ assert.match(py,/```python\nAUTOBK\(\)\n```/);
+ const ts=readFileSync(resolve(reference,'stable/typescript/autobk.md'),'utf8');
+ assert.match(ts,/```typescript\nconstructor\(\);\n```/);
+ assert(!readFileSync(resolve(reference,'stable/typescript/backgroundmethod.md'),'utf8').includes('private constructor'));
 });

@@ -6,17 +6,44 @@
     ]
   },
   {
+    "url": "https://dlmf.nist.gov/10.25.E2",
+    "sources": [
+      "crates/rexafs/src/xafs/mathutils.rs"
+    ]
+  },
+  {
     "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.BSpline.html",
     "sources": [
       "crates/rexafs/src/xafs/spline.rs"
     ]
   },
   {
+    "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.voigt_profile.html",
+    "sources": [
+      "crates/rexafs/src/xafs/mathutils.rs"
+    ]
+  },
+  {
     "url": "https://docs.xrayabsorption.org/tutorials/XAFS_Fundamentals.pdf",
     "sources": [
       "py-rexafs/python/rexafs/__init__.pyi",
+      "py-rexafs/python/rexafs/io.pyi",
       "py-rexafs/src/lib.rs",
-      "js-rexafs/types.d.ts"
+      "js-rexafs/types.d.ts",
+      "crates/rexafs/src/xafs/normalization.rs",
+      "crates/rexafs/src/xafs/normalization_ndarray.rs"
+    ]
+  },
+  {
+    "url": "https://doi.org/10.1007/978-0-387-40065-5",
+    "sources": [
+      "crates/rexafs/src/xafs/analysis/lcf.rs"
+    ]
+  },
+  {
+    "url": "https://doi.org/10.1021/ac50012a027",
+    "sources": [
+      "crates/rexafs/src/xafs/analysis/pca.rs"
     ]
   },
   {
@@ -25,7 +52,15 @@
       "py-rexafs/python/rexafs/__init__.pyi",
       "py-rexafs/src/lib.rs",
       "js-rexafs/types.d.ts",
-      "crates/rexafs/src/lib.rs"
+      "crates/rexafs/src/lib.rs",
+      "crates/rexafs/src/xafs/background.rs",
+      "crates/rexafs/src/xafs/background_ndarray.rs"
+    ]
+  },
+  {
+    "url": "https://doi.org/10.1103/PhysRevB.48.9825",
+    "sources": [
+      "crates/rexafs/src/xafs/fitting/transform.rs"
     ]
   },
   {
@@ -34,7 +69,53 @@
       "py-rexafs/python/rexafs/__init__.pyi",
       "py-rexafs/src/lib.rs",
       "js-rexafs/types.d.ts",
-      "crates/rexafs/src/lib.rs"
+      "crates/rexafs/src/lib.rs",
+      "crates/rexafs/src/xafs/fitting/mod.rs",
+      "crates/rexafs/src/xafs/fitting/path_model.rs",
+      "crates/rexafs/src/xafs/structure/pathrank.rs"
+    ]
+  },
+  {
+    "url": "https://doi.org/10.1107/S0909049504034193",
+    "sources": [
+      "crates/rexafs/src/xafs/normalization.rs",
+      "crates/rexafs/src/xafs/normalization_ndarray.rs"
+    ]
+  },
+  {
+    "url": "https://doi.org/10.2138/rmg.2014.78.2",
+    "sources": [
+      "crates/rexafs/src/xafs/io/mod.rs"
+    ]
+  },
+  {
+    "url": "https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/background/fixed.rs",
+    "sources": [
+      "js-rexafs/types.d.ts"
+    ]
+  },
+  {
+    "url": "https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/inverse_fft.rs",
+    "sources": [
+      "js-rexafs/types.d.ts"
+    ]
+  },
+  {
+    "url": "https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/normalization.rs",
+    "sources": [
+      "js-rexafs/types.d.ts"
+    ]
+  },
+  {
+    "url": "https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/xafsutils.rs",
+    "sources": [
+      "js-rexafs/types.d.ts"
+    ]
+  },
+  {
+    "url": "https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/xrayfft.rs",
+    "sources": [
+      "js-rexafs/types.d.ts"
     ]
   },
   {
@@ -44,15 +125,85 @@
     ]
   },
   {
+    "url": "https://github.com/xraypy/xraylarch/blob/860d8a690c81eefb0e61dee4ca3703ef4b67e93d/larch/xafs/xafsft.py#L41",
+    "sources": [
+      "crates/rexafs/src/xafs/xafsutils.rs",
+      "crates/rexafs/src/xafs/xafsutils_ndarray.rs"
+    ]
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/master/larch/io/athena_project.py",
+    "sources": [
+      "crates/rexafs/src/xafs/io/athena.rs"
+    ]
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XAS-Data-Interchange/blob/master/specification/dictionary.md",
+    "sources": [
+      "crates/rexafs/src/xafs/io/xdi.rs"
+    ]
+  },
+  {
     "url": "https://github.com/XraySpectroscopy/XAS-Data-Interchange/tree/master/specification",
     "sources": [
       "crates/rexafs/src/xafs/io/xdi.rs"
     ]
   },
   {
+    "url": "https://numpy.org/doc/stable/reference/routines.fft.html#implementation-details",
+    "sources": [
+      "py-rexafs/python/rexafs/__init__.pyi",
+      "py-rexafs/src/lib.rs",
+      "js-rexafs/types.d.ts"
+    ]
+  },
+  {
+    "url": "https://numpy.org/doc/stable/reference/routines.fft.html#normalization",
+    "sources": [
+      "js-rexafs/types.d.ts",
+      "crates/rexafs/src/xafs/xrayfft.rs",
+      "crates/rexafs/src/xafs/xrayfft_ndarray.rs"
+    ]
+  },
+  {
     "url": "https://physics.nist.gov/cuu/pdf/wall_2022.pdf",
     "sources": [
       "crates/rexafs/src/xafs/constants.rs"
+    ]
+  },
+  {
+    "url": "https://rexafs.com/docs/libraries/rust/",
+    "sources": [
+      "crates/rexafs/src/lib.rs"
+    ]
+  },
+  {
+    "url": "https://rexafs.com/docs/science/autobk/",
+    "sources": [
+      "py-rexafs/python/rexafs/__init__.pyi",
+      "py-rexafs/src/lib.rs"
+    ]
+  },
+  {
+    "url": "https://rexafs.com/docs/science/fitting-statistics/",
+    "sources": [
+      "crates/rexafs/src/xafs/fitting/mod.rs"
+    ]
+  },
+  {
+    "url": "https://rexafs.com/docs/science/fourier-compatibility/",
+    "sources": [
+      "py-rexafs/python/rexafs/__init__.pyi"
+    ]
+  },
+  {
+    "url": "https://rexafs.com/docs/science/processing/",
+    "sources": [
+      "py-rexafs/python/rexafs/__init__.pyi",
+      "py-rexafs/src/lib.rs",
+      "js-rexafs/types.d.ts",
+      "crates/rexafs/src/lib.rs",
+      "crates/rexafs/src/plot/mod.rs"
     ]
   },
   {
@@ -68,11 +219,47 @@
     ]
   },
   {
+    "url": "https://www.itl.nist.gov/div898/handbook/eda/section3/eda356.htm",
+    "sources": [
+      "crates/rexafs/src/xafs/tools.rs"
+    ]
+  },
+  {
+    "url": "https://xraypy.github.io/xraylarch/xafs_feffpaths.html",
+    "sources": [
+      "crates/rexafs/src/xafs/fitting/mod.rs"
+    ]
+  },
+  {
     "url": "https://xraypy.github.io/xraylarch/xafs_fourier.html",
     "sources": [
       "py-rexafs/python/rexafs/__init__.pyi",
-      "py-rexafs/src/lib.rs",
-      "js-rexafs/types.d.ts"
+      "py-rexafs/src/lib.rs"
+    ]
+  },
+  {
+    "url": "https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow",
+    "sources": [
+      "py-rexafs/python/rexafs/__init__.pyi"
+    ]
+  },
+  {
+    "url": "https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow-generating-fourier-transform-windows",
+    "sources": [
+      "crates/rexafs/src/xafs/xafsutils.rs",
+      "crates/rexafs/src/xafs/xafsutils_ndarray.rs"
+    ]
+  },
+  {
+    "url": "https://xraypy.github.io/xraylarch/xafs_utilities.html",
+    "sources": [
+      "crates/rexafs/src/xafs/tools.rs"
+    ]
+  },
+  {
+    "url": "https://xraypy.github.io/xraylarch/xafs_xanes.html#principal-component-analysis",
+    "sources": [
+      "crates/rexafs/src/xafs/analysis/pca.rs"
     ]
   }
 ]

@@ -8,12 +8,27 @@ Open **Publish** after processing a spectrum or completing a fit. Select a figur
 adjust its controls, and save **PNG** or **SVG**. The preview preserves the image's
 aspect ratio and uses the same rendered PNG bytes as the individual PNG save.
 
-Blank controls use ruviz's native defaults, including its 6.4 × 4.8 inch canvas at
-100 DPI (640 × 480 pixels with the current dependency). Width and height use
-inches; font and line widths use points. Set DPI to the journal's requested raster
-resolution, or use the vector SVG for scalable line art. Changing the preview
+The format selector also offers **CSV**, **Analysis folder** and **Markdown**.
+CSV exports one x/y column pair for each selected visible curve, including its
+name and axis label. Different curves keep their own grids and full arrays;
+blank cells pad shorter curves. Changing the plot limits does not crop the CSV,
+and hidden curves are omitted. At least one visible curve with data is required.
+This behavior is defined by the [figure CSV
+exporter](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/publication/figures.rs#L277).
+It is separate from the batch-results table, which contains fitted values and
+their reported errors.
+
+Blank size controls use ruviz's 6.4 × 4.8 inch canvas. rexafs explicitly sets the
+default raster resolution to **300 DPI**, producing **1920 × 1440 pixels**.
+Width and height use inches; font and line widths use points. Set DPI to the
+journal's requested raster resolution, or use the vector SVG for scalable line art. Changing the preview
 window does not alter export dimensions. Reset restores the selected figure's
 defaults.
+
+Sizes must be 1–30 inches on each side; DPI must be an integer from 72 to 1200.
+The image must contain at most 25 million pixels. Width in pixels is width in
+inches multiplied by DPI, and likewise for height. These limits and defaults
+come from [FigureOptions](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/publication/figures.rs#L82).
 
 Controls include labels/title, paired axis limits, legend, grid, processing guides
 and individual visible curves. Fit figures expose model/data components and path
@@ -51,13 +66,14 @@ scientific validity or compliance with every journal's submission rules.
 
 ## Analysis folder contents
 
-Use **Publish** to adjust figures and captions, save individual PNG/SVG files, or choose **Export analysis folder…**. See the [publication editor guide](/docs/desktop/publication/) for controls, defaults and caption conventions. A new local folder contains:
+Choose **Analysis folder** in Publish and export to a new directory. The folder
+contains:
 
 | Asset | Contents |
 |---|---|
 | `analysis.md` | Requested settings, source comments, current model, historical fit inputs, values, uncertainties, path distances and journal |
 | `resolved.md` | Per-spectrum processing outputs recomputed at export time |
-| `figures/*.png`, `figures/*.svg` | Spectra, fit overlays and residuals using the saved dimensions/style; ruviz defaults when unset |
+| `figures/*.png`, `figures/*.svg` | Spectra, fit overlays and residuals using the saved dimensions/style; native canvas size and rexafs’s 300 DPI when unset |
 | `report.html`, `captions.md` | Vector figures and tables with numbered captions, plus manuscript caption text |
 | `data/*.json` | Processed arrays and available full fit results |
 | `methods.md` | Editable methods draft with missing experimental details identified |

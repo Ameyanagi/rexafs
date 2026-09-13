@@ -25,8 +25,8 @@ series.
 | Use case | Install | Start here |
 |---|---|---|
 | Desktop analysis, fitting and plots | [Download the latest release](https://github.com/Ameyanagi/rexafs/releases/latest) | [Desktop installation](#install-the-desktop) |
-| Python / Jupyter with NumPy | `python -m pip install rexafs` | [Python guide](py-rexafs/README.md) |
-| TypeScript / JavaScript, Node or browser | `npm install rexafs` | [TypeScript guide](js-rexafs/README.md) |
+| Python / Jupyter with NumPy | `uv add rexafs` | [Python guide](py-rexafs/README.md) |
+| TypeScript / JavaScript, Node or browser | `bun add rexafs` | [TypeScript guide](js-rexafs/README.md) |
 | Rust applications | `cargo add rexafs` | [Rust API](https://docs.rs/rexafs) |
 
 Python supports CPython 3.10–3.14. Node requires version 22 or newer.
@@ -34,11 +34,10 @@ Prebuilt Python wheels and the npm Wasm package do not require a Rust compiler.
 Use a Python virtual environment to keep project dependencies separate:
 
 ```bash
-python -m venv .venv
-# macOS/Linux:
-source .venv/bin/activate
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install --upgrade rexafs
+uv init my-analysis
+cd my-analysis
+uv add rexafs numpy
+uv run python
 ```
 
 In VS Code, select this environment with **Python: Select Interpreter**; in
@@ -49,7 +48,8 @@ are available without extra rexafs editor plugins.
 The guides in this checkout describe the next release's keyword/options
 constructors and `XrayFFTR` support. Published 0.2.4 supports the basic pipeline
 below; use the guides' source-install steps to try the new configuration API
-until a release containing it is published.
+until a release containing it is published. The current Rust checkout also accepts
+`AUTOBK` and `PrePostEdge` directly in spectrum setters, without enum wrappers.
 
 ## Install the desktop
 
@@ -139,12 +139,12 @@ uv pip install maturin numpy
 uv run --no-project maturin develop --release
 ```
 
-JavaScript build (Node 22+, Rust Wasm target and `wasm-pack` on PATH):
+JavaScript build (Bun, Node 22+, Rust Wasm target and `wasm-pack` on PATH):
 
 ```bash
 rustup target add wasm32-unknown-unknown
-npm --prefix js-rexafs run build
-npm --prefix js-rexafs test
+bun --cwd js-rexafs run build
+bun --cwd js-rexafs run test
 ```
 
 ## Spectrum API

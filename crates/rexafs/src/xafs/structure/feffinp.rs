@@ -99,20 +99,26 @@ pub enum FeffInputStyle {
     Feff8,
 }
 
+/// Input-card settings; creating text does not verify backend support for every card.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FeffInputOptions {
+    /// Absorption edge; default K. This does not automatically use `default_for_z`.
     pub edge: Edge,
-    /// Cluster radius written as `RMAX` (Classic) — usually the cluster's.
+    /// Classic `RMAX` in Å; None uses the cluster radius, clamped to 2–50 Å.
     pub rmax: Option<f64>,
-    /// Maximum path length `RPATH` (Feff8 style); defaults to `rmax`.
+    /// Maximum half-path length `RPATH` in Å for Feff8 style; None uses rmax.
+    /// This field is unused by Classic style.
     pub rpath: Option<f64>,
+    /// Dimensionless S₀² amplitude factor; default 1.0.
     pub s02: f64,
-    /// Emit `SCF 5.0` (self-consistent potentials, slower).
+    /// Emit `SCF 5.0` for a 5 Å self-consistent-potential region; default false.
     pub scf: bool,
-    /// `EXAFS 20` when true, `XANES 4.0` otherwise.
+    /// Emit `EXAFS 20` when true (default), `XANES 4.0` otherwise.
+    /// Actual XANES capability depends on the chosen calculation backend.
     pub exafs: bool,
-    /// Maximum number of legs.
+    /// Maximum number of path legs; default 4, written with a minimum of 2.
     pub nleg: u8,
+    /// Header-card dialect; defaults to Classic.
     pub style: FeffInputStyle,
     /// Extra `TITLE` lines.
     pub titles: Vec<String>,
@@ -134,7 +140,12 @@ impl Default for FeffInputOptions {
     }
 }
 
-/// Render `feff.inp` for `cluster`.
+/// Render owned `feff.inp` text without writing files or running a calculation.
+///
+/// Atom positions and distances use Å. Every atom already present in the cluster
+/// is written; changing the RMAX/RPATH card does not regenerate the cluster.
+/// A nonempty cluster with its absorber first is required. Preserve the returned
+/// text with results to record the exact cards and geometry used.
 pub fn write_feff_inp(cluster: &Cluster, opts: &FeffInputOptions) -> String {
     let absorber = cluster.absorber();
     let rmax = opts.rmax.unwrap_or(cluster.radius).clamp(2.0, 50.0);

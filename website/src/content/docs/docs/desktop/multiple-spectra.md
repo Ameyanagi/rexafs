@@ -52,3 +52,8 @@ omits a dataset.
 processing parameters. Automatic fit weights also follow each frame's transform.
 Select **Single spectrum** before starting a batch. Each row has solver status
 and uncertainties; failures appear in Problems. CSV exports values and errors.
+
+In [Series](/docs/desktop/series/), choose **Sampled frames** for a preview or
+**All frames** for the full scan before running the calculation. The heatmap
+remains a sampled overview in either mode. A batch fits independent parameter
+sets; use the joint workflow above when spectra must constrain the same variable.

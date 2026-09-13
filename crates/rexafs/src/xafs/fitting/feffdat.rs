@@ -20,6 +20,12 @@ fn split_at_char_boundary_prefix(line: &str, byte_limit: usize) -> (&str, &str) 
     line.split_at(split_index)
 }
 
+/// Read FEFF85L-compatible path columns, metadata, and absorber-first geometry.
+///
+/// `pha` is `real_phc + pha_feff` in radians; `amp` is `mag_feff * red_fact`.
+/// Both FEFF10 and ReFEFF runner outputs use the supported `Feff85L` flavor.
+/// Selecting the `Feff10` parser enum returns `UnsupportedFeffFlavor`.
+/// File I/O failures, missing/invalid rows, and invalid geometry return errors.
 pub fn parse_feff_path_file<P: AsRef<Path>>(
     path: P,
     flavor: FeffFlavor,

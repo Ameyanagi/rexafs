@@ -11,9 +11,13 @@ use crate::xafs::fitting::types::{FeffDat, PathAtom};
 /// One leg endpoint of a scattering path (Cartesian, absorber at origin).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PathLeg {
+    /// Cartesian coordinate in Å relative to the absorber.
     pub cart: [f64; 3],
+    /// FEFF potential index; zero is the absorber.
     pub ipot: u16,
+    /// Atomic number of the atom at this endpoint.
     pub z: u8,
+    /// Element symbol or fallback label from the path file.
     pub symbol: String,
     /// Nearest [`Cluster`] atom index, when mapped.
     pub cluster_atom: Option<usize>,
@@ -23,8 +27,11 @@ pub struct PathLeg {
 /// (implicitly) the return to the absorber.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PathGeometry {
+    /// Reference half-path length from the file, in Å.
     pub reff: f64,
+    /// Dimensionless path multiplicity from the file.
     pub degen: f64,
+    /// Number of legs, including the final return to the absorber.
     pub nleg: usize,
     /// `legs[0]` is the absorber at the origin; `legs[1..]` the scatterers.
     pub legs: Vec<PathLeg>,
@@ -85,6 +92,9 @@ impl PathGeometry {
     /// Map every leg onto the nearest cluster atom within `tol` Å (the FEFF
     /// output keeps the input coordinates to ~1e-4 Å). Unmatched legs keep
     /// `cluster_atom = None`.
+    /// Returns the number of matched endpoints and replaces previous mappings.
+    /// Matching uses distance only, without checking element identity; use the
+    /// same calculation geometry and a tolerance consistent with file rounding.
     pub fn map_to_cluster(&mut self, cluster: &Cluster, tol: f64) -> usize {
         let mut matched = 0;
         for leg in &mut self.legs {

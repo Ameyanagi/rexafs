@@ -6,21 +6,41 @@ audience: user
 
 ## Install
 
-Use CPython 3.10–3.14 in a virtual environment:
+We recommend [uv](https://docs.astral.sh/uv/getting-started/installation/) to
+install rexafs in an isolated environment. CPython 3.10–3.14 is supported;
+this example uses Python 3.12:
 
 ```sh
-python -m venv .venv
+uv venv --python 3.12
+uv pip install rexafs==0.2.4
 # macOS/Linux:
 source .venv/bin/activate
 # Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install rexafs==0.2.4 numpy
+python -c "import rexafs; print(rexafs.__version__)"
 ```
 
-In VS Code, select this environment with **Python: Select Interpreter**. In
-Jupyter, select its kernel. The package includes `py.typed` and type stubs.
-The [generated reference](/docs/reference/stable/python/spectrum/) contains the
-released signatures; [Next API](/docs/reference/next/python/spectrum/) adds richer
-editor help and configuration constructors for a future package release.
+NumPy is installed as a dependency. See [uv's environment guide](https://docs.astral.sh/uv/pip/environments/)
+for environment selection. An existing pip workflow also works: activate its
+environment and run `python -m pip install rexafs==0.2.4`.
+
+In VS Code, select this environment with **Python: Select Interpreter**. The
+package includes `py.typed` and type stubs. The
+[stable reference](/docs/reference/stable/python/spectrum/) preserves the released
+signatures and adds explanations reviewed against the implementation. Improved
+installed hover help and keyword constructors appear in the
+[Next API](/docs/reference/next/python/spectrum/) until a new package release.
+Updating the website does not replace the stubs in an existing installation.
+
+For Jupyter, install and register a kernel from the same activated environment:
+
+```sh
+uv pip install ipykernel
+python -m ipykernel install --user --name rexafs --display-name "Python (rexafs)"
+```
+
+Select **Python (rexafs)** in your notebook's kernel menu. The
+[IPython kernel guide](https://ipython.readthedocs.io/en/stable/install/kernel_install.html)
+explains how to register separate environments.
 
 ## Load and transform a measured spectrum
 
@@ -39,8 +59,11 @@ print("Fourier magnitude:", spectrum.chir_mag())
 ```
 
 `fft()` calculates missing normalization and background stages. Output arrays are
-independent copies. Before a stage runs, an unavailable output is `None`. Invalid
-inputs and numerical failures raise exceptions.
+independent NumPy float64 copies. Before a stage runs, or after invalidation,
+an unavailable output is `None`. Input and normalization errors raise
+`ValueError`; background and Fourier failures raise `RuntimeError`. The default
+Fourier magnitude has units Å⁻³ because `kweight=2` and the amplitude factor is
+`kstep / sqrt(pi)`, with no additional FFT-length normalization.
 
 ## Configure stable 0.2.4
 
@@ -64,15 +87,22 @@ and `.set_ifft()` binding are unreleased additions.
 
 For QAS transmission files with energy, incident intensity and transmitted intensity
 in the first three columns, use `rexafs.io.read_qas_transmission(path)`. It computes
-the natural logarithm of the intensity ratio. Do not use that reader on a file
-that already contains μ, such as this Cu example.
+the natural logarithm of the intensity ratio. Intensities should be positive
+and in matching units. The reader ignores extra columns, treats `#` as a comment
+and returns an unprocessed spectrum. It does not check positive intensities or
+sort energies; invalid derived data are rejected when processing runs. Do not
+use that reader on a file that already contains μ, such as this Cu example.
 
 ## Recommended defaults
 
 AUTOBK starts with `rbkg=1.0` Å, a fixed endpoint penalty of `0.001`, the direct
 solver and background `kweight=1`. The forward transform starts with k=2–15 Å⁻¹,
 `kweight=2`, a Kaiser–Bessel window and 2048 FFT points. Automatic normalization
-ranges adapt to the data. These are starting points; inspect the windows and noise.
+ranges adapt to the data. The FFT's automatic `kstep` uses the background grid,
+whose default is 0.05 Å⁻¹. Increasing the FFT length adds zero padding and refines
+the displayed R spacing without adding experimental resolution. These are
+starting points; inspect the windows and noise, and remember that uncorrected
+R peaks are not directly bond distances.
 
 [Processing theory](/docs/science/processing/) explains the equations and references.
 For repeated spectra, loop over `Spectrum` objects; the Python package does not

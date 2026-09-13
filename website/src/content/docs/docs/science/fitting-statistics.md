@@ -10,6 +10,83 @@ classes. Processing produces chi(k); fitting adjusts a scattering-path model
 to that signal. A converged optimizer has satisfied numerical stopping rules.
 It has not established that the chosen structural model is unique or correct.
 
+## From a scattering path to χ(k)
+
+A path file supplies a reference half-path length $R_0$, multiplicity $N_p$,
+and tabulated scattering amplitude, phase, and electron propagation terms.
+For single scattering, $R_0$ is the absorber–scatterer distance; for multiple
+scattering, it is half the full closed path length. Changing a path parameter
+adjusts this reference calculation; it does not recalculate the electronic
+structure or relax atomic coordinates. The scattering interpretation follows
+[Rehr and Albers (2000)](https://doi.org/10.1103/RevModPhys.72.621); the exact
+expression below is traced to [path_model.rs](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs/src/xafs/fitting/path_model.rs).
+
+| Path parameter | Meaning and units | Loaded-path default |
+|---|---|---|
+| `degen` | Dimensionless path multiplicity $N_p$ | Value in the path file |
+| `s02` | Dimensionless amplitude reduction $S_0^2$ | 1 |
+| `e0` | Relative threshold shift $\Delta E_0$ in eV | 0 |
+| `ei` | Imaginary energy correction $E_i$ in eV | 0 |
+| `deltar` | Half-path-length change $\Delta R$ in Å | 0 |
+| `sigma2` | Second distance cumulant $\sigma^2$ in Å² | 0 |
+| `third` | Third distance cumulant $C_3$ in Å³ | 0 |
+| `fourth` | Fourth distance cumulant $C_4$ in Å⁴ | 0 |
+
+These are reference-model defaults, not measured values or universal fit bounds.
+In particular, the fitted `e0` correction is distinct from the absolute edge
+energy used during background removal. Increasing positive $\sigma^2$ usually
+damps high-k structure; $\Delta R$ changes the oscillation phase and geometric
+amplitude. $N_p$ and $S_0^2$ multiply each other and cannot be independently
+identified from that product alone.
+
+Away from its small-denominator guards, rexafs defines
+
+$$
+q=\operatorname{sgn}(k^2-\alpha\Delta E_0)
+  \sqrt{|k^2-\alpha\Delta E_0|},
+\qquad
+p_c=\sqrt{\left(p_{\mathrm{re}}(q)+i/\lambda(q)\right)^2+i\alpha E_i}.
+$$
+
+Here $k$, the shifted real wave number $q$, and the complex momentum $p_c$
+have units Å⁻¹; $\alpha=2m_e/\hbar^2$ is `ETOK` in Å⁻²/eV, with the required
+unit conversion included. $p_{\mathrm{re}}$ is the tabulated real momentum,
+$\lambda$ is the mean free path in Å, and $i^2=-1$. The square root of the
+complex expression uses the principal branch. The model's dimensionless
+complex contribution is
+
+$$
+\mathcal X(k)=
+\frac{N_pS_0^2 F(q)}{q(R_0+\Delta R)^2}
+\exp\!\left[
+-2R_0\operatorname{Im}p_c
+-2p_c^2\left(\sigma^2-\frac{p_c^2C_4}{3}\right)
++i\left\{2qR_0+\phi(q)
++2p_c\left(\Delta R-\frac{2\sigma^2}{R_0}
+-\frac{2p_c^2C_3}{3}\right)\right\}
+\right],
+\qquad \chi(k)=\operatorname{Im}\mathcal X(k).
+$$
+
+$F=\mathtt{mag\_feff}\,\mathtt{red\_fact}$ is the reduced amplitude in Å;
+$\phi=\mathtt{real\_phc}+\mathtt{pha\_feff}$ is the total phase in radians.
+Every term in the exponential is dimensionless. The first real term attenuates
+the electron's propagation, the cumulant term describes distance disorder,
+and the imaginary term determines the oscillation phase. A fit sums $\chi(k)$
+over enabled paths before applying fit weights and windows. The cumulant
+expansion is a truncated description of disorder, not an arbitrary distance
+distribution; large corrections can invalidate the reference-path model.
+
+The code interpolates FEFF columns with cubic splines and extrapolates the
+end polynomial pieces outside tabulated coverage. Use the available FEFF k
+range when possible. Near zero, numerical guards regularize the energy,
+momentum, mean-free-path, and distance denominators. The first complex sample
+is replaced by $2\mathcal X_1-\mathcal X_2$, even on a grid that starts above
+zero. These details are part of the implementation, rather than additional
+physical terms in the equation. `FeffFlavor::Feff85L` selects the supported
+file format, including compatible output from current FEFF10/ReFEFF runners;
+the separate `FeffFlavor::Feff10` parser option is currently unsupported.
+
 ## Residuals and shared parameters
 
 For dataset $d$, let $\boldsymbol\theta$ be the vector of independent fitted
@@ -31,6 +108,60 @@ The implementation is in
 [solver.rs](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs/src/xafs/fitting/solver.rs) and
 [transform.rs](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs/src/xafs/fitting/transform.rs); the
 [multiple-spectrum guide](https://github.com/Ameyanagi/rexafs/blob/6cb668dfcba41f02db102fde7c8a091947468f83/doc/joint-fitting.md) describes the user controls.
+
+## Fit-space and noise conventions
+
+`FitSpace::R` is the default: the fit concatenates real and imaginary differences
+after k- and R-windowing. `K` uses $k^w\chi(k)$ without the k-window. `Q` uses
+the real part of an R-filtered back-transform. Its analytic half-spectrum
+convention is implemented by `larch_chiq`; it differs from the processing
+library's real, Hermitian `ifft()`. A magnitude-only R-space comparison is not
+the objective used by `FitSpace::R`.
+
+The default `FeffFitTransform` has k = 0–20 Å⁻¹, R = 1–3 Å, $w=2$,
+2048 FFT points, and k spacing 0.05 Å⁻¹. Fitting accepts a nonnegative real
+weight directly; the processing FFT floors its weight to an integer. The fit
+expects prepared uniform k samples and does not resample them. Set the ranges
+to the usable measured interval. Multiple weights add residual blocks but do
+not multiply the independent-information estimate.
+
+The Rust fit API uses a supplied per-weight `epsilon_ks` entry, then scalar
+`epsilon_k`, then **1.0** as its k-space residual divisor. It does not estimate
+noise automatically. Calling `estimate_noise()` is a separate operation.
+For weight $w$, the R-space residual divisor is
+
+$$
+\epsilon_R=\frac{\epsilon_k}{2}
+\sqrt{\frac{\delta k\left(k_{\max}^{a}-k_{\min}^{a}\right)}{\pi a}},
+\qquad a=2w+1.
+$$
+
+$\delta k$, $k_{\min}$, and $k_{\max}$ use Å⁻¹; $a$ is dimensionless.
+$\epsilon_k$ is the numerical scale supplied to the k residual and
+$\epsilon_R$ is the corresponding numerical divisor used for R and Q.
+These are implementation conventions; the code does not check that a supplied
+scale is a calibrated uncertainty with units appropriate to every weighted
+representation. Positive floors of $10^{-12}$ prevent zero divisors, but do
+not make arbitrary scales a measurement-noise model. Set `kstep` explicitly
+on a nondefault grid: when it is `None`, transform spacing is inferred from
+the input, while this noise conversion still assumes 0.05 Å⁻¹.
+
+`estimate_noise()` instead measures the root mean square per real/imaginary
+component in the high-R interval 15–30 Å, corrected by the mean k-window.
+Writing that result as $\widehat\epsilon_R$, its returned k-space scale is
+
+$$
+\widehat\epsilon_k=\widehat\epsilon_R
+\sqrt{\frac{2\pi a}{\delta k\left(k_{\max}^{a}-k_{\min}^{a}\right)}}.
+$$
+
+The hat distinguishes this estimated quantity from the residual divisor.
+The two conversions are **not inverses**: inserting $\widehat\epsilon_k$ into
+the residual formula gives $\widehat\epsilon_R/\sqrt2$, before numerical guards.
+This documents the current code's scaling; it is not an extra renormalization
+of the measured spectrum. High-R noise estimation assumes the selected region
+contains noise rather than structural signal, detector artifacts, or transform
+leakage. Inspect that assumption before interpreting reduced chi-square.
 
 ## Independent information and reported chi-square
 

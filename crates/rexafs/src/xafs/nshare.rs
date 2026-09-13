@@ -1,3 +1,7 @@
+//! Owned-array conversions for the optional `ndarray-compat` backend.
+//! These conversions copy values into newly allocated buffers even though their
+//! names begin with `into_`; they are not zero-copy views.
+
 use nalgebra::{DMatrix, DVector};
 
 #[cfg(feature = "ndarray-compat")]
@@ -13,7 +17,9 @@ use ndarray::{Array1, ArrayBase, Ix1, Ix2, OwnedRepr};
 /// For more general conversions, you should consider using nshare crate.
 #[cfg(feature = "ndarray-compat")]
 pub trait ToNalgebra {
+    /// Owned destination vector or matrix type.
     type Out;
+    /// Consume the source and copy values into an owned nalgebra vector/matrix.
     fn into_nalgebra(self) -> Self::Out;
 }
 
@@ -39,7 +45,9 @@ impl ToNalgebra for ArrayBase<OwnedRepr<f64>, Ix2> {
 /// For more general conversions, you should consider using nshare crate.
 #[cfg(feature = "ndarray-compat")]
 pub trait ToNdarray1 {
+    /// Owned destination vector or matrix type.
     type Out;
+    /// Consume the source and copy values into an owned one-dimensional ndarray.
     fn into_ndarray1(self) -> Self::Out;
 }
 

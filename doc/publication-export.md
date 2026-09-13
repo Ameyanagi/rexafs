@@ -6,7 +6,7 @@ Use **Publish** to adjust figures and captions, save individual PNG/SVG files, o
 |---|---|
 | `analysis.md` | Requested settings, source comments, current model, historical fit inputs, values, uncertainties, path distances and journal |
 | `resolved.md` | Per-spectrum processing outputs recomputed at export time |
-| `figures/*.png`, `figures/*.svg` | Spectra, fit overlays and residuals using the saved dimensions/style; ruviz defaults when unset |
+| `figures/*.png`, `figures/*.svg` | Spectra, fit overlays and residuals using the saved dimensions/style; native canvas size and rexafs’s 300 DPI when unset |
 | `report.html`, `captions.md` | Vector figures and tables with numbered captions, plus manuscript caption text |
 | `data/*.json` | Processed arrays and available full fit results |
 | `methods.md` | Editable methods draft with missing experimental details identified |

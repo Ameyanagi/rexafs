@@ -8,6 +8,13 @@ Projects store processing settings, overrides, derived spectra, fit models/histo
 joint assignments and publication settings, including figure sizes and captions.
 Materials Project credentials remain in machine-local settings.
 
+Saving is explicit; `.rxs.bak` contains the previous completed save, not edits
+made since then. The session's undo/redo stack and action journal are reset on
+project open. Export an analysis folder before closing if you need its journal
+in the analysis record. Saved derived-operation provenance, fit history and
+completed Assistant conversations are separate project records and remain
+available according to their own retention rules.
+
 ## Raw data: paths or embedded originals
 
 Choose **Raw: paths / Raw: embedded** beside **Save project**. This choice is

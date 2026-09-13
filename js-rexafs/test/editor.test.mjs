@@ -40,6 +40,9 @@ spectrum.set_normalization_method(new PrePostEdge()).set_background_method(backg
 const q = spectrum.q();
 if (q !== undefined) q[0].toFixed(3);
 background.rbkg;
+forward.kstep;
+forward.dk;
+spectrum.chir_real();
 spectrum.fft();
 // @ts-expect-error misspelled option
 new AUTOBK({ rbgk: 1 });
@@ -67,8 +70,13 @@ spectrum.chi()[0];
       const diagnostics = [...service.getCompilerOptionsDiagnostics(), ...service.getSyntacticDiagnostics(filename), ...service.getSemanticDiagnostics(filename)];
       assert.deepEqual(diagnostics.map(d => ts.flattenDiagnosticMessageText(d.messageText, "\n")), []);
       const hover = (text, offset = 0) => service.getQuickInfoAtPosition(filename, source.indexOf(text) + offset);
-      assert.match(ts.displayPartsToString(hover("background.rbkg", 12).documentation), /angstroms.*Default: 1.0/);
-      assert.match(ts.displayPartsToString(hover("spectrum.fft", 10).documentation), /2048/);
+      const hoverText = (text, offset) => ts.displayPartsToString(hover(text, offset).documentation).replace(/\s+/g, " ");
+      assert.match(hoverText("background.rbkg", 12), /angstroms.*Default: 1.0/);
+      assert.match(hoverText("spectrum.fft", 10), /2048/);
+      assert.match(hoverText("forward.kstep", 8), /infers the first spacing/);
+      assert.match(hoverText("forward.dk", 8), /KaiserBessel.*shape parameter/);
+      assert.match(hoverText("spectrum.chir_real", 10), /kstep\/sqrt\(pi\)/);
+      assert.match(hoverText("type AUTOBKClampScalePolicy", 5), /optimization objective/);
       const completeSource = source;
       const completion = suffix => {
         source = completeSource + suffix;
@@ -82,6 +90,7 @@ spectrum.chi()[0];
       source = completeSource + '\nnew AUTOBK(';
       const signature = service.getSignatureHelpItems(filename, source.length, {});
       assert.ok(signature?.items.some(item => ts.displayPartsToString(item.parameters[0].displayParts).includes("AUTOBKOptions")));
+      assert.ok(signature?.items.some(item => ts.displayPartsToString(item.documentation).includes("recommended defaults")));
     } finally { service.dispose(); }
   });
 }

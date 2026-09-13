@@ -815,19 +815,36 @@ pub fn find_e0(energy: &DVector<f64>, mu: &DVector<f64>) -> Result<f64, Box<dyn 
     Ok(e0)
 }
 
+/// Dimensionless Fourier-window families.
+///
+/// Windows reduce ringing at a truncated data range but also change amplitudes
+/// and effective resolution. Their parameters are not interchangeable; see
+/// [`ftwindow`] and the
+/// [Larch window reference](https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow-generating-fourier-transform-windows).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub enum FTWindow {
     #[default]
-    Hanning, // Hanning window, cosine-squared tamper
-    Parzen,       // Parzen window, linear tamper
-    Welch,        // Welch window, quadratic tamper
-    Gaussian,     // Gaussian window, Gaussian (normal) tamper
-    Sine,         // Sine window, sine function window
-    KaiserBessel, // Kaiser-Bessel function-derived window
-    FHanning,     // I am not sure what this is. It is in the Larch code, but it is not used.
+    /// Cosine-squared low/high tapers with an interior plateau; the helper default.
+    Hanning,
+    /// Linear low/high tapers with an interior plateau.
+    Parzen,
+    /// Quadratic low/high tapers with an interior plateau.
+    Welch,
+    /// Gaussian centered on the selected domain; `dx` is its standard deviation
+    /// in axis units. Tails are evaluated over the complete supplied grid.
+    Gaussian,
+    /// A single sine arch across the selected domain.
+    Sine,
+    /// Modified Bessel window. `dx` controls both the domain and the numerical
+    /// shape parameter; this is Larch's modified Kaiser convention, not unit-area scaling.
+    KaiserBessel,
+    /// Cosine-squared window with fractional taper geometry. Use dimensionless
+    /// fractions for `dx`/`dx2`; equal numeric widths differ from ordinary Hanning.
+    FHanning,
 }
 
 impl FTWindow {
+    /// Construct this window on x; see `ftwindow` for units, defaults and grid assumptions.
     pub fn window(
         &self,
         x: &ArrayBase<OwnedRepr<f64>, Ix1>,
@@ -840,6 +857,24 @@ impl FTWindow {
     }
 }
 
+/// Construct a dimensionless Fourier window on the supplied axis.
+///
+/// For k-space, x is in Å⁻¹; for R-space, x is in Å. Missing boundaries use
+/// the axis extrema, `dx` defaults to 1, `dx2` follows `dx`, and a missing family
+/// uses Hanning. Ordinary taper parameters have axis units. Gaussian uses `dx`
+/// as its standard deviation, Kaiser–Bessel also uses its numeric value as a
+/// shape parameter, and fractional Hanning uses fractions for taper geometry.
+/// No division by area or by the sum of the samples is performed.
+///
+/// This low-level routine follows Larch's index geometry, intended for a
+/// zero-origin uniform increasing axis and valid boundaries/tapers inside its
+/// indexable range. It does not validate arbitrary grids or boundary settings;
+/// invalid indices can panic. Prefer checked `XrayFFTF::xftf`/`XrayFFTR::xftr`
+/// settings for the spectrum pipeline. This legacy helper requires at least
+/// two samples and does not handle empty/single-sample grids. Input is unchanged.
+///
+/// The formulas and endpoint rounding follow the
+/// [pinned Larch implementation](https://github.com/xraypy/xraylarch/blob/860d8a690c81eefb0e61dee4ca3703ef4b67e93d/larch/xafs/xafsft.py#L41).
 pub fn ftwindow(
     x: &ArrayBase<OwnedRepr<f64>, Ix1>,
     xmin: Option<f64>,

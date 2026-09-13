@@ -35,6 +35,8 @@ tracked prose documents at commit `6cb668d`**: Markdown, MDX, reStructuredText a
 extensionless `README` files. There are 6 user documents, 26 mixed documents and
 68 developer/research records. These are source-file counts, not planned page
 counts or a certification that every sentence is ready for publication.
+Later additions are appended to the inventory; the counts above remain the
+historical snapshot at that commit.
 
 The inventory specifies each file's audience, migration action, proposed public
 route and editing notes. It is a planning catalog, not a website publishing

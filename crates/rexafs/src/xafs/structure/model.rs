@@ -13,15 +13,16 @@ use super::symmetry::SymOp;
 /// One chemical species occupying (part of) a site.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Species {
-    /// Element symbol (`Fe`), always a valid [`Element`].
+    /// Element symbol or source label (`Fe`); [`Species::new`] does not validate it.
     pub symbol: String,
-    /// Site occupancy in 0…1.
+    /// Site occupancy, conventionally 0…1; direct construction does not enforce bounds.
     pub occupancy: f64,
     /// Oxidation state when the source gave one (`Fe2+` → 2).
     pub oxidation: Option<f64>,
 }
 
 impl Species {
+    /// Store a symbol and occupancy without validation; oxidation is initially unknown.
     pub fn new(symbol: &str, occupancy: f64) -> Self {
         Self {
             symbol: symbol.to_string(),
@@ -42,18 +43,23 @@ impl Species {
 pub struct Site {
     /// Label from the source (`Ru1`, `O2`), or a generated one.
     pub label: String,
-    /// Species on this site, occupancies summing to ≤ 1.
+    /// Listed site species; physically their occupancies should sum to at most one.
+    /// Direct construction does not enforce that constraint.
     pub species: Vec<Species>,
-    /// Fractional coordinates, wrapped into [0, 1).
+    /// Dimensionless fractional coordinates. Import/expansion can wrap them into
+    /// [0, 1); [`Site::new`] stores the supplied values unchanged.
     pub frac: [f64; 3],
     /// Site multiplicity when known (number of equivalent positions).
     pub multiplicity: Option<u32>,
+    /// Wyckoff-position label when supplied by the source.
     pub wyckoff: Option<String>,
     /// Index of the asymmetric-unit site this one was generated from.
     pub asym_index: Option<usize>,
 }
 
 impl Site {
+    /// Create a fully occupied single-species site without wrapping or validation.
+    /// Coordinates are fractional, not Cartesian Å values.
     pub fn new(label: &str, symbol: &str, frac: [f64; 3]) -> Self {
         Self {
             label: label.to_string(),
@@ -90,12 +96,14 @@ impl Site {
         format!("({})", parts.join(""))
     }
 
+    /// Whether any listed species matches the symbol, ignoring ASCII letter case.
     pub fn contains_element(&self, symbol: &str) -> bool {
         self.species
             .iter()
             .any(|s| s.symbol.eq_ignore_ascii_case(symbol))
     }
 
+    /// Sum of listed occupancies, without clamping or vacancy correction.
     pub fn total_occupancy(&self) -> f64 {
         self.species.iter().map(|s| s.occupancy).sum()
     }
@@ -108,6 +116,7 @@ pub struct SpaceGroupInfo {
     pub number: Option<u16>,
     /// Hermann–Mauguin symbol as given by the source.
     pub hm_symbol: Option<String>,
+    /// Hall symbol when present in the source.
     pub hall: Option<String>,
     /// The operations used to expand the asymmetric unit.
     pub operations: Vec<SymOp>,
@@ -120,19 +129,25 @@ pub struct Structure {
     pub title: String,
     /// Where it came from (`cif:/path`, `amcsd:1234`, `mp:mp-33`).
     pub source: String,
+    /// Unit-cell geometry, with lengths in Å and angles in degrees.
     pub lattice: Lattice,
     /// All sites of the conventional cell.
     pub sites: Vec<Site>,
     /// The asymmetric unit as read from the source (may equal `sites`).
     pub asymmetric_sites: Vec<Site>,
+    /// Space-group identity and expansion operations retained for provenance.
     pub space_group: SpaceGroupInfo,
+    /// Formula supplied by the source, if known.
     pub formula_sum: Option<String>,
+    /// Mineral name supplied by the source, if known.
     pub mineral: Option<String>,
     /// Free-form notes and parser warnings.
     pub warnings: Vec<String>,
 }
 
 impl Structure {
+    /// Store an already-expanded cell, cloning its sites as the asymmetric list.
+    /// No symmetry expansion, species validation, or coordinate wrapping occurs.
     pub fn new(title: &str, lattice: Lattice, sites: Vec<Site>) -> Self {
         Self {
             title: title.to_string(),
@@ -147,6 +162,7 @@ impl Structure {
         }
     }
 
+    /// Number of explicitly stored sites in the cell, not the cluster atom count.
     pub fn num_sites(&self) -> usize {
         self.sites.len()
     }

@@ -23,6 +23,8 @@ Start with the [project README](../README.md), [API guide](api.md),
 - [Fixed-penalty AUTOBK](autobk-fixed-penalty.md): the rexafs-specific objective.
 - [Contributor documentation baseline](../CONTRIBUTING.md): requirements for
   clear English, defined symbols/units, verified citations and useful API help.
+- [September 13 source/documentation audit](documentation-audit-2026-09-13.md):
+  developer record of reviewed areas, corrections, checks and scope limits.
 
 ## Release and migration
 
@@ -38,6 +40,7 @@ Start with the [project README](../README.md), [API guide](api.md),
 - [Linux and Windows development and repository hooks](desktop-development.md)
 - [XDI import](xdi-import.md)
 - [Multiple spectra and independent fitting](joint-fitting.md)
+- [Series browsing and trends](series.md)
 - [Structure slices and depth cues](structure-depth-view.md)
 - [Project compatibility and recovery](project-compatibility.md)
 - [Publication editor and captions](publication.md)

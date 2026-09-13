@@ -1,7 +1,10 @@
 # Linux and Windows development
 
-Use the Rust toolchain pinned by `rust-toolchain.toml`, Python 3.12+ for repository
-tools, and Node 22+ for the optional JavaScript package.
+Run the commands below from the repository root. Use the Rust toolchain pinned
+by [`rust-toolchain.toml`](../rust-toolchain.toml), Python 3.12+ for repository
+tools, and Node 22+ for the optional JavaScript package. Release and website CI
+currently use Node 24. Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
+to run the Python tooling commands.
 
 ## Linux
 
@@ -63,7 +66,7 @@ Windows fields use Consolas, and shortcuts use Ctrl. See
 ## Repository checks
 
 ```bash
-uv tool install pre-commit==4.5.1
+uv tool install --python 3.12 pre-commit==4.5.1
 pre-commit install --install-hooks
 pre-commit run --all-files
 pre-commit run --all-files --hook-stage pre-push
@@ -75,5 +78,21 @@ Push checks run the numerical core tests and strict Clippy when Rust sources or
 dependency manifests change. Native GUI tests run in the release CI matrix,
 where platform libraries and calculation backends are installed.
 
-`python scripts/check-tooling.py` runs all release-tool test scripts. Their names
-contain hyphens, so standard `unittest discover` does not collect them.
+`uv run --no-project --python 3.12 python scripts/check-tooling.py` runs every
+`scripts/test-*.py` suite with the same interpreter. Their names contain hyphens,
+so standard `unittest discover` does not collect them. The Node package and
+platform installer smoke tests have separate runners.
+
+The checks have different scopes; a passing core suite does not verify the
+installed bindings, website, or native desktop:
+
+| Area | Source of the check commands | What it verifies |
+|---|---|---|
+| Core Rust | [Rust workflow](../.github/workflows/rust.yml) | Default and optional numerical backends, plotting, Windows compilation, formatting, strict Clippy, and benchmark regression gates |
+| Release packages | [Release workflow](../.github/workflows/release-build.yml) and [release runbook](releasing.md) | Extracted Rust package, Python wheels and source archive, npm tarball, desktop archives, and platform smoke tests |
+| Editor help | [Binding checks](../js-rexafs/test/README.md) | Completion, signatures and hover text from the installed Python and TypeScript packages |
+| Public documentation | [Website maintenance](../website/README.md) and [website workflow](../.github/workflows/website.yml) | Generated API reference, citations, links, browser behavior, and deployment |
+
+Benchmark regressions are informational on pull requests and blocking on pushes
+to `main`. Native rendering and platform installation require their own checks;
+archive self-checks only exercise the calculation and packaging paths.

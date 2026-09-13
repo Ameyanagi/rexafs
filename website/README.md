@@ -26,7 +26,9 @@ npm --prefix website run preview
 Open the preview's `/rexafs/` path. `npm --prefix website run dev` gives live
 editing; generate Rust reference files first if you want their links to work.
 The Rust generator downloads the published crate, verifies its recorded SHA-256,
-and runs rustdoc with all features and no dependency documentation. Cargo may
+and runs rustdoc with the default backend and optional capabilities, with no
+dependency documentation. It deliberately excludes `ndarray-compat`, which
+replaces several default numerical modules with legacy implementations. Cargo may
 download optional engine build artifacts. Existing warnings in the published
 crate's rustdoc remain visible in the build log; the website does not patch a
 release's source silently. Set `DOCS_CARGO_TARGET_DIR` to an absolute cache path
@@ -55,10 +57,19 @@ checks supplement review of the prose, figures, source claims and citations.
   when the underlying method changes. Do not import `doc/` recursively.
 - `src/content/docs/docs/reference/{stable,next}/` is generated. Edit Python
   stubs/native docstrings or TypeScript declarations, then regenerate. Stable
-  uses the release tag and installed wheel; Next uses checkout declarations.
-  Next pages are visibly labeled and excluded from the default search index.
+  membership and signatures come from the release tag; Next uses the checkout.
+  Both use maintained checkout docstrings/JSDoc for explanations. Help for shared
+  members must be checked against both implementations: do not describe a new
+  calling convention as available in the stable release. Put those examples in
+  the Next guide. Generators reject missing descriptions instead of rendering
+  empty fields or Python's generic constructor help. Next pages are visibly
+  labeled and excluded from the default search index.
 - `public/api/rust/` is generated from the checksum-verified published crate and
-  ignored by Git. It includes public modules enabled by optional features.
+  ignored by Git. It includes public modules enabled by optional features while
+  preserving the default numerical backend.
+- `public/api/rust-next/` is generated separately from the checkout, with its
+  updated Rust comments and API. Its banner states that it is unreleased and
+  links back to Stable. Do not use it as evidence of a released signature.
 - `src/data/api-citations.json` is generated from authored API documentation
   links, including scientific papers, specifications and supporting code. New
   links must still be reviewed for relevance and explained where they are used.

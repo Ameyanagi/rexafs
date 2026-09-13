@@ -1,12 +1,16 @@
-# Profiling of the preedge, autobk, and fft process.
+# Historical profiling of normalization, AUTOBK, and Fourier transforms
 
 For the published packages, see the [2026-09-06 matched Larch/rexafs benchmark
 and profiling report](benchmarks/2026-09-06-larch/README.md). It retains 112 timing
 and output comparisons plus Python and native CPU profiles for both packages.
 
-Historical measurements from the codename period; figures retain their original profiler labels.
+The measurements below are historical records from the codename period; figures
+retain their original profiler labels. They do not describe the performance or
+default solver of the current release. Current algorithm choices are explained
+in [fixed-penalty AUTOBK](autobk-fixed-penalty.md), and the current regression
+commands are in the [Rust workflow](../.github/workflows/rust.yml).
 
-Profiling were performed using the following command:
+Profiling was performed using the following command:
 
 ```bash
 sudo cargo flamegraph --bench xas_group_benchmark_parallel
@@ -14,16 +18,23 @@ sudo cargo flamegraph --bench xas_group_benchmark_parallel
 
 ## Results
 
-In both cases (numerical and analytical Jacobian), AUTOBK algorithm takes most of the time, and the minimization process is the bottleneck of the entire process. The analytical Jacobian gives roughly x3-4 speedup compared to the numerical Jacobian, but we need to avoid minimization for further speedup.
+In these runs, AUTOBK took most of the processing time with either a numerical
+or an analytical Jacobian. A Jacobian is the matrix of residual derivatives
+with respect to fitted parameters. The analytical Jacobian was reported to give
+roughly a three- to fourfold speedup over finite differences. These profiles
+motivated investigating a direct linear solve, which was added later; the
+reported ratio is not a benchmark of today's default solver.
 
 ![profile for numerical Jacobian](img/flamegraph_rexafs_numerical_optimization.svg)
 
 ![profile for analytical Jacobian](img/flamegraph_rexafs_analytical_optimization.svg)
 
-## Appectix: Profiling of xraylarch
+## Appendix: Profiling of xraylarch
 
-Profile of python + xraylarch (preedge, autobk, and fft) were also measured. In this case, AUTOBK is also the bottleneck of the entire process.
-rexafs with single core and numerical Jacobian give similar performance to xraylarch.
+The Python/xraylarch normalization, AUTOBK and Fourier transform pipeline was
+also profiled. AUTOBK was the bottleneck in that run, and the historical
+single-core rexafs implementation with a numerical Jacobian had similar
+performance to xraylarch.
 
 ![profile of xraylarch](img/flamegraph_xraylarch.svg)
 

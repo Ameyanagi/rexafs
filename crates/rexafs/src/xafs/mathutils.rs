@@ -1,3 +1,10 @@
+//! Low-level interpolation, finite-difference and line-shape helpers.
+//!
+//! These routines assume finite arrays and, where stated, sorted grids. They are
+//! not a replacement for [`crate::Spectrum::from_arrays`] input validation.
+//! Coordinates may use any consistent unit; line-shape densities have inverse
+//! coordinate units, while finite differences retain the input value units.
+
 use enterpolation::{
     linear::{Linear, LinearError},
     Signal,
@@ -8,15 +15,32 @@ use num_complex::Complex64;
 
 use super::errors::MathError;
 
+/// Numerical operations on owned f64 vectors.
+/// Methods returning vectors allocate new buffers. Shape widths and centers must
+/// use the same units as the coordinates. Continuous area normalization of a
+/// density does not guarantee unit area after sampling or finite truncation.
+/// The [SciPy Voigt reference](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.voigt_profile.html)
+/// defines the same Gaussian/Lorentzian widths and Faddeeva normalization;
+/// rexafs clamps vanishing widths to machine epsilon rather than treating exact
+/// delta-function limits separately.
 pub trait MathUtils {
+    /// Linearly interpolate paired knots `x`/`y` at the coordinates in `self`.
+    /// Holds endpoint values outside the knot interval. Supply nonempty finite knots
+    /// in increasing order; invalid spline structure returns `LinearError`, while empty
+    /// or NaN knot arrays can panic before that validation.
     fn interpolate(&self, x: &[f64], y: &[f64]) -> Result<Self, LinearError>
     where
         Self: Sized;
 
+    /// Return whether coordinates are nondecreasing; duplicate values are allowed.
     fn is_sorted(&self) -> bool;
 
+    /// Return indices that sort finite values in ascending order. NaN comparisons panic.
     fn argsort(&self) -> Vec<usize>;
 
+    /// Evaluate a unit-area Gaussian density at these coordinates. `sigma` is its
+    /// standard deviation and `center` its mean. Uses exp(-(x-center)^2/(2*sigma^2))
+    /// / (sigma*sqrt(2*pi)); nonpositive widths are clamped to machine epsilon.
     fn gaussian(self, center: f64, sigma: f64) -> DVector<f64>
     where
         Self: Into<DVector<f64>>,
@@ -27,6 +51,9 @@ pub trait MathUtils {
         x.map(|value| (-value.powi(2) / (2.0 * sigma.powi(2))).exp() / inverse_of_coefficient)
     }
 
+    /// Evaluate a unit-area Lorentzian density at these coordinates. `sigma` is the
+    /// half width at half maximum, not a standard deviation. The formula is
+    /// sigma / (pi*((x-center)^2+sigma^2)); nonpositive widths are clamped to epsilon.
     fn lorentzian(self, center: f64, sigma: f64) -> DVector<f64>
     where
         Self: Into<DVector<f64>>,
@@ -37,6 +64,11 @@ pub trait MathUtils {
         x.map(|value| coefficient / (value.powi(2) + sigma.powi(2)))
     }
 
+    /// Evaluate the unit-area convolution of Gaussian and Lorentzian profiles.
+    /// `sigma` is the Gaussian standard deviation and `gamma` the Lorentzian half width
+    /// at half maximum. Uses the real Faddeeva function with argument
+    /// ((x-center)+i*gamma)/(sigma*sqrt(2)), divided by sigma*sqrt(2*pi).
+    /// Both widths are clamped to at least machine epsilon.
     fn voigt(self, center: f64, sigma: f64, gamma: f64) -> DVector<f64>
     where
         Self: Into<DVector<f64>>,
@@ -55,9 +87,15 @@ pub trait MathUtils {
         )
     }
 
+    /// Return the minimum value. Empty arrays or NaN comparisons can panic.
     fn min(&self) -> f64;
+    /// Return the maximum value. Empty arrays or NaN comparisons can panic.
     fn max(&self) -> f64;
+    /// Return successive differences `x[i+1]-x[i]`, with length n-1 (zero when empty).
     fn diff(&self) -> Self;
+    /// Return derivatives with respect to sample index, using centered differences
+    /// inside and one-sided differences at the ends. No physical grid spacing is applied.
+    /// Empty or one-point vectors return equally sized zeros.
     fn gradient(&self) -> Self;
 }
 
@@ -195,6 +233,9 @@ fn argsort(v: &[f64]) -> Vec<usize> {
     idx
 }
 
+/// Find the preceding index on an ascending finite array, clamped to its ends.
+/// Returns an error when empty. This linear-search legacy helper assumes sorted
+/// data despite its name; unsorted/NaN arrays can panic.
 pub fn index_of(array: &[f64], value: &f64) -> Result<usize, MathError> {
     if array.is_empty() {
         return Err(MathError::IndexOutOfBounds { index: 0, len: 0 });
@@ -216,6 +257,8 @@ pub fn index_of(array: &[f64], value: &f64) -> Result<usize, MathError> {
         .unwrap_or(array.len() - 1))
 }
 
+/// Find the final coordinate at or below `value` on a sorted finite array.
+/// Uses binary partitioning, clamps outside values to the ends and errors when empty.
 pub fn index_of_sorted(array: &[f64], value: &f64) -> Result<usize, MathError> {
     if array.is_empty() {
         return Err(MathError::IndexOutOfBounds { index: 0, len: 0 });
@@ -224,6 +267,9 @@ pub fn index_of_sorted(array: &[f64], value: &f64) -> Result<usize, MathError> {
     Ok(idx.saturating_sub(1))
 }
 
+/// Find the index minimizing absolute distance to `value`; the first tie wins.
+/// Legacy behavior panics for empty arrays or NaN comparisons. Use
+/// [`index_nearest_sorted`] for checked empty-input handling on sorted grids.
 pub fn index_nearest(array: &[f64], value: &f64) -> Result<usize, MathError> {
     Ok(array
         .iter()
@@ -233,6 +279,9 @@ pub fn index_nearest(array: &[f64], value: &f64) -> Result<usize, MathError> {
         .0)
 }
 
+/// Find the nearest coordinate by binary search on a sorted finite array.
+/// Ties choose the lower index, out-of-range values choose the nearest endpoint,
+/// and an empty array returns `MathError`.
 pub fn index_nearest_sorted(array: &[f64], value: &f64) -> Result<usize, MathError> {
     if array.is_empty() {
         return Err(MathError::IndexOutOfBounds { index: 0, len: 0 });
@@ -256,6 +305,11 @@ pub fn index_nearest_sorted(array: &[f64], value: &f64) -> Result<usize, MathErr
 }
 
 #[allow(non_snake_case)]
+/// Evaluate the modified Bessel function I0 by its power series for a
+/// dimensionless argument. This legacy helper stops when the sum no longer changes
+/// or becomes non-finite; large inputs can overflow. The FFT window implementation
+/// uses the dedicated Bessel helper in its own module. The defining series is
+/// [DLMF equation 10.25.2](https://dlmf.nist.gov/10.25.E2) at order zero.
 pub fn bessel_I0(x: f64) -> f64 {
     let base = x * x / 4.0;
     let mut addend = 1.0;
@@ -271,6 +325,14 @@ pub fn bessel_I0(x: f64) -> f64 {
     sum
 }
 
+/// Evaluate the B-spline Jacobian with respect to its coefficients.
+/// Rows correspond to query coordinates `x`; columns to the length of `c`.
+/// The coefficient values themselves are unused because the spline is linear
+/// in those coefficients. `t` supplies knots, `k` the spline degree, and `e == 3`
+/// requests endpoint clamping. Coordinates and knots must use the same units;
+/// the basis derivatives with respect to coefficients are dimensionless.
+/// Delegates to `spline::coefficient_jacobian`; this legacy wrapper has
+/// no separate validation or error return.
 pub fn splev_jacobian(t: Vec<f64>, c: Vec<f64>, k: usize, x: Vec<f64>, e: usize) -> DMatrix<f64> {
     super::spline::coefficient_jacobian(&t, c.len(), k, &x, e == 3)
 }

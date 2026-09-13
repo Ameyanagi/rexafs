@@ -51,6 +51,8 @@ fn matrix_to_nested(matrix: &DMatrix<f64>) -> Vec<Vec<f64>> {
         .collect::<Vec<_>>()
 }
 
+/// Fit prepared datasets jointly with shared named parameters and default solver options.
+/// Inputs are borrowed and remain unchanged; see [`super::feffit_joint`] for the public workflow.
 pub fn feffit_joint(
     datasets: &[FeffFitDataset],
     variables: &FitVariables,
@@ -58,6 +60,10 @@ pub fn feffit_joint(
     feffit_joint_with_options(datasets, variables, &FeffFitOptions::default())
 }
 
+/// Minimize concatenated residuals using explicit solver settings.
+/// Missing noise values use 1.0; no preprocessing or noise estimation runs here.
+/// Invalid datasets, transforms, expressions, or unavailable solvers return errors.
+/// Inspect the returned solver report even after an Ok result.
 pub fn feffit_joint_with_options(
     datasets: &[FeffFitDataset],
     variables: &FitVariables,

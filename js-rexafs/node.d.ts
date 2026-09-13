@@ -1,4 +1,11 @@
-/** Node loads its packaged Wasm automatically; init is a no-op. */
+/**
+ * Return an already-resolved initialization promise for Node.
+ *
+ * Importing `rexafs/node` loads its packaged WebAssembly engine synchronously, so no explicit
+ * initialization is required before constructing objects. This no-op export lets code shared
+ * with browser callers use `await init()` in both places. A missing or invalid packaged Wasm
+ * asset fails during module import instead.
+ */
 export default function init(): Promise<void>;
 export { Spectrum, PrePostEdge, AUTOBK, XrayFFTF, XrayFFTR, NormalizationMethod, BackgroundMethod } from "./types.js";
 

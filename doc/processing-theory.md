@@ -45,7 +45,11 @@ The edge energy $E_0$ defines the energy origin. Automatic edge finding uses
 the absorption derivative with checks against spurious features. It is an
 estimate, not an independent energy calibration. Inspect it for noisy data,
 multiple edges or narrow scans, and use `set_e0()` when an explicit value is
-required. See the [edge-finding implementation](../crates/rexafs/src/xafs/xafsutils.rs).
+required. An explicit E0 used through `Spectrum` must be finite and strictly
+inside the measured energy range; normalization reports an error otherwise.
+The lower-level Rust `PrePostEdge::fill_parameter` has a different contract:
+it replaces nonfinite E0 values or values outside the first through penultimate
+energy samples with an automatic estimate. See the [edge-finding implementation](../crates/rexafs/src/xafs/xafsutils.rs).
 
 The pre-edge model is
 
@@ -82,7 +86,10 @@ The implementation requires a finite step and floors it at $10^{-12}$; a
 near-zero or negative estimated jump therefore still needs scientific review.
 Flattening is a separate output, not the input substituted into AUTOBK.
 
-`PrePostEdge()` selects fit ranges from available data. Its automatic polynomial
+`PrePostEdge()` in Python/TypeScript and `PrePostEdge::new()` in Rust select
+fit ranges from available data. Rust `PrePostEdge::default()` instead starts
+with fixed offsets of −200 to −30 eV and 150 to 2000 eV, and degree 2.
+Choose `new()` when you want the automatic behavior described here. Its automatic polynomial
 degree is 0, 1 or 2 for post-edge spans below 50 eV, below 350 eV, or at least
 350 eV. Explicit degrees are limited to 0–5. All four fit-window endpoints are
 **offsets from $E_0$ in eV**, not absolute energies. The exact formulas and range
@@ -110,8 +117,8 @@ the eV and angstrom conversions. rexafs uses the
 This real-valued expression is for $E\ge E_0$; the background pipeline selects
 the relevant post-edge data and produces a uniform k grid.
 
-AUTOBK represents the smooth absorption background by a cubic spline
-$\mu_0(E)$ and forms
+AUTOBK represents the smooth absorption background by a cubic spline **in k**,
+evaluates it on the energy grid as $\mu_0(E)$, and forms
 
 $$
 \chi(k)=\frac{\mu(E(k))-\mu_0(E(k))}{\Delta\mu}.
@@ -142,8 +149,29 @@ singular-value decomposition is visible in
 
 ## 4. Transform from k to R
 
-For the standard uniform grid $k_j=j\delta k$, rexafs first constructs
-$g_j=\chi(k_j)k_j^w W_k(k_j)$, then calculates
+**The forward amplitude factor is `kstep / sqrt(pi)`**, applied after an
+unnormalized forward FFT. There is no additional division by `nfft` or
+`sqrt(nfft)`, and no extra factor of $i$. This is the convention implemented by
+[xftf_fast_nalgebra](../crates/rexafs/src/xafs/xrayfft.rs).
+
+To see where the sampling interval enters, write the continuous convention as
+
+$$
+\widetilde\chi(R)=\frac{1}{\sqrt{\pi}}
+\int_0^\infty \chi(k)k^w W_k(k)\exp(-2ikR)\,dk.
+$$
+
+Here $k$ is photoelectron wave number in Å⁻¹, $R$ is Fourier distance in Å,
+$w$ is the nonnegative integer k-weight, $W_k$ is a dimensionless window and
+$i^2=-1$. The kernel uses $2kR$, as in the EXAFS scattering oscillation; an
+uncorrected Fourier peak is still affected by the scattering phase and is not
+directly a bond length. See [Rehr and Albers](https://doi.org/10.1103/RevModPhys.72.621)
+for that physical distinction. The $1/\sqrt{\pi}$ prefactor specifies rexafs's
+amplitude convention; it is not a measured quantity or a window correction.
+
+On the standard zero-origin uniform grid $k_j=j\delta k$, the integral is
+approximated by a sum with sample width $\delta k$. rexafs constructs
+$g_j=\chi(k_j)k_j^w W_k(k_j)$ and evaluates
 
 $$
 \widetilde\chi_m=\frac{\delta k}{\sqrt{\pi}}
@@ -151,41 +179,68 @@ $$
 \qquad R_m=\frac{\pi m}{N\delta k}.
 $$
 
-$N$ is `nfft`, $\delta k$ is `kstep` in Å⁻¹, $w$ is `kweight`, $W_k$ is the
-dimensionless window, and $i^2=-1$. Samples beyond the prepared data are zero.
-The output has units $\mathrm{\AA}^{-(w+1)}$ when $\chi$ is dimensionless. `r()` reports R in Å;
-`chir_real()`, `chir_imag()` and `chir_mag()` report the real part, imaginary
-part and magnitude of $\widetilde\chi$, respectively.
+$N$ is `nfft`, $\delta k$ is `kstep` in Å⁻¹, $j$ indexes input samples and
+$m$ indexes Fourier bins. The two exponent forms agree because
+$2k_jR_m=2\pi jm/N$. Samples beyond the prepared data are zero. In Input mode,
+if the data are longer than $N$, only the first $N$ samples are transformed;
+choose `nfft` large enough to retain all intended data.
 
-This formula is the negative-exponent, unnormalized DFT followed by rexafs's
-explicit amplitude factor; see
-[xftf_fast_nalgebra](../crates/rexafs/src/xafs/xrayfft.rs) and the
-[NumPy DFT convention](https://numpy.org/doc/stable/reference/routines.fft.html).
-It specifies the implementation rather than assuming that all textbook XAFS
-Fourier normalizations are interchangeable.
+For an already weighted and windowed real array `g`, the equivalent NumPy
+calculation is:
 
-Increasing k-weight emphasizes higher-k data, including its noise. The window
-reduces ringing caused by sharp truncation. Window parameters are
-shape-dependent: `dk` describes taper geometry but also controls Kaiser–Bessel
-shape, so equal `dk` does not make different window families equivalent.
-See [window implementations](../crates/rexafs/src/xafs/xafsutils.rs) and
+```python
+import numpy as np
+
+chi_r = (kstep / np.sqrt(np.pi)) * np.fft.rfft(g, n=nfft, norm="backward")
+r = np.arange(chi_r.size) * np.pi / (nfft * kstep)
+```
+
+NumPy's `norm="backward"` means the forward transform is unscaled; its $1/N$
+factor belongs to the inverse transform. See the
+[NumPy FFT normalization reference](https://numpy.org/doc/stable/reference/routines.fft.html#normalization).
+At `kstep=0.05`, rexafs's explicit multiplier is approximately
+**0.02820947918**, independent of `nfft`. The same multiplier and exponent sign
+appear in [Larch's `xftf_fast` implementation](https://github.com/xraypy/xraylarch/blob/860d8a690c81eefb0e61dee4ca3703ef4b67e93d/larch/xafs/xafsft.py#L298).
+Use that implementation when comparing conventions: a textbook transform or a
+manual equation with a different sign or normalization is not interchangeable.
+There is no normalization by the window area, peak height or sum of weights.
+
+For dimensionless $\chi$, $\widetilde\chi$ has units
+$\mathrm{\AA}^{-(w+1)}$; with the default $w=2$, these are Å⁻³.
+`r()` reports R in Å, and `chir_real()`, `chir_imag()` and `chir_mag()` report
+the real part, imaginary part and magnitude of $\widetilde\chi$. The real FFT
+retains bins $0$ through $\lfloor N/2\rfloor$, including the Nyquist bin for
+even $N$. The spectrum getters show only the range selected by `rmax_out`
+(default 10 Å); the full coefficients remain available for inverse filtering.
+
+Increasing k-weight emphasizes higher-k data, including its noise. Fractional
+`kweight` settings are floored to an integer. The window reduces ringing caused
+by sharp truncation. Window parameters are shape-dependent: `dk` describes taper
+geometry but also controls Kaiser–Bessel shape; Gaussian `dk` controls its width,
+and fractional Hanning uses fractional taper parameters. Equal `dk` does not
+make different window families equivalent. See the
+[window implementation](../crates/rexafs/src/xafs/xafsutils.rs) and
 [Larch's window reference](https://xraypy.github.io/xraylarch/xafs_fourier.html#ftwindow-generating-fourier-transform-windows).
 
-At the defaults $N=2048$ and $\delta k=0.05$ Å⁻¹, adjacent R samples are
-approximately 0.03068 Å apart. More zero-padding makes that display grid finer;
-it does not add experimental information or resolve arbitrarily close shells.
-The phase of the scattering process also shifts Fourier peaks, so an
-uncorrected R peak is not directly a bond length. See the physical discussion
-in [Rehr and Albers](https://doi.org/10.1103/RevModPhys.72.621).
+`XrayFFTF` defaults to `nfft=2048` and automatic `kstep`, which uses the first
+input spacing. The usual `kstep=0.05` Å⁻¹ comes from AUTOBK's default output
+grid. Together these give adjacent R samples approximately **0.03068 Å** apart.
+Increasing `nfft` by adding zeros makes this display grid finer while preserving
+amplitudes at shared R samples. It does not add experimental information or
+resolve arbitrarily close shells.
 
-`grid="Input"` keeps the prepared background grid. `grid="Larch"` changes
-resampling and window construction; it does not change the returned background
+`grid="Input"` keeps the prepared background grid. For a physical R-axis
+interpretation, that grid should be uniform, start at zero and agree with
+`kstep`; the low-level Input API accepts other increasing grids without
+resampling or an origin-phase correction. `grid="Larch"` resamples from zero
+and changes window construction. It does not change the returned background
 `k()` or `chi()`. Use `kwin_k()` with `kwin()`. The
 [compatibility guide](fft-grid-compatibility.md) specifies those conventions.
 
 ## 5. Filter in R and transform back to q
 
 `XrayFFTR` selects an R window $W_R$ and an R-weight $u=\mathtt{rweight}$.
+Fractional nonnegative R-weights are floored to an integer.
 For an unchanged transform length, define
 
 $$

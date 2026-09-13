@@ -618,14 +618,14 @@ pub(crate) struct OperandoData {
     /// k grid and k-weighted χ(k) rows (sampled frames × grid).
     pub(crate) grid: Vec<f64>,
     pub(crate) matrix: Vec<Vec<f64>>,
-    /// Absolute-energy grid and normalized μ(E) rows.
+    /// Absolute-energy grid and flattened μ(E) rows, falling back to norm.
     pub(crate) e_grid: Vec<f64>,
     pub(crate) e_matrix: Vec<Vec<f64>>,
     /// R grid and |χ(R)| rows.
     pub(crate) r_grid: Vec<f64>,
     pub(crate) r_matrix: Vec<Vec<f64>>,
     pub(crate) e0s: Vec<f64>,
-    /// White-line height (max normalized μ within +30 eV of E₀) per sampled frame.
+    /// Maximum flat (or norm when absent) on [E₀, E₀ + 30 eV] per sampled frame.
     pub(crate) whitelines: Vec<f64>,
     pub(crate) kweight: f64,
 }

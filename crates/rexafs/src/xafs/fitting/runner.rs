@@ -54,6 +54,8 @@ const REFEFF_MODULES: [&str; 24] = [
 ];
 const NO_EXTERNAL_MODULES: [(&str, &str); 0] = [];
 
+/// Resolve requested external executables or internal stages without running them.
+/// Missing executables and disabled backend features return [`FittingError`].
 pub fn resolve_feff_commands(
     request: &FeffRunRequest,
 ) -> Result<FeffResolvedCommands, FittingError> {
@@ -64,6 +66,9 @@ pub fn resolve_feff_commands(
     }
 }
 
+/// Run a scattering calculation, writing generated files/logs into its workspace.
+/// See [`FeffRunRequest`] for backend-specific timeouts and artifact retention.
+/// Invalid inputs, unsupported backends, timeout, or calculation failure return errors.
 pub fn run_feff(request: &FeffRunRequest) -> Result<FeffRunResult, FittingError> {
     match request.mode {
         FeffExecutionMode::Feff85LModules => run_feff85l_modules(request),

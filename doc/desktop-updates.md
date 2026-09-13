@@ -1,11 +1,15 @@
 # Desktop updates and release channels
 
-Open **Updates** in the top bar, or search for **Check for updates** with Cmd+K
+Open **Help → Updates**, or search for **Check for updates** with Cmd+K
 on macOS or Ctrl+K on Windows/Linux.
 
 **Stable** is the default for routine analysis. **Nightly** is opt-in and follows daily builds of main. The selected channel and the **Check for updates on startup** preference belong to this computer, not the project. Automatic checks do not install software or upload spectra.
 
 Choose **Download** to fetch the matching Mac archive and verify its size and SHA-256. **Show download in Finder** reveals the completed ZIP. Save the project, quit the app, extract the archive, and move the application into Applications. Nightly is named `rexafs Nightly.app`, so it can coexist with Stable. Choosing Stable from a Nightly app explicitly offers the stable release, even if its library version is older.
+
+The built-in verified-download action supports macOS in 0.2.4. Windows and Linux
+users should follow the release link and download the matching installer or
+portable archive manually; see [installation](installing.md).
 
 A Nightly label includes the immutable build tag. `rexafs --build-info` reports the library version, channel, release tag, source commit and optional nightly build time. Each packaged archive contains the same identity and signing/notarization provenance in `build.json`.
 

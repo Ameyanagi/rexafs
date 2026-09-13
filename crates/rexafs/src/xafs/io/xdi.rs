@@ -11,13 +11,18 @@ use std::{collections::BTreeMap, path::Path};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Column label and declared units from the XDI header.
 pub struct XdiColumn {
+    /// Standard or custom signal name, used case-insensitively for lookup.
     pub label: String,
+    /// Declared unit token, retained verbatim; absence is distinct from an empty unit.
     pub units: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Parsed version, ordered columns, metadata, comments and non-fatal warnings.
 pub struct XdiHeader {
+    /// XDI format version from the first-line signature.
     pub version: String,
     /// Ordered application/version tokens from the first line.
     pub applications: Vec<String>,
@@ -25,17 +30,21 @@ pub struct XdiHeader {
     pub metadata: BTreeMap<String, String>,
     /// User comments, including empty lines and interior whitespace.
     pub comments: Vec<String>,
+    /// Column definitions in table order.
     pub columns: Vec<XdiColumn>,
+    /// Missing descriptive metadata and other non-fatal import observations.
     pub warnings: Vec<String>,
 }
 
 impl XdiHeader {
+    /// Borrow metadata by case-insensitive `family.field` key. Missing keys return `None`.
     pub fn get(&self, key: &str) -> Option<&str> {
         self.metadata
             .get(&key.to_ascii_lowercase())
             .map(String::as_str)
     }
 
+    /// Find the first column with a case-insensitive label; return its zero-based index.
     pub fn column_index(&self, label: &str) -> Option<usize> {
         self.columns
             .iter()
@@ -43,7 +52,13 @@ impl XdiHeader {
     }
 
     /// Convert a raw abscissa value to eV without changing the stored table.
-    /// Angle axes use first-order Bragg diffraction and Mono.d_spacing in Å.
+    /// Angle axes use first-order Bragg diffraction: `E = hc / (2 d sin(theta))`,
+    /// with `E` in eV, `d = Mono.d_spacing` in Å, and `theta` converted from the
+    /// declared degrees/radians. The code uses `hc = 12398.419843320026 eV Å`.
+    /// See the [XDI metadata dictionary](https://github.com/XraySpectroscopy/XAS-Data-Interchange/blob/master/specification/dictionary.md)
+    /// for axis and monochromator metadata. This assumes first-order diffraction;
+    /// no calibration offset or higher harmonic is inferred.
+    /// Unsupported units, nonpositive energy or invalid spacing/angle return an error.
     pub fn energy_ev(&self, column: usize, value: f64) -> Result<f64, XdiError> {
         let c = self
             .columns
@@ -108,7 +123,9 @@ impl XdiHeader {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Owned XDI header and rectangular numeric table, retaining original units.
 pub struct XdiFile {
+    /// Parsed metadata, signal definitions and import warnings.
     pub header: XdiHeader,
     /// Row-major table, with original values and units intact.
     pub data: Vec<Vec<f64>>,
@@ -118,17 +135,24 @@ pub struct XdiFile {
 /// signal, then sample intensities, then a reference signal.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum XdiSignal {
+    /// Prefer direct sample absorption, then sample intensity ratios, then reference.
     #[default]
     Auto,
+    /// Use `mutrans`/`normtrans`, otherwise natural log `ln(i0 / itrans)`.
     Transmission,
+    /// Use `mufluor`/`normfluor`, otherwise `ifluor / i0` without a logarithm.
     Fluorescence,
+    /// Use `murefer`/`normrefer`, otherwise natural log `ln(itrans / irefer)`.
     Reference,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[error("XDI{location}: {message}", location = if *line == 0 { String::new() } else { format!(" line {line}") })]
+/// Parsing, table validation, axis conversion or signal-selection failure.
 pub struct XdiError {
+    /// One-based source line; zero means the error is not associated with a text line.
     pub line: usize,
+    /// Human-readable cause, including row/column context when available.
     pub message: String,
 }
 
@@ -167,6 +191,8 @@ fn field_name(s: &str) -> bool {
 }
 
 impl XdiFile {
+    /// Read UTF-8 XDI text from a file, preserving the original numeric table.
+    /// Returns an error for I/O, syntax or table-validation failures.
     pub fn read(path: impl AsRef<Path>) -> Result<Self, XdiError> {
         let path = path.as_ref();
         let text = std::fs::read_to_string(path)
@@ -174,6 +200,8 @@ impl XdiFile {
         Self::parse(&text)
     }
 
+    /// Parse XDI 1.x text without reading a file. Rejects damaged tables and
+    /// ambiguous axes; missing descriptive metadata is recorded as warnings.
     pub fn parse(text: &str) -> Result<Self, XdiError> {
         // All three line endings named by the specification, plus a UTF-8 BOM.
         let normalized = text
@@ -365,6 +393,8 @@ impl XdiFile {
         Ok(Self { header, data })
     }
 
+    /// Copy the first-column axis converted to eV, preserving input row order.
+    /// Returns the header conversion error for unsupported units or invalid values.
     pub fn energy_ev(&self) -> Result<Vec<f64>, XdiError> {
         self.data
             .iter()
@@ -375,6 +405,12 @@ impl XdiFile {
     /// Build a spectrum from standard XDI signal names. The original metadata,
     /// units and table remain available on this XdiFile. For arbitrary detector
     /// channels, use `data` with your own channel assignments instead.
+    /// Direct `mu*` or `norm*` columns are copied as supplied and take precedence
+    /// over intensity ratios; their prior normalization is not undone. Ratio
+    /// formulas are listed on [`XdiSignal`]. Invalid denominators or non-finite
+    /// ratios return errors. Fluorescence numerators may be zero or negative.
+    /// The returned spectrum sorts energy and absorption together but does not
+    /// normalize, remove background, or correct detector effects automatically.
     pub fn to_spectrum(&self, signal: XdiSignal) -> Result<super::XASSpectrum, XdiError> {
         let find = |names: &[&str]| names.iter().find_map(|name| self.header.column_index(name));
         let direct = |signal| match signal {

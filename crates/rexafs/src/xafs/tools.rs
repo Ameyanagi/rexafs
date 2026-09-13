@@ -12,7 +12,8 @@
 //! * difference spectra.
 //!
 //! The functions in this module are pure and operate on `DVector<f64>` /
-//! slices so they can be reused from the GUI or from Python bindings. Thin
+//! slices so they can be reused by Rust applications and the GUI. These tools
+//! are not currently exposed by the Python or JavaScript packages. Thin
 //! convenience methods on [`XASSpectrum`] (in `xasspectrum.rs`) forward to
 //! them and take care of keeping `energy`/`mu`/`raw_energy`/`raw_mu`
 //! consistent and of invalidating every derived result
@@ -32,9 +33,14 @@
 //!   to the reference E0, with a free scale factor. The optimum is found by a
 //!   coarse/fine grid search plus parabolic refinement instead of
 //!   Levenberg–Marquardt.
-//! * Merging uses a weighted mean; the standard deviation stored on the
-//!   merged spectrum is the (frequency-weighted) sample standard deviation,
-//!   which for equal weights is the usual `sqrt(Σ(μᵢ−μ̄)²/(N−1))` used by Athena.
+//! * Merging uses a weighted mean and a rexafs-specific finite-member correction
+//!   for the reported spread. Equal weights reproduce the sample standard
+//!   deviation; unequal weights do not imply an unbiased variance estimator.
+//!   See [`merge_spectra`] for the exact formula and interpretation.
+//!
+//! The [Larch utility reference](https://xraypy.github.io/xraylarch/xafs_utilities.html)
+//! provides terminology and workflow context. These functions implement the
+//! choices stated here, rather than promising identical Athena/Larch outputs.
 
 use nalgebra::DVector;
 use serde::{Deserialize, Serialize};
@@ -572,10 +578,17 @@ pub fn rebin_grid(emin: f64, emax: f64, cfg: &RebinConfig, e0: f64) -> Vec<f64> 
 
 /// Rebin `(energy, mu)` onto the three-region grid described by `cfg`.
 ///
-/// Every raw point is assigned to exactly one bin (bin edges half-way between
-/// neighbouring grid points). Bins containing raw points are averaged
+/// Bins have edges half-way between neighbouring grid points; the first and
+/// last edges extend half a local step beyond the nominal grid. Points outside
+/// those finite outer edges are omitted. Bins are lower-inclusive and
+/// upper-exclusive, so a point on a shared edge belongs to the later bin.
+/// Bins containing raw points are averaged
 /// ([`RebinMethod`]); bins without any raw point are filled by linear
 /// interpolation of the raw data at the nominal grid energy.
+/// Energy is in eV and output absorption retains the input units. At least three
+/// paired input points and two output grid points are required. The caller must
+/// supply a sorted grid; this low-level helper does not sort it. Per-bin spread
+/// describes variation within a bin, not propagated measurement uncertainty.
 pub fn rebin(
     energy: &DVector<f64>,
     mu: &DVector<f64>,
@@ -692,10 +705,12 @@ pub enum MergeWeight {
 /// Configuration of [`merge_spectra`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MergeConfig {
+    /// Output sampling grid, clipped to the common energy range. Default: `First`.
     pub grid: MergeGrid,
+    /// Relative spectrum weights. Default: equal weights.
     pub weight: MergeWeight,
     /// Pre-edge region relative to each member's e0 used to estimate noise
-    /// for [`MergeWeight::NoiseInverse`].
+    /// for [`MergeWeight::NoiseInverse`], in eV. Default: `(-200.0, -30.0)`.
     pub noise_region: (f64, f64),
 }
 
@@ -754,6 +769,22 @@ pub fn pre_edge_noise(
 /// weighted mean is stored as `mu`, and the per-point standard deviation is
 /// stored in `mu_stddev`. The merged spectrum inherits the stage
 /// configurations of the first member with all outputs cleared.
+///
+/// At each output energy, the implementation calculates
+/// `mean = Σ(w_i * mu_i) / W` and
+/// `spread = sqrt(Σ(w_i * (mu_i - mean)^2) / (W * (N - 1) / N))`.
+/// Here `i` indexes the `N` input spectra, `mu_i` is interpolated absorption,
+/// `w_i` is a nonnegative relative weight, and `W = Σw_i > 0`. The mean and
+/// spread have the input absorption units. `N` includes zero-weight members;
+/// a single member receives zero spread. All weights must be finite.
+///
+/// Equal weights give the usual sample standard deviation described by the
+/// [NIST measures-of-scale reference](https://www.itl.nist.gov/div898/handbook/eda/section3/eda356.htm).
+/// For unequal weights this correction is a rexafs convention, not a general
+/// unbiased frequency/reliability-weighted variance or the standard error of
+/// the mean. Interpolation can introduce correlations; `mu_stddev` does not
+/// estimate their covariance. An empty selection, invalid weights, missing
+/// arrays or insufficient common energy coverage returns a typed error.
 pub fn merge_spectra(
     members: &[&XASSpectrum],
     cfg: &MergeConfig,
@@ -885,7 +916,7 @@ pub fn merge_spectra(
 /// Which arrays a difference spectrum is formed from.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DiffSpace {
-    /// Raw μ(E).
+    /// Current working μ(E), without normalization. This is the default.
     #[default]
     Mu,
     /// Normalized μ(E) (requires `normalize()` on both spectra).
@@ -910,6 +941,11 @@ fn space_array(s: &XASSpectrum, space: DiffSpace) -> Result<DVector<f64>, XAFSEr
 ///
 /// `b` is interpolated linearly onto `a`'s grid. The result carries the
 /// difference in `mu`/`raw_mu` and is named `"<a> - <b>"`.
+/// Outside `b`'s measured interval, its endpoint value is held; this function
+/// does not restrict the result to common coverage. Prefer overlapping ranges
+/// when interpreting a difference physically. `Norm` and `Flat` require existing
+/// normalization results on both inputs; no prerequisite stage runs here.
+/// Output units are those of the selected arrays, and uncertainty is not propagated.
 pub fn difference(
     a: &XASSpectrum,
     b: &XASSpectrum,

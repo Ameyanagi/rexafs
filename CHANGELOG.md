@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Accept `AUTOBK` and `PrePostEdge` directly in Rust spectrum settings setters,
+  preserving existing enum, `Some(...)` and `None` calls on both backends.
+- Audit API help and scientific guides against the implementation, including
+  defaults, Fourier scaling, fitting statistics, ownership and desktop workflows.
+  Generate substantive stable Python/TypeScript help from maintained docstrings
+  while preserving released signatures, and provide a separate Next Rust reference.
+- Fix Rust reference layout and backend selection, add direct homepage API links,
+  and recommend uv and Bun for library installation.
+
 - Establish a repository-wide English and scientific-documentation baseline.
   Explain processing equations and fit-statistic conventions with source links
   and citations; correct the older uncertainty notes' mathematical errors.

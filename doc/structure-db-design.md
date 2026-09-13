@@ -1,5 +1,36 @@
 # Structure database for EXAFS fitting — core design
 
+This is a historical development record, beginning on 2026-09-03 and retaining
+the implementation milestones and measurements below. For the current user
+workflow, see [Structures and scattering paths](https://rexafs.com/docs/desktop/structures/).
+
+## Source audit clarifications, 2026-09-13
+
+- The current COD client is implemented. Network clients use the `http` feature;
+  `materials-project` and `cod` enable it, and the AMCSD downloader also needs it.
+  The older “Left undone” notes below describe the initial implementation.
+- [`Lattice::from_parameters`](../crates/rexafs/src/xafs/structure/lattice.rs)
+  chooses a along x and b in the xy plane; `from_matrix` preserves the supplied
+  Cartesian orientation. Lengths are in Å and angles in degrees.
+- [`build_cluster`](../crates/rexafs/src/xafs/structure/cluster.rs) uses majority
+  species by default. Random occupancy selects among the listed species after
+  normalizing their occupancies; neither policy creates vacancies from missing
+  occupancy. The absorber remains the selected site's majority species.
+- [`structure_from_cif`](../crates/rexafs/src/xafs/structure/cif.rs) strips CIF
+  standard-uncertainty suffixes from numbers rather than propagating them.
+  Public `Species::new` and `Site::new` do not validate species/occupancies or
+  wrap coordinates; the import/expansion pipeline performs its own processing.
+- Formula matching is a simple search aid, not a full chemical-formula parser.
+  [`parse_formula`](../crates/rexafs/src/xafs/structure/db.rs) recognizes
+  capitalized element tokens and immediate counts, normalizes ratios, and does
+  not interpret grouped multipliers such as `Ca(OH)2`.
+- Path importance and shell templates are starting heuristics. They do not
+  establish statistical significance or calculate correlated disorder; see
+  [path ranking](../crates/rexafs/src/xafs/structure/pathrank.rs) and
+  [parameter templates](../crates/rexafs/src/xafs/fitting/template.rs).
+
+## Original implementation record
+
 Status: implemented on `feat/structure-db` (2026-09-03), module
 `crates/rexafs/src/xafs/structure/`. Larix parity target: CIF browser,
 AMCSD database, Materials Project import → `feff.inp` → FEFF paths, with
@@ -141,7 +172,7 @@ highlight a selected path.
    workspace, run with the existing runner, then `PathGeometry::from_feffdat
    (&path.feff)` + `map_to_cluster` to draw paths.
 
-## Left undone
+## Left undone in the initial implementation
 
 - Wyckoff letters are not computed (only read when the CIF lists them).
 - Hall-symbol parsing beyond the bundled table (non-standard settings not

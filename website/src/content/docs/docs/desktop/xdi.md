@@ -41,6 +41,15 @@ metadata and does not overwrite the user's E0 processing setting.
   not silently skipped. Missing absorber/edge descriptions and malformed metadata
   fields produce warnings. The reader is not a full metadata-dictionary validator.
 
+These strict numeric-row checks occur before detector arithmetic. During
+conversion to μ(E), a finite input row can still produce an undefined logarithm
+or division, for example when the transmitted intensity is zero. The desktop
+excludes a non-finite calculated signal and reports the affected point count and
+source lines in import diagnostics. Review those exclusions before accepting the
+mapping. Conversion also sorts energy and μ together by increasing energy; it
+does not merge repeated energies. See the [shared desktop signal
+conversion](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/params.rs#L913).
+
 Pixel and motor-step energy calibrations, χ(k)/χ(R) import into the μ(E)
 processing pipeline, and XDI export are not implemented. The low-level reader can
 retain those tables, but conversion to an energy spectrum rejects unsupported axes.

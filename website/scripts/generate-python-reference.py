@@ -1,8 +1,15 @@
-"""Generate user API pages from the packaged stubs and Python docstrings."""
+"""Render released signatures with source-maintained, reviewed API explanations.
+
+Stable membership and types always come from the release tag. Explanations come
+from the checkout stubs, where they also power editor hover help. Keep help for
+shared members valid for both versions; describe new calling conventions in
+signatures and the Next guide. Missing help is a build error.
+"""
 
 from __future__ import annotations
+
 import ast
-import importlib
+import copy
 import inspect
 import json
 import re
@@ -22,108 +29,145 @@ def source(path: str, channel: str) -> str:
     return (ROOT / path).read_text()
 
 
-def doc(obj: object) -> str:
-    return inspect.getdoc(obj) or ""
+def name(node: ast.AST) -> str | None:
+    if isinstance(node, (ast.ClassDef, ast.FunctionDef)):
+        return node.name
+    if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+        return node.target.id
+    return None
 
 
-def signature(node: ast.FunctionDef) -> str:
-    copy = ast.FunctionDef(
-        name=node.name,
-        args=node.args,
-        body=[ast.Expr(ast.Constant(Ellipsis))],
-        decorator_list=[],
-        returns=node.returns,
-        type_comment=None,
-        lineno=0,
+def documented_nodes(nodes: list[ast.stmt]) -> dict[str, tuple[ast.AST, str]]:
+    result = {}
+    for index, node in enumerate(nodes):
+        key = name(node)
+        if key is None:
+            continue
+        comment = ""
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef)):
+            comment = ast.get_docstring(node) or ""
+        elif index + 1 < len(nodes):
+            following = nodes[index + 1]
+            if (
+                isinstance(following, ast.Expr)
+                and isinstance(following.value, ast.Constant)
+                and isinstance(following.value.value, str)
+            ):
+                comment = following.value.value
+        result[key] = (node, comment)
+    return result
+
+
+def help_for(entries: dict, key: str, context: str) -> str:
+    comment = inspect.cleandoc(entries.get(key, (None, ""))[1])
+    if not comment or "Initialize self. See help(type(self))" in comment:
+        raise ValueError(f"Missing source docstring: {context}.{key}")
+    return comment
+
+
+def signature(node: ast.FunctionDef, class_name: str | None = None) -> str:
+    rendered = copy.deepcopy(node)
+    rendered.body = [ast.Expr(ast.Constant(Ellipsis))]
+    rendered.decorator_list = []
+    if node.name == "__init__" and class_name:
+        rendered.name = class_name
+        rendered.args.args = rendered.args.args[1:]
+        rendered.returns = None
+    return ast.unparse(rendered).split(":\n", 1)[0].removeprefix("def ")
+
+
+def write_page(path: Path, title: str, channel: str, declaration: str, body: list[str]):
+    status = (
+        "Stable " + TAG.removeprefix("v")
+        if channel == "stable"
+        else "Next API · unreleased"
     )
-    return ast.unparse(copy).split(":\n", 1)[0].removeprefix("def ")
+    lines = [
+        f'---\ntitle: "Python · {title}"\ndescription: "{title} signatures, defaults and API explanations."\naudience: user\npagefind: {str(channel == "stable").lower()}\n---',
+        f"**{status}.** "
+        + (
+            "These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release."
+            if channel == "stable"
+            else f"These signatures describe the source checkout. They are not available in rexafs {TAG.removeprefix('v')}."
+        ),
+        "[Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)",
+        f"[Declaration source](https://github.com/Ameyanagi/rexafs/blob/{TAG if channel == 'stable' else 'main'}/{declaration}) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/{declaration})",
+        *body,
+    ]
+    text = "\n\n".join(lines)
+    text = re.sub(r"(?<![<(])(https?://[^\s<>]+)(?=\s|$)", r"<\1>", text)
+    path.write_text(text + "\n")
 
 
-package = importlib.import_module("rexafs")
-assert package.__version__ == TAG.removeprefix("v"), package.__version__
-counts = {}
-for channel in ["stable", "next"]:
-    channel_dir = OUT / channel / "python"
-    channel_dir.mkdir(parents=True, exist_ok=True)
-    for old in channel_dir.glob("*.md"):
-        old.unlink()
-    count = 0
-    for relative, module_name in [("__init__.pyi", "rexafs"), ("io.pyi", "rexafs.io")]:
-        module = importlib.import_module(module_name)
-        path = "py-rexafs/python/rexafs/" + relative
-        tree = ast.parse(source(path, channel))
-        for node in tree.body:
-            if not isinstance(
-                node, (ast.ClassDef, ast.FunctionDef)
-            ) or node.name.startswith("_"):
-                continue
-            title = node.name if module_name == "rexafs" else "io." + node.name
-            runtime = getattr(module, node.name, None) if channel == "stable" else None
-            lines = [
-                f'---\ntitle: "Python · {title}"\ndescription: "{title} signatures, types and docstrings."\naudience: user\npagefind: {str(channel == "stable").lower()}\n---\n',
-                f"**{'Stable ' + TAG.removeprefix('v') if channel == 'stable' else 'Next API · unreleased'}.** "
-                + (
-                    "Install the stable package to use these signatures."
-                    if channel == "stable"
-                    else "These signatures describe the source checkout. They are not available from `pip install rexafs==0.2.4`."
-                ),
-                "\n[Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)\n",
-                ast.get_docstring(node) or (doc(runtime) if runtime else ""),
-                f"\n[Declaration source](https://github.com/Ameyanagi/rexafs/blob/{TAG if channel == 'stable' else 'main'}/{path})\n",
-            ]
-            members = node.body if isinstance(node, ast.ClassDef) else [node]
-            for index, member in enumerate(members):
-                if isinstance(member, ast.FunctionDef) and (
-                    not member.name.startswith("_") or member.name == "__init__"
-                ):
-                    label = node.name if member.name == "__init__" else member.name
-                    lines += [
-                        f"\n## {label}\n",
-                        "```python\n" + signature(member) + "\n```",
-                        ast.get_docstring(member)
-                        or (
-                            doc(getattr(runtime, member.name, None))
-                            if runtime and isinstance(node, ast.ClassDef)
-                            else ""
-                        ),
-                    ]
-                    count += 1
-                elif isinstance(member, ast.AnnAssign) and isinstance(
-                    member.target, ast.Name
-                ):
-                    name = member.target.id
-                    following = members[index + 1] if index + 1 < len(members) else None
-                    comment = (
-                        following.value.value
-                        if isinstance(following, ast.Expr)
-                        and isinstance(following.value, ast.Constant)
-                        and isinstance(following.value.value, str)
-                        else ""
+def generate():
+    counts = {}
+    for channel in ["stable", "next"]:
+        channel_dir = OUT / channel / "python"
+        channel_dir.mkdir(parents=True, exist_ok=True)
+        for old in channel_dir.glob("*.md"):
+            old.unlink()
+        count = 0
+        for relative, module_name in [
+            ("__init__.pyi", "rexafs"),
+            ("io.pyi", "rexafs.io"),
+        ]:
+            path = "py-rexafs/python/rexafs/" + relative
+            tree = ast.parse(source(path, channel))
+            current = documented_nodes(ast.parse(source(path, "next")).body)
+            for node in tree.body:
+                if not isinstance(
+                    node, (ast.ClassDef, ast.FunctionDef)
+                ) or node.name.startswith("_"):
+                    continue
+                title = node.name if module_name == "rexafs" else "io." + node.name
+                body = [help_for(current, node.name, module_name)]
+                if isinstance(node, ast.ClassDef):
+                    entries = documented_nodes(current[node.name][0].body)
+                    members = node.body
+                else:
+                    entries, members = current, [node]
+                    body = []
+                for member in members:
+                    key = name(member)
+                    if key is None or (key.startswith("_") and key != "__init__"):
+                        continue
+                    label = node.name if key == "__init__" else key
+                    declaration = (
+                        signature(member, node.name)
+                        if isinstance(member, ast.FunctionDef)
+                        else ast.unparse(member)
                     )
-                    if not comment and runtime:
-                        comment = doc(getattr(runtime, name, None))
-                    lines += [
-                        f"\n## {name}\n",
-                        "```python\n" + ast.unparse(member) + "\n```",
-                        comment,
+                    body += [
+                        f"## {label}",
+                        f"```python\n{declaration}\n```",
+                        help_for(entries, key, title),
                     ]
                     count += 1
-            # Make bare citation URLs in API docstrings clickable without inventing bibliography entries.
-            text = "\n\n".join(part for part in lines if part)
-            text = re.sub(r"(?<![<(])(https?://[^\s<>]+)(?=\s)", r"<\1>", text)
-            (channel_dir / (title.lower().replace(".", "-") + ".md")).write_text(
-                text + "\n"
-            )
-        aliases = [
-            ast.unparse(n)
-            for n in tree.body
-            if isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name)
-        ]
-        if module_name == "rexafs":
-            (channel_dir / "types.md").write_text(
-                f'---\ntitle: "Python · type aliases"\ndescription: "Literal types and module attributes."\naudience: user\npagefind: {str(channel == "stable").lower()}\n---\n\n**{channel} API**. See the [version guide](/docs/reference/).\n\n```python\n'
-                + "\n\n".join(aliases)
-                + "\n```\n"
-            )
-    counts[channel] = count
-print("Generated Python documented members:", counts)
+                write_page(
+                    channel_dir / (title.lower().replace(".", "-") + ".md"),
+                    title,
+                    channel,
+                    path,
+                    body,
+                )
+            if module_name == "rexafs":
+                body = []
+                for node in tree.body:
+                    if isinstance(node, ast.AnnAssign) and isinstance(
+                        node.target, ast.Name
+                    ):
+                        key = node.target.id
+                        body += [
+                            f"## {key}",
+                            f"```python\n{ast.unparse(node)}\n```",
+                            help_for(current, key, module_name),
+                        ]
+                write_page(
+                    channel_dir / "types.md", "type aliases", channel, path, body
+                )
+        counts[channel] = count
+    print("Generated Python documented members:", counts)
+
+
+if __name__ == "__main__":
+    generate()

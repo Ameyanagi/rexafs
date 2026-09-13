@@ -27,7 +27,8 @@
 //! ```
 //!
 //! The reference implementation used for parsing and writing semantics is
-//! Larch's `larch.io.athena_project` (`parse_perlathena` / `AthenaProject.save`).
+//! [Larch's `larch.io.athena_project`](https://github.com/xraypy/xraylarch/blob/master/larch/io/athena_project.py)
+//! (`parse_perlathena` / `AthenaProject.save`).
 //!
 //! Round-trip fidelity: every `@args` key/value pair is kept verbatim in
 //! [`AthenaGroup::args`] (in file order). The typed [`AthenaParams`] view is
@@ -64,7 +65,8 @@ pub const DEFAULT_DEMETER_VERSION: &str = "0.9.26";
 ///
 /// Athena writes most values as single-quoted strings, some as bare numbers
 /// and a few (e.g. `titles`) as Perl array references. Keeping the flavour
-/// lets us write the file back exactly as it was read.
+/// preserves unchanged argument text and its quoting style. Whole-file bytes,
+/// whitespace and compression are not guaranteed to round-trip identically.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AthenaValue {
     /// `'text'` (escapes already resolved)
@@ -76,7 +78,7 @@ pub enum AthenaValue {
 }
 
 impl AthenaValue {
-    /// Scalar text of the value (`None` for lists).
+    /// Borrow the scalar text of a quoted/bare value; array references return `None`.
     pub fn as_str(&self) -> Option<&str> {
         match self {
             AthenaValue::Quoted(s) | AthenaValue::Bare(s) => Some(s),
@@ -84,17 +86,17 @@ impl AthenaValue {
         }
     }
 
-    /// Parse the scalar as a float (`None` if not a number).
+    /// Parse scalar text as f64; array references or unparseable values return `None`.
     pub fn as_f64(&self) -> Option<f64> {
         self.as_str()?.trim().parse::<f64>().ok()
     }
 
-    /// Quoted value from any string-like.
+    /// Construct an owned single-quoted scalar argument.
     pub fn quoted<S: Into<String>>(s: S) -> Self {
         AthenaValue::Quoted(s.into())
     }
 
-    /// Bare value from any string-like.
+    /// Construct an owned unquoted scalar argument.
     pub fn bare<S: Into<String>>(s: S) -> Self {
         AthenaValue::Bare(s.into())
     }
@@ -432,7 +434,8 @@ impl AthenaGroup {
         self.arg(key).and_then(AthenaValue::as_f64)
     }
 
-    /// Set (or append) a raw arg.
+    /// Set (or append) a raw arg without updating the typed parameter view.
+    /// Existing typed `Some` values still override this raw value when written.
     pub fn set_arg<S: Into<String>>(&mut self, key: S, value: AthenaValue) -> &mut Self {
         let key = key.into();
         match self.args.iter_mut().find(|(k, _)| *k == key) {
@@ -474,9 +477,19 @@ impl AthenaGroup {
     /// Convert this record into an [`XASSpectrum`] configured with the
     /// Athena normalization, background and Fourier transform parameters.
     ///
-    /// `mu(E)` records set the raw energy/mu arrays; `chi(k)` records set
-    /// `k`/`chi` directly. The Athena energy shift (`bkg_eshift`) is stored
-    /// in the parameters but, like Larch, not applied to the energy array.
+    /// `mu(E)` records copy energy (eV) and absorption into baseline/working arrays.
+    /// Only the supported parameter subset is transferred; missing parameters use
+    /// rexafs defaults. This does not guarantee numerical identity with Athena.
+    /// In particular, the original `bkg_eshift` remains in this record's parameters
+    /// but is not applied to the returned spectrum, and phase-correction/display
+    /// flags are not implemented by this conversion.
+    ///
+    /// `chi(k)` records have limited legacy support: they populate public result
+    /// slots, not the AUTOBK buffers used by `Spectrum::k()` and `Spectrum::chi()`;
+    /// setting a stored E0 can clear even those slots. A chi-only record therefore
+    /// cannot enter the automatic spectrum pipeline through this conversion.
+    /// Use this record's `x`/`y` arrays directly with transform or fitting APIs.
+    /// Mismatched x/y lengths return an error; this is not a full input validator.
     pub fn to_spectrum(&self) -> Result<XASSpectrum, XAFSError> {
         if self.x.len() != self.y.len() {
             return Err(DataError::LengthMismatch {
@@ -907,7 +920,8 @@ impl AthenaProject {
         Parser::new(text).parse()
     }
 
-    /// Write the project, gzip-compressed, to `path`.
+    /// Write the project, gzip-compressed, to `path`, overwriting an existing file.
+    /// Returns I/O/compression errors; no atomic replacement or backup is created.
     pub fn write<P: AsRef<Path>>(&self, path: P) -> Result<(), IOError> {
         let path = path.as_ref();
         let write_err = |e: std::io::Error| IOError::WriteFailed {
