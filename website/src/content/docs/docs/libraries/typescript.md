@@ -9,11 +9,11 @@ audience: user
 Install with [Bun](https://bun.sh/docs/installation):
 
 ```sh
-bun add rexafs@0.2.4
+bun add rexafs@0.2.5
 ```
 
 The package runs in Node 22+ and browsers with WebAssembly support. You can also
-install it with `npm install rexafs@0.2.4` or `pnpm add rexafs@0.2.4`.
+install it with `npm install rexafs@0.2.5` or `pnpm add rexafs@0.2.5`.
 Use ECMAScript modules and TypeScript `moduleResolution: "NodeNext"` for Node or
 `"Bundler"` for browser bundlers. Typed declarations are included; see the
 [stable API reference](/docs/reference/stable/typescript/spectrum/).
@@ -68,42 +68,46 @@ Serve the packaged `.wasm` asset with your bundler. A failed initialization or
 malformed input throws an error. Array getters return independent copies, or
 `undefined` before the corresponding stage runs.
 
-## Configure stable 0.2.4
+<span id="configure-stable-024"></span>
 
-In this release, assign fields after construction and use the background wrapper:
+## Configure processing
+
+Use options constructors and pass settings directly. Apply this configuration
+before freeing the spectrum in the Node example above:
 
 ```typescript
-import { AUTOBK, BackgroundMethod, XrayFFTF } from "rexafs/node";
-const background = new AUTOBK();
-background.rbkg = 1.0;
-const method = BackgroundMethod.AUTOBK(background);
-const transform = new XrayFFTF();
-transform.kweight = 2;
+import { AUTOBK, XrayFFTF, XrayFFTR } from "rexafs/node";
+const background = new AUTOBK({ rbkg: 1.0 });
+const transform = new XrayFFTF({ kweight: 2 });
+const inverse = new XrayFFTR({ rmin: 1.0, rmax: 3.0 });
 try {
-  spectrum.set_background_method(method).set_fft(transform).fft();
+  spectrum.set_background_method(background).set_fft(transform).set_ifft(inverse).ifft();
+  console.log(spectrum.q(), spectrum.chiq());
 } finally {
-  method.free();
   background.free();
   transform.free();
+  inverse.free();
 }
 ```
 
+`ifft()` calculates missing forward stages and filters R=1–3 Å in this example.
+With forward `kweight=2` and default inverse `rweight=0`, `chiq()` has units Å⁻²;
+it retains the forward weighting and window. Choose the R interval from your
+data; it is not a phase-corrected bond-distance range.
+
 Settings are copied into the spectrum. Release settings and the spectrum when
-finished; never use an object after `free()`. Apply this configuration before
-freeing the spectrum in the complete example above.
+finished; never use an object after `free()`.
 
 The defaults match the [Python guide](/docs/libraries/python/#recommended-defaults)
 for the main processing path. Legacy trust-region optimization is unavailable in
-Wasm; use the recommended fixed-penalty/direct-solver combination. The option-object
-constructors and inverse settings in [Next API](/docs/reference/) are not in npm 0.2.4.
+Wasm; use the recommended fixed-penalty/direct-solver combination.
 
 See [processing theory](/docs/science/processing/) for weighting, units and citations.
 
 ## Read results and editor help
 
-The [reference](/docs/reference/) documents field units, defaults and automatic
-values. Stable pages keep 0.2.4 signatures; expanded installed editor help belongs
-to Next.
+The [stable reference](/docs/reference/stable/typescript/spectrum/) and installed
+editor help document field units, defaults, automatic values and errors.
 
 `chi()` returns the unweighted, dimensionless background residual on `k()`.
 The `chir_real()`, `chir_imag()` and `chir_mag()` getters return the transform on
@@ -129,15 +133,15 @@ remain unset and are recalculated for each input.
 For example, after changing the background `kstep`, assign forward settings with
 `kstep = undefined` using `set_fft()` before calling `fft()`. This requests new
 spacing inference for the changed background grid. If an inverse transform has
-already resolved its spacing, Next also requires reassigning inverse settings with
-automatic `kstep` through `set_ifft()`. Stable 0.2.4 does not expose inverse settings;
-use a fresh spectrum when changing those grids after a back-transform.
+already resolved its spacing, reassign inverse settings with automatic `kstep`
+through `set_ifft()` after changing the forward R spacing or inverse FFT length.
+Reapply the desired window and range settings to each new configuration.
 
 Calling `set_normalization_method()` or
 `set_background_method()` with no argument, `undefined` or `null` restores that
-stage's default settings in both stable 0.2.4 and Next; the selected E0 is retained.
-For custom settings, stable 0.2.4 uses algorithm wrappers as shown above, while Next
-also accepts `PrePostEdge` and `AUTOBK` settings objects directly.
+stage's default settings; the selected E0 is retained. Custom settings accept
+`PrePostEdge` and `AUTOBK` directly. The older method wrappers and field assignments
+remain supported.
 
-The source JSDoc for [Spectrum](/docs/reference/next/typescript/spectrum/) documents
-these version differences and which stages each operation invalidates.
+The [Spectrum reference](/docs/reference/stable/typescript/spectrum/) documents
+which stages each operation invalidates.

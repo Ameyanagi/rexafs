@@ -11,6 +11,26 @@ rexafs is available under the [MIT license](/LICENSE-MIT.txt) or
 its contributors. For dependency and calculation-engine notices, see
 **Help → Licenses** in the desktop.
 
+## Browser scattering engine
+
+The scattering workspace distributes [ReFEFF 0.4.0](https://github.com/Ameyanagi/refeff/releases/tag/v0.4.0),
+a Rust port derived from FEFF10. Its [license and FEFF10 conditions](/refeff/LICENSE)
+and [provenance notice](/refeff/NOTICE.md) remain applicable. The browser
+filesystem adapter retains its [MIT](/refeff/browser-wasi-shim-LICENSE-MIT) and
+[Apache-2.0](/refeff/browser-wasi-shim-LICENSE-APACHE) notices.
+Retained [Rust dependency notices](/refeff/RUST-NOTICES.txt) and their
+[source inventory](/refeff/rust-dependencies.json) accompany the compiled engine.
+Its runtime attribution includes [toolchain notices](/refeff/TOOLCHAIN-NOTICES.txt),
+Rust's [standard-library notice](/refeff/rust-COPYRIGHT-library.html) and
+[source provenance](/refeff/toolchain-provenance.json).
+
+The [ZnSe input](/refeff/znse.inp) is copied unchanged from
+[ReFEFF's 0.4.0 test fixture](https://github.com/Ameyanagi/refeff/blob/v0.4.0/crates/refeff/tests/data/znse.inp).
+This historical test input includes a krypton (Kr) scatterer in the first shell;
+it is a calculation example, not a measurement or pure ZnSe model.
+The [runtime manifest](/refeff/manifest.json)
+records the upstream source, release archive and file hashes.
+
 ## Cu example
 
 [cu_150k.xmu](/examples/cu_150k.xmu) contains a Cu foil

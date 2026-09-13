@@ -69,10 +69,14 @@ removing a public member's help fails generation.
 `/app/` runs spectrum processing locally in a module Worker, using this checkout's
 WASM bindings. It is labeled as an unreleased preview. It supports numeric
 text/CSV import, explicit column roles and energy units, normalization, AUTOBK,
-forward Fourier transforms and CSV/JSON export. ReFEFF execution remains upstream
-work; this preview does not include it.
+forward Fourier transforms and CSV/JSON export.
 
-`npm run dev` and `npm run build` first run `build:wasm`. Install `wasm-pack 0.15.0`
+`/app/scattering/` runs the published ReFEFF 0.4.0 WASI engine through its browser
+Worker. It accepts a FEFF input, displays calculated EXAFS and offers generated
+files and a provenance record for download. Native rexafs 0.2.5 retains its
+ReFEFF 0.3.0 dependency; the two browser engines have separate manifests.
+
+`npm run dev` and `npm run build` first prepare both engines. Install `wasm-pack 0.15.0`
 and the `wasm32-unknown-unknown` target before either command. Cargo's binary
 directory must be on `PATH`; `REXAFS_WASM_PACK` can select an explicit executable.
 The build stages only browser runtime assets in ignored `public/wasm/` and writes
@@ -99,12 +103,42 @@ Cancel terminates the Worker and discards its state; progress reports stage
 boundaries. The JSON export records requested settings and resolved E0; other
 inferred settings are not exposed by the current bindings.
 
+ReFEFF assets come from the pinned upstream release archive, verified by SHA-256
+during staging. The build retains engine, adapter and third-party notices in
+ignored `public/refeff/`. No ReFEFF source build is needed for this website.
+Staging uses Python 3's standard ZIP reader; `REXAFS_PYTHON` can select it.
+`REXAFS_REFEFF_ARCHIVE` accepts a local copy of the pinned archive for offline
+builds without bypassing checksum verification.
+The browser verifies the WASM bytes before starting a calculation and loads
+them only on demand. Its tests compare all ZnSe `chi.dat`/`xmu.dat` numeric
+columns with retained serial native 0.4.0 output at the upstream tolerance,
+`5e-8 + 5e-5 * abs(reference)`. That case does not qualify every FEFF workflow.
+The unchanged upstream input includes a Kr scatterer; preserve this distinction
+when describing the example.
+
+`vendor/refeff-0.4.0/` retains the Cargo dependency notices and source inventory.
+Ordinary builds verify and copy these files. When updating the pinned engine,
+follow the [notice generation instructions](vendor/refeff-0.4.0/README.md) and
+update the staging hashes with the reviewed outputs. The Python 3.12 generator
+reads the pinned upstream commit without modifying its checkout or rebuilding
+WebAssembly. From the repository root, verify the retained outputs with:
+
+```sh
+uv run --no-project --python 3.12 website/scripts/generate-refeff-notices.py \
+  --refeff-repository ../refeff --check
+```
+
+The same directory retains runtime notices from the identified Rust distribution
+and its WASI libc sources. Their inventory records exact source URLs, hashes and
+retained byte ranges. They are refreshed separately from the Cargo generator;
+follow the vendor README and preserve the original notice bytes.
+
 ## Content ownership
 
 - `src/content/docs/` owns the curated public manual. Every page requires
   `audience: user`; the collection schema rejects any other audience.
 - `doc/` retains source-checkout guides and historical records. Website guides
-  target published 0.2.4; they intentionally differ from checkout guides that
+  target published 0.2.5; they intentionally differ from checkout guides that
   document unreleased APIs. Keep shared scientific explanations synchronized
   when the underlying method changes. Do not import `doc/` recursively.
 - `src/content/docs/docs/reference/{stable,next}/` is generated. Edit Python

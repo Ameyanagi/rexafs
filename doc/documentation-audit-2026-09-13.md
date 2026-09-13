@@ -315,3 +315,32 @@ Validation:
 
 Native ARM64 builds, packaged engine execution and installer qualification still
 require their CI jobs. No release or website deployment was performed locally.
+
+## Subsequent release and ReFEFF browser work
+
+The earlier sections retain their actual validation state. PR #58 subsequently
+merged with green checks, and the immutable `v0.2.5` tag identifies that merge.
+The [release qualification record](validation/2026-09-13-release-0.2.5/review.md)
+tracks tagged builds, native ARM64 evidence, signing and publication. Website
+Stable references and downloads are promoted only after published-byte checks.
+
+Upstream ReFEFF 0.4.0 supplied a WASI browser engine after the earlier compile
+assessment. The scattering workspace uses its unchanged release assets with
+local input, cancellation, generated-file downloads and a calculation record.
+The [browser qualification record](validation/2026-09-13-browser-refeff/review.md)
+retains native reference arrays, all 4,010 compared values, input attribution,
+interface checks and the separate deployment gate. This integration changes
+neither native rexafs 0.2.5's ReFEFF 0.3.0 dependency nor its immutable source tag.
+
+The website update also promotes the API guides and six architecture-specific
+downloads, retains historical screenshot versions and source references, and
+keeps the Windows ARM64 helper's Windows 11 requirement visible. The
+[recommendations](documentation-api-roadmap.md) distinguish completed changes
+from proposed API and platform work.
+
+PR #61 subsequently merged after 46 successful checks and the expected skipped
+PR deployment. Its full qualification run passed 33 jobs, including all 20
+wheels and six desktops. The final local website promotion passed production
+builds, 22 content/input/staging checks and all 21 browser tests at both root
+and subpath, plus both generator tests. Registry, signed desktop and public
+download verification are recorded in the release review above.

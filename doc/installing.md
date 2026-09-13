@@ -1,7 +1,7 @@
 # Install rexafs
 
-This source guide targets 0.2.5. During release preparation, use the
-[download page](https://rexafs.com/download/) for currently published packages.
+This guide targets 0.2.5. The [download page](https://rexafs.com/download/) lists
+current packages and checksums.
 
 ## Desktop
 
@@ -14,8 +14,8 @@ Choose your platform on the [latest release](https://github.com/Ameyanagi/rexafs
 | Linux x86-64 / ARM64 preview | Extract the matching archive and run `./rexafs` from its folder. See the runtime requirements below. |
 
 The latest-release link follows new stable versions automatically. The 0.2.5
-release adds Linux and Windows ARM64, subject to its
-[qualification gates](validation/2026-09-13-release-0.2.5/review.md). Windows ARM64
+release adds Linux and Windows ARM64; see its
+[qualification record](validation/2026-09-13-release-0.2.5/review.md). Windows ARM64
 requires Windows 11 because its FEFF10 helper runs as an x64 process; rexafs and
 ReFEFF themselves are native. See [native development](desktop-development.md)
 for source builds.

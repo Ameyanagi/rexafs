@@ -85,6 +85,29 @@ function clearError(): void { errorBox.textContent = ''; errorBox.hidden = true;
 function assertActive(id: number, signal: AbortSignal): void {
   if (id !== operation || signal.aborted) throw signal.reason ?? new DOMException('Calculation cancelled.', 'AbortError');
 }
+/**
+ * Stop awaiting work that has no AbortSignal API, such as a module import.
+ * The browser may finish loading the module later; that completion cannot
+ * resume a cancelled calculation. Both outcomes remain handled after abort.
+ */
+function withAbort<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason ?? new DOMException('Calculation cancelled.', 'AbortError'));
+    if (signal.aborted) {
+      void pending.catch(() => undefined);
+      abort();
+      return;
+    }
+    signal.addEventListener('abort', abort, { once: true });
+    pending.then(value => {
+      signal.removeEventListener('abort', abort);
+      resolve(value);
+    }, cause => {
+      signal.removeEventListener('abort', abort);
+      reject(cause);
+    });
+  });
+}
 function sync(): void {
   const current = Boolean(record && completedRevision === revision);
   runButton.disabled = busy || !editor.value.trim();
@@ -300,7 +323,7 @@ async function calculate(): Promise<void> {
     if (bytes.byteLength !== release.wasmBytes || await sha256(bytes) !== release.wasmSha256) throw new Error('The downloaded WebAssembly does not match the ReFEFF release SHA-256 fingerprint.');
     assertActive(id, signal);
     const moduleUrl = `${engineBase}index.mjs`;
-    const adapter = await import(/* @vite-ignore */ moduleUrl) as Adapter;
+    const adapter = await withAbort(import(/* @vite-ignore */ moduleUrl), signal) as Adapter;
     assertActive(id, signal);
     if (typeof adapter.runFeff !== 'function') throw new Error('The ReFEFF browser adapter could not be loaded.');
     wasmUrl = URL.createObjectURL(new Blob([bytes.slice().buffer], { type: 'application/wasm' }));
@@ -403,5 +426,13 @@ recordButton.addEventListener('click', () => {
   if (!busy && record && completedRevision === revision) download('rexafs-scattering-provenance.json', JSON.stringify(record, null, 2), 'application/json');
 });
 new ResizeObserver(() => { if (plotData) draw(); }).observe(svg.parentElement!);
-window.addEventListener('pagehide', () => { stop(); for (const url of downloadUrls) URL.revokeObjectURL(url); downloadUrls.clear(); });
+window.addEventListener('pagehide', () => {
+  const wasBusy = busy;
+  stop();
+  if (wasBusy) status.textContent = 'Cancelled when leaving this page. Edit the input or run again.';
+  sync();
+  for (const url of downloadUrls) URL.revokeObjectURL(url);
+  downloadUrls.clear();
+});
+window.addEventListener('pageshow', sync);
 sync();

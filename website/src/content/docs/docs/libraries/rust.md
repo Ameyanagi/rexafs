@@ -9,7 +9,7 @@ audience: user
 Add the stable crate:
 
 ```sh
-cargo add rexafs@0.2.4
+cargo add rexafs@0.2.5
 ```
 
 ```rust
@@ -34,13 +34,13 @@ after direct edits to legacy public fields, call `invalidate_derived()`.
 
 ## Full API reference
 
-The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.4 crate
+The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.5 crate
 with the default nalgebra backend and optional features. It excludes the legacy
 `ndarray-compat` backend, which replaces parts of that API and has different
-defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.4/rexafs/) is also available.
+defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.5/rexafs/) is also available.
 
 The [Next reference](/api/rust-next/rexafs/index.html) uses the checkout with the
-same features. Its unreleased signatures require that checkout.
+same features. Use it when working from source.
 
 | Module | Operations |
 |---|---|
@@ -64,7 +64,7 @@ same features. Its unreleased signatures require that checkout.
 | `materials-project`, `cod` | HTTP structure-source integrations |
 | `ndarray-compat` | Legacy ndarray compatibility backend |
 
-For example, `cargo add rexafs@0.2.4 --features plotting,refeff-runner` enables
+For example, `cargo add rexafs@0.2.5 --features plotting,refeff-runner` enables
 plotting and ReFEFF. Backend availability depends on the platform; see
 [WebAssembly support](/docs/libraries/webassembly/) for browser limits.
 
@@ -74,24 +74,24 @@ Follow [theory and units](/docs/science/processing/),
 
 ## Configure a stage
 
-In stable 0.2.4, configure AUTOBK through the method selector:
+Pass settings directly to the stage setter:
 
 ```rust
-use rexafs::{AUTOBK, BackgroundMethod, Spectrum};
+use rexafs::{AUTOBK, Spectrum};
 
 fn configure(spectrum: &mut Spectrum) -> rexafs::Result<()> {
     let mut background = AUTOBK::new();
     background.rbkg = Some(1.2); // Background cutoff in angstroms.
-    spectrum.set_background_method(Some(BackgroundMethod::AUTOBK(background)))?;
+    spectrum.set_background_method(background)?;
     Ok(())
 }
 ```
 
-The unreleased Next API also accepts `set_background_method(background)?` and
-`set_normalization_method(prepost)?` directly. Existing enum forms and `None` for
-default settings remain supported. Forward settings use `set_fft(transform)`
-in 0.2.4. The `XrayFFTR` settings type also exists in 0.2.4, but the
-`set_ifft(inverse)` setter is a Next addition planned for 0.2.5.
+Normalization similarly accepts `set_normalization_method(prepost)?`.
+Existing enum forms, `Some(...)` and `None` for default settings remain supported.
+Use `set_fft(transform)` for `XrayFFTF` forward settings and `set_ifft(inverse)`
+for `XrayFFTR` inverse settings. Each setter invalidates the affected stage and
+its dependents; run `fft()` or `ifft()` to calculate the new results.
 
 ## Collections and errors
 

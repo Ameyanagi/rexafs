@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.4.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
+**Stable 0.2.5.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.5/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
 Settings for extracting extended X-ray absorption fine structure, chi(k), with a cubic
 spline background in photoelectron wavenumber k.
@@ -33,7 +33,7 @@ fixed-penalty fit, throws an Error without silently switching objectives.
 ## constructor
 
 ```typescript
-constructor();
+constructor(options?: AUTOBKOptions);
 ```
 
 Create owned settings with the recommended defaults described below. Browser callers must
@@ -142,6 +142,16 @@ Integer multiplier for the low-k endpoint residuals. Default: 0, which disables 
 endpoint. In FixedPenalty the absolute value multiplies each residual, so its square
 weights the objective. The active low-k samples begin at k=0 on the output grid.
 
+## clamp_hi
+
+```typescript
+clamp_hi: number | undefined;
+```
+
+Integer multiplier for the high-k endpoint residuals. Default: 1. In FixedPenalty the
+absolute value multiplies each residual, so doubling it quadruples that endpoint
+contribution before averaging. Use 0 to disable the high-k endpoint penalty.
+
 ## clamp_lambda
 
 ```typescript
@@ -159,16 +169,6 @@ uses unweighted, edge-step-normalized chi. Changing kweight or the window change
 balance at a fixed lambda. The parameter is unused by legacy endpoint policies; it is not a
 universal physical constant. See [the fixed-penalty
 objective](https://rexafs.com/docs/science/autobk/).
-
-## clamp_hi
-
-```typescript
-clamp_hi: number | undefined;
-```
-
-Integer multiplier for the high-k endpoint residuals. Default: 1. In FixedPenalty the
-absolute value multiplies each residual, so doubling it quadruples that endpoint
-contribution before averaging. Use 0 to disable the high-k endpoint penalty.
 
 ## nfft
 

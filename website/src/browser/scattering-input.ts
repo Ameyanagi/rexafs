@@ -21,7 +21,7 @@ export function validateWorkspacePath(name: string): void {
 /**
  * Read the first two columns of ReFEFF chi.dat: k in Å⁻¹ and dimensionless χ(k).
  * The upstream codec also writes magnitude, phase and optional diagnostic
- * columns. Reject malformed rows instead of silently dropping measurements.
+ * columns. Reject malformed rows instead of silently dropping data.
  * Source: ReFEFF v0.4.0, crates/refeff-io/src/chi_dat.rs.
  */
 export function parseScatteringChi(bytes: Uint8Array): { x: Float64Array; y: Float64Array } {

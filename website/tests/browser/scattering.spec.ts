@@ -261,6 +261,89 @@ test('the five-minute budget includes engine loading and a timed-out calculation
   await runMinimal(page);
 });
 
+test('a stalled adapter import times out, and its late resolution cannot start abandoned work', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.clock.install();
+  let release!: () => void, requested!: () => void;
+  let workers = 0;
+  const errors: string[] = [];
+  page.on('worker', () => workers++);
+  page.on('pageerror', error => errors.push(error.message));
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { requested = resolve; });
+  await page.route('**/refeff/index.mjs', async route => {
+    requested();
+    await held;
+    await route.continue().catch(() => {});
+  });
+  try {
+    await page.goto(base + '/app/scattering/');
+    await page.locator('#feff-input').fill(minimal);
+    await page.locator('#run-feff').click();
+    await started;
+    await page.clock.fastForward(300_001);
+    // The UI must settle while the module request is still pending. Dynamic
+    // imports do not accept AbortSignal, unlike the preceding WASM fetch.
+    await expect(page.locator('#scattering-error')).toContainText('5-minute');
+    await expect(page.locator('#run-feff')).toBeEnabled();
+    await expect(page.locator('#cancel-feff')).toBeDisabled();
+    await expect(page.locator('#scattering-workspace')).toHaveAttribute('aria-busy', 'false');
+    await expect(page.locator('#download-output')).toBeDisabled();
+    await expect(page.locator('#download-scattering-record')).toBeDisabled();
+    expect(workers).toBe(0);
+  } finally {
+    release();
+    await page.unroute('**/refeff/index.mjs');
+  }
+  // Await the same browser module after releasing its response, without an
+  // arbitrary sleep, so this checks an import that actually resolves late.
+  await page.evaluate(async url => { await import(url); }, base + '/refeff/index.mjs');
+  expect(workers).toBe(0);
+  await expect(page.locator('#scattering-error')).toContainText('5-minute');
+  await expect(page.locator('#download-scattering-record')).toBeDisabled();
+  await runMinimal(page);
+  expect(workers).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test('a persisted page returns from an interrupted Worker with editable input and usable controls', async ({ page }) => {
+  test.setTimeout(60_000);
+  let workers = 0, closedWorkers = 0;
+  const errors: string[] = [];
+  page.on('worker', worker => { workers++; worker.on('close', () => closedWorkers++); });
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(base + '/app/scattering/');
+  await page.locator('#load-znse').click();
+  await expect(page.locator('#run-feff')).toBeEnabled();
+  const input = await page.locator('#feff-input').inputValue();
+  await page.locator('#scattering-log').evaluate(log => {
+    const observer = new MutationObserver(() => {
+      if (!log.textContent?.trim()) return;
+      observer.disconnect();
+      // Exercise the persisted-page lifecycle on actual Worker progress.
+      // This does not depend on Chromium choosing to cache a real navigation.
+      window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    });
+    observer.observe(log, { childList: true, subtree: true, characterData: true });
+  });
+  await page.locator('#run-feff').click();
+  await expect(page.locator('#scattering-status')).toContainText(/cancelled.*leaving/i, { timeout: 30_000 });
+  await expect(page.locator('#run-feff')).toBeEnabled();
+  await expect(page.locator('#cancel-feff')).toBeDisabled();
+  await expect(page.locator('#scattering-workspace')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('#feff-input')).toBeEditable();
+  await expect(page.locator('#feff-input')).toHaveValue(input);
+  await expect(page.locator('#download-output')).toBeDisabled();
+  await expect(page.locator('#download-scattering-record')).toBeDisabled();
+  await expect.poll(() => closedWorkers).toBe(1);
+  expect(workers).toBe(1);
+  const next = await runMinimal(page);
+  expect(next.inputs.root.text).toBe(minimal);
+  expect(workers).toBe(2);
+  expect(errors).toEqual([]);
+});
+
 for (const failure of ['unavailable', 'altered'] as const) {
   test(`an ${failure} WASM asset fails visibly and a retry recovers`, async ({ page }) => {
     test.setTimeout(60_000);

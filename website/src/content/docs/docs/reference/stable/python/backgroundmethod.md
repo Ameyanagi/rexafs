@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.4.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
+**Stable 0.2.5.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.5/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
 Select a background algorithm and own a copy of its settings.
 

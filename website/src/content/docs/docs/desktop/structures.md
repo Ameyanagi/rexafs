@@ -30,9 +30,10 @@ construction](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/
 
 ## Calculate and select paths
 
-Choose the engine and cluster radius, then **Calculate paths**. Windows 0.2.4
-uses ReFEFF; macOS and Linux packages also offer FEFF10. Record the engine and
-settings in your methods.
+Choose the engine and cluster radius, then **Calculate paths**. Every 0.2.5
+desktop package offers ReFEFF and FEFF10; see the
+[Windows ARM64 requirement](/docs/getting-started/install/#arm64-availability).
+Record the engine and settings in your methods.
 
 In Paths, use **First shell**, **To fit R max** or the importance filter as a
 starting selection, then inspect individual paths. Single and multiple scattering

@@ -23,7 +23,7 @@ in-situ measurement series quickly and reproducibly.
 
 **Is the software finished?**
 The desktop is stable on macOS, with Windows and Linux previews. This manual
-covers 0.2.4 and labels unreleased API additions as **Next**. See
+covers 0.2.5; **Next** documents the source checkout. See
 [release history](/releases/).
 
 ## Scope
@@ -33,26 +33,28 @@ No. Start with the desktop guide to [your first
 analysis](/docs/getting-started/first-analysis/).
 
 **What do the Python and TypeScript packages include?**
-Edge finding, normalization, AUTOBK, and forward and inverse Fourier transforms.
+Edge finding, normalization, AUTOBK, and configurable forward and inverse Fourier
+transforms.
 Groups, data treatment, LCF, PCA, structures and fitting are currently available
 in the desktop and Rust only. See the [feature
-map](/docs/getting-started/#features-by-interface), including differences between
-Stable and Next configuration APIs.
+map](/docs/getting-started/#features-by-interface).
 
 **Can I use it for XANES?**
 rexafs normalizes and flattens XANES, overlays spectra, and offers linear
 combination fitting and principal component analysis in the desktop and Rust.
-It does not perform XANES multiple-scattering simulations or edge fitting.
+Those interfaces do not perform XANES multiple-scattering simulations or edge
+fitting. The separate [ReFEFF browser preview](/app/scattering/) accepts FEFF
+inputs; its current browser validation covers the bundled ZnSe EXAFS workflow.
 
 **Are there Windows or Linux ARM64 downloads?**
-No ARM64 desktop packages are published for either platform in 0.2.4. macOS has
-Apple Silicon and Intel packages; Windows and Linux have x64 packages. See
-[ARM64 availability](/docs/getting-started/install/#arm64-availability).
+Yes. Version 0.2.5 adds ARM64 desktop previews for Windows and Linux alongside
+the x64 packages. Windows ARM64 requires Windows 11 for its bundled x64 FEFF10
+helper. See [ARM64 availability](/docs/getting-started/install/#arm64-availability).
 
 **Which scattering engine is used?**
-ReFEFF is embedded in every desktop package and available as a Rust feature.
-The macOS and Linux packages also bundle FEFF10; Windows uses ReFEFF. Record the engine
-and version you used; the analysis export includes them.
+Every 0.2.5 desktop package includes ReFEFF and FEFF10. Rust exposes them as
+optional features. Record the engine and version you used; the analysis export
+includes them. The browser scattering preview uses ReFEFF 0.4.0 separately.
 
 **How does rexafs relate to Athena, Artemis and XrayLarch?**
 It is an independent implementation with its own engine, defaults and project
@@ -84,6 +86,9 @@ default; they contact GitHub without uploading spectra. Turn them off in
 use the network when you use those features; the [assistant
 guide](/docs/desktop/assistant/) explains what it shares. See [updates and
 offline use](/docs/getting-started/updates/).
+
+Browser spectrum and scattering inputs also stay local. The website's Cloudflare
+hosting collects [page-performance metrics](https://developers.cloudflare.com/web-analytics/data-metrics/data-origin-and-collection/).
 
 **How do I share an analysis with a colleague?**
 Save the project with **Raw: embedded** so original spectra and FEFF inputs are
