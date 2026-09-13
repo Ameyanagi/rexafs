@@ -17,7 +17,10 @@ AUTOBKSolver: TypeAlias = Literal["TrustRegionDogLeg", "LegacyLm", "LinearDirect
 AUTOBKClampScalePolicy: TypeAlias = Literal["FixedPenalty", "Fixed", "TwoPass"]
 
 class PrePostEdge:
-    """Pre/post-edge normalization settings. Defaults adapt to the measured energy range. Settings are copied when assigned to a spectrum."""
+    """Pre/post-edge normalization settings. Defaults adapt to the measured energy range. Settings are copied when assigned to a spectrum.
+
+    For measurement conventions, see [Newville, Fundamentals of XAFS](https://docs.xrayabsorption.org/tutorials/XAFS_Fundamentals.pdf).
+    """
     def __init__(
         self,
         *,
@@ -49,7 +52,10 @@ class PrePostEdge:
     """Absorption edge-step override in mu units. Default: estimate from the fitted baselines."""
 
 class AUTOBK:
-    """AUTOBK background settings. Recommended defaults use LinearDirect and FixedPenalty with lambda 0.001. Settings are copied when assigned to a spectrum."""
+    """AUTOBK background settings. Recommended defaults use LinearDirect and FixedPenalty with lambda 0.001. Settings are copied when assigned to a spectrum.
+
+    Original AUTOBK method: [Newville et al. (1993)](https://doi.org/10.1103/PhysRevB.47.14126). The fixed endpoint penalty is a rexafs-specific choice, not part of that original objective.
+    """
     def __init__(
         self,
         *,
@@ -123,7 +129,10 @@ class AUTOBK:
     """Endpoint model. Recommended default: FixedPenalty with LinearDirect; Fixed and TwoPass are legacy models."""
 
 class XrayFFTF:
-    """Forward Fourier-transform settings. Defaults: k=2..15 inverse angstroms, kweight=2, KaiserBessel window. Settings are copied when assigned to a spectrum."""
+    """Forward Fourier-transform settings. Defaults: k=2..15 inverse angstroms, kweight=2, KaiserBessel window. Settings are copied when assigned to a spectrum.
+
+    XAFS and scattering theory: [Rehr and Albers (2000)](https://doi.org/10.1103/RevModPhys.72.621). Fourier peaks are not automatically phase-corrected bond distances.
+    """
     def __init__(
         self,
         *,
@@ -161,7 +170,10 @@ class XrayFFTF:
     """Fourier window shape. Default: KaiserBessel; explicitly unset uses Hanning."""
 
 class XrayFFTR:
-    """Inverse Fourier-transform settings. Set rmin/rmax to select an R-space shell. Settings are copied when assigned to a spectrum."""
+    """Inverse Fourier-transform settings. Set rmin/rmax to select an R-space shell. Settings are copied when assigned to a spectrum.
+
+    See the [XrayLarch Fourier guide](https://xraypy.github.io/xraylarch/xafs_fourier.html) for XAFS conventions. Filtering retains the forward weighting and window.
+    """
     def __init__(
         self,
         *,

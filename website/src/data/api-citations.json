@@ -1,0 +1,78 @@
+[
+  {
+    "url": "https://api.materialsproject.org",
+    "sources": [
+      "crates/rexafs/src/xafs/structure/db/mp.rs"
+    ]
+  },
+  {
+    "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.BSpline.html",
+    "sources": [
+      "crates/rexafs/src/xafs/spline.rs"
+    ]
+  },
+  {
+    "url": "https://docs.xrayabsorption.org/tutorials/XAFS_Fundamentals.pdf",
+    "sources": [
+      "py-rexafs/python/rexafs/__init__.pyi",
+      "py-rexafs/src/lib.rs",
+      "js-rexafs/types.d.ts"
+    ]
+  },
+  {
+    "url": "https://doi.org/10.1103/PhysRevB.47.14126",
+    "sources": [
+      "py-rexafs/python/rexafs/__init__.pyi",
+      "py-rexafs/src/lib.rs",
+      "js-rexafs/types.d.ts",
+      "crates/rexafs/src/lib.rs"
+    ]
+  },
+  {
+    "url": "https://doi.org/10.1103/RevModPhys.72.621",
+    "sources": [
+      "py-rexafs/python/rexafs/__init__.pyi",
+      "py-rexafs/src/lib.rs",
+      "js-rexafs/types.d.ts",
+      "crates/rexafs/src/lib.rs"
+    ]
+  },
+  {
+    "url": "https://github.com/scipy/scipy/blob/v1.17.1/scipy/interpolate/_cubic.py",
+    "sources": [
+      "crates/rexafs/src/xafs/spline.rs"
+    ]
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XAS-Data-Interchange/tree/master/specification",
+    "sources": [
+      "crates/rexafs/src/xafs/io/xdi.rs"
+    ]
+  },
+  {
+    "url": "https://physics.nist.gov/cuu/pdf/wall_2022.pdf",
+    "sources": [
+      "crates/rexafs/src/xafs/constants.rs"
+    ]
+  },
+  {
+    "url": "https://wiki.crystallography.net/RESTful_API/",
+    "sources": [
+      "crates/rexafs/src/xafs/structure/db/cod.rs"
+    ]
+  },
+  {
+    "url": "https://www.crystallography.net/cod/",
+    "sources": [
+      "crates/rexafs/src/xafs/structure/db/cod.rs"
+    ]
+  },
+  {
+    "url": "https://xraypy.github.io/xraylarch/xafs_fourier.html",
+    "sources": [
+      "py-rexafs/python/rexafs/__init__.pyi",
+      "py-rexafs/src/lib.rs",
+      "js-rexafs/types.d.ts"
+    ]
+  }
+]

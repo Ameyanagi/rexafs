@@ -30,3 +30,13 @@ __pycache__/
 
 # JavaScript development dependencies
 /js-rexafs/node_modules/
+
+# Documentation website build products
+/website/node_modules/
+/website/.astro/
+/website/dist/
+/website/playwright-report/
+/website/test-results/
+/website/public/api/rust/
+/website/.venv/
+/website/.cache/

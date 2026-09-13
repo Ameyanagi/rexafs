@@ -1,0 +1,66 @@
+---
+title: References and citations
+description: Scientific sources, software attribution and references extracted from API documentation.
+audience: user
+---
+
+import ApiCitations from '../../../../components/ApiCitations.astro';
+
+## What to cite
+
+Record **rexafs**, the exact version, the interface, the actual FEFF backend and
+its version, and the processing/fitting choices used. Cite the measurement and
+structure sources separately. The project does not currently prescribe a rexafs
+journal-paper citation; use the versioned software release and repository record.
+
+The desktop's analysis export includes a methods draft and references. Complete
+missing experimental details from your own records. Exported text does not supply
+sample preparation, beamline conditions or a scientific conclusion that you have
+not entered and reviewed.
+
+## Scientific reference guide
+
+| Topic | Reference | How it is used here |
+|---|---|---|
+| XAFS measurement and interpretation | [M. Newville, Fundamentals of XAFS](https://docs.xrayabsorption.org/tutorials/XAFS_Fundamentals.pdf) | Intensity conventions, absorption and the processing context |
+| Scattering theory | [J. J. Rehr and R. C. Albers, Reviews of Modern Physics 72, 621–654 (2000)](https://doi.org/10.1103/RevModPhys.72.621) | EXAFS scattering, amplitudes and phases |
+| AUTOBK | [M. Newville et al., Physical Review B 47, 14126–14131 (1993)](https://doi.org/10.1103/PhysRevB.47.14126) | Low-R spline background removal; rexafs's fixed endpoint penalty is an additional project choice |
+| Independent information | [E. A. Stern, Physical Review B 48, 9825–9827 (1993)](https://doi.org/10.1103/PhysRevB.48.9825) | The finite information content of EXAFS; see the exact implemented convention in the statistics guide |
+| Physical constants | [NIST CODATA 2022](https://physics.nist.gov/cuu/pdf/wall_2022.pdf) | Energy-to-wave-number conversion |
+| Numerical least squares | [MINPACK LMDIF documentation](https://www.math.utah.edu/software/minpack/minpack/lmdif.html) and [SciPy leastsq](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.leastsq.html) | Background on Jacobians, local covariance and solver assumptions |
+| XDI | [XAS Data Interchange specification](https://github.com/XraySpectroscopy/XAS-Data-Interchange/blob/master/specification/spec.md) | Structured spectral data and metadata |
+
+Read the [processing equations](/docs/science/processing/),
+[AUTOBK objective](/docs/science/autobk/) and
+[fit statistics](/docs/science/fitting-statistics/) for definitions and limitations.
+A reference supports the adjacent method; it does not assert that every default
+in rexafs is identical to another implementation.
+
+## Learning alongside XrayLarch
+
+XrayLarch's documentation is a useful companion because it connects installation,
+GUI workflows, Python functions and scientific explanations. This manual follows
+that reader-oriented organization while documenting rexafs's own supported API.
+
+- [XAFS processing overview](https://xraypy.github.io/xraylarch/xafs.html)
+- [Normalization](https://xraypy.github.io/xraylarch/xafs_preedge.html)
+- [Background removal](https://xraypy.github.io/xraylarch/xafs_autobk.html)
+- [Fourier transforms](https://xraypy.github.io/xraylarch/xafs_fourier.html)
+- [Path fitting](https://xraypy.github.io/xraylarch/xafs_feffit.html)
+- [XANES linear analysis and PCA](https://xraypy.github.io/xraylarch/xafs_xanes.html)
+
+rexafs's fixed penalty, optional Larch FFT grid and PCA centering choices are
+explained in their respective guides. Similar function purposes do not guarantee
+identical numerical defaults or identical results.
+
+## References from the API documentation
+
+The following links are extracted from Python docstrings/type stubs, TypeScript
+JSDoc and Rust API comments, including supporting specifications and service
+documentation. Each includes its source location. This list follows
+the current documented source, including the labeled Next API. Generation preserves
+authored references; it does not invent citations or independently establish that
+a reference supports a claim. The explanations above and at each algorithm remain
+part of the scientific review.
+
+<ApiCitations />

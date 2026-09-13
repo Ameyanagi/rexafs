@@ -1,0 +1,24 @@
+---
+import Search from '@astrojs/starlight/components/Search.astro';
+import ThemeSelect from '@astrojs/starlight/components/ThemeSelect.astro';
+import { url } from '../lib/urls';
+---
+<div class="docs-header">
+  <a class="wordmark" href={url()}>rexafs<span> / guide</span></a>
+  <nav aria-label="Main navigation">
+    <a href={url('docs/desktop/')}>Desktop</a>
+    <a href={url('docs/libraries/')}>Libraries</a>
+  </nav>
+  <div class="tools"><Search /><ThemeSelect /></div>
+</div>
+<style>
+  .docs-header {display:flex; align-items:center; gap:2rem; height:100%;}
+  .wordmark {font-size:1.45rem; font-weight:750; letter-spacing:-.06em; color:var(--sl-color-white); text-decoration:none; white-space:nowrap;}
+  .wordmark span {font-size:.8rem; font-weight:450; letter-spacing:0; color:var(--sl-color-gray-2); margin-left:.55rem;}
+  nav,.tools {display:flex;align-items:center;gap:1.2rem;}
+  nav a {color:var(--sl-color-text);text-decoration:none;font-size:.9rem;font-weight:600;}
+  nav a:hover {color:var(--sl-color-text-accent);}
+  .tools {margin-left:auto;}
+  @media(max-width:50rem){.docs-header{gap:1rem}.wordmark span{display:none}nav{gap:.75rem}.tools{gap:.25rem}}
+  @media(max-width:24rem){.docs-header{gap:.6rem}.wordmark{font-size:1.25rem}nav a{font-size:.8rem}}
+</style>

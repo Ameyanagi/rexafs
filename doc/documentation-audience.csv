@@ -1,0 +1,101 @@
+path,audience,website_action,proposed_route,notes
+.github/pull_request_template.md,developer,exclude,,Contribution review template.
+AGENTS.md,developer,exclude,,Repository assistant instructions.
+CHANGELOG.md,mixed,split,/releases/,Publish released user-visible changes; omit Unreleased and withheld 0.2.2 download claims from stable documentation.
+CONTRIBUTING.md,developer,exclude,,Contributor documentation/review requirements; apply to public content but do not publish as a user guide.
+COPYRIGHT.md,mixed,split,/licenses/,Reuse exact project license attribution; contribution terms remain accessible in the repository.
+README.md,mixed,split,/,Keep a concise repository overview; extract product overview and user entry points; source development and release mechanics stay in GitHub.
+assets/brand/README.md,developer,exclude,,Brand-generation instructions; selected artwork may be used without publishing prompts.
+crates/rexafs-gui/src/app/shell/assistant_workflow.md,developer,exclude,,Internal assistant workflow instructions.
+crates/rexafs-gui/tests/fixtures/projects/README.md,developer,exclude,,Project fixture maintenance and regression setup.
+crates/rexafs/README.md,user,adapt,/docs/libraries/rust/,"Library consumers: retain examples, feature flags and plotting behavior; link versioned rustdoc."
+crates/rexafs/doc/feff-fitting-mvp.md,developer,exclude,,"Historical implementation, profiling or MVP notes; write current user tutorials separately."
+crates/rexafs/doc/migration-performance-logic-hardening.md,developer,exclude,,"Historical implementation, profiling or MVP notes; write current user tutorials separately."
+crates/rexafs/doc/profiling.md,developer,exclude,,"Historical implementation, profiling or MVP notes; write current user tutorials separately."
+crates/rexafs/supportinginfo/uncertainty.md,developer,exclude,,"Older duplicate uncertainty notes with unresolved statements; preserve as history, never auto-publish."
+crates/rexafs/supportinginfo/uncertainty2.md,developer,exclude,,"Older duplicate uncertainty notes with unresolved statements; preserve as history, never auto-publish."
+crates/rexafs/tests/pythonscript/README.md,developer,exclude,,Fixture provenance or generation instructions; preserve upstream attribution with selected sample assets.
+crates/rexafs/tests/testfiles/larch_fit_refs/README.md,developer,exclude,,Fixture provenance or generation instructions; preserve upstream attribution with selected sample assets.
+crates/rexafs/tests/testfiles/xraylarch_d867/README.md,developer,exclude,,Fixture provenance or generation instructions; preserve upstream attribution with selected sample assets.
+crates/rexafs/tests/testfiles/xraylarch_d867/feff8l/FeO_withPb/README,developer,exclude,,Fixture provenance or generation instructions; preserve upstream attribution with selected sample assets.
+doc/README.md,developer,exclude,,Repository navigation for both audiences; replace public navigation with a curated site sidebar.
+doc/api.md,user,adapt,/docs/libraries/spectrum-api/,Shared processing contract; distinguish released configuration support from additions on main.
+doc/artifact-sizes.md,developer,exclude,,"Historical package/project measurements, not a current user guarantee."
+doc/autobk-fixed-penalty.md,mixed,split,/docs/science/autobk/,"Keep objective, parameter effects and references; move detailed cache/solver engineering discussion to developer docs."
+doc/benchmarks/2026-09-06-larch/README.md,developer,exclude,,Historical research and benchmarks; exclude from launch. A future public performance article requires a fresh editorial/scientific review.
+doc/benchmarks/2026-09-06-larch/baseline-0.1.0/measurements.md,developer,exclude,,Historical research and benchmarks; exclude from launch. A future public performance article requires a fresh editorial/scientific review.
+doc/benchmarks/2026-09-06-larch/clamping-0.1.0/README.md,developer,exclude,,Historical research and benchmarks; exclude from launch. A future public performance article requires a fresh editorial/scientific review.
+doc/benchmarks/2026-09-06-larch/source-comparison.md,developer,exclude,,Historical research and benchmarks; exclude from launch. A future public performance article requires a fresh editorial/scientific review.
+doc/benchmarks/2026-09-07-08-summary.md,developer,exclude,,Historical research and benchmarks; exclude from launch. A future public performance article requires a fresh editorial/scientific review.
+doc/benchmarks/2026-09-07-clamp-study/README.md,developer,exclude,,Historical research and benchmarks; exclude from launch. A future public performance article requires a fresh editorial/scientific review.
+doc/benchmarks/2026-09-07-fixed-production/README.md,developer,exclude,,Historical research and benchmarks; exclude from launch. A future public performance article requires a fresh editorial/scientific review.
+doc/benchmarks/2026-09-07-fixed-production/ci-34046599255/README.md,developer,exclude,,Historical research and benchmarks; exclude from launch. A future public performance article requires a fresh editorial/scientific review.
+doc/dependencies.md,developer,exclude,,Dependency update and compatibility review record.
+doc/desktop-development.md,developer,exclude,,"Toolchains, source development and repository hooks."
+doc/desktop-updates.md,mixed,split,/docs/getting-started/updates/,Publish update/channel workflow; merge version-specific changes into release history; exclude Maintainer operation.
+doc/distribution-notices.md,developer,exclude,,Maintainer license audit; public licenses page should use actual notices rather than this dated audit.
+doc/experimental-assistant.md,mixed,split,/docs/desktop/assistant/,"Keep optional setup, usage, permissions, shared context and conversation persistence; exclude final protocol/module implementation paragraph."
+doc/fft-grid-compatibility.md,mixed,split,/docs/science/fourier-compatibility/,"Keep grid behavior, user migration and numerical differences; exclude validation commands and audit records."
+doc/fitting-statistics.md,user,adapt,/docs/science/fitting-statistics/,Retain statistics and interpretation limits; state desktop/Rust fitting scope.
+doc/fitting-workspace-redesign.md,developer,exclude,,Mixed design/progress record; use only as supporting evidence when writing fresh user tutorials.
+doc/gui-ux-design-v2.md,developer,exclude,,Historical design proposal.
+doc/gui-ux-design.md,developer,exclude,,Product/implementation design history.
+doc/gui-workflow-validation.md,developer,exclude,,Dated acceptance evidence.
+doc/installing.md,mixed,split,/docs/getting-started/install/,"Retain platform requirements, offline setup and checksums; replace audit narratives with concise verified support limits."
+doc/joint-fitting.md,mixed,split,/docs/desktop/fitting/multiple-spectra/,Keep Workflow and Independent batches; exclude dated Validation section and QA screenshot gallery.
+doc/macos-installers.md,mixed,split,/docs/getting-started/install/macos/,Use installation/update paragraphs; move Bundling and qualification and Local preview to maintainer docs.
+doc/migration.md,mixed,split,/docs/libraries/migration/,Keep user-facing package/API and project migration; repository rename and publishing setup stay in developer history.
+doc/plots/feff10_card_comparison_2026-03-03/report.md,developer,exclude,,Historical FEFF comparisons and raw plots; not a user workflow guide.
+doc/plots/feff_vs_larch_index.md,developer,exclude,,Historical FEFF comparisons and raw plots; not a user workflow guide.
+doc/processing-theory.md,user,adapt,/docs/science/processing/,"Retain equations, units, assumptions, citations and version-pinned implementation links."
+doc/profiling.md,developer,exclude,,Historical performance investigation.
+doc/project-compatibility.md,mixed,split,/docs/desktop/projects/,"Keep sharing, recovery and compatibility guarantees; move schema internals and Every-release regression record to developer docs."
+doc/publication-export.md,user,adapt,/docs/desktop/publication/,"Retain export contents, units, portability and incomplete-result behavior."
+doc/publication.md,user,adapt,/docs/desktop/publication/,Merge with export guide into one task-oriented publication guide.
+doc/rebranding-plan.md,developer,exclude,,Historical release/rebrand planning.
+doc/release-notes-0.1.0.md,mixed,curate-release,/releases/0.1.0/,"Retain released behavior, migration and platform limits; verify publication/assets and remove CI/build narratives."
+doc/release-notes-0.1.1.md,mixed,curate-release,/releases/0.1.1/,"Retain released behavior, migration and platform limits; verify publication/assets and remove CI/build narratives."
+doc/release-notes-0.1.2.md,mixed,curate-release,/releases/0.1.2/,"Retain released behavior, migration and platform limits; verify publication/assets and remove CI/build narratives."
+doc/release-notes-0.1.3.md,mixed,curate-release,/releases/0.1.3/,"Retain released behavior, migration and platform limits; verify publication/assets and remove CI/build narratives."
+doc/release-notes-0.1.4.md,mixed,curate-release,/releases/0.1.4/,"Retain released behavior, migration and platform limits; verify publication/assets and remove CI/build narratives."
+doc/release-notes-0.2.0.md,mixed,curate-release,/releases/0.2.0/,"Retain released behavior, migration and platform limits; verify publication/assets and remove CI/build narratives."
+doc/release-notes-0.2.1.md,mixed,curate-release,/releases/0.2.1/,"Retain released behavior, migration and platform limits; verify publication/assets and remove CI/build narratives."
+doc/release-notes-0.2.2.md,developer,exclude,,Withheld release attempt with unpublished download URLs; retain only as historical qualification evidence.
+doc/release-notes-0.2.3.md,mixed,curate-release,/releases/0.2.3/,"Retain released behavior, migration and platform limits; verify publication/assets and remove CI/build narratives."
+doc/release-notes-0.2.4.md,mixed,curate-release,/releases/0.2.4/,"Retain released behavior, migration and platform limits; verify publication/assets and remove CI/build narratives."
+doc/releasing.md,developer,exclude,,"Release preparation, credentials, CI and publication."
+doc/remaining-work-plan.md,developer,exclude,,Implementation backlog and handoff.
+doc/structure-db-design.md,developer,exclude,,Implementation design; use as supporting evidence for a separately verified structure tutorial.
+doc/structure-depth-view.md,mixed,split,/docs/desktop/structures/,Keep display controls and scientific limits; remove dated qualification records and rendering implementation notes.
+doc/ui-simplification-plan.md,developer,exclude,,Implementation planning and handoff.
+doc/validation/2026-09-07-advanced-processing-audit/README.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-07-audit-followup/README.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-07-feff-release/README.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-07-installer-audit/README.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-07-multichannel-audit/README.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-07-update-audit/README.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-07-ux-audit/README.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-08-import-mapping/review.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-08-release-0.1.4/review.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-08-release-0.2.0/review.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-08-startup-help/review.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-08-ui-simplification/review.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-09-linux-desktop/README.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-09-release-0.2.1/review.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-09-release-0.2.4/review.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-09-structure-performance/review.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-09-windows-gui/README.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-10-numerical-compat/README.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-10-release-0.2.2/review.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/2026-09-10-release-0.2.3/review.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/validation/desktop-ux-status.md,developer,exclude,,"Historical qualification, screenshots and regression evidence."
+doc/windows-installers.md,mixed,split,/docs/getting-started/install/windows/,Use install/update/uninstall and support limits; move Build and verify and old release-packaging records to maintainer docs.
+doc/xdi-import.md,mixed,split,/docs/desktop/import/xdi/,"Keep format interpretation, units and user errors; place Rust usage in library reference and fixture-generation details in developer docs."
+experiments/normalization_stability/README.md,developer,exclude,,"Prototype research, not production behavior; exclude generated HTML/CSV/JSON as well as prose."
+experiments/normalization_stability/results/report.md,developer,exclude,,"Prototype research, not production behavior; exclude generated HTML/CSV/JSON as well as prose."
+js-rexafs/README.md,mixed,split,/docs/libraries/typescript/,"Publish Node/browser installation, initialization, ownership and editor help; package-build/test instructions stay in developer docs."
+js-rexafs/test/README.md,developer,exclude,,Runtime/editor contract test instructions.
+py-rexafs/README.md,mixed,split,/docs/libraries/python/,"Publish installation, NumPy workflow, defaults and editor setup; keep contributor wheel-building instructions separate."
+supportinginfo/uncertainty.md,developer,exclude,,Historical teaching notes; public scientific reference is processing-theory.md and fitting-statistics.md.
+supportinginfo/uncertainty2.md,developer,exclude,,Historical teaching notes; public scientific reference is processing-theory.md and fitting-statistics.md.
+vendor/sum_tree/README.rexafs.md,developer,exclude,,Vendored patch and attribution record; retain required notices separately from website prose.
