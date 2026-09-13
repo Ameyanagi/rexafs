@@ -65,6 +65,11 @@ test('science renders equations and search finds public content',async({page})=>
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(base+'/docs/science/processing/');
  await expect(page.locator('.katex').first()).toBeVisible();
+ // The KaTeX HTML and stylesheet must come from the same release: a mismatch
+ // leaves subscripts at full size on the baseline.
+ await page.goto(base+'/docs/science/autobk/');
+ const sizes=await page.locator('.katex-html .msupsub .mtight').first().evaluate(el=>[parseFloat(getComputedStyle(el).fontSize),parseFloat(getComputedStyle(el.closest('.katex')!).fontSize)]);
+ expect(sizes[0]).toBeLessThan(sizes[1]*0.8);
  await page.screenshot({path:'test-results/science.png',fullPage:true});
  await page.getByRole('button',{name:'Search',exact:true}).click();
  const search=page.getByRole('textbox',{name:'Search',exact:true});await search.fill('rbkg');

@@ -12,21 +12,31 @@ and FFT grid questions.
 
 ## Legacy iterative AUTOBK
 
-The historical clamp residual is `weight × s(c) × chi(c)`, where
-`s(c) = 1 + 100 × mean(h(c)²)` and `h` contains the real/imaginary low-R residual.
-Its derivative is now
+The historical clamp residual for an endpoint sample $i$ is
+$w\,s(\mathbf c)\,\chi_i(\mathbf c)$, where $w$ is its fixed endpoint weight,
+$\chi_i(\mathbf c)$ is the endpoint residual, and the scale is
 
-```text
-dresidual/dc = weight × (s × dchi/dc + chi × ds/dc)
-ds/dc = 200 × dot(h, dh/dc) / len(h)
-```
+$$
+s(\mathbf c)=1+\frac{100}{L}\sum_{j=1}^{L}h_j(\mathbf c)^2 ,
+$$
 
-Here `c` denotes a spline coefficient (apply the expression to every coefficient
-to build the Jacobian), `chi(c)` is an endpoint residual, `weight` is its fixed
-endpoint multiplier, and `len(h)` counts the real/imaginary low-R entries.
-The second equation follows by differentiating the sum of squared entries of h;
-the first follows from the product rule. Omitting `chi × ds/dc` differentiates
-a frozen scale instead of the scale actually used by the residual. These are
+with $\mathbf h(\mathbf c)$ the $L$ real and imaginary low-R residual entries.
+Its derivative with respect to one spline coefficient $c_k$ is now
+
+$$
+\frac{\partial}{\partial c_k}\bigl[w\,s\,\chi_i\bigr]
+=w\left(s\,\frac{\partial\chi_i}{\partial c_k}
++\chi_i\,\frac{\partial s}{\partial c_k}\right),
+\qquad
+\frac{\partial s}{\partial c_k}
+=\frac{200}{L}\sum_{j=1}^{L}h_j\,\frac{\partial h_j}{\partial c_k}.
+$$
+
+Applying the expression to every coefficient builds the Jacobian. The second
+equation follows by differentiating the sum of squared entries of $\mathbf h$;
+the first follows from the product rule. Omitting
+$\chi_i\,\partial s/\partial c_k$ differentiates a frozen scale instead of the
+scale actually used by the residual. These are
 derivatives of the [implemented legacy objective](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs/src/xafs/background.rs),
 not an additional physical model. For normalization and Fourier conventions,
 see [processing theory](/docs/science/processing/).
@@ -63,10 +73,11 @@ floored, automatic spline coefficient count. It does not expose `clamp_lambda`.
 Matching the public FFT grid does not remove these background differences.
 Desktop, Python and Wasm use the default backend.
 
-Both public forward FFT implementations use the actual `kstep / sqrt(pi)`
-amplitude factor after an unnormalized negative-exponent FFT. FixedPenalty
-AUTOBK instead uses the fixed internal reference multiplier `0.05 / sqrt(pi)`;
-its selected kstep still controls the R axis. Legacy AUTOBK policies use the
+Both public forward FFT implementations use the actual $\delta k/\sqrt{\pi}$
+amplitude factor for the k step $\delta k$ after an unnormalized
+negative-exponent FFT. FixedPenalty AUTOBK instead uses the fixed internal
+reference multiplier $0.05/\sqrt{\pi}$; its selected k step still controls the
+R axis. Legacy AUTOBK policies use the
 actual kstep for both scale and R axis. These are separate objective conventions.
 
 ## Explicit output FFT grid

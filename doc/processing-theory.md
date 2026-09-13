@@ -149,8 +149,8 @@ singular-value decomposition is visible in
 
 ## 4. Transform from k to R
 
-**The forward amplitude factor is `kstep / sqrt(pi)`**, applied after an
-unnormalized forward FFT. There is no additional division by `nfft` or
+**The forward amplitude factor is $\delta k/\sqrt{\pi}$**, where $\delta k$ is
+the k step (`kstep`), applied after an unnormalized forward FFT. There is no additional division by `nfft` or
 `sqrt(nfft)`, and no extra factor of $i$. This is the convention implemented by
 [xftf_fast_nalgebra](../crates/rexafs/src/xafs/xrayfft.rs).
 

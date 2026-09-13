@@ -20,8 +20,8 @@ current group. The **stage bar** across the top follows the analysis order:
 |---|---|
 | **Data** | Import files, review column mappings, organize groups, and apply data treatment such as alignment, rebinning or merging. |
 | **Normalize** | Estimate the edge energy, fit the pre-edge and post-edge baselines and scale the absorption to a unit edge step. |
-| **Background** | Remove the smooth background with AUTOBK to obtain χ(k). |
-| **Transform** | Weight and window χ(k), Fourier-transform it to χ(R), and back-transform a selected R range to χ(q). |
+| **Background** | Remove the smooth background with AUTOBK to obtain $\chi(k)$. |
+| **Transform** | Weight and window $\chi(k)$, Fourier-transform it to $\chi(R)$, and back-transform a selected R range to $\chi(q)$. |
 | **Fit** | Choose a structure, calculate scattering paths, select paths, set up a model and run single or joint fits. Its steps are **Structure → Calculate → Paths → Model → Results**. |
 | **Series** | Browse a folder of scans as ordered frames and inspect trends across them. |
 | **Publish** | Set figure size, labels, limits and captions, then export PNG, SVG, CSV or a complete analysis folder. |

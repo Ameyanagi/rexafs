@@ -27,6 +27,14 @@ does not import rexafs or require a package installation. `--no-project` avoids
 building the repository's Python package just to render its documentation.
 User analysis projects use the [uv init/add/run workflow](src/content/docs/docs/libraries/python.md).
 
+`package.json` overrides every nested `katex` dependency to the top-level
+`katex` version so the rendered math HTML and the bundled `katex.min.css` come
+from the same release; KaTeX 0.18 renamed its sizing classes, and a mismatch
+leaves subscripts and superscripts unstyled. After changing `katex` or the
+Markdown plugins, run `npx astro build --force`: Astro's content cache otherwise
+keeps HTML rendered by the previous version. The browser test checks that a
+subscript is rendered smaller than its base.
+
 Open the preview's `/rexafs/` path. `npm --prefix website run dev` gives live
 editing; generate Rust reference files first if you want their links to work.
 The Rust generator downloads the published crate, verifies its recorded SHA-256,

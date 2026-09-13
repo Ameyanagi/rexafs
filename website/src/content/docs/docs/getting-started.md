@@ -41,7 +41,7 @@ script matches the desktop when the settings match. This manual targets
 2. **Normalize** the absorption so that the edge step is 1, after checking the
    estimated edge energy and the pre-edge and post-edge baselines.
 3. **Remove the background** with AUTOBK to obtain the EXAFS oscillations
-   χ(k), then **transform** them to χ(R) with a k weight and a window.
+   $\chi(k)$, then **transform** them to $\chi(R)$ with a k weight and a window.
 4. **Model and fit**: choose a structure, calculate scattering paths with
    ReFEFF or FEFF10, select the paths to include, and fit their parameters
    inside a k and R range. Inspect residuals, uncertainties and correlations.
