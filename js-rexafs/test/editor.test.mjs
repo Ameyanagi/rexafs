@@ -2,7 +2,7 @@
 // dependency. Runtime processing tests alone cannot catch missing exports/docs.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +24,13 @@ const packed = JSON.parse(run(["pack", "--json", "--pack-destination", directory
 writeFileSync(join(directory, "package.json"), '{"type":"module","private":true}');
 run(["install", "--ignore-scripts", "--no-audit", "--no-fund", join(directory, packed.filename)], directory);
 process.on("exit", () => rmSync(directory, { recursive: true, force: true }));
+
+test("default TypeScript commands select native and compatibility compilers", () => {
+  const nativePackage = new URL("../node_modules/@typescript/native/package.json", import.meta.url);
+  const nativeVersion = JSON.parse(readFileSync(nativePackage, "utf8")).version;
+  assert.equal(run(["exec", "--offline", "--", "tsc", "--version"], root).trim(), `Version ${nativeVersion}`);
+  assert.equal(run(["exec", "--offline", "--", "tsc6", "--version"], root).trim(), `Version ${ts.version}`);
+});
 
 for (const [entry, resolution] of [["rexafs", "NodeNext"], ["rexafs/node", "NodeNext"], ["rexafs/browser", "Bundler"]]) {
   test(`installed ${entry}: TypeScript 7 checking and editor completion, signatures and hover (${resolution})`, () => {
