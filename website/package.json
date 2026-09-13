@@ -13,8 +13,9 @@
     "test:browser": "playwright test",
     "generate:typescript": "node scripts/generate-typescript-reference.mjs",
     "build:wasm": "node scripts/build-wasm.mjs",
-    "prebuild": "npm run build:wasm",
-    "predev": "npm run build:wasm"
+    "stage:refeff": "node scripts/stage-refeff.mjs",
+    "prebuild": "npm run build:wasm && npm run stage:refeff",
+    "predev": "npm run build:wasm && npm run stage:refeff"
   },
   "engines": {
     "node": ">=22.12.0"

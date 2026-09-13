@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "description": "Frozen native serial ReFEFF outputs for the unchanged upstream ZnSe EXAFS input. This checks browser/native numerical agreement for this workflow; it does not establish physical accuracy or parity for other workflows.",
+  "generatedAt": "2026-09-13T11:44:08.142161+00:00",
+  "host": "macOS-26.5.1-arm64-arm-64bit",
+  "refeff": {
+    "release": "https://github.com/Ameyanagi/refeff/releases/tag/v0.4.0",
+    "version": "0.4.0",
+    "sourceCommit": "91b23364309c3daca871b748ae45bf2426c60b8e",
+    "nativeBinarySha256": "29acb518ae122015cb144d7c4bc546bba8f23c5006a44c2d81c936ad1dac50e6",
+    "rustCompiler": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "identityEvidence": {
+    "url": "https://github.com/Ameyanagi/refeff/releases/download/v0.4.0/release-parity-evidence.zip",
+    "sha256": "8232a91e81592c612e1c52e663c88e92ab8076777e051fa2635798fee24f7c07",
+    "entry": "evidence.json",
+    "fields": [
+      "commit",
+      "provenance.rustBinarySha256",
+      "provenance.rustCompiler"
+    ],
+    "verification": "The executable SHA-256 matched the published evidence before execution. A fresh temporary directory held the input and output files."
+  },
+  "input": {
+    "url": "https://github.com/Ameyanagi/refeff/blob/91b23364309c3daca871b748ae45bf2426c60b8e/crates/refeff/tests/data/znse.inp",
+    "sha256": "c2b4494b9a39306a8429d432990dd5e354ea87ba6abd999f23cefdccf6045576",
+    "attribution": "Unmodified ReFEFF test input. Preserve the upstream licensing and FEFF10 port notices; see the linked license. This historical ZnSe input includes one Kr scatterer in the first coordination shell.",
+    "license": "https://github.com/Ameyanagi/refeff/blob/91b23364309c3daca871b748ae45bf2426c60b8e/LICENSE"
+  },
+  "command": [
+    "refeff",
+    "--threads",
+    "1",
+    "--json",
+    "run",
+    "--input",
+    "feff.inp",
+    "--output",
+    "native"
+  ],
+  "effectiveThreads": 1,
+  "comparison": {
+    "absoluteTolerance": 5e-08,
+    "relativeTolerance": 5e-05,
+    "rule": "abs(actual - reference) <= absoluteTolerance + relativeTolerance * abs(reference)",
+    "scope": "Every numeric column in chi.dat and xmu.dat; headers and elapsed times are excluded.",
+    "source": "https://github.com/Ameyanagi/refeff/blob/91b23364309c3daca871b748ae45bf2426c60b8e/wasm/tests/runtime.test.mjs"
+  },
+  "outputs": {
+    "chi.dat": {
+      "sha256": "5c8e115fbd713973c239424ba8b10361b380235ffccd6dd06f71a988d2c6ae91",
+      "numericRows": 401
+    },
+    "xmu.dat": {
+      "sha256": "0d02e9984067932e34063a0e60c1bd8c879b62ded100a8675751f9a3738ab3b7",
+      "numericRows": 401
+    }
+  }
+}

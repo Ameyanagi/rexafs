@@ -1,0 +1,93 @@
+---
+import { url } from '../../lib/urls';
+import release from '../../data/refeff-release.json';
+import '../../styles/browser-app.css';
+import '../../styles/scattering.css';
+const canonical = new URL(url('app/scattering/'), Astro.site).href;
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Calculate scattering · rexafs browser preview</title>
+  <meta name="description" content="Run ReFEFF scattering calculations locally in your browser. Edit a FEFF input, inspect χ(k), and download scattering paths and provenance." />
+  <link rel="icon" href={url('favicon.svg')} />
+  <link rel="canonical" href={canonical} />
+</head>
+<body>
+  <a class="skip" href="#main">Skip to calculation</a>
+  <header class="app-header">
+    <a class="brand" href={url()}><img src={url('favicon.svg')} width="28" height="28" alt="" />rexafs</a>
+    <span class="preview-label">Browser preview · ReFEFF {release.version}</span>
+    <nav aria-label="Main navigation">
+      <a href={url('docs/libraries/webassembly/')}>Browser guide</a>
+      <a href={url('docs/desktop/structures/')}>Structures guide</a>
+      <a href={url('download/')}>Desktop</a>
+    </nav>
+  </header>
+  <main id="main">
+    <div id="scattering-app" data-base={url()}>
+      <nav class="workspace-navigation" aria-label="Browser tools"><a href={url('app/')}>Process a spectrum</a><a href={url('app/scattering/')} aria-current="page">Calculate scattering</a></nav>
+      <div class="app-intro">
+        <div><p class="eyebrow">OPEN SOURCE · LOCAL CALCULATION</p><h1>Calculate scattering.</h1></div>
+        <p>Run a FEFF input with ReFEFF.<br /> Your files stay in this browser.</p>
+      </div>
+      <noscript><p class="error-box">Enable JavaScript to run this WebAssembly calculation workspace.</p></noscript>
+      <div class="scattering-layout">
+        <section class="controls scattering-controls" aria-labelledby="input-title">
+          <h2 id="input-title"><span class="section-number">01</span> Atomic model</h2>
+          <div class="scattering-source-actions">
+            <div><label class="file-label" for="feff-file">Open feff.inp</label><input id="feff-file" type="file" accept=".inp,.txt,text/plain" aria-describedby="feff-input-help" /></div>
+            <button id="load-znse" class="secondary-button" type="button">Load ZnSe test input</button>
+          </div>
+          <p id="feff-source-name" class="source-name">No input loaded</p>
+          <label class="file-label editor-label" for="feff-input">FEFF input</label>
+          <textarea id="feff-input" spellcheck="false" autocapitalize="off" autocomplete="off" rows="20" aria-describedby="feff-input-help" placeholder="Paste a feff.inp file or load the ZnSe test input."></textarea>
+          <p id="feff-input-help" class="field-help">Up to 1 MiB. The input defines the absorber, atomic coordinates, potentials and calculation cards.</p>
+          <details class="scattering-help">
+            <summary>Auxiliary files</summary>
+            <label class="file-label" for="aux-files">Add files beside feff.inp</label>
+            <input id="aux-files" type="file" multiple aria-describedby="aux-help" />
+            <p id="aux-help" class="field-help">Use matching filenames in INCLUDE cards. This picker adds files to the root folder: up to 64 files and 8 MiB including the input.</p>
+            <ul id="aux-list" class="aux-list" aria-label="Auxiliary files"></ul>
+            <button id="clear-aux" class="text-button" type="button" disabled>Clear auxiliary files</button>
+          </details>
+          <div class="process-actions"><button id="run-feff" class="primary-button" type="button" disabled>Run calculation</button><button id="cancel-feff" class="secondary-button" type="button" disabled>Cancel</button></div>
+          <details class="scattering-help scope-help">
+            <summary>Scope and limits</summary>
+            <p>The engine runs on one calculation thread. Large clusters can exceed browser or 32-bit WebAssembly memory limits; intermediate files also use memory.</p>
+            <p>This workspace stops a run after 5 minutes or 2 MiB of progress text, and accepts up to 10,000 returned files totaling 128 MiB. These safeguards do not impose a memory cap on the engine.</p>
+            <p>The upstream ZnSe test input includes a krypton (Kr) scatterer. Its validated extended X-ray absorption fine structure (EXAFS) workflow includes full multiple scattering. Other FEFF workflows need separate validation.</p>
+            <a href={url('docs/libraries/webassembly/')}>Browser support and validation →</a>
+          </details>
+        </section>
+        <section id="scattering-workspace" class="workspace" aria-label="Scattering results" aria-busy="false">
+          <div class="workspace-heading"><h2>Results</h2><span id="scattering-summary" class="result-meta"></span></div>
+          <p id="scattering-status" class="analysis-status" role="status" aria-live="polite">Load the ZnSe test input or open a FEFF input to begin.</p>
+          <p id="scattering-error" class="error-box" role="alert" hidden></p>
+          <p id="scattering-stale" class="stale-notice" hidden>Input changed. Run again to update these results and downloads.</p>
+          <div class="plot-panel">
+            <div id="scattering-empty" class="plot-empty"><span aria-hidden="true">χ(k)</span><h3>From atoms to a spectrum.</h3><p>Your calculated EXAFS spectrum appears here.</p></div>
+            <svg id="scattering-plot" class="spectrum-plot" role="img" aria-labelledby="plot-title plot-description" viewBox="0 0 900 440" aria-hidden="true" style="display:none"></svg>
+          </div>
+          <p id="scattering-plot-note" class="field-help">The plot uses chi.dat columns 1–2: photoelectron wave number k (Å⁻¹) and dimensionless χ(k).</p>
+          <div class="scattering-downloads">
+            <div class="field"><label for="output-file">Generated file</label><select id="output-file" disabled><option>No calculation yet</option></select></div>
+            <button id="download-output" class="secondary-button" type="button" disabled>Download file</button>
+          </div>
+          <p class="field-help">Downloads preserve the original bytes, including scattering paths and binary intermediate files.</p>
+          <details class="scattering-log-panel">
+            <summary>Calculation log <span id="scattering-log-summary"></span></summary>
+            <pre id="scattering-log" tabindex="0" aria-label="Calculation log"></pre>
+          </details>
+          <div class="analysis-record"><div><h3>Calculation record</h3><p>Input files, engine version, output checksums and calculation report.</p></div><button id="download-scattering-record" class="text-button" type="button" disabled>Export provenance JSON ↓</button></div>
+          <p class="preview-note">ReFEFF {release.version}. <a href={`https://github.com/Ameyanagi/refeff/blob/${release.sourceCommit}/wasm/README.md`}>Engine documentation ↗</a></p>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer class="app-footer"><span>rexafs · MIT or Apache-2.0</span><nav aria-label="Footer"><a href={url('licenses/')}>Licenses and example data</a><a href={`https://github.com/Ameyanagi/refeff/blob/${release.sourceCommit}/crates/refeff-io/src/chi_dat.rs`}>chi.dat format ↗</a><a href="https://github.com/Ameyanagi/rexafs/issues">Report an issue ↗</a></nav></footer>
+  <script>import '../../browser/scattering';</script>
+</body>
+</html>

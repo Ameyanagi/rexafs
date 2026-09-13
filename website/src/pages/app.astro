@@ -26,6 +26,7 @@ const canonical = new URL(url('app/'), Astro.site).href;
   </header>
   <main id="main">
     <div id="browser-app" data-base={url()}>
+      <nav class="workspace-navigation" aria-label="Browser tools"><a href={url('app/')} aria-current="page">Process a spectrum</a><a href={url('app/scattering/')}>Calculate scattering</a></nav>
       <div class="app-intro">
         <div><p class="eyebrow">X-RAY ABSORPTION ANALYSIS</p><h1>Analyze a spectrum.</h1></div>
         <p>Load a file or try the Cu example.<br /> Your data stays in this browser.</p>
