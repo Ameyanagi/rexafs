@@ -1,0 +1,68 @@
+---
+import HomeCode from '../components/HomeCode.astro';
+import { url } from '../lib/urls';
+import release from '../data/release.json';
+const canonical=new URL(url(),Astro.site).href;
+---
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>rexafs — X-ray absorption analysis, your way</title>
+<meta name="description" content="Process XAS spectra and fit EXAFS with the rexafs desktop or Python, TypeScript and Rust libraries. Explore tutorials, complete API references and scientific methods."/>
+<link rel="canonical" href={canonical}/><link rel="icon" type="image/svg+xml" href={url('favicon.svg')}/>
+<meta property="og:title" content="rexafs — X-ray absorption analysis, your way"/><meta property="og:description" content="One numerical engine. Desktop and libraries. Methods you can inspect."/><meta property="og:type" content="website"/>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header wrap">
+  <a class="brand" href={url()} aria-label="rexafs home"><img src={url('favicon.svg')} width="29" height="29" alt=""/>rexafs</a>
+  <nav aria-label="Main navigation"><a href={url('docs/desktop/')}>Desktop</a><a href={url('docs/libraries/')}>Libraries</a><a href={url('docs/science/processing/')}>Science</a><a href={url('docs/getting-started/')}>Documentation <span aria-hidden="true">↗</span></a></nav>
+  <a class="github" href="https://github.com/Ameyanagi/rexafs">GitHub <span aria-hidden="true">↗</span></a>
+</header>
+<main id="main" class="wrap">
+  <section class="intro">
+    <a class="release-pill" href={url('releases/')}><span></span> STABLE {release.version} <span aria-hidden="true">→</span></a>
+    <p class="eyebrow">OPEN-SOURCE X-RAY ABSORPTION ANALYSIS</p>
+    <h1>Your spectra.<br/><span>Your way to analyze.</span></h1>
+    <p class="lede">From measured absorption to structural models.<br class="desktop-break"/> A shared Rust engine, built for the desktop and your code.</p>
+  </section>
+  <section class="entry-grid" aria-label="Choose how to use rexafs">
+    <article class="entry desktop-entry">
+      <div class="entry-heading"><span class="number">01 /</span><h2>Desktop</h2><span class="entry-label">EXPLORE VISUALLY</span></div>
+      <p>Inspect spectra, refine a fit, and prepare figures.<br/> Keep the full analysis together in a portable project.</p>
+      <a class="screenshot-link" href={url('screenshots/fit-result.jpg')} aria-label="View the full rexafs desktop screenshot"><img src={url('screenshots/fit-result.jpg')} width="1192" height="768" alt="Complete rexafs 0.2.4 window showing the Cu first-shell fit, residuals and fitted parameters" loading="eager"/></a>
+      <div class="entry-bottom"><a class="primary" href={url('download/')}>Download the desktop <span aria-hidden="true">↗</span></a><a class="secondary" href={url('docs/getting-started/first-analysis/')}>First analysis →</a></div>
+      <div class="platforms">macOS <span>·</span> Windows preview <span>·</span> Linux preview</div>
+    </article>
+    <article class="entry library-entry">
+      <div class="entry-heading"><span class="number">02 /</span><h2>Libraries</h2><span class="entry-label">BUILD WITH CODE</span></div>
+      <p>Bring spectrum processing into your own workflow.<br/> Use NumPy, a browser, Node, or a native Rust application.</p>
+      <HomeCode/>
+      <div class="entry-bottom"><a class="primary" href={url('docs/libraries/')}>Use the libraries <span aria-hidden="true">↗</span></a><a class="secondary" href={url('docs/reference/')}>API reference →</a></div>
+      <div class="platforms">Python <span>·</span> TypeScript / JavaScript <span>·</span> Rust</div>
+    </article>
+  </section>
+  <section class="workflow" aria-labelledby="workflow-title">
+    <div class="section-intro"><p class="eyebrow">A CONNECTED WORKFLOW</p><h2 id="workflow-title">Follow the signal.</h2><p>Start with the data. Understand every transformation.</p></div>
+    <ol>
+      <li><span>01</span><a href={url('docs/desktop/import/')}><h3>Read & inspect</h3><p>Confirm columns, signals and energy units.</p></a></li>
+      <li><span>02</span><a href={url('docs/science/processing/')}><h3>Process</h3><p>Normalize, remove background and transform.</p></a></li>
+      <li><span>03</span><a href={url('docs/desktop/fitting/')}><h3>Model & fit</h3><p>Connect scattering paths to measured EXAFS.</p></a></li>
+      <li><span>04</span><a href={url('docs/desktop/publication/')}><h3>Share & reproduce</h3><p>Export figures, data, settings and references.</p></a></li>
+    </ol>
+  </section>
+  <section class="science-band">
+    <div><p class="eyebrow">METHODS YOU CAN INSPECT</p><h2>The explanation is part<br/>of the analysis.</h2></div>
+    <div><p>Equations with defined units. Defaults with context. API documentation from the source. Learn what a result means, and where its assumptions end.</p><a href={url('docs/science/processing/')}>Explore the science <span aria-hidden="true">↗</span></a><a href={url('docs/science/references/')}>References & citations <span aria-hidden="true">↗</span></a></div>
+  </section>
+  <section class="closing"><p>One spectrum is enough to begin.</p><a href={url('docs/getting-started/first-analysis/')}>Try the bundled Cu example →</a></section>
+</main>
+<footer class="wrap"><a class="brand" href={url()}>rexafs</a><p>Rust-powered X-ray absorption analysis.</p><nav aria-label="Footer"><a href={url('releases/')}>Releases</a><a href={url('licenses/')}>Licenses</a><a href="https://github.com/Ameyanagi/rexafs/issues">Get help ↗</a></nav></footer>
+</body>
+</html>
+<style is:global>
+  *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f7f7f2;color:#20292a;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}a{color:inherit}button,a{-webkit-tap-highlight-color:transparent}a:focus-visible,button:focus-visible{outline:3px solid #00747c;outline-offset:5px}.wrap{max-width:1280px;margin:auto;padding:0 48px}.skip{position:fixed;top:-80px;left:12px;background:white;padding:12px;z-index:100}.skip:focus{top:12px}.site-header{height:92px;display:flex;align-items:center;gap:40px;border-bottom:1px solid #dfe1d9}.brand{display:inline-flex;gap:10px;align-items:center;font-size:28px;letter-spacing:-1.5px;font-weight:760;text-decoration:none}.site-header nav{display:flex;gap:32px;margin-left:auto}.site-header nav a,.github{font-size:13px;font-weight:600;text-decoration:none}.site-header nav a:hover,.secondary:hover{color:#92511f}.github{border-left:1px solid #d8dbd2;padding-left:30px}.intro{position:relative;padding:76px 0 48px}.eyebrow{font-size:10px;letter-spacing:1.8px;font-weight:700;color:#5a6762;margin:0 0 18px}.intro h1{font-size:clamp(44px,5vw,68px);line-height:1.06;letter-spacing:-3px;font-weight:560;margin:0}.intro h1 span{color:#747d71}.lede{font-size:17px;line-height:1.7;color:#59625c;margin-top:23px}.release-pill{position:absolute;right:0;top:81px;display:flex;align-items:center;gap:11px;border:1px solid #d6dacd;border-radius:30px;padding:9px 13px;font-size:10px;font-weight:650;letter-spacing:.8px;text-decoration:none}.release-pill span:first-child{height:6px;width:6px;border-radius:50%;background:#426d52}.entry-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}.entry{min-width:0;background:#fff;border:1px solid #dce0d7;border-radius:12px;padding:26px;display:flex;flex-direction:column}.entry-heading{display:flex;gap:13px;align-items:center}.entry h2{font-size:25px;letter-spacing:-.8px;font-weight:600;margin:0}.number{color:#566550;font-size:12px;font-family:monospace}.entry-label{margin-left:auto;font-size:9px;letter-spacing:1.2px;color:#6b766e;font-weight:700}.entry>p{font-size:13px;color:#646c66;line-height:1.75;margin:17px 0 23px}.screenshot-link{display:flex;flex:1;align-items:center;min-height:325px;background:#20262d;border:1px solid #30373e;border-radius:9px;overflow:hidden}.screenshot-link img{width:100%;height:auto;display:block}.entry-bottom{display:flex;gap:16px;align-items:center;margin-top:24px;flex-wrap:wrap}.primary{background:#2d493d;color:#fff;display:inline-flex;justify-content:space-between;gap:20px;padding:13px 17px;border-radius:5px;font-size:12px;font-weight:650;text-decoration:none}.primary:hover{background:#20382e}.secondary{font-size:11px;font-weight:650;text-decoration:none}.platforms{font-size:10px;color:#566550;margin-top:16px;display:flex;gap:9px;flex-wrap:wrap}.platforms span{color:#afb7a9}.workflow{padding:84px 0 65px}.section-intro h2,.science-band h2{font-size:35px;letter-spacing:-1.3px;font-weight:550;margin:0}.section-intro>p:last-child{font-size:14px;color:#657061}.workflow ol{display:grid;grid-template-columns:repeat(4,1fr);list-style:none;margin:35px 0 0;padding:0;border-top:1px solid #d6dbcf}.workflow li{padding:24px 20px 0 0}.workflow li>span{font-family:monospace;font-size:11px;color:#566550}.workflow li a{text-decoration:none}.workflow h3{font-size:15px;font-weight:650;margin:13px 0 8px}.workflow li p{font-size:12px;line-height:1.7;color:#626d61;max-width:210px}.science-band{display:grid;grid-template-columns:1fr 1fr;gap:70px;border-top:1px solid #d6dbcf;border-bottom:1px solid #d6dbcf;padding:42px 0}.science-band p:not(.eyebrow){font-size:14px;line-height:1.8;color:#5f6a5d;margin:0 0 20px}.science-band a{font-size:12px;font-weight:650;display:inline-block;text-decoration:none;margin-right:28px;margin-top:5px}.closing{display:flex;justify-content:space-between;align-items:center;padding:46px 0}.closing p{font-size:21px;letter-spacing:-.6px}.closing a{font-size:13px;font-weight:650;text-decoration:none}footer.wrap{border-top:1px solid #d6dbcf;padding-top:26px;padding-bottom:30px;display:flex;align-items:center;gap:22px}footer .brand{font-size:23px}footer p{font-size:11px;color:#566550}footer nav{margin-left:auto;display:flex;gap:23px}footer nav a{font-size:11px;text-decoration:none}
+  @media(max-width:1000px){.wrap{padding-left:28px;padding-right:28px}.entry{padding:20px}.entry-label{font-size:8px}.entry>p br{display:none}.entry-bottom{gap:12px}.site-header nav{gap:20px}.github{padding-left:16px}.science-band{gap:40px}}
+  @media(max-width:760px){.site-header{height:auto;min-height:80px;gap:18px;flex-wrap:wrap;padding-top:18px;padding-bottom:18px}.site-header nav{gap:17px;order:3;width:100%;margin:0}.github{margin-left:auto;border:0}.intro{padding-top:52px}.intro h1{letter-spacing:-2px}.release-pill{position:static;width:fit-content;margin-bottom:28px}.intro .eyebrow{font-size:9px}.entry-grid{grid-template-columns:1fr}.entry{padding:24px}.entry-label{font-size:9px}.screenshot-link{min-height:0}.workflow{padding-top:60px}.workflow ol{grid-template-columns:1fr 1fr;gap:12px}.science-band{grid-template-columns:1fr;gap:26px}.closing{align-items:flex-start;gap:16px;flex-direction:column}.closing p{margin-bottom:0}footer.wrap{flex-wrap:wrap}footer nav{margin:0;width:100%}.desktop-break{display:none}}
+  @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>

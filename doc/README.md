@@ -1,5 +1,15 @@
 # rexafs documentation
 
+The [documentation audience inventory](documentation-audience.csv) classifies
+every existing prose document as user, developer, or mixed content. The
+[rexafs.com plan](documentation-site-plan.md) explains how to split mixed guides
+and publish only user-facing content. These two planning files are developer
+documents. The curated [public manual](https://rexafs.com/docs/getting-started/)
+is built from `website/src/content/docs/`; see the
+[website maintenance guide](../website/README.md) for generation and deployment.
+The manual targets published 0.2.4, while source-checkout guides can describe
+clearly labeled unreleased additions.
+
 Start with the [project README](../README.md), [API guide](api.md),
 [Rust guide](../crates/rexafs/README.md), [Python guide](../py-rexafs/README.md) or
 [JavaScript guide](../js-rexafs/README.md).

@@ -23,7 +23,9 @@ export interface PrePostEdgeOptions {
   /** Absorption edge-step override in mu units. Default: estimate from the fitted baselines. */
   edge_step?: number | undefined;
 }
-/** Pre/post-edge normalization settings. Defaults adapt to the measured energy range. Setters copy configurations; call free() when done. */
+/** Pre/post-edge normalization settings. Defaults adapt to the measured energy range. Setters copy configurations; call free() when done.
+ * For measurement conventions, see [Newville, Fundamentals of XAFS](https://docs.xrayabsorption.org/tutorials/XAFS_Fundamentals.pdf).
+ */
 export class PrePostEdge {
   /** Create settings, optionally overriding Rust defaults. */
   constructor(options?: PrePostEdgeOptions);
@@ -94,7 +96,9 @@ export interface AUTOBKOptions {
   /** Endpoint model. Recommended default: FixedPenalty with LinearDirect; Fixed and TwoPass are legacy models. */
   clamp_scale_policy?: AUTOBKClampScalePolicy | undefined;
 }
-/** AUTOBK background settings. Recommended defaults use LinearDirect and FixedPenalty with lambda 0.001. Setters copy configurations; call free() when done. */
+/** AUTOBK background settings. Recommended defaults use LinearDirect and FixedPenalty with lambda 0.001. Setters copy configurations; call free() when done.
+ * Original AUTOBK method: [Newville et al. (1993)](https://doi.org/10.1103/PhysRevB.47.14126). The fixed endpoint penalty is a rexafs-specific choice, not part of that original objective.
+ */
 export class AUTOBK {
   /** Create settings, optionally overriding Rust defaults. */
   constructor(options?: AUTOBKOptions);
@@ -169,7 +173,9 @@ export interface XrayFFTFOptions {
   /** Fourier window shape. Default: KaiserBessel; explicitly unset uses Hanning. */
   window?: FTWindow | undefined;
 }
-/** Forward Fourier-transform settings. Defaults: k=2..15 inverse angstroms, kweight=2, KaiserBessel window. Setters copy configurations; call free() when done. */
+/** Forward Fourier-transform settings. Defaults: k=2..15 inverse angstroms, kweight=2, KaiserBessel window. Setters copy configurations; call free() when done.
+ * XAFS and scattering theory: [Rehr and Albers (2000)](https://doi.org/10.1103/RevModPhys.72.621). Fourier peaks are not automatically phase-corrected bond distances.
+ */
 export class XrayFFTF {
   /** Create settings, optionally overriding Rust defaults. */
   constructor(options?: XrayFFTFOptions);
@@ -218,7 +224,9 @@ export interface XrayFFTROptions {
   /** Inverse Fourier window shape. Default: KaiserBessel; explicitly unset uses Hanning. */
   window?: FTWindow | undefined;
 }
-/** Inverse Fourier-transform settings. Set rmin/rmax to select an R-space shell. Setters copy configurations; call free() when done. */
+/** Inverse Fourier-transform settings. Set rmin/rmax to select an R-space shell. Setters copy configurations; call free() when done.
+ * See the [XrayLarch Fourier guide](https://xraypy.github.io/xraylarch/xafs_fourier.html) for XAFS conventions. Filtering retains the forward weighting and window.
+ */
 export class XrayFFTR {
   /** Create settings, optionally overriding Rust defaults. */
   constructor(options?: XrayFFTROptions);

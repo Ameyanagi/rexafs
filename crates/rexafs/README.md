@@ -1,5 +1,8 @@
 # rexafs for Rust
 
+[Published user guide](https://rexafs.com/docs/libraries/rust/) ·
+[Versioned API reference](https://rexafs.com/docs/reference/)
+
 Rust-powered X-ray absorption analysis, developed under the codename xraytsubaki.
 The core includes normalization, AUTOBK, Fourier transforms, group processing,
 EXAFS fitting, structure handling, LCF/PCA and spectrum tools.

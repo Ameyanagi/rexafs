@@ -1,0 +1,73 @@
+---
+title: "Install rexafs"
+description: "Install the desktop or stable Python, TypeScript and Rust packages."
+audience: user
+---
+
+Choose the interface that suits your work. The desktop and prebuilt Python/npm
+packages do not require a Rust compiler.
+
+## Desktop
+
+Use the [download page](/download/) to select your operating system and processor.
+
+| Platform | Install | Support |
+|---|---|---|
+| macOS Apple Silicon | Open the ARM64 DMG and drag rexafs into Applications | Signed and notarized |
+| macOS Intel | Open the Intel DMG and drag rexafs into Applications | Signed and notarized |
+| Windows x64 | Run the setup EXE; launch rexafs from the Start menu | Preview; Windows 10 2004 or newer / Windows 11 |
+| Linux x64 | Extract the archive; run `./rexafs` inside its folder | Preview; Ubuntu 24.04 runtime baseline |
+
+Keep portable folders together, including their resources, examples and licenses.
+There are no published Linux or Windows ARM64 desktop packages in 0.2.4.
+Save your project and close an older application before replacing it.
+
+The Windows installer uses your user directory and does not require administrator
+rights. Uninstall through **Settings → Apps**; your `.rxs` projects remain separate.
+The rexafs Windows executable and installer are not publisher-signed in this release.
+
+### Linux runtime
+
+Use a graphical login session with a Vulkan-capable driver. On Ubuntu 24.04:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y libgtk-3-0t64 libxkbcommon-x11-0 libvulkan1 \
+  libfontconfig1 fonts-dejavu-core xdg-desktop-portal xdg-desktop-portal-gtk
+```
+
+Install the Vulkan driver for your graphics hardware. Other distributions require
+compatible system libraries. Release GUI checks use X11 and Mesa software rendering;
+native Wayland and every physical GPU/monitor configuration are not qualified.
+
+### Verify a download
+
+Each download has a SHA-256 checksum. Compare the downloaded bytes with the linked
+checksum file before opening the package. For example:
+
+```sh
+# macOS
+shasum -a 256 rexafs-0.2.4-aarch64-apple-darwin.dmg
+# Linux
+sha256sum rexafs-0.2.4-x86_64-unknown-linux-gnu.tar.gz
+```
+
+On Windows, use `Get-FileHash -Algorithm SHA256` in PowerShell. The hash should
+match the published checksum for that exact file.
+
+## Libraries
+
+- [Python / Jupyter](/docs/libraries/python/): `python -m pip install rexafs==0.2.4`.
+- [TypeScript / JavaScript](/docs/libraries/typescript/): `npm install rexafs@0.2.4`.
+- [Rust](/docs/libraries/rust/): `cargo add rexafs@0.2.4`.
+
+Python supports CPython 3.10–3.14. Node requires version 22 or newer. The browser
+package requires WebAssembly initialization. Use the linked guides for a complete
+example and editor configuration.
+
+
+[![The complete rexafs welcome window with import, project and Cu example actions](/screenshots/welcome.jpg)](/screenshots/welcome.jpg)
+
+*The empty workspace offers the three starting actions. Full application window, rexafs 0.2.4 on macOS. Select the image to view its full resolution.*
+
+Continue with [your first analysis](/docs/getting-started/first-analysis/).

@@ -1,0 +1,39 @@
+---
+import { Code } from 'astro:components';
+const examples = [
+  { id:'python', label:'Python', lang:'python', code:`import numpy as np\nfrom rexafs import Spectrum\n\nenergy, mu = np.loadtxt(\n    "cu_150k.xmu", unpack=True\n)\nspectrum = Spectrum(energy, mu).fft()\nprint(spectrum.r(), spectrum.chir_mag())` },
+  { id:'typescript', label:'TypeScript', lang:'typescript', code:`import { Spectrum } from "rexafs/node";\n\n// Your measured energy and absorption.\nconst spectrum = Spectrum.from_arrays(energy, mu);\ntry {\n  spectrum.fft();\n  console.log(spectrum.r(), spectrum.chir_mag());\n} finally { spectrum.free(); }` },
+  { id:'rust', label:'Rust', lang:'rust', code:`use rexafs::Spectrum;\n\n// energy and mu are measured slices.\nlet mut spectrum =\n    Spectrum::from_arrays(&energy, &mu)?;\nspectrum.fft()?;\nlet r = spectrum.r();\nlet magnitude = spectrum.chir_mag();` },
+] as const;
+---
+<div class="code-example">
+  <div class="code-tabs" role="tablist" aria-label="Example language">
+    {examples.map((item,i)=><button id={`tab-${item.id}`} role="tab" aria-selected={i===0} aria-controls={`panel-${item.id}`} tabindex={i===0?0:-1}>{item.label}</button>)}
+  </div>
+  {examples.map((item,i)=><div class="code-panel" id={`panel-${item.id}`} role="tabpanel" aria-labelledby={`tab-${item.id}`} hidden={i!==0}><Code code={item.code} lang={item.lang} theme="github-dark-high-contrast" /></div>)}
+  <div class="code-note"><span class="status-dot"></span> Published API · 0.2.4</div>
+</div>
+<script>
+  const tabs=Array.from(document.querySelectorAll<HTMLButtonElement>('.code-tabs [role="tab"]'));
+  function select(tab:HTMLButtonElement) {
+    tabs.forEach(button=>{const active=button===tab;button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1;document.getElementById(button.getAttribute('aria-controls')!)!.hidden=!active;});
+  }
+  tabs.forEach((tab,index)=>{
+    tab.addEventListener('click',()=>select(tab));
+    tab.addEventListener('keydown',event=>{
+      const next=event.key==='ArrowRight'?(index+1)%tabs.length:event.key==='ArrowLeft'?(index+tabs.length-1)%tabs.length:event.key==='Home'?0:event.key==='End'?tabs.length-1:null;
+      if(next!==null){event.preventDefault();select(tabs[next]);tabs[next].focus();}
+    });
+  });
+</script>
+<style>
+  .code-example{background:#20262d;color:#e2e8ed;border-radius:9px;overflow:hidden;display:flex;flex-direction:column;min-height:325px;}
+  .code-tabs{display:flex;gap:1.4rem;padding:0 1.25rem;border-bottom:1px solid #46515c;}
+  .code-tabs button{background:none;border:0;border-bottom:2px solid transparent;color:#bbc5ce;padding:.9rem 0;font:600 .8rem system-ui;cursor:pointer;}
+  .code-tabs button[aria-selected="true"]{color:#8ed6df;border-color:#8ed6df;}
+  .code-panel{flex:1;padding:1.2rem 1.25rem;overflow:auto;}
+  .code-panel[hidden]{display:none;}
+  .code-panel :global(pre){margin:0;background:transparent!important;font-size:.76rem;line-height:1.8;white-space:pre;}
+  .code-note{font:500 .7rem system-ui;color:#bac3cc;padding:.8rem 1.25rem;border-top:1px solid #46515c;display:flex;gap:.5rem;align-items:center;}
+  .status-dot{width:6px;height:6px;background:#85cec1;border-radius:50%;}
+</style>

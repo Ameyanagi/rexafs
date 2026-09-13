@@ -1,5 +1,8 @@
 # rexafs for Python
 
+[Published user guide](https://rexafs.com/docs/libraries/python/) ·
+[Versioned API reference](https://rexafs.com/docs/reference/)
+
 Process X-ray absorption spectra with Rust and work with the results as NumPy
 arrays. Start with `Spectrum(energy, mu).fft()`; configure only what you need.
 Energy is in **eV**, k/q in **Å⁻¹**, and R in **Å**.

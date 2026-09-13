@@ -1,7 +1,7 @@
 # rexafs
 
 **[Download the latest desktop binaries](https://github.com/Ameyanagi/rexafs/releases/latest)** ·
-[Installation guide](doc/installing.md) ·
+[User documentation](https://rexafs.com/docs/getting-started/) ·
 [Release build workflow](https://github.com/Ameyanagi/rexafs/actions/workflows/release-build.yml)
 
 ![rexafs — Rust-powered X-ray absorption analysis](assets/brand/rexafs-release.png)
@@ -10,8 +10,10 @@
 
 rexafs processes measured XAS spectra, removes EXAFS backgrounds, computes Fourier
 transforms and fits scattering-path models. Use the Rust library, Python bindings,
-JavaScript/Wasm package or desktop application. [rexafs.com](https://rexafs.com) is
-the project's domain; website deployment is part of the release plan.
+JavaScript/Wasm package or desktop application. The
+[public website](https://rexafs.com/) gives desktop and library
+users installation guides, illustrated workflows and generated API references.
+The website is deployed with GitHub Pages at rexafs.com.
 
 Developed under the codename **xraytsubaki**, inspired by the camellia. The `r`
 in **rexafs** stands for both **Rust** and **reinventing the wheel** for EXAFS

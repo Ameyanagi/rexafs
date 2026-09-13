@@ -1,5 +1,8 @@
 # rexafs for JavaScript and TypeScript
 
+[Published user guide](https://rexafs.com/docs/libraries/typescript/) ·
+[Versioned API reference](https://rexafs.com/docs/reference/)
+
 Process X-ray absorption spectra in Node or a browser using the Rust engine
 compiled to WebAssembly. TypeScript declarations are included.
 

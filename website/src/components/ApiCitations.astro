@@ -1,0 +1,4 @@
+---
+import citations from '../data/api-citations.json';
+---
+<ul>{citations.map(citation=><li><a href={citation.url}>{citation.url.replace(/^https?:\/\//,'')}</a><ul>{citation.sources.map(source=><li><a href={`https://github.com/Ameyanagi/rexafs/blob/main/${source}`}><code>{source}</code></a></li>)}</ul></li>)}</ul>
