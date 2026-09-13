@@ -21,9 +21,7 @@ install the package for either runtime; `npm install rexafs` and
 Rust is not required to use it. Imports are ECMAScript modules.
 
 **Version note:** options constructors, direct configuration arguments and
-`XrayFFTR` below are additions after 0.2.4. Until released, install a tarball from
-this checkout using [Build from source](#build-from-source). The basic pipeline
-works in 0.2.4.
+`XrayFFTR` were added in 0.2.5. The basic pipeline also works in 0.2.4.
 
 ## Node quick start
 
@@ -114,11 +112,11 @@ not become a record of the resolved calculation parameters.
 Use `new PrePostEdge({ ... })` with `set_normalization_method()` for custom
 normalization and `set_e0(eV)` to override the edge energy.
 
-In both stable 0.2.4 and the source checkout, calling `set_normalization_method()` or
+In 0.2.4 and later, calling `set_normalization_method()` or
 `set_background_method()` without an argument restores that stage's recommended
 defaults. `null` and `undefined` have the same effect. For custom settings,
-0.2.4 accepts algorithm wrappers; the source checkout also accepts `PrePostEdge`
-and `AUTOBK` settings directly.
+0.2.4 accepts algorithm wrappers; 0.2.5 also accepts `PrePostEdge` and `AUTOBK`
+settings directly.
 
 ## What the calculations mean
 
@@ -135,10 +133,9 @@ when interpreting structural fits and uncertainties.
 
 ## Completion and hover help
 
-The declarations in this checkout include typed signatures and explanatory JSDoc
-for every exported configuration field, constructor and spectrum method. The
-published 0.2.4 package has less extensive editor help; the online stable reference
-includes reviewed explanations while preserving its released signatures.
+Since 0.2.5, the package includes explanatory JSDoc for every exported
+configuration field, constructor and spectrum method. Version 0.2.4 has shorter
+editor help; the online stable reference preserves the published signatures.
 Options interfaces (`AUTOBKOptions`, `XrayFFTFOptions`,
 etc.) and string unions (`FTWindow`, `FFTGrid`, `AUTOBKSolver`,
 `AUTOBKClampScalePolicy`) are exported from all entry points. Editors can suggest
@@ -174,7 +171,7 @@ npm --prefix js-rexafs test
 cd js-rexafs
 npm pack
 # From your application directory, install the resulting file:
-# npm install /path/to/rexafs/js-rexafs/rexafs-0.2.4.tgz
+# npm install /path/to/rexafs/js-rexafs/rexafs-0.2.5.tgz
 ```
 
 The package includes Node/browser Wasm and declarations. Filesystem reading,

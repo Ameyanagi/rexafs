@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** This reference describes the source checkout, including additions not available in rexafs 0.2.4.
+**Next API · unreleased.** This reference describes the source checkout. Compare with stable rexafs 0.2.4 before using it with an installed package.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
@@ -110,7 +110,7 @@ set_normalization_method(self, method: PrePostEdge | NormalizationMethod | None=
 
 Copy the selected normalization method and clear normalization and later results.
 
-Source builds accept PrePostEdge settings directly; omitted/None restores
+Since 0.2.5, PrePostEdge settings are accepted directly; omitted/None restores
 automatic normalization. Published 0.2.4 uses
 NormalizationMethod.PrePostEdge(parameters) or new_prepostedge().
 An explicit E0 in those parameters becomes the spectrum E0; otherwise
@@ -126,7 +126,7 @@ set_background_method(self, method: AUTOBK | BackgroundMethod | None=None) -> Sp
 
 Copy the selected background method and clear background and Fourier results.
 
-Source builds accept AUTOBK settings directly; omitted/None restores
+Since 0.2.5, AUTOBK settings are accepted directly; omitted/None restores
 default AUTOBK. Published 0.2.4 uses BackgroundMethod.AUTOBK(parameters)
 or BackgroundMethod.new_autobk() for recommended defaults. Existing
 normalization results are retained. Later edits to the original settings
@@ -148,7 +148,7 @@ Copy inverse settings and clear q()/chiq(), preserving forward results.
 Use XrayFFTR to choose the R window and output q range. Editing the
 original settings later does not change this spectrum; assign again
 to apply changes. Returns this spectrum without filtering. Call ifft()
-to compute the new result. This binding is an addition after 0.2.4.
+to compute the new result. This binding was added in 0.2.5.
 
 ## set_fft
 
@@ -267,8 +267,8 @@ At least two entries must be present in the displayed r() array;
 an overly small forward rmax_out can therefore prevent inversion.
 After changing the forward R spacing, reassign inverse settings with
 automatic kstep to resolve the new grid instead of retaining an old
-resolved spacing. Configurable inverse settings require a source build
-after 0.2.4.
+resolved spacing. Configurable inverse settings were added in 0.2.5;
+use a fresh spectrum in 0.2.4 after changing the forward grid.
 
 ## invalidate_derived
 

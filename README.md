@@ -56,11 +56,12 @@ Jupyter, select its kernel. The Python package includes `py.typed` and type
 stubs; npm includes TypeScript declarations. Member completion and hover help
 are available without extra rexafs editor plugins.
 
-The guides in this checkout describe the next release's keyword/options
-constructors and `XrayFFTR` support. Published 0.2.4 supports the basic pipeline
-below; use the guides' source-install steps to try the new configuration API
-until a release containing it is published. The current Rust checkout also accepts
-`AUTOBK` and `PrePostEdge` directly in spectrum setters, without enum wrappers.
+The guides in this checkout describe the 0.2.5 keyword/options constructors and
+`XrayFFTR` bindings. Version 0.2.4 supports the basic pipeline below; use its
+method selectors and field assignments when targeting that version. Rust 0.2.5
+also accepts `AUTOBK` and `PrePostEdge` directly in spectrum setters, without enum
+wrappers. Use the [download page](https://rexafs.com/download/) to check which
+packages are currently published.
 
 ## Install the desktop
 

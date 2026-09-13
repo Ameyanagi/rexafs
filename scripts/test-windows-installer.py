@@ -24,6 +24,7 @@ from windows_installer import (
     installer_compiler,
     installer_policy,
     output_name,
+    pe_imports,
     pe_machine,
     require_machine,
     runtime_directory,
@@ -45,6 +46,37 @@ def pe_fixture(machine: int, subsystem: int = 2) -> bytes:
     struct.pack_into("<H", data, 0x96, 0x22)
     struct.pack_into("<H", data, 0x98, 0x20B)
     struct.pack_into("<H", data, 0x98 + 68, subsystem)
+    return bytes(data)
+
+
+def pe_import_fixture(
+    machine: int, imports: tuple[str, ...] = (), delay: tuple[str, ...] = ()
+) -> bytes:
+    """Make synthetic import tables in a section whose RVA differs from its offset."""
+    data = bytearray(pe_fixture(machine)) + bytearray(1536)
+    struct.pack_into("<H", data, 0x86, 1)  # NumberOfSections
+    struct.pack_into("<I", data, 0x98 + 60, 0x200)  # SizeOfHeaders
+    struct.pack_into("<I", data, 0x98 + 108, 16)  # NumberOfRvaAndSizes
+    data[0x188:0x190] = b".idata\0\0"
+    struct.pack_into("<IIII", data, 0x190, 0x600, 0x1000, 0x600, 0x200)
+    for index, rva, width, name_offset, names in [
+        (1, 0x1000, 20, 12, imports),
+        (13, 0x1100, 32, 4, delay),
+    ]:
+        if not names:
+            continue
+        struct.pack_into(
+            "<II", data, 0x98 + 112 + index * 8, rva, (len(names) + 1) * width
+        )
+        for offset, name in enumerate(names):
+            entry = rva - 0x1000 + 0x200 + offset * width
+            name_rva = rva + 0x200 + offset * 64
+            if index == 13:
+                struct.pack_into("<I", data, entry, 1)
+            struct.pack_into("<I", data, entry + name_offset, name_rva)
+            encoded = name.encode("ascii") + b"\0"
+            position = name_rva - 0x1000 + 0x200
+            data[position : position + len(encoded)] = encoded
     return bytes(data)
 
 
@@ -121,6 +153,118 @@ def runtime_signature_stub(path: Path, target: str) -> dict[str, str]:
 
 
 class InstallerTests(unittest.TestCase):
+    def test_reads_normal_and_delayed_imports_using_section_addresses(self):
+        with tempfile.TemporaryDirectory() as temp:
+            library = Path(temp) / "runtime.dll"
+            library.write_bytes(
+                pe_import_fixture(
+                    0xAA64, ("KERNEL32.dll", "VCRUNTIME140.dll"), ("MSVCP140.dll",)
+                )
+            )
+            self.assertEqual(
+                pe_imports(library),
+                {"kernel32.dll", "vcruntime140.dll", "msvcp140.dll"},
+            )
+
+    def test_import_inspection_rejects_bad_addresses_and_truncated_or_legacy_tables(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as temp:
+            library = Path(temp) / "runtime.dll"
+            original = pe_import_fixture(
+                0xAA64, ("VCRUNTIME140.dll",), ("MSVCP140.dll",)
+            )
+            for offset, value in [
+                (0x200 + 12, 0x999999),  # Import name outside any section.
+                (0x98 + 124, 20),  # Import directory omits its terminating descriptor.
+                (
+                    0x300,
+                    0,
+                ),  # Old pointer-based delay imports cannot be treated as RVAs.
+                (0x98 + 108, 17),  # Data directory count exceeds the optional header.
+            ]:
+                with self.subTest(offset=offset):
+                    data = bytearray(original)
+                    struct.pack_into("<I", data, offset, value)
+                    library.write_bytes(data)
+                    with self.assertRaisesRegex(ValueError, "PE"):
+                        pe_imports(library)
+            library.write_bytes(original[:0x198])
+            with self.assertRaisesRegex(ValueError, "section table"):
+                pe_imports(library)
+
+    def test_arm64_redist_omits_unused_x64_fh4_companion_but_keeps_native_crt(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            bundle = fixture(root, ARM64_TARGET)
+            (bundle / "rexafs.exe").write_bytes(
+                pe_import_fixture(0xAA64, ("MSVCP140.dll",))
+            )
+            runtime = runtime_fixture(root, 0xAA64)
+            (runtime / "msvcp140.dll").write_bytes(
+                pe_import_fixture(0xAA64, ("VCRUNTIME140.dll",))
+            )
+            (runtime / "vcruntime140_1.dll").write_bytes(
+                pe_import_fixture(0x8664, ("VCRUNTIME140.dll",))
+            )
+            with patch(
+                "windows_installer.signed_runtime", side_effect=runtime_signature_stub
+            ):
+                provenance = stage_runtime(bundle, ARM64_TARGET, runtime)
+                self.assertEqual(set(provenance), {"msvcp140.dll", "vcruntime140.dll"})
+                self.assertFalse((bundle / "vcruntime140_1.dll").exists())
+                self.assertEqual(
+                    bundled_runtime(bundle, ARM64_TARGET, provenance), provenance
+                )
+                self.assertEqual(pe_machine(bundle / "rexafs.exe"), 0xAA64)
+            # Matching x64 packages still include that DLL.
+            x64 = fixture(root, TARGET)
+            for path in runtime.glob("*.dll"):
+                path.write_bytes(pe_fixture(0x8664))
+            with patch(
+                "windows_installer.signed_runtime", side_effect=runtime_signature_stub
+            ):
+                self.assertIn("vcruntime140_1.dll", stage_runtime(x64, TARGET, runtime))
+
+    def test_arm64_cannot_omit_a_direct_transitive_or_delayed_crt_dependency(self):
+        for source in ["rexafs.exe", "msvcp140.dll"]:
+            for delayed in [False, True]:
+                with (
+                    self.subTest(source=source, delayed=delayed),
+                    tempfile.TemporaryDirectory() as temp,
+                ):
+                    root = Path(temp)
+                    bundle = fixture(root, ARM64_TARGET)
+                    runtime = runtime_fixture(root, 0xAA64)
+                    (runtime / "vcruntime140_1.dll").write_bytes(pe_fixture(0x8664))
+                    dependency = ("VCRUNTIME140_1.dll",)
+                    owner = bundle if source == "rexafs.exe" else runtime
+                    (owner / source).write_bytes(
+                        pe_import_fixture(
+                            0xAA64,
+                            () if delayed else dependency,
+                            dependency if delayed else (),
+                        )
+                    )
+                    with patch("windows_installer.signed_runtime") as signature:
+                        with self.assertRaisesRegex(
+                            ValueError, "imports CRT DLLs unavailable"
+                        ):
+                            stage_runtime(bundle, ARM64_TARGET, runtime)
+                        signature.assert_not_called()
+                    self.assertFalse(any(bundle.glob("*.dll")))
+
+    def test_arm64_runtime_exception_does_not_allow_other_x64_dlls(self):
+        for name in ["vcruntime140.dll", "msvcp140.dll", "unexpected.dll"]:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                bundle = fixture(root, ARM64_TARGET)
+                runtime = runtime_fixture(root, 0xAA64)
+                (runtime / name).write_bytes(pe_fixture(0x8664))
+                with self.assertRaisesRegex(ValueError, "Wrong PE machine"):
+                    stage_runtime(bundle, ARM64_TARGET, runtime)
+                self.assertFalse(any(bundle.glob("*.dll")))
+
     def test_stage_runtime_copies_native_crt_and_records_its_provenance(self):
         for target in [TARGET, ARM64_TARGET]:
             with self.subTest(target=target), tempfile.TemporaryDirectory() as temp:

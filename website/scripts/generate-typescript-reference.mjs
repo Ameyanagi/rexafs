@@ -49,7 +49,7 @@ export function generate(root = defaultRoot) {
           `---\ntitle: "TypeScript · ${name}"\ndescription: "${name} declarations, defaults and API explanations."\naudience: user\npagefind: ${channel === 'stable'}\n---`,
           `**${channel === 'stable' ? 'Stable ' + tag.slice(1) : 'Next API · unreleased'}.** ${channel === 'stable'
             ? 'These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.'
-            : `This reference describes the source checkout, including additions not available in npm rexafs@${tag.slice(1)}.`}`,
+            : `This reference describes the source checkout. Compare with stable npm rexafs@${tag.slice(1)} before using it with an installed package.`}`,
           '[Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)',
           `[Declaration source](https://github.com/Ameyanagi/rexafs/blob/${channel === 'stable' ? tag : 'main'}/${path}) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/${path})`,
           helpFor(current, name, path),

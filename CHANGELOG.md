@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.2.5
+
+- Add native Linux and Windows ARM64 desktop packages and Windows installers.
+  Windows ARM64 uses native rexafs/ReFEFF and the x64 FEFF10 helper through
+  Windows 11 emulation. Include matching Microsoft runtime DLLs in Windows ZIPs.
+- Add a browser processing preview with local text/CSV import, explicit columns
+  and units, cancellable WebAssembly processing, plots and CSV/provenance exports.
+  ReFEFF browser support remains upstream work.
+- Shorten repeated website copy while retaining scientific guides and original
+  screenshots. Lead with open source, format support, speed and a small footprint.
+- Validate coordinated versions across Cargo, npm, lockfiles and Python metadata
+  before release builds; retain linked and embedded 0.2.5 project fixtures.
 - Bundle FEFF10 with the Windows desktop. The MSVC build runs FEFF10 through
   the verified upstream `feff10-rs.exe` helper process and its MinGW runtime
   libraries in `resources/feff10`, with their notices; ReFEFF is unchanged.

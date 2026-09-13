@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import tempfile
 from pathlib import Path, PurePosixPath
@@ -75,6 +76,120 @@ def require_machine(
         )
     validate_pe_binary(path, machine, gui=gui)
     return machine
+
+
+def pe_imports(path: Path) -> set[str]:
+    """Read normal and delay-loaded DLL names from the default PE32+ image view.
+
+    Decode relative virtual addresses through the section table; reject truncated
+    tables and unsupported legacy delay descriptors rather than ignoring them.
+    ARM64X's default view is native ARM64. This does not enumerate DLLs loaded
+    dynamically by application code or substitute for native runtime tests.
+    https://learn.microsoft.com/windows/win32/debug/pe-format
+    https://learn.microsoft.com/windows/arm/arm64x-pe
+    """
+    validate_pe_binary(path, pe_machine(path))
+    data = path.read_bytes()
+    pe = struct.unpack_from("<I", data, 0x3C)[0]
+    optional = pe + 24
+    optional_size = struct.unpack_from("<H", data, pe + 20)[0]
+    section_count = struct.unpack_from("<H", data, pe + 6)[0]
+    section_table = optional + optional_size
+    if section_table + section_count * 40 > len(data):
+        raise ValueError(f"Truncated PE section table: {path.name}")
+    sections = [
+        struct.unpack_from("<IIII", data, section_table + index * 40 + 8)
+        for index in range(section_count)
+    ]
+    header_size = struct.unpack_from("<I", data, optional + 60)[0]
+
+    def read_rva(rva: int, size: int) -> bytes:
+        if 0 <= rva < header_size and rva + size <= min(header_size, len(data)):
+            return data[rva : rva + size]
+        for _virtual_size, address, raw_size, offset in sections:
+            relative = rva - address
+            if 0 <= relative and relative + size <= raw_size:
+                start = offset + relative
+                if start + size <= len(data):
+                    return data[start : start + size]
+        raise ValueError(f"Invalid PE import address in {path.name}: 0x{rva:X}")
+
+    count = struct.unpack_from("<I", data, optional + 108)[0]
+    if 112 + count * 8 > optional_size:
+        raise ValueError(f"Truncated PE data directories: {path.name}")
+    imports = set()
+    for index, width, name_offset in [(1, 20, 12), (13, 32, 4)]:
+        if index >= count:
+            continue
+        address, size = struct.unpack_from("<II", data, optional + 112 + index * 8)
+        if not address and not size:
+            continue
+        if not address or size < width:
+            raise ValueError(f"Invalid PE import directory: {path.name}")
+        for offset in range(0, size - width + 1, width):
+            entry = read_rva(address + offset, width)
+            if not any(entry):
+                break
+            if index == 13 and struct.unpack_from("<I", entry)[0] != 1:
+                raise ValueError(f"Unsupported PE delay import attributes: {path.name}")
+            name_rva = struct.unpack_from("<I", entry, name_offset)[0]
+            name = bytearray()
+            for character in range(256):
+                value = read_rva(name_rva + character, 1)
+                if value == b"\0":
+                    break
+                name.extend(value)
+            else:
+                raise ValueError(f"Unterminated PE import name: {path.name}")
+            decoded = name.decode("ascii").lower()
+            if not re.fullmatch(r"[a-z0-9_.-]+\.dll", decoded):
+                raise ValueError(f"Invalid PE import name in {path.name}: {decoded!r}")
+            imports.add(decoded)
+        else:
+            raise ValueError(f"Unterminated PE import directory: {path.name}")
+    return imports
+
+
+def runtime_payload(bundle: Path, target: str, runtime: Path) -> list[Path]:
+    """Select compatible CRT DLLs and require every static CRT import to be present.
+
+    The ARM64 redistributable can contain the x64-only vcruntime140_1.dll FH4
+    companion. Omit that one file only when neither the native desktop nor any
+    selected native/ARM64X runtime imports it, including delay imports. Other
+    machine mismatches remain errors. Microsoft describes FH4's x64 DLL here:
+    https://devblogs.microsoft.com/cppblog/making-cpp-exception-handling-smaller-x64/
+    """
+    executable = bundle / "rexafs.exe"
+    require_machine(executable, target)
+    files, omitted = [], []
+    for path in sorted(runtime.glob("*.dll")):
+        if (
+            target == ARM64_TARGET
+            and path.name.lower() == "vcruntime140_1.dll"
+            and pe_machine(path) == 0x8664
+        ):
+            validate_pe_binary(path, 0x8664)
+            omitted.append(path.name)
+            continue
+        require_machine(path, target, runtime=True)
+        files.append(path)
+    available = {path.name.lower() for path in files}
+    required_by = {}
+    for path in [executable, *files]:
+        required = {
+            name
+            for name in pe_imports(path)
+            if re.fullmatch(r"(?:vcruntime|msvcp|concrt)[0-9][a-z0-9_.-]*\.dll", name)
+        }
+        required_by[path.name] = sorted(required)
+        if missing := required - available:
+            raise ValueError(
+                f"{path.name} imports CRT DLLs unavailable for {target}: {', '.join(sorted(missing))}"
+            )
+    if omitted:
+        print(f"Omitted unused x64 CRT companion: {', '.join(omitted)}")
+        print("Verified native CRT imports: " + json.dumps(required_by, sort_keys=True))
+    return files
 
 
 def installer_policy(target: str) -> dict[str, str]:
@@ -327,10 +442,11 @@ def stage_runtime(
 
     Run on Windows with an existing bundle directory. By default, locate the
     target's installed Visual Studio redistributable directory; runtime can
-    select another redistributable directory. Verify every DLL's Microsoft
-    signature and PE architecture before copying any file. Reject existing
-    destination DLLs or notices rather than replace them. Return DLL versions,
-    signer names, SHA-256 hashes and machine identifiers for build metadata.
+    select another redistributable directory. Select native/compatible DLLs and
+    verify their imports, Microsoft signatures and PE architecture before copying
+    any file. An unused x64-only FH4 companion in ARM64 redists is omitted.
+    Reject existing destination DLLs or notices rather than replace them. Return
+    DLL versions, signer names, SHA-256 hashes and machine identifiers for metadata.
     """
     architecture = TARGETS[target]["architecture"]
     runtime = runtime or runtime_directory(target)
@@ -338,7 +454,7 @@ def stage_runtime(
         raise ValueError(f"Runtime staging requires a bundle directory: {bundle}")
     if not (runtime / "vcruntime140.dll").is_file():
         raise ValueError(f"Microsoft {architecture} vcruntime140.dll is required")
-    files = sorted(runtime.glob("*.dll"))
+    files = runtime_payload(bundle, target, runtime)
     for name in [*(path.name for path in files), RUNTIME_NOTICE]:
         destination = bundle / name
         if destination.exists() or destination.is_symlink():

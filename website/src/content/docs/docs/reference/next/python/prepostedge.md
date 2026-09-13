@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** This reference describes the source checkout, including additions not available in rexafs 0.2.4.
+**Next API · unreleased.** This reference describes the source checkout. Compare with stable rexafs 0.2.4 before using it with an installed package.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
@@ -53,7 +53,7 @@ Set only the fields your data require, then assign the settings to the
 spectrum's normalization stage. Fit ranges and degrees are
 resolved when normalization runs; creating settings does not process data.
 
-Keyword arguments are available in source builds after 0.2.4; published
+Keyword arguments were added in 0.2.5. Published
 0.2.4 settings use construction without arguments followed by field
 assignment. Python type conversion can raise TypeError, and an integer
 outside the native field's representable range can raise OverflowError

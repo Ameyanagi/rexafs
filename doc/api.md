@@ -73,7 +73,7 @@ The bindings expose the Rust configuration names and fields: `PrePostEdge`,
 `AUTOBK`, `XrayFFTF`, `XrayFFTR`, `NormalizationMethod`, and `BackgroundMethod`. Configure a
 stage separately, then let `fft()` run it when needed. Python keyword constructors,
 TypeScript options constructors, direct settings setters and `XrayFFTR` are
-additions after 0.2.4; see the binding guides for source installation until released.
+additions in 0.2.5; see the binding guides for versioned installation instructions.
 
 ```rust,ignore
 use rexafs::{AUTOBK, XrayFFTF};
@@ -109,7 +109,7 @@ Normalization uses `set_normalization_method` with
 `PrePostEdge(...)` directly in the bindings and `PrePostEdge::new()` or an edited
 `PrePostEdge` value in Rust. Rust also accepts method enums, optional method enums,
 and `None` to select default settings; older callers remain supported. Direct Rust
-settings setters are an addition after 0.2.4. In 0.2.4, pass
+settings setters are additions in 0.2.5. In 0.2.4, pass
 `Some(NormalizationMethod::PrePostEdge(parameters))` or
 `Some(BackgroundMethod::AUTOBK(parameters))`. Use `set_e0(value)`
 for an explicit edge energy. Unset scalar parameters use Rust defaults. Window

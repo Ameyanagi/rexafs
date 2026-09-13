@@ -89,8 +89,9 @@ fn configure(spectrum: &mut Spectrum) -> rexafs::Result<()> {
 
 The unreleased Next API also accepts `set_background_method(background)?` and
 `set_normalization_method(prepost)?` directly. Existing enum forms and `None` for
-default settings remain supported. Forward and inverse settings already use
-`set_fft(transform)` and `set_ifft(inverse)` directly in 0.2.4.
+default settings remain supported. Forward settings use `set_fft(transform)`
+in 0.2.4. The `XrayFFTR` settings type also exists in 0.2.4, but the
+`set_ifft(inverse)` setter is a Next addition planned for 0.2.5.
 
 ## Collections and errors
 

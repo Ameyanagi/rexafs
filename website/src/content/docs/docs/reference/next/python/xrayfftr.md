@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** This reference describes the source checkout, including additions not available in rexafs 0.2.4.
+**Next API · unreleased.** This reference describes the source checkout. Compare with stable rexafs 0.2.4 before using it with an installed package.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
@@ -27,7 +27,7 @@ filtering. The uncorrected R axis includes scattering phase shifts.
 
 Example: p = XrayFFTR(); p.rmin = 1.0; p.rmax = 3.0;
 spectrum.set_ifft(p).ifft(). Settings are copied; reassign after edits.
-These Python settings and set_ifft() are additions after 0.2.4.
+These Python settings and set_ifft() were added in 0.2.5.
 
 See the [implemented inverse convention](https://rexafs.com/docs/science/processing/)
 for the scaling, and [Larch's Fourier guide](https://xraypy.github.io/xraylarch/xafs_fourier.html)
@@ -53,7 +53,7 @@ weighting is intended. Assign with spectrum.set_ifft(parameters).ifft().
 The returned signal retains forward weighting and windowing; construction
 alone does not filter a spectrum.
 
-This settings class is available in source builds after 0.2.4; it is
+This settings class was added in 0.2.5; it is
 not exported by the published 0.2.4 package. Python type conversion can raise TypeError, and an integer
 outside the native field's representable range can raise OverflowError
 before any numerical processing.

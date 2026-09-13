@@ -17,7 +17,7 @@ package:
 ```bash
 uv init --python 3.12 rexafs-analysis
 cd rexafs-analysis
-uv add rexafs==0.2.4 numpy
+uv add rexafs==0.2.5 numpy
 uv run python -c "import rexafs; print(rexafs.__version__)"
 ```
 
@@ -31,8 +31,7 @@ because the examples import it. See [uv's project guide](https://docs.astral.sh/
 only when building rexafs from source.
 
 **Version note:** keyword constructors, direct configuration setters and
-`XrayFFTR` below are additions after 0.2.4. Until released, install this checkout
-using [Build from source](#build-from-source). The basic example works in 0.2.4.
+`XrayFFTR` were added in 0.2.5. The basic example also works in 0.2.4.
 
 ## Load and process a spectrum
 
@@ -125,7 +124,7 @@ reassign forward and inverse settings so their automatic spacings are inferred
 again:
 
 ```python
-# Source checkout after 0.2.4; continue with the spectrum above.
+# Requires 0.2.5 or later; continue with the spectrum above.
 spectrum.set_background_method(AUTOBK(kstep=0.1))
 spectrum.set_fft(XrayFFTF(kstep=None))
 spectrum.set_ifft(XrayFFTR(kstep=None)).ifft()

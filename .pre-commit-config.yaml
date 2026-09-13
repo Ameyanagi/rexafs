@@ -22,7 +22,7 @@ repos:
         name: Release version consistency
         entry: python scripts/check-release-version.py
         language: python
-        files: '(Cargo\.(toml|lock)|package\.json|pyproject\.toml|rust-toolchain\.toml|scripts/check-release-version\.py)$'
+        files: '(Cargo\.(toml|lock)|package(-lock)?\.json|pyproject\.toml|rust-toolchain\.toml|scripts/check-release-version\.py)$'
         pass_filenames: false
       - id: project-fixtures
         name: Retained project compatibility fixtures

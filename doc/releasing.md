@@ -1,5 +1,19 @@
 # Releasing rexafs
 
+## Preparing 0.2.5
+
+The [0.2.5 notes](release-notes-0.2.5.md) and
+[qualification record](validation/2026-09-13-release-0.2.5/review.md) track the
+browser preview, simpler processing APIs and six desktop targets. Publication
+requires a successful manual build of the immutable tag after PR #58 is merged.
+The website's Stable release stays on 0.2.4 until the new packages are published.
+
+`scripts/check-release-version.py` checks Cargo's workspace, local lockfile
+entries, npm's manifest and lockfile, and Python's inherited version. Passing
+`v0.2.5` also checks the tag; release CI does this before packaging. Advance the
+website's release metadata separately after verifying published artifacts, then
+regenerate Stable references from that tag and check the deployed install links.
+
 ## Historical preparation of 0.2.4
 
 The 0.2.4 patch release improved desktop sizing, empty-workspace actions, text
@@ -158,7 +172,7 @@ source-tree tests, stage the helper first with `python scripts/feff10_worker.py
 target/feff10-helper` and point `REXAFS_FEFF10_EXECUTABLE` at it; see the
 [Windows development instructions](desktop-development.md#windows).
 
-The next-release matrix adds native Linux and Windows ARM64 builds. Linux uses
+The 0.2.5 matrix adds native Linux and Windows ARM64 builds. Linux uses
 the upstream ARM64 FEFF10 archive. Windows ARM64 builds rexafs and ReFEFF natively
 but runs the x64 FEFF10 helper through Windows 11 emulation; this must not be
 reported as native ARM64 FEFF10. `build.json` records each engine's execution

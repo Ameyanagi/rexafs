@@ -91,7 +91,7 @@ def write_page(
         + (
             "These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release."
             if channel == "stable"
-            else f"This reference describes the source checkout, including additions not available in rexafs {tag.removeprefix('v')}."
+            else f"This reference describes the source checkout. Compare with stable rexafs {tag.removeprefix('v')} before using it with an installed package."
         ),
         "[Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)",
         f"[Declaration source](https://github.com/Ameyanagi/rexafs/blob/{tag if channel == 'stable' else 'main'}/{declaration}) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/{declaration})",

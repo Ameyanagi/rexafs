@@ -124,8 +124,8 @@ export class PrePostEdge {
    * are not written back into the original settings object. Resolved values stay in the
    * spectrum's settings until those settings are replaced.
    *
-   * Stable 0.2.4 uses this constructor without arguments, followed by property assignment. Next
-   * (the source checkout) also accepts the named options object.
+   * Named options were added in 0.2.5. Version 0.2.4 uses this constructor without
+   * arguments, followed by property assignment.
    */
   constructor(options?: PrePostEdgeOptions);
   /**
@@ -383,8 +383,8 @@ export class AUTOBK {
    * are retained in the spectrum. Automatic kmax and nknots remain unset in stored settings
    * and are calculated locally for each input.
    *
-   * Stable 0.2.4 uses this constructor without arguments, followed by property assignment. Next
-   * (the source checkout) also accepts the named options object.
+   * Named options were added in 0.2.5. Version 0.2.4 uses this constructor without
+   * arguments, followed by property assignment.
    */
   constructor(options?: AUTOBKOptions);
   /**
@@ -664,8 +664,8 @@ export class XrayFFTF {
    * are not written back into the original settings object. Resolved values stay in the
    * spectrum's settings until those settings are replaced.
    *
-   * Stable 0.2.4 uses this constructor without arguments, followed by property assignment. Next
-   * (the source checkout) also accepts the named options object.
+   * Named options were added in 0.2.5. Version 0.2.4 uses this constructor without
+   * arguments, followed by property assignment.
    */
   constructor(options?: XrayFFTFOptions);
   /**
@@ -841,7 +841,7 @@ export class XrayFFTR {
    * are not written back into the original settings object. Resolved values stay in the
    * spectrum's settings until those settings are replaced.
    *
-   * This class is available in Next (the source checkout), not npm 0.2.4.
+   * This class was added in 0.2.5 and is not exported by npm 0.2.4.
    */
   constructor(options?: XrayFFTROptions);
   /**
@@ -1044,9 +1044,9 @@ export class Spectrum {
    * assignment. Later edits require reassignment. Returns this spectrum.
    *
    * Omitting the argument, undefined or null restores automatic pre/post-edge settings while
-   * retaining the selected E0. These reset forms work in stable 0.2.4 and Next. For custom
-   * settings, stable 0.2.4 accepts a NormalizationMethod wrapper; Next (the source checkout)
-   * also accepts PrePostEdge directly.
+   * retaining the selected E0. These reset forms work in 0.2.4 and later. For custom
+   * settings, 0.2.4 accepts a NormalizationMethod wrapper; direct PrePostEdge settings
+   * were added in 0.2.5.
    */
   set_normalization_method(method?: PrePostEdge | NormalizationMethod | null): this;
   /**
@@ -1055,8 +1055,8 @@ export class Spectrum {
    * free them after assignment. Later edits require reassignment. Returns this spectrum.
    *
    * Omitting the argument, undefined or null restores default AUTOBK settings. These reset
-   * forms work in stable 0.2.4 and Next. For custom settings, stable 0.2.4 accepts a
-   * BackgroundMethod wrapper; Next (the source checkout) also accepts AUTOBK directly. This
+   * forms work in 0.2.4 and later. For custom settings, 0.2.4 accepts a BackgroundMethod
+   * wrapper; direct AUTOBK settings were added in 0.2.5. This
    * does not reset forward or inverse configuration values that were already resolved
    * automatically.
    */
@@ -1066,7 +1066,7 @@ export class Spectrum {
    * background and forward results. Settings can be freed after assignment; later edits require
    * reassignment. Invalid R ranges or inconsistent kstep/nfft are reported when ifft() runs.
    * Returns this spectrum. Assign settings with kstep undefined to resolve spacing again after
-   * changing the forward grid. This method and XrayFFTR are Next additions after 0.2.4.
+   * changing the forward grid. This method and XrayFFTR were added in 0.2.5.
    */
   set_ifft(parameters: XrayFFTR): this;
   /**
@@ -1120,8 +1120,8 @@ export class Spectrum {
    * chi(k). Throws on inconsistent transform settings or failed prerequisite stages. Returns
    * this spectrum. At least two reported R samples are required even though filtering uses the
    * full internal Fourier bins; rmax_out=0 therefore fails. When reusing a spectrum with a
-   * different forward grid, reset previously resolved inverse settings in Next, or create a
-   * fresh spectrum in stable 0.2.4.
+   * different forward grid, reset previously resolved inverse settings with set_ifft()
+   * (added in 0.2.5), or create a fresh spectrum in 0.2.4.
    */
   ifft(): this;
   /**

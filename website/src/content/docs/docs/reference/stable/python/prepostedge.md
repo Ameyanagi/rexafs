@@ -53,7 +53,7 @@ Set only the fields your data require, then assign the settings to the
 spectrum's normalization stage. Fit ranges and degrees are
 resolved when normalization runs; creating settings does not process data.
 
-Keyword arguments are available in source builds after 0.2.4; published
+Keyword arguments were added in 0.2.5. Published
 0.2.4 settings use construction without arguments followed by field
 assignment. Python type conversion can raise TypeError, and an integer
 outside the native field's representable range can raise OverflowError

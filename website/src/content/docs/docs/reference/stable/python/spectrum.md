@@ -110,7 +110,7 @@ set_normalization_method(self, method: NormalizationMethod | None=None) -> Spect
 
 Copy the selected normalization method and clear normalization and later results.
 
-Source builds accept PrePostEdge settings directly; omitted/None restores
+Since 0.2.5, PrePostEdge settings are accepted directly; omitted/None restores
 automatic normalization. Published 0.2.4 uses
 NormalizationMethod.PrePostEdge(parameters) or new_prepostedge().
 An explicit E0 in those parameters becomes the spectrum E0; otherwise
@@ -126,7 +126,7 @@ set_background_method(self, method: BackgroundMethod | None=None) -> Spectrum
 
 Copy the selected background method and clear background and Fourier results.
 
-Source builds accept AUTOBK settings directly; omitted/None restores
+Since 0.2.5, AUTOBK settings are accepted directly; omitted/None restores
 default AUTOBK. Published 0.2.4 uses BackgroundMethod.AUTOBK(parameters)
 or BackgroundMethod.new_autobk() for recommended defaults. Existing
 normalization results are retained. Later edits to the original settings
@@ -254,8 +254,8 @@ At least two entries must be present in the displayed r() array;
 an overly small forward rmax_out can therefore prevent inversion.
 After changing the forward R spacing, reassign inverse settings with
 automatic kstep to resolve the new grid instead of retaining an old
-resolved spacing. Configurable inverse settings require a source build
-after 0.2.4.
+resolved spacing. Configurable inverse settings were added in 0.2.5;
+use a fresh spectrum in 0.2.4 after changing the forward grid.
 
 ## invalidate_derived
 
