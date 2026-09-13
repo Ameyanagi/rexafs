@@ -7,14 +7,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-// TypeScript 7 ships the native compiler; Microsoft provides the previous
-// JavaScript language-service API through this compatibility package.
-import ts from "@typescript/typescript6";
+// Microsoft's recommended aliases keep the native compiler alongside the
+// compatibility package that provides the JavaScript language-service API.
+import ts from "typescript";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const directory = mkdtempSync(join(tmpdir(), "rexafs-types-"));
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-const compiler = fileURLToPath(new URL("../node_modules/typescript/bin/tsc", import.meta.url));
+const compiler = fileURLToPath(new URL("../node_modules/@typescript/native/bin/tsc", import.meta.url));
 function run(args, cwd) {
   const result = spawnSync(npm, args, { cwd, encoding: "utf8", shell: process.platform === "win32" });
   assert.equal(result.status, 0, result.stdout + result.stderr);
