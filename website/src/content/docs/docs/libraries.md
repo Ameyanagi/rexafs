@@ -7,13 +7,13 @@ audience: user
 [Try the browser workspace](/app/) for local processing without installation.
 
 All three libraries use the Rust numerical engine. These guides target
-**published 0.2.4**.
+**published 0.2.5**.
 
 | Library | Best for | Install |
 |---|---|---|
-| [Python](/docs/libraries/python/) | NumPy, Jupyter and analysis scripts | `uv add rexafs==0.2.4` |
-| [TypeScript / JavaScript](/docs/libraries/typescript/) | Node applications and browser tools | `bun add rexafs@0.2.4` |
-| [Rust](/docs/libraries/rust/) | Native applications, parallel groups, structures and fitting | `cargo add rexafs@0.2.4` |
+| [Python](/docs/libraries/python/) | NumPy, Jupyter and analysis scripts | `uv add rexafs==0.2.5` |
+| [TypeScript / JavaScript](/docs/libraries/typescript/) | Node applications and browser tools | `bun add rexafs@0.2.5` |
+| [Rust](/docs/libraries/rust/) | Native applications, parallel groups, structures and fitting | `cargo add rexafs@0.2.5` |
 
 The commands assume an existing project. Follow the language guide for project
 setup, editor configuration and a measured Cu example.
@@ -40,5 +40,5 @@ getter's return type. Supply energy in eV and absorption μ; file readers have
 format-specific validation rules.
 
 The [spectrum workflow](/docs/libraries/spectrum-api/) explains units, errors and
-settings. The [API reference](/docs/reference/) separates stable signatures from
-unreleased additions.
+settings. The [API reference](/docs/reference/) separates the published package
+from the source checkout.

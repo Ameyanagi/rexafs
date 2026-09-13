@@ -1,0 +1,43 @@
+{
+  "version": "0.4.0",
+  "tag": "v0.4.0",
+  "sourceCommit": "91b23364309c3daca871b748ae45bf2426c60b8e",
+  "cliVersion": "0.3.0",
+  "target": "wasm32-wasip1",
+  "releaseUrl": "https://github.com/Ameyanagi/refeff/releases/tag/v0.4.0",
+  "sourceUrl": "https://github.com/Ameyanagi/refeff/tree/91b23364309c3daca871b748ae45bf2426c60b8e",
+  "archiveUrl": "https://github.com/Ameyanagi/refeff/releases/download/v0.4.0/refeff-wasm-0.4.0.zip",
+  "archiveSha256": "22ad5127e25d85d8f02583b686e3b0f58c66a91adc11a15653d1e1668697fafb",
+  "archiveBytes": 7696137,
+  "wasmSha256": "3a08f446b302ac4ca665d6aae738eead15915f79582162ce610e7afad41433cc",
+  "wasmBytes": 12694588,
+  "notice": {
+    "sourceUrl": "https://raw.githubusercontent.com/Ameyanagi/refeff/91b23364309c3daca871b748ae45bf2426c60b8e/NOTICE.md",
+    "sha256": "8d253291e5703548135012f3fa112fb0a28deb449e2761fba990344d3ce11d31",
+    "bytes": 1124
+  },
+  "rustNotices": {
+    "RUST-NOTICES.txt": {
+      "sha256": "d317f702d93dca294cc6cfa8338cf02aa956b92f7d560da20f6ce53fe282a74f",
+      "bytes": 226415
+    },
+    "rust-dependencies.json": {
+      "sha256": "11c903d61ceb635d93c2adfc23917afb9914af000f01253151b913a2977dbcae",
+      "bytes": 113724
+    }
+  },
+  "toolchainNotices": {
+    "TOOLCHAIN-NOTICES.txt": {
+      "sha256": "49fbbecdd70943fc8140a67aad87ab35dad32bc51774e43cd38983978c333e49",
+      "bytes": 68027
+    },
+    "rust-COPYRIGHT-library.html": {
+      "sha256": "90567e2718bf7fd65a71a3a43c5596488e80e5f51ed02bfea6fec54458b5f3d1",
+      "bytes": 425661
+    },
+    "toolchain-provenance.json": {
+      "sha256": "e4b8cf76797975a1b8b5ef684c03b843fa84b1f34ead0ac94e411cda0a0479d6",
+      "bytes": 9952
+    }
+  }
+}

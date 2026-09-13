@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.4.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
+**Stable 0.2.5.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.5/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
 Settings for converting weighted, windowed chi(k) into complex chi(R).
 
@@ -35,21 +35,10 @@ distance; see [Rehr and Albers (2000)](https://doi.org/10.1103/RevModPhys.72.621
 
 set_fft() copies settings. Reassign after editing, and free() this object when finished.
 
-## grid
-
-```typescript
-grid: FFTGrid;
-```
-
-Sampling and window-construction convention. Default: Input preserves the prepared
-background k grid. Larch linearly resamples onto a zero-origin grid and extends the window
-domain as needed. Neither changes the returned background k()/chi(); always pair kwin()
-with kwin_k().
-
 ## constructor
 
 ```typescript
-constructor();
+constructor(options?: XrayFFTFOptions);
 ```
 
 Create owned settings with the recommended defaults described below. Browser callers must
@@ -71,6 +60,17 @@ free(): void;
 
 Release this object's Wasm allocation. Do not call methods, read fields or free it again
 afterwards. Arrays and settings already copied elsewhere remain valid.
+
+## grid
+
+```typescript
+grid: FFTGrid;
+```
+
+Sampling and window-construction convention. Default: Input preserves the prepared
+background k grid. Larch linearly resamples onto a zero-origin grid and extends the window
+domain as needed. Neither changes the returned background k()/chi(); always pair kwin()
+with kwin_k().
 
 ## rmax_out
 

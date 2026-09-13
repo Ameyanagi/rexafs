@@ -9,9 +9,9 @@ fast X-ray absorption spectroscopy (XAS) analysis in a small package. It support
 text/XDI spectra, CIF/XYZ structures and CSV/SVG/PNG exports, with desktop tools
 for scattering calculations, joint fits and measurement series.
 
-This manual covers **stable 0.2.4** on the desktop and in Python, TypeScript and
-Rust. Browser analysis is in development; the [processing preview](/app/) uses
-the unreleased source-checkout engine.
+This manual covers **stable 0.2.5** on the desktop and in Python, TypeScript and
+Rust. The browser previews offer [spectrum processing](/app/) and
+[ReFEFF scattering](/app/scattering/), separately from the published npm API.
 
 ## Who this manual is for
 
@@ -48,7 +48,7 @@ capabilities below, with optional features where indicated.
 |---|:---:|:---:|:---:|:---:|
 | Energy/absorption arrays, normalization, AUTOBK, FFT and IFFT | Yes | Yes | Yes | Yes |
 | Normalization/background/forward-FFT settings | Yes | Yes | Yes | Yes |
-| Custom inverse-transform settings | Yes | Next API | Next API | Yes |
+| Custom inverse-transform settings | Yes | Yes | Yes | Yes |
 | Text mapping, XDI and multiple imported channels | Yes | QAS reader / NumPy | Supply arrays | Readers |
 | Groups, marks, processing overrides and comparisons | Yes | Loop over spectra | Loop over spectra | Group API |
 | Alignment, calibration, deglitching, truncation, rebinning, smoothing, merging and differences | Yes | — | — | Yes |
@@ -60,8 +60,8 @@ capabilities below, with optional features where indicated.
 | Publication figures, captions, data and methods exports | Yes | Use plotting tools | Use plotting tools | Optional plotting |
 | Optional analysis assistant | Yes | — | — | — |
 
-**Next API** is unreleased. Use the [API version guide](/docs/reference/) to
-select documentation matching your installed package.
+Use the [API version guide](/docs/reference/) to select documentation matching
+your installed package. **Next** documents the source checkout.
 
 ## Know your data
 

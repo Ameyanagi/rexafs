@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "refeffVersion": "0.4.0",
+  "refeffSourceCommit": "91b23364309c3daca871b748ae45bf2426c60b8e",
+  "target": "wasm32-wasip1",
+  "wasmSha256": "3a08f446b302ac4ca665d6aae738eead15915f79582162ce610e7afad41433cc",
+  "observedProducers": {
+    "rustc": "1.95.0 (59807616e 2026-04-14)",
+    "clang": "21.1.4-wasi-sdk (https://github.com/llvm/llvm-project 222fc11f2b8f25f6a0f4976272ef1bb7bf49521d)"
+  },
+  "observedRuntimeSymbols": [
+    "dlmalloc",
+    "__wasilibc_get_environ",
+    "__wasilibc_stat",
+    "rustc_demangle",
+    "compiler_builtins",
+    "__multi3"
+  ],
+  "rustSourceCommit": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+  "rustDistributionManifest": {
+    "url": "https://static.rust-lang.org/dist/channel-rust-1.95.0.toml",
+    "date": "2026-04-16",
+    "sha256": "821ff14e4c4a1cbe1e8915f35aff0a3fbbdf8d293ad48ab8f31e3b0440c581f9"
+  },
+  "wasiSdk": {
+    "version": "30",
+    "sourceCommit": "3d4ea12dbee832e92a4734c938fa980395f59da3",
+    "llvmCommit": "222fc11f2b8f25f6a0f4976272ef1bb7bf49521d",
+    "wasiLibcCommit": "ec0effd769df5f05b647216578bcf5d3b5449725",
+    "selectionSourceUrl": "https://raw.githubusercontent.com/rust-lang/rust/59807616e1fa2540724bfbac14d7976d7e4a3860/src/ci/docker/host-x86_64/dist-various-2/Dockerfile",
+    "selectionSourceSha256": "aba6ac9d2206f7187155b2131db2bae12dca923d9d1eabae9fb36da7e93c3268",
+    "submoduleSourceUrl": "https://api.github.com/repos/WebAssembly/wasi-sdk/git/trees/3d4ea12dbee832e92a4734c938fa980395f59da3?recursive=1"
+  },
+  "bundledWasiLibc": {
+    "sourceArchiveUrl": "https://static.rust-lang.org/dist/2026-04-16/rust-std-1.95.0-wasm32-wasip1.tar.xz",
+    "sourceArchiveSha256": "86e5b6d98c7520bb9c3ad4f8cbbbf14beaf230b0f06b437db398e3c4f7dae43e",
+    "sourceArchivePath": "rust-std-1.95.0-wasm32-wasip1/rust-std-wasm32-wasip1/lib/rustlib/wasm32-wasip1/lib/self-contained/libc.a",
+    "sha256": "907cbc15a6a44b00761e3b50679a0dc473c370f349b1f9a3a33a63024f42308b",
+    "bytes": 3073742,
+    "allocator": "dlmalloc",
+    "alsoContainsFts": true
+  },
+  "scope": "Rust standard-library notices and the source notices for compiler-builtins and the WASI libc selected by the identified Rust release. This records the upstream distribution sources, not a complete per-function link map. The WebAssembly producers identify Rust and clang; WASI SDK and libc source selection are traced through the matching Rust distribution configuration.",
+  "bundle": {
+    "path": "TOOLCHAIN-NOTICES.txt",
+    "sha256": "49fbbecdd70943fc8140a67aad87ab35dad32bc51774e43cd38983978c333e49",
+    "bytes": 68027
+  },
+  "rustStandardLibraryNotice": {
+    "path": "rust-COPYRIGHT-library.html",
+    "sha256": "90567e2718bf7fd65a71a3a43c5596488e80e5f51ed02bfea6fec54458b5f3d1",
+    "bytes": 425661,
+    "sourceArchiveUrl": "https://static.rust-lang.org/dist/2026-04-16/rustc-1.95.0-aarch64-apple-darwin.tar.xz",
+    "sourceArchiveSha256": "149e85a285b6eba58eb6c8bdf7deb1b93763890598e62cb635a712e3a8454f04",
+    "sourceArchivePath": "rustc-1.95.0-aarch64-apple-darwin/rustc/share/doc/rust/COPYRIGHT-library.html"
+  },
+  "files": [
+    {
+      "component": "Rust 1.95.0",
+      "sourcePath": "COPYRIGHT",
+      "sourceUrl": "https://raw.githubusercontent.com/rust-lang/rust/59807616e1fa2540724bfbac14d7976d7e4a3860/COPYRIGHT",
+      "sourceSha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af",
+      "sourceBytes": 1571,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 1571,
+      "sha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af",
+      "bundleByteOffset": 1186
+    },
+    {
+      "component": "Rust 1.95.0",
+      "sourcePath": "LICENSE-MIT",
+      "sourceUrl": "https://raw.githubusercontent.com/rust-lang/rust/59807616e1fa2540724bfbac14d7976d7e4a3860/LICENSE-MIT",
+      "sourceSha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "sourceBytes": 1068,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 1068,
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "bundleByteOffset": 3104
+    },
+    {
+      "component": "Rust 1.95.0",
+      "sourcePath": "LICENSE-APACHE",
+      "sourceUrl": "https://raw.githubusercontent.com/rust-lang/rust/59807616e1fa2540724bfbac14d7976d7e4a3860/LICENSE-APACHE",
+      "sourceSha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "sourceBytes": 9723,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 9723,
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "bundleByteOffset": 4525
+    },
+    {
+      "component": "Rust compiler-builtins",
+      "sourcePath": "library/compiler-builtins/LICENSE.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/rust-lang/rust/59807616e1fa2540724bfbac14d7976d7e4a3860/library/compiler-builtins/LICENSE.txt",
+      "sourceSha256": "ab6eec6caf0fa5775e411c7a8bc6a45c4ef2956b0980b157ab74fc5cd62a928b",
+      "sourceBytes": 15078,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 15078,
+      "sha256": "ab6eec6caf0fa5775e411c7a8bc6a45c4ef2956b0980b157ab74fc5cd62a928b",
+      "bundleByteOffset": 14659
+    },
+    {
+      "component": "WASI libc",
+      "sourcePath": "LICENSE",
+      "sourceUrl": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/ec0effd769df5f05b647216578bcf5d3b5449725/LICENSE",
+      "sourceSha256": "2711a8b5a5cdfef0e639f96c1aca12ae23d7d64a02d0507f1bdf14d2b27bbc3a",
+      "sourceBytes": 910,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 910,
+      "sha256": "2711a8b5a5cdfef0e639f96c1aca12ae23d7d64a02d0507f1bdf14d2b27bbc3a",
+      "bundleByteOffset": 30080
+    },
+    {
+      "component": "WASI libc",
+      "sourcePath": "LICENSE-APACHE",
+      "sourceUrl": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/ec0effd769df5f05b647216578bcf5d3b5449725/LICENSE-APACHE",
+      "sourceSha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "sourceBytes": 10847,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 10847,
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "bundleByteOffset": 31349
+    },
+    {
+      "component": "WASI libc",
+      "sourcePath": "LICENSE-APACHE-LLVM",
+      "sourceUrl": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/ec0effd769df5f05b647216578bcf5d3b5449725/LICENSE-APACHE-LLVM",
+      "sourceSha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+      "sourceBytes": 12243,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 12243,
+      "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+      "bundleByteOffset": 42565
+    },
+    {
+      "component": "WASI libc",
+      "sourcePath": "LICENSE-MIT",
+      "sourceUrl": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/ec0effd769df5f05b647216578bcf5d3b5449725/LICENSE-MIT",
+      "sourceSha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "sourceBytes": 1023,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 1023,
+      "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "bundleByteOffset": 55160
+    },
+    {
+      "component": "WASI libc",
+      "sourcePath": "libc-bottom-half/cloudlibc/LICENSE",
+      "sourceUrl": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/ec0effd769df5f05b647216578bcf5d3b5449725/libc-bottom-half/cloudlibc/LICENSE",
+      "sourceSha256": "c8b789cf5a746611e6300a0cc7750dbf92b61912a709d04e639245f7290656d0",
+      "sourceBytes": 1292,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 1292,
+      "sha256": "c8b789cf5a746611e6300a0cc7750dbf92b61912a709d04e639245f7290656d0",
+      "bundleByteOffset": 56581
+    },
+    {
+      "component": "WASI libc",
+      "sourcePath": "libc-top-half/musl/COPYRIGHT",
+      "sourceUrl": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/ec0effd769df5f05b647216578bcf5d3b5449725/libc-top-half/musl/COPYRIGHT",
+      "sourceSha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+      "sourceBytes": 6204,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 6204,
+      "sha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+      "bundleByteOffset": 58259
+    },
+    {
+      "component": "WASI libc",
+      "sourcePath": "fts/musl-fts/COPYING",
+      "sourceUrl": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/ec0effd769df5f05b647216578bcf5d3b5449725/fts/musl-fts/COPYING",
+      "sourceSha256": "55af87e4017668f54467a3380e7ebbac5e672d8c763bfe95e6fc882a6fdc4046",
+      "sourceBytes": 1514,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 1514,
+      "sha256": "55af87e4017668f54467a3380e7ebbac5e672d8c763bfe95e6fc882a6fdc4046",
+      "bundleByteOffset": 64833
+    },
+    {
+      "component": "WASI libc",
+      "sourcePath": "fts/musl-fts/NOTICE.wasi-libc.md",
+      "sourceUrl": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/ec0effd769df5f05b647216578bcf5d3b5449725/fts/musl-fts/NOTICE.wasi-libc.md",
+      "sourceSha256": "6aa429513e3e883111aceab81f80f9da38613b7f74c966393ff33470c93a9daa",
+      "sourceBytes": 407,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 407,
+      "sha256": "6aa429513e3e883111aceab81f80f9da38613b7f74c966393ff33470c93a9daa",
+      "bundleByteOffset": 66740
+    },
+    {
+      "component": "WASI libc dlmalloc",
+      "sourcePath": "dlmalloc/src/malloc.c",
+      "sourceUrl": "https://raw.githubusercontent.com/WebAssembly/wasi-libc/ec0effd769df5f05b647216578bcf5d3b5449725/dlmalloc/src/malloc.c",
+      "sourceSha256": "9e7ce51d813331ae87ef235f6ca2d5ce2167692e30bb51a173513e3754a67f8f",
+      "sourceBytes": 224221,
+      "retainedSourceByteOffset": 0,
+      "retainedBytes": 478,
+      "sha256": "623aece9a051d3e1c11989e9a9b802c63b9e2d91d67171c730b622bb80e1befe",
+      "bundleByteOffset": 67527
+    }
+  ]
+}

@@ -186,5 +186,15 @@ website/src/content/docs/docs/science/references.mdx,user,publish,/docs/science/
 website/src/content/docs/docs/troubleshooting.md,user,publish,/docs/troubleshooting/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
 website/src/content/docs/licenses.md,user,publish,/licenses/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
 website/src/content/docs/releases.md,user,publish,/releases/,"Curated public manual; keep task instructions and theory, avoid repeated promotional copy."
-doc/release-notes-0.2.5.md,developer,exclude,,Candidate 0.2.5 release notes; publish with verified artifacts and qualification evidence.
-doc/validation/2026-09-13-release-0.2.5/review.md,developer,exclude,,Release preparation and exact-build/signing/publication evidence; distinguish pending from completed gates.
+doc/release-notes-0.2.5.md,developer,exclude,,Published 0.2.5 release notes with verified artifacts and qualification evidence.
+doc/validation/2026-09-13-release-0.2.5/review.md,developer,exclude,,Release source and exact-build/signing/publication evidence; distinguish pending from completed gates.
+doc/validation/2026-09-13-browser-refeff/review.md,developer,exclude,,Pinned browser/native comparison and deployment evidence; distinguish tested workflows from broader physical accuracy.
+doc/validation/2026-09-13-python-abi3/review.md,developer,exclude,,Local unpublished ABI3 wheel pilot; preserve source identity and tested interpreter/NumPy scope without treating it as release qualification.
+website/vendor/refeff-0.4.0/README.md,developer,exclude,,Instructions and scope for retained upstream dependency notices; public attribution links to the exact distributed texts.
+website/third-party/refeff/NOTICE.md,user,asset,/refeff/NOTICE.md,Exact upstream ReFEFF provenance notice; preserve its bytes and attribution.
+website/src/content/docs/docs/reference/stable/python/xrayfftr.md,user,generated,/docs/reference/stable/python/xrayfftr/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/autobkoptions.md,user,generated,/docs/reference/stable/typescript/autobkoptions/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/prepostedgeoptions.md,user,generated,/docs/reference/stable/typescript/prepostedgeoptions/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/xrayfftfoptions.md,user,generated,/docs/reference/stable/typescript/xrayfftfoptions/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/xrayfftr.md,user,generated,/docs/reference/stable/typescript/xrayfftr/,Generated from source-owned API help; preserve Stable/Next channel rules.
+website/src/content/docs/docs/reference/stable/typescript/xrayfftroptions.md,user,generated,/docs/reference/stable/typescript/xrayfftroptions/,Generated from source-owned API help; preserve Stable/Next channel rules.

@@ -1,7 +1,7 @@
 # CI selection and release coverage
 
-This checkout's PR and release workflow changes await post-merge measurement.
-Historical timings appear below.
+CI selects checks from changed files while retaining full release coverage.
+Historical full-build timings appear below.
 
 | Changed files or event | Checks |
 |---|---|
@@ -38,7 +38,7 @@ On 2026-09-13, [PR build 34751534452](https://github.com/Ameyanagi/rexafs/action
 took **73m29s**. Intel macOS desktop queued **30m05s**, then ran **43m05s**.
 The Windows regression step took **25m35s** including compilation; its tests
 took **31.17s**. Python API tests took under one second. Compilation and queues
-dominated. No speedup is claimed until a comparable run measures these changes.
+dominated. These baseline timings do not measure cache speedups.
 
 The [0.2.5 tagged build](https://github.com/Ameyanagi/rexafs/actions/runs/34754751069)
 retains its original workflow. Follow the [release runbook](releasing.md) for

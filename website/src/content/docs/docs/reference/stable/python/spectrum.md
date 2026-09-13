@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.4.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
+**Stable 0.2.5.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.5/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
 Own a measured absorption spectrum and its calculated processing stages.
 
@@ -105,7 +105,7 @@ performing normalization or recalibrating the input energy axis.
 ## set_normalization_method
 
 ```python
-set_normalization_method(self, method: NormalizationMethod | None=None) -> Spectrum
+set_normalization_method(self, method: PrePostEdge | NormalizationMethod | None=None) -> Spectrum
 ```
 
 Copy the selected normalization method and clear normalization and later results.
@@ -121,7 +121,7 @@ processing data; call normalize() or a later stage to recompute.
 ## set_background_method
 
 ```python
-set_background_method(self, method: BackgroundMethod | None=None) -> Spectrum
+set_background_method(self, method: AUTOBK | BackgroundMethod | None=None) -> Spectrum
 ```
 
 Copy the selected background method and clear background and Fourier results.
@@ -136,6 +136,19 @@ spectrum without fitting; call calc_background() or a later stage.
 If changing kstep after fft() has already run, also reassign XrayFFTF
 settings with kstep=None. Clearing the Fourier results does not reset
 its previously resolved automatic spacing.
+
+## set_ifft
+
+```python
+set_ifft(self, parameters: XrayFFTR) -> Spectrum
+```
+
+Copy inverse settings and clear q()/chiq(), preserving forward results.
+
+Use XrayFFTR to choose the R window and output q range. Editing the
+original settings later does not change this spectrum; assign again
+to apply changes. Returns this spectrum without filtering. Call ifft()
+to compute the new result. This binding was added in 0.2.5.
 
 ## set_fft
 

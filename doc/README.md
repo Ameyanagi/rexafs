@@ -7,8 +7,8 @@ and publish only user-facing content. These two planning files are developer
 documents. The curated [public manual](https://rexafs.com/docs/getting-started/)
 is built from `website/src/content/docs/`; see the
 [website maintenance guide](../website/README.md) for generation and deployment.
-The manual targets published 0.2.4, while source-checkout guides can describe
-clearly labeled unreleased additions.
+The manual follows the [verified release metadata](../website/src/data/release.json),
+while source-checkout guides can describe clearly labeled unreleased additions.
 
 Start with the [project README](../README.md), [API guide](api.md),
 [Rust guide](../crates/rexafs/README.md), [Python guide](../py-rexafs/README.md) or
@@ -27,8 +27,8 @@ Start with the [project README](../README.md), [API guide](api.md),
   developer record of reviewed areas, corrections, checks and scope limits.
 - [Documentation and API priorities](documentation-api-roadmap.md): concise
   website ownership, binding improvements and ARM64 distribution work.
-- [WebAssembly assessment](webassembly.md): successful processing builds,
-  ReFEFF compile/runtime blockers and a staged porting plan.
+- [WebAssembly assessment](webassembly.md): browser processing and ReFEFF 0.4.0,
+  historical compile probes and remaining portability work.
 
 ## Release and migration
 

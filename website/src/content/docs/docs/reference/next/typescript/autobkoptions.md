@@ -5,7 +5,7 @@ audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** This reference describes the source checkout. Compare with stable npm rexafs@0.2.4 before using it with an installed package.
+**Next API · unreleased.** This reference describes the source checkout. Compare with stable npm rexafs@0.2.5 before using it with an installed package.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 

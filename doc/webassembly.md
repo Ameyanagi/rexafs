@@ -1,10 +1,37 @@
 # WebAssembly build assessment
 
-**Implementation update:** rexafs now includes a browser processing workspace at
-`/app/`, with local import, a cancellable Worker, plots and CSV/provenance export.
-The site builds its WASM assets from the checkout. ReFEFF WASM implementation is
-being handled upstream; no ReFEFF source or dependency patches are included here.
-The assessment below records the earlier compile probes.
+**Implementation update:** `/app/` provides local spectrum processing, plots and
+CSV/provenance export. `/app/scattering/` runs the published ReFEFF 0.4.0 WASI
+engine in a separate Worker. Native rexafs 0.2.5 retains ReFEFF 0.3.0; the
+browser integration does not change that release's source or dependencies.
+
+## ReFEFF 0.4.0 integration
+
+[ReFEFF 0.4.0](https://github.com/Ameyanagi/refeff/releases/tag/v0.4.0)
+adds serial WASI execution and a browser adapter with a virtual filesystem,
+progress and cancellation. The website stages its published archive after
+checking the pinned SHA-256, retains its licenses and source identity, and loads
+the engine only when a scattering calculation starts. The Worker receives
+user-selected input bytes; it does not upload calculation files.
+
+The processing engine remains a separate `wasm-bindgen` module. ReFEFF uses
+`wasm32-wasip1` and the upstream `browser_wasi_shim` adapter; it is not linked
+into the npm processing package. The [upstream guide](https://github.com/Ameyanagi/refeff/blob/v0.4.0/wasm/README.md)
+documents the runtime and native/browser ZnSe comparison. Browser calculations
+use one thread and memory-backed intermediate files. Compiling the full CLI
+does not qualify every FEFF workflow in a browser.
+
+The [browser qualification record](validation/2026-09-13-browser-refeff/review.md)
+retains the engine and native-reference identities, comparison of all 4,010
+numeric values in the ZnSe test outputs, and interface checks at both deployment
+paths. The unchanged historical input contains a Kr scatterer; this is a
+software-agreement case, not a validated model of pristine ZnSe.
+
+The earlier probes below apply to the recorded 0.3.0 dependency. They explain
+why changing only rexafs's compilation target was insufficient; they do not
+describe the newer WASI release.
+
+## Historical assessment
 
 Assessed on 13 September 2026 from rexafs commit
 `0e3572f5a7931244214b9f92bbd0046cc6f5f504`, with Rust 1.98.1 and the committed
@@ -12,7 +39,9 @@ lockfile. This developer record distinguishes a successful compile from a
 tested JavaScript API. The [public support guide](../website/src/content/docs/docs/libraries/webassembly.md)
 describes what users can run now.
 
-## Build results
+<a id="build-results"></a>
+
+## Historical build results
 
 | Build | Result | What it establishes |
 |---|---|---|
@@ -32,7 +61,7 @@ npm --prefix js-rexafs test
 
 cargo check --locked -p rexafs --no-default-features --target wasm32-unknown-unknown
 
-# Diagnostic probes: these currently fail, not supported build recipes.
+# Historical diagnostic probes with the recorded lockfile, not supported recipes.
 cargo check --locked -p rexafs --target wasm32-unknown-unknown
 cargo check --locked -p rexafs --no-default-features --features refeff-runner --target wasm32-unknown-unknown
 ```
@@ -46,7 +75,9 @@ the Ru fixture (`E0 = 22118.8` eV, 315 k samples, 326 R samples).
 The default-feature C compilation failures were observed with this Mac's
 compiler; they do not prove those libraries are fundamentally unportable.
 
-## Why ReFEFF needs more work
+<a id="why-refeff-needs-more-work"></a>
+
+## ReFEFF 0.3.0 barriers
 
 The first observed compile failure follows this dependency chain:
 
@@ -83,6 +114,11 @@ cannot transparently replace those standard-library operations. A successful
 
 ## Recommended porting sequence
 
+This was the recommendation before ReFEFF 0.4.0. Upstream subsequently chose
+WASI with a virtual filesystem and serial scheduling for browser execution;
+the processing and scattering modules remain separate. Advanced analysis
+bindings and broader numerical qualification are still useful next steps.
+
 1. **Keep the existing processing module small.** Preserve numerical regression
    checks and provide a Worker example before adding long calculations.
 2. **Expose advanced analysis independently of engine execution.** Add text/byte
@@ -104,8 +140,8 @@ cannot transparently replace those standard-library operations. A successful
 5. **Load scattering separately.** Use an optional package/module so basic
    processing users need not download the larger scattering engine.
 
-The browser workspace implements the first step with a cancellable Worker.
-Advanced bindings and a ReFEFF WASM runtime remain future work. See the upstream
+The original browser workspace implemented the first step with a cancellable
+Worker. The corresponding historical upstream plan is the
 [embedding roadmap](https://github.com/Ameyanagi/refeff/blob/6e260d7ea4d9869f6456c48ed06815cd0c240213/docs/EMBEDDING_ROADMAP.md).
 
 ## Other meanings of “everything”
@@ -120,6 +156,7 @@ Advanced bindings and a ReFEFF WASM runtime remain future work. See the upstream
 [WASI](https://doc.rust-lang.org/rustc/platform-support/wasm32-wasip1.html)
 provides host filesystem interfaces; ordinary `wasip1` does not support native
 thread/process spawning. [Emscripten's virtual filesystem](https://emscripten.org/docs/porting/files/file_systems_overview.html)
-can preserve legacy file handoffs. Neither target resolves the `atomic-wait`
-dependency failure by itself, and neither is a drop-in change to the current
-wasm-bindgen package. No ReFEFF runtime on either target was qualified here.
+can preserve legacy file handoffs. Changing targets alone did not resolve the
+recorded `atomic-wait` dependency failure, and neither target is a drop-in change
+to the processing package. ReFEFF 0.4.0 supplies the required upstream changes
+and uses WASI through its separate browser adapter.

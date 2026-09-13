@@ -1,7 +1,7 @@
 # rexafs 0.2.5
 
-Release preparation: publication and signing remain pending. The qualification
-record will identify the successful tagged build and published artifact hashes.
+Source: [`v0.2.5` at `50d59e2`](https://github.com/Ameyanagi/rexafs/commit/50d59e2147e12a98ace9a9e17df872a910e9ca24).
+[Exact-tag release build](https://github.com/Ameyanagi/rexafs/actions/runs/34754751069).
 
 | Desktop | Installer | Portable |
 |---|---|---|
@@ -45,8 +45,9 @@ WebAssembly and Node entry points.
   process a spectrum locally, inspect plots and export CSV plus a provenance
   record. Work runs in a cancellable Worker with input and numerical limits.
   The [website preview](https://rexafs.com/app/) follows the website's source
-  deployment; it is separate from the versioned npm package. Scattering engines
-  and the full desktop workflow are outside its current scope.
+  deployment; it is separate from the versioned npm package. The package's
+  browser API covers spectrum processing; it does not include the desktop
+  interface or a scattering engine.
 - **Clearer documentation.** Shorter product copy, explicit supported formats,
   source-owned API help, corrected scientific explanations and separate Stable
   and source-checkout references. Original screenshots retain their capture
@@ -55,19 +56,22 @@ WebAssembly and Node entry points.
 
 The numerical defaults and format-1 project format are unchanged. New linked and
 embedded compatibility fixtures are saved through the 0.2.5 writer; historical
-fixtures remain intact. ReFEFF WASM support is being handled upstream.
+fixtures remain intact. Upstream ReFEFF 0.4.0 now provides a separate WASI browser
+adapter; integrating it into the website is independent of this immutable
+0.2.5 package release, whose native dependency remains ReFEFF 0.3.0.
 
 </details>
 
 <details>
 <summary>Platform scope and qualification</summary>
 
-Mac downloads require the signed and notarized ZIP/DMG outputs from the qualified
-build. Windows and Linux remain desktop previews. Windows ARM64 requires Windows
+Mac ZIPs and DMGs are signed, notarized and stapled. The
+[signing workflow](https://github.com/Ameyanagi/rexafs/actions/runs/34760514667)
+verified the qualified build and both installers. Windows and Linux remain desktop previews. Windows ARM64 requires Windows
 11 for the x64 FEFF10 helper. Linux uses the Ubuntu 24.04 runtime baseline and
 requires a graphical session with a Vulkan-capable driver.
 
-Release CI checks six desktop architectures, both Windows installers, Linux X11
+Release CI checks all six desktop targets, both Windows installers, Linux X11
 rendering with Mesa software drivers, 20 Python wheels, the Python source archive,
 Rust and npm packages, numerical regressions, licenses and artifact checksums.
 These checks do not qualify every physical GPU, native Wayland session or clean
