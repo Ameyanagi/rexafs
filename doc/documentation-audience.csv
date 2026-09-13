@@ -31,6 +31,7 @@ doc/benchmarks/2026-09-07-clamp-study/README.md,developer,exclude,,Historical re
 doc/benchmarks/2026-09-07-fixed-production/README.md,developer,exclude,,Historical research and benchmarks; exclude from launch. A future public performance article requires a fresh editorial/scientific review.
 doc/benchmarks/2026-09-07-fixed-production/ci-34046599255/README.md,developer,exclude,,Historical research and benchmarks; exclude from launch. A future public performance article requires a fresh editorial/scientific review.
 doc/dependencies.md,developer,exclude,,Dependency update and compatibility review record.
+doc/ci.md,developer,exclude,,"CI selection, complete release qualification and historical build timings; measure changes after merge."
 doc/desktop-development.md,developer,exclude,,"Toolchains, source development and repository hooks."
 doc/desktop-updates.md,mixed,split,/docs/getting-started/updates/,Publish update/channel workflow; merge version-specific changes into release history; exclude Maintainer operation.
 doc/distribution-notices.md,developer,exclude,,Maintainer license audit; public licenses page should use actual notices rather than this dated audit.
