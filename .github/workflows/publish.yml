@@ -35,6 +35,7 @@ jobs:
       commit: ${{ steps.source.outputs.commit }}
       version: ${{ steps.source.outputs.version }}
       tag: ${{ steps.source.outputs.tag }}
+      python_abi: ${{ steps.source.outputs.python_abi }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -120,7 +121,8 @@ jobs:
         env:
           PUBLISH_CHANNEL: ${{ inputs.channel }}
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
-        run: python scripts/check-registry-artifacts.py "$PUBLISH_CHANNEL" artifacts artifacts/release-manifest/SHA256SUMS "$RELEASE_VERSION"
+          PYTHON_ABI: ${{ needs.version.outputs.python_abi }}
+        run: python scripts/check-registry-artifacts.py "$PUBLISH_CHANNEL" artifacts artifacts/release-manifest/SHA256SUMS "$RELEASE_VERSION" --python-abi "$PYTHON_ABI"
       - name: Check out the exact qualified Rust source
         if: inputs.channel == 'crates-io'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

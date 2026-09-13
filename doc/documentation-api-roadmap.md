@@ -93,10 +93,12 @@ Rerun a PR's current revision: manually rerunning an obsolete revision can
 replace the newer run in that PR's group.
 
 The [ABI3 pilot](validation/2026-09-13-python-abi3/review.md) passed all 14 Python
-API tests on CPython 3.10–3.14 using one macOS ARM64 wheel. Evaluate four platform
-builds followed by all 20 runtime checks for a future release, after qualifying
-the other platforms, minimum NumPy versions and revised artifact contracts.
-Keep 0.2.5's released binaries and current qualification matrix unchanged.
+API tests on CPython 3.10–3.14 using one macOS ARM64 wheel. The unreleased source
+now builds four shared wheels and retains all 20 runtime combinations, each with
+minimum and latest compatible NumPy. Native PR CI must qualify all four platforms
+before merging; a future versioned release must qualify the new artifact
+contract before publication. See the [release checks](releasing.md#github-is-the-release-build-authority).
+Keep 0.2.5's released binaries and historical qualification unchanged.
 
 ## Browser scope
 

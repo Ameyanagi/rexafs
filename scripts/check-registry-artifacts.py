@@ -4,6 +4,8 @@ import hashlib
 from pathlib import Path
 import re
 
+from python_wheels import check_wheel, inventory
+
 
 def read_manifest(path):
     """Read a flat SHA256SUMS file into a basename-to-hex-digest dictionary.
@@ -22,12 +24,13 @@ def read_manifest(path):
     return entries
 
 
-def required_names(channel, version, entries):
+def required_names(channel, version, entries, python_abi="per-interpreter"):
     """Select all manifest entries required for one coordinated registry release.
 
     Cargo and npm require one source crate or tarball. PyPI requires the source
-    archive and every wheel in the qualified manifest; it does not infer a new
-    platform matrix. Cargo alpha/beta/rc suffixes are converted to Python's
+    archive and every wheel in the qualified manifest. The ABI3 source profile
+    additionally requires exactly four platform wheels; historical source tags
+    retain their manifest-defined inventory. Cargo alpha/beta/rc suffixes become Python's
     a/b/rc spelling. Unsupported versions/channels or missing assets raise
     ValueError. The input manifest is left unchanged.
     """
@@ -45,6 +48,10 @@ def required_names(channel, version, entries):
         wheels = {name for name in entries if name.endswith(".whl")}
         if not wheels or any(not name.startswith(f"rexafs-{python_version}-") for name in wheels):
             raise ValueError("The manifest must contain wheels for the intended Python version")
+        if python_abi == "abi3-py310":
+            inventory(wheels, version)
+        elif python_abi != "per-interpreter" or any("-abi3-" in name for name in wheels):
+            raise ValueError("Wheel ABI differs from the immutable source tag")
         names = wheels | {f"rexafs-{python_version}.tar.gz"}
     else:
         raise ValueError("Unsupported registry")
@@ -53,7 +60,7 @@ def required_names(channel, version, entries):
     return names
 
 
-def verify(channel, artifacts, manifest, version):
+def verify(channel, artifacts, manifest, version, python_abi="per-interpreter"):
     """Return the verified file count for one registry's downloaded artifacts.
 
     Recursively hash files below artifacts, excluding manifest itself, and
@@ -63,7 +70,7 @@ def verify(channel, artifacts, manifest, version):
     desktop assets; it does not authenticate the original GitHub run.
     """
     entries = read_manifest(manifest)
-    names = required_names(channel, version, entries)
+    names = required_names(channel, version, entries, python_abi)
     actual = {}
     for path in artifacts.rglob("*"):
         if not path.is_file() or path.resolve() == manifest.resolve():
@@ -72,6 +79,8 @@ def verify(channel, artifacts, manifest, version):
             raise ValueError("Duplicate registry artifact name: " + path.name)
         with path.open("rb") as stream:
             actual[path.name] = hashlib.file_digest(stream, "sha256").hexdigest()
+        if channel == "pypi" and python_abi == "abi3-py310" and path.suffix == ".whl":
+            check_wheel(path, version)
     expected = {name: entries[name] for name in names}
     if actual != expected:
         raise ValueError("Registry artifacts are missing, unexpected, or differ from the qualified build")
@@ -84,6 +93,7 @@ if __name__ == "__main__":
     parser.add_argument("artifacts", type=Path)
     parser.add_argument("manifest", type=Path)
     parser.add_argument("version")
+    parser.add_argument("--python-abi", choices=["per-interpreter", "abi3-py310"], default="per-interpreter")
     args = parser.parse_args()
-    count = verify(args.channel, args.artifacts, args.manifest, args.version)
+    count = verify(args.channel, args.artifacts, args.manifest, args.version, args.python_abi)
     print(f"Verified all {count} {args.channel} artifacts against the qualified GitHub build")
