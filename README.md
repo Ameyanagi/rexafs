@@ -100,6 +100,8 @@ details. See [Windows installation](doc/windows-installers.md),
 Optional Rust integrations include [ReFEFF](https://crates.io/crates/refeff), FEFF10,
 structure databases and plotting. The Python and JavaScript packages expose the
 small processing API; they do not yet expose all Rust fitting and structure APIs.
+Desktop packages built from this checkout include both ReFEFF and FEFF10 on
+every platform; the published 0.2.4 Windows package includes ReFEFF only.
 The desktop uses the published [`xraydb`](https://crates.io/crates/xraydb) crate
 from [`xraydb-rs`](https://github.com/Ameyanagi/xraydb-rs) for absorption-edge
 identification. The desktop's experimental assistant is optional.
@@ -110,15 +112,19 @@ The release work is tested with Rust 1.98.1. The desktop uses edition 2024 and a
 pinned GPUI dependency; see the runbook for platform qualification.
 
 Install the development dependencies for your platform first; see
-[Linux and Windows development](doc/desktop-development.md). On Windows MSVC,
-use the ReFEFF-only command below because the FEFF10 prebuilt uses MinGW.
+[Linux and Windows development](doc/desktop-development.md).
 
 ```bash
 cargo test --locked -p rexafs
 cargo run --locked --release -p rexafs-gui
 ```
 
-The desktop executable is `target/release/rexafs`. To build only the ReFEFF backend:
+The desktop executable is `target/release/rexafs`. On Windows, the MSVC build
+cannot link the MinGW FEFF10 archive, so FEFF10 runs through the upstream
+`feff10-rs.exe` helper process. Release packages bundle it in `resources/feff10`;
+a source build finds it through `REXAFS_FEFF10_EXECUTABLE` after
+`python scripts/feff10_worker.py target/feff10-helper` downloads and verifies it.
+To build only the ReFEFF backend:
 
 ```bash
 cargo build --locked --release -p rexafs-gui --no-default-features --features refeff-runner

@@ -31,7 +31,6 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "3060e417
 # Core crate: pipeline + fitting. Do NOT enable its `plotting` feature here;
 # the GUI builds ruviz Plots itself in src/plotting/.
 rexafs = { path = "../rexafs", default-features = true, features = ["amcsd", "materials-project", "cod"] }
-feff10 = { workspace = true, optional = true }
 
 accesskit = "0.25"
 raw-window-handle = "0.6"
@@ -58,6 +57,11 @@ serde_json = { workspace = true, features = ["float_roundtrip"] }
 default = ["refeff-runner", "feff10-runner"]
 refeff-runner = ["rexafs/refeff-runner"]
 feff10-runner = ["rexafs/feff10-runner", "dep:feff10"]
+
+# Windows runs FEFF10 through the bundled helper process (see the core crate),
+# so the embedded library and its worker hook are only linked elsewhere.
+[target.'cfg(not(windows))'.dependencies]
+feff10 = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 accesskit_macos = "0.27"

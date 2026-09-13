@@ -52,13 +52,23 @@ Install Visual Studio Build Tools with **Desktop development with C++**, the
 Windows SDK, Rust's MSVC toolchain, CMake, and Python 3.12+. In a developer shell:
 
 ```powershell
+python scripts/feff10_worker.py target/feff10-helper
+$env:REXAFS_FEFF10_EXECUTABLE = "$PWD\target\feff10-helper\feff10-rs.exe"
 cargo test --locked -p rexafs
 cargo check --locked -p rexafs --all-targets
-cargo test --locked -p rexafs-gui --no-default-features --features refeff-runner
-cargo run --locked --release -p rexafs-gui --no-default-features --features refeff-runner
+cargo test --locked -p rexafs-gui
+cargo run --locked --release -p rexafs-gui
 ```
 
-FEFF10's current Windows prebuilt targets MinGW, so MSVC builds use ReFEFF.
+FEFF10's Windows prebuilt targets MinGW, which the MSVC desktop cannot link.
+Windows builds therefore keep the `feff10-runner` feature but run FEFF10
+through the upstream `feff10-rs.exe` command-line helper as a separate
+process, one fresh process per FEFF stage. `scripts/feff10_worker.py`
+downloads that executable and its MinGW runtime DLLs from the pinned feff10-rs
+release and verifies their SHA-256 values. The runner looks for the helper in
+`REXAFS_FEFF10_EXECUTABLE`, then in `resources/feff10` beside `rexafs.exe`
+(where release packaging installs it), then on `PATH`. Without it, FEFF10
+calculations report a missing `feff10-rs` executable while ReFEFF keeps working.
 Criterion benchmarks build on Windows; optional pprof flamegraphs require Unix.
 Windows fields use Consolas, and shortcuts use Ctrl. See
 [Windows installation](windows-installers.md) for the installer and portable ZIP.

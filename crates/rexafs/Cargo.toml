@@ -41,7 +41,6 @@ pest_derive = { workspace = true }
 thiserror = { workspace = true }
 ruviz = { workspace = true, optional = true, features = ["svg", "typst-math"] }
 refeff = { workspace = true, optional = true }
-feff10 = { workspace = true, optional = true }
 # apex-io 0.3 (via apex-solver 1.4) links sqlite3 through rusqlite 0.31.
 # Cargo permits only one libsqlite3-sys version in this workspace.
 rusqlite = { version = "0.31", features = ["bundled"], optional = true }
@@ -60,6 +59,12 @@ amcsd = ["dep:rusqlite"]
 http = ["dep:ureq"]
 materials-project = ["http"]
 cod = ["http"]
+
+# The embedded FEFF10 library is a MinGW archive that the MSVC desktop cannot
+# link. Windows builds keep the `feff10-runner` feature and run FEFF10 through
+# the bundled `feff10-rs.exe` helper process instead; see fitting/runner.rs.
+[target.'cfg(not(windows))'.dependencies]
+feff10 = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dev-dependencies]
 pprof = { version = "0.15", features = ["flamegraph"] }

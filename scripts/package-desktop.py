@@ -12,6 +12,7 @@ from pathlib import Path
 
 from release_archive import zip_bundle
 from desktop_channels import app_name, identity
+from feff10_worker import install_helper
 from macos_installer import include_notices
 
 root = Path(__file__).resolve().parents[1]
@@ -53,8 +54,8 @@ features = compiled_identity.get("features")
 if (not features or len(features) != len(set(features))
         or not set(features) <= {"refeff-runner", "feff10-runner"}):
     raise SystemExit("Compiled desktop must report its embedded calculation engines")
-if system == "Darwin" and set(features) != {"refeff-runner", "feff10-runner"}:
-    raise SystemExit("Mac releases must include both ReFEFF and FEFF10")
+if set(features) != {"refeff-runner", "feff10-runner"}:
+    raise SystemExit("Desktop releases must include both ReFEFF and FEFF10")
 for key, value in {"version": version, **build_identity}.items():
     if compiled_identity.get(key) != value:
         raise SystemExit(f"Compiled desktop has the wrong {key}")
@@ -119,6 +120,10 @@ for package_id in sorted(included):
 (bundle / "dependencies.json").write_text(json.dumps(inventory, indent=2) + "\n")
 if "feff10-runner" in features:
     shutil.copytree(root / "assets/licenses/feff10-native", notices / "feff10-native")
+    if system == "Windows":
+        # The MSVC desktop runs FEFF10 through the verified upstream helper
+        # executable; the runner looks for it in resources/feff10.
+        install_helper(resources / "feff10")
 if system == "Darwin":
     include_notices(bundle, build_identity)
 (bundle / "README.txt").write_text(
@@ -127,7 +132,8 @@ if system == "Darwin":
     "Keep the extracted directory together; it contains the example and notices.\n"
     f"Open {application_name} on macOS or run rexafs / rexafs.exe on Linux / Windows.\n"
     "Help contains the optional Cu example and offline licenses.\n"
-    "This archive has no publisher code signature; macOS notarization is not included.\n"
+    + ("On Windows, FEFF10 runs through the bundled resources\\feff10\\feff10-rs.exe helper process.\n" if system == "Windows" else "")
+    + "This archive has no publisher code signature; macOS notarization is not included.\n"
     "Linux requires a graphical session, Vulkan-capable driver, GTK 3, fontconfig and xkbcommon.\n"
     "Save .rxs projects with relative source paths (default), or select Raw: embedded for portable originals.\n"
     "Run the executable with --self-check for a display-free packaged example check.\n"

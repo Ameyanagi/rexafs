@@ -21,8 +21,22 @@ const FEFF85L_MODULES: [(&str, &str); 6] = [
     ("genfmt", "feff8l_genfmt"),
     ("ff2x", "feff8l_ff2x"),
 ];
-#[cfg(feature = "feff10-runner")]
+#[cfg(all(feature = "feff10-runner", not(windows)))]
 const FEFF10_MODULE_PREFIX: &str = "feff10::";
+/// Environment variable that names the FEFF10 command-line helper explicitly.
+/// It overrides the bundled helper on Windows; an empty value is ignored.
+pub const FEFF10_HELPER_ENV: &str = "REXAFS_FEFF10_EXECUTABLE";
+/// File name of the FEFF10 command-line helper bundled with Windows packages.
+/// It is the upstream `feff10-rs` executable built for the MinGW toolchain.
+pub const FEFF10_HELPER_EXECUTABLE: &str = "feff10-rs.exe";
+/// Directory of the bundled helper and its runtime libraries, relative to the
+/// directory containing the rexafs executable.
+pub const FEFF10_HELPER_DIRECTORY: &str = "resources/feff10";
+/// Stage name recorded for the single helper process on Windows.
+pub const FEFF10_HELPER_MODULE: &str = "feff10-rs";
+/// Upper bound on FEFF10 stages, used to bound the complete helper run.
+#[cfg(all(feature = "feff10-runner", windows))]
+const FEFF10_MAX_STAGES: u64 = 18;
 #[cfg(feature = "refeff-runner")]
 const REFEFF_MODULE_PREFIX: &str = "refeff::";
 #[cfg(feature = "refeff-runner")]
@@ -159,7 +173,7 @@ fn run_feff85l_modules(request: &FeffRunRequest) -> Result<FeffRunResult, Fittin
     }
 }
 
-#[cfg(feature = "feff10-runner")]
+#[cfg(all(feature = "feff10-runner", not(windows)))]
 fn resolve_feff10_commands(mode: FeffExecutionMode) -> Result<FeffResolvedCommands, FittingError> {
     let modules = feff10::Stage::all()
         .iter()
@@ -180,7 +194,212 @@ fn resolve_feff10_commands(mode: FeffExecutionMode) -> Result<FeffResolvedComman
     })
 }
 
-#[cfg(feature = "feff10-runner")]
+/// Locate the FEFF10 helper on Windows: the explicit environment override,
+/// then the bundled `resources/feff10` directory beside the rexafs executable,
+/// then `PATH`. The helper is the upstream MinGW `feff10-rs` build; the MSVC
+/// desktop cannot link the MinGW FEFF10 archive directly.
+#[cfg(all(feature = "feff10-runner", windows))]
+fn feff10_helper_executable() -> Result<PathBuf, FittingError> {
+    if let Some(explicit) = env::var_os(FEFF10_HELPER_ENV).filter(|value| !value.is_empty()) {
+        return validate_executable_path(Path::new(&explicit));
+    }
+    if let Some(directory) = env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf))
+    {
+        let bundled = directory
+            .join(FEFF10_HELPER_DIRECTORY)
+            .join(FEFF10_HELPER_EXECUTABLE);
+        if is_executable_file(&bundled) {
+            return validate_executable_path(&bundled);
+        }
+    }
+    lookup_in_path(FEFF10_HELPER_EXECUTABLE).ok_or_else(|| FittingError::ExecutableNotFound {
+        module: FEFF10_HELPER_MODULE.to_string(),
+    })
+}
+
+/// Strip the `\\?\` verbatim prefix that `canonicalize` adds on Windows.
+/// `CreateProcess` does not accept verbatim paths for the working directory,
+/// so the helper receives ordinary drive or UNC paths.
+#[cfg(all(feature = "feff10-runner", windows))]
+fn without_verbatim_prefix(path: &Path) -> PathBuf {
+    use std::path::{Component, Prefix};
+    let mut components = path.components();
+    let Some(Component::Prefix(prefix)) = components.next() else {
+        return path.to_path_buf();
+    };
+    let root = match prefix.kind() {
+        Prefix::VerbatimDisk(letter) => format!("{}:\\", letter as char),
+        Prefix::VerbatimUNC(server, share) => format!(
+            "\\\\{}\\{}\\",
+            server.to_string_lossy(),
+            share.to_string_lossy()
+        ),
+        _ => return path.to_path_buf(),
+    };
+    let mut simplified = PathBuf::from(root);
+    simplified.extend(components.filter(|component| !matches!(component, Component::RootDir)));
+    simplified
+}
+
+#[cfg(all(feature = "feff10-runner", windows))]
+fn resolve_feff10_commands(mode: FeffExecutionMode) -> Result<FeffResolvedCommands, FittingError> {
+    let executable = without_verbatim_prefix(&feff10_helper_executable()?);
+    Ok(FeffResolvedCommands {
+        mode,
+        modules: vec![FeffModuleCommand {
+            module: FEFF10_HELPER_MODULE.to_string(),
+            executable,
+        }],
+    })
+}
+
+/// Run FEFF10 through the bundled helper process. The helper parses the
+/// prepared `feff.inp`, derives the stages from its CONTROL card, runs each
+/// stage in a fresh process with the requested per-stage timeout, and writes
+/// the same `feffNNNN.dat`, `paths.dat` and `logN.dat` files as the embedded
+/// pipeline. rexafs additionally bounds the complete run to the per-stage
+/// timeout multiplied by the maximum stage count.
+#[cfg(all(feature = "feff10-runner", windows))]
+fn run_feff10_pipeline(request: &FeffRunRequest) -> Result<FeffRunResult, FittingError> {
+    let workspace_dir = validate_workspace_dir(&request.workspace_dir)?;
+    let feffinp_path = resolve_feffinp_path(request, &workspace_dir)?;
+    let executable = without_verbatim_prefix(&feff10_helper_executable()?);
+    let helper_dir = without_verbatim_prefix(&workspace_dir);
+    let original = fs::read_to_string(&feffinp_path).map_err(|error| FittingError::IOFailed {
+        action: "read FEFF10 input".to_string(),
+        path: feffinp_path.display().to_string(),
+        reason: error.to_string(),
+    })?;
+    let prepared = prepare_feff10_input(&original, request.use_sfconv);
+    let helper_input = helper_dir.join("feff.inp");
+    fs::write(&helper_input, prepared).map_err(|error| FittingError::IOFailed {
+        action: "write prepared FEFF10 input".to_string(),
+        path: helper_input.display().to_string(),
+        reason: error.to_string(),
+    })?;
+
+    let module = FeffModuleCommand {
+        module: FEFF10_HELPER_MODULE.to_string(),
+        executable,
+    };
+    let mut args: Vec<std::ffi::OsString> = vec![
+        "run".into(),
+        helper_input.clone().into(),
+        "--work-dir".into(),
+        helper_dir.clone().into(),
+        "--quiet".into(),
+    ];
+    if let Some(timeout_sec) = request.timeout_sec {
+        args.push("--timeout".into());
+        args.push(timeout_sec.to_string().into());
+    }
+    let overall_timeout = request
+        .timeout_sec
+        .map(|timeout_sec| timeout_sec.saturating_mul(FEFF10_MAX_STAGES));
+    let helper_log = run_module_command(&module, &args, &helper_dir, overall_timeout)?;
+
+    let resolved = FeffResolvedCommands {
+        mode: request.mode,
+        modules: vec![module],
+    };
+    let mut logs = vec![helper_log];
+    logs.extend(discover_feff10_logs(&workspace_dir)?);
+    let path_files = discover_path_files(&workspace_dir)?;
+    if path_files.is_empty() {
+        return Err(FittingError::NoPathOutputs {
+            workspace: workspace_dir.display().to_string(),
+        });
+    }
+
+    Ok(FeffRunResult {
+        mode: request.mode,
+        workspace_dir,
+        feffinp_path,
+        resolved,
+        logs,
+        path_files,
+    })
+}
+
+/// Return the FEFF card keyword of a line, ignoring blank and `*` comment lines.
+#[cfg(any(test, all(feature = "feff10-runner", windows)))]
+fn feff_card_keyword(line: &str) -> Option<&str> {
+    let trimmed = line.trim_start();
+    if trimmed.is_empty() || trimmed.starts_with('*') {
+        return None;
+    }
+    trimmed.split_whitespace().next()
+}
+
+/// Parse the six PRINT flags of a card line; missing flags are 0.
+#[cfg(any(test, all(feature = "feff10-runner", windows)))]
+fn parse_print_flags(line: &str) -> [i64; 6] {
+    let mut flags = [0i64; 6];
+    let values = line
+        .split_whitespace()
+        .skip(1)
+        .take_while(|token| !token.starts_with('*'))
+        .map_while(|token| token.parse::<i64>().ok());
+    for (slot, value) in flags.iter_mut().zip(values) {
+        *slot = value;
+    }
+    flags
+}
+
+/// Insert a card before the POTENTIALS, ATOMS or END block, or append it.
+#[cfg(any(test, all(feature = "feff10-runner", windows)))]
+fn insert_feff_card(lines: &mut Vec<String>, card: &str) {
+    let position = lines
+        .iter()
+        .position(|line| {
+            feff_card_keyword(line).is_some_and(|keyword| {
+                ["POTENTIALS", "ATOMS", "END"]
+                    .iter()
+                    .any(|block| keyword.eq_ignore_ascii_case(block))
+            })
+        })
+        .unwrap_or(lines.len());
+    lines.insert(position, card.to_string());
+}
+
+/// Prepare input text for the FEFF10 helper. The sixth PRINT flag is raised
+/// to at least 3 so FEFF10 writes individual path files, and SFCONV is added
+/// when requested. Other cards, comments and atom lists are unchanged. This
+/// mirrors the card edits applied to the parsed input by the embedded route.
+#[cfg(any(test, all(feature = "feff10-runner", windows)))]
+fn prepare_feff10_input(input: &str, use_sfconv: bool) -> String {
+    let mut lines: Vec<String> = input.lines().map(str::to_string).collect();
+    let print_index = lines
+        .iter()
+        .position(|line| feff_card_keyword(line).is_some_and(|k| k.eq_ignore_ascii_case("PRINT")));
+    match print_index {
+        Some(index) => {
+            let mut flags = parse_print_flags(&lines[index]);
+            if flags[5] < 3 {
+                flags[5] = 3;
+            }
+            lines[index] = format!(
+                "PRINT {} {} {} {} {} {}",
+                flags[0], flags[1], flags[2], flags[3], flags[4], flags[5]
+            );
+        }
+        None => insert_feff_card(&mut lines, "PRINT 0 0 0 0 0 3"),
+    }
+    if use_sfconv
+        && !lines
+            .iter()
+            .any(|line| feff_card_keyword(line).is_some_and(|k| k.eq_ignore_ascii_case("SFCONV")))
+    {
+        insert_feff_card(&mut lines, "SFCONV");
+    }
+    let mut prepared = lines.join("\n");
+    prepared.push('\n');
+    prepared
+}
+
+#[cfg(all(feature = "feff10-runner", not(windows)))]
 fn run_feff10_pipeline(request: &FeffRunRequest) -> Result<FeffRunResult, FittingError> {
     let workspace_dir = validate_workspace_dir(&request.workspace_dir)?;
     let feffinp_path = resolve_feffinp_path(request, &workspace_dir)?;
@@ -263,7 +482,7 @@ fn run_feff10_pipeline(request: &FeffRunRequest) -> Result<FeffRunResult, Fittin
     })
 }
 
-#[cfg(feature = "feff10-runner")]
+#[cfg(all(feature = "feff10-runner", not(windows)))]
 fn ensure_other_card_present(other_cards: &mut Vec<String>, keyword: &str) {
     if other_cards.iter().any(|line| {
         line.split_whitespace()
@@ -588,7 +807,19 @@ fn run_single_module(
     workspace_dir: &Path,
     timeout_sec: Option<u64>,
 ) -> Result<PathBuf, FittingError> {
+    run_module_command(module, &[], workspace_dir, timeout_sec)
+}
+
+/// Run one external command with arguments in the workspace, apply the timeout,
+/// and record its exit status and output in `feffrun_<module>.log`.
+fn run_module_command(
+    module: &FeffModuleCommand,
+    args: &[std::ffi::OsString],
+    workspace_dir: &Path,
+    timeout_sec: Option<u64>,
+) -> Result<PathBuf, FittingError> {
     let mut child = Command::new(&module.executable)
+        .args(args)
         .current_dir(workspace_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -1331,5 +1562,47 @@ mod tests {
 
         assert_eq!(modeled.chi.len(), k.len());
         assert_eq!(modeled.path_chi.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod feff10_input_tests {
+    use super::{parse_print_flags, prepare_feff10_input};
+
+    const INPUT: &str = "TITLE Cu\nHOLE 1 1.0\nCONTROL 1 1 1 1 1 1\nPRINT 1 0 0 0 0 0 * comment\nRMAX 5.0\n\nPOTENTIALS\n 0 29 Cu\nATOMS\n 0.0 0.0 0.0 0 Cu\nEND\n";
+
+    #[test]
+    fn raises_the_path_output_flag_and_keeps_other_flags() {
+        let prepared = prepare_feff10_input(INPUT, false);
+        assert!(prepared.contains("PRINT 1 0 0 0 0 3\n"));
+        assert!(!prepared.contains("SFCONV"));
+        assert!(prepared.contains("HOLE 1 1.0\n"));
+        assert!(prepared.ends_with("END\n"));
+        assert_eq!(parse_print_flags("PRINT 1 0 0 0 0 3"), [1, 0, 0, 0, 0, 3]);
+        assert_eq!(parse_print_flags("  print 2"), [2, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn keeps_a_larger_existing_flag_and_adds_a_missing_card_before_potentials() {
+        let prepared = prepare_feff10_input("PRINT 0 0 0 0 0 5\nATOMS\nEND\n", true);
+        assert!(prepared.starts_with("PRINT 0 0 0 0 0 5\nSFCONV\nATOMS\n"));
+
+        let without_print = prepare_feff10_input(
+            "TITLE x\n* PRINT in a comment\nPOTENTIALS\n 0 29 Cu\nEND\n",
+            false,
+        );
+        assert_eq!(
+            without_print,
+            "TITLE x\n* PRINT in a comment\nPRINT 0 0 0 0 0 3\nPOTENTIALS\n 0 29 Cu\nEND\n"
+        );
+    }
+
+    #[test]
+    fn preserves_an_existing_sfconv_card() {
+        let prepared = prepare_feff10_input("sfconv\nPRINT 0 0 0 0 0 3\n", true);
+        assert_eq!(
+            prepared.matches("sfconv").count() + prepared.matches("SFCONV").count(),
+            1
+        );
     }
 }
