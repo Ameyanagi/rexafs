@@ -16,6 +16,12 @@ screenshots remain. Corrected the FAQ's startup-network claim, stored automatic
 settings explanation, Windows FEFF10 release distinction and JavaScript cleanup
 examples. Existing generated API help remains source-owned.
 
+Lead product copy with open source, format interoperability, speed, a small
+footprint and advanced analysis. Name concrete formats and capabilities instead
+of adding long feature lists. Treat browser analysis as a developing preview;
+avoid suggesting that it already includes the full desktop workflow. Keep
+numerical speed and size claims tied to a measured version and environment.
+
 Keep each page responsible for one task:
 
 | Page | Keep | Link elsewhere |

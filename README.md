@@ -6,14 +6,18 @@
 
 ![rexafs — Rust-powered X-ray absorption analysis](assets/brand/rexafs-release.png)
 
-**Rust-powered X-ray absorption analysis.**
+**Open-source X-ray absorption analysis. Fast. Small. Capable.**
 
-rexafs processes measured XAS spectra, removes EXAFS backgrounds, computes Fourier
-transforms and fits scattering-path models. Use the Rust library, Python bindings,
-JavaScript/Wasm package or desktop application. The
-[public website](https://rexafs.com/) gives desktop and library
-users installation guides, illustrated workflows and generated API references.
-The website is deployed with GitHub Pages at rexafs.com.
+rexafs is free and open source under [MIT](LICENSE-MIT) or
+[Apache-2.0](LICENSE-APACHE), built for fast processing in a small package.
+Work across formats and platforms: import text/XDI spectra and CIF/XYZ structures,
+then export CSV data and SVG/PNG figures. The desktop and Rust library support
+scattering calculations, joint fits and large measurement series; Python and
+TypeScript expose spectrum processing. Browser analysis is in development, with
+a [processing preview](https://rexafs.com/app/).
+
+The [public website](https://rexafs.com/) has installation guides, illustrated
+workflows and API references.
 
 Developed under the codename **xraytsubaki**, inspired by the camellia. The `r`
 in **rexafs** stands for both **Rust** and **reinventing the wheel** for EXAFS

@@ -1,12 +1,17 @@
 ---
 title: "Start with a spectrum"
-description: "Choose desktop analysis or a library, and explore what rexafs can do."
+description: "Open-source X-ray absorption analysis across formats and platforms."
 audience: user
 ---
 
-rexafs provides tools for X-ray absorption spectroscopy (XAS), with a desktop
-application and Python, TypeScript and Rust libraries. This manual covers
-**stable 0.2.4**.
+rexafs is free and open source under [MIT or Apache-2.0](/licenses/), built for
+fast X-ray absorption spectroscopy (XAS) analysis in a small package. It supports
+text/XDI spectra, CIF/XYZ structures and CSV/SVG/PNG exports, with desktop tools
+for scattering calculations, joint fits and measurement series.
+
+This manual covers **stable 0.2.4** on the desktop and in Python, TypeScript and
+Rust. Browser analysis is in development; the [processing preview](/app/) uses
+the unreleased source-checkout engine.
 
 ## Who this manual is for
 
