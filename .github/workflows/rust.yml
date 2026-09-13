@@ -9,8 +9,40 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+concurrency:
+  group: rust-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  scope:
+    name: Select Rust checks
+    runs-on: ubuntu-latest
+    outputs:
+      full: ${{ steps.select.outputs.full }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: '3.12'
+    - name: Verify selection and version rules
+      run: |
+        python scripts/check-release-version.py
+        python scripts/test-ci-scope.py
+        python scripts/test-ci-results.py
+    - id: select
+      env:
+        CI_EVENT: ${{ github.event_name }}
+        CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        CI_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      run: |
+        python scripts/ci_scope.py --event "$CI_EVENT" --base "$CI_BASE" --head "$CI_HEAD" \
+          --scope-push --github-output "$GITHUB_OUTPUT"
+
   core:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     name: Core (${{ matrix.os }}, ${{ matrix.toolchain }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -28,8 +60,10 @@ jobs:
       uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
       with:
         toolchain: ${{ matrix.toolchain }}
-    - name: Build core crate
-      run: cargo +${{ matrix.toolchain }} build --locked -p rexafs --verbose
+    - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      with:
+        shared-key: checks
+        save-if: ${{ github.ref == 'refs/heads/main' && runner.os == 'Linux' && matrix.toolchain == '1.98.1' }}
     - name: Run core crate tests
       run: cargo +${{ matrix.toolchain }} test --locked -p rexafs --verbose
     - name: Test optional ndarray compatibility backend
@@ -40,6 +74,8 @@ jobs:
       run: cargo +${{ matrix.toolchain }} check --locked -p rexafs --all-targets
 
   plotting:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     name: Core plotting (stable)
     runs-on: ubuntu-latest
 
@@ -53,6 +89,8 @@ jobs:
       run: cargo +stable test --locked -p rexafs --features plotting
 
   linux-desktop:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     name: Linux desktop compile (stable)
     runs-on: ubuntu-24.04
 
@@ -69,6 +107,8 @@ jobs:
       run: cargo +stable check --locked -p rexafs-gui --no-default-features --features refeff-runner,feff10-runner
 
   strict-gates:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     name: Strict Gates (stable)
     runs-on: ubuntu-latest
 
@@ -98,7 +138,8 @@ jobs:
   benchmark:
     name: Benchmark Regression
     runs-on: ubuntu-latest
-    needs: [core, strict-gates]
+    needs: [scope, core, strict-gates]
+    if: needs.scope.outputs.full == 'true'
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -129,3 +170,18 @@ jobs:
         path: |
           target/criterion
           target/bench-regression-summary.md
+
+  result:
+    name: Rust checks
+    if: always()
+    needs: [scope, core, plotting, linux-desktop, strict-gates, benchmark]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: '3.12'
+    - name: Require every selected job to pass
+      env:
+        CI_NEEDS_JSON: ${{ toJSON(needs) }}
+      run: python scripts/check-ci-results.py --selector scope --jobs core plotting linux-desktop strict-gates benchmark

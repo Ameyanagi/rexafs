@@ -97,6 +97,9 @@ Windows fields use Consolas, and shortcuts use Ctrl. See
 
 ## Repository checks
 
+See [CI selection and release coverage](ci.md) for changed-file selection,
+aggregate checks and the measured build bottlenecks.
+
 ```bash
 uv tool install --python 3.12 pre-commit==4.5.1
 pre-commit install --install-hooks

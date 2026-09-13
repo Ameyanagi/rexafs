@@ -2,3 +2,12 @@
 # every platform, including original line endings and trailing blank lines.
 crates/rexafs/tests/testfiles/** -text -whitespace
 crates/rexafs-gui/tests/fixtures/** -text -whitespace
+
+# Retained upstream license bytes and their byte-offset inventory are immutable.
+website/vendor/refeff-0.4.0/RUST-NOTICES.txt -text -whitespace
+website/vendor/refeff-0.4.0/rust-dependencies.json -text
+website/vendor/refeff-0.4.0/TOOLCHAIN-NOTICES.txt -text -whitespace
+website/vendor/refeff-0.4.0/rust-COPYRIGHT-library.html -text -whitespace
+website/vendor/refeff-0.4.0/toolchain-provenance.json -text
+website/tests/fixtures/refeff-0.4.0/** -text -whitespace
+website/third-party/refeff/NOTICE.md -text -whitespace

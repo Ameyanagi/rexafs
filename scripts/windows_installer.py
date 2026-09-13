@@ -153,8 +153,9 @@ def pe_imports(path: Path) -> set[str]:
 def runtime_payload(bundle: Path, target: str, runtime: Path) -> list[Path]:
     """Select compatible CRT DLLs and require every static CRT import to be present.
 
-    The ARM64 redistributable can contain the x64-only vcruntime140_1.dll FH4
-    companion. Omit that one file only when neither the native desktop nor any
+    The ARM64 redistributable can contain an x64-compatible vcruntime140_1.dll
+    companion for Microsoft's FH4 C++ exception handler, with a PE header that
+    reports x64 (0x8664). Omit that file only when neither the native desktop nor any
     selected native/ARM64X runtime imports it, including delay imports. Other
     machine mismatches remain errors. Microsoft describes FH4's x64 DLL here:
     https://devblogs.microsoft.com/cppblog/making-cpp-exception-handling-smaller-x64/
@@ -444,7 +445,7 @@ def stage_runtime(
     target's installed Visual Studio redistributable directory; runtime can
     select another redistributable directory. Select native/compatible DLLs and
     verify their imports, Microsoft signatures and PE architecture before copying
-    any file. An unused x64-only FH4 companion in ARM64 redists is omitted.
+    any file. An unused x64-compatible FH4 companion in ARM64 redists is omitted.
     Reject existing destination DLLs or notices rather than replace them. Return
     DLL versions, signer names, SHA-256 hashes and machine identifiers for metadata.
     """
