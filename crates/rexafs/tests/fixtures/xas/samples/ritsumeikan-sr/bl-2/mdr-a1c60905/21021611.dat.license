@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: individual dataset license
+License-Evidence: https://mdr.nims.go.jp/datasets/a1c60905-b457-4280-8115-9a47ec2ce602
+Test-Eligibility: documented-license
+Source: https://mdr.nims.go.jp/datasets/a1c60905-b457-4280-8115-9a47ec2ce602
+Download: https://mdr.nims.go.jp/filesets/aec3cde0-1803-4aec-896c-fa07cab34f78/download
+Citation: Masashi Ishii; Ritsumeikan SR Center. XAFS spectrum of Lanthanum fluoride, anhydrous. https://doi.org/10.48505/nims.3356
+SHA256: 046dd80bb5e3b5bf6c04700dbc221225553c81edc34c1679db59f4169572da5f
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/mdr/a1c60905-b457-4280-8115-9a47ec2ce602/record.json

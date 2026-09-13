@@ -11,6 +11,9 @@ repository = { workspace = true }
 description = "Rust-powered X-ray absorption spectroscopy analysis and EXAFS fitting"
 keywords = ["xafs", "exafs", "spectroscopy", "xray", "science"]
 categories = ["science"]
+# Keep the beamline corpus and its integration tests in Git, outside the
+# crates.io archive. Source-checkout tests read these fixtures from disk.
+exclude = ["/tests/fixtures/xas/", "/tests/beamline_*.rs"]
 
 [dependencies]
 semver = { workspace = true }

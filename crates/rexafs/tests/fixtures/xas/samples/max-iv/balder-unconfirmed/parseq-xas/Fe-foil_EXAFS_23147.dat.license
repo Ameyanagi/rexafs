@@ -1,0 +1,11 @@
+SPDX-License-Identifier: MIT
+License-File: LICENSES/kklmn--ParSeq-XAS--LICENSE
+License-Basis: repository-distribution-license
+License-Scope: repository distribution license; bundled examples/test fixtures
+License-Evidence: https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/LICENSE
+Test-Eligibility: documented-license
+Source: https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/foils/Fe-foil_EXAFS_23147.dat
+Download: https://raw.githubusercontent.com/kklmn/ParSeq-XAS/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/foils/Fe-foil_EXAFS_23147.dat
+Citation: Konstantin Klementiev and contributors. ParSeq-XAS. https://github.com/kklmn/ParSeq-XAS
+SHA256: 7d2cec2951c6ccdbcb46a44f11247e765896b11dfb0f9ac786e0791d05870399
+Modifications: None; original downloaded measurement bytes retained.

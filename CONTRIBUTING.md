@@ -71,3 +71,23 @@ packages and run the runtime and language-server checks described in
 Automated checks can verify packaging, links, types and numerical examples.
 They do not establish that prose is clear, a citation supports a claim, or an
 assumption is physically appropriate; those require review.
+
+## Beamline measurement fixtures
+
+The source checkout retains original X-ray absorption measurements in
+[`crates/rexafs/tests/fixtures/xas`](crates/rexafs/tests/fixtures/xas/README.md),
+with per-file licenses, citations, source URLs and checksums. These fixtures and
+their dedicated integration test are excluded from the crates.io package.
+Running the tests does not download measurement data.
+
+```sh
+cargo test --locked -p rexafs --test beamline_formats
+python scripts/check-beamline-fixtures.py
+python scripts/check-beamline-fixtures.py --package
+```
+
+The first command exercises the currently covered readers. The second verifies
+all retained measurement and attribution files. The third asks Cargo for its
+actual package file list and fails if the corpus or its integration test would
+be published. See the [integration notes](crates/rexafs/tests/fixtures/xas/INTEGRATION.md)
+for coverage and instructions for adding fixtures.

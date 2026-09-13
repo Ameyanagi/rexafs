@@ -1,0 +1,258 @@
+{
+  "@context": "http://schema.org",
+  "@graph": [
+    {
+      "@id": "https://mdrs-external.nims.go.jp/datasets/ef31c010-20db-4a69-89d6-eaecbfc2c91e",
+      "@type": "Dataset",
+      "datePublished": "2021-11-08",
+      "name": "XAFS spectrum of Barium(II) iodide, anhydrous",
+      "description": "This dataset consists of X-ray absorption fine structure (XAFS) spectra at Ba K-edge of Barium(II) iodide, anhydrous measured at SPring-8 BL14B2, and is a part of XAFS database (MDR XAFS DB, https://doi.org/10.48505/nims.1447) as a collection of MDR",
+      "distribution": [
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/8f625cc7-c953-427b-a4c7-0ef4f323a848/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/bfda8f1d-551d-470c-bccf-22544862d305/download",
+          "encodingFormat": "text/plain"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/7199f4c5-99a9-4bfc-b1a9-6941bfe8c222/download",
+          "encodingFormat": "application/json"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/0eef55f5-1cf3-4ccd-9aac-88e7823d4b98/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/0ca3c4f7-2a52-4a57-9ed0-95c9c89e907a/download",
+          "encodingFormat": "text/tab-separated-values"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/404b9359-ab24-42fc-aea6-f2cf5bffe252/download",
+          "encodingFormat": "text/plain"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/1d525dd1-5097-45b6-aa5a-6fc03f6a3aec/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/2deb18c8-135c-4f21-85e2-68dcc12c755f/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/d7264bcd-d8d3-4fa6-b7da-9bee642e176a/download",
+          "encodingFormat": "image/png"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/b2d2c62c-d797-467c-b61e-260824202936/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/f7e76fd4-da67-46ff-a496-661237650447/download",
+          "encodingFormat": "text/plain"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/9077e1fb-5f8e-43fe-b218-de1f29b4cc07/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/f1a79c1f-1cc1-40c0-9804-6755779cb074/download",
+          "encodingFormat": "text/plain"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/753b3570-c9fb-4774-bfef-f452ad1f951e/download",
+          "encodingFormat": "application/octet-stream"
+        }
+      ],
+      "identifier": "https://doi.org/10.48505/nims.3067",
+      "license": [
+        {
+          "@id": "cc-by-4.0"
+        }
+      ],
+      "hasPart": [
+        {
+          "@id": "Ba-K_BaI2_Si311_50m_200220_001_fe.ex3"
+        },
+        {
+          "@id": "Ba-K_BaI2_Si311_50m_200220_001_fe.txt"
+        },
+        {
+          "@id": "metadata.all.json"
+        },
+        {
+          "@id": "Ba-K_BaI2_Si311_50m_200220_002.ex3"
+        },
+        {
+          "@id": "primary.tsv"
+        },
+        {
+          "@id": "Ba-K_BaI2_Si311_50m_200220_002.txt"
+        },
+        {
+          "@id": "Ba-K_BaI2_Si311_50m_200220_002.dat"
+        },
+        {
+          "@id": "Ba-K_BaI2_Si311_50m_200220_002_fe.ex3"
+        },
+        {
+          "@id": "BaI2.thumb.png"
+        },
+        {
+          "@id": "metadata.all.yml"
+        },
+        {
+          "@id": "Ba-K_BaI2_Si311_50m_200220_001.txt"
+        },
+        {
+          "@id": "Ba-K_BaI2_Si311_50m_200220_001.ex3"
+        },
+        {
+          "@id": "Ba-K_BaI2_Si311_50m_200220_002_fe.txt"
+        },
+        {
+          "@id": "Ba-K_BaI2_Si311_50m_200220_001.dat"
+        }
+      ],
+      "author": [
+        {
+          "@id": "#00a34808-62b7-4991-85eb-fece808e28a8"
+        },
+        {
+          "@id": "#8c95d14e-1301-47cb-8199-db89f472e726"
+        }
+      ],
+      "publisher": {
+        "@id": "#3abe99b2-d3c0-42f6-a999-7e5cbea40635"
+      }
+    },
+    {
+      "@id": "Ba-K_BaI2_Si311_50m_200220_001_fe.ex3",
+      "url": "https://mdrs-external.nims.go.jp/filesets/8f625cc7-c953-427b-a4c7-0ef4f323a848",
+      "@type": "File",
+      "contentSize": 15269,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "Ba-K_BaI2_Si311_50m_200220_001_fe.txt",
+      "url": "https://mdrs-external.nims.go.jp/filesets/bfda8f1d-551d-470c-bccf-22544862d305",
+      "@type": "File",
+      "contentSize": 14875,
+      "encodingFormat": "text/plain"
+    },
+    {
+      "@id": "metadata.all.json",
+      "url": "https://mdrs-external.nims.go.jp/filesets/7199f4c5-99a9-4bfc-b1a9-6941bfe8c222",
+      "@type": "File",
+      "contentSize": 6732,
+      "encodingFormat": "application/json"
+    },
+    {
+      "@id": "Ba-K_BaI2_Si311_50m_200220_002.ex3",
+      "url": "https://mdrs-external.nims.go.jp/filesets/0eef55f5-1cf3-4ccd-9aac-88e7823d4b98",
+      "@type": "File",
+      "contentSize": 15269,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "primary.tsv",
+      "url": "https://mdrs-external.nims.go.jp/filesets/0ca3c4f7-2a52-4a57-9ed0-95c9c89e907a",
+      "@type": "File",
+      "contentSize": 5443,
+      "encodingFormat": "text/tab-separated-values"
+    },
+    {
+      "@id": "Ba-K_BaI2_Si311_50m_200220_002.txt",
+      "url": "https://mdrs-external.nims.go.jp/filesets/404b9359-ab24-42fc-aea6-f2cf5bffe252",
+      "@type": "File",
+      "contentSize": 14875,
+      "encodingFormat": "text/plain"
+    },
+    {
+      "@id": "Ba-K_BaI2_Si311_50m_200220_002.dat",
+      "url": "https://mdrs-external.nims.go.jp/filesets/1d525dd1-5097-45b6-aa5a-6fc03f6a3aec",
+      "@type": "File",
+      "contentSize": 261651,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "Ba-K_BaI2_Si311_50m_200220_002_fe.ex3",
+      "url": "https://mdrs-external.nims.go.jp/filesets/2deb18c8-135c-4f21-85e2-68dcc12c755f",
+      "@type": "File",
+      "contentSize": 15269,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "BaI2.thumb.png",
+      "url": "https://mdrs-external.nims.go.jp/filesets/d7264bcd-d8d3-4fa6-b7da-9bee642e176a",
+      "@type": "File",
+      "contentSize": 28609,
+      "encodingFormat": "image/png"
+    },
+    {
+      "@id": "metadata.all.yml",
+      "url": "https://mdrs-external.nims.go.jp/filesets/b2d2c62c-d797-467c-b61e-260824202936",
+      "@type": "File",
+      "contentSize": 3457,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "Ba-K_BaI2_Si311_50m_200220_001.txt",
+      "url": "https://mdrs-external.nims.go.jp/filesets/f7e76fd4-da67-46ff-a496-661237650447",
+      "@type": "File",
+      "contentSize": 14875,
+      "encodingFormat": "text/plain"
+    },
+    {
+      "@id": "Ba-K_BaI2_Si311_50m_200220_001.ex3",
+      "url": "https://mdrs-external.nims.go.jp/filesets/9077e1fb-5f8e-43fe-b218-de1f29b4cc07",
+      "@type": "File",
+      "contentSize": 15269,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "Ba-K_BaI2_Si311_50m_200220_002_fe.txt",
+      "url": "https://mdrs-external.nims.go.jp/filesets/f1a79c1f-1cc1-40c0-9804-6755779cb074",
+      "@type": "File",
+      "contentSize": 14875,
+      "encodingFormat": "text/plain"
+    },
+    {
+      "@id": "Ba-K_BaI2_Si311_50m_200220_001.dat",
+      "url": "https://mdrs-external.nims.go.jp/filesets/753b3570-c9fb-4774-bfef-f452ad1f951e",
+      "@type": "File",
+      "contentSize": 261651,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "#00a34808-62b7-4991-85eb-fece808e28a8",
+      "name": "Masashi Ishii",
+      "identifier": "https://orcid.org/0000-0003-0357-2832"
+    },
+    {
+      "@id": "#8c95d14e-1301-47cb-8199-db89f472e726",
+      "name": "Industrial Application and Partnership Division"
+    },
+    {
+      "@id": "#3abe99b2-d3c0-42f6-a999-7e5cbea40635",
+      "@type": "Organization",
+      "name": "SPring-8",
+      "identifier": "https://ror.org/01d1kv753"
+    }
+  ]
+}

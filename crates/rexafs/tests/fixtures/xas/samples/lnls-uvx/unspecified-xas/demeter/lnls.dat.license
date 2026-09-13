@@ -1,0 +1,11 @@
+SPDX-License-Identifier: Artistic-1.0-Perl
+License-File: LICENSES/bruceravel--demeter--LICENSE
+License-Basis: repository-distribution-license
+License-Scope: repository distribution license; bundled examples/test fixtures
+License-Evidence: https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/LICENSE
+Test-Eligibility: documented-license
+Source: https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/lnls.dat
+Download: https://raw.githubusercontent.com/bruceravel/demeter/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/lnls.dat
+Citation: Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719
+SHA256: e40350c900d7511f8de9db7ce4b57c158ecabc4d2db9a53e120cbfb77b0cb801
+Modifications: None; original downloaded measurement bytes retained.

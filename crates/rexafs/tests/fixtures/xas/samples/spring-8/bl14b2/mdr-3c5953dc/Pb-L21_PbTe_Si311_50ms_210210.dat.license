@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: individual dataset license
+License-Evidence: https://mdr.nims.go.jp/datasets/3c5953dc-1faa-47a7-a3f0-8211703adb58
+Test-Eligibility: documented-license
+Source: https://mdr.nims.go.jp/datasets/3c5953dc-1faa-47a7-a3f0-8211703adb58
+Download: https://mdr.nims.go.jp/filesets/db93fb2a-b9ba-449f-b12f-dfa85a31f845/download
+Citation: Masashi Ishii; Industrial Application and Partnership Division. XAFS spectrum of Lead telluride. https://doi.org/10.48505/nims.3178
+SHA256: 12d11303c8c8fc6b9926c7f7ee89bc468745479e20785d019bcc56a3ec373afa
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/mdr/3c5953dc-1faa-47a7-a3f0-8211703adb58/record.json

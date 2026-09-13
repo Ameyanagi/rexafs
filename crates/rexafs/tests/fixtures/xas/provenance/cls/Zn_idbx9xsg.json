@@ -1,0 +1,38 @@
+{
+  "sid": "Zn_idbx9xsg",
+  "url": "https://xasdb.lightsource.ca/DB/Zn/BM08-LISA/Zinc%20Foil/Zinc%20Foil_2024_02_10_scan1_idbx9xsg.dat",
+  "cache_path": ".gather-cache/cls/files/Zn/BM08-LISA/Zinc Foil/Zinc Foil_2024_02_10_scan1_idbx9xsg.dat",
+  "header": {
+    "XDI/1.0": "",
+    "Scan.license": "CC BY 4.0",
+    "Publication.authors": " Puri A.",
+    "Publication.affiliation": " CNR-IOM; ESRF",
+    "Sample.reference": "",
+    "ScanParameters.E0": "",
+    "Facility.name": "ESRF",
+    "Sample.temperature": "300 K",
+    "Sample.prep": "Foil",
+    "Sample.formula": "Zn",
+    "Sample.smiles": "",
+    "Sample.name": "Zinc Foil",
+    "Scan.number": "scan1",
+    "Sample.id": "bx9xsg",
+    "Scan.start_time": "2024-02-10",
+    "Element.symbol": "Zn",
+    "Facility.energy": "6.03 GeV",
+    "Facility.xray_source": "Bending magnet (0.85 T)",
+    "Beamline.name": "BM08-LISA",
+    "Beamline.energy_range": "2.5 - 72.0",
+    "Beamline.scan_mode": "Transmission",
+    "Beamline.energy_resolution": "Si(111): 1.1e-4; Si(311): 1.9e-5",
+    "Beamline.flux": "Si(111): 1e11 ph/s; Si(311): 1e10 ph/s",
+    "Beamline.spot_size": "170 um x 180 um (focused); 1 mm x 2 mm (unfocused)",
+    "Beamline.website": "https://www.esrf.fr/UsersAndScience/Experiments/CRG/BM08",
+    "Beamline.detector": "Ionization chamber",
+    "Mono.name": "Si(111), Si(311)",
+    "Element.edge": {
+      "K": 9659
+    }
+  },
+  "filepath": "Zn/BM08-LISA/Zinc Foil/Zinc Foil_2024_02_10_scan1_idbx9xsg.dat"
+}

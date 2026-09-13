@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit per-spectrum Scan.license declaration in CLS API metadata; also in the download header except Fe_idcj28n9
+License-Evidence: https://xasdb.lightsource.ca/xasgetcompounds
+Test-Eligibility: documented-license
+Source: https://xasdb.lightsource.ca/DB/Fe/BIOXAS-S/Iron%20Foil/Fe-Foil_2024_04_07_scan1_idcj28n9.dat
+Download: https://xasdb.lightsource.ca/DB/Fe/BIOXAS-S/Iron%20Foil/Fe-Foil_2024_04_07_scan1_idcj28n9.dat
+Citation: Morgane Desmau, Roman Chernikov. Iron Foil, Fe K-edge, BIOXAS-S, 2024-04-07. Canadian Light Source XAS Database, spectrum Fe_idcj28n9. https://doi.org/10.20383/103.01329
+SHA256: 08d0795936fe82c3c1c280ac088415b9dd7f635583afcd78e9961e151b29c696
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/cls/Fe_idcj28n9.json

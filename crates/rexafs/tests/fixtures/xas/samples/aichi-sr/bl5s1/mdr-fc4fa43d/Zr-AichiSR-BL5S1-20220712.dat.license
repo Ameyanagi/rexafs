@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-NC-SA-4.0
+License-File: LICENSES/CC-BY-NC-SA-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: individual dataset license
+License-Evidence: https://mdr.nims.go.jp/datasets/fc4fa43d-6bd1-45b9-b783-264e62f1923d
+Test-Eligibility: documented-license
+Source: https://mdr.nims.go.jp/datasets/fc4fa43d-6bd1-45b9-b783-264e62f1923d
+Download: https://mdr.nims.go.jp/filesets/84f85c5e-1f94-4474-990f-a5b60c39eb2f/download
+Citation: Masashi Ishii; Aichi SR. XAFS spectrum of Zirconium. https://doi.org/10.48505/nims.3950
+SHA256: 749a83b7763923ac30f7e25c5527711e574bb2ad4d42e0f64b3b6acc8c50c845
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/mdr/fc4fa43d-6bd1-45b9-b783-264e62f1923d/record.json

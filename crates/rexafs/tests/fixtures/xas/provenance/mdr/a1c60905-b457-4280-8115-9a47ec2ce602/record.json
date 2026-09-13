@@ -1,0 +1,137 @@
+{
+  "@context": "http://schema.org",
+  "@graph": [
+    {
+      "@id": "https://mdrs-external.nims.go.jp/datasets/a1c60905-b457-4280-8115-9a47ec2ce602",
+      "@type": "Dataset",
+      "datePublished": null,
+      "name": "XAFS spectrum of Lanthanum fluoride, anhydrous",
+      "description": "This dataset consists of X-ray absorption fine structure (XAFS) spectra at F K-edge of Lanthanum fluoride, anhydrous measured at Ritsumeikan-SR BL-2, and is a part of XAFS database (MDR XAFS DB, https://doi.org/10.48505/nims.1447) as a collection of MDR",
+      "distribution": [
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/aec3cde0-1803-4aec-896c-fa07cab34f78/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/82b94189-f82a-4cd7-a47a-dafbc9eff394/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/2aaec58d-7269-4ea8-a443-b0c5b011dbf0/download",
+          "encodingFormat": "application/json"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/f0c06adc-89c3-44bd-b089-de1a86d727aa/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/779cce78-647c-46c0-8ae4-4a2aaf0b3ba0/download",
+          "encodingFormat": "text/tab-separated-values"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/eab961be-38ca-448d-9df7-72427d05bb1e/download",
+          "encodingFormat": "image/png"
+        }
+      ],
+      "identifier": "https://doi.org/10.48505/nims.3356",
+      "license": [
+        {
+          "@id": "cc-by-4.0"
+        }
+      ],
+      "hasPart": [
+        {
+          "@id": "21021611.dat"
+        },
+        {
+          "@id": "21021611.tey"
+        },
+        {
+          "@id": "metadata.json"
+        },
+        {
+          "@id": "metadata.yml"
+        },
+        {
+          "@id": "primary.tsv"
+        },
+        {
+          "@id": "BL2_F-K_014_tey.png"
+        }
+      ],
+      "author": [
+        {
+          "@id": "#41cdf134-76bb-430d-b3da-35a95d1fc68a"
+        },
+        {
+          "@id": "#42a187fb-8c47-417e-a3a9-f8b04844fb37"
+        }
+      ],
+      "publisher": {
+        "@id": "#1d6604f2-d522-40b5-802a-50d5405d3f65"
+      }
+    },
+    {
+      "@id": "21021611.dat",
+      "url": "https://mdrs-external.nims.go.jp/filesets/aec3cde0-1803-4aec-896c-fa07cab34f78",
+      "@type": "File",
+      "contentSize": 57930,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "21021611.tey",
+      "url": "https://mdrs-external.nims.go.jp/filesets/82b94189-f82a-4cd7-a47a-dafbc9eff394",
+      "@type": "File",
+      "contentSize": 9664,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "metadata.json",
+      "url": "https://mdrs-external.nims.go.jp/filesets/2aaec58d-7269-4ea8-a443-b0c5b011dbf0",
+      "@type": "File",
+      "contentSize": 12443,
+      "encodingFormat": "application/json"
+    },
+    {
+      "@id": "metadata.yml",
+      "url": "https://mdrs-external.nims.go.jp/filesets/f0c06adc-89c3-44bd-b089-de1a86d727aa",
+      "@type": "File",
+      "contentSize": 6359,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "primary.tsv",
+      "url": "https://mdrs-external.nims.go.jp/filesets/779cce78-647c-46c0-8ae4-4a2aaf0b3ba0",
+      "@type": "File",
+      "contentSize": 11239,
+      "encodingFormat": "text/tab-separated-values"
+    },
+    {
+      "@id": "BL2_F-K_014_tey.png",
+      "url": "https://mdrs-external.nims.go.jp/filesets/eab961be-38ca-448d-9df7-72427d05bb1e",
+      "@type": "File",
+      "contentSize": 22256,
+      "encodingFormat": "image/png"
+    },
+    {
+      "@id": "#41cdf134-76bb-430d-b3da-35a95d1fc68a",
+      "name": "Masashi Ishii",
+      "identifier": "https://orcid.org/0000-0003-0357-2832"
+    },
+    {
+      "@id": "#42a187fb-8c47-417e-a3a9-f8b04844fb37",
+      "name": "Ritsumeikan SR Center"
+    },
+    {
+      "@id": "#1d6604f2-d522-40b5-802a-50d5405d3f65",
+      "@type": "Organization",
+      "name": "Ritsumeikan University"
+    }
+  ]
+}
