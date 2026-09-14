@@ -127,7 +127,7 @@ pub struct MeasurementScan {
     /// Header-supported signal mappings. Empty means manual mapping is needed.
     /// Shared header inference requires unique detector-role matches. Each stored
     /// absorption column remains a separate choice, even when labels repeat
-    /// (source-checkout corrections after 0.2.6).
+    /// (since 0.2.7).
     pub signals: Vec<SignalCandidate>,
     /// Unit assumptions, ambiguous channels and historical-format observations.
     pub warnings: Vec<String>,

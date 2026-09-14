@@ -423,7 +423,7 @@ pub struct AthenaGroup {
     pub args: Vec<(String, AthenaValue)>,
     /// Statements inside the record we do not model (e.g. `@xdi = ...`), verbatim.
     /// Includes historical `(undef)` markers for absent optional arrays. The
-    /// source checkout writes these before current `i0`, `signal` and `stddev`
+    /// writer since 0.2.7 places these before current `i0`, `signal` and `stddev`
     /// arrays so retained markers cannot overwrite edits to those fields.
     pub extra: Vec<String>,
 }

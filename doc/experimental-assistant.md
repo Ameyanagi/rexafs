@@ -27,7 +27,7 @@ Connection initialization does not send the draft message or analysis context;
 Send shares the context described below. Codex owns authentication through its
 [app-server protocol](https://learn.chatgpt.com/docs/app-server).
 
-**Source-checkout fix, not included in 0.2.6:** the
+**Version 0.2.7 correction:** the
 [launcher](../crates/rexafs-gui/src/codex_client.rs) preserves absolute inherited
 search-path entries and adds common Bun, npm, Homebrew, Nix, Volta and mise
 locations for the child process. It does not read shell startup files or change
@@ -41,9 +41,9 @@ characters; only the last 4 KiB is retained in memory. This diagnostic is not
 written into a saved project. The launcher change does not alter authentication,
 Review/Edit analysis permissions or Extended access.
 
-## Compact composer (unreleased)
+## Compact composer in 0.2.7
 
-The source checkout places the message above a compact footer with **Model**,
+Version 0.2.7 places the message above a compact footer with **Model**,
 **Reasoning**, and **Access** menus. The footer wraps in a narrow docked panel;
 the same composer is used in a separate Assistant window. The rounded arrow
 sends the message and becomes Stop while a response is running.

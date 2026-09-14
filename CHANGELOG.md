@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.2.7 (release preparation)
+
+- Compact the Assistant into Model, Reasoning and Access menus beneath the
+  message field; preserve keyboard navigation and keep Parameters accessible.
+- Discover runtimes needed by Codex launchers when macOS opens rexafs from
+  Finder, and display bounded startup diagnostics.
+- Require unambiguous detector roles, retain distinct stored signals, reject
+  malformed leading rows across comments, and preserve edited Athena arrays.
+- Use `dev` for nightly desktop builds and promote reviewed stable releases
+  through `dev` → `main`. Update `encoding_rs` to 0.8.41.
+
+See the [release notes](doc/release-notes-0.2.7.md) and
+[qualification record](doc/validation/2026-09-15-release-0.2.7/review.md).
+
+## 0.2.6
+
+The [published release notes](doc/release-notes-0.2.6.md) record the universal
+measurement reader, plotted imports, four ABI3 Python wheels and fixture provenance.
+
 ## 0.2.5
 
 - Add native Linux and Windows ARM64 desktop packages and Windows installers.

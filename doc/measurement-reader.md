@@ -5,9 +5,9 @@
 Rust, Python, TypeScript/WebAssembly, desktop and browser interfaces. Existing
 specialized XDI, QAS and Athena APIs remain available.
 
-## Reader corrections in development
+## Reader corrections in 0.2.7
 
-The source checkout includes the following corrections after 0.2.6:
+Version 0.2.7 includes the following corrections:
 
 - Shared header inference requires a unique column for each detector role.
   Repeated `I0` headings, or both `I0` and its `monitor` alias, require explicit
