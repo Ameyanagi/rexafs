@@ -60,7 +60,7 @@ and Partnership Division's [XAFS spectrum of Lead telluride](https://doi.org/10.
 licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 The measurement bytes are unchanged; the screenshots visualize its stored energy
 and absorption, without additional import corrections. The
-[capture record](https://github.com/Ameyanagi/rexafs/tree/test/beamline-fixtures/doc/validation/2026-09-14-measurement-import-ui)
+[capture record](https://github.com/Ameyanagi/rexafs/tree/45ccd5e72eedf07d4e6f15b8c1d0e0e9661d0d86/doc/validation/2026-09-14-measurement-import-ui)
 identifies the input and executable by checksum. These images describe unreleased
 behavior and do not replace the versioned release screenshots above.
 
