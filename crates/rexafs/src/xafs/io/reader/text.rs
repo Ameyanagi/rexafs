@@ -203,14 +203,23 @@ fn table(text: &str, format: &str, index: usize) -> Result<MeasurementScan, Read
         start = (search..lines.len())
             .find(|&i| !lines[i].trim().is_empty())
             .ok_or_else(|| ReadError::new("9809: no measurement rows after Offset"))?;
-    } else if let Some((i, previous)) = lines[..start]
-        .iter()
-        .enumerate()
-        .rev()
-        .find(|(_, s)| !s.trim().is_empty())
+    } else if let Some((i, previous)) =
+        lines[..start]
+            .iter()
+            .enumerate()
+            .skip(search)
+            .rev()
+            .find(|(_, s)| {
+                let line = s.trim();
+                !line.is_empty() && !line.starts_with(['#', ';', '!', '*'])
+            })
     {
-        let first = previous.trim().split([',', ' ', '\t']).next().unwrap_or("");
-        if first.parse::<f64>().is_ok() {
+        let first = previous
+            .trim()
+            .split(|c: char| c == ',' || c.is_whitespace())
+            .next()
+            .unwrap_or("");
+        if numbers(first).is_some() {
             return Err(ReadError::new(format!(
                 "{format}, line {}: invalid first numeric row",
                 i + 1

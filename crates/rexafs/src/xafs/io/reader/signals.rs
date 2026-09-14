@@ -27,11 +27,16 @@ pub(super) fn infer(scan: &mut MeasurementScan) {
         .map(|c| c.name.to_lowercase().replace([' ', '_', '-'], ""))
         .collect();
     let find = |aliases: &[&str]| {
-        normalized
+        let mut matches = normalized
             .iter()
-            .position(|n| aliases.contains(&n.as_str()))
+            .enumerate()
+            .filter_map(|(index, name)| aliases.contains(&name.as_str()).then_some(index));
+        let first = matches.next()?;
+        matches.next().is_none().then_some(first)
     };
-    let axis = find(&[
+    // Keep the existing axis convention; format adapters refine the choice
+    // between requested energy and its measured readback where documented.
+    let axis_labels = [
         "energy",
         "e",
         "ev",
@@ -48,7 +53,10 @@ pub(super) fn infer(scan: &mut MeasurementScan) {
         "encenergy",
         "energysetpoint.x",
         "shiftedenergy",
-    ]);
+    ];
+    let axis = normalized
+        .iter()
+        .position(|name| axis_labels.contains(&name.as_str()));
     let Some(e) = axis else {
         return;
     };
@@ -63,7 +71,7 @@ pub(super) fn infer(scan: &mut MeasurementScan) {
         }
         _ => return,
     };
-    let direct = find(&[
+    let stored_labels = [
         "mu",
         "mutrans",
         "normtrans",
@@ -73,15 +81,32 @@ pub(super) fn infer(scan: &mut MeasurementScan) {
         "normalized",
         "ln(i0/i1)",
         "mu01",
-    ]);
-    if let Some(column) = direct {
-        add(
-            scan,
-            &scan.columns[column].name.clone(),
-            e,
-            conversion.clone(),
-            SignalConversion::Direct { column },
-        );
+    ];
+    let direct: Vec<_> = normalized
+        .iter()
+        .enumerate()
+        .filter_map(|(index, name)| stored_labels.contains(&name.as_str()).then_some(index))
+        .collect();
+    if !direct.is_empty() {
+        let mut label_counts = std::collections::BTreeMap::new();
+        for &column in &direct {
+            *label_counts
+                .entry(normalized[column].as_str())
+                .or_insert(0usize) += 1;
+        }
+        for column in direct {
+            let mut label = scan.columns[column].name.clone();
+            if label_counts[normalized[column].as_str()] > 1 {
+                label = format!("{label} (column {})", column + 1);
+            }
+            add(
+                scan,
+                &label,
+                e,
+                conversion.clone(),
+                SignalConversion::Direct { column },
+            );
+        }
         // Precomputed sample signals take precedence over raw channels. Their
         // scale/corrections remain the source's responsibility.
         return;

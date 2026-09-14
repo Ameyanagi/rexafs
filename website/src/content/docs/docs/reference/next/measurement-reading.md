@@ -9,6 +9,19 @@ pagefind: false
 Use the [Stable reader guide](/docs/reference/stable/measurement-reading/)
 for the published release.
 
+## Unreleased reader corrections
+
+- Detector roles must match a unique column. Repeated headings or competing
+  aliases require explicit selection. Each stored absorption column remains a
+  separate signal choice; repeated labels show their one-based column number.
+- Malformed leading numeric rows produce a line-specific error even when
+  comments separate them from later valid rows.
+- Athena export retains historical `(undef)` markers before current optional
+  arrays, so edited `i0`, `signal` and `stddev` values survive saving and reopening.
+
+These corrections are not included in the 0.2.6 packages. The Rust core supplies
+the same reader behavior to Python, TypeScript, desktop and browser imports.
+
 ## Inspect and select
 
 The universal reader detects formats from file content and returns an owned
