@@ -94,6 +94,13 @@ provide supporting context. The latter repository is private.
 
 ## Examples
 
+The following APIs are unreleased. Existing zero-based numeric mappings remain
+valid. Explicit selectors also accept exact, case-sensitive column names from
+`scan.columns`; names are resolved separately for each scan, so reordered columns
+do not change their meaning. Missing or duplicate names produce an error; use an
+index to distinguish repeated labels. Names are not detector aliases: `I0` and
+`i0` select different labels, and the string `"1"` is a name, not index 1.
+
 Rust, from a source checkout:
 
 ```rust,no_run
@@ -105,6 +112,29 @@ println!("{:?}", scan.warnings);
 let (energy_ev, signal) = scan.arrays(None)?;
 # Ok::<(), rexafs::io::ReadError>(())
 ```
+
+For QAS columns named `energy`, `i0`, `it`, `ir` and `iff`, select each signal
+explicitly with the new `SpectrumSelection` API:
+
+```rust,no_run
+use rexafs::io::{read_measurement, SpectrumSelection};
+let document = read_measurement("qas.dat")?;
+let scan = &document.scans[0];
+let transmission = scan.arrays_with(&SpectrumSelection::transmission("energy", "i0", "it"))?;
+let fluorescence = scan.arrays_with(&SpectrumSelection::fluorescence("energy", "i0", ["iff"]))?;
+let reference = scan.arrays_with(&SpectrumSelection::transmission("energy", "it", "ir"))?;
+// Indices still work, and may be mixed with names.
+let same_transmission = scan.arrays_with(&SpectrumSelection::transmission(0usize, "i0", 2usize))?;
+# Ok::<(), rexafs::io::ReadError>(())
+```
+
+`SpectrumSelection::direct("energy", "mu")` copies stored absorption.
+`selection.resolve(scan)` returns the existing numeric `SpectrumMapping`, whose
+struct fields and `scan.arrays(Some(&mapping))` API are unchanged. The constructors
+retain the selected axis's detected calibration, including Bragg and relative
+energy conversions. Unknown or conflicting calibration requires
+`.with_energy(EnergyConversion::Ev)` or another explicit conversion. No units are
+guessed from the numerical values.
 
 Python, after building/installing the source wheel:
 
@@ -130,6 +160,23 @@ mapping: SpectrumMapping = {
 energy_ev, mu = measurement.arrays(scan=0, mapping=mapping)
 ```
 
+For common selections, column keywords avoid writing the nested mapping:
+
+```python
+measurement = read_measurement("qas.dat")
+transmission = measurement.arrays(energy="energy", i0="i0", it="it")
+fluorescence = measurement.arrays(energy="energy", i0="i0", iff="iff")
+reference = measurement.arrays(energy="energy", i0="it", it="ir")
+spectrum = measurement.spectrum(energy=0, i0="i0", it=2)
+```
+
+Use `mu="mu"` for stored absorption or `iff=["iff1", "iff2"]` for an explicit
+detector sum. Supply `energy` and exactly one of `mu`, `it`, or `iff`; the last
+two also require `i0`. `energy_unit="eV"` or `"keV"` overrides the detected
+calibration; omit it to retain that calibration. The nested mapping also accepts
+names, for example `"energy_column": "energy"` and `"incident": "i0"`.
+Do not combine a mapping dictionary with column keywords.
+
 TypeScript, after building/installing the source npm package:
 
 ```ts
@@ -143,6 +190,26 @@ try {
   measurement.free();
 }
 ```
+
+TypeScript supports the same selectors in an options object:
+
+```ts
+const measurement = read_measurement("energy,i0,it,ir,iff\n7100,100,20,5,3\n7101,200,40,10,8\n");
+try {
+  const transmission = measurement.arrays({ energy: "energy", i0: "i0", it: "it" });
+  const fluorescence = measurement.arrays({ energy: "energy", i0: "i0", iff: "iff" });
+  const reference = measurement.arrays({ energy: "energy", i0: "it", it: "ir" });
+  const sameTransmission = measurement.arrays({ scan: 0, energy: 0, i0: "i0", it: 2 });
+} finally {
+  measurement.free();
+}
+```
+
+Use `mu` for stored absorption, an `iff` array for a detector sum, and
+`energy_unit: "eV"` or `"keV"` only when overriding the source calibration.
+The existing `arrays(scan, mapping)` overload also accepts names in its mapping.
+Options cannot be combined with a positional mapping. With no column options,
+automatic selection still requires exactly one detected signal.
 
 Python also accepts `parse_measurement(bytes_or_text)`; TypeScript
 `read_measurement()` accepts `Uint8Array` (including Node `Buffer`) or text.
@@ -253,10 +320,22 @@ undecodable bytes silently.
 In the desktop, choose **Import…** or drop a single measurement file. Text,
 beamline files, Athena projects, XTUNES and Larix sessions use the same plotted
 preview. **Project → Open measurement…** uses a single-file picker for this view.
-Choose a record from **Scan** when the file contains several. A sole detected
-signal is selected automatically; multiple candidates require a signal choice.
+Choose a record from **Scan** when the file contains several. Detected signals
+appear as visible checkboxes, initially checked when their conversion is valid.
+For QAS files with `i0`, `it`, `ir` and `iff`, the choices are **Transmission**
+(ln(I0/It)), **Fluorescence** (IFF/I0), and **Reference** (ln(It/Ir)). These are
+the detector operations described above; no detector corrections are inferred.
+Each row shows the actual source column names in its formula. Uncheck outputs
+you do not need, then use **Preview** to inspect a curve or edit its columns.
+Switching previews keeps each signal's mapping and does not toggle its checkbox.
+**Reset mapping** restores the previewed signal's detected mapping.
+
 The plot updates when the selected scan, detector columns or axis units change.
-**Import spectrum** adds the reviewed, unprocessed spectrum with undo support.
+**Import N spectra** adds all checked, unprocessed spectra together, with distinct
+signal names and source mappings. The main Data view initially shows raw μ(E)
+for the first imported spectrum. One undo removes the entire import. No groups
+are added if any checked conversion fails; invalid signals can be excluded.
+**Custom mapping…** provides a single manual output when detection is insufficient.
 
 **Energy axis** shows the detected conversion. Recognized 9809 inputs use the
 observed Bragg angle and header crystal spacing; recognized motor-step and

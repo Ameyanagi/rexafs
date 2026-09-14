@@ -142,6 +142,22 @@ pub(super) fn infer(scan: &mut MeasurementScan) {
             );
         }
     }
+    // A foil downstream of the sample uses It as its incident monitor.
+    // Ir/Iref are explicit reference labels; a generic I2 is not sufficient.
+    if let (Some(incident), Some(transmitted)) = (it, find(&["ir", "iref"])) {
+        if scan.columns[transmitted].values.iter().any(|v| *v != 0.) {
+            add(
+                scan,
+                "reference",
+                e,
+                conversion.clone(),
+                SignalConversion::Transmission {
+                    incident,
+                    transmitted,
+                },
+            );
+        }
+    }
     for name in ["tey", "pey", "cey"] {
         if let (Some(incident), Some(detector)) = (i0, find(&[name])) {
             if scan.columns[detector].values.iter().any(|v| *v != 0.) {

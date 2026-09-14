@@ -64,6 +64,16 @@ and absorption, without additional import corrections. The
 identifies the input and executable by checksum. These images describe unreleased
 behavior and do not replace the versioned release screenshots above.
 
+The current Next guide also shows the multiple-signal import controls in a full,
+unedited 1187 × 768 capture from 14 September 2026. Its 651-point
+`Mo foil 0001-r0003.dat` input comes from Ryuichi Shimogawa and contributors'
+[xasref collection](https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo%20foil%200001-r0003.dat),
+with the collection's [MIT distribution notice](https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/LICENSE).
+The original measurement bytes are unchanged. The screenshot plots the selected
+reference signal as `ln(it / ir)` without normalization or detector corrections.
+The repository's `doc/validation/2026-09-14-named-multisignal-import-capture.json`
+records the input, executable and image checksums.
+
 ## Scientific citations
 
 Use the [citation guide](/docs/science/references/) for algorithm references.

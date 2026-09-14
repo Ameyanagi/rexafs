@@ -67,6 +67,7 @@ enum Action {
     Selector(u8),
     Scan(usize),
     Signal(usize),
+    IncludeSignal(usize),
     Mode(u8),
     Dataset(usize),
     UseDatasets,
@@ -467,6 +468,7 @@ impl ImportEditor {
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
         self.save_review_draft();
+        self.save_measurement_draft();
         self.invalidate_validation();
         self.generation += 1;
         self.preview.invalidate();
@@ -627,11 +629,17 @@ impl ImportEditor {
         let Some(key) = self.key(draft.revision) else {
             return;
         };
-        if self.locked || draft.validate().is_err() || !self.preview.ready(&key) {
+        let preview_required = self
+            .measurement
+            .as_ref()
+            .is_none_or(|s| s.preview_included());
+        if self.locked
+            || (preview_required && (draft.validate().is_err() || !self.preview.ready(&key)))
+        {
             return;
         }
         if let Some(source) = &self.measurement {
-            let group = match source.materialize(draft.config()) {
+            let groups = match source.materialize_selected(draft.config()) {
                 Ok(group) => group,
                 Err(error) => {
                     self.error = Some(error);
@@ -646,7 +654,7 @@ impl ImportEditor {
                     if studio.project_generation != expected {
                         return false;
                     }
-                    studio.accept_measurement(group, cx);
+                    studio.accept_measurements(groups, cx);
                     true
                 })
                 .unwrap_or(false);
@@ -1093,6 +1101,12 @@ impl ImportEditor {
         .detach();
     }
 
+    fn save_measurement_draft(&mut self) {
+        if let (Some(source), Some(draft)) = (&mut self.measurement, &self.draft) {
+            source.remember_config(draft.config());
+        }
+    }
+
     fn save_review_draft(&mut self) {
         if self.review_scope.is_some()
             && let Some(draft) = &self.draft
@@ -1275,7 +1289,9 @@ impl ImportEditor {
             Action::ReviewPrimary(_) | Action::ReviewEdit(_) | Action::Axis(_) => {
                 accesskit::Role::Tab
             }
-            Action::ReviewOutput(_) | Action::ConfirmUnits => accesskit::Role::CheckBox,
+            Action::ReviewOutput(_) | Action::ConfirmUnits | Action::IncludeSignal(_) => {
+                accesskit::Role::CheckBox
+            }
             _ => accesskit::Role::Button,
         };
         let selected = match action {
@@ -1283,6 +1299,9 @@ impl ImportEditor {
                 .review_outputs
                 .contains(&REVIEW_CHANNELS[index as usize]),
             Action::ConfirmUnits => self.confirmed_units,
+            Action::IncludeSignal(index) => {
+                self.measurement.as_ref().is_some_and(|s| s.included[index])
+            }
             _ => selected,
         };
         crate::accessibility::Control::new(

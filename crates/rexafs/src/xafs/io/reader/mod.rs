@@ -15,6 +15,7 @@ mod binary;
 mod hdf5;
 mod larix;
 mod model;
+mod selection;
 mod signals;
 mod text;
 mod xtunes;
@@ -23,6 +24,7 @@ pub use model::{
     EnergyConversion, Measurement, MeasurementColumn, MeasurementDataset, MeasurementScan,
     ReadError, SignalCandidate, SignalConversion, SpectrumMapping,
 };
+pub use selection::{ColumnSelector, SignalSelection, SpectrumSelection};
 
 /// Read a local measurement file with content-based detection (unreleased).
 ///

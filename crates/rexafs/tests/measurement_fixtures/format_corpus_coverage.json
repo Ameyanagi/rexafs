@@ -764,7 +764,7 @@
       "status": "signal_choices",
       "detected_format": "text",
       "datasets": 0,
-      "converted_signals": 2,
+      "converted_signals": 3,
       "warnings": 0,
       "scans": [
         {
@@ -779,6 +779,11 @@
             },
             {
               "name": "fluorescence",
+              "points": 3464,
+              "status": "converted"
+            },
+            {
+              "name": "reference",
               "points": 3464,
               "status": "converted"
             }
@@ -3586,7 +3591,7 @@
       "status": "signal_choices",
       "detected_format": "text",
       "datasets": 0,
-      "converted_signals": 2,
+      "converted_signals": 3,
       "warnings": 0,
       "scans": [
         {
@@ -3603,6 +3608,11 @@
               "name": "fluorescence",
               "points": 651,
               "status": "converted"
+            },
+            {
+              "name": "reference",
+              "points": 651,
+              "status": "converted"
             }
           ],
           "warnings": 1
@@ -3615,7 +3625,7 @@
       "status": "signal_choices",
       "detected_format": "text",
       "datasets": 0,
-      "converted_signals": 2,
+      "converted_signals": 3,
       "warnings": 0,
       "scans": [
         {
@@ -3632,6 +3642,11 @@
               "name": "fluorescence",
               "points": 646,
               "status": "converted"
+            },
+            {
+              "name": "reference",
+              "points": 646,
+              "status": "converted"
             }
           ],
           "warnings": 1
@@ -3644,7 +3659,7 @@
       "status": "signal_choices",
       "detected_format": "text",
       "datasets": 0,
-      "converted_signals": 2,
+      "converted_signals": 3,
       "warnings": 0,
       "scans": [
         {
@@ -3659,6 +3674,11 @@
             },
             {
               "name": "fluorescence",
+              "points": 647,
+              "status": "converted"
+            },
+            {
+              "name": "reference",
               "points": 647,
               "status": "converted"
             }
@@ -3768,7 +3788,7 @@
       "status": "signal_choices",
       "detected_format": "text",
       "datasets": 0,
-      "converted_signals": 5,
+      "converted_signals": 6,
       "warnings": 0,
       "scans": [
         {
@@ -3778,6 +3798,11 @@
           "signals": [
             {
               "name": "transmission",
+              "points": 422,
+              "status": "converted"
+            },
+            {
+              "name": "reference",
               "points": 422,
               "status": "converted"
             },

@@ -41,13 +41,19 @@ Copy metadata and raw arrays. Nonfinite source cells are represented by null.
 arrays(scan?: number, mapping?: SpectrumMapping): { energy: Float64Array; mu: Float64Array };
 ```
 
-Copy converted energy in eV and signal to Float64Arrays in acquisition order.
-scan defaults to 0. Omit mapping only when there is exactly one detected
-signal. Select a candidate's mapping or supply explicit zero-based roles.
-Rejects invalid indices, conflicting roles, nonfinite selected cells,
-nonpositive energy, invalid Bragg calibration and invalid intensity ratios.
-Duplicates and source order remain; Spectrum construction requires strictly
-increasing unique energy. No processing or cached results are changed.
+Select columns with exact names or indices, for example arrays({energy:"energy", i0:"I0", it:"It"}).
+Missing/duplicate names fail. Retains the same owned arrays, ordering, conversion checks and
+no-processing behavior as the positional overload. Cannot combine options with a mapping.
+
+## arrays
+
+```typescript
+arrays(options: MeasurementOptions): { energy: Float64Array; mu: Float64Array };
+```
+
+Select columns with exact names or indices, for example arrays({energy:"energy", i0:"I0", it:"It"}).
+Missing/duplicate names fail. Retains the same owned arrays, ordering, conversion checks and
+no-processing behavior as the positional overload. Cannot combine options with a mapping.
 
 ## select_datasets
 

@@ -42,6 +42,13 @@ await init();
 const measurement = read_measurement("energy,mu\\n7100,1\\n7101,2");
 const mapping: SpectrumMapping = { energy_column: 0, energy: {kind:"ev"}, signal: {kind:"direct",column:1} };
 measurement.arrays(0, mapping).energy[0].toFixed(2);
+measurement.arrays({energy:"energy", mu:"mu"}).energy[0].toFixed(2);
+measurement.arrays({energy:0, i0:"I0", iff:["IFF1", 3], energy_unit:"keV"});
+measurement.arrays(0, {energy_column:"energy",energy:{kind:"ev"},signal:{kind:"direct",column:"mu"}});
+// @ts-expect-error selectors cannot be booleans
+measurement.arrays({energy:true, mu:1});
+// @ts-expect-error invalid unit override
+measurement.arrays({energy:0, mu:1, energy_unit:"watts"});
 measurement.arrays(0, { ...mapping, energy: { kind: "offset_ev", offset_ev: 20000 } });
 // @ts-expect-error Relative energy requires a declared origin
 measurement.arrays(0, { ...mapping, energy: { kind: "offset_ev" } });
@@ -126,6 +133,10 @@ spectrum.chi()[0];
       assert.ok(completion("\nnew AUTOBK({ ").includes("clamp_lambda"));
       assert.ok(completion('\nnew XrayFFTF({ window: "').includes("KaiserBessel"));
       assert.ok(completion("\nmeasurement.").includes("select_datasets"));
+      const columnOptions = completion("\nmeasurement.arrays({ ");
+      for (const name of ["energy", "mu", "i0", "it", "iff", "energy_unit"]) {
+        assert.ok(columnOptions.includes(name), name);
+      }
       source = completeSource + '\nmeasurement.arrays(';
       const readerSignature=service.getSignatureHelpItems(filename,source.length,{});
       assert.ok(readerSignature?.items.some(item=>item.parameters.some(p=>ts.displayPartsToString(p.displayParts).includes("SpectrumMapping"))));

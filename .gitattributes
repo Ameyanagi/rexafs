@@ -2,6 +2,8 @@
 # every platform, including original line endings and trailing blank lines.
 crates/rexafs/tests/testfiles/** -text -whitespace
 crates/rexafs/tests/fixtures/xas/** -text -whitespace
+crates/rexafs/tests/fixtures/rexafs-corpus/** -text -whitespace
+crates/rexafs/tests/fixtures/sessions/** -text -whitespace
 crates/rexafs-gui/tests/fixtures/** -text -whitespace
 
 # Retained upstream license bytes and their byte-offset inventory are immutable.

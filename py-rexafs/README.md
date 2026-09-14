@@ -209,3 +209,10 @@ not included in the published 0.2.5 packages.
 Larix 1.0 session import is available in the unreleased shared reader, including
 stored absorption, complex saved arrays and inert session metadata. See the
 [Larix import guide](../doc/larix-import.md).
+
+Column selections accept exact, case-sensitive names as well as zero-based indices.
+For a QAS file, use `measurement.arrays(energy="energy", i0="i0", it="it")`
+for transmission, `iff="iff"` instead of `it` for fluorescence, or
+`i0="it", it="ir"` for the reference. The same keywords work with `.spectrum()`.
+Duplicate names require indices. Omit `energy_unit` to preserve detected axis
+calibration, or explicitly override it with `"eV"` or `"keV"`.

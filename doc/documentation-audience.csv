@@ -219,3 +219,4 @@ crates/rexafs/tests/fixtures/rexafs-corpus/provenance/pynxxas/manual-README.md,d
 crates/rexafs/tests/fixtures/rexafs-corpus/research/worldwide-beamlines.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
 crates/rexafs/tests/fixtures/xas/candidates/kek-pf/README.md,developer,exclude,,KEK QD fixture provenance and academic-use notice.
 doc/validation/2026-09-14-measurement-import-ui/README.md,developer,exclude,,Original computer-use captures and source attribution for unreleased import workflows.
+doc/validation/2026-09-14-named-multisignal-import.md,developer,exclude,,Named-column API and multiple-signal UI qualification including Windows checkout correction.

@@ -1,0 +1,21 @@
+{
+  "captured_on": "2026-09-14",
+  "platform": "macOS ARM64",
+  "version": "Unreleased named-column and multiple-signal import changes on test/beamline-fixtures after 836e643.",
+  "method": "Computer-use getScreenshot; original full JPEG, no cropping, resizing or compositing.",
+  "width": 1187,
+  "height": 768,
+  "image": {
+    "path": "website/public/screenshots/next/import-signals.jpg",
+    "sha256": "14d40c424ded0349b9c518b73a58969f5943f2f702466b192bbe80bb590c695d"
+  },
+  "executable_sha256": "ba25a17f7630a1053f6dc425ac210dd3e8ad4abd5b8db83d09339932b8818707",
+  "input": {
+    "path": "crates/rexafs/tests/fixtures/xas/samples/nsls-ii/7-bm-qas/xasref/Mo foil 0001-r0003.dat",
+    "sha256": "280452e66ffd87d41bfa0d3609e51512aa9264e66bed65ad0fb4942cf20bb135",
+    "source_url": "https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo%20foil%200001-r0003.dat",
+    "attribution": "Ryuichi Shimogawa and contributors. xasref: reference XAS spectra.",
+    "license_basis": "MIT repository distribution notice; original adjacent .license attribution retained."
+  },
+  "observed": "Transmission, fluorescence and reference are checked; Previewing Reference displays ln(it / ir); Import 3 spectra remains enabled."
+}

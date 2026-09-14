@@ -35,7 +35,29 @@ mapping = {
 energy_ev, mu = measurement.arrays(scan=0, mapping=mapping)
 ```
 
-Indices are zero-based. TypeScript uses the same mapping object:
+Indices are zero-based. Names can be used wherever a mapping takes a column
+index. They must match `scan.columns` exactly, including case; duplicate names
+require indices. Names and indices may be mixed, and names are resolved for
+each scan independently.
+
+For QAS columns named `energy`, `i0`, `it`, `ir` and `iff`, Python also supports
+short column keywords:
+
+```python
+transmission = measurement.arrays(energy="energy", i0="i0", it="it")
+fluorescence = measurement.arrays(energy="energy", i0="i0", iff="iff")
+reference = measurement.arrays(energy="energy", i0="it", it="ir")
+spectrum = measurement.spectrum(energy=0, i0="i0", it=2)
+```
+
+Supply `energy` and exactly one of `mu`, `it` or `iff`; `it` and `iff` require
+`i0`. `mu` copies stored absorption, and an `iff` list sums explicitly selected
+detectors before dividing by `i0`. Omit `energy_unit` to retain the detected
+axis calibration, including Bragg and relative energy conversions. Set it to
+`"eV"` or `"keV"` for an explicit override. Unknown units require a choice.
+Column keywords and a mapping dictionary cannot be combined.
+
+TypeScript uses the same mapping object or an options object:
 
 ```ts
 import init, { read_measurement } from "rexafs";
@@ -49,10 +71,24 @@ try {
 }
 ```
 
+For detector data, use `measurement.arrays({energy: "energy", i0: "i0", it: "it"})`.
+Use `iff: "iff"` instead of `it` for fluorescence, or `i0: "it", it: "ir"` for
+the reference. `scan` defaults to 0; all column options accept names or indices.
+The existing `arrays(scan, mapping)` overload remains available. No column
+options means automatic detection, which requires a sole detected signal.
+
 Python accepts paths or `parse_measurement(bytes_or_text)`. TypeScript accepts
 text or `Uint8Array`, including Node `Buffer`. Rust provides
 `rexafs::io::read_measurement(path)` and `parse_measurement(bytes)`, followed by
 `scan.arrays(mapping)` or `scan.to_spectrum(mapping)`.
+
+Rust also provides `SpectrumSelection::direct(energy, mu)`,
+`SpectrumSelection::transmission(energy, i0, it)` and
+`SpectrumSelection::fluorescence(energy, i0, detectors)`. Pass the result to
+`scan.arrays_with(&selection)` or `scan.to_spectrum_with(&selection)`.
+Constructors accept names and indices; `.with_energy(EnergyConversion::Ev)`
+overrides calibration. `.resolve(scan)` returns an indexed `SpectrumMapping`,
+whose existing numeric struct fields remain unchanged.
 
 Snapshots and converted arrays are independent copies. Nonfinite raw cells
 appear as `None`/`null` in snapshots; selected nonfinite values fail conversion.
@@ -141,20 +177,43 @@ workspace uses an 8 MiB file limit and a 100,000-point processing limit.
 
 In the desktop, use **Import…** or drop a single measurement file. The same
 plotted preview handles beamline text, Athena, XTUNES and Larix files. Choose
-**Scan** or a signal when several are available; a sole signal is selected
-automatically. **Energy axis** shows the detected conversion and offers explicit
+**Scan** when several records are available. Detected signals appear as visible
+checkboxes, initially checked when conversion succeeds. QAS inputs with the
+corresponding channels offer **Transmission**, **Fluorescence**, and **Reference**.
+Reference uses the transmitted monitor and downstream reference detector,
+`ln(It / Ir)`, with the same transmission requirements above. Each row shows its
+source-column formula. Uncheck signals you do not need; **Preview** changes the
+displayed curve without changing the selected outputs. Each signal keeps its
+edited mapping when switching previews. **Reset mapping** restores the previewed
+signal's detected roles. **Custom mapping…** provides one manual output.
+
+**Energy axis** shows the detected conversion and offers explicit
 eV, keV, degree and radian overrides. Angles require the crystal-plane spacing
 in Å. **Columns** exposes detector roles, and **Source details** shows the
-original header and source rows. **Import spectrum** creates the reviewed
-spectrum with undo support and portable original bytes in the saved project.
+original header and source rows. **Import N spectra** creates every checked
+output with distinct signal names and portable original bytes in the saved
+project. All selected conversions must succeed before any groups are added;
+invalid signals can be excluded. The Data view opens on raw μ(E) for the
+first imported spectrum, and one undo removes the entire import.
 The desktop accepts files up to 256 MiB. **Scan → Select datasets…** supports
 explicit selection of equal-length real HDF5 vectors; incomplete HDF5 group
 recovery is flagged visibly. A readable container does not guarantee that every
 detector group was recovered.
 
-[![Unreleased desktop import preview with the 624-point PbTe EX3 spectrum and detected energy and stored signal.](/screenshots/next/import-preview.jpg)](/screenshots/next/import-preview.jpg)
+[![Current unreleased import preview showing transmission, fluorescence and reference inclusion checkboxes, with the reference spectrum plotted.](/screenshots/next/import-signals.jpg)](/screenshots/next/import-signals.jpg)
 
-Unreleased macOS ARM64 source build, captured on 14 September 2026. The preview
+Current unreleased macOS ARM64 build, captured on 14 September 2026. The QAS
+example has three selected outputs; **Previewing Reference** shows `ln(it / ir)`
+without changing which spectra will be imported. The 651-point Mo-foil file is
+retained from [xasref](https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo%20foil%200001-r0003.dat)
+with its [MIT repository notice](https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/LICENSE)
+and credit to Ryuichi Shimogawa and contributors. See
+[screenshot provenance](/licenses/#documentation-screenshots).
+
+[![Earlier unreleased desktop import preview with the 624-point PbTe EX3 spectrum and detected energy and stored signal.](/screenshots/next/import-preview.jpg)](/screenshots/next/import-preview.jpg)
+
+Earlier unreleased macOS ARM64 source build, captured on 14 September 2026 before
+the visible signal checkboxes were added. The preview
 shows the stored absorption before import. Data: Masashi Ishii and the Industrial
 Application and Partnership Division, [XAFS spectrum of Lead telluride](https://doi.org/10.48505/nims.3178),
 under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). See

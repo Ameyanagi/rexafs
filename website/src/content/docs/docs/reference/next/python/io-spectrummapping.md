@@ -16,10 +16,10 @@ Explicit axis and detector mapping; energy converts to eV without inferred corre
 ## energy_column
 
 ```python
-energy_column: int
+energy_column: ColumnSelector
 ```
 
-Zero-based source axis column.
+Exact source axis name or zero-based index. Names must be unique within the scan.
 
 ## energy
 

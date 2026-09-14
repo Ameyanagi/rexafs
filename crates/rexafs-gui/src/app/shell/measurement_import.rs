@@ -19,6 +19,9 @@ pub(crate) struct MeasurementImport {
     pub scan: usize,
     pub signal: Option<usize>,
     pub confirmed: bool,
+    pub included: Vec<bool>,
+    pub configs: Vec<ImportConfig>,
+    pub candidate_errors: Vec<Option<String>>,
     pub dataset_paths: Vec<String>,
 }
 
@@ -37,16 +40,20 @@ fn initial_mapping(document: &Measurement, scan: usize) -> SpectrumMapping {
 
 impl MeasurementImport {
     pub fn new(path: PathBuf, document: Measurement, bytes: Vec<u8>) -> Self {
-        let confirmed = document.scans.first().is_some_and(|s| s.signals.len() == 1);
-        Self {
+        let mut source = Self {
             path,
             original_bytes: Arc::new(bytes),
             document: Arc::new(document),
             scan: 0,
-            signal: confirmed.then_some(0),
-            confirmed,
+            signal: None,
+            confirmed: false,
+            included: vec![],
+            configs: vec![],
+            candidate_errors: vec![],
             dataset_paths: vec![],
-        }
+        };
+        source.select_scan(0);
+        source
     }
     pub fn selected_mapping(&self) -> SpectrumMapping {
         self.document
@@ -57,7 +64,33 @@ impl MeasurementImport {
             .unwrap_or_else(|| initial_mapping(&self.document, self.scan))
     }
     pub fn config(&self) -> ImportConfig {
+        if let Some(config) = self.signal.and_then(|i| self.configs.get(i)) {
+            return config.clone();
+        }
+        self.original_config()
+    }
+    pub fn original_config(&self) -> ImportConfig {
         let mapping = self.selected_mapping();
+        let mut config = self.config_for_mapping(&mapping);
+        if self
+            .document
+            .scans
+            .get(self.scan)
+            .and_then(|scan| self.signal.and_then(|i| scan.signals.get(i)))
+            .is_some_and(|signal| signal.name == "reference")
+            && let SignalConversion::Transmission {
+                incident,
+                transmitted,
+            } = mapping.signal
+        {
+            config.mode = DetectionMode::Reference;
+            config.it_col = Some(incident);
+            config.ir_col = Some(transmitted);
+        }
+        config
+    }
+    fn config_for_mapping(&self, mapping: &SpectrumMapping) -> ImportConfig {
+        let mapping = mapping.clone();
         let mut config = ImportConfig {
             energy_col: Some(mapping.energy_column),
             ..Default::default()
@@ -88,12 +121,108 @@ impl MeasurementImport {
     }
     pub fn select_scan(&mut self, index: usize) {
         self.scan = index;
-        self.confirmed = self
-            .document
-            .scans
-            .get(index)
-            .is_some_and(|s| s.signals.len() == 1);
-        self.signal = self.confirmed.then_some(0);
+        self.configs.clear();
+        self.candidate_errors.clear();
+        self.included.clear();
+        if let Some(scan) = self.document.scans.get(index) {
+            for candidate in &scan.signals {
+                let mut config = self.config_for_mapping(&candidate.mapping);
+                if candidate.name == "reference" {
+                    if let SignalConversion::Transmission {
+                        incident,
+                        transmitted,
+                    } = candidate.mapping.signal
+                    {
+                        config.mode = DetectionMode::Reference;
+                        config.it_col = Some(incident);
+                        config.ir_col = Some(transmitted);
+                    }
+                }
+                self.configs.push(config);
+                let error = scan
+                    .arrays(Some(&candidate.mapping))
+                    .err()
+                    .map(|e| e.to_string());
+                self.included.push(error.is_none());
+                self.candidate_errors.push(error);
+            }
+        }
+        self.signal = (!self.configs.is_empty()).then(|| {
+            self.candidate_errors
+                .iter()
+                .position(Option::is_none)
+                .unwrap_or(0)
+        });
+        self.confirmed = self.signal.is_some();
+    }
+    pub fn remember_config(&mut self, config: &ImportConfig) {
+        if let Some(index) = self.signal {
+            self.configs[index] = config.clone();
+            self.candidate_errors[index] = self
+                .mapping(config)
+                .and_then(|m| {
+                    self.document.scans[self.scan]
+                        .arrays(Some(&m))
+                        .map_err(|e| e.to_string())
+                })
+                .err();
+        }
+    }
+    pub fn included_count(&self) -> usize {
+        if self.signal.is_none() {
+            usize::from(self.confirmed)
+        } else {
+            self.included.iter().filter(|v| **v).count()
+        }
+    }
+    pub fn included_valid(&self) -> bool {
+        if self.signal.is_none() {
+            return self.confirmed;
+        }
+        self.included_count() > 0
+            && self
+                .included
+                .iter()
+                .zip(&self.candidate_errors)
+                .all(|(include, error)| !include || error.is_none())
+    }
+    pub fn preview_included(&self) -> bool {
+        self.signal.is_none_or(|index| self.included[index])
+    }
+    /// Convert every checked output before adding any group to the project.
+    pub fn materialize_selected(
+        &self,
+        current: &ImportConfig,
+    ) -> Result<Vec<DerivedSpectrum>, String> {
+        if self.signal.is_none() {
+            return self.materialize(current).map(|g| vec![g]);
+        }
+        if !self.included_valid() {
+            return Err("Select at least one valid signal to import.".into());
+        }
+        let mut groups = Vec::new();
+        for (index, include) in self.included.iter().enumerate() {
+            if !include {
+                continue;
+            }
+            let mut source = self.clone();
+            source.signal = Some(index);
+            let config = if self.signal == Some(index) {
+                current
+            } else {
+                &self.configs[index]
+            };
+            let mut group = source.materialize(config)?;
+            let name = &self.document.scans[self.scan].signals[index].name;
+            if self.configs.len() > 1 {
+                group.label = format!("{} · {name}", group.label);
+            }
+            if let Some(operation) = &mut group.operation {
+                operation.parameters["signal_name"] = name.clone().into();
+            }
+            groups.push(group);
+        }
+        Ok(groups)
     }
     pub fn mapping(&self, config: &ImportConfig) -> Result<SpectrumMapping, String> {
         let scan = self
@@ -319,23 +448,39 @@ impl StudioApp {
         cx.notify();
     }
 
-    pub(crate) fn accept_measurement(
+    pub(crate) fn accept_measurements(
         &mut self,
-        mut group: DerivedSpectrum,
+        groups: Vec<DerivedSpectrum>,
         cx: &mut Context<Self>,
     ) {
-        group.id = self.next_group_id();
-        self.record(
-            "Import measurement",
-            Some(journal::UndoOp::DerivedAdd {
-                index: self.derived.len(),
-                spectrum: group.clone(),
-            }),
-        );
-        self.derived.push(group);
+        let count = groups.len();
+        if count == 0 {
+            return;
+        }
+        let first = self.derived.len();
+        let mut ids = std::collections::BTreeSet::new();
+        for mut group in groups {
+            group.id = self.next_group_id();
+            ids.insert(
+                group
+                    .group_id
+                    .clone()
+                    .expect("Materialized measurement has an identity"),
+            );
+            self.derived.push(group);
+        }
         self.rekey_after_catalog_change();
-        self.select_entry(DERIVED_BASE + self.derived.len() - 1, cx);
-        self.status = "Spectrum imported".into();
+        self.record_created_groups(ids, format!("Import {count} measurement spectra"));
+        // Show the same raw quantity that the user reviewed before importing.
+        self.stage_view.e_quantity = EQuantity::Mu;
+        self.stage_view.scope = PlotScope::Current;
+        self.set_stage(Stage::Data, cx);
+        self.select_entry(DERIVED_BASE + first, cx);
+        self.status = format!(
+            "Imported {count} {}",
+            if count == 1 { "spectrum" } else { "spectra" }
+        )
+        .into();
         cx.notify();
     }
 }

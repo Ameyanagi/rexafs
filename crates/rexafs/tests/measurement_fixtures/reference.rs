@@ -100,10 +100,15 @@ fn xdac_keeps_independent_samples_and_uncorrected_vortex_channels() {
     let doc = read("nsls/x23a2/demeter/x23a2med.dat");
     let s = &doc.scans[0];
     assert_eq!(s.columns.len(), 17);
-    assert_eq!(s.signals.len(), 5);
+    assert_eq!(s.signals.len(), 6);
     assert_eq!(s.columns[7].values[0], 9743.);
     assert_eq!(s.columns[11].values[0], 9799.);
-    let (e, y) = s.arrays(Some(&s.signals[1].mapping)).unwrap();
+    let detector = s
+        .signals
+        .iter()
+        .find(|s| s.name == "Ifch1 / I0 (uncorrected)")
+        .unwrap();
+    let (e, y) = s.arrays(Some(&detector.mapping)).unwrap();
     assert_eq!(e.len(), 422);
     assert_eq!(e[0], 6912.0019);
     assert!((y[0] - 845f64 / 4484.).abs() < 1e-13);

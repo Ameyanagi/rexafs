@@ -1,4 +1,77 @@
 use super::*;
+
+#[test]
+fn qas_imports_checked_outputs_with_independent_mappings_and_provenance() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+        "../rexafs/tests/fixtures/xas/samples/nsls-ii/7-bm-qas/xasref/Mo foil 0001-r0003.dat",
+    );
+    let (document, bytes) = read_source(&path).unwrap();
+    let mut source = MeasurementImport::new(path, document, bytes);
+    assert_eq!(source.included, [true, true, true]);
+    let groups = source.materialize_selected(&source.config()).unwrap();
+    assert_eq!(groups.len(), 3);
+    let scan = &source.document.scans[0];
+    for (group, name) in groups
+        .iter()
+        .zip(["transmission", "fluorescence", "reference"])
+    {
+        assert!(group.label.ends_with(name));
+        assert_eq!(group.energy.len(), 651);
+        assert_eq!(
+            group.operation.as_ref().unwrap().parameters["signal_name"],
+            name
+        );
+    }
+    let row = 100;
+    let i0 = scan.columns[1].values[row];
+    let it = scan.columns[2].values[row];
+    let ir = scan.columns[3].values[row];
+    let iff = scan.columns[4].values[row];
+    assert!((groups[0].mu[row] - (i0 / it).ln()).abs() < 1e-13);
+    assert!((groups[1].mu[row] - iff / i0).abs() < 1e-13);
+    assert!((groups[2].mu[row] - (it / ir).ln()).abs() < 1e-13);
+    assert_ne!(groups[0].group_id, groups[1].group_id);
+    source.included[1] = false;
+    source.signal = Some(2);
+    assert_eq!(source.config().mode, DetectionMode::Reference);
+    let original = source.original_config();
+    let mut edited = original.clone();
+    edited.it_col = Some(1);
+    source.remember_config(&edited);
+    source.signal = Some(0);
+    assert_eq!(
+        source.materialize_selected(&source.config()).unwrap().len(),
+        2
+    );
+    source.signal = Some(2);
+    assert_eq!(source.config().it_col, Some(1));
+    assert_eq!(source.original_config().it_col, Some(2));
+    source.remember_config(&original);
+    assert_eq!(
+        source.materialize_selected(&source.config()).unwrap()[1].mu,
+        groups[2].mu
+    );
+    source.included.fill(false);
+    assert!(!source.included_valid());
+    assert!(source.materialize_selected(&source.config()).is_err());
+}
+
+#[test]
+fn invalid_signals_can_be_excluded_without_blocking_valid_outputs() {
+    let bytes = b"energy,I0,It,Ir,IFF\n7100,100,0,5,3\n7101,200,40,10,8\n";
+    let document = rexafs::io::parse_measurement(bytes).unwrap();
+    let mut source = MeasurementImport::new("invalid.dat".into(), document, bytes.to_vec());
+    assert_eq!(source.included, [false, true, false]);
+    assert_eq!(source.signal, Some(1));
+    source.signal = Some(0); // Previewing an unchecked invalid signal is allowed.
+    assert!(!source.preview_included());
+    let groups = source.materialize_selected(&source.config()).unwrap();
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].mu, [0.03, 0.04]);
+    source.included[0] = true;
+    assert!(source.materialize_selected(&source.config()).is_err());
+}
+
 #[test]
 fn every_beamline_signal_has_the_same_preview_and_import_conversion() {
     let root =
@@ -14,9 +87,10 @@ fn every_beamline_signal_has_the_same_preview_and_import_conversion() {
         sources += 1;
         for scan in 0..source.document.scans.len() {
             source.select_scan(scan);
-            if source.document.scans[scan].signals.len() != 1 {
-                assert!(!source.confirmed, "{}", path.display());
-            }
+            assert_eq!(
+                source.confirmed,
+                !source.document.scans[scan].signals.is_empty()
+            );
             for choice in 0..source.document.scans[scan].signals.len() {
                 source.signal = Some(choice);
                 source.confirmed = true;

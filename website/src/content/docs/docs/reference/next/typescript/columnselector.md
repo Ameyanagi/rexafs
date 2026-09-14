@@ -1,6 +1,6 @@
 ---
-title: "TypeScript · SignalCandidate"
-description: "SignalCandidate declarations, defaults and API explanations."
+title: "TypeScript · ColumnSelector"
+description: "ColumnSelector declarations, defaults and API explanations."
 audience: user
 pagefind: false
 ---
@@ -11,20 +11,8 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Header-supported signal choice; several choices require explicit selection.
-
-## name
+Exact, case-sensitive column name or zero-based index. Duplicate names require indices.
 
 ```typescript
-name: string;
+export type ColumnSelector = string | number;
 ```
-
-Display label for this signal.
-
-## mapping
-
-```typescript
-mapping: SpectrumMapping<number>;
-```
-
-Fully specified axis and signal conversion.

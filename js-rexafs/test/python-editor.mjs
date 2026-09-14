@@ -20,6 +20,10 @@ from rexafs.io import parse_measurement, SpectrumMapping
 measurement = parse_measurement("energy,mu\\n7100,1\\n7101,2")
 mapping: SpectrumMapping = {"energy_column":0,"energy":{"kind":"offset_ev","offset_ev":20000},"signal":{"kind":"direct","column":1}}
 energy, mu = measurement.arrays(mapping=mapping)
+energy, mu = measurement.arrays(energy="energy", mu="mu")
+measurement.arrays(energy=0, i0="I0", iff=["IFF1", 3], energy_unit="keV")
+named_mapping: SpectrumMapping = {"energy_column":"energy","energy":{"kind":"ev"},"signal":{"kind":"direct","column":"mu"}}
+measurement.spectrum(mapping=named_mapping)
 print(energy[0], mu[0], measurement.document["format"])
 archived: list[float | None] | None = measurement.document["datasets"][0]["imaginary"]
 print(archived, measurement.document["metadata"].get("larix.session_text"))
@@ -110,6 +114,11 @@ XrayFFTF(window="")
   const readerMethods=await request("textDocument/completion",readerPosition(3,12));
   assert.ok((readerMethods.items ?? readerMethods).some(item=>item.label==="select_datasets"));
   assert.match(JSON.stringify(await request("textDocument/signatureHelp",readerPosition(4,19))),/SpectrumMapping/);
+  const columnKeywords=await request("textDocument/completion",readerPosition(4,19));
+  for (const name of ["energy", "mu", "i0", "it", "iff", "energy_unit"]) {
+    assert.ok((columnKeywords.items ?? columnKeywords).some(item=>item.label.startsWith(`${name}=`)), name);
+  }
+  assert.match(JSON.stringify(await request("textDocument/hover",readerPosition(2,15))),/case-sensitive/);
   console.log("Installed Python wheel: property/method hovers, member/keyword/literal completion and signature defaults passed");
   await request("shutdown", null);
   send({ method: "exit", params: null });

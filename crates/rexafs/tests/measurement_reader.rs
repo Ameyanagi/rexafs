@@ -2,5 +2,6 @@
 mod measurement_reader {
     mod contracts;
     mod larix;
+    mod selection;
     mod xtunes;
 }

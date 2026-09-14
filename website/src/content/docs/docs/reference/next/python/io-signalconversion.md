@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/io.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/io.pyi)
 
-Zero-based roles: direct column, transmission incident/transmitted, or ratio detectors/incident.
+Names or zero-based indices for direct, transmission or detector/monitor ratio roles.
 
 ## kind
 
@@ -24,31 +24,31 @@ Arithmetic: direct, transmission or ratio. Required at runtime.
 ## column
 
 ```python
-column: int
+column: ColumnSelector
 ```
 
-Zero-based stored-signal column for direct.
+Exact name or zero-based stored-signal column for direct.
 
 ## incident
 
 ```python
-incident: int
+incident: ColumnSelector
 ```
 
-Zero-based incident monitor for transmission or ratio.
+Exact name or zero-based incident monitor for transmission or ratio.
 
 ## transmitted
 
 ```python
-transmitted: int
+transmitted: ColumnSelector
 ```
 
-Zero-based transmitted intensity for transmission.
+Exact name or zero-based transmitted intensity for transmission.
 
 ## detectors
 
 ```python
-detectors: list[int]
+detectors: list[ColumnSelector]
 ```
 
-Nonempty, unique zero-based detector columns for ratio.
+Nonempty list of distinct detector names or indices for ratio.

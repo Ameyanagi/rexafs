@@ -1252,32 +1252,38 @@ export type EnergyConversion =
       /** Degrees per axis unit: 1 for degrees, 180/pi for radians. */
       degrees_per_unit: number;
     };
+/** Exact, case-sensitive column name or zero-based index. Duplicate names require indices. */
+export type ColumnSelector = string | number;
+
 /**
- * Zero-based detector roles. Transmission is ln(incident/transmitted), with
+ * Exact column names or zero-based detector roles. Transmission is ln(incident/transmitted), with
  * nonzero matching polarity and matching units. Ratio is sum(detectors)/incident
  * with a nonzero monitor. No dark-current, gain or dead-time correction is inferred.
  * Direct copies the original signal and scale. See
  * [Newville (2014)](https://doi.org/10.2138/rmg.2014.78.2) for transmission assumptions.
  */
-export type SignalConversion =
-  | { kind: 'direct'; column: number }
-  | { kind: 'transmission'; incident: number; transmitted: number }
-  | { kind: 'ratio'; detectors: number[]; incident: number };
-/** Explicit, copied selection for converting one original scan. */
-export interface SpectrumMapping {
-  /** Zero-based energy or calibrated angle column. */
-  energy_column: number;
+export type SignalConversion<Column extends ColumnSelector = ColumnSelector> =
+  | { kind: 'direct'; column: Column }
+  | { kind: 'transmission'; incident: Column; transmitted: Column }
+  | { kind: 'ratio'; detectors: Column[]; incident: Column };
+/** Explicit, copied selection for converting one original scan.
+ * Column defaults to ColumnSelector (string | number). Detected candidates use
+ * SpectrumMapping<number>, since the reader has already resolved their indices.
+ */
+export interface SpectrumMapping<Column extends ColumnSelector = ColumnSelector> {
+  /** Exact name or zero-based index of the energy or calibrated angle column. */
+  energy_column: Column;
   /** Source axis conversion to electronvolts. */
   energy: EnergyConversion;
   /** Selected detector arithmetic, without normalization or background removal. */
-  signal: SignalConversion;
+  signal: SignalConversion<Column>;
 }
 /** Header-supported signal choice; several choices require explicit selection. */
 export interface SignalCandidate {
   /** Display label for this signal. */
   name: string;
   /** Fully specified axis and signal conversion. */
-  mapping: SpectrumMapping;
+  mapping: SpectrumMapping<number>;
 }
 /** Original owned numeric channel in acquisition order. */
 export interface MeasurementColumn {
@@ -1334,6 +1340,27 @@ export interface MeasurementDocument {
   /** Encoding, container and unreadable HDF5 alias-group diagnostics. */
   warnings: string[];
 }
+/** Convenient scan and column selection (unreleased). Names must be exact and unique.
+ * Supply energy and exactly one of mu, it or iff; it/iff also require i0.
+ * Conflicting/incomplete options throw. Omit column options to use automatic detection.
+ */
+export interface MeasurementOptions {
+  /** Zero-based scan index; defaults to 0. */
+  scan?: number;
+  /** Axis name or zero-based index; required with explicit signal roles. */
+  energy?: ColumnSelector;
+  /** Override detected axis calibration; omitted retains detected/declared units. Unknown units require a choice. */
+  energy_unit?: 'eV' | 'keV';
+  /** Stored absorption column; cannot be combined with i0, it or iff. */
+  mu?: ColumnSelector;
+  /** Incident monitor, required for it or iff. */
+  i0?: ColumnSelector;
+  /** Transmitted intensity; produces ln(i0 / it), using the shared conversion checks. */
+  it?: ColumnSelector;
+  /** Fluorescence/yield detector or explicit list; summed then divided by i0, without corrections. */
+  iff?: ColumnSelector | ColumnSelector[];
+}
+
 /**
  * Owned universal reader (unreleased). Supports text/CSV, beamline layouts,
  * historical binary, Athena Perl/JSON, Larix 1.0 sessions, XTUNES, gzip and HDF5. Browser callers first await
@@ -1351,13 +1378,18 @@ export class Measurement {
   /**
    * Copy converted energy in eV and signal to Float64Arrays in acquisition order.
    * scan defaults to 0. Omit mapping only when there is exactly one detected
-   * signal. Select a candidate's mapping or supply explicit zero-based roles.
+   * signal. Select a candidate's mapping or supply exact names or zero-based roles.
    * Rejects invalid indices, conflicting roles, nonfinite selected cells,
    * nonpositive energy, invalid Bragg calibration and invalid intensity ratios.
    * Duplicates and source order remain; Spectrum construction requires strictly
    * increasing unique energy. No processing or cached results are changed.
    */
   arrays(scan?: number, mapping?: SpectrumMapping): { energy: Float64Array; mu: Float64Array };
+  /** Select columns with exact names or indices, for example arrays({energy:"energy", i0:"I0", it:"It"}).
+   * Missing/duplicate names fail. Retains the same owned arrays, ordering, conversion checks and
+   * no-processing behavior as the positional overload. Cannot combine options with a mapping.
+   */
+  arrays(options: MeasurementOptions): { energy: Float64Array; mu: Float64Array };
   /**
    * Append copied real dataset vectors in path order; return the new scan index.
    * Requires at least two distinct nonempty vectors of equal length. Invalid

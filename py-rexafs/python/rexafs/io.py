@@ -33,7 +33,10 @@ def read_qas_transmission(path: str | PathLike[str]) -> Spectrum:
     return _core.read_qas_transmission(fspath(path))
 
 
-from typing import Literal, TypedDict
+from typing import Literal, TypeAlias, TypedDict
+
+ColumnSelector: TypeAlias = int | str
+"""Zero-based column index or exact, case-sensitive name; duplicate names require indices."""
 
 class EnergyConversion(TypedDict, total=False):
     """Axis conversion: ev, kev, offset_ev, or bragg (crystal spacing in Å).
@@ -52,22 +55,22 @@ class EnergyConversion(TypedDict, total=False):
     """Positive multiplier from source axis to degrees; required for bragg."""
 
 class SignalConversion(TypedDict, total=False):
-    """Zero-based roles: direct column, transmission incident/transmitted, or ratio detectors/incident."""
+    """Names or zero-based indices for direct, transmission or detector/monitor ratio roles."""
     kind: Literal["direct", "transmission", "ratio"]
     """Arithmetic: direct, transmission or ratio. Required at runtime."""
-    column: int
-    """Zero-based stored-signal column for direct."""
-    incident: int
-    """Zero-based incident monitor for transmission or ratio."""
-    transmitted: int
-    """Zero-based transmitted intensity for transmission."""
-    detectors: list[int]
-    """Nonempty, unique zero-based detector columns for ratio."""
+    column: ColumnSelector
+    """Exact name or zero-based stored-signal column for direct."""
+    incident: ColumnSelector
+    """Exact name or zero-based incident monitor for transmission or ratio."""
+    transmitted: ColumnSelector
+    """Exact name or zero-based transmitted intensity for transmission."""
+    detectors: list[ColumnSelector]
+    """Nonempty list of distinct detector names or indices for ratio."""
 
 class SpectrumMapping(TypedDict):
     """Explicit axis and detector mapping; energy converts to eV without inferred corrections."""
-    energy_column: int
-    """Zero-based source axis column."""
+    energy_column: ColumnSelector
+    """Exact source axis name or zero-based index. Names must be unique within the scan."""
     energy: EnergyConversion
     """Declared energy unit or explicit Bragg calibration."""
     signal: SignalConversion
@@ -132,6 +135,33 @@ class MeasurementDocument(TypedDict):
     warnings: list[str]
     """Container and encoding diagnostics, including partial HDF5 recovery."""
 
+
+def _selection_json(mapping, energy, mu, i0, it, iff, energy_unit):
+    """Translate convenience keywords; Rust resolves selectors and validates arithmetic."""
+    import json
+    if all(v is None for v in (energy, mu, i0, it, iff, energy_unit)):
+        return None if mapping is None else json.dumps(mapping, allow_nan=False)
+    if mapping is not None:
+        raise ValueError("Use mapping or column keywords, not both")
+    if energy is None or sum(v is not None for v in (mu, it, iff)) != 1:
+        raise ValueError("Specify energy and exactly one of mu, it, or iff")
+    if mu is not None:
+        if i0 is not None:
+            raise ValueError("A direct mu column cannot be combined with i0")
+        signal = {"kind": "direct", "column": mu}
+    else:
+        if i0 is None:
+            raise ValueError("Transmission and fluorescence require i0")
+        signal = ({"kind": "transmission", "incident": i0, "transmitted": it}
+                  if it is not None else
+                  {"kind": "ratio", "incident": i0,
+                   "detectors": list(iff) if isinstance(iff, (list, tuple)) else [iff]})
+    if energy_unit not in (None, "eV", "keV"):
+        raise ValueError("energy_unit must be eV or keV")
+    return json.dumps({"energy_column": energy,
+                       "energy": None if energy_unit is None else {"kind": energy_unit.lower()},
+                       "signal": signal}, allow_nan=False)
+
 class Measurement:
     """Owned, content-detected measurement document (unreleased).
 
@@ -166,8 +196,21 @@ class Measurement:
         """
         return self._native.select_datasets(paths)
 
-    def arrays(self, scan: int = 0, mapping: SpectrumMapping | None = None):
+    def arrays(self, scan: int = 0, mapping: SpectrumMapping | None = None, *,
+               energy: ColumnSelector | None = None, mu: ColumnSelector | None = None,
+               i0: ColumnSelector | None = None, it: ColumnSelector | None = None,
+               iff: ColumnSelector | list[ColumnSelector] | tuple[ColumnSelector, ...] | None = None,
+               energy_unit: Literal["eV", "keV"] | None = None):
         """Return independent NumPy float64 energy (eV) and signal arrays.
+
+        Column arguments accept exact, case-sensitive names or zero-based indices.
+        For example, arrays(energy="energy", i0="I0", it="It") selects transmission;
+        mu selects stored absorption and iff selects one detector or an explicit list.
+        Specify energy and exactly one of mu, it, or iff; it/iff also require i0.
+        Keywords cannot be combined with mapping. Missing or duplicate names fail.
+        Omit energy_unit to retain detected axis calibration/declared units; set
+        "eV" or "keV" to override. Unknown units require an explicit choice.
+        The mapping dictionary also accepts names and indices in any combination.
 
         scan is zero-based. Recommended mapping=None uses the sole detected
         signal; zero or multiple choices require a mapping from document or an
@@ -180,25 +223,31 @@ class Measurement:
         calibration or nonfinite selected values raise ValueError; an invalid
         scan raises IndexError. No processing runs or input changes occur.
         """
-        import json
-        if not isinstance(scan, int) or scan < 0 or scan > maxsize:
+        if not isinstance(scan, int) or isinstance(scan, bool) or scan < 0 or scan > maxsize:
             raise IndexError("Scan index out of range")
-        return self._native.arrays(scan, None if mapping is None else json.dumps(mapping, allow_nan=False))
+        selection = _selection_json(mapping, energy, mu, i0, it, iff, energy_unit)
+        return self._native.arrays(scan, selection)
 
-    def spectrum(self, scan: int = 0, mapping: SpectrumMapping | None = None) -> Spectrum:
+    def spectrum(self, scan: int = 0, mapping: SpectrumMapping | None = None, *,
+               energy: ColumnSelector | None = None, mu: ColumnSelector | None = None,
+               i0: ColumnSelector | None = None, it: ColumnSelector | None = None,
+               iff: ColumnSelector | list[ColumnSelector] | tuple[ColumnSelector, ...] | None = None,
+               energy_unit: Literal["eV", "keV"] | None = None) -> Spectrum:
         """Create an owned, unprocessed Spectrum from the selected scan.
 
-        Uses arrays() conversion rules, then sorts energy and signal together.
+        Accepts the same column-name/index keywords and energy_unit override as
+        arrays(), or the existing mapping dictionary. These options are mutually
+        exclusive. Uses arrays() conversion rules, then sorts energy and signal together.
         Duplicate energies remain and may require cleanup before processing.
         No normalization/background/FFT prerequisites run; existing objects and
         source files are unchanged. Selection and conversion errors are the
         same as arrays(). This unreleased reader differs from the strict
         Spectrum array constructor, which requires increasing, unique energy.
         """
-        import json
-        if not isinstance(scan, int) or scan < 0 or scan > maxsize:
+        if not isinstance(scan, int) or isinstance(scan, bool) or scan < 0 or scan > maxsize:
             raise IndexError("Scan index out of range")
-        return self._native.spectrum(scan, None if mapping is None else json.dumps(mapping, allow_nan=False))
+        selection = _selection_json(mapping, energy, mu, i0, it, iff, energy_unit)
+        return self._native.spectrum(scan, selection)
 
 
 def parse_measurement(data: bytes | str) -> Measurement:

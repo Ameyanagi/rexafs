@@ -54,10 +54,19 @@ processing occurs, and original scans remain unchanged.
 ## arrays
 
 ```python
-arrays(self, scan: int=0, mapping: SpectrumMapping | None=None) -> tuple[NDArray[np.float64], NDArray[np.float64]]
+arrays(self, scan: int=0, mapping: SpectrumMapping | None=None, *, energy: ColumnSelector | None=None, mu: ColumnSelector | None=None, i0: ColumnSelector | None=None, it: ColumnSelector | None=None, iff: ColumnSelector | list[ColumnSelector] | tuple[ColumnSelector, ...] | None=None, energy_unit: Literal['eV', 'keV'] | None=None) -> tuple[NDArray[np.float64], NDArray[np.float64]]
 ```
 
 Return independent NumPy float64 energy (eV) and signal arrays.
+
+Column arguments accept exact, case-sensitive names or zero-based indices.
+For example, arrays(energy="energy", i0="I0", it="It") selects transmission;
+mu selects stored absorption and iff selects one detector or an explicit list.
+Specify energy and exactly one of mu, it, or iff; it/iff also require i0.
+Keywords cannot be combined with mapping. Missing or duplicate names fail.
+Omit energy_unit to retain detected axis calibration/declared units; set
+"eV" or "keV" to override. Unknown units require an explicit choice.
+The mapping dictionary also accepts names and indices in any combination.
 
 scan is zero-based. Recommended mapping=None uses the sole detected
 signal; zero or multiple choices require a mapping from document or an
@@ -73,12 +82,14 @@ scan raises IndexError. No processing runs or input changes occur.
 ## spectrum
 
 ```python
-spectrum(self, scan: int=0, mapping: SpectrumMapping | None=None) -> Spectrum
+spectrum(self, scan: int=0, mapping: SpectrumMapping | None=None, *, energy: ColumnSelector | None=None, mu: ColumnSelector | None=None, i0: ColumnSelector | None=None, it: ColumnSelector | None=None, iff: ColumnSelector | list[ColumnSelector] | tuple[ColumnSelector, ...] | None=None, energy_unit: Literal['eV', 'keV'] | None=None) -> Spectrum
 ```
 
 Create an owned, unprocessed Spectrum from the selected scan.
 
-Uses arrays() conversion rules, then sorts energy and signal together.
+Accepts the same column-name/index keywords and energy_unit override as
+arrays(), or the existing mapping dictionary. These options are mutually
+exclusive. Uses arrays() conversion rules, then sorts energy and signal together.
 Duplicate energies remain and may require cleanup before processing.
 No normalization/background/FFT prerequisites run; existing objects and
 source files are unchanged. Selection and conversion errors are the

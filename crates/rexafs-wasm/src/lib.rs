@@ -1295,7 +1295,7 @@ impl WasmMeasurement {
     }
     /// Copy a scan's converted energy and signal as JSON, in acquisition order.
     /// Omit mapping_json only when the scan has exactly one signal candidate.
-    /// Explicit mappings use zero-based columns and declared energy units.
+    /// Explicit mappings accept exact column names or zero-based indices and energy units.
     /// Errors identify invalid roles, units, ratios and nonfinite selected cells.
     pub fn arrays_json(
         &self,
@@ -1303,7 +1303,7 @@ impl WasmMeasurement {
         mapping_json: Option<String>,
     ) -> Result<String, JsValue> {
         let mapping = mapping_json
-            .map(|s| serde_json::from_str::<rexafs::io::SpectrumMapping>(&s))
+            .map(|s| serde_json::from_str::<rexafs::io::SpectrumSelection>(&s))
             .transpose()
             .map_err(|e| js_sys::Error::new(&e.to_string()))?;
         let selected = self
@@ -1311,6 +1311,11 @@ impl WasmMeasurement {
             .scans
             .get(scan)
             .ok_or_else(|| js_sys::Error::new("Scan index out of range"))?;
+        let mapping = mapping
+            .as_ref()
+            .map(|m| m.resolve(selected))
+            .transpose()
+            .map_err(|e| js_sys::Error::new(&e.to_string()))?;
         let arrays = selected
             .arrays(mapping.as_ref())
             .map_err(|e| js_sys::Error::new(&e.to_string()))?;

@@ -212,7 +212,7 @@ function updateMappingSummary(): void {
     : 'Choose a detected signal, or review and confirm the custom columns and units.';
 }
 
-function applySignal(m: SpectrumMapping): void {
+function applySignal(m: SpectrumMapping<number>): void {
   energyColumn.value=String(m.energy_column);
   energyUnit.value=m.energy.kind==='bragg'?'bragg':m.energy.kind==='offset_ev'?'offset_ev':m.energy.kind==='kev'?'keV':'eV';
   if (m.energy.kind==='offset_ev') get<HTMLInputElement>('#energy-origin').value=String(m.energy.offset_ev);
@@ -230,7 +230,7 @@ function applySignal(m: SpectrumMapping): void {
   updateQuantity();
 }
 
-function readMapping(): SpectrumMapping {
+function readMapping(): SpectrumMapping<number> {
   return {
     energy_column:Number(energyColumn.value),
     energy:energyUnit.value==='bragg'?{kind:'bragg',d_spacing:Number(get<HTMLInputElement>('#crystal-spacing').value),degrees_per_unit:Number(get<HTMLInputElement>('#angle-scale').value)}:energyUnit.value==='offset_ev'?{kind:'offset_ev',offset_ev:Number(get<HTMLInputElement>('#energy-origin').value)}:{kind:energyUnit.value==='keV'?'kev':'ev'},

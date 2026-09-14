@@ -27,9 +27,9 @@ pub mod xdi;
 pub use athena::{AthenaGroup, AthenaParams, AthenaProject, AthenaValue};
 pub use load_spectrum_QAS_trans as read_qas_transmission;
 pub use reader::{
-    parse_measurement, read_measurement, EnergyConversion, Measurement, MeasurementColumn,
-    MeasurementDataset, MeasurementScan, ReadError, SignalCandidate, SignalConversion,
-    SpectrumMapping,
+    parse_measurement, read_measurement, ColumnSelector, EnergyConversion, Measurement,
+    MeasurementColumn, MeasurementDataset, MeasurementScan, ReadError, SignalCandidate,
+    SignalConversion, SignalSelection, SpectrumMapping, SpectrumSelection,
 };
 pub use xdi::{XdiColumn, XdiError, XdiFile, XdiHeader, XdiSignal};
 

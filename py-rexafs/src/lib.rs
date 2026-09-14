@@ -1906,13 +1906,18 @@ impl PyMeasurement {
         mapping_json: Option<&str>,
     ) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>)> {
         let mapping = mapping_json
-            .map(serde_json::from_str::<rexafs::io::SpectrumMapping>)
+            .map(serde_json::from_str::<rexafs::io::SpectrumSelection>)
             .transpose()
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let s =
             self.inner.scans.get(scan).ok_or_else(|| {
                 pyo3::exceptions::PyIndexError::new_err("Scan index out of range")
             })?;
+        let mapping = mapping
+            .as_ref()
+            .map(|m| m.resolve(s))
+            .transpose()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let (energy, mu) = s
             .arrays(mapping.as_ref())
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
@@ -1921,13 +1926,18 @@ impl PyMeasurement {
     #[pyo3(signature = (scan=0, mapping_json=None))]
     fn spectrum(&self, scan: usize, mapping_json: Option<&str>) -> PyResult<PySpectrum> {
         let mapping = mapping_json
-            .map(serde_json::from_str::<rexafs::io::SpectrumMapping>)
+            .map(serde_json::from_str::<rexafs::io::SpectrumSelection>)
             .transpose()
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let s =
             self.inner.scans.get(scan).ok_or_else(|| {
                 pyo3::exceptions::PyIndexError::new_err("Scan index out of range")
             })?;
+        let mapping = mapping
+            .as_ref()
+            .map(|m| m.resolve(s))
+            .transpose()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         Ok(PySpectrum {
             inner: s
                 .to_spectrum(mapping.as_ref())

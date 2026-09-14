@@ -1,7 +1,7 @@
 """Measurement readers and explicit conversion to unprocessed spectra."""
 
 from os import PathLike
-from typing import Literal, TypedDict
+from typing import Literal, TypeAlias, TypedDict
 import numpy as np
 from numpy.typing import NDArray
 
@@ -31,6 +31,9 @@ def read_qas_transmission(path: str | PathLike[str]) -> Spectrum:
     For the transmission equation and its physical assumptions, see
     [Newville, Fundamentals of XAFS, section 4](https://docs.xrayabsorption.org/tutorials/XAFS_Fundamentals.pdf)."""
 
+ColumnSelector: TypeAlias = int | str
+"""Zero-based column index or exact, case-sensitive name; duplicate names require indices."""
+
 class EnergyConversion(TypedDict, total=False):
     """Axis conversion: ev, kev, offset_ev, or bragg (crystal spacing in Å).
 
@@ -48,22 +51,22 @@ class EnergyConversion(TypedDict, total=False):
     """Positive multiplier from source axis to degrees; required for bragg."""
 
 class SignalConversion(TypedDict, total=False):
-    """Zero-based roles: direct column, transmission incident/transmitted, or ratio detectors/incident."""
+    """Names or zero-based indices for direct, transmission or detector/monitor ratio roles."""
     kind: Literal["direct", "transmission", "ratio"]
     """Arithmetic: direct, transmission or ratio. Required at runtime."""
-    column: int
-    """Zero-based stored-signal column for direct."""
-    incident: int
-    """Zero-based incident monitor for transmission or ratio."""
-    transmitted: int
-    """Zero-based transmitted intensity for transmission."""
-    detectors: list[int]
-    """Nonempty, unique zero-based detector columns for ratio."""
+    column: ColumnSelector
+    """Exact name or zero-based stored-signal column for direct."""
+    incident: ColumnSelector
+    """Exact name or zero-based incident monitor for transmission or ratio."""
+    transmitted: ColumnSelector
+    """Exact name or zero-based transmitted intensity for transmission."""
+    detectors: list[ColumnSelector]
+    """Nonempty list of distinct detector names or indices for ratio."""
 
 class SpectrumMapping(TypedDict):
     """Explicit axis and detector mapping; energy converts to eV without inferred corrections."""
-    energy_column: int
-    """Zero-based source axis column."""
+    energy_column: ColumnSelector
+    """Exact source axis name or zero-based index. Names must be unique within the scan."""
     energy: EnergyConversion
     """Declared energy unit or explicit Bragg calibration."""
     signal: SignalConversion
@@ -155,8 +158,21 @@ class Measurement:
         processing occurs, and original scans remain unchanged.
         """
         ...
-    def arrays(self, scan: int = 0, mapping: SpectrumMapping | None = None) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    def arrays(self, scan: int = 0, mapping: SpectrumMapping | None = None, *,
+               energy: ColumnSelector | None = None, mu: ColumnSelector | None = None,
+               i0: ColumnSelector | None = None, it: ColumnSelector | None = None,
+               iff: ColumnSelector | list[ColumnSelector] | tuple[ColumnSelector, ...] | None = None,
+               energy_unit: Literal["eV", "keV"] | None = None) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
         """Return independent NumPy float64 energy (eV) and signal arrays.
+
+        Column arguments accept exact, case-sensitive names or zero-based indices.
+        For example, arrays(energy="energy", i0="I0", it="It") selects transmission;
+        mu selects stored absorption and iff selects one detector or an explicit list.
+        Specify energy and exactly one of mu, it, or iff; it/iff also require i0.
+        Keywords cannot be combined with mapping. Missing or duplicate names fail.
+        Omit energy_unit to retain detected axis calibration/declared units; set
+        "eV" or "keV" to override. Unknown units require an explicit choice.
+        The mapping dictionary also accepts names and indices in any combination.
 
         scan is zero-based. Recommended mapping=None uses the sole detected
         signal; zero or multiple choices require a mapping from document or an
@@ -169,10 +185,16 @@ class Measurement:
         calibration or nonfinite selected values raise ValueError; an invalid
         scan raises IndexError. No processing runs or input changes occur."""
         ...
-    def spectrum(self, scan: int = 0, mapping: SpectrumMapping | None = None) -> Spectrum:
+    def spectrum(self, scan: int = 0, mapping: SpectrumMapping | None = None, *,
+               energy: ColumnSelector | None = None, mu: ColumnSelector | None = None,
+               i0: ColumnSelector | None = None, it: ColumnSelector | None = None,
+               iff: ColumnSelector | list[ColumnSelector] | tuple[ColumnSelector, ...] | None = None,
+               energy_unit: Literal["eV", "keV"] | None = None) -> Spectrum:
         """Create an owned, unprocessed Spectrum from the selected scan.
 
-        Uses arrays() conversion rules, then sorts energy and signal together.
+        Accepts the same column-name/index keywords and energy_unit override as
+        arrays(), or the existing mapping dictionary. These options are mutually
+        exclusive. Uses arrays() conversion rules, then sorts energy and signal together.
         Duplicate energies remain and may require cleanup before processing.
         No normalization/background/FFT prerequisites run; existing objects and
         source files are unchanged. Selection and conversion errors are the

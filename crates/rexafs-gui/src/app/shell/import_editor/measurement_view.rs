@@ -3,6 +3,15 @@ use super::*;
 use rexafs::io::{EnergyConversion, SignalCandidate, SignalConversion};
 
 fn signal_label(signal: &SignalCandidate) -> String {
+    if signal.name == "reference" {
+        return "Reference".into();
+    }
+    if signal.name == "transmission" {
+        return "Transmission".into();
+    }
+    if signal.name == "fluorescence" {
+        return "Fluorescence".into();
+    }
     let mode = match signal.mapping.signal {
         SignalConversion::Direct { .. } => "Stored signal",
         SignalConversion::Transmission { .. } => "Transmission",
@@ -13,6 +22,12 @@ fn signal_label(signal: &SignalCandidate) -> String {
 
 impl ImportEditor {
     pub(super) fn activate_measurement(&mut self, action: Action, cx: &mut Context<Self>) -> bool {
+        if matches!(
+            action,
+            Action::Signal(_) | Action::Scan(_) | Action::Mode(_)
+        ) {
+            self.save_measurement_draft();
+        }
         let Some(source) = &mut self.measurement else {
             return false;
         };
@@ -33,6 +48,11 @@ impl ImportEditor {
                 self.show_columns = !source.confirmed;
                 self.reload(cx);
             }
+            Action::IncludeSignal(index) => {
+                if source.included[index] || source.candidate_errors[index].is_none() {
+                    source.included[index] = !source.included[index];
+                }
+            }
             Action::Signal(index) => {
                 source.signal = Some(index);
                 source.confirmed = true;
@@ -42,6 +62,7 @@ impl ImportEditor {
                 self.reload(cx);
             }
             Action::Mode(index) => {
+                source.signal = None;
                 source.confirmed = true;
                 let mut config = self
                     .draft
@@ -79,7 +100,8 @@ impl ImportEditor {
                 Err(e) => self.error = Some(e),
             },
             Action::Reset => {
-                self.params.import = source.config();
+                self.params.import = source.original_config();
+                source.remember_config(&self.params.import);
                 self.reload(cx);
             }
             _ => return false,
@@ -113,13 +135,13 @@ impl ImportEditor {
                 cx,
             ));
         }
-        if let Some(scan) = scan {
-            let label = if source.confirmed {
-                source
-                    .signal
-                    .and_then(|i| scan.signals.get(i))
-                    .map(signal_label)
-                    .unwrap_or("Custom signal".into())
+        if scan.is_some() {
+            let label: String = if source.confirmed {
+                if source.signal.is_some() {
+                    "Custom mapping…".into()
+                } else {
+                    "Custom signal".into()
+                }
             } else {
                 "Choose signal…".into()
             };
@@ -132,6 +154,98 @@ impl ImportEditor {
             );
         }
         body = body.child(selectors);
+        if let Some(scan) = scan.filter(|_| !self.choose_datasets && source.signal.is_some()) {
+            let mut outputs = div()
+                .id("measurement-output-choices")
+                .flex()
+                .flex_col()
+                .gap_1()
+                .max_h(px(180.))
+                .overflow_y_scroll();
+            outputs = outputs.child(div().text_color(t.text_muted).child(
+                "Select spectra to import. Preview a signal to inspect or edit its columns.",
+            ));
+            for (index, signal) in scan.signals.iter().enumerate() {
+                let name = signal_label(signal);
+                let enabled = source.included[index] || source.candidate_errors[index].is_none();
+                let mut selected_source = source.clone();
+                selected_source.signal = Some(index);
+                let formula = selected_source
+                    .mapping(&source.configs[index])
+                    .map(|m| {
+                        let col = |i: usize| {
+                            scan.columns
+                                .get(i)
+                                .map(|c| c.name.clone())
+                                .unwrap_or_else(|| format!("column {i}"))
+                        };
+                        match m.signal {
+                            SignalConversion::Direct { column } => col(column),
+                            SignalConversion::Transmission {
+                                incident,
+                                transmitted,
+                            } => format!("ln({} / {})", col(incident), col(transmitted)),
+                            SignalConversion::Ratio {
+                                detectors,
+                                incident,
+                            } => format!(
+                                "({}) / {}",
+                                detectors
+                                    .iter()
+                                    .map(|&i| col(i))
+                                    .collect::<Vec<_>>()
+                                    .join(" + "),
+                                col(incident)
+                            ),
+                        }
+                    })
+                    .unwrap_or_else(|e| e);
+                let row = div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .p_1()
+                    .rounded_md()
+                    .bg(if source.signal == Some(index) {
+                        t.surface
+                    } else {
+                        t.bg
+                    })
+                    .child(div().w(px(205.)).child(self.button(
+                        Action::IncludeSignal(index),
+                        format!("{} {name}", if source.included[index] { "☑" } else { "☐" }),
+                        enabled,
+                        cx,
+                    )))
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_size(px(12.))
+                            .text_color(t.text_muted)
+                            .child(formula),
+                    )
+                    .child(self.button(
+                        Action::Signal(index),
+                        if source.signal == Some(index) {
+                            format!("Previewing {name}")
+                        } else {
+                            format!("Preview {name}")
+                        },
+                        true,
+                        cx,
+                    ));
+                outputs = outputs.child(row);
+                if let Some(error) = &source.candidate_errors[index] {
+                    outputs = outputs.child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(t.warn)
+                            .child(error.clone()),
+                    );
+                }
+            }
+            body = body.child(outputs);
+        }
         if source
             .document
             .warnings
@@ -157,10 +271,9 @@ impl ImportEditor {
             } else {
                 scan.into_iter()
                     .flat_map(|s| {
-                        s.signals
-                            .iter()
-                            .enumerate()
-                            .map(|(i, s)| (Action::Signal(i), signal_label(s)))
+                        s.signals.iter().enumerate().map(|(i, s)| {
+                            (Action::Signal(i), format!("Detected {}", signal_label(s)))
+                        })
                     })
                     .collect()
             };
@@ -451,12 +564,14 @@ impl ImportEditor {
         }
         let ready = !self.choose_datasets
             && source.confirmed
-            && self.error.is_none()
-            && self
-                .draft
-                .as_ref()
-                .and_then(|d| self.key(d.revision))
-                .is_some_and(|k| self.preview.ready(&k));
+            && source.included_valid()
+            && (!source.preview_included()
+                || (self.error.is_none()
+                    && self
+                        .draft
+                        .as_ref()
+                        .and_then(|d| self.key(d.revision))
+                        .is_some_and(|k| self.preview.ready(&k))));
         let panel = div()
             .id("measurement-import-dialog")
             .relative()
@@ -501,7 +616,20 @@ impl ImportEditor {
                     .child(self.button(Action::Reset, "Reset mapping", self.draft.is_some(), cx))
                     .child(div().flex_1())
                     .child(self.button(Action::Cancel, "Cancel", true, cx))
-                    .child(self.button(Action::Apply, "Import spectrum", ready, cx)),
+                    .child(self.button(
+                        Action::Apply,
+                        format!(
+                            "Import {} {}",
+                            source.included_count(),
+                            if source.included_count() == 1 {
+                                "spectrum"
+                            } else {
+                                "spectra"
+                            }
+                        ),
+                        ready,
+                        cx,
+                    )),
             );
         self.modal(panel.children(popup), cx).into_any_element()
     }
