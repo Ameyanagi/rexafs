@@ -20,19 +20,19 @@ def sha256(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def require_main(env):
-    """Require a scheduled/manual run on this repository's main branch.
+def require_dev(env):
+    """Require a push/manual run on this repository's development branch.
 
     Read the supplied environment mapping without changing it. Other refs,
     repositories or event types raise ValueError before publication work starts.
     """
-    if (env.get("GITHUB_REF") != "refs/heads/main" or env.get("GITHUB_REPOSITORY") != REPOSITORY
-            or env.get("GITHUB_EVENT_NAME") not in {"schedule", "workflow_dispatch"}):
-        raise ValueError("Nightly publication is restricted to this repository's main branch")
+    if (env.get("GITHUB_REF") != "refs/heads/dev" or env.get("GITHUB_REPOSITORY") != REPOSITORY
+            or env.get("GITHUB_EVENT_NAME") not in {"push", "workflow_dispatch"}):
+        raise ValueError("Nightly publication requires this repository's dev branch")
 
 
 def build_plan(run, version, commit, run_id):
-    """Return a nightly identity tied to one main-branch Actions run.
+    """Return a nightly identity tied to one dev-branch Actions run.
 
     Validate run ID, source SHA, branch and event, then derive the dated tag and
     UTC timestamp from the run's creation time. Rerunning the same run preserves
@@ -40,8 +40,8 @@ def build_plan(run, version, commit, run_id):
     or signing have succeeded; qualify performs the artifact checks later.
     """
     if (str(run.get("id")) != run_id or run.get("head_sha") != commit
-            or run.get("head_branch") != "main" or run.get("event") not in {"schedule", "workflow_dispatch"}):
-        raise ValueError("Nightly run does not match the main-branch source")
+            or run.get("head_branch") != "dev" or run.get("event") not in {"push", "workflow_dispatch"}):
+        raise ValueError("Nightly run does not match the dev-branch source")
     # Run creation time is stable across reruns, including reruns after midnight.
     created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00")).astimezone(timezone.utc)
     return dict(version=version, commit=commit, tag=f"nightly-{created:%Y%m%d}-{run_id}", built_at=created.strftime("%Y-%m-%dT%H:%M:%SZ"))
@@ -140,7 +140,7 @@ def publish(directory, version, commit, run_id, tag):
     notes = directory / "nightly-notes.md"
     notes.write_text(f"""Nightly desktop build from `{commit}` (library version {version}).
 
-These prerelease builds include the newest changes on main. They pass automated core/desktop regression tests and package self-checks; they do not receive a separate manual graphical audit every night.
+These prerelease builds include the newest changes on dev. They pass automated core/desktop regression tests and package self-checks; they do not receive a separate manual graphical audit every night.
 
 Both Mac apps and DMG installers are signed with Developer ID, notarized, stapled and checked with Gatekeeper. Open the DMG, drag `rexafs Nightly.app` onto Applications, and eject the disk image. Nightly can coexist with Stable. Save your project before switching builds. ZIP archives remain available for the existing updater.
 
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     parser.add_argument("--directory", type=Path)
     parser.add_argument("--tag")
     args = parser.parse_args()
-    require_main(os.environ)
+    require_dev(os.environ)
     root = Path(__file__).resolve().parents[1]
     version = tomllib.loads((root / "Cargo.toml").read_text())["workspace"]["package"]["version"]
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()

@@ -24,11 +24,15 @@ TAG = "nightly-20260907-123"
 
 class DesktopChannels(unittest.TestCase):
     def test_reruns_keep_the_original_date_and_source_identity(self):
-        run = dict(id=123, head_sha="abc", head_branch="main", event="workflow_dispatch", created_at="2026-09-07T23:59:59Z")
+        run = dict(id=123, head_sha="abc", head_branch="dev", event="workflow_dispatch", created_at="2026-09-07T23:59:59Z")
         expected = dict(version="0.1.2", commit="abc", tag=TAG, built_at="2026-09-07T23:59:59Z")
         self.assertEqual(nightly.build_plan(run, "0.1.2", "abc", "123"), expected)
-        with self.assertRaises(ValueError):
-            nightly.build_plan({**run, "head_sha": "other"}, "0.1.2", "abc", "123")
+        self.assertEqual(nightly.build_plan({**run, "event": "push"}, "0.1.2", "abc", "123"), expected)
+        for key, value in [("head_sha", "other"), ("head_branch", "main"),
+                           ("head_branch", "feature/example"), ("event", "pull_request"),
+                           ("event", "schedule"), ("id", 124)]:
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                nightly.build_plan({**run, key: value}, "0.1.2", "abc", "123")
 
     def test_build_identity_and_app_names_keep_channels_separate(self):
         self.assertEqual(identity("0.1.2", {})["release_tag"], "v0.1.2")
@@ -41,13 +45,16 @@ class DesktopChannels(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 identity("0.1.2", invalid)
 
-    def test_only_main_schedule_or_manual_run_can_publish(self):
-        env = dict(GITHUB_REF="refs/heads/main", GITHUB_REPOSITORY="Ameyanagi/rexafs", GITHUB_EVENT_NAME="schedule")
-        nightly.require_main(env)
-        for key, value in [("GITHUB_REF", "refs/pull/12/merge"), ("GITHUB_REPOSITORY", "someone/rexafs"),
-                           ("GITHUB_EVENT_NAME", "pull_request"), ("GITHUB_REF", "refs/tags/v0.1.2")]:
-            with self.subTest(key=key), self.assertRaises(ValueError):
-                nightly.require_main({**env, key: value})
+    def test_only_dev_push_or_manual_run_can_publish(self):
+        env = dict(GITHUB_REF="refs/heads/dev", GITHUB_REPOSITORY="Ameyanagi/rexafs", GITHUB_EVENT_NAME="workflow_dispatch")
+        nightly.require_dev(env)
+        nightly.require_dev({**env, "GITHUB_EVENT_NAME": "push"})
+        for key, value in [("GITHUB_REF", "refs/heads/main"), ("GITHUB_REF", "refs/heads/feature/example"),
+                           ("GITHUB_REF", "refs/pull/12/merge"), ("GITHUB_REPOSITORY", "someone/rexafs"),
+                           ("GITHUB_EVENT_NAME", "pull_request"), ("GITHUB_EVENT_NAME", "schedule"),
+                           ("GITHUB_REF", "refs/tags/v0.1.2")]:
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                nightly.require_dev({**env, key: value})
 
     def archive(self, root, target, overrides=None, signed=True):
         file = root / f"rexafs-0.1.2-{target}.zip"
