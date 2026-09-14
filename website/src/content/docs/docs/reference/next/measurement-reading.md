@@ -1,12 +1,13 @@
 ---
 title: Reading measurements
-description: Unreleased automatic beamline, HDF5, Athena, Larix and XTUNES import.
+description: Automatic beamline, HDF5, Athena, Larix and XTUNES import since 0.2.6.
 audience: user
 pagefind: false
 ---
 
-**Next API · unreleased.** Build the source packages to use this reader. The
-published 0.2.5 packages retain their existing specialized readers.
+**Next API · source checkout.** The shared reader is available since 0.2.6.
+Use the [Stable reader guide](/docs/reference/stable/measurement-reading/)
+for the published release.
 
 ## Inspect and select
 
@@ -200,9 +201,9 @@ explicit selection of equal-length real HDF5 vectors; incomplete HDF5 group
 recovery is flagged visibly. A readable container does not guarantee that every
 detector group was recovered.
 
-[![Current unreleased import preview showing transmission, fluorescence and reference inclusion checkboxes, with the reference spectrum plotted.](/screenshots/next/import-signals.jpg)](/screenshots/next/import-signals.jpg)
+[![Pre-release import preview showing transmission, fluorescence and reference inclusion checkboxes, with the reference spectrum plotted.](/screenshots/next/import-signals.jpg)](/screenshots/next/import-signals.jpg)
 
-Current unreleased macOS ARM64 build, captured on 14 September 2026. The QAS
+Pre-release macOS ARM64 build, captured on 14 September 2026. The QAS
 example has three selected outputs; **Previewing Reference** shows `ln(it / ir)`
 without changing which spectra will be imported. The 651-point Mo-foil file is
 retained from [xasref](https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo%20foil%200001-r0003.dat)

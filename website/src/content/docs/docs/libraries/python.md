@@ -12,11 +12,13 @@ analysis project. rexafs supports CPython 3.10–3.14; this example uses 3.12:
 ```sh
 uv init --python 3.12 rexafs-analysis
 cd rexafs-analysis
-uv add rexafs==0.2.5 numpy
+uv add rexafs==0.2.6 numpy
 uv run python -c "import rexafs; print(rexafs.__version__)"
 ```
 
-Prebuilt wheels cover Linux x64, Windows x64, and macOS x64/ARM64. For other
+Four stable-ABI wheels cover Linux x64, Windows x64, and macOS x64/ARM64.
+Each platform wheel supports GIL-enabled CPython 3.10–3.14; free-threaded Python
+is not qualified. NumPy is installed separately for the selected interpreter. For other
 architectures, see [source builds](https://github.com/Ameyanagi/rexafs/tree/main/py-rexafs#build-from-source).
 
 `uv run` uses the project's `.venv` automatically. Commit `pyproject.toml`,
@@ -105,7 +107,26 @@ calling `fft()` so it infers the new spacing. After changing the forward R
 spacing or inverse FFT length, also reassign an `XrayFFTR` with `kstep=None`
 before `ifft()`. Reapply the desired window and range settings.
 
-## Read transmission data
+## Read measurement files
+
+Use the shared reader for beamline text and supported containers:
+
+```python
+from rexafs.io import read_measurement
+
+measurement = read_measurement("measurement.dat")
+print(measurement.document["scans"][0]["signals"])
+energy_ev, mu = measurement.arrays()
+```
+
+Automatic conversion requires exactly one detected signal. When a file has
+several channels, select names or indices explicitly, for example
+`measurement.arrays(energy="energy", i0="i0", it="it")` for transmission.
+Arrays retain acquisition order. Reading does not run processing or detector
+corrections. See [reading measurements](/docs/reference/stable/measurement-reading/)
+for stored absorption, fluorescence, angles, containers and warnings.
+
+### Specialized QAS reader
 
 For QAS transmission files with energy, incident intensity and transmitted intensity
 in the first three columns, use `rexafs.io.read_qas_transmission(path)`. It computes

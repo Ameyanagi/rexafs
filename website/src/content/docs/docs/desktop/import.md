@@ -6,62 +6,60 @@ audience: user
 
 ## Import and review
 
-Choose **Import** or drag files/folders into the workspace. Check the energy axis,
-columns and plotted edge before accepting the suggested mapping. Ambiguous files
-wait for review.
+Choose **Import…** or drop a measurement file into the workspace. The plotted
+preview handles beamline text, numeric tables, Athena projects, Larix sessions,
+XTUNES saves and supported HDF5 arrays. Choose **Scan** for a file with several
+records. File content determines the reader; an extension alone does not
+establish the units or detector arithmetic.
 
-Select the main signal: **Transmission**, **Fluorescence**, **Reference** or
-**μ column**. You can also import additional available channels. Confirm whether
-the axis is eV, keV or monochromator angle. An angular axis needs the appropriate
-monochromator spacing; do not relabel degrees as eV.
+1. Inspect the plotted signal and **Energy axis**. The reader preserves declared
+   eV/keV, relative-energy and monochromator-angle calibration. Confirm an
+   assumed unit or provide the missing crystal-plane spacing for an angular axis.
+2. Check the signals to import: stored **μ**, **Transmission**, **Fluorescence**
+   or **Reference**, when the source provides those channels. Each row shows its
+   source-column formula. **Preview** changes the displayed curve without
+   changing the checked outputs.
+3. Use **Columns** to correct detector roles or **Custom mapping…** for a manual
+   output. **Source details** reveals original headers and rows. Read any parser
+   warnings before accepting the data.
+4. Choose **Import N spectra**. Every checked conversion must succeed before
+   groups are added. Each signal becomes a separate spectrum, the Data view
+   starts on raw μ(E), and one undo removes the entire import.
 
-Enter angular axes as the Bragg angle $\theta$, not the full scattering angle
-$2\theta$. rexafs uses first-order diffraction:
+![rexafs 0.2.6 import preview with transmission, fluorescence and reference choices](/screenshots/0.2.6/import-preview.png)
 
-$$E=\frac{hc}{2d\sin\theta}.$$
+Captured from the signed 0.2.6 Mac app. The QAS Mo foil measurement is from
+[Ryuichi Shimogawa and contributors, xasref](https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo%20foil%200001-r0003.dat),
+distributed under its MIT repository notice.
 
-Here $E$ is energy in eV, $d$ is the reflecting-plane spacing in Å, and
-$hc=12398.419843320026$ eV Å is the conversion factor used in the code. The angle
-must be greater than zero and at most 90° (or $\pi/2$ radians); $d$ must be finite
-and positive. Use the spacing for the actual monochromator reflection. This
-conversion does not fit a motor offset or calibrate the instrument. See
-[Bragg's law](https://dictionary.iucr.org/Bragg%27s_law) and the [desktop axis
-converter](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/import_mapping.rs#L35).
+For transmission, rexafs computes `ln(I0 / It)` from incident and transmitted
+intensities in matching units. Reference uses `ln(It / Ir)`, with `Ir` measured
+after the reference foil. Fluorescence uses the selected detector sum divided by
+`I0`. Choose stored μ when absorption is already calculated. The reader does
+not repeat dark-current, dead-time or other detector corrections.
 
-For transmission, absorption is $\mu(E)=\ln[I_0(E)/I_t(E)]$. Here $I_0$ and $I_t$
-are incident and transmitted intensities in matching units; both must be positive.
-For fluorescence, a common input is $I_f/I_0$. If the source already contains
-absorption, choose its μ column. These conventions and their assumptions are
-explained in [processing theory](/docs/science/processing/).
+Angles are Bragg angles θ, not full scattering angles 2θ. Conversion uses
+`E = hc / (2 d sin θ)`, where energy E is in eV, reflecting-plane spacing d is
+in Å and `hc = 12398.419843320026 eV Å`. Use the spacing for the actual
+monochromator reflection. This applies first-order Bragg diffraction; it does
+not fit an instrument offset. The [reader guide](/docs/reference/stable/measurement-reading/#units-and-signals)
+explains units, intensity requirements, defaults and scientific references.
 
-In fluorescence mode, rexafs sums the selected region-of-interest (ROI) columns
-before dividing by $I_0$. Each selected detector column is counted once. Select
-only compatible detector signals, with any required detector corrections already
-applied. Reference mode uses a precomputed reference μ column when assigned;
-otherwise it calculates $\ln(I_t/I_r)$, where $I_r$ is the intensity after the
-reference foil. These are the actual [desktop import
-operations](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/params.rs#L913).
+For HDF5, **Scan → Select datasets…** combines explicitly chosen, equal-length
+real vectors. Images need a detector reduction; warnings identify partial group
+recovery. A readable container does not mean every channel is available. The
+[format guide](/docs/reference/stable/measurement-reading/) describes Athena,
+Larix, XTUNES, 9809/KEK `.qd` and other supported formats and their limits.
 
-After changing a mapping, **Revalidate** and inspect the preview. **Review later**
-keeps the source pending. [XDI](/docs/desktop/xdi/) provides named columns and
-metadata for import.
-
-Inspect the point count and parser warnings. The ordinary text reader can skip
-malformed or short rows and truncate wider rows to the established column width;
-diagnostics report these changes with example source lines. Converted points with
-non-finite energy or μ are excluded. The remaining energy/μ pairs are sorted by
-energy without averaging duplicates. Fewer than two finite points is an import
-error; later processing can reject an inadequate axis or range. XDI rejects
-malformed numeric rows before signal conversion. Finite values alone do not
-establish physically valid detector intensities or column assignments.
-
-
-[![Full import review with the selected Cu columns and confirmed eV units](/screenshots/import-mapping.jpg)](/screenshots/import-mapping.jpg)
-
-*This measured example already contains μ(E); do not apply a second logarithm. rexafs 0.2.4 on macOS.*
-
+Folders and multiple-file selections retain the batch workflow below. Import
+containers individually. Source files are unchanged; saved desktop projects
+retain original measurement bytes and accepted signal mappings.
 
 ## Recipes and groups
+
+Batch imports use a column review and saved recipes. Check the plotted edge,
+units and parser diagnostics; **Revalidate** checks an edited mapping and
+**Review later** keeps the source pending.
 
 **Recipe** saves import choices for matching layouts. Reopening a project keeps
 its accepted mappings; later computer recipes apply to new imports. Source files

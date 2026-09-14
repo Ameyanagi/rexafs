@@ -14,7 +14,7 @@ Open **Fit → Structure → Curated**, select **Cu / Copper**, then
 **Use structure →**. In Calculate, select Cu as absorber, the K edge, an 8 Å
 radius and **ReFEFF**. Choose **Calculate paths** and wait for completion.
 
-Every 0.2.5 desktop package offers ReFEFF and FEFF10; see the
+Every 0.2.6 desktop package offers ReFEFF and FEFF10; see the
 [Windows ARM64 requirement](/docs/getting-started/install/#arm64-availability).
 Record the engine used.
 

@@ -5,14 +5,14 @@ with a merge commit before tagging. Nightly desktop builds follow `dev`; they
 do not substitute for the qualified stable tag build below. See the
 [development branch workflow](development-branches.md).
 
-## Preparing 0.2.6
+## Published 0.2.6
 
 The [0.2.6 notes](release-notes-0.2.6.md) and
 [qualification record](validation/2026-09-14-release-0.2.6/review.md) track the
 shared measurement reader, plotted import workflow and coordinated package
-release. Build the immutable `v0.2.6` tag through GitHub before publishing any
-channel. Website Stable metadata remains on 0.2.5 until the new artifacts and
-registry uploads have been verified.
+release. All 37 jobs in the immutable-tag build passed, and the registry packages
+and signed Mac installers were published on 14 September 2026. Stable references
+use the verified 0.2.6 tag and published crate checksum.
 
 ## Historical preparation of 0.2.5
 
@@ -153,7 +153,7 @@ Use another fresh environment to rebuild/install the sdist, run
 supported CPython minor (3.10–3.14), OS and architecture. Linux
 wheels must meet the declared manylinux policy; a local Linux wheel is insufficient.
 
-For the unreleased ABI3 source profile, build once per platform and install those
+For the ABI3 profile introduced in 0.2.6, build once per platform and install those
 same wheel bytes on all five interpreters. Run `scripts/check-python-wheels.py`
 against the wheel directory before and after installation (`--installed`). Test
 both the latest compatible NumPy and these minimum binary releases:
@@ -309,8 +309,8 @@ the extracted archive. Linux GUI evidence uses a separate archive per target so
 its image/log filenames cannot collide in the flat release manifest. Python's
 wheel matrix remains separate; adding a desktop target does not add a wheel.
 
-The four-wheel ABI3 profile is **unreleased**; 0.2.5 retains its 20 published
-per-interpreter wheels. PyO3's `abi3-py310` feature selects the CPython stable
+The four-wheel ABI3 profile is published in **0.2.6**; 0.2.5 retains its 20
+published per-interpreter wheels. PyO3's `abi3-py310` feature selects the CPython stable
 binary interface with a 3.10 minimum. This qualification covers GIL-enabled
 interpreters only; see [PyO3's ABI documentation](https://pyo3.rs/v0.29.2/building-and-distribution.html#py_limited_apiabi3abi3t).
 The workflow verifies wheel names, metadata, platform baselines and installed
@@ -318,8 +318,8 @@ package bytes, preserves the Linux 3.12 editor check, and checks that the sdist
 retains the stable-ABI feature before rebuilding and testing it. Publication
 selects the ABI profile from the immutable source tag: new ABI3 releases require
 exactly four wheels, while historical tags retain their original manifest
-inventory. A future versioned release must qualify this profile before upload;
-do not replace or relabel 0.2.5 assets.
+inventory. Every subsequent version must qualify its own wheel bytes before upload; do
+not replace or relabel 0.2.5 assets.
 
 The final manifest job requires **every** build and runtime job to succeed. `SHA256SUMS` uses
 flat asset names so it also works after downloading all GitHub Release assets into

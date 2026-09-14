@@ -9,11 +9,11 @@ audience: user
 Install with [Bun](https://bun.sh/docs/installation):
 
 ```sh
-bun add rexafs@0.2.5
+bun add rexafs@0.2.6
 ```
 
 The package runs in Node 22+ and browsers with WebAssembly support. You can also
-install it with `npm install rexafs@0.2.5` or `pnpm add rexafs@0.2.5`.
+install it with `npm install rexafs@0.2.6` or `pnpm add rexafs@0.2.6`.
 Use ECMAScript modules and TypeScript `moduleResolution: "NodeNext"` for Node or
 `"Bundler"` for browser bundlers. Typed declarations are included; see the
 [stable API reference](/docs/reference/stable/typescript/spectrum/).
@@ -46,6 +46,31 @@ try {
 ```
 
 Node initializes the packaged Wasm synchronously.
+
+## Read measurement files
+
+The shared reader accepts text or bytes, including a Node `Buffer`:
+
+```typescript
+import { readFileSync } from "node:fs";
+import { read_measurement } from "rexafs/node";
+
+const measurement = read_measurement(readFileSync("measurement.dat"));
+try {
+  console.log(measurement.document.scans[0].signals);
+  const { energy, mu } = measurement.arrays();
+  console.log(energy, mu);
+} finally {
+  measurement.free();
+}
+```
+
+Automatic conversion requires exactly one detected signal. Select ambiguous
+columns by name or index, for example
+`measurement.arrays({energy: "energy", i0: "i0", it: "it"})`. Returned arrays
+are independent copies and retain acquisition order. The reader does not run
+processing or detector corrections. See [reading measurements](/docs/reference/stable/measurement-reading/)
+for angles, HDF5, Athena, Larix, XTUNES and explicit signal selection.
 
 ## Browser initialization
 

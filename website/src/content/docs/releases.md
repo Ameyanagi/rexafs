@@ -8,10 +8,33 @@ Published changes and migration notes are listed below. Back up projects before
 updating. Source-checkout APIs are documented in the [Next API
 reference](/docs/reference/).
 
-## Stable 0.2.5
+## Stable 0.2.6
 
-[Download 0.2.5](/download/) or read the
-[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.5).
+[Download 0.2.6](/download/) or read the
+[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.6).
+
+- A shared reader across Rust, Python, TypeScript, the desktop and browser
+  workspace detects beamline text, numeric tables, Athena, Larix, XTUNES and
+  supported HDF5 datasets. Select columns by name or index, retain raw arrays
+  and headers, and review ambiguous units or detector roles explicitly.
+- The desktop import preview plots the selected signal and can import
+  transmission, fluorescence and reference together. Expand source details when
+  needed; the Data view opens on raw μ(E). See [import and groups](/docs/desktop/import/).
+- Declared eV/keV, relative-energy and Bragg-angle calibrations are retained.
+  Japanese 9809 and tested KEK `.qd` files use recorded angles and crystal
+  spacing. See [reading measurements](/docs/reference/stable/measurement-reading/)
+  for format coverage and limits.
+- Four platform wheels support GIL-enabled CPython 3.10–3.14 using the stable
+  Python ABI. The same wheel bytes are tested across those interpreters with
+  minimum and latest compatible NumPy. Free-threaded Python remains unqualified.
+- Test measurements retain their original bytes, source attribution and license
+  records in the repository; fixture bundles are excluded from published packages.
+- Existing format-1 projects and numerical defaults are unchanged. All six
+  desktop targets remain available, with Windows and Linux labeled as previews.
+
+## Previous stable 0.2.5
+
+[Download the previous 0.2.5 release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.5).
 
 - ARM64 desktop previews for Windows and Linux, alongside the existing x64
   packages. Windows ARM64 requires Windows 11.
@@ -34,7 +57,7 @@ reference](/docs/reference/).
   browser Worker, with generated FEFF files and a provenance record.
 
 These follow website deployment, separately from the versioned npm API. Native
-rexafs 0.2.5 retains ReFEFF 0.3.0. See [WASM scope](/docs/libraries/webassembly/).
+rexafs 0.2.6 retains ReFEFF 0.3.0. See [WASM scope](/docs/libraries/webassembly/).
 
 ## Earlier releases
 
@@ -84,4 +107,4 @@ and checksums.
   exposes `XrayFFTR` and `Spectrum.set_ifft()` in Python/TypeScript and adds the
   spectrum setter in Rust. Version 0.2.4 needs zero-argument Python/TypeScript
   settings constructors followed by field assignment; those forms remain valid
-  in 0.2.5. See the [Stable API reference](/docs/reference/).
+  in later releases. See the [Stable API reference](/docs/reference/).
