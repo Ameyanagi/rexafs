@@ -27,6 +27,12 @@ Access button indicates that workspace commands are enabled. Command approvals
 and the assistant sandbox still apply. **Plot images** and **Web search** are
 in **Assistant settings** (the gear button).
 
+Opening **Parameters** or **Groups**, by its toolbar button or keyboard
+shortcut, keeps that panel visible beside the Assistant. When space is tight,
+the older panel closes first and the Assistant narrows temporarily. Its preferred
+width returns when space is available. On small windows, the plot can be narrower
+than the usual 360 px target so the requested panel remains usable.
+
 These presentation changes are not included in the 0.2.6 download. The
 [composer implementation](../crates/rexafs-gui/src/app/shell/assistant_composer.rs)
 uses the existing preference persistence and permission checks.

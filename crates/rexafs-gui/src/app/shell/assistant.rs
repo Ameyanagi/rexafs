@@ -9,9 +9,10 @@ use super::assistant_receipts::{
     Receipt, changes_allowed, completion, diff, processing_scope_label, requires_edit,
 };
 use super::assistant_shell::{
-    ANALYSIS_CLOSED, AssistantHost, ControlState, EscapeTarget, HostAction, PanelMemory, SidePanel,
-    account_disclosure, account_status, clamp_assistant_width, empty_state_message, escape_target,
-    fit_assistant_panels, model_picker_handles_key, task_starters,
+    ANALYSIS_CLOSED, AssistantHost, AssistantLayout, ControlState, EscapeTarget, HostAction,
+    PanelMemory, SidePanel, account_disclosure, account_status, clamp_assistant_width,
+    empty_state_message, escape_target, fit_assistant_panels, model_picker_handles_key,
+    task_starters,
 };
 use super::{
     assistant_state::{
@@ -335,33 +336,63 @@ impl StudioApp {
         }
     }
 
+    /// Shared by toolbar buttons, shortcuts and tools that reveal a panel.
+    pub(crate) fn set_side_panel_visible(&mut self, panel: SidePanel, visible: bool) {
+        match panel {
+            SidePanel::Groups => self.data_panel_open = visible,
+            SidePanel::Inspector => self.context_panel_open = visible,
+        }
+        if visible {
+            self.last_opened_side_panel = Some(panel);
+        }
+        self.fit_assistant_layout();
+    }
+
+    pub(crate) fn toggle_side_panel(&mut self, panel: SidePanel) {
+        let visible = match panel {
+            SidePanel::Groups => self.data_panel_open,
+            SidePanel::Inspector => self.context_panel_open,
+        };
+        self.set_side_panel_visible(panel, !visible);
+    }
+
+    fn visible_side_panels(&self) -> PanelMemory {
+        let inspector_visible = !matches!(self.stage, super::Stage::Fit | super::Stage::Publish)
+            && (self.stage != super::Stage::Series || self.series_ready());
+        PanelMemory {
+            file_browser: self.data_panel_open,
+            inspector: self.context_panel_open && inspector_visible,
+        }
+    }
+
+    fn assistant_layout(&self) -> AssistantLayout {
+        fit_assistant_panels(
+            self.viewport_w,
+            self.structure.settings.assistant_panel_width,
+            self.visible_side_panels(),
+            self.last_opened_side_panel,
+            self.structure.settings.groups_panel_width(),
+        )
+    }
+
     pub(crate) fn fit_assistant_layout(&mut self) {
         if self.assistant_host != AssistantHost::Docked {
             return;
         }
-        let inspector_visible = !matches!(self.stage, super::Stage::Fit | super::Stage::Publish);
-        let current = PanelMemory {
-            file_browser: self.data_panel_open,
-            inspector: self.context_panel_open && inspector_visible,
-        };
-        let next = fit_assistant_panels(
-            self.viewport_w,
-            self.structure.settings.assistant_panel_width,
-            current,
-            self.last_opened_side_panel,
-        );
+        let current = self.visible_side_panels();
+        let next = self.assistant_layout().panels;
         let mut collapsed = Vec::new();
         if current.file_browser && !next.file_browser {
             self.data_panel_open = false;
-            collapsed.push("groups");
+            collapsed.push("Groups");
         }
         if current.inspector && !next.inspector {
             self.context_panel_open = false;
-            collapsed.push("inspector");
+            collapsed.push("Parameters");
         }
         if !collapsed.is_empty() {
             self.status = format!(
-                "Collapsed {} to keep at least 360 px for plots beside Assistant",
+                "Collapsed {} to make room beside Assistant",
                 collapsed.join(" and ")
             )
             .into();
@@ -376,9 +407,7 @@ impl StudioApp {
         Some(
             div()
                 .relative()
-                .w(px(clamp_assistant_width(
-                    self.structure.settings.assistant_panel_width,
-                )))
+                .w(px(self.assistant_layout().width))
                 .h_full()
                 .min_h_0()
                 .min_w_0()
@@ -400,9 +429,7 @@ impl StudioApp {
                             cx.listener(|this, event: &gpui::MouseDownEvent, _, cx| {
                                 this.assistant_resizing = Some((
                                     f32::from(event.position.x),
-                                    clamp_assistant_width(
-                                        this.structure.settings.assistant_panel_width,
-                                    ),
+                                    this.assistant_layout().width,
                                 ));
                                 cx.stop_propagation();
                                 cx.notify();
@@ -2330,9 +2357,7 @@ impl Render for AssistantWindow {
             .unwrap_or(false);
         let width = if docked {
             self.studio
-                .read_with(cx, |app, _| {
-                    clamp_assistant_width(app.structure.settings.assistant_panel_width)
-                })
+                .read_with(cx, |app, _| app.assistant_layout().width)
                 .unwrap_or(380.)
         } else {
             f32::from(window.viewport_size().width)

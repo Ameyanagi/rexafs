@@ -762,7 +762,7 @@ impl StudioApp {
             self.analysis.shown = Some(tool);
         }
         self.set_stage(super::Stage::Data, cx);
-        self.context_panel_open = true;
+        self.set_side_panel_visible(super::assistant_shell::SidePanel::Inspector, true);
         self.inspector_scroll
             .set_offset(gpui::point(px(0.), px(0.)));
         self.queue_tool_preview(cx);

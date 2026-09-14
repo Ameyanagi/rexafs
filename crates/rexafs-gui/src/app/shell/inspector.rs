@@ -126,7 +126,7 @@ impl StudioApp {
             body
         };
         div()
-            .w(px(312.))
+            .w(px(super::assistant_shell::PARAMETERS_WIDTH))
             .h_full()
             .min_h_0()
             .min_w_0()

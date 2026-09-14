@@ -28,6 +28,12 @@ The **Access** menu describes **Review** and **Edit analysis**. Its **Workspace
 commands** switch is the existing Extended access setting, with the same sandbox
 and approval rules. An amber dot on Access indicates that it is enabled.
 **Plot images** and **Web search** are in Assistant settings (the gear button).
+Opening **Parameters** or **Groups**, by its toolbar button or keyboard
+shortcut, keeps that panel visible beside the Assistant. When space is tight,
+the older panel closes first and the Assistant narrows temporarily. Its preferred
+width returns when space is available. On small windows, the plot can be narrower
+than the usual 360 px target so the requested panel remains usable.
+
 This layout is not included in the 0.2.6 download.
 
 ## Controls and access
