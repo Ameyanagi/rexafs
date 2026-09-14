@@ -1,6 +1,15 @@
 # Releasing rexafs
 
-## Preparing 0.2.5
+## Preparing 0.2.6
+
+The [0.2.6 notes](release-notes-0.2.6.md) and
+[qualification record](validation/2026-09-14-release-0.2.6/review.md) track the
+shared measurement reader, plotted import workflow and coordinated package
+release. Build the immutable `v0.2.6` tag through GitHub before publishing any
+channel. Website Stable metadata remains on 0.2.5 until the new artifacts and
+registry uploads have been verified.
+
+## Historical preparation of 0.2.5
 
 The [0.2.5 notes](release-notes-0.2.5.md) and
 [qualification record](validation/2026-09-13-release-0.2.5/review.md) track the

@@ -1,6 +1,6 @@
 //! Readers and interchange formats for measured XAS data.
 //!
-//! For unreleased automatic import, start with [`read_measurement`] (path) or
+//! For automatic import since 0.2.6, start with [`read_measurement`] (path) or
 //! [`parse_measurement`] (bytes), inspect scans/warnings, then select a mapping.
 //! The shared reader covers beamline tables, Athena, XTUNES and HDF5 containers.
 //!

@@ -1235,7 +1235,7 @@ export class Spectrum {
   chiq(): Float64Array | undefined;
 }
 
-/** Source axis conversion to eV; no magnitude-based unit guessing (unreleased). */
+/** Source axis conversion to eV; no magnitude-based unit guessing (since 0.2.6). */
 export type EnergyConversion =
   | { kind: 'ev' }
   | { kind: 'kev' }
@@ -1340,7 +1340,7 @@ export interface MeasurementDocument {
   /** Encoding, container and unreadable HDF5 alias-group diagnostics. */
   warnings: string[];
 }
-/** Convenient scan and column selection (unreleased). Names must be exact and unique.
+/** Convenient scan and column selection (since 0.2.6). Names must be exact and unique.
  * Supply energy and exactly one of mu, it or iff; it/iff also require i0.
  * Conflicting/incomplete options throw. Omit column options to use automatic detection.
  */
@@ -1362,7 +1362,7 @@ export interface MeasurementOptions {
 }
 
 /**
- * Owned universal reader (unreleased). Supports text/CSV, beamline layouts,
+ * Owned universal reader (since 0.2.6). Supports text/CSV, beamline layouts,
  * historical binary, Athena Perl/JSON, Larix 1.0 sessions, XTUNES, gzip and HDF5. Browser callers first await
  * init(). No filesystem/network access, processing or input mutation occurs.
  * Input and expanded gzip text are each limited to 256 MiB; HDF5 numeric values
@@ -1401,7 +1401,7 @@ export class Measurement {
   free(): void;
 }
 /**
- * Parse measurement content with the shared Rust reader (unreleased).
+ * Parse measurement content with the shared Rust reader (since 0.2.6).
  * Accepts UTF-8 text or Uint8Array, including Node Buffers and browser file bytes.
  * Returns owned Measurement storage; free it after copying the arrays you need.
  * Same limits/errors as Measurement. No filesystem/network access or processing

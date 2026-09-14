@@ -19,7 +19,7 @@ parse_measurement(data: bytes | str) -> Measurement
 
 Read text or binary measurement content without filesystem/network access.
 
-Unreleased universal Rust reader: XDI, beamline text, CSV, historical binary,
+Universal Rust reader, added in 0.2.6: XDI, beamline text, CSV, historical binary,
 Athena (Perl/JSON, optionally gzip), Larix 1.0 sessions, XTUNES and HDF5. Strings are encoded as UTF-8.
 Returns owned scans, original metadata, signal choices and saved arrays;
 inspect .document and select .arrays() or .spectrum() to convert a scan.

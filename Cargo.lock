@@ -6897,7 +6897,7 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
 name = "py-rexafs"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "ndarray",
  "numpy",
@@ -7495,7 +7495,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "apex-solver",
  "approx",
@@ -7538,7 +7538,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs-gui"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -7572,7 +7572,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs-wasm"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "js-sys",
  "rexafs",

@@ -163,7 +163,7 @@ def _selection_json(mapping, energy, mu, i0, it, iff, energy_unit):
                        "signal": signal}, allow_nan=False)
 
 class Measurement:
-    """Owned, content-detected measurement document (unreleased).
+    """Owned, content-detected measurement document (since 0.2.6).
 
     Use read_measurement(path) or parse_measurement(data). Reading retains scans,
     headers, channel units and dataset shapes, including Larix 1.0 sessions. It does not normalize,
@@ -241,7 +241,7 @@ class Measurement:
         Duplicate energies remain and may require cleanup before processing.
         No normalization/background/FFT prerequisites run; existing objects and
         source files are unchanged. Selection and conversion errors are the
-        same as arrays(). This unreleased reader differs from the strict
+        same as arrays(). This reader differs from the strict
         Spectrum array constructor, which requires increasing, unique energy.
         """
         if not isinstance(scan, int) or isinstance(scan, bool) or scan < 0 or scan > maxsize:
@@ -253,7 +253,7 @@ class Measurement:
 def parse_measurement(data: bytes | str) -> Measurement:
     """Read text or binary measurement content without filesystem/network access.
 
-    Unreleased universal Rust reader: XDI, beamline text, CSV, historical binary,
+    Universal Rust reader, added in 0.2.6: XDI, beamline text, CSV, historical binary,
     Athena (Perl/JSON, optionally gzip), Larix 1.0 sessions, XTUNES and HDF5. Strings are encoded as UTF-8.
     Returns owned scans, original metadata, signal choices and saved arrays;
     inspect .document and select .arrays() or .spectrum() to convert a scan.
@@ -267,7 +267,7 @@ def parse_measurement(data: bytes | str) -> Measurement:
 
 
 def read_measurement(path: str | PathLike[str]) -> Measurement:
-    """Read a local measurement file through the unreleased universal reader.
+    """Read a local measurement file through the universal reader added in 0.2.6.
 
     Accepts a filename or pathlib.Path; content determines the format, not the
     extension. For an unambiguous first scan, use read_measurement(path).arrays()

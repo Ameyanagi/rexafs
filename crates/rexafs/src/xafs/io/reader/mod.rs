@@ -1,4 +1,4 @@
-//! Universal, content-detected measurement import (unreleased).
+//! Universal, content-detected measurement import (since 0.2.6).
 //!
 //! Start with [`read_measurement`] or [`parse_measurement`]. Reading retains
 //! original columns, ordering and headers. Convert an individual scan with
@@ -26,7 +26,7 @@ pub use model::{
 };
 pub use selection::{ColumnSelector, SignalSelection, SpectrumSelection};
 
-/// Read a local measurement file with content-based detection (unreleased).
+/// Read a local measurement file with content-based detection (since 0.2.6).
 ///
 /// Returns owned scans, metadata and numeric datasets, including saved Larix
 /// and XTUNES results. Larix stored energy/mu are imported without rerunning its

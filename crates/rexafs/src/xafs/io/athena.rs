@@ -64,7 +64,7 @@ pub const DEFAULT_DEMETER_VERSION: &str = "0.9.26";
 /// A raw value from an Athena `@args` list.
 ///
 /// Athena writes most values as single-quoted strings, some as bare numbers
-/// and a few (e.g. `titles`) as Perl array references. Unreleased readers also
+/// and a few (e.g. `titles`) as Perl array references. Readers since 0.2.6 also
 /// retain nested metadata hash literals as opaque `Bare` text without evaluation.
 /// Keeping the flavour
 /// preserves unchanged argument text and its quoting style. Whole-file bytes,

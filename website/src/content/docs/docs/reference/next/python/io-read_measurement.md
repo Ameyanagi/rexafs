@@ -17,7 +17,7 @@ pagefind: false
 read_measurement(path: str | PathLike[str]) -> Measurement
 ```
 
-Read a local measurement file through the unreleased universal reader.
+Read a local measurement file through the universal reader added in 0.2.6.
 
 Accepts a filename or pathlib.Path; content determines the format, not the
 extension. For an unambiguous first scan, use read_measurement(path).arrays()
