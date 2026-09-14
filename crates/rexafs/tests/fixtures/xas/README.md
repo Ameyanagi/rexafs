@@ -1,9 +1,10 @@
 # rexafs measurement-format corpus
 
-132 original measurement/project files collected on 2026-09-14, totaling 26.8 MB (25.5 MiB), from eight repositories/databases. The collection targets format coverage with a few examples per beamline; projects may contain multiple spectra. The source-checkout integration tests exercise a subset of the collected formats; see [INTEGRATION.md](INTEGRATION.md).
+154 original measurement, project and reference files retained as of 2026-09-14. The original 132-file collection is supplemented by three attributed NIST BMM standards, 13 Demeter/Larch examples, one complete ESRF BM16 BLISS acquisition file and five KEK Photon Factory QD measurements. The collection targets format coverage with a few examples per beamline; projects may contain multiple spectra. The universal source-checkout reader exercises every retained file, with explicit mapping or detector reduction where required; see [INTEGRATION.md](INTEGRATION.md).
 
-- **120 files in `samples/`**, with documented licenses, covering **49 identified beamlines/stations at 14 facilities**. Additional files retain unresolved station labels. Of these files, 75 have explicit data licenses and 45 rely on upstream repository distribution licenses.
+- **137 files in `samples/`**, with documented licenses, covering **49 identified beamlines/stations at 14 facilities**. Additional files retain unresolved station labels. Of these files, 78 have explicit data licenses and 59 rely on upstream repository distribution licenses.
 - **12 examples obtained from RefXAS**, stored in `candidates/refxas/` and representing eight additional identified beamlines. Source links, citations and the original usage notice are retained.
+- **Five KEK Photon Factory `.qd` measurements**, stored in [candidates/kek-pf/](candidates/kek-pf/README.md), are retained for academic, nonmilitary research and reader regression testing only. The original custom usage notice and experimenter attribution accompany every file; contact the experimenter for publication citation.
 - Every measurement has an adjacent `.license` attribution file and a manifest entry with source/download URLs, license evidence, citation, SHA-256, byte size, mode and provenance. Original measurement bytes and filenames are retained.
 
 Start with [manifest.csv](manifest.csv) for browsing, [manifest.json](manifest.json) for scripts, [CITATIONS.md](CITATIONS.md) for attribution, and [LICENSE.md](LICENSE.md) for license scope. [validation.json](validation.json) records the integrity/container checks.
@@ -12,9 +13,11 @@ Start with [manifest.csv](manifest.csv) for browsing, [manifest.json](manifest.j
 
 The files include transmission, fluorescence, multielement fluorescence, TEY, PEY, PFY, CEY, HERFD detector projections and an energy-dispersive Athena example. Mode tags describe source metadata or available detector channels, not a guarantee that every channel is active or scientifically useful.
 
-Formats include PF/SPring-8 9809, MRCAT and EPICS/LabVIEW ASCII, SPEC/SRS (including wrapped rows and multiple scans), FIO, XDAC, SSRL ASCII and binary, NSLS legacy binary, XDI, interpolated QAS/ISS data, Athena Perl/JSON projects, EX3 and yield exports, Sardana HDF5 and RefXAS BLISS HDF5. There are 61 acquisition-format files across both subsets, six additional exports retaining raw detector channels, and two HERFD detector projection files. “Raw” does not imply that the beamline applied no corrections.
+Formats include PF/SPring-8 9809, MRCAT and EPICS/LabVIEW ASCII, SPEC/SRS (including wrapped rows and multiple scans), FIO, XDAC, SSRL ASCII and binary, NSLS legacy binary, XDI, interpolated QAS/ISS data, Athena Perl/JSON projects, EX3 and yield exports, Sardana HDF5 and RefXAS BLISS HDF5. There are 72 acquisition-format files across the collection, six additional exports retaining raw detector channels, and two HERFD detector projection files. “Raw” does not imply that the beamline applied no corrections.
 
 The supplied [MDR ZrN record](https://mdr.nims.go.jp/datasets/3ff63598-8621-4ef6-8de9-5426bf12adac) is included as Photon Factory BL-12C `zr02.dat`, with its metadata and CC-BY-NC-SA-4.0 declaration.
+
+The Demeter/Larch follow-up also retains two FDMNES calculations, a chi(k) export, an unlabeled numeric table, multielement XDI and four historical Athena projects. These reference-format files do not add confirmed beamlines. See the [format audit](../../../../../doc/reference-format-audit.md) for original versus synthetic coverage and reader limitations.
 
 ## Verify or restore
 
@@ -32,9 +35,9 @@ python3 scripts/corpus.py list
 python3 scripts/corpus.py fetch
 ```
 
-All 132 measurement files, including the RefXAS examples, are retained in this Git checkout. Cargo excludes this entire directory from the published crate. Tests use local files and do not download data.
+All 154 measurement, project and reference files, including the RefXAS and KEK examples, are retained in this Git checkout. Cargo excludes this entire directory from the published crate. Tests use local files and do not download data.
 
-`fetch` restores measurement payloads and their sidecars, leaving existing changed files untouched. License texts and evidence snapshots are supplied in this repository; the fetch command does not recreate those extracted metadata records. Use `--include-candidates` only when deliberately working with the RefXAS local candidate set. GitHub URLs are pinned to commits; other sources are pinned by checksums.
+`fetch` restores measurement payloads and their sidecars, leaving existing changed files untouched. License texts and evidence snapshots are supplied in this repository; the fetch command does not recreate those extracted metadata records. Use `--include-candidates` when deliberately working with the RefXAS and KEK sets under their custom notices. KEK downloads require the official session-based form; the script reports restoration instructions if one is missing. GitHub URLs are pinned to commits; other sources are pinned by checksums.
 
 Verification checks byte sizes, SHA-256, Git blob hashes where available, required attribution fields, companions and license/metadata assets. It also checks text/JSON/gzip readability; optional HDF5 verification reads dataset payloads. It does not validate the scientific quality of spectra, implement legacy binary readers, or prove rexafs parser support. Numeric text row counts in the report can include headers and wrapped rows.
 
@@ -61,6 +64,7 @@ BM08 GILDA and LISA are counted once. The ESRF dispersive project contains both 
 | CLS | [SXRMB](samples/cls/sxrmb) | 3 | TEY |
 | CLS | [VLS-PGM](samples/cls/vls-pgm) | 3 | fluorescence |
 | ESRF | [BM08 LISA](samples/esrf/bm08-lisa) | 7 | transmission |
+| ESRF | [BM16](samples/esrf/bm16) | 1 | transmission, multichannel acquisition |
 | ESRF | [BM26A DUBBLE](samples/esrf/bm26a-dubble) | 1 | fluorescence |
 | ESRF | [BM29](samples/esrf/id24) | 1 | energy-dispersive |
 | ESRF | [ID21](samples/esrf/id21) | 3 | fluorescence, transmission |
@@ -69,8 +73,8 @@ BM08 GILDA and LISA are counted once. The ESRF dispersive project contains both 
 | NSLS | [X10C](samples/nsls/x10c) | 1 | transmission |
 | NSLS | [X11A](samples/nsls/x11a) | 1 | transmission |
 | NSLS | [X15B](samples/nsls/x15b) | 1 | unresolved |
-| NSLS | [X23A2](samples/nsls/x23a2) | 1 | fluorescence, transmission |
-| NSLS-II | [6-BM BMM](samples/nsls-ii/6-bm-bmm) | 1 | fluorescence, transmission |
+| NSLS | [X23A2](samples/nsls/x23a2) | 3 | fluorescence, transmission |
+| NSLS-II | [6-BM BMM](samples/nsls-ii/6-bm-bmm) | 4 | fluorescence, transmission |
 | NSLS-II | [7-BM QAS](samples/nsls-ii/7-bm-qas) | 3 | fluorescence, transmission |
 | NSLS-II | [8-ID ISS](samples/nsls-ii/8-id-iss) | 1 | fluorescence, transmission |
 | Photon Factory | [AR-NW10A](samples/photon-factory/ar-nw10a) | 2 | transmission |
@@ -89,7 +93,7 @@ BM08 GILDA and LISA are counted once. The ESRF dispersive project contains both 
 | SRS Daresbury | [SOX1](samples/srs-daresbury/sox1) | 1 | unresolved |
 | SRS Daresbury | [ex1a](samples/srs-daresbury/ex1a) | 1 | fluorescence |
 | SRS Daresbury | [exf9](samples/srs-daresbury/exf9) | 1 | fluorescence |
-| SSRL | [2-3](samples/ssrl/2-3) | 3 | transmission |
+| SSRL | [2-3](samples/ssrl/2-3) | 4 | transmission |
 | SSRL | [4-1](samples/ssrl/4-1) | 1 | transmission |
 | SSRL | [4-3](samples/ssrl/4-3) | 2 | transmission |
 | SSRL | [7-3](samples/ssrl/7-3) | 1 | transmission |
@@ -121,3 +125,10 @@ The DELTA two-column example has no identified station. The original RefXAS noti
 [RESEARCH_NOTES.md](RESEARCH_NOTES.md) records source selection and remaining coverage gaps. All coverage figures describe this collection, not an exhaustive census of beamline formats.
 
 Integration correction: `as2o3_10K_scan1.xdi` identifies SSRL 2-3 in its original header; the collected catalog previously placed it under 4-1. The catalog and directory were corrected, with measurement bytes retained.
+
+The separate [XTUNES fixtures](../sessions/xtunes/README.md) add four native XTS saves and two projects. Their attribution and checksum manifest are retained beside those files. See the [unreleased reader guide](../../../../../doc/measurement-reader.md) for current conversion behavior and limitations.
+
+The BM16 BLISS acquisition is retained in full (77,957,635 bytes), under its
+upstream MIT distribution notice. Current HDF5 support recovers canonical
+numeric channels with explicit linked-group warnings; this is partial recovery.
+See the [additional raw-data audit](../../../../../doc/beamline-source-repositories.md#additional-raw-data-audit).

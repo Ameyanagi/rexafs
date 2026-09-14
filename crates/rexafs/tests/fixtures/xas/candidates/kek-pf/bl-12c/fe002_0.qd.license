@@ -1,0 +1,12 @@
+Usage-Notice-Identifier: LicenseRef-KEK-PF-Academic-Use-Notice
+License-File: LICENSES/LicenseRef-KEK-PF-Academic-Use-Notice.txt
+License-Basis: custom-academic-use-notice
+License-Scope: Custom KEK-PF usage notice: academic research excluding military-related research; contact the experimenter for publication citation. No standard data license is assigned.
+License-Evidence: https://pfxafs.kek.jp/xafsdata/
+Intended-Use: Academic, nonmilitary research and reader regression testing only.
+Publication-Citation: Contact Yasuhiro Inada (Ritsumeikan University) through the source record before citing the data in a publication.
+Source: https://pfxafs.kek.jp/xafsdata/view.php?id=132
+Citation: Yasuhiro Inada (Ritsumeikan University), 2021-11-12. LiFePO4, KEK Photon Factory BL-12C, Quick Scan. PF XAFS database record 132. https://pfxafs.kek.jp/xafsdata/view.php?id=132
+SHA256: 919b5f4b102cea0a3159ce3773a57f293bd0e6e2326a2ef32232018a1c34c918
+Modifications: None; complete original measurement bytes retained.
+Packaging: Repository test fixture only; excluded from crates.io, Python and npm packages.

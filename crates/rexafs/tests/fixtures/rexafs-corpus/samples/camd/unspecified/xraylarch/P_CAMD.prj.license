@@ -1,0 +1,11 @@
+SPDX-License-Identifier: MIT
+License-File: LICENSES/xraypy--xraylarch--LICENSE
+License-Basis: repository-distribution-license
+License-Scope: repository distribution license; bundled examples/test fixtures
+License-Evidence: https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/LICENSE
+Test-Eligibility: documented-license
+Source: https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/P_CAMD.prj
+Download: https://raw.githubusercontent.com/xraypy/xraylarch/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/P_CAMD.prj
+Citation: Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007
+SHA256: 174acba7e6d80342bea65e3deb3c37305b67842d69e73f9772d18a0c6f48742f
+Modifications: None; original downloaded measurement bytes retained.

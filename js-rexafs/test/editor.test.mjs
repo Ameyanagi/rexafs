@@ -36,9 +36,21 @@ for (const [entry, resolution] of [["rexafs", "NodeNext"], ["rexafs/node", "Node
   test(`installed ${entry}: TypeScript 7 checking and editor completion, signatures and hover (${resolution})`, () => {
     const filename = join(directory, `example-${entry.replaceAll("/", "-")}.ts`);
     let source = `import init, { Spectrum, AUTOBK, PrePostEdge, XrayFFTF, XrayFFTR,
-      type FTWindow, type FFTGrid, type AUTOBKSolver, type AUTOBKClampScalePolicy,
+      read_measurement, type SpectrumMapping, type FTWindow, type FFTGrid, type AUTOBKSolver, type AUTOBKClampScalePolicy,
       type AUTOBKOptions, type PrePostEdgeOptions, type XrayFFTFOptions, type XrayFFTROptions } from "${entry}";
 await init();
+const measurement = read_measurement("energy,mu\\n7100,1\\n7101,2");
+const mapping: SpectrumMapping = { energy_column: 0, energy: {kind:"ev"}, signal: {kind:"direct",column:1} };
+measurement.arrays(0, mapping).energy[0].toFixed(2);
+measurement.arrays(0, { ...mapping, energy: { kind: "offset_ev", offset_ev: 20000 } });
+// @ts-expect-error Relative energy requires a declared origin
+measurement.arrays(0, { ...mapping, energy: { kind: "offset_ev" } });
+measurement.select_datasets(["/energy","/mu"]);
+const sessionText: string | undefined = measurement.document.metadata["larix.session_text"];
+const imaginary: (number | null)[] | null = measurement.document.datasets[0].imaginary;
+console.log(sessionText, imaginary);
+// @ts-expect-error Bragg conversion requires crystal spacing and scale
+const invalidMapping: SpectrumMapping = {energy_column:0,energy:{kind:"bragg"},signal:{kind:"direct",column:1}};
 const energy = new Float64Array([1, 2, 3]);
 const spectrum = new Spectrum(energy, energy);
 const options: AUTOBKOptions = { rbkg: 1, solver: "LinearDirect" };
@@ -102,6 +114,7 @@ spectrum.chi()[0];
       assert.match(hoverText("spectrum.set_background_method", 10), /undefined or null restores default AUTOBK settings/);
       assert.match(hoverText("spectrum.set_background_method", 10), /work in 0\.2\.4 and later/);
       assert.match(hoverText("spectrum.set_background_method", 10), /direct AUTOBK settings were added in 0\.2\.5/);
+      assert.match(hoverText("measurement.arrays", 13), /eV/);
       const completeSource = source;
       const completion = suffix => {
         source = completeSource + suffix;
@@ -112,6 +125,10 @@ spectrum.chi()[0];
       assert.ok(completion("\nspectrum.").includes("set_ifft"));
       assert.ok(completion("\nnew AUTOBK({ ").includes("clamp_lambda"));
       assert.ok(completion('\nnew XrayFFTF({ window: "').includes("KaiserBessel"));
+      assert.ok(completion("\nmeasurement.").includes("select_datasets"));
+      source = completeSource + '\nmeasurement.arrays(';
+      const readerSignature=service.getSignatureHelpItems(filename,source.length,{});
+      assert.ok(readerSignature?.items.some(item=>item.parameters.some(p=>ts.displayPartsToString(p.displayParts).includes("SpectrumMapping"))));
       source = completeSource + '\nnew AUTOBK(';
       const signature = service.getSignatureHelpItems(filename, source.length, {});
       assert.ok(signature?.items.some(item => ts.displayPartsToString(item.parameters[0].displayParts).includes("AUTOBKOptions")));

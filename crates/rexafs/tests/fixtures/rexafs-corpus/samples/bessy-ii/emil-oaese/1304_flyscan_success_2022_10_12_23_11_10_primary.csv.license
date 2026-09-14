@@ -1,0 +1,11 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit dataset license
+License-Evidence: https://zenodo.org/records/10866536
+Source: https://zenodo.org/records/10866536
+Download: https://zenodo.org/api/records/10866536/files/Raw_data_for_Figures.zip/content
+Citation: Garcia-Diez, Raul (2024). Studying energy materials under operating conditions by X-ray absorption spectroscopy using the new OÆSE endstation at BESSY II. Zenodo. https://doi.org/10.5281/zenodo.10866536
+SHA256: 5b4160a01162fed8df7113e4e6b3de7b5d76317842616e3420e87d04ce112afd
+Archive-Member: NCA degradation damage/1304_flyscan_success_2022_10_12_23_11_10_primary.csv
+Modifications: None; original downloaded measurement bytes retained.

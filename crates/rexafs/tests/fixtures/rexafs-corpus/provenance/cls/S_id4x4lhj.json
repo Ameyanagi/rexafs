@@ -1,0 +1,38 @@
+{
+  "sid": "S_id4x4lhj",
+  "url": "https://xasdb.lightsource.ca/DB/S/VLS-PGM/Iron%20%28II%29%20Sulfate/FeSO4_2016_01_scan2_id4x4lhj.dat",
+  "cache_path": ".gather-cache/cls/files/S/VLS-PGM/Iron (II) Sulfate/FeSO4_2016_01_scan2_id4x4lhj.dat",
+  "header": {
+    "XDI/1.0": "",
+    "Scan.license": "CC BY 4.0",
+    "Publication.authors": " Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner",
+    "Publication.affiliation": " Canadian Light Source",
+    "Sample.reference": "",
+    "ScanParameters.E0": "",
+    "Facility.name": "CLS",
+    "Sample.temperature": "r.t.",
+    "Sample.prep": "powder, 500 um",
+    "Sample.formula": "FeSO4",
+    "Sample.smiles": "[Fe+2].[O-]S([O-])(=O)=O",
+    "Publication.DOI": " https://doi.org/10.20383/103.01329",
+    "Sample.name": "Iron (II) Sulfate",
+    "Scan.number": "scan2",
+    "Sample.id": "4x4lhj",
+    "Scan.start_time": "2016-01-scan2",
+    "Element.symbol": "S",
+    "Facility.energy": "2.90 GeV",
+    "Facility.xray_source": "185 mm planar undulator",
+    "Beamline.name": "VLS-PGM",
+    "Beamline.scan_mode": "Fluorescence",
+    "Beamline.website": "https://vlspgm.lightsource.ca/",
+    "Beamline.detector": "?",
+    "Beamline.energy_range": "0.0055 - 0.25",
+    "Beamline.flux": "2E11 at 9-240eV",
+    "Beamline.spot_size": "0.5 mm",
+    "Mono.name": "Variable Line Spacing Plane Grating Monochromator",
+    "Element.edge": {
+      "L2": 163.6
+    }
+  },
+  "filepath": "S/VLS-PGM/Iron (II) Sulfate/FeSO4_2016_01_scan2_id4x4lhj.dat"
+}

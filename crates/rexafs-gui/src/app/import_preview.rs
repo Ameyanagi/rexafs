@@ -14,6 +14,14 @@ pub struct SourceRevision {
 }
 
 impl SourceRevision {
+    /// Identity of an owned measurement snapshot, independent of later disk edits.
+    pub fn snapshot() -> Self {
+        Self {
+            bytes: 0,
+            modified: SystemTime::now(),
+        }
+    }
+
     pub fn read(path: &Path) -> Result<Self, String> {
         let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
         Ok(Self {

@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-NC-SA-4.0
+License-File: LICENSES/CC-BY-NC-SA-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: individual dataset license
+License-Evidence: https://mdr.nims.go.jp/datasets/191de9cf-581e-41a2-ab53-a74e21039ffb
+Test-Eligibility: documented-license
+Source: https://mdr.nims.go.jp/datasets/191de9cf-581e-41a2-ab53-a74e21039ffb
+Download: https://mdr.nims.go.jp/filesets/c4820934-1739-4cee-bfb0-8e1e6035a1e9/download
+Citation: Masashi Ishii; Photon Factory. XAFS spectrum of Copper(II) oxide. https://doi.org/10.48505/nims.3611
+SHA256: 71c315626acab1cac6beeca067b608a19b73e437c9a269bcfcc1db0498b3cc1b
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/mdr/191de9cf-581e-41a2-ab53-a74e21039ffb/record.json

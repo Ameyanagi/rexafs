@@ -106,19 +106,37 @@ pub struct LayoutKey {
 
 impl LayoutKey {
     pub fn from_preview(preview: &ImportPreview) -> Self {
-        Self::from_parts(
+        let mut key = Self::from_parts(
             preview.column_count,
             preview.names.as_deref(),
             preview.xdi.as_ref(),
-        )
+        );
+        if let Some(layout) = &preview.layout {
+            key.parser = layout.format.clone();
+            key.units = layout
+                .units
+                .iter()
+                .map(|u| u.as_deref().map(canonical_unit))
+                .collect();
+        }
+        key
     }
 
     pub fn from_detection(detection: &crate::params::ImportDetection) -> Self {
-        Self::from_parts(
+        let mut key = Self::from_parts(
             detection.column_count,
             detection.names.as_deref(),
             detection.xdi.as_ref(),
-        )
+        );
+        if let Some(layout) = &detection.layout {
+            key.parser = layout.format.clone();
+            key.units = layout
+                .units
+                .iter()
+                .map(|u| u.as_deref().map(canonical_unit))
+                .collect();
+        }
+        key
     }
 
     fn from_parts(

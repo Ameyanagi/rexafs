@@ -1,0 +1,388 @@
+{
+  "schema_version": 1,
+  "format": "Larix session 1.0",
+  "generation": {
+    "method": "Larch Python API; no GUI interaction",
+    "larch": "2026.3.1",
+    "python": "3.12.12",
+    "platform": "Darwin",
+    "dependencies": {
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "lmfit": "1.3.4",
+      "xraydb": "4.5.8"
+    },
+    "writer_sources": [
+      {
+        "path": "larch/io/save_restore.py",
+        "sha256": "a35714eafec864e38055e80e51338afedb815ee6e973a6e39c2464a3cccdebcd",
+        "url": "https://github.com/xraypy/xraylarch/blob/2026.3.1/larch/io/save_restore.py"
+      },
+      {
+        "path": "larch/utils/jsonutils.py",
+        "sha256": "39031066ddf7ea09a708440116f1f65f71fea6720fe8186f9d3843438b794c92",
+        "url": "https://github.com/xraypy/xraylarch/blob/2026.3.1/larch/utils/jsonutils.py"
+      },
+      {
+        "path": "larch/utils/npjson.py",
+        "sha256": "49158f25cb4e1428db739f15358487607bcd8e7f36b058dd6e9e41a629774d88",
+        "url": "https://github.com/xraypy/xraylarch/blob/2026.3.1/larch/utils/npjson.py"
+      }
+    ],
+    "controlled_metadata": "Fixed fixture timestamp, hostname and MAC ID; isolated config; gzip mtime=0; PYTHONHASHSEED=0.",
+    "pre_edge": {
+      "pre1": -150,
+      "pre2": -30,
+      "norm1": 100,
+      "norm2": 800,
+      "nnorm": 2
+    },
+    "autobk": {
+      "rbkg": 1,
+      "kmin": 0,
+      "kmax": 12,
+      "kweight": 1,
+      "dk": 1,
+      "nfft": 2048,
+      "kstep": 0.05
+    },
+    "xftf": {
+      "kmin": 2,
+      "kmax": 10,
+      "kweight": 2,
+      "dk": 1,
+      "window": "hanning",
+      "nfft": 2048,
+      "kstep": 0.05
+    }
+  },
+  "files": [
+    {
+      "path": "fixtures/valid/pfbl12c-raw.larix",
+      "category": "valid",
+      "description": "Transmission; 818 original energy/mu and detector rows.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [
+        "pfbl12c"
+      ],
+      "larch_read_session_verified": true,
+      "bytes": 55420,
+      "sha256": "6f67f75fdf44e41ae106b1ffe9ee4922058cdc8cc50228a15e23e8678fad49c8"
+    },
+    {
+      "path": "fixtures/valid/pf9a-raw.larix",
+      "category": "valid",
+      "description": "Fluorescence; 1426 rows, including six duplicate energies.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [
+        "pf9a"
+      ],
+      "larch_read_session_verified": true,
+      "bytes": 92505,
+      "sha256": "927b7adfe7af798750b9cd4d256e01a886dd424aa6757d9148148fec26c1b13e"
+    },
+    {
+      "path": "fixtures/valid/pfbl12c-normalized.larix",
+      "category": "valid",
+      "description": "Transmission after normalized; 818 absorption points.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [
+        "pfbl12c"
+      ],
+      "larch_read_session_verified": true,
+      "bytes": 103497,
+      "sha256": "2d474f0a056bad21ff1038b34af623335ae80a29a91d9af1d3db23ccfb67ed37"
+    },
+    {
+      "path": "fixtures/valid/pfbl12c-autobk.larix",
+      "category": "valid",
+      "description": "Transmission after autobk; 818 absorption points.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [
+        "pfbl12c"
+      ],
+      "larch_read_session_verified": true,
+      "bytes": 132970,
+      "sha256": "d0cdc79fd9f752658167040ae4890f45461c5c46bcf1cfd75f13ab51b5052c64"
+    },
+    {
+      "path": "fixtures/valid/pfbl12c-ft.larix",
+      "category": "valid",
+      "description": "Transmission after ft; 818 absorption points.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [
+        "pfbl12c"
+      ],
+      "larch_read_session_verified": true,
+      "bytes": 147761,
+      "sha256": "e9265bdaf3c7755c0141717360f3c69c1e17c5dfc21cff6f447616e397303acd"
+    },
+    {
+      "path": "fixtures/valid/pf9a-ft.larix",
+      "category": "valid",
+      "description": "Fluorescence after normalization, background and FT; 1420 unique energies.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [
+        "pf9a"
+      ],
+      "larch_read_session_verified": true,
+      "bytes": 241115,
+      "sha256": "a51cb26d13dd5fadeb8a46bc3482112161b01126aeb5673bc1ac5be7d8f416a7"
+    },
+    {
+      "path": "fixtures/valid/two-analyzed.larix",
+      "category": "valid",
+      "description": "Two processed groups on independent energy grids.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [
+        "pfbl12c",
+        "pf9a"
+      ],
+      "larch_read_session_verified": true,
+      "bytes": 388010,
+      "sha256": "f268d95d4c4c2c0a0811b2a96746ebb8ada6eb4d74815504cbc8ac5a02b980d7"
+    },
+    {
+      "path": "fixtures/valid/mixed-raw-analyzed.larix",
+      "category": "valid",
+      "description": "Raw transmission and processed fluorescence.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [
+        "pfbl12c",
+        "pf9a"
+      ],
+      "larch_read_session_verified": true,
+      "bytes": 295907,
+      "sha256": "e2c6114874ca39fe85d58a0d7484c62c3b4dc75fbfc1de798052da768264c5a4"
+    },
+    {
+      "path": "fixtures/valid/legacy-arrays.larix",
+      "category": "valid",
+      "description": "Legacy numeric JSON arrays, including complex FT values.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "Array",
+      "expected_absorption_groups": [
+        "pfbl12c"
+      ],
+      "larch_read_session_verified": true,
+      "bytes": 148694,
+      "sha256": "99837398945330b02ff755d9f5c0e6089dc2c88b32ccf336d12fad9cfd2ee76b"
+    },
+    {
+      "path": "fixtures/valid/no-xasgroups.larix",
+      "category": "valid",
+      "description": "Valid session saved without the optional _xasgroups index.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [
+        "pfbl12c"
+      ],
+      "larch_read_session_verified": true,
+      "bytes": 55390,
+      "sha256": "cb03d77978295473f7ee8a8f6d220c610c60b4e0771c30a29ac195539b4e0428"
+    },
+    {
+      "path": "fixtures/valid/typed-metadata.larix",
+      "category": "valid",
+      "description": "Synthetic names, metadata, Journals, typed arrays and parameter expressions.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [
+        "typed"
+      ],
+      "larch_read_session_verified": true,
+      "bytes": 1435,
+      "sha256": "0cea54c31edfef4159b6580f3e4ba8aa3d98067d68d8d78724502fe9b4c8d52b"
+    },
+    {
+      "path": "fixtures/valid/chi-only.larix",
+      "category": "valid",
+      "description": "EXAFS chi(k) group with no absorption arrays; no automatic energy/mu mapping.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [],
+      "larch_read_session_verified": true,
+      "bytes": 3513,
+      "sha256": "a6159cfda7f3f0f372d38b0c6e242cd982bb1be0ce1134aa5ccece4181741313"
+    },
+    {
+      "path": "fixtures/valid/non-xas.larix",
+      "category": "valid",
+      "description": "Synthetic position scan; xdat is millimeters, not photon energy.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [],
+      "larch_read_session_verified": true,
+      "bytes": 694,
+      "sha256": "4d77eb31e18b1dc4b1ed87ee0291da1f307cca37ff3518b9b199e5c4f234505a"
+    },
+    {
+      "path": "fixtures/valid/empty.larix",
+      "category": "valid",
+      "description": "Valid empty session with an empty _xasgroups dictionary.",
+      "generation": "larch.io.save_session",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [],
+      "larch_read_session_verified": true,
+      "bytes": 514,
+      "sha256": "ff7dd0872f255b7fde7de527707e32de0224de0910fb4f97a2154b13846ce928"
+    },
+    {
+      "path": "fixtures/valid/plain-session.larix",
+      "category": "valid",
+      "description": "Exact decompressed typed-metadata session.",
+      "generation": "gzip.decompress(typed-metadata.larix)",
+      "array_encoding": "b64ndarray",
+      "expected_absorption_groups": [
+        "typed"
+      ],
+      "larch_read_session_verified": true,
+      "bytes": 4197,
+      "sha256": "3a2bac4d41137291e043ddc3d98b70d8033e7cf6bc74d8d80121f3fb01c3f899"
+    },
+    {
+      "path": "fixtures/invalid/truncated-gzip.larix",
+      "category": "invalid",
+      "generation": "Documented mutation of typed-metadata.larix; see generate.py.",
+      "expected_failure_layer": "gzip",
+      "description": "Truncated gzip stream; reject damaged input.",
+      "bytes": 1423,
+      "sha256": "197e71b84c524afab08d018827a753920b58e6a91aa999c55849259a7306716d"
+    },
+    {
+      "path": "fixtures/invalid/bad-magic.larix",
+      "category": "invalid",
+      "generation": "Documented mutation of typed-metadata.larix; see generate.py.",
+      "expected_failure_layer": "format",
+      "description": "Header does not identify a Larix session.",
+      "bytes": 1414,
+      "sha256": "57feda5b51df1a56c2459b9627375c715c46d82b862edab03d76af0587fa9bee"
+    },
+    {
+      "path": "fixtures/invalid/invalid-json.larix",
+      "category": "invalid",
+      "generation": "Documented mutation of typed-metadata.larix; see generate.py.",
+      "expected_failure_layer": "json",
+      "description": "Invalid JSON for the typed symbol; reject incomplete decoding.",
+      "bytes": 1418,
+      "sha256": "b2d165bed3a3e79f38c0f7260537881c07afc045cfde6d5f6318a539c7cba14d"
+    },
+    {
+      "path": "fixtures/invalid/bad-array-shape.larix",
+      "category": "invalid",
+      "generation": "Documented mutation of typed-metadata.larix; see generate.py.",
+      "expected_failure_layer": "array",
+      "description": "Array shape requires five float64 values but only four are stored.",
+      "bytes": 1418,
+      "sha256": "420db7345c9ac578d1930523eee73b2f1ff48c44992e0b45fa23978f634503de"
+    },
+    {
+      "path": "fixtures/invalid/mismatched-energy-mu.larix",
+      "category": "invalid",
+      "generation": "Documented mutation of typed-metadata.larix; see generate.py.",
+      "expected_failure_layer": "mapping",
+      "description": "Serialization is valid; four energy points and three mu values cannot map to a spectrum.",
+      "bytes": 1418,
+      "sha256": "d17ab3f196f326ebb60b662b989a1ca858d6b58b2ce2774ad2cbfa38b78cd395"
+    },
+    {
+      "path": "fixtures/invalid/missing-group-reference.larix",
+      "category": "invalid",
+      "generation": "Documented mutation of typed-metadata.larix; see generate.py.",
+      "expected_failure_layer": "reference",
+      "description": "Serialization is valid; report a dangling _xasgroups reference without hiding it.",
+      "bytes": 1425,
+      "sha256": "d24c90bda5b0fb3beb807067696932458234f33b97a8bd96c6c17abd987fd9dc"
+    }
+  ],
+  "assets": [
+    {
+      "path": ".gitattributes",
+      "bytes": 89,
+      "sha256": "c28afda32a5dd391c6b122e66e6584e6e190fc62a87ac68ca70f7a7c32bddd81"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 30,
+      "sha256": "ffbed810127366008c68e9ae74d2f5f8cb35e14f695bd456cc551e559692d55b"
+    },
+    {
+      "path": "FORMAT.md",
+      "bytes": 5073,
+      "sha256": "204fb33368677d00492b37739b4145980cd85703062427c58c4012e2bdadf4e2"
+    },
+    {
+      "path": "LICENSE.txt",
+      "bytes": 1391,
+      "sha256": "86079980d9c636cbc3ec90b8208f436529d117faf964ab5b72c36f8e025fb529"
+    },
+    {
+      "path": "README.md",
+      "bytes": 7413,
+      "sha256": "25d27030beaedad76162fa3d21ac533f24a6e63c4c40630be8eb2a71d0073bab"
+    },
+    {
+      "path": "expected.json",
+      "bytes": 336648,
+      "sha256": "db5f32173a09011eb75e263ce6f8a24ed9d5f1aa8f9d1b930977655ce2db25eb"
+    },
+    {
+      "path": "fixturelib.py",
+      "bytes": 3284,
+      "sha256": "bf8aad61fffc5a4e4b08d70fd65f47fdabf10d7f0336c0ab33e513197f114acf"
+    },
+    {
+      "path": "generate.py",
+      "bytes": 15821,
+      "sha256": "e82088a34c7b3a85380727ae6974a84616bf3e63ef26cee47573ea7af13b20ea"
+    },
+    {
+      "path": "requirements-lock.txt",
+      "bytes": 1624,
+      "sha256": "078344ee935e17f4cf375847b049cba4156bb7e74a125f492c731a81f45ada72"
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 20,
+      "sha256": "cd394b6694b0831355c5001544fe5e9cd6ad23696fa9a68504583691ae98f389"
+    },
+    {
+      "path": "sources/PF9A_2022.dat",
+      "bytes": 73706,
+      "sha256": "15511e4a96a5faef16087eb96d6f0060860bea28f0b816fc4d6a963c7c7640ca"
+    },
+    {
+      "path": "sources/PF9A_2022.dat.license",
+      "bytes": 906,
+      "sha256": "f16796f62a6e1f6936002a4f799a88adf64bbf931178222f9fdd1997b6681978"
+    },
+    {
+      "path": "sources/PFBL12C_2005.dat",
+      "bytes": 42751,
+      "sha256": "66c9ec11cf82958a0b65a9587439f7a86fafbbac580e8298d0e6e6fd7bfd0b39"
+    },
+    {
+      "path": "sources/PFBL12C_2005.dat.license",
+      "bytes": 912,
+      "sha256": "b137fbec5fba91206f4f29c7d86fe55b65576a04b1aeb799ac11d334e26d4ef4"
+    },
+    {
+      "path": "verify.py",
+      "bytes": 5983,
+      "sha256": "7b27c6ebe221e12aa41bb8b1bc00073f39acbe09c0fce3d7c4d722911c783590"
+    },
+    {
+      "path": "sources/manifest.json",
+      "bytes": 5731,
+      "sha256": "a1613c6da1903058fcb4def44018c4819c0f60ad7ed7a76f57bc1597e54d2bea"
+    }
+  ]
+}

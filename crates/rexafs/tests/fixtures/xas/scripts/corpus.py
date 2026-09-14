@@ -107,7 +107,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['verify', 'list', 'fetch'])
     parser.add_argument('--include-candidates', action='store_true',
-                        help='Include locally collected RefXAS review-required entries')
+                        help='Include RefXAS and KEK entries with custom usage notices')
     parser.add_argument('--hdf5', action='store_true', help='Read HDF5 using optional h5py')
     parser.add_argument('--report', type=Path, help='Write verification observations as JSON')
     args = parser.parse_args()
@@ -123,6 +123,12 @@ def main():
                 if digest(path.read_bytes()) != r['sha256']:
                     raise ValueError(f"Refusing to overwrite changed file: {path}")
                 continue
+            if r.get('download_method') == 'session-form':
+                raise ValueError(
+                    f"Restore {r['path']} through the Download form at "
+                    f"{r['source_url']}, then run verify --include-candidates "
+                    "to check its recorded checksum and attribution."
+                )
             data = urllib.request.urlopen(r['download_url'], timeout=60).read()
             if len(data) != r['bytes'] or digest(data) != r['sha256']:
                 raise ValueError(f"Source content changed: {r['id']}")

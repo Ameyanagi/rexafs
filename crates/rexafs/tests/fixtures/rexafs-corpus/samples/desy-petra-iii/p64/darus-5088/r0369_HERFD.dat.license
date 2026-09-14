@@ -1,0 +1,11 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit dataset license
+License-Evidence: https://darus.uni-stuttgart.de/dataset.xhtml?persistentId=doi:10.18419/DARUS-5088
+Source: https://darus.uni-stuttgart.de/dataset.xhtml?persistentId=doi:10.18419/DARUS-5088
+Download: https://darus.uni-stuttgart.de/api/access/datafile/383026
+Citation: Lorena Fritsch; Pia Rhesies; Wael Barakat; Deven Estes; Matthias Bauer (2025). Replication data for Detection and Characterization of Hydride Ligands in Copper Complexes by Hard X-ray Spectroscopy. DaRUS, V1. https://doi.org/10.18419/DARUS-5088
+SHA256: 9df4df8da56e410277da8cc84c6b1e90823729f82ffea7d41701000d9b4d245b
+Archive-Member: Rohdaten_SFB/Cu3H/HERFD-XANES/r0369_HERFD.dat
+Modifications: None; original downloaded measurement bytes retained.

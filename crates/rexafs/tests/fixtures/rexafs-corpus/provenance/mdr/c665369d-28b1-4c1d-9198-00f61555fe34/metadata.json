@@ -1,0 +1,382 @@
+{
+    "data_info": {
+        "facility": "Ritsumeikan-SR",
+        "beamline": "BL-13",
+        "id": "BL13_Si-K_001",
+        "related_id": null,
+        "date": {
+            "create_time": "2021-08-02 11:22:00",
+            "update_time": null
+        },
+        "data_depositor": {
+            "name": "Kei Mitsuhara",
+            "affiliation": "Ritsumeikan SR Center"
+        },
+        "comment": "XANES"
+    },
+    "sample": {
+        "chemical_formula": "SiO2",
+        "name": "Quartz",
+        "CAS_number": null,
+        "manufacturer": null,
+        "Product_number": null,
+        "sample_lot_number": null,
+        "additional_data": "powder, on carbon tape"
+    },
+    "measurement": {
+        "absorption_edge": "Si K-edge",
+        "energy_calibration": [
+            {
+                "standard_sample": "SiO2",
+                "calibration_position": "white line peak maximum",
+                "energy": 1846.8,
+                "energy_unit": "eV"
+            }
+        ],
+        "incident_angle": 0,
+        "incident_angle_unit": "deg",
+        "tune_angle": 45,
+        "tune_angle_unit": "deg",
+        "tune_energy": null,
+        "tune_energy_unit": null,
+        "data_points": 276,
+        "section": {
+            "section_number": 7,
+            "section_blocks": [
+                {
+                    "start_energy": 1780,
+                    "start_energy_unit": "eV",
+                    "end_energy": 1830,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 25,
+                    "delta_energy": 2,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 1,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 2,
+                    "dwelling_time_unit": "s"
+                },
+                {
+                    "start_energy": 1830,
+                    "start_energy_unit": "eV",
+                    "end_energy": 1835,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 10,
+                    "delta_energy": 0.5,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 1,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 2,
+                    "dwelling_time_unit": "s"
+                },
+                {
+                    "start_energy": 1835,
+                    "start_energy_unit": "eV",
+                    "end_energy": 1850,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 100,
+                    "delta_energy": 0.15,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 1,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 2,
+                    "dwelling_time_unit": "s"
+                },
+                {
+                    "start_energy": 1850,
+                    "start_energy_unit": "eV",
+                    "end_energy": 1870,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 40,
+                    "delta_energy": 0.5,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 1,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 2,
+                    "dwelling_time_unit": "s"
+                },
+                {
+                    "start_energy": 1870,
+                    "start_energy_unit": "eV",
+                    "end_energy": 1900,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 30,
+                    "delta_energy": 1,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 1,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 2,
+                    "dwelling_time_unit": "s"
+                },
+                {
+                    "start_energy": 1900,
+                    "start_energy_unit": "eV",
+                    "end_energy": 1980,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 40,
+                    "delta_energy": 2,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 1,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 2,
+                    "dwelling_time_unit": "s"
+                },
+                {
+                    "start_energy": 1980,
+                    "start_energy_unit": "eV",
+                    "end_energy": 2100,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 30,
+                    "delta_energy": 4,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 1,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 2,
+                    "dwelling_time_unit": "s"
+                }
+            ]
+        },
+        "start_ring_current": 37.9,
+        "end_ring_current": 37.4,
+        "ring_current_unit": "mA",
+        "start_time": "2020-05-22 17:46:00",
+        "end_time": "2020-05-22 18:05:00"
+    },
+    "instrument": {
+        "I0": {
+            "detector": [
+                {
+                    "type": "Ni mesh",
+                    "manufacturer": null,
+                    "model_number": null,
+                    "coating_element": "Ni",
+                    "aperture_ratio": 89,
+                    "aperture_ratio_unit": "%",
+                    "applied_voltage": null,
+                    "applied_voltage_unit": null
+                }
+            ],
+            "Ammeter": [
+                {
+                    "range": 20,
+                    "range_unit": "pA",
+                    "manufacturer": "KEYSIHGT",
+                    "model_number": "B2981A"
+                }
+            ],
+            "additional_data": null
+        },
+        "TEY": {
+            "Ammeter": [
+                {
+                    "range": 200,
+                    "range_unit": "pA",
+                    "manufacturer": "KEYSIHGT",
+                    "model_number": "B2981A"
+                }
+            ],
+            "additional_data": null
+        },
+        "PFY": {
+            "detector": [
+                {
+                    "type": null,
+                    "manufacturer": null,
+                    "model_number": null,
+                    "amp_gain": null,
+                    "amp_gain_unit": null,
+                    "peaking_time": null,
+                    "peaking_time_unit": null,
+                    "deadtime": null,
+                    "deadtime_unit": null,
+                    "deadtime_setting_energy": null,
+                    "deadtime_setting_energy_unit": null,
+                    "element_number": null,
+                    "ROI": [
+                        {
+                            "ROI_energy_lower": null,
+                            "ROI_energy_upper": null,
+                            "ROI_energy_unit": null
+                        }
+                    ]
+                }
+            ],
+            "additional_data": null
+        },
+        "PEY": {
+            "detector": [
+                {
+                    "type": null,
+                    "manufacturer": null,
+                    "model_number": null,
+                    "applied_voltage_front": null,
+                    "applied_voltage_front_unit": null,
+                    "applied_voltage_end": null,
+                    "applied_voltage_end_unit": null,
+                    "battery_box_voltage": null,
+                    "battery_box_voltage_unit": null,
+                    "retarding_voltage": null,
+                    "retarding_voltage_unit": null,
+                    "deflection_voltage": null,
+                    "deflection_voltage_unit": null
+                }
+            ],
+            "Ammeter": [
+                {
+                    "range": null,
+                    "range_unit": null,
+                    "manufacturer": null,
+                    "model_number": null
+                }
+            ],
+            "additional_data": null
+        },
+        "monochromator": {
+            "type": "DCM",
+            "detail": [
+                {
+                    "crystal_plane": "InSb(111)",
+                    "d": 0.374,
+                    "d_unit": "nm",
+                    "material": null,
+                    "groove_density": null,
+                    "groove_density_unit": null,
+                    "groove_depth": null,
+                    "groove_depth_unit": null,
+                    "deflection_angle": null,
+                    "deflection_angle_unit": null
+                }
+            ]
+        },
+        "slit": [
+            {
+                "name": null,
+                "vertical_size": null,
+                "vertical_size_unit": null,
+                "horizontal_size": null,
+                "horizontal_size_unit": null
+            }
+        ],
+        "filter": null,
+        "measurement_chamber_environment": "Vac"
+    },
+    "file": {
+        "file_name": "20052209.dat",
+        "raw_data_format": [
+            {
+                "extension": "dat",
+                "format": "BL-13",
+                "columns": [
+                    {
+                        "name": "Energy(c)",
+                        "unit": "eV"
+                    },
+                    {
+                        "name": "Angle(o)",
+                        "unit": "deg"
+                    },
+                    {
+                        "name": "Energy(o)",
+                        "unit": "eV"
+                    },
+                    {
+                        "name": "time/s",
+                        "unit": "s"
+                    },
+                    {
+                        "name": "I0",
+                        "unit": "count"
+                    },
+                    {
+                        "name": "TEY",
+                        "unit": "count"
+                    },
+                    {
+                        "name": "FY1",
+                        "unit": "count"
+                    },
+                    {
+                        "name": "FY2",
+                        "unit": "count"
+                    },
+                    {
+                        "name": "FY3",
+                        "unit": "count"
+                    },
+                    {
+                        "name": "FY4",
+                        "unit": "count"
+                    },
+                    {
+                        "name": "FY5",
+                        "unit": "count"
+                    },
+                    {
+                        "name": "SRC",
+                        "unit": "count"
+                    },
+                    {
+                        "name": "FY(sum)",
+                        "unit": "count"
+                    },
+                    {
+                        "name": "Eng",
+                        "unit": "eV"
+                    },
+                    {
+                        "name": "TEY/I0",
+                        "unit": null
+                    },
+                    {
+                        "name": "FY1/I0",
+                        "unit": null
+                    },
+                    {
+                        "name": "FY2/I0",
+                        "unit": null
+                    },
+                    {
+                        "name": "FY3/I0",
+                        "unit": null
+                    }
+                ]
+            }
+        ],
+        "processed_data_format": [
+            {
+                "extension": "tey",
+                "format": "Athena",
+                "columns": [
+                    {
+                        "name": "photon energy",
+                        "unit": "eV",
+                        "formula": "column[2]",
+                        "normalizing_process": [
+                            {
+                                "BG_subtraction": null,
+                                "Normalization": null
+                            }
+                        ],
+                        "input": {
+                            "columns": "raw_data_format[0].columns"
+                        }
+                    },
+                    {
+                        "name": "Normalized Intensity",
+                        "unit": null,
+                        "formula": "column[5]/column[4]",
+                        "normalizing_process": [
+                            {
+                                "BG_subtraction": "-1.890182+0.00131183*column[2]",
+                                "Normalization": "-2.752575+0.00402907*column[2] - 1.02769295e-006*column[2]**2"
+                            }
+                        ],
+                        "input": {
+                            "columns": "raw_data_format[0].columns"
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

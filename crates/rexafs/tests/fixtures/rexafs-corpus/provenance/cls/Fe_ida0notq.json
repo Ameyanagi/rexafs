@@ -1,0 +1,39 @@
+{
+  "sid": "Fe_ida0notq",
+  "url": "https://xasdb.lightsource.ca/DB/Fe/BIOXAS-S/Ferrihydrite/Ferrihydrite_2021_03_11_scan1_ida0notq.dat",
+  "cache_path": ".gather-cache/cls/files/Fe/BIOXAS-S/Ferrihydrite/Ferrihydrite_2021_03_11_scan1_ida0notq.dat",
+  "header": {
+    "XDI/1.0": "",
+    "Scan.license": "CC BY 4.0",
+    "Publication.authors": " Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner",
+    "Publication.affiliation": " Canadian Light Source",
+    "Sample.reference": "",
+    "ScanParameters.E0": "",
+    "Facility.name": "CLS",
+    "Sample.temperature": "77 K",
+    "Sample.prep": "powder, 500 um",
+    "Sample.formula": "Fe5HO8(H2O)4",
+    "Sample.smiles": "",
+    "Publication.DOI": " https://doi.org/10.20383/103.01329",
+    "Sample.name": "Ferrihydrite",
+    "Scan.number": "scan1",
+    "Sample.id": "a0notq",
+    "Scan.start_time": "2021-03-11",
+    "Element.symbol": "Fe",
+    "Facility.energy": "2.90 GeV",
+    "Facility.xray_source": "Wiggler",
+    "Beamline.name": "BIOXAS-S",
+    "Beamline.scan_mode": "Transmission",
+    "Beamline.energy_resolution": "0.0001",
+    "Beamline.flux": "1E12 ph/s at 12keV",
+    "Beamline.spot_size": "0.5-3mm",
+    "Beamline.energy_range": "5.0 - 32.0",
+    "Beamline.website": "https://bioxas.lightsource.ca/",
+    "Beamline.detector": "Ionization chamber",
+    "Mono.name": "Si220",
+    "Element.edge": {
+      "K": 7112
+    }
+  },
+  "filepath": "Fe/BIOXAS-S/Ferrihydrite/Ferrihydrite_2021_03_11_scan1_ida0notq.dat"
+}

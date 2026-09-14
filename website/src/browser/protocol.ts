@@ -1,13 +1,4 @@
-/** Column positions are zero-based; only eV or keV energy inputs are accepted. */
-export interface InputColumns {
-  energy: number;
-  signal: number;
-  /** Incident intensity I0; required when signal is transmitted intensity It. */
-  reference?: number;
-  quantity: 'mu' | 'transmission';
-  energyUnit: 'eV' | 'keV';
-}
-
+import type { MeasurementDocument, SpectrumMapping } from '../../../js-rexafs/types';
 /** Requested processing settings. Undefined E0 selects automatic edge finding. */
 export interface AnalysisSettings {
   e0?: number;
@@ -29,8 +20,8 @@ export interface AnalysisSettings {
 export interface AnalysisRequest {
   id: number;
   type: 'process';
-  source: { name: string; text: string };
-  columns: InputColumns;
+  source: { name: string; bytes: Uint8Array };
+  selection: { scan: number; mapping: SpectrumMapping; datasetPaths?: string[] };
   settings: AnalysisSettings;
   /** Same-origin deployment base, including the trailing slash. */
   baseUrl: string;
@@ -56,4 +47,20 @@ export interface AnalysisResult {
 export type AnalysisResponse =
   | { id: number; type: 'progress'; stage: string }
   | { id: number; type: 'result'; result: AnalysisResult }
+  | { id: number; type: 'error'; message: string };
+
+/** Inspection uses the same byte parser as processing, with bounded previews. */
+export interface InspectionRequest {
+  id: number;
+  type: 'inspect';
+  source: AnalysisRequest['source'];
+  baseUrl: string;
+  datasetPaths?: string[];
+}
+export interface MeasurementPreview {
+  document: MeasurementDocument;
+  rowCounts: number[];
+}
+export type InspectionResponse =
+  | { id: number; type: 'inspection'; preview: MeasurementPreview }
   | { id: number; type: 'error'; message: string };

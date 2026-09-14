@@ -1,0 +1,163 @@
+{
+  "audited_at": "2026-09-14T01:53:07.707713+00:00",
+  "scope": "Unreleased checkout; exact original column recovery and independently calculated mappings, not scientific calibration. Originals are local investigation files, not redistributed fixtures.",
+  "records": [
+    {
+      "filename": "ScotchTape02_0.qd",
+      "source_url": "https://pfxafs.kek.jp/xafsdata/view.php?id=133",
+      "sha256": "7f6e8b15d7fb2b39138cc87447db120afbfbbe64ee0ba30b65aa90ed190a4ec4",
+      "bytes": 24247,
+      "signature": "9809     KEK-PF   BL9A",
+      "points": 452,
+      "d_spacing_angstrom": 3.13551,
+      "energy_range_ev": [
+        2435.57935901944,
+        2575.2364557156748
+      ],
+      "mapping": {
+        "energy_column": 1,
+        "energy": {
+          "kind": "bragg",
+          "d_spacing": 3.13551,
+          "degrees_per_unit": 1.0
+        },
+        "signal": {
+          "kind": "ratio",
+          "incident": 3,
+          "detectors": [
+            4
+          ]
+        }
+      },
+      "status": "manual_arithmetic_required",
+      "max_energy_error_ev": 0.0,
+      "max_signal_error": 0.0,
+      "all_original_numeric_cells_match": true,
+      "first_signal": 13.721435478477764
+    },
+    {
+      "filename": "sr01_0.qd",
+      "source_url": "https://pfxafs.kek.jp/xafsdata/view.php?id=153",
+      "sha256": "aff3cca5c9425b1ccff20df5c9e80899240b25e92491d5c0e8708166f9afd896",
+      "bytes": 208692,
+      "signature": "9809     KEK-PF   NW10A",
+      "points": 3999,
+      "d_spacing_angstrom": 1.63747,
+      "energy_range_ev": [
+        15601.900242317006,
+        17206.13309426539
+      ],
+      "mapping": {
+        "energy_column": 1,
+        "energy": {
+          "kind": "bragg",
+          "d_spacing": 1.63747,
+          "degrees_per_unit": 1.0
+        },
+        "signal": {
+          "kind": "transmission",
+          "incident": 3,
+          "transmitted": 4
+        }
+      },
+      "status": "automatic_transmission_verified",
+      "max_energy_error_ev": 0.0,
+      "max_signal_error": 1.7763568394002505e-15,
+      "all_original_numeric_cells_match": true,
+      "first_signal": 0.5213996694692895
+    },
+    {
+      "filename": "Fe003_0.qd",
+      "source_url": "https://pfxafs.kek.jp/xafsdata/view.php?id=187",
+      "sha256": "c749dfb0a91b3ea27dd0fbf1cfd8ac664abc9cf2bd5f0cabcb2fafa82acc291f",
+      "bytes": 208681,
+      "signature": "9809     KEK-PF   BL9C",
+      "points": 4000,
+      "d_spacing_angstrom": 3.13551,
+      "energy_range_ev": [
+        6609.573166547034,
+        8459.456582206425
+      ],
+      "mapping": {
+        "energy_column": 1,
+        "energy": {
+          "kind": "bragg",
+          "d_spacing": 3.13551,
+          "degrees_per_unit": 1.0
+        },
+        "signal": {
+          "kind": "transmission",
+          "incident": 3,
+          "transmitted": 4
+        }
+      },
+      "status": "automatic_transmission_verified",
+      "max_energy_error_ev": 0.0,
+      "max_signal_error": 1.7763568394002505e-15,
+      "all_original_numeric_cells_match": true,
+      "first_signal": 1.7075946693810415
+    },
+    {
+      "filename": "cu_foil_0.qd",
+      "source_url": "https://pfxafs.kek.jp/xafsdata/view.php?id=22",
+      "sha256": "95442847c66be92a877c72876b377230edcaab24fa0636536f77fa1bbef6fdff",
+      "bytes": 267763,
+      "signature": "9809     KEK-PF   BL9C",
+      "points": 5135,
+      "d_spacing_angstrom": 3.13551,
+      "energy_range_ev": [
+        8700.036313549168,
+        10497.840911532052
+      ],
+      "mapping": {
+        "energy_column": 1,
+        "energy": {
+          "kind": "bragg",
+          "d_spacing": 3.13551,
+          "degrees_per_unit": 1.0
+        },
+        "signal": {
+          "kind": "transmission",
+          "incident": 3,
+          "transmitted": 4
+        }
+      },
+      "status": "automatic_transmission_verified",
+      "max_energy_error_ev": 0.0,
+      "max_signal_error": 4.440892098500626e-16,
+      "all_original_numeric_cells_match": true,
+      "first_signal": 0.7009419013653193
+    },
+    {
+      "filename": "fe002_0.qd",
+      "source_url": "https://pfxafs.kek.jp/xafsdata/view.php?id=132",
+      "sha256": "919b5f4b102cea0a3159ce3773a57f293bd0e6e2326a2ef32232018a1c34c918",
+      "bytes": 204430,
+      "signature": "9809     KEK-PF   BL12C",
+      "points": 3917,
+      "d_spacing_angstrom": 3.13551,
+      "energy_range_ev": [
+        6606.347505188538,
+        8210.568959028782
+      ],
+      "mapping": {
+        "energy_column": 1,
+        "energy": {
+          "kind": "bragg",
+          "d_spacing": 3.13551,
+          "degrees_per_unit": 1.0
+        },
+        "signal": {
+          "kind": "transmission",
+          "incident": 3,
+          "transmitted": 4
+        }
+      },
+      "status": "automatic_transmission_verified",
+      "max_energy_error_ev": 0.0,
+      "max_signal_error": 1.7763568394002505e-15,
+      "all_original_numeric_cells_match": true,
+      "first_signal": 1.1433464813363585
+    }
+  ]
+}

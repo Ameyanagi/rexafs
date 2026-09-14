@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit per-spectrum Scan.license declaration in CLS API metadata; also in the download header except Fe_idcj28n9
+License-Evidence: https://xasdb.lightsource.ca/DB/S/VLS-PGM/Iron%20%28II%29%20Sulfate/FeSO4_2016_01_scan1_idafhtzf.dat
+Test-Eligibility: documented-license
+Source: https://xasdb.lightsource.ca/DB/S/VLS-PGM/Iron%20%28II%29%20Sulfate/FeSO4_2016_01_scan1_idafhtzf.dat
+Download: https://xasdb.lightsource.ca/DB/S/VLS-PGM/Iron%20%28II%29%20Sulfate/FeSO4_2016_01_scan1_idafhtzf.dat
+Citation: Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Iron (II) Sulfate, S L2-edge, VLS-PGM, 2016-01-scan1. Canadian Light Source XAS Database, spectrum S_idafhtzf. https://doi.org/10.20383/103.01329
+SHA256: 30eedae75734a1109a25d0e7b47d333af58007b3eeb4b4746ffe742a8cde7068
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/cls/S_idafhtzf.json

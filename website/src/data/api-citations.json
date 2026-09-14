@@ -129,7 +129,9 @@
   {
     "url": "https://doi.org/10.2138/rmg.2014.78.2",
     "sources": [
-      "crates/rexafs/src/xafs/io/mod.rs"
+      "js-rexafs/types.d.ts",
+      "crates/rexafs/src/xafs/io/mod.rs",
+      "crates/rexafs/src/xafs/io/reader/model.rs"
     ]
   },
   {

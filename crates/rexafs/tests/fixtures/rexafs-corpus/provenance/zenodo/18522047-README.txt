@@ -1,0 +1,12 @@
+This dataset contains raw and processed data supporting XRD and XAFS analyses.
+
+File description:
+- .ras files: Raw XRD data acquired using synchrotron radiation.
+- .dat files: Raw XAFS μ(E) data acquired using synchrotron radiation.
+- .xlsx files: Processed data used for figure and table generation.
+
+Correspondence to figures and tables:
+- XRD data correspond to Fig. 1 and Table 1.
+- XAFS data correspond to Figs. 2, 3 and 4, Appendix Fig. 1, and Appendix Table 1.
+
+Data were processed using standard software packages commonly used in the field.

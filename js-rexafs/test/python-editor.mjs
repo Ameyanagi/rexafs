@@ -16,6 +16,13 @@ writeFileSync(join(directory, "pyrightconfig.json"), JSON.stringify({
   typeCheckingMode: "strict", pythonVersion: "3.10",
 }));
 const valid = `from rexafs import AUTOBK, Spectrum, XrayFFTF, XrayFFTR, FTWindow
+from rexafs.io import parse_measurement, SpectrumMapping
+measurement = parse_measurement("energy,mu\\n7100,1\\n7101,2")
+mapping: SpectrumMapping = {"energy_column":0,"energy":{"kind":"offset_ev","offset_ev":20000},"signal":{"kind":"direct","column":1}}
+energy, mu = measurement.arrays(mapping=mapping)
+print(energy[0], mu[0], measurement.document["format"])
+archived: list[float | None] | None = measurement.document["datasets"][0]["imaginary"]
+print(archived, measurement.document["metadata"].get("larix.session_text"))
 window: FTWindow = "Hanning"
 spectrum = Spectrum([1., 2.], [1., 2.])
 spectrum.set_background_method(AUTOBK(rbkg=1.2)).set_fft(XrayFFTF(window=window)).set_ifft(XrayFFTR(rmin=1.0)).ifft()
@@ -95,6 +102,14 @@ XrayFFTF(window="")
   assert.ok((choices.items ?? choices).some(item => item.label.includes("KaiserBessel")));
   const signature = await request("textDocument/signatureHelp", position(7, 7));
   assert.match(JSON.stringify(signature), /clamp_lambda.*0\.001/);
+  const readerText = 'from rexafs.io import parse_measurement\nmeasurement = parse_measurement("energy,mu\\n7100,1")\nmeasurement.arrays\nmeasurement.\nmeasurement.arrays(';
+  const readerUri = pathToFileURL(join(directory,"reader.py")).href;
+  send({method:"textDocument/didOpen",params:{textDocument:{uri:readerUri,languageId:"python",version:1,text:readerText}}});
+  const readerPosition=(line,character)=>({textDocument:{uri:readerUri},position:{line,character}});
+  assert.match(JSON.stringify(await request("textDocument/hover",readerPosition(2,15))),/eV/);
+  const readerMethods=await request("textDocument/completion",readerPosition(3,12));
+  assert.ok((readerMethods.items ?? readerMethods).some(item=>item.label==="select_datasets"));
+  assert.match(JSON.stringify(await request("textDocument/signatureHelp",readerPosition(4,19))),/SpectrumMapping/);
   console.log("Installed Python wheel: property/method hovers, member/keyword/literal completion and signature defaults passed");
   await request("shutdown", null);
   send({ method: "exit", params: null });

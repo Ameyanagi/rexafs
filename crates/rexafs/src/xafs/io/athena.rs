@@ -64,14 +64,16 @@ pub const DEFAULT_DEMETER_VERSION: &str = "0.9.26";
 /// A raw value from an Athena `@args` list.
 ///
 /// Athena writes most values as single-quoted strings, some as bare numbers
-/// and a few (e.g. `titles`) as Perl array references. Keeping the flavour
+/// and a few (e.g. `titles`) as Perl array references. Unreleased readers also
+/// retain nested metadata hash literals as opaque `Bare` text without evaluation.
+/// Keeping the flavour
 /// preserves unchanged argument text and its quoting style. Whole-file bytes,
 /// whitespace and compression are not guaranteed to round-trip identically.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AthenaValue {
     /// `'text'` (escapes already resolved)
     Quoted(String),
-    /// bare token such as `0`, `1`, `24`
+    /// Bare token such as `0`, `1`, `24`, or an opaque metadata hash literal.
     Bare(String),
     /// `[...]` array reference
     List(Vec<AthenaValue>),
@@ -1275,7 +1277,21 @@ impl<'a> Parser<'a> {
                 let group = current
                     .as_mut()
                     .ok_or_else(|| Self::err(line_no, format!("@{key} outside of a group")))?;
-                let values = parse_list(rhs, line_no)?
+                // Historical projects write absent optional arrays as (undef).
+                // Preserve the statement as evidence without inventing a sample.
+                let items = parse_list(rhs, line_no)?;
+                if !matches!(key, "x" | "y")
+                    && matches!(items.as_slice(), [AthenaValue::Bare(v)] if v == "undef")
+                {
+                    match key {
+                        "i0" => group.i0 = None,
+                        "signal" => group.signal = None,
+                        _ => group.stddev = None,
+                    }
+                    group.extra.push(statement.trim().to_owned());
+                    return Ok(());
+                }
+                let values = items
                     .iter()
                     .map(|v| {
                         v.as_f64().ok_or_else(|| {
@@ -1292,7 +1308,17 @@ impl<'a> Parser<'a> {
                 }
             }
             "journal" => {
-                project.journal = parse_list(rhs, line_no)?
+                // Journals have been written as {}, double-quoted strings and
+                // occasionally non-literal Perl expressions. Only parse a
+                // literal list; retain any other journal verbatim, never execute it.
+                let items = match parse_list(rhs, line_no) {
+                    Ok(items) => items,
+                    Err(_) => {
+                        project.extra.push(statement.trim().to_owned());
+                        return Ok(());
+                    }
+                };
+                project.journal = items
                     .into_iter()
                     .map(|v| match v {
                         AthenaValue::Quoted(s) | AthenaValue::Bare(s) => s,
@@ -1311,23 +1337,23 @@ impl<'a> Parser<'a> {
 
 /// True when `s` ends with a `;` that is outside of any quoted string.
 fn statement_complete(s: &str) -> bool {
-    let mut in_quote = false;
+    let mut in_quote = None;
     let mut escaped = false;
     let mut last_semicolon = false;
     for c in s.chars() {
-        if in_quote {
+        if let Some(quote) = in_quote {
             if escaped {
                 escaped = false;
             } else if c == '\\' {
                 escaped = true;
-            } else if c == '\'' {
-                in_quote = false;
+            } else if c == quote {
+                in_quote = None;
             }
             continue;
         }
         match c {
-            '\'' => {
-                in_quote = true;
+            '\'' | '"' => {
+                in_quote = Some(c);
                 last_semicolon = false;
             }
             ';' => last_semicolon = true,
@@ -1335,7 +1361,7 @@ fn statement_complete(s: &str) -> bool {
             _ => last_semicolon = false,
         }
     }
-    !in_quote && last_semicolon
+    in_quote.is_none() && last_semicolon
 }
 
 /// Parse a single scalar value (`'text'` or bare token).
@@ -1344,6 +1370,7 @@ fn parse_scalar(text: &str, line_no: usize) -> Result<AthenaValue, IOError> {
     let mut lexer = Lexer {
         chars: &mut chars,
         line_no,
+        depth: 0,
     };
     let value = lexer.value()?;
     match value {
@@ -1363,6 +1390,7 @@ fn parse_list(text: &str, line_no: usize) -> Result<Vec<AthenaValue>, IOError> {
     let mut lexer = Lexer {
         chars: &mut chars,
         line_no,
+        depth: 0,
     };
     lexer.sequence(None)
 }
@@ -1370,6 +1398,7 @@ fn parse_list(text: &str, line_no: usize) -> Result<Vec<AthenaValue>, IOError> {
 struct Lexer<'a, I: Iterator<Item = char>> {
     chars: &'a mut std::iter::Peekable<I>,
     line_no: usize,
+    depth: usize,
 }
 
 impl<I: Iterator<Item = char>> Lexer<'_, I> {
@@ -1409,17 +1438,58 @@ impl<I: Iterator<Item = char>> Lexer<'_, I> {
             return Ok(None);
         };
         match c {
-            '\'' => {
+            '\'' | '"' => {
                 self.chars.next();
-                self.quoted().map(Some)
+                self.quoted(c).map(Some)
             }
-            '[' => {
+            '[' | '(' => {
+                if self.depth >= 64 {
+                    return Err(Parser::err(
+                        self.line_no,
+                        "metadata nesting exceeds 64 levels",
+                    ));
+                }
                 self.chars.next();
-                self.sequence(Some(']')).map(|v| Some(AthenaValue::List(v)))
+                self.depth += 1;
+                let value = self.sequence(Some(if c == '[' { ']' } else { ')' }));
+                self.depth -= 1;
+                value.map(|v| Some(AthenaValue::List(v)))
             }
-            '(' => {
-                self.chars.next();
-                self.sequence(Some(')')).map(|v| Some(AthenaValue::List(v)))
+            '{' => {
+                // Retain the exact hash syntax, including nested XDI metadata.
+                // Braces inside quoted values do not delimit the hash.
+                let mut raw = String::new();
+                let mut depth = 0;
+                let mut quote = None;
+                let mut escaped = false;
+                for c in self.chars.by_ref() {
+                    raw.push(c);
+                    if let Some(q) = quote {
+                        if escaped {
+                            escaped = false;
+                        } else if c == '\\' {
+                            escaped = true;
+                        } else if c == q {
+                            quote = None;
+                        }
+                    } else if c == '\'' || c == '"' {
+                        quote = Some(c);
+                    } else if c == '{' {
+                        depth += 1;
+                        if depth + self.depth > 64 {
+                            return Err(Parser::err(
+                                self.line_no,
+                                "metadata nesting exceeds 64 levels",
+                            ));
+                        }
+                    } else if c == '}' {
+                        depth -= 1;
+                        if depth == 0 {
+                            return Ok(Some(AthenaValue::Bare(raw)));
+                        }
+                    }
+                }
+                Err(Parser::err(self.line_no, "unterminated metadata hash"))
             }
             _ => {
                 let mut token = String::new();
@@ -1441,15 +1511,15 @@ impl<I: Iterator<Item = char>> Lexer<'_, I> {
         }
     }
 
-    /// Body of a single-quoted Perl string (opening quote already consumed).
-    fn quoted(&mut self) -> Result<AthenaValue, IOError> {
+    /// Body of a quoted string; interpolation and expressions are never evaluated.
+    fn quoted(&mut self, quote: char) -> Result<AthenaValue, IOError> {
         let mut out = String::new();
         loop {
             match self.chars.next() {
                 None => return Err(Parser::err(self.line_no, "unterminated string")),
-                Some('\'') => break,
+                Some(c) if c == quote => break,
                 Some('\\') => match self.chars.peek() {
-                    Some('\'') | Some('\\') => {
+                    Some(c) if *c == quote || *c == '\\' => {
                         out.push(self.chars.next().unwrap_or('\\'));
                     }
                     Some('x') => {

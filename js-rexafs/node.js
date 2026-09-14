@@ -1,3 +1,4 @@
+import { bindMeasurement } from "./measurement.js";
 import { bindConfiguration } from "./configuration.js";
 import core from "./dist/node/rexafs_wasm.js";
 import { bindSpectrum } from "./spectrum.js";
@@ -13,3 +14,6 @@ export const AUTOBK = bindConfiguration(core.AUTOBK, ["ek0", "rbkg", "nknots", "
 export const XrayFFTF = bindConfiguration(core.XrayFFTF, ["grid", "rmax_out", "dk", "dk2", "kmin", "kmax", "kweight", "nfft", "kstep", "window"]);
 export const XrayFFTR = bindConfiguration(core.XrayFFTR, ["qmax_out", "dr", "dr2", "rmin", "rmax", "rweight", "nfft", "kstep", "window"]);
 export const { NormalizationMethod, BackgroundMethod } = core;
+
+export const Measurement = bindMeasurement(core);
+export function read_measurement(data) { return new Measurement(data); }

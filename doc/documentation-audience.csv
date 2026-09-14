@@ -198,3 +198,24 @@ website/src/content/docs/docs/reference/stable/typescript/prepostedgeoptions.md,
 website/src/content/docs/docs/reference/stable/typescript/xrayfftfoptions.md,user,generated,/docs/reference/stable/typescript/xrayfftfoptions/,Generated from source-owned API help; preserve Stable/Next channel rules.
 website/src/content/docs/docs/reference/stable/typescript/xrayfftr.md,user,generated,/docs/reference/stable/typescript/xrayfftr/,Generated from source-owned API help; preserve Stable/Next channel rules.
 website/src/content/docs/docs/reference/stable/typescript/xrayfftroptions.md,user,generated,/docs/reference/stable/typescript/xrayfftroptions/,Generated from source-owned API help; preserve Stable/Next channel rules.
+doc/measurement-reader.md,mixed,split,/docs/reference/next/measurement-reading/,Unreleased reader guide; retain implementation and fixture qualification in the checkout.
+doc/universal-reader-plan.md,developer,exclude,,Implementation sequence and qualification record.
+doc/beamline-source-repositories.md,developer,exclude,,Pinned research sources and fixture redistribution evidence.
+crates/rexafs/tests/fixtures/sessions/xtunes/README.md,developer,exclude,,Original XTUNES fixture provenance and licensing.
+doc/reference-format-audit.md,developer,exclude,,Pinned upstream reader audit and fixture qualification; public behavior belongs in the Next reader guide.
+doc/larix-import-plan.md,developer,exclude,,Unreleased Larix implementation sequence and qualification record.
+doc/larix-import.md,mixed,split,/docs/reference/next/measurement-reading/,Publish the unreleased import contract and limits; retain fixture qualification in the checkout.
+crates/rexafs/tests/fixtures/README.md,developer,exclude,,Current fixture organization and shared test entry points.
+crates/rexafs/tests/fixtures/sessions/README.md,developer,exclude,,Current session fixture index; original bundle documents remain historical.
+crates/rexafs/tests/fixtures/sessions/larix/README.md,developer,exclude,,Original Larix fixture provenance and licensing; preserved unchanged.
+doc/measurement-reader-refactor-plan.md,developer,exclude,,Reader and test organization plan with preview follow-up.
+doc/validation/2026-09-14-kek-qd/review.md,developer,exclude,,Actual KEK QD download evidence and numerical qualification with licensing limits.
+doc/validation/2026-09-14-measurement-corpus/review.md,developer,exclude,,Copied corpus audit with measured reader outcomes and numerical regression tests.
+crates/rexafs/tests/fixtures/rexafs-corpus/CITATIONS.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
+crates/rexafs/tests/fixtures/rexafs-corpus/LICENSE.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
+crates/rexafs/tests/fixtures/rexafs-corpus/README.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
+crates/rexafs/tests/fixtures/rexafs-corpus/RESEARCH_NOTES.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
+crates/rexafs/tests/fixtures/rexafs-corpus/provenance/pynxxas/manual-README.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
+crates/rexafs/tests/fixtures/rexafs-corpus/research/worldwide-beamlines.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
+crates/rexafs/tests/fixtures/xas/candidates/kek-pf/README.md,developer,exclude,,KEK QD fixture provenance and academic-use notice.
+doc/validation/2026-09-14-measurement-import-ui/README.md,developer,exclude,,Original computer-use captures and source attribution for unreleased import workflows.

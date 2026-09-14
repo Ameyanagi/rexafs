@@ -1,0 +1,27 @@
+KEK Photon Factory XAFS database usage notice
+Identifier: LicenseRef-KEK-PF-Academic-Use-Notice
+Source: https://pfxafs.kek.jp/xafsdata/
+Retrieved: 2026-09-14
+
+Original Japanese notice (preserved from the database landing page):
+
+ここはPFの硬X線XAFSビームラインにおいて、ユーザーのみなさまより提供いただいたXAFSデータを公開しているページです。
+公開しているデータは 学術研究(軍事関連研究をのぞく)の目的において利用できます。
+なお、論文などの引用としてデータを利用したい場合は、詳細ページに記載のある実験者に直接連絡してください。
+上記内容を理解し、データベースへの接続を希望される方は「データベースに接続」ボタンを押してください。
+※不正アクセス監視のため、接続元IPアドレス等の履歴がサーバーに記録されます。ご了承ください。
+(c)2017-2026 IMSS Photon Factory
+
+English explanation by rexafs (the original notice governs):
+The database makes user-contributed PF hard-X-ray XAFS measurements available
+for academic research, excluding military-related research. For use as a
+citation in a paper or other publication, contact the experimenter identified
+on the individual data record.
+
+Repository purpose: retained at the user's request for academic, nonmilitary
+research and reader regression testing only. Keep this notice, the individual
+source/experimenter attribution and the original measurement bytes together.
+These files are excluded from crates.io, Python and npm packages.
+
+This custom notice is not an MIT, Apache or Creative Commons license and does
+not change the software license of rexafs. No broader permission is asserted.

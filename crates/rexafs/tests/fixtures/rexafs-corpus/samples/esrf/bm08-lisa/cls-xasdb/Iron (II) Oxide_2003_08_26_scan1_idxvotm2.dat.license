@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit per-spectrum Scan.license declaration in CLS API metadata; also in the download header except Fe_idcj28n9
+License-Evidence: https://xasdb.lightsource.ca/DB/Fe/BM08-GILDA/Iron%20%28II%29%20Oxide/Iron%20%28II%29%20Oxide_2003_08_26_scan1_idxvotm2.dat
+Test-Eligibility: documented-license
+Source: https://xasdb.lightsource.ca/DB/Fe/BM08-GILDA/Iron%20%28II%29%20Oxide/Iron%20%28II%29%20Oxide_2003_08_26_scan1_idxvotm2.dat
+Download: https://xasdb.lightsource.ca/DB/Fe/BM08-GILDA/Iron%20%28II%29%20Oxide/Iron%20%28II%29%20Oxide_2003_08_26_scan1_idxvotm2.dat
+Citation: Puri A.. Iron (II) Oxide, Fe K-edge, BM08-GILDA, 2003-08-26. Canadian Light Source XAS Database, spectrum Fe_idxvotm2.
+SHA256: 7334ea90de1258a6e0f0bcc86da2c71a631d1064e30d3dc0bc38335046620840
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/cls/Fe_idxvotm2.json

@@ -1,0 +1,122 @@
+{
+  "@context": "http://schema.org",
+  "@graph": [
+    {
+      "@id": "https://mdrs-external.nims.go.jp/datasets/f48a5ce8-0004-42d1-b5de-387e3f5f5958",
+      "@type": "Dataset",
+      "datePublished": null,
+      "name": "XAFS spectrum of Iron(III) oxide",
+      "description": "This dataset consists of X-ray absorption fine structure (XAFS) spectra at Fe K-edge of Iron(III) oxide measured at Photon Factory BL-9C, and is a part of XAFS database (MDR XAFS DB, https://doi.org/10.48505/nims.1447) as a collection of MDR",
+      "distribution": [
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/8a94cb70-29d0-4177-b64a-2751b5d3598c/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/64089330-18c5-4d0b-9d75-a16087074943/download",
+          "encodingFormat": "application/json"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/7eaa38dc-4a21-417e-b959-4f415f2904fc/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/d4cba31d-c138-41b8-b71f-78fed13f31ee/download",
+          "encodingFormat": "text/tab-separated-values"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/bbcd2447-b7d3-4d98-a8ea-33afc8393335/download",
+          "encodingFormat": "image/png"
+        }
+      ],
+      "identifier": "https://doi.org/10.48505/nims.3655",
+      "license": [
+        {
+          "@id": "cc-by-nc-sa-4.0"
+        }
+      ],
+      "hasPart": [
+        {
+          "@id": "Fe011.dat"
+        },
+        {
+          "@id": "metadata.json"
+        },
+        {
+          "@id": "metadata.yml"
+        },
+        {
+          "@id": "primary.tsv"
+        },
+        {
+          "@id": "thumbnail.png"
+        }
+      ],
+      "author": [
+        {
+          "@id": "#e0db5867-bfe4-4388-8e4a-27a489e370ef"
+        },
+        {
+          "@id": "#461bcff3-af15-4a7d-b2ba-02f326c8c040"
+        }
+      ],
+      "publisher": {
+        "@id": "#c966013d-1495-4d3c-869f-bd29aabc9d06"
+      }
+    },
+    {
+      "@id": "Fe011.dat",
+      "url": "https://mdrs-external.nims.go.jp/filesets/8a94cb70-29d0-4177-b64a-2751b5d3598c",
+      "@type": "File",
+      "contentSize": 36155,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "metadata.json",
+      "url": "https://mdrs-external.nims.go.jp/filesets/64089330-18c5-4d0b-9d75-a16087074943",
+      "@type": "File",
+      "contentSize": 4695,
+      "encodingFormat": "application/json"
+    },
+    {
+      "@id": "metadata.yml",
+      "url": "https://mdrs-external.nims.go.jp/filesets/7eaa38dc-4a21-417e-b959-4f415f2904fc",
+      "@type": "File",
+      "contentSize": 2614,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "primary.tsv",
+      "url": "https://mdrs-external.nims.go.jp/filesets/d4cba31d-c138-41b8-b71f-78fed13f31ee",
+      "@type": "File",
+      "contentSize": 3896,
+      "encodingFormat": "text/tab-separated-values"
+    },
+    {
+      "@id": "thumbnail.png",
+      "url": "https://mdrs-external.nims.go.jp/filesets/bbcd2447-b7d3-4d98-a8ea-33afc8393335",
+      "@type": "File",
+      "contentSize": 8986,
+      "encodingFormat": "image/png"
+    },
+    {
+      "@id": "#e0db5867-bfe4-4388-8e4a-27a489e370ef",
+      "name": "Masashi Ishii",
+      "identifier": "https://orcid.org/0000-0003-0357-2832"
+    },
+    {
+      "@id": "#461bcff3-af15-4a7d-b2ba-02f326c8c040",
+      "name": "Photon Factory"
+    },
+    {
+      "@id": "#c966013d-1495-4d3c-869f-bd29aabc9d06",
+      "@type": "Organization",
+      "name": "KEK"
+    }
+  ]
+}

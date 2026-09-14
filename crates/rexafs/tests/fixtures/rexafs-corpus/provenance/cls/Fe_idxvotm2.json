@@ -1,0 +1,37 @@
+{
+  "sid": "Fe_idxvotm2",
+  "url": "https://xasdb.lightsource.ca/DB/Fe/BM08-GILDA/Iron%20%28II%29%20Oxide/Iron%20%28II%29%20Oxide_2003_08_26_scan1_idxvotm2.dat",
+  "cache_path": ".gather-cache/cls/files/Fe/BM08-GILDA/Iron (II) Oxide/Iron (II) Oxide_2003_08_26_scan1_idxvotm2.dat",
+  "header": {
+    "XDI/1.0": "",
+    "Scan.license": "CC BY 4.0",
+    "Publication.authors": " Puri A.",
+    "Publication.affiliation": " CNR-IOM; ESRF",
+    "Sample.reference": "",
+    "ScanParameters.E0": "",
+    "Facility.name": "ESRF",
+    "Sample.temperature": "79 K",
+    "Sample.prep": "powder, liquids",
+    "Sample.formula": "FeO",
+    "Sample.smiles": "",
+    "Sample.name": "Iron (II) Oxide",
+    "Scan.number": "scan1",
+    "Sample.id": "xvotm2",
+    "Scan.start_time": "2003-08-26",
+    "Element.symbol": "Fe",
+    "Facility.energy": "6.03 GeV",
+    "Facility.xray_source": "Bending magnet (0.85 T)",
+    "Beamline.name": "BM08-GILDA",
+    "Beamline.energy_range": "4.9 - 32.0",
+    "Beamline.scan_mode": "Transmission",
+    "Beamline.flux": "1e10-1e11 ph/s",
+    "Beamline.spot_size": "1 mm x 2 mm",
+    "Beamline.website": "https://www.esrf.fr/UsersAndScience/Experiments/CRG/BM08",
+    "Beamline.detector": "Ionization chamber",
+    "Mono.name": "Si(111), Si(311)",
+    "Element.edge": {
+      "K": 7112
+    }
+  },
+  "filepath": "Fe/BM08-GILDA/Iron (II) Oxide/Iron (II) Oxide_2003_08_26_scan1_idxvotm2.dat"
+}

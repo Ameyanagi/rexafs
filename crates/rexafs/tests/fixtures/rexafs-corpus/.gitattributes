@@ -1,0 +1,5 @@
+# Preserve original bytes, including CRLF and legacy encodings.
+samples/** -text -whitespace
+provenance/** -text -whitespace
+LICENSES/** -text -whitespace
+candidates/refxas/** -text -whitespace

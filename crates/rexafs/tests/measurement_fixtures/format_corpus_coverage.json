@@ -1,0 +1,5613 @@
+{
+  "scope": "Reader regression snapshot, not proof of complete format support or scientific validity. Rejections record known gaps; numerical regressions are separate.",
+  "manifest_sha256": "85336ac90dc37f10cba8d6b9761abd96be12010ebd4c711a43b1018eec691adc",
+  "records": [
+    {
+      "path": "candidates/refxas/delta/unspecified/xafsdb-webserver/Co_metal_Delta.txt",
+      "sha256": "1d094131657d54ab18b08cc510279f04b6d3c65f385518f5032ee6712d98182f",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 433,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "candidates/refxas/desy-petra-iii/p65/xafsdb-webserver/Au foil_Au L3_180.xdi",
+      "sha256": "e3b56d420a02141fde673bfd16e7117e40efe6d4f31832035838b686f517058c",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 15,
+          "points": 1513,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "candidates/refxas/desy-petra-iii/p65/xafsdb-webserver/Fe_foil_Fe_K_300.xdi",
+      "sha256": "338591f66f61ea1278d3913d47bebe4da6da93410a8b98b66ef13853d660f9e7",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 15,
+          "points": 1361,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "candidates/refxas/desy-petra-iii/p65/xafsdb-webserver/Mo_foil_Mo_K_300.xdi",
+      "sha256": "bb4d38215b76b218846ce4b35c11b3e6c5c9e4d71903e96fe9555b51306eaf9d",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 15,
+          "points": 2423,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "candidates/refxas/elettra/xafs/xafsdb-webserver/Cu2O Cu K Elettra.txt",
+      "sha256": "02b5eada664b1693144ad5592b7d90660f04a56062da8bc2b41a376d3071c9e9",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 8,
+          "points": 720,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "candidates/refxas/esrf/bm23/xafsdb-webserver/ESRF_052022_01_RT_EXAFS.h5",
+      "sha256": "c9e792ddf2ded16c224750a640f3c7db2bed9f05ee331a2d3081afc66a952ffb",
+      "status": "partial",
+      "detected_format": "hdf5",
+      "datasets": 1408,
+      "converted_signals": 0,
+      "warnings": 4,
+      "scans": [
+        {
+          "id": "/1.1/instrument[2601]",
+          "columns": 22,
+          "points": 2601,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/2.1/instrument[2601]",
+          "columns": 22,
+          "points": 2601,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/3.1/instrument[2601]",
+          "columns": 22,
+          "points": 2601,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/4.1/instrument[2601]",
+          "columns": 22,
+          "points": 2601,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "candidates/refxas/esrf/bm23/xafsdb-webserver/FeO FeK BM 23ESRF.dat",
+      "sha256": "25179bf7491103abf5daf0acb3b8611974f5e78edaf46447958ea74f512122ab",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "spec",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "1  zapline mono 16.5279 14.3086 1409 300",
+          "columns": 4,
+          "points": 1052,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "candidates/refxas/kit-anka/catact/xafsdb-webserver/Ag_foil_CATACT KIT",
+      "sha256": "47074dbb450e4f4056f70f4de50d23933d82ac895fb30ce6fb7e78258201cfbb",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "spec",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "1  akscan E 25.514 1",
+          "columns": 31,
+          "points": 495,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "candidates/refxas/slri/bl8/xafsdb-webserver/Cu foil Cu K SLRI",
+      "sha256": "57b5ba1f8868014c342c27f67e5b1fc678ac4bf83d7d2850de20da942144a2ba",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 440,
+          "signals": [
+            {
+              "name": "ln(I0/I1)",
+              "points": 440,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "candidates/refxas/sls/superxas/xafsdb-webserver/Pt_foil_Pt L3 SLS.txt",
+      "sha256": "85072844ffbdddf2b2f0ba0258c88fc2b775c107b1bed60b634e1179564b0c33",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 11,
+          "points": 513,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "candidates/refxas/soleil/rock/xafsdb-webserver/Mo_foil Mo K ROCK Soleil.txt",
+      "sha256": "5d7d71b86f2b4f7234cd52bf0706b531b745da7f5b835ecffc667376960deab2",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 4,
+          "points": 768,
+          "signals": [
+            {
+              "name": "normalized",
+              "points": 768,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "candidates/refxas/soleil/samba/xafsdb-webserver/Pt_foil Pt L3 SAMBA Soleil.txt",
+      "sha256": "9f1cad0f83f96aa254bef8fdfb6550be7f5bdb986f67e60e2a5f36438fbec1b5",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 10,
+          "points": 2800,
+          "signals": [],
+          "warnings": 3
+        }
+      ]
+    },
+    {
+      "path": "samples/aichi-sr/bl11s2/mdr-24efb0bd/ZrFoil-f-AichiSR-BL11S-20200327.dat",
+      "sha256": "ef4f49be62355483fcaf4c5263210e0750931a416c809c8e30ba3e7781b19daa",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 4129,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 4129,
+              "status": "converted"
+            },
+            {
+              "name": "it_5",
+              "points": 4129,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aichi-sr/bl11s2/mdr-b8ade3fa/RuO2-f-AichiSR-BL11S-20200903.dat",
+      "sha256": "8132bd57c013ec58fcdb09909d19d8507ed16a318e22baaf6504103a7b82d370",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 4369,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 4369,
+              "status": "converted"
+            },
+            {
+              "name": "it_5",
+              "points": 4369,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aichi-sr/bl5s1/mdr-edad880c/ZrO2-AichiSR-BL5S1-20220712.dat",
+      "sha256": "cf1f7b301fe25d15996d0d7525149d249654b604d52d519c28751458fb339353",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 4245,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 4245,
+              "status": "converted"
+            },
+            {
+              "name": "it_5",
+              "points": 4245,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aichi-sr/bl5s1/mdr-fc4fa43d/Zr-AichiSR-BL5S1-20220712.dat",
+      "sha256": "749a83b7763923ac30f7e25c5527711e574bb2ad4d42e0f64b3b6acc8c50c845",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 4245,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 4245,
+              "status": "converted"
+            },
+            {
+              "name": "it_5",
+              "points": 4245,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aichi-sr/unresolved-bl11s/zenodo-18522047/3YSZ_aged-1.dat",
+      "sha256": "1f03faf8d7d2aa1f48b232f68ab61ac055a0a932a1fe636e8e0a09d0d47ec893",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 4245,
+          "signals": [
+            {
+              "name": "fluorescence_4",
+              "points": 4245,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aichi-sr/unresolved-bl11s/zenodo-18522047/3YSZ_unaged-1.dat",
+      "sha256": "f02be8321f06c3b32654e02c6d3b00e67a8b575669859a6f13e5a8f468865400",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 4245,
+          "signals": [
+            {
+              "name": "fluorescence_4",
+              "points": 4245,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aichi-sr/unresolved-bl11s/zenodo-18522047/8YSZ_unaged-1.dat",
+      "sha256": "3237556d3ce8117a9b49af3ff22061540788be015c4b60ed266380e5f100b454",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 4245,
+          "signals": [
+            {
+              "name": "fluorescence_4",
+              "points": 4245,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe.txt",
+      "sha256": "4e00074d08e135eefa79ebf61a91c09c4ba92457fd88871d2befdf9dd06e7d8d",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 10,
+          "points": 31,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_000.dat",
+      "sha256": "ebc6ac28633ea6cc248eb187354fbfab955cf2b5e542fac2d9e27d6456d41efe",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_001.dat",
+      "sha256": "a88544c5e23f91c8bc747b513c0a6ecbb4870096e68aee8dcabc1a6f1338bcba",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_002.dat",
+      "sha256": "2cb43f1107b7a9357ccf8d791dc32163508029bdc8868dde047b599abd00b7fa",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_003.dat",
+      "sha256": "82896c8bf7bdca06d6f0f242f3b1c41bf16d376ea0705741e3ff87b8fe25cded",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_004.dat",
+      "sha256": "1951687345d4c557ed7e682bb15e6b2fadde5239e57898c93db039111751b199",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_005.dat",
+      "sha256": "39eb49b920984882abf5ec298ab5c4148f1d30d73ab590b14301341410a648d2",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_006.dat",
+      "sha256": "f854de3d8ae086e301e1f80870fe689ee8516d2dbbb5ae518293f959a47f6b76",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_007.dat",
+      "sha256": "ef38eb5aa27c09d804767f34d84bbd7e7fd3396b20734540ae6627dc8972c9e9",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_008.dat",
+      "sha256": "aa1157100edd20f1c4b1c036340e4eb6ced8d6314de01f082d4a5d086b3720e2",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_009.dat",
+      "sha256": "114ec052d050ba1bac1f262b9a02a91a7cc1f3a3a0740e120321a66d0981a6f4",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_010.dat",
+      "sha256": "d8237426751b6f1cb26973bee79fbcd8819518daae6a69813fd59e2cb19ae3eb",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_011.dat",
+      "sha256": "d38c5f82dcb21b671c483d1ca8ba99a0bbe19aacc9f143b4bb31ce4c1a7d4bd5",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_012.dat",
+      "sha256": "4c953ad676a7dab8f2e5f69929051e0998c63c0d2a77bd2f3d0650a95f968303",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_013.dat",
+      "sha256": "4e1e332318b6ddd54fa4da1ebab98de529028fcc03577e3d3cdbbaf21747d62a",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_014.dat",
+      "sha256": "a3065caf8f12711cf833606b6326ce5d6e63a35edfe6ae75c561fc70a47ae85c",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_015.dat",
+      "sha256": "e78a3144205b23ab3e8afe38253e345fc47c79214e8e7be9d5a25abb691cfbc7",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_016.dat",
+      "sha256": "ec8a64760ca449c513cdca5a3b76cf4b73420a790c8a949606220afcd4a35ef5",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_017.dat",
+      "sha256": "7bc41402329fbb7e38f00b617f0220902faa24c1facff4cfd160a54615080802",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_018.dat",
+      "sha256": "f24207cefcc8dd2cd617c5fa66d16e4d15aa3c4a6fb71327ca649c9427828f0a",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_019.dat",
+      "sha256": "6a5465e267104b86b9b7e83df6bcb96d79a88a592bf03f59cda609065a8e4c72",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_020.dat",
+      "sha256": "15bbf98c977e2c48d68338820e0300ec192a2eacf8e661f5f8e0f65c8fb916b4",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_021.dat",
+      "sha256": "77d48cd5bb45d830ae4d9f5edfdbde6b7ed25885a3907d9d3e8f5c552d2f402f",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_022.dat",
+      "sha256": "ba681aa6d7125a2411b0fccfa4c586055dd2bfe5ab9f52503bad5e5d283895f4",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_023.dat",
+      "sha256": "3d84f9ebb522515ecdcceec21090ceeaf523659ac3b3396cb41d993a0e90c308",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_024.dat",
+      "sha256": "251aaffec6215fa009043b3414df7d53a8a9f0e8d0fe38128e00cba922b190c0",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_025.dat",
+      "sha256": "5dab31bd7eaff6cde7b2f5a3da2d1f04ce28cca317307c370a9675ba1a571d9a",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_026.dat",
+      "sha256": "938d128adc7f4ac8b4a29476342e47c3e69c02294d2402ee12099a2a228e52d9",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_027.dat",
+      "sha256": "fe020d397a172c85422fbc7b451ef5af43e27cce04d2fd42a001663098c3dc1b",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_028.dat",
+      "sha256": "3f755e1d8f06425f16305408248a77be747bf81da8cbe9caf1c69fa693eeac8b",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_029.dat",
+      "sha256": "8d14887a3fffc91c4c386f1359a26b63bc95e554a1529609b0a9cc98318d783e",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/alba/circe/zenodo-10044133/XAS_Fe_030.dat",
+      "sha256": "2ac9fafdbf670afa79e97c9d50456d418bde24c950935c303fa72dcd71a74c9c",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/als/10-3-2/xraylarch/Fe-K-ALS-10.3.2.prj",
+      "sha256": "d15db783b619d9336286eeb7b3de13d28a3c9a29fc4e5c9139d5305ffd5ed5ff",
+      "status": "signal_choices",
+      "detected_format": "athena",
+      "datasets": 0,
+      "converted_signals": 8,
+      "warnings": 1,
+      "scans": [
+        {
+          "id": "fuhea",
+          "columns": 3,
+          "points": 251,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 251,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "arjfs",
+          "columns": 3,
+          "points": 241,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 241,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "sdbmf",
+          "columns": 3,
+          "points": 265,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 265,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "lyume",
+          "columns": 3,
+          "points": 270,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 270,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "hxrmv",
+          "columns": 3,
+          "points": 248,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 248,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "zainw",
+          "columns": 3,
+          "points": 235,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 235,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "nuyke",
+          "columns": 3,
+          "points": 268,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 268,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "thmyv",
+          "columns": 3,
+          "points": 378,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 378,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/10-bm/xraylarch/APS10BM_2019.dat",
+      "sha256": "fa3cdd99bdb0e20205da29328c39c9023173b0dc07a92e49f6d56f264e30f774",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 3464,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 3464,
+              "status": "converted"
+            },
+            {
+              "name": "fluorescence",
+              "points": 3464,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/12-bm/xraylarch/APS12BM_2019.dat",
+      "sha256": "32ad420451ef569758ef3bbcda4242d8557ec1ce71a58c0986c8ebad057128c2",
+      "status": "signal_choices",
+      "detected_format": "aps_12bm",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "Scan 29; exafsscan",
+          "columns": 26,
+          "points": 492,
+          "signals": [
+            {
+              "name": "mu01",
+              "points": 492,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-bm-d/pynxxas/Fe_XDIFiles/converted.nxs",
+      "sha256": "584e90480a330cbbf6daa4e191c985ae7968f59fcbe443500d10fddfc19037c6",
+      "status": "partial",
+      "detected_format": "hdf5",
+      "datasets": 17,
+      "converted_signals": 0,
+      "warnings": 6,
+      "scans": [
+        {
+          "id": "/fe2o3[348]",
+          "columns": 2,
+          "points": 348,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/fe_metal[348]",
+          "columns": 2,
+          "points": 348,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/feo[412]",
+          "columns": 2,
+          "points": 412,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/fe2o3/instrument[348]",
+          "columns": 2,
+          "points": 348,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/fe_metal/instrument[348]",
+          "columns": 2,
+          "points": 348,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/feo/instrument[412]",
+          "columns": 2,
+          "points": 412,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-bm-d/pynxxas/Fe_XDIFiles/fe2o3_rt.xdi",
+      "sha256": "4a1c4cec3e00d62734406a872d8a114ebd7d7c1b66050a61ec4017b03abd2a5a",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 3,
+          "points": 348,
+          "signals": [
+            {
+              "name": "mutrans",
+              "points": 348,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-bm-d/pynxxas/Fe_XDIFiles/fe_metal_rt.xdi",
+      "sha256": "0b04a3a7a141230d9599050062b63e9215871624f1a81e03dabf67f011b83dea",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 3,
+          "points": 348,
+          "signals": [
+            {
+              "name": "mutrans",
+              "points": 348,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-bm-d/xasdatalibrary/Chorover13BM_ZnSO4_rt_01.xdi",
+      "sha256": "f8971b3ddc039b94081dcc0f75d2a4ced855a32f90bfe437ab0c7d5b1188f625",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 3,
+          "points": 415,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 415,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-bm-d/xraylarch/APS13ID_2008.dat",
+      "sha256": "9a60a114bf1da7da96490c09deb2cd58eadf0b2d02fa14e7e42db6eb2fadf4b8",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 4,
+          "points": 469,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 469,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-c/xasdatalibrary/co_metal_rt.xdi",
+      "sha256": "8339b75c6c23b8d55f4a103faa0d0fc2b48059423a281fae4588055b3d657ace",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 3,
+          "points": 417,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 417,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-c/xasdatalibrary/cu_metal_rt.xdi",
+      "sha256": "17b7076f1c3b5eccfa76dc6a7b3d26ea1fd388fa27f621a058779f70b71351d6",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 4,
+          "points": 408,
+          "signals": [
+            {
+              "name": "mutrans",
+              "points": 408,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/V_XANES_ap1.001",
+      "sha256": "34c3e5d35f716550fda5e4ab8db1d97c18210619a8b9833b2b9eef4372239096",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 25,
+          "points": 367,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 367,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/V_XANES_ap10.001",
+      "sha256": "8143641822449172ca06034b8791a448206f5618913272ce5073331bf1cba901",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 25,
+          "points": 367,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 367,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/V_XANES_ap11.001",
+      "sha256": "ffa4983cc6a118479b4df929c77ce1e9d179bf7ed06b6b68aa4cfd84e38dec3b",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 25,
+          "points": 367,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 367,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/V_XANES_ap12.001",
+      "sha256": "db39ead7361aac9a61c4c86526a437d25a8eeb80dd1822403cf34e28a889ec19",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 25,
+          "points": 367,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 367,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/V_XANES_ap2.001",
+      "sha256": "7348d8f732865ed005f4e8ab3fcc84242eee4a0a86c273d4f2a38e2d9fcbb298",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 25,
+          "points": 367,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 367,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/V_XANES_ap3.001",
+      "sha256": "fdad1d857235347b6058d6a6038063638925b63c5d79aa03e190c9fe96906d47",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 25,
+          "points": 367,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 367,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/V_XANES_ap4.001",
+      "sha256": "ab51fd8a3d57bf1ac2c05846cc346b7adaf5346928b9f53afd3ff96ee4d9712d",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 25,
+          "points": 367,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 367,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/V_XANES_ap5.001",
+      "sha256": "84581b4bf5200b45ea6cdf0fb0a2f805124123fdf962ea24e5bfa6a7a67bca17",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 25,
+          "points": 367,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 367,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/V_XANES_ap6.001",
+      "sha256": "ac31bd69834a1f6d958614460bebd3f4c7451b28cf345ca51fc8004d8cba56d1",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 25,
+          "points": 367,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 367,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/V_XANES_ap7.001",
+      "sha256": "fc0e7b2fb1fe201657da092110532432bac80e277a6569379f51db78aa8b19de",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 25,
+          "points": 367,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 367,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/V_XANES_ap8.001",
+      "sha256": "6561337b48d3d07c748731fc4309cabea20c05722e54903f35fa03d8fcca6c31",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 25,
+          "points": 367,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 367,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/V_XANES_ap9.001",
+      "sha256": "d915c6cbb8ac503d686df061fa45c63093999f5e81c9151e8b08c813a90e6180",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 25,
+          "points": 367,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 367,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/pynxxas/MultiElementFluor/converted.nxs",
+      "sha256": "68a242daeee184210dba372efada461d110f636e3bab43d97346b054d9a5b4f7",
+      "status": "partial",
+      "detected_format": "hdf5",
+      "datasets": 60,
+      "converted_signals": 0,
+      "warnings": 24,
+      "scans": [
+        {
+          "id": "/V_XANES_ap1/V_XANES_ap1[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap10/V_XANES_ap10[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap11/V_XANES_ap11[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap12/V_XANES_ap12[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap2/V_XANES_ap2[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap3/V_XANES_ap3[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap4/V_XANES_ap4[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap5/V_XANES_ap5[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap6/V_XANES_ap6[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap7/V_XANES_ap7[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap8/V_XANES_ap8[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap9/V_XANES_ap9[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap1/V_XANES_ap1/instrument[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap10/V_XANES_ap10/instrument[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap11/V_XANES_ap11/instrument[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap12/V_XANES_ap12/instrument[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap2/V_XANES_ap2/instrument[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap3/V_XANES_ap3/instrument[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap4/V_XANES_ap4/instrument[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap5/V_XANES_ap5/instrument[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap6/V_XANES_ap6/instrument[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap7/V_XANES_ap7/instrument[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap8/V_XANES_ap8/instrument[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/V_XANES_ap9/V_XANES_ap9/instrument[367]",
+          "columns": 2,
+          "points": 367,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/xasdatalibrary/CdS_rt_01.xdi",
+      "sha256": "ab2f620fd5e69d61252ec713c7ba1bd1bd79927891db9d14eb08804afcccd985",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 3,
+          "points": 229,
+          "signals": [
+            {
+              "name": "fluorescence",
+              "points": 229,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/13-id-e/xraylarch/APS13ID_2019.dat",
+      "sha256": "f5d9d914e9db038936d34b73ec98f24ce83bdb62c3b0b19fc7539b78d5439162",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 21,
+          "points": 221,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 221,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/20-bm/pynxxas/Fe_XDIFiles/feo_rt1.xdi",
+      "sha256": "6144e0708f91aec9b3c9359bb4606275668d100f63f27b2c27eb05c0411a983d",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 3,
+          "points": 412,
+          "signals": [
+            {
+              "name": "mutrans",
+              "points": 412,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/20-bm/xasdatalibrary/Fe2O3_rt_01.xdi",
+      "sha256": "57ca5b63a454bb3c81778a4bbdddf444a1141347bdcbfdf17a652fdb23b57078",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 3,
+          "points": 412,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 412,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/20-bm/xraylarch/APS20BM_2001.dat",
+      "sha256": "c9edc33b7f7b6a7ea23157416170e8ae3594949440fda79d742f9e09d2be9b3f",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 412,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/20-id-c/zenodo-5669967/Arsenopyrite.0001",
+      "sha256": "0d851f25bab1484bbcc608464af73b54e331e949fd5267758f040e137b82f35c",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 11,
+          "points": 245,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/20-id-c/zenodo-5669967/As2O3.0002",
+      "sha256": "2f9e20187ae6c86d8f2d218f19787501c3a11d7a79436ca6278e6d2f98f3329c",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 11,
+          "points": 245,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/20-id-c/zenodo-5669967/Kankite.0001",
+      "sha256": "288e058bf118cb1513b9f2c6aea5a7dda8457104421dea55e287b2e0190aebd6",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 11,
+          "points": 245,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/20-id/xraylarch/APS20ID_2018.dat",
+      "sha256": "f89fd2c7cf6f19eccf1b45cb7dda5c71817cfb6f415ce21ebe52991a3b3ded54",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 17,
+          "points": 379,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/20-id/xraylarch/APS20ID_2022.dat",
+      "sha256": "f9cb1c84e263c02e955fe104e8786b0a9d190d5deebc36a60283d174b6b80b9d",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 26,
+          "points": 259,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/9-bm/xraylarch/APS9BM_2006.dat",
+      "sha256": "fd298c8c327c7c8efae2c5e6639f8f27185905b92551351424fac14b3c003e7e",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "spec",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "1  gescan  energy 2460 2500  257 var",
+          "columns": 36,
+          "points": 258,
+          "signals": [],
+          "warnings": 3
+        }
+      ]
+    },
+    {
+      "path": "samples/aps/9-bm/xraylarch/APS9BM_2019.dat",
+      "sha256": "e7bba704f10177af49fdfaa88fb28508d628f78b21514acd81d7e13449ebb23c",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 8,
+          "points": 442,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/australian-synchrotron/mex1/pynexafs/MEX1_40747.mda",
+      "sha256": "35045870d2b92632ff8fd8eeded83a91309fe09e9c66c62592cb6336d0950556",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/australian-synchrotron/mex1/pynexafs/MEX1_40747_processed.asc",
+      "sha256": "229e87f91920f37c3b62426340417023b341a11fac4cffac260bc0d0e1340dc4",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 34,
+          "points": 131,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/australian-synchrotron/mex1/pynexafs/MEX1_40747_processed.xdi",
+      "sha256": "b721aef0c705ebe65b4c6bb074ab45d93a7e21fc02e9edde44a92df29addfa6d",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 33,
+          "points": 131,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 131,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/australian-synchrotron/mex2/pynexafs/2024-03/MEX2_5640.mda",
+      "sha256": "3f0ad0dd1be7ce8d4a5f19e64c2a74da7d9cd208c9dd95f0769072c8b6766663",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/australian-synchrotron/mex2/pynexafs/2024-03/MEX2_5640_processed.xdi",
+      "sha256": "97c301300a675be8f6d2f821781b1a925617ce2e2227fc471fe154d2f1368f02",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 10,
+          "points": 236,
+          "signals": [
+            {
+              "name": "fluorescence",
+              "points": 236,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/australian-synchrotron/mex2/pynexafs/2024-03/MEX2_5641.mda",
+      "sha256": "ab83ec02f9d0608bab7fba33d9e65673b4a6489ca9effad5ba665ae15b8fac19",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/australian-synchrotron/mex2/pynexafs/2024-03/MEX2_5641_processed.xdi",
+      "sha256": "f4a528d98f3855dc8ce38657bfdfd0f2385395b41131b7202de75c56edcdf2d8",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 10,
+          "points": 236,
+          "signals": [
+            {
+              "name": "fluorescence",
+              "points": 236,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/australian-synchrotron/mex2/pynexafs/2025-03/MEX2_13366.mda",
+      "sha256": "c159d243f2658afec47b5c0b2ec4181281a8beb105352b41b2856c69600b1e83",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/australian-synchrotron/mex2/pynexafs/2025-03/MEX2_13366_processed.xdi",
+      "sha256": "4073c523615f737670195ae2c6985372eed1ad0a95a3476231d579f105621fae",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 9,
+          "points": 520,
+          "signals": [
+            {
+              "name": "mufluor",
+              "status": "rejected",
+              "error": "Scan 'scan_1', row 2: energy must be positive and finite"
+            }
+          ],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/australian-synchrotron/sxr/pynexafs/2024-03/sxr129577.asc",
+      "sha256": "9c0502b9916610263d8dae96b8d24af11ef903abe32ec5c52e63d448b4a13849",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 18,
+          "points": 601,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/australian-synchrotron/sxr/pynexafs/2024-03/sxr129577.mda",
+      "sha256": "5d188d6272f62e87e15151557345bc7b3a330669660e1064d3587d2e3a23f4b9",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/australian-synchrotron/sxr/pynexafs/2024-03/sxr129578.asc",
+      "sha256": "5fea26dafdefab4dce88117eb8270e14f5f46607625a31b130eefdb582b7282c",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 18,
+          "points": 601,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/australian-synchrotron/sxr/pynexafs/2024-03/sxr129578.mda",
+      "sha256": "adca15a42aa965eae26b54ee59f56a819f2e1762024d1d695c77dfaa1f8ff645",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/bessy-ii/emil-oaese/1271_flyscan_7ffa27d4-0afa-4581-9632-e92a780cef12_primary.dat",
+      "sha256": "91bfdd6b42bc4091652fd07c471a49d2ef424fd4233ea11c6bb20a2a8f0d99bb",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 23,
+          "points": 735,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/bessy-ii/emil-oaese/1304_flyscan_success_2022_10_12_23_11_10_primary.csv",
+      "sha256": "5b4160a01162fed8df7113e4e6b3de7b5d76317842616e3420e87d04ce112afd",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 21,
+          "points": 329,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/bessy-ii/emil-oaese/Scan_1107_2022_10_08_aq_CuSO4.sdat",
+      "sha256": "42758fd271e591f4f3eebfcd9fe8bcc7b6a63f6b5941824f1b34d13402473f89",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 742,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/bessy-ii/emil-oaese/Scan_2007_2022_11_02_aq_CuSO4.dat",
+      "sha256": "f218ea17f930ab15260848b8ae85492e7925ade74e429ede26bfe78ac2074e3e",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 3,
+          "points": 200,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/camd/unspecified/xraylarch/AgL3_CAMD.prj",
+      "sha256": "e89d72d4288992890878a71933b29bb72064790444528b425fb71986ea19dbf5",
+      "status": "signal_choices",
+      "detected_format": "athena",
+      "datasets": 0,
+      "converted_signals": 29,
+      "warnings": 1,
+      "scans": [
+        {
+          "id": "qiql",
+          "columns": 3,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "kcgg",
+          "columns": 2,
+          "points": 541,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 541,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "pnji",
+          "columns": 3,
+          "points": 541,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 541,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "luwm",
+          "columns": 2,
+          "points": 541,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 541,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "rkkc",
+          "columns": 3,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "krrt",
+          "columns": 4,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "bphy",
+          "columns": 3,
+          "points": 481,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 481,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "zxtk",
+          "columns": 4,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "qexn",
+          "columns": 2,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "lzlw",
+          "columns": 2,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "mipa",
+          "columns": 3,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "axyj",
+          "columns": 4,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "hcxc",
+          "columns": 3,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "ugog",
+          "columns": 3,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "vshu",
+          "columns": 3,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "icju",
+          "columns": 2,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "zojs",
+          "columns": 3,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "bzci",
+          "columns": 2,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "qrjw",
+          "columns": 3,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "bzcu",
+          "columns": 3,
+          "points": 571,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 571,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "abrc",
+          "columns": 2,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "jzfc",
+          "columns": 3,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "innd",
+          "columns": 3,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "ffsr",
+          "columns": 2,
+          "points": 521,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 521,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "oehc",
+          "columns": 3,
+          "points": 481,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 481,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "dzjw",
+          "columns": 3,
+          "points": 481,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 481,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "ubim",
+          "columns": 3,
+          "points": 581,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "jnvk",
+          "columns": 2,
+          "points": 541,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 541,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "kzat",
+          "columns": 3,
+          "points": 541,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 541,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/camd/unspecified/xraylarch/P_CAMD.prj",
+      "sha256": "174acba7e6d80342bea65e3deb3c37305b67842d69e73f9772d18a0c6f48742f",
+      "status": "signal_choices",
+      "detected_format": "athena",
+      "datasets": 0,
+      "converted_signals": 15,
+      "warnings": 1,
+      "scans": [
+        {
+          "id": "trbj",
+          "columns": 2,
+          "points": 415,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 415,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "lqgm",
+          "columns": 3,
+          "points": 488,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 488,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "cnxm",
+          "columns": 3,
+          "points": 338,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 338,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "swzi",
+          "columns": 3,
+          "points": 395,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 395,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "xwbk",
+          "columns": 2,
+          "points": 338,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 338,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "kvtj",
+          "columns": 3,
+          "points": 395,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 395,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "qtjl",
+          "columns": 3,
+          "points": 395,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 395,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "slfx",
+          "columns": 2,
+          "points": 488,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 488,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "rioa",
+          "columns": 2,
+          "points": 415,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 415,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "ojqvv",
+          "columns": 3,
+          "points": 375,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 375,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "whfta",
+          "columns": 3,
+          "points": 375,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 375,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "kwrn",
+          "columns": 3,
+          "points": 415,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 415,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "ootg",
+          "columns": 2,
+          "points": 321,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 321,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "dshz",
+          "columns": 3,
+          "points": 415,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 415,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "fjgm",
+          "columns": 3,
+          "points": 395,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 395,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/bioxas-s/cls-xasdb/Fe-Foil_2024_04_07_scan1_idcj28n9.dat",
+      "sha256": "08d0795936fe82c3c1c280ac088415b9dd7f635583afcd78e9961e151b29c696",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 413,
+          "signals": [],
+          "warnings": 4
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/bioxas-s/cls-xasdb/Ferrihydrite_2021_03_11_scan1_ida0notq.dat",
+      "sha256": "4d94d441e5da61cb05037a03855a172b19d42d6caf2f8c8b133a31bafd0478ea",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 72,
+          "points": 347,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 347,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/bioxas-s/cls-xasdb/Jarosite_2021_03_12_scan1_ids1dc72.dat",
+      "sha256": "b65e9e9d1b05fcc8cbf784b93f0548bb8bfac8696b5dc67f04cd797e501f1241",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 72,
+          "points": 347,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 347,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/hxma/cls-xasdb/Zn(OOCCH3)2H2O_2012_07_05_scan1_idrfof85.dat",
+      "sha256": "905ec2c9982fb2f724fab651a180328b4fe61b02cf5a12c9aa35fd3117e0ca9d",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 13,
+          "points": 418,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/hxma/cls-xasdb/ZnFeO_2010_02_10_scan1_id1x8obl.dat",
+      "sha256": "80750e0aa24c4bca011cc3fa679586dfe38dc1d7459e0e0ac7fe33da38267e7c",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 11,
+          "points": 458,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/hxma/cls-xasdb/ZnFeO_2010_02_10_scan2_ideutfwr.dat",
+      "sha256": "129fe822df6de9ccf566bcf3a92c42634c43f5c67552da6776ce6b9867d7d91d",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 11,
+          "points": 458,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/hxma/xraylarch/CLSHXMA.dat",
+      "sha256": "db91876a3fab9bf459f489b0fb6a5dccc7f7a17a0a470eca0a989add4735949e",
+      "status": "signal_choices",
+      "detected_format": "cls_acquisition",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 11,
+          "points": 414,
+          "signals": [
+            {
+              "name": "HXMA transmission",
+              "points": 414,
+              "status": "converted"
+            },
+            {
+              "name": "BL1606-ID1:mcs03:fbk / BL1606-ID1:mcs04:fbk (uncorrected)",
+              "points": 414,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/ideas/cls-xasdb/ZnS_2022_03_20_scan2_idja8kfp.dat",
+      "sha256": "caaaacc6ddd1c3e1e4c90f924aba4cdd467df41a70e9532ccaedcf35ab92e092",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 418,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/ideas/cls-xasdb/ZnSe_2022_06_3_id3hy6kf.dat",
+      "sha256": "4192cb5ef0d90b25b1e1488564b3c05eb5d35e3dde6ac4cb44718e2a19875725",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 413,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/ideas/cls-xasdb/ZnSe_2022_06_4_idqeo94d.dat",
+      "sha256": "794eddef37b5315df1b401784ad82f1a5c9e4e71b7c38c148bd90b381a753ff8",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 413,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/sxrmb/cls-xasdb/Fe-foil_2024_04_30_1_scan1_idyxpl8x.dat",
+      "sha256": "5ca52345641998754876b4fb10cc686ca37e258a62afca6babb14b9b3963abf9",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 20,
+          "points": 384,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/sxrmb/cls-xasdb/Zn-foil_2024_04_30_1_scan1_idx8ttpj.dat",
+      "sha256": "344f6fac4c1dd0be276f8570fbc7c77b7075a8f75102fbdb4a77add6f5d8a9f0",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 8,
+          "points": 221,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/sxrmb/cls-xasdb/Zn-foil_2024_04_30_2_scan1_idvphxym.dat",
+      "sha256": "c9115b9ca14cebd7184fbd3e0e0fb8082df58666c2f894abf177decd9abe1207",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 8,
+          "points": 221,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/vls-pgm/cls-xasdb/C12H10S2_201601_01_scan1_id1hi2lv.dat",
+      "sha256": "db3aa1f3fadd3ae93a4d5d010a699326622ace2266870f05a679182e86a5c094",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 19,
+          "points": 343,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/vls-pgm/cls-xasdb/FeSO4_2016_01_scan1_idafhtzf.dat",
+      "sha256": "30eedae75734a1109a25d0e7b47d333af58007b3eeb4b4746ffe742a8cde7068",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 16,
+          "points": 301,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/cls/vls-pgm/cls-xasdb/FeSO4_2016_01_scan2_id4x4lhj.dat",
+      "sha256": "22ae0c8bc5b10ad381c5d691999c57ddf51e708417914ddc83f73ca4ae0e4105",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 16,
+          "points": 301,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/desy-doris/unspecified/parseq-xas/CuO_lnt.fio",
+      "sha256": "7cbdd0ffa74a985c13d21c543447a016d87e05f39d9a28b3b465a8e5f4e53507",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "fio",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 13,
+          "points": 800,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/desy-doris/unspecified/parseq-xas/Cu_lnt1.fio",
+      "sha256": "d6771372bab396494de0e802e40e8aa41c579d8bff534b22c629752e198c0055",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "fio",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 12,
+          "points": 848,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/desy-petra-iii/p64/darus-5088/r0349_0001.hdf5_0000_8974.10.xes",
+      "sha256": "b3c9cfbde9eb7cdfa7523a8ea963ddffa1a2a01033c338e3cac79da225201596",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 12,
+          "points": 487,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/desy-petra-iii/p64/darus-5088/r0349_0001.hdf5_0087_8991.50.xes",
+      "sha256": "52146662c6b59e09a43eb35669636b8c3a876f566748acbe3ef0808f5f5b3be4",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 12,
+          "points": 487,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/desy-petra-iii/p64/darus-5088/r0349_0001.hdf5_0173_9008.71.xes",
+      "sha256": "32c9dd61a613d7e678cacebc32dcd1a856cf7f4add74acbd108ce7c53f5cda79",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 12,
+          "points": 487,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/desy-petra-iii/p64/darus-5088/r0367_HERFD.dat",
+      "sha256": "d91bae2fb18c8e10fb43a4d34d1744a1c82bb8c1d5e21c24eba78382f0d06fb0",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 174,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/desy-petra-iii/p64/darus-5088/r0369_HERFD.dat",
+      "sha256": "9df4df8da56e410277da8cc84c6b1e90823729f82ffea7d41701000d9b4d245b",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 174,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/diamond/i06/figshare-24530623/XAS-PEEM-data.opju",
+      "sha256": "00ac73e0649540c90c7413b1a2cbd5c341ec27e96ff28d13797fe21f3515d185",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/esrf/bm08-lisa/cls-xasdb/Iron (II) Oxide_2003_08_26_scan1_idxvotm2.dat",
+      "sha256": "7334ea90de1258a6e0f0bcc86da2c71a631d1064e30d3dc0bc38335046620840",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 372,
+          "signals": [
+            {
+              "name": "mutrans",
+              "points": 372,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/bm08-lisa/cls-xasdb/Iron (II) Oxide_2008_08_25_scan1_idq2cv7k.dat",
+      "sha256": "c3352cbb1e0736612f11250faf31c17276e6b5a8405640087530b09fd6df495c",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 3,
+          "points": 473,
+          "signals": [],
+          "warnings": 3
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/bm08-lisa/cls-xasdb/Iron (II) Oxide_2018_10_07_scan1_idg74ufm.dat",
+      "sha256": "76d3254618bc6bd03b23dfcda008eb7cc163e6affcf362db192e48acd32e6688",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 263,
+          "signals": [
+            {
+              "name": "mutrans",
+              "points": 263,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/bm08-lisa/cls-xasdb/Zinc Cobaltite_2024_10_26_scan1_idbkn38n.dat",
+      "sha256": "d496e13d9d5570211326b3d31131d3ddc55776fe6d0b91379d29ca2b0357120c",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 3,
+          "points": 610,
+          "signals": [
+            {
+              "name": "mutrans",
+              "points": 610,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/bm08-lisa/cls-xasdb/Zinc Foil_2024_02_10_scan1_idbx9xsg.dat",
+      "sha256": "9a7189a1da63e739df22fa577ed8a61364f8a663b64137ec39e12f84de4f94d9",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 393,
+          "signals": [
+            {
+              "name": "mutrans",
+              "points": 393,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/bm08-lisa/cls-xasdb/Zinc Oxide_2024_02_10_scan1_idzz5ccy.dat",
+      "sha256": "25ea189ae8b82a320af4fe53ae5928c9d576fb677326942ddc03a636206d437e",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 3,
+          "points": 393,
+          "signals": [
+            {
+              "name": "mutrans",
+              "points": 393,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/bm08-lisa/xraylarch/ESRF_BM08_LISA_2021.dat",
+      "sha256": "af4061530ebc8a3a0bdce8da355aba5346d9ad7dba4a903e2d4941b9e1c50a2d",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 7,
+          "points": 198,
+          "signals": [
+            {
+              "name": "mu",
+              "points": 198,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/bm16-fame-uhd/pynxxas/BlissMultiModal/converted.nxs",
+      "sha256": "b6ecc7a1f1ab922bffe3951b9852b48085d07f04ade07d0175ece3b0d982aa94",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "hdf5",
+      "datasets": 38,
+      "converted_signals": 0,
+      "warnings": 1,
+      "scans": []
+    },
+    {
+      "path": "samples/esrf/bm16-fame-uhd/pynxxas/BlissMultiModal/test_Assolution_Mauro_0001.h5",
+      "sha256": "68e073a97ac96a59a3e3cb0a17bfd63a5228db724b5803ebcfbf03a39be44ef2",
+      "status": "partial",
+      "detected_format": "hdf5",
+      "datasets": 1974,
+      "converted_signals": 0,
+      "warnings": 64,
+      "scans": [
+        {
+          "id": "/1.1/instrument[4000]",
+          "columns": 4,
+          "points": 4000,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/1.1/instrument[4001]",
+          "columns": 54,
+          "points": 4001,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/2.1/instrument[4000]",
+          "columns": 4,
+          "points": 4000,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/2.1/instrument[4001]",
+          "columns": 54,
+          "points": 4001,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/bm26a-dubble/demeter/dubble.dat",
+      "sha256": "01d63df3015ef54161e7a2f7292d0c8a921ae46b7317a910814bcb770ba5d17d",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "srs",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 15,
+          "points": 377,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/id21/cls-xasdb/Gypsum_2006_06_06_scan1_id8r6xst.dat",
+      "sha256": "b0492d0d5201c338f168297cb75ab0c15bb86f3f38e2905941e48a4213bb0613",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 400,
+          "signals": [
+            {
+              "name": "mutrans",
+              "points": 400,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/id21/cls-xasdb/Jarosite_2006_06_23_scan1_idnra3o7.dat",
+      "sha256": "43ac35d8edf2195466392c267e930dbc946736a2e5ff8442aba26a2b96de63ff",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 400,
+          "signals": [
+            {
+              "name": "mutrans",
+              "points": 400,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/id21/cls-xasdb/Pyrite_2005_11_19_scan1_idvvf2ra.dat",
+      "sha256": "df6af192c8e2fe4696e8c34b849baaac7e4dcf959b5e9b0eec79a1574e83b0a0",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 400,
+          "signals": [
+            {
+              "name": "mufluor",
+              "points": 400,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/id24/xraylarch/dispersive.prj",
+      "sha256": "d3aa1fc4a52cfccc19661a2b0ba69f338c7e3425f79adc8c128107e082af3701",
+      "status": "signal_choices",
+      "detected_format": "athena",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "cuft_txt",
+          "columns": 2,
+          "points": 725,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 725,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        },
+        {
+          "id": "cu_calib",
+          "columns": 2,
+          "points": 1241,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 1241,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        },
+        {
+          "id": "cu_pixel",
+          "columns": 2,
+          "points": 1241,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "cuspixel",
+          "columns": 2,
+          "points": 1241,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "cuspix?1",
+          "columns": 2,
+          "points": 1241,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "cuspix?2",
+          "columns": 2,
+          "points": 1241,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "cuspix?3",
+          "columns": 2,
+          "points": 1241,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "cuspix?4",
+          "columns": 2,
+          "points": 1241,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "cuspix?5",
+          "columns": 2,
+          "points": 1241,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "cuspix?6",
+          "columns": 2,
+          "points": 1241,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "cuspix?7",
+          "columns": 2,
+          "points": 1241,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "cuspix?8",
+          "columns": 2,
+          "points": 1241,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/esrf/snbl-bm01b/xraylarch/ESRF_SNBL_2013.dat",
+      "sha256": "6006a10d25e93f3242901c1380f4be011e06363c4610b0e5ec55c427ea12c62a",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "spec",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "1  zapline mono 10.3073 9.89985 7244 100",
+          "columns": 18,
+          "points": 456,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "2  zapline mono 10.3073 9.89985 3622 100",
+          "columns": 18,
+          "points": 906,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/lnls-uvx/unspecified-xas/demeter/lnls.dat",
+      "sha256": "e40350c900d7511f8de9db7ce4b57c158ecabc4d2db9a53e120cbfb77b0cb801",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "lnls",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 8,
+          "points": 999,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/max-iv/balder-unconfirmed/parseq-xas/20230318.h5",
+      "sha256": "0f9935509bb6352dac3996fa222e5a939c38a364651f523da056a9943f1fe8d4",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "hdf5",
+      "datasets": 62,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "/entry24212/measurement[601]",
+          "columns": 7,
+          "points": 601,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "/entry24213/measurement[526]",
+          "columns": 7,
+          "points": 526,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "/entry24212/instrument[601]",
+          "columns": 6,
+          "points": 601,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/entry24213/instrument[526]",
+          "columns": 6,
+          "points": 526,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/max-iv/balder-unconfirmed/parseq-xas/Cu-foil_EXAFS_23068.dat",
+      "sha256": "0b3c55a839381c3e3194767336f7bd6250c3d84b2e64c1355b06683e19899e1e",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "spec",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "23068 ascanct mono1_energy_acs 8779.0 10099.0 4095 0.005 0.01",
+          "columns": 8,
+          "points": 4096,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/max-iv/balder-unconfirmed/parseq-xas/Fe-foil_EXAFS_23147.dat",
+      "sha256": "7d2cec2951c6ccdbcb46a44f11247e765896b11dfb0f9ac786e0791d05870399",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "spec",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "23147 ascanct mono1_energy_acs 6912.0 8232.0 4095 0.005 0.01",
+          "columns": 8,
+          "points": 4096,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/max-iv/balder-unconfirmed/parseq-xas/scan-24212_eiger_streaming.h5",
+      "sha256": "18f61fd22ff74fb11565b34dbc705b80fa4f239c386f91df32c664205f191dbe",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "hdf5",
+      "datasets": 2,
+      "converted_signals": 0,
+      "warnings": 1,
+      "scans": []
+    },
+    {
+      "path": "samples/max-iv/balder-unconfirmed/parseq-xas/scan-24213_eiger_streaming.h5",
+      "sha256": "0a4f9158669c216ed670d806dd6705d47e3706be670c2ba2bab974167684b70e",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "hdf5",
+      "datasets": 2,
+      "converted_signals": 0,
+      "warnings": 1,
+      "scans": []
+    },
+    {
+      "path": "samples/nsls-ii/6-bm-bmm/xraylarch/NSLS6BM_2019.dat",
+      "sha256": "cb3f8f5f18a6a03dd2bda1674189a31c947dba9ab4efedf07730075949d53fa2",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 23,
+          "points": 352,
+          "signals": [
+            {
+              "name": "xmu",
+              "points": 352,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/nsls-ii/7-bm-qas/xasref/Mo foil 0001-r0003.dat",
+      "sha256": "280452e66ffd87d41bfa0d3609e51512aa9264e66bed65ad0fb4942cf20bb135",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 9,
+          "points": 651,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 651,
+              "status": "converted"
+            },
+            {
+              "name": "fluorescence",
+              "points": 651,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/nsls-ii/7-bm-qas/xasref/Pd foil 0001.dat",
+      "sha256": "752c51c70c500ee85a8523c5325f62acba1958464624b7767e5f157cbcf6d06a",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 9,
+          "points": 646,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 646,
+              "status": "converted"
+            },
+            {
+              "name": "fluorescence",
+              "points": 646,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/nsls-ii/7-bm-qas/xasref/Rh foil 0001.dat",
+      "sha256": "14ffccc94bc429af34dff4644ebb4a94c7ec78382c7bd6784e4c52048b4b92fb",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 9,
+          "points": 647,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 647,
+              "status": "converted"
+            },
+            {
+              "name": "fluorescence",
+              "points": 647,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/nsls-ii/8-id-iss/xraylarch/NSLS8ID_2019.dat",
+      "sha256": "b2d5b2a1ae186cc52397c200b9dc2b06b180e06b229f754d8ba985e3c8a0b34c",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 647,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/nsls/x10c/demeter/x10c.dat",
+      "sha256": "26c637c9cbde2a0d0aa714cd31151738591d50bc6ed7ce2b01606bebad9b1e6c",
+      "status": "signal_choices",
+      "detected_format": "x10c",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 8,
+          "points": 547,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 547,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/nsls/x11a/xasdatalibrary/cu_metal_10K.xdi",
+      "sha256": "6fd3823892d218e576b27674f3faff998ffdf4de261e9ac92ea40a42e6f1ba88",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 612,
+          "signals": [
+            {
+              "name": "mutrans",
+              "points": 612,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/nsls/x15b/demeter/x15b.dat",
+      "sha256": "812f05c8cc364fd38b63f618c87d8453e9a6817d3e9e9fdaeb81bf927fbb8c9e",
+      "status": "signal_choices",
+      "detected_format": "x15b",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 15,
+          "points": 321,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 321,
+              "status": "converted"
+            },
+            {
+              "name": "narrow fluorescence",
+              "points": 321,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/nsls/x23a2/xraylarch/NSLS_XDAC_2011.dat",
+      "sha256": "46bc385f0ad1d92adb30ea40d2620da894c46ee87342fc01416f9b00609af572",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 5,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 17,
+          "points": 422,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 422,
+              "status": "converted"
+            },
+            {
+              "name": "Ifch1 / I0 (uncorrected)",
+              "points": 422,
+              "status": "converted"
+            },
+            {
+              "name": "Ifch2 / I0 (uncorrected)",
+              "points": 422,
+              "status": "converted"
+            },
+            {
+              "name": "Ifch3 / I0 (uncorrected)",
+              "points": 422,
+              "status": "converted"
+            },
+            {
+              "name": "Ifch4 / I0 (uncorrected)",
+              "points": 422,
+              "status": "converted"
+            }
+          ],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/photon-factory/ar-nw10a/mdr-2434ccfd/No4_CeO2.dat",
+      "sha256": "fc01807ff111ac0f0fd0655b978d404a148166a7a3b3ce5157e58d4d9dcf95a1",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 481,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 481,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/photon-factory/ar-nw10a/mdr-9dc840e3/i03.dat",
+      "sha256": "1e6c20c46f2013752b6eecbca735a37ad17020bab9de41b0bd0aa7ab76601487",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 481,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 481,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/photon-factory/bl-12c/mdr-3ff63598/zr02.dat",
+      "sha256": "fe7fd721a1bd7ddc02c8b52aeec083cc15631da82c56842918b9cc15a11f8352",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 621,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 621,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/photon-factory/bl-12c/xraylarch/PFBL12C_2005.dat",
+      "sha256": "66c9ec11cf82958a0b65a9587439f7a86fafbbac580e8298d0e6e6fd7bfd0b39",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 818,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 818,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/photon-factory/bl-9a/mdr-191de9cf/Cu104.dat",
+      "sha256": "71c315626acab1cac6beeca067b608a19b73e437c9a269bcfcc1db0498b3cc1b",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 726,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 726,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/photon-factory/bl-9a/mdr-6ad6ede8/Ti103.dat",
+      "sha256": "c075c6160e8ed4bee586909d9fa564108649ccf10c9468bec81a6672223ef4b3",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 726,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 726,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/photon-factory/bl-9a/pynxxas/KEK_PFdata/converted.nxs",
+      "sha256": "e7e94f111142ae805f200faf1aecb79df573b58d11361f6f15e0ac745a287bc7",
+      "status": "partial",
+      "detected_format": "hdf5",
+      "datasets": 5,
+      "converted_signals": 0,
+      "warnings": 2,
+      "scans": [
+        {
+          "id": "/fe010[1426]",
+          "columns": 2,
+          "points": 1426,
+          "signals": [],
+          "warnings": 1
+        },
+        {
+          "id": "/fe010/instrument[1426]",
+          "columns": 2,
+          "points": 1426,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/photon-factory/bl-9a/xraylarch/PF9A_2022.dat",
+      "sha256": "15511e4a96a5faef16087eb96d6f0060860bea28f0b816fc4d6a963c7c7640ca",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 1426,
+          "signals": [
+            {
+              "name": "fluorescence_4",
+              "points": 1426,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/photon-factory/bl-9c/mdr-f48a5ce8/Fe011.dat",
+      "sha256": "0ac60d0359eb41dd68f8cc0612ce303ab6d7848ca25ec34e7763cdb5973fef97",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 676,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 676,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/photon-factory/bl-9c/mdr-f5204d19/Fe010.dat",
+      "sha256": "565e124f676a649f4a93590f1b6132e9d64a6bb31637268e271374c18e6caafe",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 676,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 676,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/pls-ii/2a/figshare-28944977/Source_Data.xlsx",
+      "sha256": "f16e3f1d3d640e7633e31d137ce61445e9de64c9308f62e29b56b09233da5f28",
+      "status": "rejected",
+      "error": "Unknown binary format or text encoding; expected UTF-8 or valid Shift-JIS"
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-10/mdr-a75da7e1/17032306.dat",
+      "sha256": "73e98c5598d0f636cc41e49ee72752bf0e378ff314cf8182569a99fa2476e18c",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 11,
+          "points": 354,
+          "signals": [
+            {
+              "name": "tey",
+              "points": 354,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-10/mdr-a75da7e1/17032306.pfy",
+      "sha256": "07f70a380cb73ddbf68258fc8a17d07854ce9eb91451c783928845dda59276cd",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 240,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-10/mdr-f55722b9/17030605.dat",
+      "sha256": "552f8a6a6818bf43e784c33ea6040f7a3a087ee775eba7496ba9a69ffa92d82d",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 11,
+          "points": 354,
+          "signals": [
+            {
+              "name": "tey",
+              "points": 354,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-10/mdr-f55722b9/17030605.pfy",
+      "sha256": "9ec24a80ed10d20e65d7d1e3b0382ceee56ff0d555a24bea92789ad4f96e4c5f",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 240,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-11/mdr-97686182/21033010.dat",
+      "sha256": "e1354f66a59551eb2b971bfe331759d7137de9c47a5ac40dd0145f0e96e572b1",
+      "status": "signal_choices",
+      "detected_format": "ritsumeikan",
+      "datasets": 0,
+      "converted_signals": 3,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 16,
+          "points": 223,
+          "signals": [
+            {
+              "name": "SC yield",
+              "points": 223,
+              "status": "converted"
+            },
+            {
+              "name": "MCP yield",
+              "points": 223,
+              "status": "converted"
+            },
+            {
+              "name": "SDD yield",
+              "points": 223,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-11/mdr-97686182/21033010.pey",
+      "sha256": "cac3c1eafab9e6e43e00d29fb287128f561fad7421fd2580b538b6b10335baed",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 223,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-11/mdr-9b267eea/21020420.dat",
+      "sha256": "a62864a289db49bf3120f530e6aa9a1b39b16e9cb97b2291b7573371c9399518",
+      "status": "signal_choices",
+      "detected_format": "ritsumeikan",
+      "datasets": 0,
+      "converted_signals": 3,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 16,
+          "points": 358,
+          "signals": [
+            {
+              "name": "SC yield",
+              "points": 358,
+              "status": "converted"
+            },
+            {
+              "name": "MCP yield",
+              "points": 358,
+              "status": "converted"
+            },
+            {
+              "name": "SDD yield",
+              "points": 358,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-11/mdr-9b267eea/21020420.pey",
+      "sha256": "e1a2c80ba98351cab1b671d99d9942a55b6291040e99f8f7dbb4613258e582db",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 358,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-13/mdr-3f67b1c0/20060504.dat",
+      "sha256": "6d96f3b29eb67f75a14a97215704130c2d9aa4615f72203f35ee4c912ac9d1f8",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 18,
+          "points": 352,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-13/mdr-3f67b1c0/20060504.tey",
+      "sha256": "45b67c6efbf4b434fc2c3a32afc32964b450c907d09f8ccc2e622fbb37d39849",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 352,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-13/mdr-c665369d/20052209.dat",
+      "sha256": "9abd5ea007efde0b64411c0b2a580e63915f1b5fe1227d288da20cab232c649a",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 18,
+          "points": 276,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-13/mdr-c665369d/20052209.tey",
+      "sha256": "4eae07832380f9253ac8c0cb3899d5c8a5d3afeebc84402eac56f22b54d22315",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 276,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-2/mdr-0468e6b4/21030223.dat",
+      "sha256": "d28e67f2955006fa039843cc4d45410319fe8bd615862022f91f2cec88db1c4d",
+      "status": "signal_choices",
+      "detected_format": "ritsumeikan",
+      "datasets": 0,
+      "converted_signals": 3,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 16,
+          "points": 546,
+          "signals": [
+            {
+              "name": "SC yield",
+              "points": 546,
+              "status": "converted"
+            },
+            {
+              "name": "MCP yield",
+              "points": 546,
+              "status": "converted"
+            },
+            {
+              "name": "SDD yield",
+              "points": 546,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-2/mdr-0468e6b4/21030223.tey",
+      "sha256": "60ca88367dcf837b9c7b8975ad35bf3860276a465269eb9412103b400e45c628",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 545,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-2/mdr-a1c60905/21021611.dat",
+      "sha256": "046dd80bb5e3b5bf6c04700dbc221225553c81edc34c1679db59f4169572da5f",
+      "status": "signal_choices",
+      "detected_format": "ritsumeikan",
+      "datasets": 0,
+      "converted_signals": 3,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 16,
+          "points": 469,
+          "signals": [
+            {
+              "name": "SC yield",
+              "points": 469,
+              "status": "converted"
+            },
+            {
+              "name": "MCP yield",
+              "points": 469,
+              "status": "converted"
+            },
+            {
+              "name": "SDD yield",
+              "points": 469,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ritsumeikan-sr/bl-2/mdr-a1c60905/21021611.tey",
+      "sha256": "a18db0ed24462d5e14cb19aada9b5f3f66a3ce33aff91cc68b322bd6c2bf01c5",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 448,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/saga-ls/bl10/mdr-6d8d2c63/NiO_Ni-L.tey",
+      "sha256": "82990fb965ee4ac658e327b0b7b483d2e7e6bc901a9e5e3197ebdb2dadbe257c",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 286,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/saga-ls/bl10/mdr-9d3101cf/LiCoO2_Co-L.tey",
+      "sha256": "3a90c1da7fa47f1f78a34feca8c1b8db743770270f54391dc8744985a72f44ca",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 335,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/saga-ls/bl11/mdr-12b7b42c/rTiO2_Ti-K.dat",
+      "sha256": "635eeaaa25466c516470071b09618a814333f6a7fcd5122487a84d6f9f5e7a3d",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 12,
+          "points": 581,
+          "signals": [
+            {
+              "name": "fluorescence_3",
+              "points": 581,
+              "status": "converted"
+            },
+            {
+              "name": "yield_5",
+              "points": 581,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/saga-ls/bl11/mdr-12b7b42c/rTiO2_Ti-K.pfy",
+      "sha256": "653849c92d1ce90df5e0b5f2b1c429a0282315ccb9476afd7f7b3cbc905f9cfc",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 581,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/saga-ls/bl11/mdr-1c05e9f1/Ca(OH)2_Ca-K.cey",
+      "sha256": "d99ffe5973eaad77bb177202df0cb919b9559a144c4145eb8d3d19a9b7bfb6ce",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 541,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/saga-ls/bl11/mdr-1c05e9f1/Ca(OH)2_Ca-K.dat",
+      "sha256": "3ffa48f3eb12ff5bbf73d806253642bd6d5bb5e7f15d79e4969dc2adf74fcc7b",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 12,
+          "points": 541,
+          "signals": [
+            {
+              "name": "fluorescence_3",
+              "points": 541,
+              "status": "converted"
+            },
+            {
+              "name": "yield_5",
+              "points": 541,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/saga-ls/bl12/mdr-5812be74/LiCoO2_Co-L.tey",
+      "sha256": "739747e6ac56149253f87f4840ad3bbb9d96688af46973315ae8038597749223",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 340,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/saga-ls/bl12/mdr-c7c8a33f/NiO_Ni-L.tey",
+      "sha256": "7e20529c4b1eca395eb04bad79c8a63a762a806b101ac66ad2cdd84e337fa627",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 276,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/sls/phoenix/xraylarch/SLS_PHOENIX_2023.dat",
+      "sha256": "c98e98005f4432b20c5d244d5f44f989fdbd3cbe7489cd67bd18253530f59003",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 55,
+          "points": 301,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/solaris/astra/rodbuk-VRJ85T/data_XAS.csv",
+      "sha256": "52c219a9a9cc861a4e4548ff1ad6f45a2139c2861ce382117c775ed0cd2f3ef8",
+      "status": "rejected",
+      "error": "text: no numeric data table"
+    },
+    {
+      "path": "samples/solaris/pirx/rodbuk-58IJY5/AFJ_CuALD_650c_Si.dat",
+      "sha256": "6c98e3f2f8994230c11bad1557431691d66ce3841c6e2c26ddb36f2027cb8dd2",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "spec",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "1 rscan ENERGY 1.0 260.0 [[280.0, 10], [282.0, 4], [294.0, 120], [300.0, 30], [310.0, 10], [360.0, 25], [520.0, 16]]",
+          "columns": 24,
+          "points": 216,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "2 rscan ENERGY 1.0 510.0 [[520.0, 10], [525.0, 10], [536.0, 55], [550.0, 28], [570.0, 20], [700.0, 13]]",
+          "columns": 24,
+          "points": 137,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "3 rscan ENERGY 1.0 675.0 [[685.0, 10], [692.0, 14], [717.0, 125], [730.0, 26], [760.0, 30]]",
+          "columns": 24,
+          "points": 206,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "4 rscan ENERGY 1.0 910.0 [[920.0, 10], [925.0, 10], [929.0, 20], [938.0, 90], [948.0, 40], [958.0, 50], [968.0, 20], [998.0, 30], [1028.0, 30], [1080.0, 26]]",
+          "columns": 24,
+          "points": 327,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "5 rscan ENERGY 1.0 995.0 [[1005.0, 10], [1015.0, 20], [1050.0, 175], [1080.0, 60], [1140.0, 40], [1200.0, 12]]",
+          "columns": 24,
+          "points": 318,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "6 rscan ENERGY 1.0 1800.0 [[1825.0, 25], [1840.0, 30], [1860.0, 100], [1900.0, 40], [2000.0, 20]]",
+          "columns": 24,
+          "points": 216,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "7 rscan ENERGY 1.0 260.0 [[280.0, 10], [282.0, 4], [294.0, 120], [300.0, 30], [310.0, 10], [360.0, 25], [520.0, 16]]",
+          "columns": 24,
+          "points": 216,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "8 rscan ENERGY 1.0 510.0 [[520.0, 10], [525.0, 10], [536.0, 55], [550.0, 28], [570.0, 20], [700.0, 13]]",
+          "columns": 24,
+          "points": 137,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "9 rscan ENERGY 1.0 675.0 [[685.0, 10], [692.0, 14], [717.0, 125], [730.0, 26], [760.0, 30]]",
+          "columns": 24,
+          "points": 206,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "10 rscan ENERGY 1.0 910.0 [[920.0, 10], [925.0, 10], [929.0, 20], [938.0, 90], [948.0, 40], [958.0, 50], [968.0, 20], [998.0, 30], [1028.0, 30], [1080.0, 26]]",
+          "columns": 24,
+          "points": 327,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "11 rscan ENERGY 1.0 995.0 [[1005.0, 10], [1015.0, 20], [1050.0, 175], [1080.0, 60], [1140.0, 40], [1200.0, 12]]",
+          "columns": 24,
+          "points": 318,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "12 rscan ENERGY 1.0 1800.0 [[1825.0, 25], [1840.0, 30], [1860.0, 100], [1900.0, 40], [2000.0, 20]]",
+          "columns": 24,
+          "points": 216,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "13 rscan ENERGY 1.0 260.0 [[280.0, 10], [282.0, 4], [294.0, 120], [300.0, 30], [310.0, 10], [360.0, 25], [520.0, 16]]",
+          "columns": 24,
+          "points": 216,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "14 rscan ENERGY 1.0 510.0 [[520.0, 10], [525.0, 10], [536.0, 55], [550.0, 28], [570.0, 20], [700.0, 13]]",
+          "columns": 24,
+          "points": 137,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "15 rscan ENERGY 1.0 675.0 [[685.0, 10], [692.0, 14], [717.0, 125], [730.0, 26], [760.0, 30]]",
+          "columns": 24,
+          "points": 206,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "16 rscan ENERGY 1.0 910.0 [[920.0, 10], [925.0, 10], [929.0, 20], [938.0, 90], [948.0, 40], [958.0, 50], [968.0, 20], [998.0, 30], [1028.0, 30], [1080.0, 26]]",
+          "columns": 24,
+          "points": 327,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "17 rscan ENERGY 1.0 995.0 [[1005.0, 10], [1015.0, 20], [1050.0, 175], [1080.0, 60], [1140.0, 40], [1200.0, 12]]",
+          "columns": 24,
+          "points": 318,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "18 rscan ENERGY 1.0 1800.0 [[1825.0, 25], [1840.0, 30], [1860.0, 100], [1900.0, 40], [2000.0, 20]]",
+          "columns": 24,
+          "points": 216,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "19 rscan ENERGY 1.0 910.0 [[924.0, 7], [929.0, 10], [932.0, 30], [938.0, 30], [948.5, 21]]",
+          "columns": 24,
+          "points": 99,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "20 mesh ENERGY 931.0 934.6 1 MT 0.0 0.1 60 1.0 False",
+          "columns": 25,
+          "points": 122,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "21 rscan ENERGY 1.0 260.0 [[280.0, 10], [282.0, 4], [294.0, 120], [300.0, 30], [310.0, 10], [360.0, 25], [520.0, 16]]",
+          "columns": 24,
+          "points": 216,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "22 rscan ENERGY 1.0 510.0 [[520.0, 10], [525.0, 10], [536.0, 55], [550.0, 28], [570.0, 20], [700.0, 13]]",
+          "columns": 24,
+          "points": 137,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "23 rscan ENERGY 1.0 675.0 [[685.0, 10], [692.0, 14], [717.0, 125], [730.0, 26], [760.0, 30]]",
+          "columns": 24,
+          "points": 206,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "24 rscan ENERGY 1.0 910.0 [[920.0, 10], [925.0, 10], [929.0, 20], [938.0, 90], [948.0, 40], [958.0, 50], [968.0, 20], [998.0, 30], [1028.0, 30], [1080.0, 26]]",
+          "columns": 24,
+          "points": 327,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "25 rscan ENERGY 1.0 995.0 [[1005.0, 10], [1015.0, 20], [1050.0, 175], [1080.0, 60], [1140.0, 40], [1200.0, 12]]",
+          "columns": 24,
+          "points": 318,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "26 rscan ENERGY 1.0 1800.0 [[1825.0, 25], [1840.0, 30], [1860.0, 100], [1900.0, 40], [2000.0, 20]]",
+          "columns": 24,
+          "points": 216,
+          "signals": [],
+          "warnings": 2
+        },
+        {
+          "id": "27 rscan ENERGY 1.0 910.0 [[924.0, 7], [929.0, 10], [932.0, 30], [938.0, 30], [948.5, 21]]",
+          "columns": 24,
+          "points": 99,
+          "signals": [],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/solaris/pirx/rodbuk-58IJY5/c0.txt",
+      "sha256": "3127dfd312009cac3384f21039d20a20059834153d91b4fb9a30c023cbec609b",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 99,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/solaris/pirx/rodbuk-58IJY5/c1.txt",
+      "sha256": "0554e7ff176a3d85130f77818ecd1674c8fadb39cf7e5979766b91e2ff50e7ed",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 99,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/solaris/pirx/rodbuk-58IJY5/c2.txt",
+      "sha256": "8b1e679d72416531f5f67338d30ab1b0e297c5238f7dd16ee3795aea502d7380",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 99,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/soleil/samba/zenodo-7801896/Aeschynite_0001.txt",
+      "sha256": "f5f0a138b261fa8d608044104b43218514d999ed8df7449db95dbd0af56ad033",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 10,
+          "points": 1187,
+          "signals": [
+            {
+              "name": "XMU",
+              "points": 1187,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/soleil/samba/zenodo-7801896/Ba_pcl_0001.txt",
+      "sha256": "9d0194f02fab50cea5c85798053b534b99c0b25d4ae0fc40bee72e0eeac58e5a",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 10,
+          "points": 1625,
+          "signals": [
+            {
+              "name": "XMU",
+              "points": 1625,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/soleil/samba/zenodo-7801896/Nb_anatase_10pc_0001.txt",
+      "sha256": "91c4b8e25080bed54baa685a33ca61408857bf010926189a54d5945e80f52e0f",
+      "status": "signal_choices",
+      "detected_format": "text",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 10,
+          "points": 1625,
+          "signals": [
+            {
+              "name": "XMU",
+              "points": 1625,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/spring-8/bl14b2/mdr-3c5953dc/Pb-L1_PbTe_Si311_50ms_210210.ex3",
+      "sha256": "48e9f600223ddc60333161b085f42c47ba96716c201aa5eedf949d56cb8791b8",
+      "status": "signal_choices",
+      "detected_format": "ex3",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 624,
+          "signals": [
+            {
+              "name": "mu",
+              "points": 624,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/spring-8/bl14b2/mdr-3c5953dc/Pb-L21_PbTe_Si311_50ms_210210.dat",
+      "sha256": "12d11303c8c8fc6b9926c7f7ee89bc468745479e20785d019bcc56a3ec373afa",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 2,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 6727,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 6727,
+              "status": "converted"
+            },
+            {
+              "name": "fluorescence_5",
+              "points": 6727,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/spring-8/bl14b2/mdr-ef31c010/Ba-K_BaI2_Si311_50m_200220_001.dat",
+      "sha256": "56ac9089e269ceae45460982e917b3496708eb5d4aa37ef7d085404bbe06d62f",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 5018,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 5018,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/spring-8/bl14b2/mdr-ef31c010/Ba-K_BaI2_Si311_50m_200220_001_fe.ex3",
+      "sha256": "973638d9a9e847db4b569c015a1423624c69ea846664b7a504746e427ad6cefe",
+      "status": "signal_choices",
+      "detected_format": "ex3",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 2,
+          "points": 595,
+          "signals": [
+            {
+              "name": "mu",
+              "points": 595,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/spring-8/bl14b2/mdr-ef31c010/Ba-K_BaI2_Si311_50m_200220_002.dat",
+      "sha256": "b42d19cd794e4b906881ed8ecf4ac8c2705b038a095cf536c5930b66e21adc22",
+      "status": "signal_choices",
+      "detected_format": "9809",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 5018,
+          "signals": [
+            {
+              "name": "it_4",
+              "points": 5018,
+              "status": "converted"
+            }
+          ],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/srs-daresbury/ex1a/demeter/srs9.dat",
+      "sha256": "a06a60f34f707d8b32318a84c6e7d6c7e4466f1ff8e520eefb4734d283102dc6",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "srs",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 15,
+          "points": 397,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/srs-daresbury/exf9/demeter/srs32.dat",
+      "sha256": "6b97363d46a6ad3ae00a7a4ab6e9489731a8485ec95b200a95721a84f1fc0bd2",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "srs",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 38,
+          "points": 353,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/srs-daresbury/sox1/demeter/srsc.dat",
+      "sha256": "44fb11de6e440abcb2c210dc3e97b9bc1de2bc5d04e6886a384ae2b064c9d890",
+      "status": "mapping_or_reduction_required",
+      "detected_format": "srs",
+      "datasets": 0,
+      "converted_signals": 0,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 7,
+          "points": 205,
+          "signals": [],
+          "warnings": 1
+        }
+      ]
+    },
+    {
+      "path": "samples/ssrl/2-3/xasdatalibrary/as2o3_10K_scan1.xdi",
+      "sha256": "16f5a9975081fb8a767bbbd7988a8e3dedb81bf6bfbe4531c941963de79e8d9d",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 4,
+          "points": 413,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 413,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/ssrl/2-3/xasdatalibrary/cr2o3_100K_001.xdi",
+      "sha256": "0b3cd6460a4f24f403c9ab40ce92733b5365d28c39d93f4c81660347d5ff2d46",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 4,
+          "points": 396,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 396,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/ssrl/2-3/xraylarch/SSRL1_2006.dat",
+      "sha256": "179bdf4cdc925cfc690bdfc47d91be7ec113ea25e52aa3afe4bc2439f8943187",
+      "status": "signal_choices",
+      "detected_format": "ssrl_ascii",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 455,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 455,
+              "status": "converted"
+            }
+          ],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/ssrl/4-1/xasdatalibrary/cr2o3_ssrl4_1_rt_001.xdi",
+      "sha256": "86bb3eec9771b3b38207cbd07d7846cdbc61d3b61253764411bd9cd0285c8890",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 4,
+          "points": 381,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 381,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/ssrl/4-3/xasdatalibrary/Cu2S_13K_01.xdi",
+      "sha256": "cf54924d288f902ee536b4b96e425f1debaa21f100e1464902c7194a546e9076",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 4,
+          "points": 454,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 454,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/ssrl/4-3/xasdatalibrary/MnO_rt_01.xdi",
+      "sha256": "21ab8bb86fd7ae6f6dd608b3a3881b6ff265a267c35cd116442b0a0cde085244",
+      "status": "signal_choices",
+      "detected_format": "xdi",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 4,
+          "points": 217,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 217,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/ssrl/7-3/demeter/ssrlb.dat",
+      "sha256": "ca06971fcecd2080fc9d620929d73ceaa8098d157226fb0f7c99f8bbad795466",
+      "status": "signal_choices",
+      "detected_format": "ssrl_binary",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 6,
+          "points": 635,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 635,
+              "status": "converted"
+            }
+          ],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/ssrl/unspecified-microprobe/xraylarch/SSRLmicro_2008.dat",
+      "sha256": "c331951e00d8616ee51d6c9c9681184e2242a7b11421506b3996d3db07400455",
+      "status": "signal_choices",
+      "detected_format": "ssrl_micro",
+      "datasets": 0,
+      "converted_signals": 32,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 69,
+          "points": 296,
+          "signals": [
+            {
+              "name": "SCA1.1 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.2 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.3 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.4 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.5 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.6 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.7 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.8 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.9 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.10 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.11 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.12 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.13 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.14 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.15 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.16 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.17 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.18 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.19 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.20 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.21 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.22 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.23 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.24 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.25 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.26 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.27 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.28 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.29 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.30 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.31 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            },
+            {
+              "name": "SCA1.32 / I0 (uncorrected)",
+              "points": 296,
+              "status": "converted"
+            }
+          ],
+          "warnings": 2
+        }
+      ]
+    },
+    {
+      "path": "samples/unspecified/lytle-archive/demeter/lytle.dat",
+      "sha256": "93cea62353b8f41954a7963cfdce994b8d97589ab1ff690f0918bc689b5cd359",
+      "status": "signal_choices",
+      "detected_format": "lytle",
+      "datasets": 0,
+      "converted_signals": 1,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "scan_1",
+          "columns": 5,
+          "points": 480,
+          "signals": [
+            {
+              "name": "transmission",
+              "points": 480,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/unspecified/unspecified/xraylarch/FeFoil_QXAFS_Compare.prj",
+      "sha256": "1bf859c93f7a74bf1915484fccdaeca0cf202ff75b0afa7b356ba204cc29182a",
+      "status": "signal_choices",
+      "detected_format": "athena",
+      "datasets": 0,
+      "converted_signals": 4,
+      "warnings": 1,
+      "scans": [
+        {
+          "id": "sroyd",
+          "columns": 4,
+          "points": 504,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 504,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "bhhdm",
+          "columns": 4,
+          "points": 494,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 494,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "upwcx",
+          "columns": 4,
+          "points": 494,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 494,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "flygf",
+          "columns": 4,
+          "points": 406,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 406,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    },
+    {
+      "path": "samples/unspecified/unspecified/xraylarch/json_unzipped.prj",
+      "sha256": "14a47fbcdb997ac6a6141837d60d83ad7c32ea80e339483d14c9d9374cd5310f",
+      "status": "signal_choices",
+      "detected_format": "athena",
+      "datasets": 0,
+      "converted_signals": 4,
+      "warnings": 0,
+      "scans": [
+        {
+          "id": "qsekm",
+          "columns": 3,
+          "points": 442,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 442,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "qmdqc",
+          "columns": 3,
+          "points": 442,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 442,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "pnmsn",
+          "columns": 3,
+          "points": 442,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 442,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        },
+        {
+          "id": "gwrcc",
+          "columns": 2,
+          "points": 441,
+          "signals": [
+            {
+              "name": "stored absorption",
+              "points": 441,
+              "status": "converted"
+            }
+          ],
+          "warnings": 0
+        }
+      ]
+    }
+  ]
+}

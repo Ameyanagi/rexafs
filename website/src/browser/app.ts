@@ -1,5 +1,6 @@
-import { inspectSource, MAX_SOURCE_BYTES, validateSettings } from './input';
-import type { AnalysisRequest, AnalysisResponse, AnalysisResult, AnalysisSettings, InputColumns } from './protocol';
+import type { SpectrumMapping } from '../../../js-rexafs/types';
+import { MAX_SOURCE_BYTES, validateSettings } from './input';
+import type { AnalysisRequest, AnalysisResponse, AnalysisResult, AnalysisSettings, InspectionRequest, InspectionResponse, MeasurementPreview } from './protocol';
 import { renderPlot } from './plot';
 
 function get<T extends Element>(selector: string): T {
@@ -19,6 +20,12 @@ const signalColumn = get<HTMLSelectElement>('#signal-column');
 const referenceColumn = get<HTMLSelectElement>('#reference-column');
 const quantity = get<HTMLSelectElement>('#signal-quantity');
 const energyUnit = get<HTMLSelectElement>('#energy-unit');
+const scanSelect = get<HTMLSelectElement>('#source-scan');
+const signalSelect = get<HTMLSelectElement>('#source-signal');
+const detectorColumns = get<HTMLSelectElement>('#detector-columns');
+const datasetPaths = get<HTMLSelectElement>('#dataset-paths');
+const customMapping = get<HTMLDetailsElement>('#custom-mapping');
+let mappingConfirmed = false;
 const processButton = get<HTMLButtonElement>('#process');
 const cancelButton = get<HTMLButtonElement>('#cancel');
 const csvButton = get<HTMLButtonElement>('#export-csv');
@@ -48,13 +55,16 @@ let loading = false;
 let processing = false;
 let sourceOperation = 0;
 let fetchController: AbortController | undefined;
+let inspectionWorker: Worker | undefined;
+let preview: MeasurementPreview | undefined;
+let selectedPaths: string[] | undefined;
 
 function clearError(): void { error.hidden = true; error.textContent = ''; }
 function showError(message: string): void { error.textContent = message; error.hidden = false; }
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : String(cause); }
 
 function syncControls(): void {
-  processButton.disabled = !source || loading || processing;
+  processButton.disabled = !source || columnCount < 2 || !mappingConfirmed || loading || processing;
   cancelButton.disabled = !loading && !processing;
   exampleButton.disabled = loading;
   workspace.setAttribute('aria-busy', String(loading || processing));
@@ -80,7 +90,10 @@ function markChanged(): void {
 }
 
 function updateQuantity(suggestColumns = false): void {
-  const transmission = quantity.value === 'transmission';
+  const transmission = quantity.value !== 'mu';
+  get<HTMLElement>('#detector-fields').hidden = quantity.value !== 'ratio';
+  get<HTMLElement>('#bragg-fields').hidden = energyUnit.value !== 'bragg';
+  get<HTMLElement>('#energy-origin-field').hidden = energyUnit.value !== 'offset_ev';
   get<HTMLElement>('#reference-field').hidden = !transmission;
   get<HTMLElement>('#transmission-help').hidden = !transmission;
   get<HTMLElement>('#signal-column-label').textContent = transmission ? 'Transmitted Iₜ column' : 'Absorption column';
@@ -93,8 +106,8 @@ function updateQuantity(suggestColumns = false): void {
 
 function configureColumns(count: number): void {
   columnCount = count;
-  for (const select of [energyColumn, signalColumn, referenceColumn]) {
-    select.replaceChildren(...Array.from({ length: count }, (_, index) => new Option(`Column ${index + 1}`, String(index))));
+  for (const select of [energyColumn, signalColumn, referenceColumn, detectorColumns]) {
+    select.replaceChildren(...Array.from({ length: count }, (_, index) => new Option(`${index + 1}: ${preview?.document.scans[Number(scanSelect.value)]?.columns[index]?.name ?? 'Column'} [${preview?.document.scans[Number(scanSelect.value)]?.columns[index]?.units ?? 'undeclared'}]`, String(index))));
   }
   energyColumn.value = '0';
   signalColumn.value = '1';
@@ -109,10 +122,17 @@ function configureColumns(count: number): void {
 
 function beginSourceLoad(): number {
   sourceOperation++;
+  inspectionWorker?.terminate();
+  inspectionWorker = undefined;
   fetchController?.abort();
   stopWorker();
   loading = true;
   source = undefined;
+  preview = undefined;
+  selectedPaths = undefined;
+  mappingConfirmed = false;
+  get<HTMLElement>('#mapping-summary').textContent = '';
+  columnCount = 0;
   result = undefined;
   completedRequest = undefined;
   revision++;
@@ -128,18 +148,121 @@ function beginSourceLoad(): number {
   return sourceOperation;
 }
 
-function acceptSource(name: string, text: string, operation: number): void {
+async function acceptSource(name: string, bytes: Uint8Array, operation: number): Promise<void> {
   if (operation !== sourceOperation) return;
-  const metadata = inspectSource(text);
-  if (metadata.columnCount < 2) throw new Error('Provide at least two columns: energy and absorption.');
-  source = { name, text };
-  configureColumns(metadata.columnCount);
+  const input = {name,bytes};
+  const info = await inspectMeasurement(input, operation);
+  if (operation !== sourceOperation) return;
+  source = input;
+  preview = info;
+  configureScans();
   loading = false;
   get<HTMLElement>('#source-name').textContent = name;
-  get<HTMLElement>('#source-details').textContent = `${metadata.rowCount.toLocaleString()} rows · ${metadata.columnCount} columns`;
-  status.textContent = 'Ready. Check the columns and units, then process the spectrum.';
+  get<HTMLElement>('#source-details').textContent = `${info.document.format} · ${info.document.scans.length} scans · ${info.document.datasets.length} datasets`;
+  status.textContent = columnCount ? 'Ready. Review the scan, signal and units, then process.' : 'No absorption channels selected. Inspect the datasets and diagnostics.';
   syncControls();
 }
+
+function inspectMeasurement(input: AnalysisRequest['source'], operation: number, paths?: string[]): Promise<MeasurementPreview> {
+  inspectionWorker?.terminate();
+  return new Promise((resolve, reject) => {
+    const task = new Worker(new URL('./analysis.worker.ts', import.meta.url), {type:'module'});
+    inspectionWorker = task;
+    task.addEventListener('message', (event: MessageEvent<InspectionResponse>) => {
+      if (event.data.id !== operation) return;
+      if (event.data.type === 'inspection') { task.terminate(); if(inspectionWorker===task)inspectionWorker=undefined; resolve(event.data.preview); }
+      else if (event.data.type === 'error') { task.terminate(); if(inspectionWorker===task)inspectionWorker=undefined; reject(new Error(event.data.message)); }
+    });
+    task.addEventListener('error', event => { task.terminate(); reject(new Error(event.message)); });
+    const request: InspectionRequest = {id:operation,type:'inspect',source:input,baseUrl,datasetPaths:paths};
+    task.postMessage(request);
+  });
+}
+
+function configureScans(): void {
+  if (!preview) return;
+  scanSelect.replaceChildren(...preview.document.scans.map((scan,index)=>new Option(`${index+1}: ${scan.label} (${preview!.rowCounts[index]} points)`,String(index))));
+  if (selectedPaths?.length) scanSelect.value=String(preview.document.scans.length-1);
+  datasetPaths.replaceChildren(...preview.document.datasets.map(d=>{
+    const option=new Option(`${d.path} [${d.shape.join(' × ')}]${d.imaginary != null ? ' · complex' : ''}`,d.path);
+    option.disabled=d.shape.length!==1 || d.imaginary != null; option.selected=selectedPaths?.includes(d.path) ?? false;return option;
+  }));
+  get<HTMLElement>('#dataset-review').hidden=!preview.document.datasets.length;
+  selectScan();
+}
+
+function selectScan(): void {
+  const scan=preview?.document.scans[Number(scanSelect.value)];
+  configureColumns(scan?.columns.length ?? 0);
+  signalSelect.replaceChildren(new Option('Manual column selection','manual'),...(scan?.signals.map((s,i)=>new Option(s.name,String(i))) ?? []));
+  mappingConfirmed = scan?.signals.length === 1;
+  customMapping.open = !mappingConfirmed;
+  if (scan?.signals.length===1) {signalSelect.value='0';applySignal(scan.signals[0].mapping);}
+  get<HTMLElement>('#reader-warnings').textContent=[...(preview?.document.warnings ?? []),...(scan?.warnings ?? []),...(scan?.signals.length!==1 ? ['Review the original header and select the intended signal explicitly.'] : [])].join(' ');
+  get<HTMLElement>('#reader-header').textContent=(scan?.header ?? '')+'\n'+(preview?.document.datasets.map(d=>`${d.path}: ${d.shape.join(' × ')} ${d.attributes.quantity ?? ''}`).join('\n') ?? '');
+  mapping.disabled=false;
+  updateMappingSummary();
+  syncControls();
+}
+
+function updateMappingSummary(): void {
+  const name = (select: HTMLSelectElement) => select.selectedOptions[0]?.textContent ?? 'Select a column';
+  get<HTMLElement>('#mapping-summary').textContent = mappingConfirmed
+    ? `Energy: ${name(energyColumn)} → eV. Signal: ${quantity.selectedOptions[0]?.textContent}.`
+    : 'Choose a detected signal, or review and confirm the custom columns and units.';
+}
+
+function applySignal(m: SpectrumMapping): void {
+  energyColumn.value=String(m.energy_column);
+  energyUnit.value=m.energy.kind==='bragg'?'bragg':m.energy.kind==='offset_ev'?'offset_ev':m.energy.kind==='kev'?'keV':'eV';
+  if (m.energy.kind==='offset_ev') get<HTMLInputElement>('#energy-origin').value=String(m.energy.offset_ev);
+  if (m.energy.kind==='bragg') {
+    get<HTMLInputElement>('#crystal-spacing').value=String(m.energy.d_spacing);
+    get<HTMLInputElement>('#angle-scale').value=String(m.energy.degrees_per_unit);
+  }
+  quantity.value=m.signal.kind==='direct'?'mu':m.signal.kind;
+  if (m.signal.kind==='direct') signalColumn.value=String(m.signal.column);
+  else {
+    referenceColumn.value=String(m.signal.incident);
+    if (m.signal.kind==='transmission') signalColumn.value=String(m.signal.transmitted);
+    else { const chosen=m.signal.detectors; for(const option of detectorColumns.options) option.selected=chosen.includes(Number(option.value)); }
+  }
+  updateQuantity();
+}
+
+function readMapping(): SpectrumMapping {
+  return {
+    energy_column:Number(energyColumn.value),
+    energy:energyUnit.value==='bragg'?{kind:'bragg',d_spacing:Number(get<HTMLInputElement>('#crystal-spacing').value),degrees_per_unit:Number(get<HTMLInputElement>('#angle-scale').value)}:energyUnit.value==='offset_ev'?{kind:'offset_ev',offset_ev:Number(get<HTMLInputElement>('#energy-origin').value)}:{kind:energyUnit.value==='keV'?'kev':'ev'},
+    signal:quantity.value==='mu'?{kind:'direct',column:Number(signalColumn.value)}:quantity.value==='transmission'?{kind:'transmission',incident:Number(referenceColumn.value),transmitted:Number(signalColumn.value)}:{kind:'ratio',incident:Number(referenceColumn.value),detectors:[...detectorColumns.selectedOptions].map(o=>Number(o.value))},
+  };
+}
+scanSelect.addEventListener('change',()=>selectScan());
+signalSelect.addEventListener('change',()=>{
+  const candidate=preview?.document.scans[Number(scanSelect.value)]?.signals[Number(signalSelect.value)];
+  if(candidate)applySignal(candidate.mapping);
+  mappingConfirmed = true;
+  customMapping.open = !candidate;
+  updateMappingSummary(); syncControls();
+});
+energyUnit.addEventListener('change',()=>updateQuantity());
+for(const control of [energyColumn,signalColumn,referenceColumn,quantity,energyUnit,detectorColumns,
+  get<HTMLInputElement>('#crystal-spacing'),get<HTMLInputElement>('#angle-scale'),get<HTMLInputElement>('#energy-origin')]) control.addEventListener('change',()=>{
+  signalSelect.value='manual'; mappingConfirmed=true; updateMappingSummary(); syncControls();
+});
+get<HTMLButtonElement>('#confirm-mapping').addEventListener('click',()=>{
+  signalSelect.value='manual'; mappingConfirmed=true; updateMappingSummary(); markChanged();
+});
+get<HTMLButtonElement>('#use-datasets').addEventListener('click',async()=>{
+  if (!source) return;
+  const operation=sourceOperation;
+  const paths=[...datasetPaths.selectedOptions].map(o=>o.value);
+  if(paths.length<2){showError('Select at least two equal-length dataset vectors.');return;}
+  loading=true;syncControls();
+  try {const info=await inspectMeasurement(source,operation,paths);if(operation===sourceOperation){preview=info;selectedPaths=paths;configureScans();}}
+  catch(cause){if(operation===sourceOperation)showError(message(cause));}
+  finally{if(operation===sourceOperation){loading=false;syncControls();}}
+});
 
 function sourceFailed(cause: unknown, operation: number): void {
   if (operation !== sourceOperation) return;
@@ -156,7 +279,7 @@ fileInput.addEventListener('change', async () => {
   const operation = beginSourceLoad();
   try {
     if (file.size > MAX_SOURCE_BYTES) throw new Error('This browser preview accepts files up to 8 MiB.');
-    acceptSource(file.name, await file.text(), operation);
+    await acceptSource(file.name, new Uint8Array(await file.arrayBuffer()), operation);
   } catch (cause) { sourceFailed(cause, operation); }
 });
 
@@ -171,7 +294,7 @@ exampleButton.addEventListener('click', async () => {
     const text = await response.text();
     if (operation !== sourceOperation) return;
     fileInput.value = '';
-    acceptSource('cu_150k.xmu', text, operation);
+    await acceptSource('cu_150k.xmu', new TextEncoder().encode(text), operation);
   } catch (cause) { sourceFailed(cause, operation); }
 });
 
@@ -189,24 +312,15 @@ function readSettings(): AnalysisSettings {
   };
 }
 
-function readColumns(): InputColumns {
-  return {
-    energy: Number(energyColumn.value), signal: Number(signalColumn.value),
-    ...(quantity.value === 'transmission' ? { reference: Number(referenceColumn.value) } : {}),
-    quantity: quantity.value as InputColumns['quantity'],
-    energyUnit: energyUnit.value as InputColumns['energyUnit'],
-  };
-}
-
 form.addEventListener('submit', event => {
   event.preventDefault();
-  if (!source || processing || loading || !form.reportValidity()) return;
+  if (!source || !mappingConfirmed || processing || loading || !form.reportValidity()) return;
   clearError();
   try {
     const settings = readSettings();
     validateSettings(settings);
     stopWorker();
-    const request: AnalysisRequest = { id: ++requestId, type: 'process', source, columns: readColumns(), settings, baseUrl };
+    const request: AnalysisRequest = { id: ++requestId, type: 'process', source, selection: {scan:Number(scanSelect.value),mapping:readMapping(),datasetPaths:Number(scanSelect.value)===(preview?.document.scans.length ?? 0)-1?selectedPaths:undefined}, settings, baseUrl };
     const startedRevision = revision;
     activeRequest = request;
     processing = true;
@@ -254,6 +368,8 @@ form.addEventListener('submit', event => {
 
 cancelButton.addEventListener('click', () => {
   sourceOperation++;
+  inspectionWorker?.terminate();
+  inspectionWorker = undefined;
   fetchController?.abort();
   loading = false;
   stopWorker();
@@ -267,9 +383,9 @@ function currentCurve() {
   if (!result || !completedRequest) return undefined;
   const fourierPower = completedRequest.settings.kweight + 1;
   const powers = ['⁰', '¹', '²', '³', '⁴'];
-  const absorptionUnit = completedRequest.columns.quantity === 'transmission' ? 'dimensionless' : 'input units';
+  const absorptionUnit = completedRequest.selection.mapping.signal.kind === 'transmission' ? 'dimensionless' : 'input units';
   switch (view) {
-    case 'raw': return { x: result.energy, y: result.mu, title: 'Measured absorption', xLabel: 'Energy (eV)', yLabel: `μ(E) (${absorptionUnit})`, columns: ['energy_eV', completedRequest.columns.quantity === 'transmission' ? 'mu_dimensionless' : 'mu_input_units'], note: 'Energy is shown in eV. Absorption uses the selected signal columns.' };
+    case 'raw': return { x: result.energy, y: result.mu, title: 'Imported absorption', xLabel: 'Energy (eV)', yLabel: `μ(E) (${absorptionUnit})`, columns: ['energy_eV', completedRequest.selection.mapping.signal.kind === 'transmission' ? 'mu_dimensionless' : 'mu_input_units'], note: 'Energy is shown in eV. Absorption uses the selected signal columns.' };
     case 'normalized': return { x: result.energy, y: result.norm, title: 'Normalized absorption', xLabel: 'Energy (eV)', yLabel: 'Normalized μ(E)', columns: ['energy_eV', 'mu_normalized'], note: 'The pre-edge baseline is removed and the absorption edge step is scaled to 1.' };
     case 'chi': return { x: result.k, y: result.chi, title: 'Background-subtracted EXAFS', xLabel: 'k (Å⁻¹)', yLabel: 'χ(k)', columns: ['k_inverse_angstrom', 'chi'], note: 'χ(k) is dimensionless and shown without k weighting.' };
     case 'fourier': return { x: result.r, y: result.chirMag, title: 'Fourier-transform magnitude', xLabel: 'R (Å)', yLabel: `|χ(R)| (Å⁻${powers[fourierPower]})`, columns: ['R_angstrom', `chir_magnitude_inverse_angstrom_power_${fourierPower}`], zeroMinimum: true, note: `Transform of k${powers[completedRequest.settings.kweight]}χ(k). R peaks are not phase-corrected bond distances.` };

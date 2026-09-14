@@ -1,11 +1,11 @@
-import { parseSource, validateSettings, validateNumericalWorkspace } from './input';
-import type { AnalysisRequest, AnalysisResponse, AnalysisResult } from './protocol';
+import { MAX_SOURCE_BYTES, validateImportedArrays, validateSettings, validateNumericalWorkspace } from './input';
+import type { AnalysisRequest, AnalysisResponse, AnalysisResult, InspectionRequest, InspectionResponse } from './protocol';
 
 type Engine = typeof import('../../../js-rexafs/index');
 interface EngineManifest { version: string; commit: string; dirty: boolean; wasmSha256: string; channel: string }
 const port = self as unknown as {
-  onmessage: ((event: MessageEvent<AnalysisRequest>) => void) | null;
-  postMessage(message: AnalysisResponse, transfer?: Transferable[]): void;
+  onmessage: ((event: MessageEvent<AnalysisRequest | InspectionRequest>) => void) | null;
+  postMessage(message: AnalysisResponse | InspectionResponse, transfer?: Transferable[]): void;
 };
 let loaded: Promise<{ engine: Engine; manifest: EngineManifest }> | undefined;
 
@@ -37,21 +37,51 @@ function hex(buffer: ArrayBuffer): string {
 }
 
 /** Content identity is exported for reproducibility; source bytes stay in this browser. */
-async function sha256(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+async function sha256(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new Uint8Array(bytes));
   return hex(digest);
 }
 
 /** Each request owns a fresh spectrum; all native allocations are released on success or failure. */
 port.onmessage = async ({ data }) => {
-  if (data.type !== 'process') return;
+  if (!['process','inspect'].includes(data.type)) return;
   const progress = (stage: string) => port.postMessage({ id: data.id, type: 'progress', stage });
   try {
-    validateSettings(data.settings);
-    const { energy, mu } = parseSource(data.source.text, data.columns);
-    progress('Loading engine');
+    if (data.source.bytes.byteLength > MAX_SOURCE_BYTES) throw new Error('This browser preview accepts files up to 8 MiB.');
+    if (data.type === 'process') progress('Loading engine');
     const { engine, manifest } = await loadEngine(data.baseUrl);
-    const inputHash = await sha256(data.source.text);
+    const measurement = engine.read_measurement(data.source.bytes);
+    let energy: Float64Array, mu: Float64Array;
+    let sourceFormat: string, sourceWarnings: string[];
+    try {
+      const paths = data.type === 'inspect' ? data.datasetPaths : data.selection.datasetPaths;
+      const selected = paths?.length ? measurement.select_datasets(paths) : undefined;
+      const document = measurement.document;
+      if (data.type === 'inspect') {
+        const rowCounts = document.scans.map(scan => scan.columns[0]?.values.length ?? 0);
+        for (const scan of document.scans) {
+          for (const column of scan.columns) column.values = column.values.slice(0, 3);
+          scan.header = scan.header.slice(0, 32_768);
+        }
+        // Previews retain shapes and complex markers, with bounded text/values.
+        for (const dataset of document.datasets) {
+          dataset.values = dataset.values.slice(0, 3);
+          if (dataset.imaginary) dataset.imaginary = dataset.imaginary.slice(0, 3);
+          for (const key of Object.keys(dataset.attributes)) dataset.attributes[key] = dataset.attributes[key].slice(0, 32768);
+        }
+        for (const key of Object.keys(document.metadata)) document.metadata[key] = document.metadata[key].slice(0, 32768);
+        port.postMessage({id:data.id,type:'inspection',preview:{document,rowCounts}});
+        return;
+      }
+      const scan = selected ?? data.selection.scan;
+      ({energy,mu} = measurement.arrays(scan, data.selection.mapping));
+      sourceFormat = document.format;
+      sourceWarnings = [...document.warnings,...(document.scans[scan]?.warnings ?? [])];
+    } finally { measurement.free(); }
+    if (data.type !== 'process') return;
+    validateSettings(data.settings);
+    validateImportedArrays(energy, mu);
+    const inputHash = await sha256(data.source.bytes);
     const spectrum = new engine.Spectrum(energy, mu);
     let result: AnalysisResult;
     const started = performance.now();
@@ -82,8 +112,8 @@ port.onmessage = async ({ data }) => {
       result = {
         sourceName: data.source.name, energy, mu, norm, flat, k, chi, r, chirMag, e0,
         provenance: {
-          schema: 'rexafs-browser-analysis-v1', createdAt: new Date().toISOString(),
-          engine: manifest, input: { name: data.source.name, textSha256: inputHash, encoding: 'UTF-8 text as imported', rows: energy.length, columns: data.columns },
+          schema: 'rexafs-browser-analysis-v2', createdAt: new Date().toISOString(),
+          engine: manifest, input: { name: data.source.name, bytesSha256: inputHash, format: sourceFormat, warnings: sourceWarnings, rows: energy.length, selection: data.selection },
           requested: data.settings, resolved: { e0 },
           defaults: { normalization: 'PrePostEdge automatic', background: 'AUTOBK defaults with requested rbkg', fourierWindow: 'KaiserBessel' },
           units: { energy: 'eV', k: 'angstrom^-1', r: 'angstrom', chi: 'dimensionless', chirMag: `angstrom^(-${data.settings.kweight + 1})` },

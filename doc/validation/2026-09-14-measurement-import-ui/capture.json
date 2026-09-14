@@ -1,0 +1,55 @@
+{
+  "captured_on": "2026-09-14",
+  "platform": "macOS ARM64",
+  "application": "target/gui-review/rexafs.app",
+  "build": "Unreleased source build; package version 0.2.5; branch test/beamline-fixtures based on 86133dc with the universal-reader changes in this PR.",
+  "capture_method": "Computer-use getScreenshot; complete original JPEG bytes, no cropping, resizing or compositing.",
+  "executable_sha256": "956dcaac4b0d263143cb2833a5ac8ce9e91b1d08bcc65aafe1dd9bc1f163c55c",
+  "screenshots": [
+    {
+      "path": "website/public/screenshots/next/import-preview.jpg",
+      "width": 1187,
+      "height": 768,
+      "sha256": "d98f5234a04ffbd13c417e7fb69d7599dfdbaf648034d53e780405ed9619eeb0"
+    },
+    {
+      "path": "website/public/screenshots/next/import-source-details.jpg",
+      "width": 1187,
+      "height": 768,
+      "sha256": "6caa956b781688d1170103add471940c102558ee77c8afc688e16438421167d9"
+    },
+    {
+      "path": "doc/validation/2026-09-14-measurement-import-ui/kek-qd-preview.jpg",
+      "width": 1187,
+      "height": 768,
+      "sha256": "16704c130adfb0e8041b3d3f79aa6050c34772019c0fae86f9dceedab0630d5f"
+    },
+    {
+      "path": "doc/validation/2026-09-14-measurement-import-ui/imported-ex3.jpg",
+      "width": 1187,
+      "height": 768,
+      "sha256": "ec131a2b98de47df572ad3283ffcb75988b1d33b898958a55253527edc110d13"
+    }
+  ],
+  "inputs": [
+    {
+      "path": "crates/rexafs/tests/fixtures/xas/samples/spring-8/bl14b2/mdr-3c5953dc/Pb-L1_PbTe_Si311_50ms_210210.ex3",
+      "sha256": "48e9f600223ddc60333161b085f42c47ba96716c201aa5eedf949d56cb8791b8",
+      "source_url": "https://mdr.nims.go.jp/datasets/3c5953dc-1faa-47a7-a3f0-8211703adb58",
+      "license": "CC-BY-4.0"
+    },
+    {
+      "path": "crates/rexafs/tests/fixtures/xas/candidates/kek-pf/bl-12c/fe002_0.qd",
+      "sha256": "919b5f4b102cea0a3159ce3773a57f293bd0e6e2326a2ef32232018a1c34c918",
+      "source_url": "https://pfxafs.kek.jp/xafsdata/view.php?id=132",
+      "license": "LicenseRef-KEK-PF-Academic-Use-Notice"
+    }
+  ],
+  "observed_workflow": [
+    "EX3 opens with 624-point stored-absorption preview and detected energy.",
+    "Source details expands original header below the plot; Import spectrum stays visible.",
+    "Import creates one spectrum; the raw absorption display retains the preview curve.",
+    "Undo removes the new spectrum; toolbar Redo restores it.",
+    "KEK QD preview shows 3917 points, transmission and recorded 3.13551 angstrom angle conversion."
+  ]
+}

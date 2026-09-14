@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: individual dataset license
+License-Evidence: https://mdr.nims.go.jp/datasets/0468e6b4-e1d0-4be4-a82c-e02b2e2a1102
+Test-Eligibility: documented-license
+Source: https://mdr.nims.go.jp/datasets/0468e6b4-e1d0-4be4-a82c-e02b2e2a1102
+Download: https://mdr.nims.go.jp/filesets/a848d643-664e-47d2-9d3e-b71af409d7a6/download
+Citation: Masashi Ishii; Ritsumeikan SR Center. XAFS spectrum of Sodium fluoride. https://doi.org/10.48505/nims.3357
+SHA256: 60ca88367dcf837b9c7b8975ad35bf3860276a465269eb9412103b400e45c628
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/mdr/0468e6b4-e1d0-4be4-a82c-e02b2e2a1102/record.json

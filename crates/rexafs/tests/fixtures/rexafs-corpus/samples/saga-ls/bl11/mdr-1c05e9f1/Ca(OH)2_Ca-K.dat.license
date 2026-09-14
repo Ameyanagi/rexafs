@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-NC-SA-4.0
+License-File: LICENSES/CC-BY-NC-SA-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: individual dataset license
+License-Evidence: https://mdr.nims.go.jp/datasets/1c05e9f1-08af-4eb8-9292-1e12971165a9
+Test-Eligibility: documented-license
+Source: https://mdr.nims.go.jp/datasets/1c05e9f1-08af-4eb8-9292-1e12971165a9
+Download: https://mdr.nims.go.jp/filesets/7d70ac9a-301c-4a9f-8657-63f1de8c0109/download
+Citation: Masashi Ishii; SAGA-LS. XAFS spectrum of Calcium(II) hydroxide. https://doi.org/10.48505/nims.4185
+SHA256: 3ffa48f3eb12ff5bbf73d806253642bd6d5bb5e7f15d79e4969dc2adf74fcc7b
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/mdr/1c05e9f1-08af-4eb8-9292-1e12971165a9/record.json

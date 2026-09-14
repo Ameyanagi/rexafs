@@ -1069,6 +1069,8 @@ pub struct StudioApp {
     journal: shell::journal::JournalState,
     palette: Option<shell::palette::PaletteState>,
     path_route: Option<shell::path_routing::RoutingCard>,
+    measurement_import: Option<shell::measurement_import::MeasurementImport>,
+    measurement_request: u64,
     pending_routed_import: VecDeque<shell::path_routing::RoutedImport>,
     /// Inspector scroll position (tools reveal their form on open).
     inspector_scroll: gpui::ScrollHandle,
@@ -2174,6 +2176,7 @@ mod override_tests {
             mu_col: None,
         };
         let reference = crate::params::ImportPreview {
+            layout: None,
             column_count: 6,
             names: None,
             rows: vec![],
@@ -2917,6 +2920,8 @@ impl StudioApp {
             journal: shell::journal::JournalState::default(),
             palette: None,
             path_route: None,
+            measurement_import: None,
+            measurement_request: 0,
             pending_routed_import: VecDeque::new(),
             inspector_scroll: gpui::ScrollHandle::new(),
             group_registry: Default::default(),
@@ -6513,8 +6518,17 @@ impl StudioApp {
         self.import_preview_error = "".into();
         self.import_preview_gen += 1;
         if path.as_os_str().is_empty() {
-            self.import_preview_error =
-                "This group has no source file for a column preview.".into();
+            self.import_preview_error = if self
+                .selected
+                .and_then(|ix| ix.checked_sub(DERIVED_BASE))
+                .and_then(|i| self.derived.get(i))
+                .and_then(|group| group.operation.as_ref())
+                .is_some_and(|op| op.tool == "Measurement import")
+            {
+                "Original measurement and import mapping are retained in this project.".into()
+            } else {
+                "This group has no source file for a column preview.".into()
+            };
             return;
         }
         let generation = self.import_preview_gen;
@@ -8496,6 +8510,7 @@ impl StudioApp {
         self.filter_reveal = None;
         self.reveal_current = None;
         self.project_generation += 1;
+        self.measurement_import = None;
         self.assistant_history = project.assistant.clone();
         self.assistant_history_revision = 0;
         self.assistant_history_saved_revision = 0;
@@ -9403,6 +9418,9 @@ impl StudioApp {
 
 impl Render for StudioApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(source) = self.measurement_import.take() {
+            self.open_measurement_editor(source, window, cx);
+        }
         self.viewport_w = f32::from(window.viewport_size().width);
         self.viewport_h = f32::from(window.viewport_size().height);
         let blocked = self.import_editor.is_some()

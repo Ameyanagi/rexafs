@@ -1,0 +1,9 @@
+SPDX-License-Identifier: MIT
+License-File: LICENSES/XraySpectroscopy--pynxxas--LICENSE
+License-Basis: repository-distribution-license
+License-Scope: repository distribution license; bundled examples/test fixtures
+License-Evidence: https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/LICENSE
+Source: https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/BlissMultiModal/test_Assolution_Mauro_0001.h5
+Citation: Xray Spectroscopy contributors (2024). pynxxas. Original ESRF BM16 BLISS example supplied in the repository. https://github.com/XraySpectroscopy/pynxxas
+SHA256: 68e073a97ac96a59a3e3cb0a17bfd63a5228db724b5803ebcfbf03a39be44ef2
+Modifications: None; complete original file retained.

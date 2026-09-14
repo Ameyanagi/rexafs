@@ -32,6 +32,7 @@ mod joint_browser;
 pub(crate) mod joint_fit;
 pub mod journal;
 mod marked_removal;
+pub(crate) mod measurement_import;
 mod molecular_geometry;
 pub mod molecule_view;
 pub mod palette;

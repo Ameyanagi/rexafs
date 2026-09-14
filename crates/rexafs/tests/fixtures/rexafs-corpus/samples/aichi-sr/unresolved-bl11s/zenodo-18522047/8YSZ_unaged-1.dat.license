@@ -1,0 +1,10 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit dataset license
+License-Evidence: https://zenodo.org/records/18522047
+Source: https://zenodo.org/records/18522047
+Download: https://zenodo.org/api/records/18522047/files/8YSZ_unaged-1.dat/content
+Citation: Nakamura, Keisuke (2026). Synchrotron XRD and XAFS datasets of dental yttria-stabilized zirconia. Zenodo. https://doi.org/10.5281/zenodo.18522047
+SHA256: 3237556d3ce8117a9b49af3ff22061540788be015c4b60ed266380e5f100b454
+Modifications: None; original downloaded measurement bytes retained.

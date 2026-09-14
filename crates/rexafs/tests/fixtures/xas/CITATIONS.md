@@ -302,3 +302,77 @@ The 12 RefXAS examples were obtained from RefXAS. Citation: [RefXAS paper](https
 
 - [Pyrite_2005_11_19_scan1_idvvf2ra.dat](samples/esrf/id21/cls-xasdb/Pyrite_2005_11_19_scan1_idvvf2ra.dat) — ESRF / ID21. Magnus Sandström. Pyrite, S K-edge, ID21, 2005-11-19. Canadian Light Source XAS Database, spectrum S_idvvf2ra. [Exact source](https://xasdb.lightsource.ca/DB/S/ID21/Pyrite/Pyrite_2005_11_19_scan1_idvvf2ra.dat); [CC-BY-4.0](LICENSES/CC-BY-4.0.txt).
 
+
+## Additional BMM standards, 2026-09-14
+
+Bruce Ravel (2025). A collection of X-ray Absorption Spectroscopy data of metals, stable oxides, and other common compounds measured at NIST’s Beamline for Materials Measurement. Version 1.0.0. National Institute of Standards and Technology. https://doi.org/10.18434/mds2-4032. Accessed 2026-09-14.
+
+Original NIST data, retained without modifications. These three files add reference-foil signal regressions from the beamline’s own repository.
+
+- [Fe-K-IronFoil.xdi](https://github.com/NSLS2/bmm-standards/blob/7f5728eb2b59d98305e41a908d0791b0baeab869/Data/Fe/Fe-K-IronFoil.xdi): `ae00e0e5bccd45902aec7f21cf62de3c094eccaec8c23960443d3006efec3396`.
+- [Au-L3-GoldFoil.xdi](https://github.com/NSLS2/bmm-standards/blob/7f5728eb2b59d98305e41a908d0791b0baeab869/Data/Au/Au-L3-GoldFoil.xdi): `fd6216a18d67df8df926b8be104208a1692a176f611139ea6b58633330f3f47a`.
+- [As-K-ArsenicTrioxide.xdi](https://github.com/NSLS2/bmm-standards/blob/7f5728eb2b59d98305e41a908d0791b0baeab869/Data/As/As-K-ArsenicTrioxide.xdi): `7bd39ef6ac0c59782ae0afcce1e45257bcb404ea6f692c165c26b3a5f54cb0eb`.
+
+
+## Demeter and Larch format follow-up, 2026-09-14
+
+Thirteen unmodified bundled examples were added at the pinned revisions below.
+Demeter examples use the supplied Artistic license option; Larch examples use
+its MIT repository distribution license. These are recorded separately from
+creator-issued data licenses. See the [format audit](../../../../../doc/reference-format-audit.md)
+for parser coverage and the distinction between measurements and calculations.
+
+- [ssrla.dat](samples/ssrl/2-3/demeter/ssrla.dat) — Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719. [Exact source](https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/ssrla.dat); [Artistic-1.0-Perl](LICENSES/bruceravel--demeter--LICENSE). SHA-256: `0a5c2a759b970693a2d7411b2862177d78aa99740fe435ba84afdc850d0c4a19`.
+
+- [ssrlmicro.dat](samples/ssrl/microexafs-unconfirmed/demeter/ssrlmicro.dat) — Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719. [Exact source](https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/ssrlmicro.dat); [Artistic-1.0-Perl](LICENSES/bruceravel--demeter--LICENSE). SHA-256: `deba396ba0434b8770d2bd09609414ac59f6cd2e6c866171519bb889e7a035a0`.
+
+- [x23a2med.dat](samples/nsls/x23a2/demeter/x23a2med.dat) — Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719. [Exact source](https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/x23a2med.dat); [Artistic-1.0-Perl](LICENSES/bruceravel--demeter--LICENSE). SHA-256: `f218b99aa4f5367e00130f23ff60ca0ccb2c9b7ea3cddce245fa1af961c9bd0f`.
+
+- [re4chan.000](samples/nsls/x23a2/demeter/re4chan.000) — Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719. [Exact source](https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/examples/recipes/MultiChannel/re4chan.000); [Artistic-1.0-Perl](LICENSES/bruceravel--demeter--LICENSE). SHA-256: `6b86fda488c7247fe41d1713faea6d60ada796f353fb2c177158c34bec107ed2`.
+
+- [FDMNES_2022_Mo2C_out.dat](samples/unspecified/fdmnes/xraylarch/FDMNES_2022_Mo2C_out.dat) — Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007. [Exact source](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/FDMNES_2022_Mo2C_out.dat); [MIT](LICENSES/xraypy--xraylarch--LICENSE). SHA-256: `9427e44763bc3438c700056160e16fef4592ee1b292dff7737a78294bd52f9e6`.
+
+- [FDMNES_2022_Mo2C_out_conv.dat](samples/unspecified/fdmnes/xraylarch/FDMNES_2022_Mo2C_out_conv.dat) — Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007. [Exact source](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/FDMNES_2022_Mo2C_out_conv.dat); [MIT](LICENSES/xraypy--xraylarch--LICENSE). SHA-256: `ef4abcf2695d20cec6aaf2993838e4e409e3c9e5cffda3f71ce13a43d99b05ff`.
+
+- [fe_xanes_8ch.xdi](samples/unspecified/multielement/xraylarch/fe_xanes_8ch.xdi) — Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007. [Exact source](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/fe_xanes_8ch.xdi); [MIT](LICENSES/xraypy--xraylarch--LICENSE). SHA-256: `edb3285ef98a3173672bdd0fea41084bc098a6f013a0ee4211784080c219586d`.
+
+- [nonuniform.chi](samples/unspecified/chi/xraylarch/nonuniform.chi) — Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007. [Exact source](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/nonuniform.chi); [MIT](LICENSES/xraypy--xraylarch--LICENSE). SHA-256: `43464e0c2fef884ab02b940531ae5ac86a98d0aa47db4c0f39c2a7706eed121d`.
+
+- [generic_columns_no_header.dat](samples/unspecified/generic/xraylarch/generic_columns_no_header.dat) — Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007. [Exact source](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/generic_columns_no_header.dat); [MIT](LICENSES/xraypy--xraylarch--LICENSE). SHA-256: `09d87893f72958901eebc2cb2400cbda13654f2ef4781f5ae829df3b88729080`.
+
+- [AsKa_standards.prj](samples/unspecified/athena-legacy/xraylarch/AsKa_standards.prj) — Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007. [Exact source](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/AsKa_standards.prj); [MIT](LICENSES/xraypy--xraylarch--LICENSE). SHA-256: `83c3beefe758620eb45dba92f6b35ec491fb4d0c1d4ffcbbe25f046667dd6d54`.
+
+- [AsXAFS_a.prj](samples/unspecified/athena-legacy/xraylarch/AsXAFS_a.prj) — Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007. [Exact source](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/AsXAFS_a.prj); [MIT](LICENSES/xraypy--xraylarch--LICENSE). SHA-256: `fb9fbf7915f17aef362247b48277aaa92f662b51884e3e01c5d4140e4a5383c3`.
+
+- [Br.prj](samples/unspecified/athena-legacy/xraylarch/Br.prj) — Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007. [Exact source](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/Br.prj); [MIT](LICENSES/xraypy--xraylarch--LICENSE). SHA-256: `53977dbb2d6e5d64ed857cbfe2548e88aca0091fdd4276a5760f0128b2e63e9c`.
+
+- [ESRF_Athena0920.prj](samples/unspecified/athena-legacy/xraylarch/ESRF_Athena0920.prj) — Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007. [Exact source](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/ESRF_Athena0920.prj); [MIT](LICENSES/xraypy--xraylarch--LICENSE). SHA-256: `f0ef00ca5deb184beee6fe5620c0d13e6e6bac0c8abf2e6f9050ecd6f4e81a24`.
+
+
+## ESRF BM16 BLISS acquisition
+
+Xray Spectroscopy contributors (2024), [pynxxas](https://github.com/XraySpectroscopy/pynxxas),
+commit `7e5f738c160e41f949c8441115856130010ca1da`. The complete original
+`test_Assolution_Mauro_0001.h5` identifies ESRF BM16 in its HDF5 metadata.
+The [manifest](manifest.json) pins the upstream file, Git blob and SHA-256.
+See [the upstream converter](https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/BlissMultiModal/convert_to_nexus.py)
+for channel selection context; rexafs does not repeat its detector corrections.
+
+
+## KEK Photon Factory QD measurements, 2026-09-14
+
+Retained for academic, nonmilitary research and reader regression testing only.
+Contact each experimenter through the official record before citing the data
+in a publication. Preserve the [original usage notice](LICENSES/LicenseRef-KEK-PF-Academic-Use-Notice.txt)
+and adjacent per-file attribution.
+
+- [cu_foil_0.qd](candidates/kek-pf/bl-9c/cu_foil_0.qd) — Hiroaki Nitani (Photon Factory), 2018-05-30. Cu metal foil, KEK Photon Factory BL-9C, Quick Scan. PF XAFS database record 22. [Official record](https://pfxafs.kek.jp/xafsdata/view.php?id=22). SHA-256: `95442847c66be92a877c72876b377230edcaab24fa0636536f77fa1bbef6fdff`.
+
+- [fe002_0.qd](candidates/kek-pf/bl-12c/fe002_0.qd) — Yasuhiro Inada (Ritsumeikan University), 2021-11-12. LiFePO4, KEK Photon Factory BL-12C, Quick Scan. PF XAFS database record 132. [Official record](https://pfxafs.kek.jp/xafsdata/view.php?id=132). SHA-256: `919b5f4b102cea0a3159ce3773a57f293bd0e6e2326a2ef32232018a1c34c918`.
+
+- [ScotchTape02_0.qd](candidates/kek-pf/bl-9a/ScotchTape02_0.qd) — Yasuo Takeichi (Photon Factory), 2021-11-19. Scotch tape AL-25DC, KEK Photon Factory BL-9A, Quick Scan. PF XAFS database record 133. [Official record](https://pfxafs.kek.jp/xafsdata/view.php?id=133). SHA-256: `7f6e8b15d7fb2b39138cc87447db120afbfbbe64ee0ba30b65aa90ed190a4ec4`.
+
+- [sr01_0.qd](candidates/kek-pf/ar-nw10a/sr01_0.qd) — Yasuhiro Niwa (KEK-PF), 2022-05-25. SrCO3, KEK Photon Factory AR-NW10A, Quick Scan. PF XAFS database record 153. [Official record](https://pfxafs.kek.jp/xafsdata/view.php?id=153). SHA-256: `aff3cca5c9425b1ccff20df5c9e80899240b25e92491d5c0e8708166f9afd896`.
+
+- [Fe003_0.qd](candidates/kek-pf/bl-9c/Fe003_0.qd) — Hitoshi Abe (IMSS), 2025-03-02. Fe foil, KEK Photon Factory BL-9C, Quick Scan. PF XAFS database record 187. [Official record](https://pfxafs.kek.jp/xafsdata/view.php?id=187). SHA-256: `c749dfb0a91b3ea27dd0fbf1cfd8ac664abc9cf2bd5f0cabcb2fafa82acc291f`.
+

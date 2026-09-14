@@ -10,3 +10,6 @@ export default function init(): Promise<void>;
 export { Spectrum, PrePostEdge, AUTOBK, XrayFFTF, XrayFFTR, NormalizationMethod, BackgroundMethod } from "./types.js";
 
 export type { FFTGrid, FTWindow, AUTOBKSolver, AUTOBKClampScalePolicy, PrePostEdgeOptions, AUTOBKOptions, XrayFFTFOptions, XrayFFTROptions } from "./types.js";
+
+export { Measurement, read_measurement } from "./types.js";
+export type { MeasurementDocument, MeasurementScan, MeasurementColumn, MeasurementDataset, SpectrumMapping, EnergyConversion, SignalConversion, SignalCandidate } from "./types.js";

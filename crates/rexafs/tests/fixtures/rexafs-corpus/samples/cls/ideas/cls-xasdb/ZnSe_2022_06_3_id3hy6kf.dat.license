@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit per-spectrum Scan.license declaration in CLS API metadata; also in the download header except Fe_idcj28n9
+License-Evidence: https://xasdb.lightsource.ca/DB/Zn/IDEAS/Zinc%20Selenide/ZnSe_2022_06_3_id3hy6kf.dat
+Test-Eligibility: documented-license
+Source: https://xasdb.lightsource.ca/DB/Zn/IDEAS/Zinc%20Selenide/ZnSe_2022_06_3_id3hy6kf.dat
+Download: https://xasdb.lightsource.ca/DB/Zn/IDEAS/Zinc%20Selenide/ZnSe_2022_06_3_id3hy6kf.dat
+Citation: Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Zinc Selenide, Zn K-edge, IDEAS, 2022-06-3. Canadian Light Source XAS Database, spectrum Zn_id3hy6kf. https://doi.org/10.20383/103.01329
+SHA256: 4192cb5ef0d90b25b1e1488564b3c05eb5d35e3dde6ac4cb44718e2a19875725
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/cls/Zn_id3hy6kf.json

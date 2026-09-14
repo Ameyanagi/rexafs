@@ -1,0 +1,46 @@
+{
+  "source": "https://github.com/Ameyanagi/xtunes-analysis/tree/e320ed77469d848cd0b99125deb810f3f34ccb91/fixtures/xtunes-generated",
+  "generation": "XTUNES 1.3 Build20200228; Windows save/reopen. See README.md.",
+  "files": [
+    {
+      "path": "LICENSE.txt",
+      "bytes": 1391,
+      "sha256": "86079980d9c636cbc3ec90b8208f436529d117faf964ab5b72c36f8e025fb529"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1459,
+      "sha256": "20158216e959204df45e8cc7c336117d0d3b18f23e1baf55c04e6259c7a1a9ee"
+    },
+    {
+      "path": "mixed-raw-analyzed.xtsp",
+      "bytes": 220579,
+      "sha256": "615bae0734d0f0daec233f648054e6d1f95c667da65b697f083e35e9ff99cbd9"
+    },
+    {
+      "path": "pf9a-bg.xts",
+      "bytes": 241895,
+      "sha256": "568fa03d1981d276d323449feb6c82947f2d5c03e8765cc0de03a2b6fa88e242"
+    },
+    {
+      "path": "pf9a-ft.xts",
+      "bytes": 239175,
+      "sha256": "161d9de6b7250f58067143be1a00b39a8057fa55176fb793925ee8ff01ecfb81"
+    },
+    {
+      "path": "pfbl12c-bg.xts",
+      "bytes": 183186,
+      "sha256": "a5115633c3d926a4e1aef10f9379f85f5fd87317b31d2a0734f9139095bd09ca"
+    },
+    {
+      "path": "pfbl12c-ft.xts",
+      "bytes": 181146,
+      "sha256": "f154884efbff1415d20fc7637067b7ae4a36bc54f0a08d6f3d02c399274e6e8d"
+    },
+    {
+      "path": "two-analyzed.xtsp",
+      "bytes": 337956,
+      "sha256": "a6cf870b987e8e970cba3b6d2c632895041a11a54a4ae4b9f48999cc5a6cbda9"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+scan_ID = 30944 
+MACRO_NAME
+ID motor energy = 705.079195
+ID motor polar. = 0.785389
+ID motor energy (AntiPararallel mode) = 735.080522
+ID motor polar. (AntiPararallel mode) = 0.785392
+ID motor offset (AntiPararallel mode) = 0.000000
+GRX = -16.441887 ( = 3)
+Mono energy = 703.989954
+Mono cff = 2.250008

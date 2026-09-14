@@ -50,6 +50,20 @@ with the Cu example and built-in Cu structure. The fitting
 walkthrough uses ReFEFF, an 8 Å cluster and one first-shell path. Values in these
 screenshots describe that demonstration, not a benchmark or universal fit result.
 
+The [Next measurement reader guide](/docs/reference/next/measurement-reading/)
+adds full, unedited 1187 × 768 captures made through computer use on
+14 September 2026 from an unreleased macOS ARM64 source build on
+`test/beamline-fixtures`. These images show the EX3 import preview and original
+header. The source measurement is Masashi Ishii and the Industrial Application
+and Partnership Division's [XAFS spectrum of Lead telluride](https://doi.org/10.48505/nims.3178),
+[MDR record](https://mdr.nims.go.jp/datasets/3c5953dc-1faa-47a7-a3f0-8211703adb58),
+licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+The measurement bytes are unchanged; the screenshots visualize its stored energy
+and absorption, without additional import corrections. The
+[capture record](https://github.com/Ameyanagi/rexafs/tree/test/beamline-fixtures/doc/validation/2026-09-14-measurement-import-ui)
+identifies the input and executable by checksum. These images describe unreleased
+behavior and do not replace the versioned release screenshots above.
+
 ## Scientific citations
 
 Use the [citation guide](/docs/science/references/) for algorithm references.

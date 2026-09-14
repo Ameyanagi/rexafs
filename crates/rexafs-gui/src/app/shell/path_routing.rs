@@ -142,6 +142,15 @@ impl StudioApp {
     }
 
     pub(crate) fn import_routed_data(&mut self, data: RoutedImport, cx: &mut Context<Self>) {
+        // Single-file sources share the universal parser and plotted editor.
+        if let [path] = data.paths.as_slice()
+            && !path.is_dir()
+        {
+            self.open_measurement_path(path.clone(), data.remember, cx);
+            return;
+        }
+        self.measurement_import = None;
+        self.measurement_request += 1;
         if data.remember {
             let folders = data
                 .paths

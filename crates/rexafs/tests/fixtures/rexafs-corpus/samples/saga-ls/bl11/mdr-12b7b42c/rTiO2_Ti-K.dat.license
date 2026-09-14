@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-NC-SA-4.0
+License-File: LICENSES/CC-BY-NC-SA-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: individual dataset license
+License-Evidence: https://mdr.nims.go.jp/datasets/12b7b42c-7362-48ab-9c86-35a5dfdf53ce
+Test-Eligibility: documented-license
+Source: https://mdr.nims.go.jp/datasets/12b7b42c-7362-48ab-9c86-35a5dfdf53ce
+Download: https://mdr.nims.go.jp/filesets/58e472bf-df0b-49e7-9c8a-b94cd9e6d23e/download
+Citation: Masashi Ishii; SAGA-LS. XAFS spectrum of Titanium(IV) dioxide (Rutile). https://doi.org/10.48505/nims.4186
+SHA256: 635eeaaa25466c516470071b09618a814333f6a7fcd5122487a84d6f9f5e7a3d
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/mdr/12b7b42c-7362-48ab-9c86-35a5dfdf53ce/record.json

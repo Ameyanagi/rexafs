@@ -1,0 +1,11 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit dataset license
+License-Evidence: https://zenodo.org/records/10044133
+Source: https://zenodo.org/records/10044133
+Download: https://zenodo.org/api/records/10044134/files/001_XAS_Fe.zip/content
+Citation: Strømberg, Anders; Jensen, Johannes H.; Breivik, Ida; Penty, Arthur; Niño, Miguel Angel; Khaliq, Muhammad Waqas; Foerster, Michael; Tufte, Gunnar; Folven, Erik (2023). XMCD data and XAS spectra, and simulation data for Clocked Dynamics in Artificial Spin Ice. Zenodo. https://doi.org/10.5281/zenodo.10044134
+SHA256: aa1157100edd20f1c4b1c036340e4eb6ced8d6314de01f082d4a5d086b3720e2
+Archive-Member: 001_XAS_Fe/XAS_Fe_008.dat
+Modifications: None; original downloaded measurement bytes retained.

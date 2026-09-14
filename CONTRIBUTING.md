@@ -80,14 +80,23 @@ with per-file licenses, citations, source URLs and checksums. These fixtures and
 their dedicated integration test are excluded from the crates.io package.
 Running the tests does not download measurement data.
 
+The [expanded corpus](crates/rexafs/tests/fixtures/rexafs-corpus/README.md) is a
+complete local copy of the data-gathering collection, with unchanged attribution
+and snapshot checksums. Its tests require no external repository and distinguish
+readable files, partial recovery and known rejection cases. It is also excluded
+from crates.io and other published packages; see the
+[fixture index](crates/rexafs/tests/fixtures/README.md).
+
 ```sh
 cargo test --locked -p rexafs --test beamline_formats
+cargo test --locked -p rexafs --test measurement_fixtures
 python scripts/check-beamline-fixtures.py
 python scripts/check-beamline-fixtures.py --package
 ```
 
-The first command exercises the currently covered readers. The second verifies
-all retained measurement and attribution files. The third asks Cargo for its
+The Cargo tests exercise the currently covered readers and recorded format gaps.
+The first Python command verifies all retained measurement and attribution files.
+The final command asks Cargo for its
 actual package file list and fails if the corpus or its integration test would
 be published. See the [integration notes](crates/rexafs/tests/fixtures/xas/INTEGRATION.md)
 for coverage and instructions for adding fixtures.

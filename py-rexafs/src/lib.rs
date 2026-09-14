@@ -1869,6 +1869,73 @@ fn read_qas_transmission(path: &str) -> PyResult<PySpectrum> {
         inner: rexafs::io::read_qas_transmission(path).map_err(|e| error(e.into()))?,
     })
 }
+/// Native storage for the unreleased rexafs.io.Measurement facade.
+/// Reading preserves source arrays; selecting a mapping performs only detector
+/// arithmetic and conversion to eV. No processing or input mutation occurs.
+#[pyclass(name = "Measurement")]
+struct PyMeasurement {
+    inner: rexafs::io::Measurement,
+}
+#[pymethods]
+impl PyMeasurement {
+    #[new]
+    fn new(bytes: &[u8]) -> PyResult<Self> {
+        Ok(Self {
+            inner: rexafs::io::parse_measurement(bytes)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+        })
+    }
+    fn select_datasets(&mut self, paths: Vec<String>) -> PyResult<usize> {
+        let scan = self
+            .inner
+            .dataset_scan(&paths)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let index = self.inner.scans.len();
+        self.inner.scans.push(scan);
+        Ok(index)
+    }
+    fn document_json(&self) -> PyResult<String> {
+        serde_json::to_string(&self.inner)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+    #[pyo3(signature = (scan=0, mapping_json=None))]
+    fn arrays<'py>(
+        &self,
+        py: Python<'py>,
+        scan: usize,
+        mapping_json: Option<&str>,
+    ) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>)> {
+        let mapping = mapping_json
+            .map(serde_json::from_str::<rexafs::io::SpectrumMapping>)
+            .transpose()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let s =
+            self.inner.scans.get(scan).ok_or_else(|| {
+                pyo3::exceptions::PyIndexError::new_err("Scan index out of range")
+            })?;
+        let (energy, mu) = s
+            .arrays(mapping.as_ref())
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok((PyArray1::from_vec(py, energy), PyArray1::from_vec(py, mu)))
+    }
+    #[pyo3(signature = (scan=0, mapping_json=None))]
+    fn spectrum(&self, scan: usize, mapping_json: Option<&str>) -> PyResult<PySpectrum> {
+        let mapping = mapping_json
+            .map(serde_json::from_str::<rexafs::io::SpectrumMapping>)
+            .transpose()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let s =
+            self.inner.scans.get(scan).ok_or_else(|| {
+                pyo3::exceptions::PyIndexError::new_err("Scan index out of range")
+            })?;
+        Ok(PySpectrum {
+            inner: s
+                .to_spectrum(mapping.as_ref())
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+        })
+    }
+}
+
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPrePostEdge>()?;
@@ -1878,6 +1945,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyNormalizationMethod>()?;
     m.add_class::<PyBackgroundMethod>()?;
     m.add_class::<PySpectrum>()?;
+    m.add_class::<PyMeasurement>()?;
     m.add_function(wrap_pyfunction!(read_qas_transmission, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
