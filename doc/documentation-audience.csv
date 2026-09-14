@@ -211,12 +211,13 @@ crates/rexafs/tests/fixtures/sessions/larix/README.md,developer,exclude,,Origina
 doc/measurement-reader-refactor-plan.md,developer,exclude,,Reader and test organization plan with preview follow-up.
 doc/validation/2026-09-14-kek-qd/review.md,developer,exclude,,Actual KEK QD download evidence and numerical qualification with licensing limits.
 doc/validation/2026-09-14-measurement-corpus/review.md,developer,exclude,,Copied corpus audit with measured reader outcomes and numerical regression tests.
-crates/rexafs/tests/fixtures/rexafs-corpus/CITATIONS.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
-crates/rexafs/tests/fixtures/rexafs-corpus/LICENSE.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
-crates/rexafs/tests/fixtures/rexafs-corpus/README.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
-crates/rexafs/tests/fixtures/rexafs-corpus/RESEARCH_NOTES.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
-crates/rexafs/tests/fixtures/rexafs-corpus/provenance/pynxxas/manual-README.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
-crates/rexafs/tests/fixtures/rexafs-corpus/research/worldwide-beamlines.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
+crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/CITATIONS.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
+crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/LICENSE.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
+crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/README.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
+crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/RESEARCH_NOTES.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
+crates/rexafs/tests/fixtures/xas/provenance/pynxxas/manual-README.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
+crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/research/worldwide-beamlines.md,developer,exclude,,Unchanged original collection documentation retained with the copied test corpus.
 crates/rexafs/tests/fixtures/xas/candidates/kek-pf/README.md,developer,exclude,,KEK QD fixture provenance and academic-use notice.
 doc/validation/2026-09-14-measurement-import-ui/README.md,developer,exclude,,Original computer-use captures and source attribution for unreleased import workflows.
 doc/validation/2026-09-14-named-multisignal-import.md,developer,exclude,,Named-column API and multiple-signal UI qualification including Windows checkout correction.
+crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/INDEX.md,developer,exclude,,Canonical paths and unchanged historical expanded-corpus records.

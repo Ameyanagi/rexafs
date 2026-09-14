@@ -15,7 +15,6 @@ categories = ["science"]
 # crates.io archive. Source-checkout tests read these fixtures from disk.
 exclude = [
     "/tests/fixtures/xas/",
-    "/tests/fixtures/rexafs-corpus/",
     "/tests/fixtures/sessions/",
     "/tests/beamline_formats.rs",
     "/tests/measurement_fixtures.rs",

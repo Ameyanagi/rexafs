@@ -1,6 +1,6 @@
 //! Checks against the attributed data copied from the private gathering checkout.
-//! No external checkout or download is required. See fixtures/rexafs-corpus/SNAPSHOT.json.
-use super::support::format_corpus_root;
+//! Historical paths resolve to the canonical xas collection; no downloads are required.
+use super::support::format_corpus_path;
 use rexafs::io::*;
 use sha2::{Digest, Sha256};
 
@@ -11,8 +11,7 @@ fn all_222_copied_measurements_match_the_recorded_reader_outcomes() {
     // independent checks; a passing snapshot is not complete format support.
     let coverage: serde_json::Value =
         serde_json::from_str(include_str!("format_corpus_coverage.json")).unwrap();
-    let root = format_corpus_root();
-    let manifest_bytes = std::fs::read(root.join("manifest.json")).unwrap();
+    let manifest_bytes = std::fs::read(format_corpus_path("manifest.json")).unwrap();
     assert_eq!(digest(&manifest_bytes), coverage["manifest_sha256"]);
     let manifest: serde_json::Value = serde_json::from_slice(&manifest_bytes).unwrap();
     let samples = manifest["samples"].as_array().unwrap();
@@ -25,7 +24,7 @@ fn all_222_copied_measurements_match_the_recorded_reader_outcomes() {
         let path = expected["path"].as_str().unwrap();
         assert_eq!(sample["path"], path);
         assert_eq!(sample["sha256"], expected["sha256"], "{path}");
-        let bytes = std::fs::read(root.join(path)).unwrap();
+        let bytes = std::fs::read(format_corpus_path(path)).unwrap();
         assert_eq!(bytes.len() as u64, sample["bytes"].as_u64().unwrap());
         assert_eq!(digest(&bytes), expected["sha256"], "{path}");
         let result = parse_measurement(&bytes);
@@ -121,8 +120,7 @@ fn digest(bytes: &[u8]) -> String {
 }
 
 fn original(path: &str, sha256: &str) -> String {
-    let root = format_corpus_root();
-    let bytes = std::fs::read(root.join(path)).unwrap();
+    let bytes = std::fs::read(format_corpus_path(path)).unwrap();
     let actual: String = Sha256::digest(&bytes)
         .iter()
         .map(|v| format!("{v:02x}"))

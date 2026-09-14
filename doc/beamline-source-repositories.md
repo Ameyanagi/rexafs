@@ -11,9 +11,11 @@ The later [expanded-corpus audit](validation/2026-09-14-measurement-corpus/revie
 checks `../rexafs-format` at `d142ad2`: 222 original files, including 89 additional
 unique payloads beyond the retained rexafs corpus. It records reader outcomes,
 per-file source URLs, license bases, numerical tests and implementation priorities.
-The complete collection has been copied to `tests/fixtures/rexafs-corpus/`, with
-no test dependency on the private gathering checkout. It remains excluded from
-the crate archive; parsing success is not a claim of complete format support.
+The complete collection is retained in the canonical `tests/fixtures/xas/`
+directory, with its [original catalog and path map](../crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/INDEX.md).
+Tests do not depend on the private gathering checkout. The collection remains
+excluded from the crate archive; parsing success is not a claim of complete
+format support.
 
 | Beamline or source | GitHub repository | Findings and follow-up |
 |---|---|---|

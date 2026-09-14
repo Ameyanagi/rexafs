@@ -8,13 +8,49 @@ Neither operation downloads measurement data or modifies the collection.
 import argparse
 import hashlib
 import json
+import runpy
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "crates/rexafs/tests/fixtures/xas"
-FORMAT_CORPUS = ROOT / "crates/rexafs/tests/fixtures/rexafs-corpus"
+FORMAT_CORPUS = CORPUS / "collections/rexafs-corpus"
+
+
+def retained_path(paths, historical_path):
+    """Resolve an archived path to its single retained file, within the corpus."""
+    path = (CORPUS / paths[historical_path]).resolve()
+    if not path.is_relative_to(CORPUS.resolve()):
+        sys.exit(f"Corpus path escapes its directory: {historical_path}")
+    return path
+
+
+def verify_expanded_collection():
+    """Verify every historical file against the unchanged original snapshot."""
+    paths = json.loads((FORMAT_CORPUS / "paths.json").read_text())
+    snapshot = json.loads((FORMAT_CORPUS / "SNAPSHOT.json").read_text())
+    expected = {record["path"] for record in snapshot["files"]} | {"SNAPSHOT.json"}
+    if set(paths) != expected:
+        sys.exit("Expanded corpus path map must retain every original snapshot entry")
+    for record in snapshot["files"]:
+        payload = retained_path(paths, record["path"]).read_bytes()
+        if len(payload) != record["bytes"] or hashlib.sha256(payload).hexdigest() != record["sha256"]:
+            sys.exit(f"Copied corpus original bytes changed: {record['path']}")
+    # Original sidecar text stays attached to each logical measurement even when
+    # two historical collections now resolve to the same physical file.
+    manifest = json.loads(retained_path(paths, "manifest.json").read_text())
+    # Retain the original container checks (including ZIP/XML and gzip checks)
+    # without invoking the historical script's download or report-writing modes.
+    original_checks = runpy.run_path(
+        str(retained_path(paths, "scripts/corpus.py")), run_name="expanded_corpus"
+    )
+    for record in manifest["samples"]:
+        sidecar = retained_path(paths, record["path"] + ".license")
+        if sidecar.read_text() != record["sidecar_text"]:
+            sys.exit(f"Expanded corpus attribution changed: {record['path']}")
+        original_checks["inspect_payload"](record, retained_path(paths, record["path"]).read_bytes())
+    print(f"Verified {len(snapshot['files'])} original corpus files through canonical paths.")
 
 
 def main():
@@ -27,20 +63,7 @@ def main():
             cwd=ROOT,
             check=True,
         )
-        subprocess.run(
-            [sys.executable, str(FORMAT_CORPUS / "scripts/corpus.py"), "verify", "--include-candidates"],
-            cwd=ROOT,
-            check=True,
-        )
-        snapshot = json.loads((FORMAT_CORPUS / "SNAPSHOT.json").read_text())
-        for record in snapshot["files"]:
-            path = (FORMAT_CORPUS / record["path"]).resolve()
-            if not path.is_relative_to(FORMAT_CORPUS.resolve()):
-                sys.exit(f"Corpus snapshot path escapes its directory: {record['path']}")
-            payload = path.read_bytes()
-            if len(payload) != record["bytes"] or hashlib.sha256(payload).hexdigest() != record["sha256"]:
-                sys.exit(f"Copied corpus original bytes changed: {record['path']}")
-        print(f"Verified {len(snapshot['files'])} copied data, documentation and provenance files.")
+        verify_expanded_collection()
         xtunes = ROOT / "crates/rexafs/tests/fixtures/sessions/xtunes"
         records = json.loads((xtunes / "manifest.json").read_text())["files"]
         for record in records:
@@ -69,7 +92,6 @@ def main():
         if (path.startswith("tests/beamline_") and path.endswith(".rs") and path.count("/") == 1)
         or path.startswith("tests/fixtures/xas/")
         or path.startswith("tests/fixtures/sessions/")
-        or path.startswith("tests/fixtures/rexafs-corpus/")
         or path == "tests/measurement_fixtures.rs"
         or path.startswith("tests/measurement_fixtures/")
     )

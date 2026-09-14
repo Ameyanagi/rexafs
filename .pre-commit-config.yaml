@@ -11,7 +11,7 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=1024]
         # Original beamline files are intentionally retained and checksummed.
-        exclude: '^crates/rexafs/tests/fixtures/(xas|sessions|rexafs-corpus)/'
+        exclude: '^crates/rexafs/tests/fixtures/(xas|sessions)/'
   - repo: local
     hooks:
       - id: rustfmt
@@ -36,7 +36,7 @@ repos:
         name: Beamline fixture integrity
         entry: python scripts/check-beamline-fixtures.py
         language: python
-        files: '(^crates/rexafs/tests/fixtures/(xas|sessions|rexafs-corpus)/|^scripts/check-beamline-fixtures\.py$)'
+        files: '(^crates/rexafs/tests/fixtures/(xas|sessions)/|^scripts/check-beamline-fixtures\.py$)'
         pass_filenames: false
       - id: release-tool-tests
         name: Release tooling regressions

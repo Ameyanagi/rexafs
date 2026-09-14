@@ -1,7 +1,7 @@
 """Audit a separately licensed fixture corpus using the installed, unreleased reader.
 
 Run with Python 3.12+ after installing the source-checkout Python wheel:
-    python scripts/audit-measurement-corpus.py --corpus crates/rexafs/tests/fixtures/rexafs-corpus --output report.json
+    python scripts/audit-measurement-corpus.py --corpus crates/rexafs/tests/fixtures/xas --collection rexafs-corpus --output report.json
 
 Checks every manifest payload's size and SHA-256 before parsing. Records recovered
 scans, numeric datasets, warnings and conversion errors for each detected signal.
@@ -23,10 +23,16 @@ from pathlib import Path
 from rexafs.io import read_measurement
 
 
-def inspect(root, record):
-    path = (root / record["path"]).resolve()
+def retained_path(root, paths, historical_path):
+    """Resolve collection aliases without changing historical report paths."""
+    path = (root / (paths[historical_path] if paths is not None else historical_path)).resolve()
     if not path.is_relative_to(root):
-        raise ValueError(f"Path outside corpus: {record['path']}")
+        raise ValueError(f"Path outside corpus: {historical_path}")
+    return path
+
+
+def inspect(root, record, paths=None):
+    path = retained_path(root, paths, record["path"])
     payload = path.read_bytes()
     if len(payload) != record["bytes"] or hashlib.sha256(payload).hexdigest() != record["sha256"]:
         raise ValueError(f"Source integrity mismatch: {record['path']}")
@@ -67,12 +73,19 @@ def inspect(root, record):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--corpus", type=Path, required=True)
+    parser.add_argument(
+        "--collection", choices=["rexafs-corpus"],
+        help="Read the expanded historical manifest through its canonical path map",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     root = args.corpus.resolve()
-    manifest_bytes = (root / "manifest.json").read_bytes()
+    paths = None
+    if args.collection:
+        paths = json.loads((root / "collections" / args.collection / "paths.json").read_text())
+    manifest_bytes = retained_path(root, paths, "manifest.json").read_bytes()
     manifest = json.loads(manifest_bytes)
-    records = [inspect(root, record) for record in manifest["samples"]]
+    records = [inspect(root, record, paths) for record in manifest["samples"]]
     report = {
         "scope": "Content parsing and detected-signal conversion; not complete-format or scientific qualification.",
         "audited_at": datetime.now(timezone.utc).isoformat(),

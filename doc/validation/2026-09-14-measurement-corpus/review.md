@@ -1,10 +1,13 @@
 # Additional measurement corpus audit
 
-The audited collection has now been copied into
-[`tests/fixtures/rexafs-corpus`](../../../crates/rexafs/tests/fixtures/rexafs-corpus/README.md).
-All 222 measurement/project files and their original attribution are retained.
-Tests use that local copy; the private collection repository is not a dependency.
-Cargo excludes the snapshot and its fixture tests from the published crate.
+This historical record describes the initial copy into `tests/fixtures/rexafs-corpus/`.
+The subsequent consolidation retains every original file in the canonical
+[`xas/` collection](../../../crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/INDEX.md),
+with a path map for the unchanged manifests and snapshot. All 222 measurement
+entries and their original attribution remain available; shared files are stored
+once. Tests require no private gathering checkout, and Cargo excludes the data
+and their fixture tests from the published crate. The measurements and original
+qualification numbers below are unchanged.
 
 Recorded on 2026-09-14 for the **unreleased** reader on `test/beamline-fixtures`.
 The inspected `../rexafs-format` checkout was at `d142ad2` with manifest SHA-256
@@ -78,7 +81,7 @@ The copied snapshot retains all **571 original files**, totaling 214,706,079
 bytes, including adjacent `.license` files, `LICENSES/`, `CITATIONS.md`, manifests,
 provenance, collection scripts and historical research documents. Every copied
 file was compared byte for byte with the gathering checkout. An added
-[`SNAPSHOT.json`](../../../crates/rexafs/tests/fixtures/rexafs-corpus/SNAPSHOT.json)
+[`SNAPSHOT.json`](../../../crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/SNAPSHOT.json)
 records their checksums and source revision. Original collection documents remain
 unchanged and describe the gathering repository at that revision.
 
@@ -95,7 +98,7 @@ First build and install the source-checkout Python wheel as described in the
 
 ```sh
 python scripts/audit-measurement-corpus.py \
-  --corpus crates/rexafs/tests/fixtures/rexafs-corpus \
+  --corpus crates/rexafs/tests/fixtures/xas --collection rexafs-corpus \
   --output /tmp/rexafs-corpus-audit.json
 
 cargo test --locked -p rexafs --test measurement_fixtures

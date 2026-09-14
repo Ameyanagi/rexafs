@@ -80,11 +80,13 @@ with per-file licenses, citations, source URLs and checksums. These fixtures and
 their dedicated integration test are excluded from the crates.io package.
 Running the tests does not download measurement data.
 
-The [expanded corpus](crates/rexafs/tests/fixtures/rexafs-corpus/README.md) is a
-complete local copy of the data-gathering collection, with unchanged attribution
-and snapshot checksums. Its tests require no external repository and distinguish
-readable files, partial recovery and known rejection cases. It is also excluded
-from crates.io and other published packages; see the
+The [expanded corpus records](crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/INDEX.md)
+retain the original data-gathering manifests, attribution and snapshot checksums.
+All measurements share the canonical `xas/` directory; a path map resolves the
+historical collection paths without storing identical files twice. Its tests
+require no external repository and distinguish readable files, partial recovery
+and known rejection cases. The collection is excluded from crates.io and other
+published packages; see the
 [fixture index](crates/rexafs/tests/fixtures/README.md).
 
 ```sh

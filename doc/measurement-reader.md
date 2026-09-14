@@ -240,11 +240,14 @@ damaged/inconsistent Larix files are expected to fail. The [reference-format aud
 distinguishes original fixtures, synthetic coverage and unimplemented formats.
 
 The [expanded corpus audit](validation/2026-09-14-measurement-corpus/review.md)
-adds a self-contained copy of 222 files gathered in `rexafs-format`, including
+covers 222 files gathered in `rexafs-format`, including
 89 payloads not present in the original corpus. All 222 enter normal fixture
 tests: 182 parse (five with partial HDF5 recovery), while 40 have explicit
-rejection expectations for unsupported formats. Across both beamline snapshots
-there are 243 unique payloads; a copied file or a passing rejection test is not
+rejection expectations for unsupported formats. Across both historical catalogs
+there are 243 unique payloads, stored once in the canonical `fixtures/xas/`
+collection. A [path map](../crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/INDEX.md)
+resolves the expanded catalog's original filenames while preserving its
+unchanged manifests, license records and checksums. A copied file or a passing rejection test is not
 counted as successful format support. Original bytes and attribution remain in
 the Git repository and are excluded from published packages.
 

@@ -1,5 +1,15 @@
 # rexafs measurement-format corpus
 
+Storage update, 2026-09-14: this is now the canonical directory for all **243
+unique beamline/project payloads**. The description below and the root manifest
+cover the original 154-entry catalog. The
+[expanded historical catalog](collections/rexafs-corpus/INDEX.md) records another
+222 entries, including 133 shared measurements and 89 additional unique files.
+Its path map preserves the original filenames and attribution without duplicate
+storage. Use `python scripts/check-beamline-fixtures.py` from the repository root
+to verify both catalogs and all session bundles. See the
+[current fixture index](../README.md) for coverage and layout.
+
 154 original measurement, project and reference files retained as of 2026-09-14. The original 132-file collection is supplemented by three attributed NIST BMM standards, 13 Demeter/Larch examples, one complete ESRF BM16 BLISS acquisition file and five KEK Photon Factory QD measurements. The collection targets format coverage with a few examples per beamline; projects may contain multiple spectra. The universal source-checkout reader exercises every retained file, with explicit mapping or detector reduction where required; see [INTEGRATION.md](INTEGRATION.md).
 
 - **137 files in `samples/`**, with documented licenses, covering **49 identified beamlines/stations at 14 facilities**. Additional files retain unresolved station labels. Of these files, 78 have explicit data licenses and 59 rely on upstream repository distribution licenses.

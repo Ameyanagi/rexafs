@@ -51,3 +51,19 @@ is required. Its 222 measurement files are checked against explicit readable,
 partial and rejected outcomes, with separate numerical regressions for Aichi,
 SAMBA and PIRX. Both corpus snapshots remain excluded from the crate archive.
 See the [copied-corpus audit](validation/2026-09-14-measurement-corpus/review.md).
+
+## Canonical fixture storage
+
+The PR-size review on 2026-09-14 identified 356 identical files shared by the
+two snapshots, including 133 measurements. Consolidation removes those extra
+copies and relocates the 216 unique expanded-collection files into `xas/`.
+The expanded collection's original manifests and historical records remain
+byte-for-byte intact in `xas/collections/rexafs-corpus/`; a path map resolves
+their original filenames to the canonical files. No unique data or attribution
+is removed, and no format expectation or production API changes.
+
+The expanded Rust fixture tests and integrity/audit scripts resolve that map.
+Python, TypeScript and desktop tests continue to use their existing `xas/`
+paths. Validation covers all original hashes and sidecars, the existing reader
+and import suites, package exclusions, documentation links and preservation of
+fixture bytes through Windows-style Git checkout filters.
