@@ -1,5 +1,10 @@
 # Releasing rexafs
 
+Prepare releases on `dev`, then review and merge a `dev` → `main` pull request
+with a merge commit before tagging. Nightly desktop builds follow `dev`; they
+do not substitute for the qualified stable tag build below. See the
+[development branch workflow](development-branches.md).
+
 ## Preparing 0.2.6
 
 The [0.2.6 notes](release-notes-0.2.6.md) and
@@ -238,7 +243,8 @@ stapler, Gatekeeper, `--version` and `--self-check` checks. Windows remains unsi
 Qualify the signed download on a clean machine. Preserve the
 [dependency notices](distribution-notices.md) for each distribution.
 
-The `macos-signing` environment permits only `main`. Its secrets are
+The `macos-signing` environment admits `main` for stable signing and `dev` for
+nightly signing. `sign-macos.yml` itself still requires `main`. Its secrets are
 `MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD`, `APPLE_ID` and
 `APPLE_APP_SPECIFIC_PASSWORD`; its variables are `APPLE_TEAM_ID` and
 `MACOS_SIGNING_IDENTITY`. The signing workflow uses a temporary keychain and

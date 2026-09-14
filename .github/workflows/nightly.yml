@@ -1,6 +1,8 @@
 name: Nightly desktop
 
 on:
+  push:
+    branches: [dev]
   schedule:
     - cron: '23 18 * * *'
   workflow_dispatch:
@@ -9,12 +11,25 @@ permissions:
   contents: read
 
 concurrency:
-  group: nightly-desktop
+  group: nightly-desktop-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  source:
+  dispatch:
+    # GitHub schedules run on the default branch. Dispatching on dev makes
+    # github.sha the immutable development commit for every build/signing job.
     if: github.ref == 'refs/heads/main' && github.repository == 'Ameyanagi/rexafs'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Start the nightly workflow on dev
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run nightly.yml --repo Ameyanagi/rexafs --ref dev
+
+  source:
+    if: github.ref == 'refs/heads/dev' && github.repository == 'Ameyanagi/rexafs'
     runs-on: ubuntu-latest
     permissions:
       contents: read

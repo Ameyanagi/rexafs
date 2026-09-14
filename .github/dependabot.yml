@@ -2,6 +2,7 @@ version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    target-branch: dev
     schedule:
       interval: weekly
     groups:
@@ -9,6 +10,7 @@ updates:
         patterns: ["*"]
   - package-ecosystem: cargo
     directory: /
+    target-branch: dev
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
@@ -19,11 +21,13 @@ updates:
         versions: [">=0.35, <0.36"]
   - package-ecosystem: npm
     directory: /js-rexafs
+    target-branch: dev
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
   - package-ecosystem: pip
     directory: /
+    target-branch: dev
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

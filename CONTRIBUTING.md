@@ -5,6 +5,14 @@ users are calculating and how to interpret the result. These requirements apply
 to all project-authored documentation: READMEs, guides, research notes, examples,
 Rust API comments, Python docstrings/type stubs, and TypeScript JSDoc/declarations.
 
+## Branches and releases
+
+Create feature branches from `dev` and target `dev` in feature pull requests.
+Nightly desktop builds follow `dev`. Promote reviewed releases through a
+`dev` → `main` pull request, preserving the shared history with a merge commit.
+See [the branch workflow](doc/development-branches.md) for commands and release
+qualification; the public website deploys only from `main`.
+
 ## Documentation baseline
 
 Write clear, grammatical English. Explain a concept before introducing its
