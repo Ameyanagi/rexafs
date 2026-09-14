@@ -158,9 +158,10 @@ MCR has scale, permutation and rotational ambiguities. Different factors can
 reconstruct the same matrix. Nonnegativity and closure restrict solutions but
 do not generally identify unique chemistry. Report residuals, constraints,
 initialization and variation across starts, and permit fixed measured spectra
-or known pure-sample coefficients when experimentally justified. This follows
-the constrained factorization discussion in the NIST paper; such anchors must
-be explicit input, never inferred merely because a pure-looking row exists.
+or known pure-sample coefficients when experimentally justified. The method
+authors explain the remaining feasible solutions in their
+[MCR-Bands guide](https://mcrals.wordpress.com/theory/mcr-bands/). Such anchors
+must be explicit input, never inferred merely because a pure-looking row exists.
 
 ## Shared data preparation and defaults
 
