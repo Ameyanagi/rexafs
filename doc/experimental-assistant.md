@@ -6,6 +6,33 @@ needed, the panel provides Retry and login controls. rexafs does not store a
 separate model API key. Choose the model and reasoning effort in the panel;
 availability comes from the connected server.
 
+## Compact composer (unreleased)
+
+The source checkout places the message above a compact footer with **Model**,
+**Reasoning**, and **Access** menus. The footer wraps in a narrow docked panel;
+the same composer is used in a separate Assistant window. The rounded arrow
+sends the message and becomes Stop while a response is running.
+
+The model button shows the resolved model name. Its menu retains **Automatic**;
+hover the button to see whether the selection is automatic. The reasoning button
+shows the effective level, while its menu distinguishes **Model default** from an
+explicit choice. Model changes retain the existing supported-level fallback.
+Use arrow keys to move through a menu, Enter or Space to choose, and Escape to
+close it. Long model and reasoning lists scroll.
+
+**Access** contains **Review** and **Edit analysis** with descriptions of their
+scope. **Workspace commands** is the existing Extended access switch: it starts
+off and does not change the selected analysis mode. A small amber dot on the
+Access button indicates that workspace commands are enabled. Command approvals
+and the assistant sandbox still apply. **Plot images** and **Web search** are
+in **Assistant settings** (the gear button).
+
+These presentation changes are not included in the 0.2.6 download. The
+[composer implementation](../crates/rexafs-gui/src/app/shell/assistant_composer.rs)
+uses the existing preference persistence and permission checks.
+
+## Workspace and conversations
+
 The Assistant opens at the right of the analysis. Drag its left border to resize
 between 320 and 640 px. **Pop out** moves the same conversation to a separate
 window; **Dock**, or closing that window, brings it back. Closing the docked panel

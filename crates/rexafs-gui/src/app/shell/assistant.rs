@@ -1,6 +1,9 @@
 //! Shared Assistant view with docked and optional native-window hosts; app actions use the same pipeline as manual edits.
+#[path = "assistant_composer.rs"]
+mod composer;
 #[path = "assistant_history.rs"]
 mod history;
+use composer::ComposerMenu;
 
 use super::assistant_receipts::{
     Receipt, changes_allowed, completion, diff, processing_scope_label, requires_edit,
@@ -121,23 +124,6 @@ fn catalog_settled(account: bool, models_requested: bool, pending: &BTreeMap<u64
     account && models_requested && !pending.values().any(|method| method == "model/list")
 }
 
-struct ModelControlsBusyTip(Theme);
-impl Render for ModelControlsBusyTip {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .px_2()
-            .py_1()
-            .rounded_md()
-            .bg(self.0.raised)
-            .border_1()
-            .border_color(self.0.border)
-            .shadow_md()
-            .text_size(px(12.))
-            .text_color(self.0.text)
-            .child("Available after this response")
-    }
-}
-
 pub(crate) struct AssistantWindow {
     studio: WeakEntity<StudioApp>,
     theme: Theme,
@@ -155,10 +141,9 @@ pub(crate) struct AssistantWindow {
     model_cursors: Vec<String>,
     preferred_model: Option<String>,
     preferred_effort: Option<String>,
-    model_picker_open: bool,
+    composer_menu: Option<ComposerMenu>,
     settings_open: bool,
-    model_picker_focus: gpui::FocusHandle,
-    model_trigger_bounds: Rc<Cell<gpui::Bounds<gpui::Pixels>>>,
+    composer_trigger_bounds: [Rc<Cell<gpui::Bounds<gpui::Pixels>>>; 3],
     model_scroll: gpui::ScrollHandle,
     model_scroll_pending: Rc<Cell<bool>>,
     model_highlight: usize,
@@ -256,7 +241,7 @@ impl StudioApp {
                 app.assistant_window.take()
             });
             assistant.update(cx, |view, cx| {
-                view.model_picker_open = false;
+                view.composer_menu = None;
                 view.account_expanded = false;
                 view.focus_composer = next != AssistantHost::Closed;
                 cx.notify();
@@ -296,7 +281,7 @@ impl StudioApp {
                                 if window.is_window_active() {
                                     host.assistant.update(cx, |view, cx| {
                                         if view.controls().composer
-                                            && !view.model_picker_open
+                                            && view.composer_menu.is_none()
                                             && !view.account_expanded
                                         {
                                             view.input.read(cx).focus_handle(cx).focus(window, cx);
@@ -486,13 +471,13 @@ impl AssistantWindow {
         self.transcript.apply(Event::AnalysisClosed, Instant::now());
         self.disconnected(String::new());
         self.error = None;
-        self.model_picker_open = false;
+        self.composer_menu = None;
         self.account_expanded = false;
         self.processing_checks.clear();
         cx.notify();
     }
     fn escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.settings_open && !self.model_picker_open {
+        if self.settings_open && self.composer_menu.is_none() {
             self.settings_open = false;
             if let Some(focus) = self
                 .controls_focus
@@ -514,7 +499,7 @@ impl AssistantWindow {
             return;
         }
         match escape_target(
-            self.model_picker_open || self.account_expanded || self.shared_context_open,
+            self.composer_menu.is_some() || self.account_expanded || self.shared_context_open,
             self.controls().stop,
         ) {
             EscapeTarget::CloseMenu => {
@@ -552,6 +537,9 @@ impl AssistantWindow {
             "assistant-cancel-login",
             "assistant-show-app",
             "assistant-focus-plots",
+            "assistant-model",
+            "assistant-reasoning",
+            "assistant-access",
             "assistant-plots",
             "assistant-web",
             "assistant-extended",
@@ -710,13 +698,15 @@ impl AssistantWindow {
             TextInput::new("Ask about this analysis…", "", theme, cx).with_style(InputStyle {
                 multiline: true,
                 max_lines: 8,
+                min_lines: 3,
+                embedded: true,
                 ..Default::default()
             })
         });
-        cx.subscribe(&input, |this, _, event, cx| {
-            if let InputEvent::Committed(_) = event {
-                this.run(cx);
-            }
+        cx.subscribe(&input, |this, _, event, cx| match event {
+            InputEvent::Committed(_) => this.run(cx),
+            InputEvent::Edited(_) => cx.notify(),
+            _ => {}
         })
         .detach();
         cx.on_app_quit(|this, _| {
@@ -792,10 +782,9 @@ impl AssistantWindow {
             model_cursors: Vec::new(),
             preferred_model: settings.assistant_model,
             preferred_effort: settings.assistant_effort,
-            model_picker_open: false,
+            composer_menu: None,
             settings_open: false,
-            model_picker_focus: cx.focus_handle().tab_index(0).tab_stop(true),
-            model_trigger_bounds: Rc::default(),
+            composer_trigger_bounds: std::array::from_fn(|_| Rc::default()),
             model_scroll: gpui::ScrollHandle::new(),
             model_scroll_pending: Rc::default(),
             model_highlight: 0,
@@ -883,382 +872,6 @@ impl AssistantWindow {
             Err(e) => self.error = Some(format!("Could not save Assistant preferences: {e}")),
         }
         cx.notify();
-    }
-    fn close_model_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.model_picker_open = false;
-        if self.controls().composer {
-            self.input.read(cx).focus_handle(cx).focus(window, cx);
-        }
-        cx.notify();
-    }
-    fn scroll_model_highlight(&self, cx: &mut Context<Self>) {
-        self.model_scroll.scroll_to_item(self.model_highlight);
-        // Repeat after layout: on first open GPUI has no viewport bounds yet.
-        self.model_scroll_pending.set(true);
-        cx.notify();
-    }
-    fn open_model_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.controls().preferences {
-            return;
-        }
-        self.model_highlight = self
-            .models
-            .iter()
-            .position(|m| Some(m.model.as_str()) == self.preferred_model.as_deref())
-            .map_or(0, |index| index + 1);
-        self.model_picker_open = true;
-        self.model_picker_focus.focus(window, cx);
-        self.scroll_model_highlight(cx);
-    }
-    fn choose_model(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.controls().preferences || index > self.models.len() {
-            return;
-        }
-        let model = index
-            .checked_sub(1)
-            .and_then(|index| self.models.get(index))
-            .map(|m| m.model.clone());
-        self.save_preferences(model, self.preferred_effort.clone(), cx);
-        self.close_model_picker(window, cx);
-    }
-    fn model_picker_key(
-        &mut self,
-        event: &gpui::KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let key = event.keystroke.key.as_str();
-        if !matches!(key, "enter" | "space" | "up" | "down" | "escape") {
-            return;
-        }
-        window.prevent_default();
-        cx.stop_propagation();
-        if !self.controls().preferences {
-            return;
-        }
-        match key {
-            "escape" => self.close_model_picker(window, cx),
-            "enter" if self.model_picker_open => {
-                self.choose_model(self.model_highlight, window, cx);
-            }
-            "enter" | "space" if !self.model_picker_open => {
-                self.open_model_picker(window, cx);
-            }
-            "up" | "down" => {
-                if !self.model_picker_open {
-                    self.open_model_picker(window, cx);
-                }
-                self.model_highlight = if key == "up" {
-                    self.model_highlight.saturating_sub(1)
-                } else {
-                    (self.model_highlight + 1).min(self.models.len())
-                };
-                self.scroll_model_highlight(cx);
-            }
-            _ => {}
-        }
-    }
-    fn model_controls(
-        &self,
-        catalog_settled: bool,
-        narrow: bool,
-        cx: &mut Context<Self>,
-    ) -> gpui::Div {
-        let t = self.theme;
-        let busy = !self.controls().preferences;
-        let (current, warning) =
-            codex_client::resolved_model_label(&self.models, self.preferred_model.as_deref());
-        let mut efforts = super::segmented(&t).flex_wrap().min_w_0();
-        for (i, (value, label, selected)) in
-            codex_client::effort_choices(self.model(), self.preferred_effort.as_deref())
-                .into_iter()
-                .enumerate()
-        {
-            efforts = efforts.child(self.control(
-                ("assistant-effort", i),
-                super::segment(&t, ("assistant-effort", i), label, selected, i == 0),
-                !busy,
-                cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    if this.controls().preferences {
-                        this.save_preferences(this.preferred_model.clone(), value.clone(), cx);
-                    }
-                }),
-            ));
-        }
-        let bounds = self.model_trigger_bounds.clone();
-        let model_picker_open = self.model_picker_open;
-        let entity = cx.entity().downgrade();
-        let trigger = self
-            .button(
-                &t,
-                "assistant-model",
-                "",
-                false,
-                cx.listener(|this, _: &ClickEvent, window, cx| {
-                    if !this.controls().preferences {
-                        return;
-                    }
-                    if this.model_picker_open {
-                        this.close_model_picker(window, cx);
-                    } else {
-                        this.open_model_picker(window, cx);
-                    }
-                }),
-            )
-            .min_w_0()
-            .max_w_full()
-            .child(
-                div()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_ellipsis()
-                    .child(current),
-            )
-            .when(!busy, |d| {
-                d.track_focus(&self.model_picker_focus)
-                    .focus(|s| s.border_2().border_color(t.accent))
-            })
-            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
-                if model_picker_handles_key(this.model_picker_open, &event.keystroke.key) {
-                    this.model_picker_key(event, window, cx);
-                }
-            }))
-            .when(self.transcript.busy, |d| {
-                d.tooltip(move |_, cx| cx.new(|_| ModelControlsBusyTip(t)).into())
-            })
-            .child(
-                gpui::canvas(
-                    |_, _, _| (),
-                    move |bounds, _, window, _| {
-                        let mut chevron = gpui::PathBuilder::stroke(px(1.5));
-                        chevron.move_to(bounds.origin + gpui::point(px(2.), px(4.)));
-                        chevron.line_to(bounds.origin + gpui::point(px(6.), px(8.)));
-                        chevron.line_to(bounds.origin + gpui::point(px(10.), px(4.)));
-                        if let Ok(path) = chevron.build() {
-                            window.paint_path(path, t.text);
-                        }
-                    },
-                )
-                .size(px(12.))
-                .flex_shrink_0(),
-            );
-        let trigger = div()
-            .min_w_0()
-            .flex_1()
-            .child(trigger)
-            .on_children_prepainted(move |children, window, _| {
-                if let Some(trigger) = children.first() {
-                    let previous = bounds.replace(*trigger);
-                    if model_picker_open && previous != *trigger {
-                        let entity = entity.clone();
-                        window.on_next_frame(move |_, cx| {
-                            entity.update(cx, |_, cx| cx.notify()).ok();
-                        });
-                    }
-                }
-            });
-        let model_row = div()
-            .flex()
-            .items_center()
-            .gap_2()
-            .min_w_0()
-            .when(narrow, |d| d.w_full())
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(t.text_muted)
-                    .child("Model"),
-            )
-            .child(trigger);
-        let reasoning_row = div()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap_1()
-            .min_w_0()
-            .when(narrow, |d| d.w_full())
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(t.text_muted)
-                    .child("Reasoning"),
-            )
-            .child(
-                efforts
-                    .id("assistant-efforts")
-                    .when(self.transcript.busy, |d| {
-                        d.tooltip(move |_, cx| cx.new(|_| ModelControlsBusyTip(t)).into())
-                    }),
-            );
-        let mut controls = div().flex().flex_col().gap_1().min_w_0().child(
-            div()
-                .flex()
-                .flex_wrap()
-                .gap_2()
-                .min_w_0()
-                .when(narrow, |d| d.flex_col())
-                .child(model_row)
-                .child(reasoning_row),
-        );
-        if let Some(warning) = warning.filter(|_| catalog_settled) {
-            controls = controls.child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(t.warn)
-                    .whitespace_nowrap()
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .child(warning),
-            );
-        }
-        controls
-    }
-    fn model_picker_overlay(&self, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
-        if !self.model_picker_open || !self.controls().preferences {
-            return None;
-        }
-        let t = self.theme;
-        let count = self.models.len() + 1;
-        // Leave room for border/padding and a gap, even in a short window.
-        let available = f32::from(self.model_trigger_bounds.get().top()).max(0.);
-        let height = (count.min(7) as f32 * MODEL_ROW_HEIGHT).min((available - 18.).max(0.));
-        let rendered_offset = self.model_scroll.offset().y;
-        let (thumb_height, thumb_offset) =
-            model_scrollbar(count, f32::from(rendered_offset), height);
-        let scroll = self.model_scroll.clone();
-        let pending = self.model_scroll_pending.clone();
-        let highlight = self.model_highlight;
-        let entity = cx.entity().downgrade();
-        let mut list = div()
-            .id("assistant-model-options")
-            .h(px(height))
-            .flex_1()
-            .min_w_0()
-            .overflow_y_scroll()
-            .track_scroll(&self.model_scroll)
-            .on_scroll_wheel(cx.listener(|_, _: &gpui::ScrollWheelEvent, _, cx| {
-                cx.stop_propagation();
-                cx.notify();
-            }))
-            .flex()
-            .flex_col();
-        let options = std::iter::once((
-            None,
-            codex_client::resolved_model_label(&self.models, None).0,
-        ))
-        .chain(
-            self.models
-                .iter()
-                .map(|m| (Some(m.model.clone()), m.display_name.clone())),
-        );
-        for (i, (model, label)) in options.enumerate() {
-            list = list.child(
-                self.control(
-                    ("assistant-model-option", i),
-                    div().id(("assistant-model-option", i)),
-                    true,
-                    cx.listener(move |this, _: &ClickEvent, window, cx| {
-                        this.choose_model(i, window, cx);
-                    }),
-                )
-                .h(px(MODEL_ROW_HEIGHT))
-                .flex_shrink_0()
-                .px_2()
-                .flex()
-                .items_center()
-                .text_xs()
-                .cursor_pointer()
-                .when(i == self.model_highlight, |d| d.bg(t.raised))
-                .when(self.preferred_model == model, |d| d.text_color(t.accent))
-                .hover(|d| d.bg(t.raised))
-                .child(
-                    div()
-                        .whitespace_nowrap()
-                        .overflow_hidden()
-                        .text_ellipsis()
-                        .child(label),
-                ),
-            );
-        }
-        let popup = div()
-            .on_children_prepainted(move |_, window, _| {
-                let retry = pending.replace(false);
-                if retry {
-                    scroll.scroll_to_item(highlight);
-                }
-                // Build the thumb from the offset actually applied by prepaint.
-                // Only request another frame if scrolling or initialization needs it.
-                if retry || scroll.offset().y != rendered_offset {
-                    let entity = entity.clone();
-                    window.on_next_frame(move |_, cx| {
-                        entity.update(cx, |_, cx| cx.notify()).ok();
-                    });
-                }
-            })
-            .id("assistant-model-popup")
-            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
-                if matches!(event.keystroke.key.as_str(), "up" | "down") {
-                    this.model_picker_focus.focus(window, cx);
-                    this.model_picker_key(event, window, cx);
-                }
-            }))
-            .w(px(280.))
-            .p(px(4.))
-            .rounded_md()
-            .bg(t.surface)
-            .border_1()
-            .border_color(t.border)
-            .shadow_lg()
-            .flex()
-            .gap(px(4.))
-            .on_any_mouse_down(|_, window, cx| {
-                window.prevent_default();
-                cx.stop_propagation();
-            })
-            .child(list)
-            .when(count as f32 * MODEL_ROW_HEIGHT > height, |d| {
-                d.child(
-                    div()
-                        .relative()
-                        .w(px(6.))
-                        .h(px(height))
-                        .flex_shrink_0()
-                        .rounded_full()
-                        .bg(t.raised)
-                        .child(
-                            div()
-                                .absolute()
-                                .top(px(thumb_offset))
-                                .w(px(6.))
-                                .h(px(thumb_height))
-                                .rounded_full()
-                                .bg(t.text_muted),
-                        ),
-                )
-            });
-        Some(
-            div()
-                .id("assistant-model-dismiss")
-                .absolute()
-                .inset_0()
-                .occlude()
-                .on_any_mouse_down(cx.listener(|this, _: &gpui::MouseDownEvent, window, cx| {
-                    window.prevent_default();
-                    cx.stop_propagation();
-                    this.close_model_picker(window, cx);
-                }))
-                .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-                .child(
-                    gpui::anchored()
-                        .anchor(gpui::Corner::BottomLeft)
-                        .position(self.model_trigger_bounds.get().origin)
-                        .offset(gpui::point(px(0.), px(-4.)))
-                        .snap_to_window()
-                        .child(popup),
-                )
-                .into_any_element(),
-        )
     }
     fn disconnected(&mut self, error: String) {
         self.deny_all_access("Connection closed");
@@ -1718,7 +1331,7 @@ impl AssistantWindow {
         let Some(directory) = self.client.as_ref().map(|c| c.directory.clone()) else {
             return;
         };
-        self.model_picker_open = false;
+        self.composer_menu = None;
         self.focus_composer = true;
         self.turn_edit = self.allow_changes;
         if self.conversation.is_none() {
@@ -3339,9 +2952,19 @@ impl Render for AssistantWindow {
                 }
             }))
             .on_action(cx.listener(|this, _: &AssistantEscape, window, cx| this.escape(window, cx)))
-            .on_action(cx.listener(|_, _: &AssistantNextControl, window, cx| window.focus_next(cx)))
+            .on_action(cx.listener(|this, _: &AssistantNextControl, window, cx| {
+                if this.composer_menu.is_some() {
+                    this.close_model_picker(window, cx);
+                }
+                window.focus_next(cx);
+            }))
             .on_action(
-                cx.listener(|_, _: &AssistantPreviousControl, window, cx| window.focus_prev(cx)),
+                cx.listener(|this, _: &AssistantPreviousControl, window, cx| {
+                    if this.composer_menu.is_some() {
+                        this.close_model_picker(window, cx);
+                    }
+                    window.focus_prev(cx);
+                }),
             )
             .flex()
             .flex_col()
@@ -3459,104 +3082,6 @@ impl Render for AssistantWindow {
             ));
         }
         let catalog_settled = catalog_settled(self.account, self.models_requested, &self.pending);
-        root = root
-            .child(self.model_controls(catalog_settled, narrow, cx))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .child(self.button(
-                        &t,
-                        "assistant-plots",
-                        if self.include_plots {
-                            "Images: On"
-                        } else {
-                            "Images: Off"
-                        },
-                        self.include_plots,
-                        cx.listener(|this, _: &ClickEvent, _, cx| {
-                            if this.controls().preferences {
-                                this.include_plots = !this.include_plots;
-                            }
-                            cx.notify();
-                        }),
-                    ))
-                    .child(self.button(
-                        &t,
-                        "assistant-web",
-                        if self.web_search {
-                            "Web: On"
-                        } else {
-                            "Web: Off"
-                        },
-                        self.web_search,
-                        cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.access_preferences(false, cx)
-                        }),
-                    ))
-                    .child(self.button(
-                        &t,
-                        "assistant-extended",
-                        if self.extended_access {
-                            "Extended access: On"
-                        } else {
-                            "Extended access: Off"
-                        },
-                        self.extended_access,
-                        cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.access_preferences(true, cx)
-                        }),
-                    ))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .when(!controls.preferences, |d| d.text_color(t.text_muted))
-                                    .child("Mode:"),
-                            )
-                            .child(
-                                super::segmented(&t)
-                                    .child(self.control(
-                                        "assistant-review",
-                                        super::segment(
-                                            &t,
-                                            "assistant-review",
-                                            "Review",
-                                            !self.allow_changes,
-                                            true,
-                                        ),
-                                        controls.preferences,
-                                        cx.listener(|this, _: &ClickEvent, _, cx| {
-                                            this.allow_changes = false;
-                                            this.turn_edit = false;
-                                            this.deny_all_access(
-                                                "Edit analysis permission revoked",
-                                            );
-                                            cx.notify();
-                                        }),
-                                    ))
-                                    .child(self.control(
-                                        "assistant-edit",
-                                        super::segment(
-                                            &t,
-                                            "assistant-edit",
-                                            "Edit analysis",
-                                            self.allow_changes,
-                                            false,
-                                        ),
-                                        controls.preferences,
-                                        cx.listener(|this, _: &ClickEvent, _, cx| {
-                                            this.allow_changes = true;
-                                            cx.notify();
-                                        }),
-                                    )),
-                            ),
-                    ),
-            );
         let settings = div().id("assistant-settings-menu").occlude().p_3().flex().flex_col().gap_2().bg(t.surface).border_1().border_color(t.border).rounded_lg().shadow_lg().max_h(px(400.)).overflow_y_scroll()
             .child(div().flex()                    .child(div().flex_1())
                     .child(
@@ -3569,42 +3094,16 @@ impl Render for AssistantWindow {
                         ),
                     ),
             )            .when(self.extended_access, |d| d.child(div().text_size(px(12.)).text_color(t.warn).child("Extended access: approved commands run in the assistant workspace sandbox; commands that need to leave the sandbox are declined automatically. Known-safe read-only commands run without approval.")))
-            .child(div().text_size(px(12.)).text_color(t.text_muted).child("Review can inspect data and navigate. Edit analysis can also change parameters and run calculations."))
+            .child(self.button(&t, "assistant-plots", if self.include_plots { "Plot images: On" } else { "Plot images: Off" }, self.include_plots,
+                cx.listener(|this, _: &ClickEvent, _, cx| { if this.controls().preferences { this.include_plots = !this.include_plots; cx.notify(); } })))
+            .child(self.button(&t, "assistant-web", if self.web_search { "Web search: On" } else { "Web search: Off" }, self.web_search,
+                cx.listener(|this, _: &ClickEvent, _, cx| this.access_preferences(false, cx))))
             .child(self.control("assistant-shared-context", div().id("assistant-shared-context").text_color(t.text_muted).cursor_pointer(), controls.composer, cx.listener(|this, _: &ClickEvent, _, cx| { this.shared_context_open = !this.shared_context_open; cx.notify(); }))
                 .child(if self.shared_context_open { "▾ Shared context…" } else { "▸ Shared context…" }))
             .when(self.shared_context_open, |d| d.child(div().text_size(px(12.)).text_color(t.text_muted)
                 .child("Send includes project state; spectrum names and file paths; processing settings and source comments; model and results; journal entries; and plot images when enabled.")))
 ;
-        root = root.child(
-            div()
-                .flex()
-                .gap_2()
-                .items_end()
-                .child(div().flex_1().min_w_0().child(self.input.clone()))
-                .child(if self.transcript.busy || self.transcript.stop_pending {
-                    self.button(
-                        &t,
-                        "assistant-stop",
-                        if self.transcript.stop_pending {
-                            "Stopping…"
-                        } else {
-                            "Stop"
-                        },
-                        false,
-                        cx.listener(|this, _: &ClickEvent, _, cx| this.stop(cx)),
-                    )
-                    .into_any_element()
-                } else {
-                    self.button(
-                        &t,
-                        "assistant-send",
-                        "Send",
-                        true,
-                        cx.listener(|this, _: &ClickEvent, _, cx| this.run(cx)),
-                    )
-                    .into_any_element()
-                }),
-        );
+        root = root.child(self.composer(catalog_settled, window, cx));
         if self.settings_open {
             root = root.child(
                 div()

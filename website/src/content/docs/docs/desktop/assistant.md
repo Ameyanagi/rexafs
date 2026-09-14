@@ -16,6 +16,20 @@ returns it. Closing the docked panel keeps the connection and transcript.
 they can also collapse automatically to leave room for plots. Panel width and
 window preference are computer settings.
 
+## Compact composer in development
+
+The development build places **Model**, **Reasoning**, and **Access** menus below
+the message. The first two show the effective selections; their menus retain
+**Automatic** and **Model default**. Use arrow keys to browse, Enter or Space to
+choose, and Escape to close a menu. The arrow button sends; it becomes Stop
+during a response.
+
+The **Access** menu describes **Review** and **Edit analysis**. Its **Workspace
+commands** switch is the existing Extended access setting, with the same sandbox
+and approval rules. An amber dot on Access indicates that it is enabled.
+**Plot images** and **Web search** are in Assistant settings (the gear button).
+This layout is not included in the 0.2.6 download.
+
 ## Controls and access
 
 - **Review** permits inspection and navigation. **Edit analysis** enables the
