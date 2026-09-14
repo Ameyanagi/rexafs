@@ -5,6 +5,14 @@ with a merge commit before tagging. Nightly desktop builds follow `dev`; they
 do not substitute for the qualified stable tag build below. See the
 [development branch workflow](development-branches.md).
 
+## Preparing 0.2.7
+
+The [0.2.7 notes](release-notes-0.2.7.md) and
+[qualification record](validation/2026-09-15-release-0.2.7/review.md) track the
+Assistant interface, desktop Codex startup and measurement reader corrections.
+Publication requires the reviewed `dev` → `main` promotion, a successful manual
+build of its immutable tag, qualified packages and signed Mac downloads.
+
 ## Published 0.2.6
 
 The [0.2.6 notes](release-notes-0.2.6.md) and

@@ -59,7 +59,7 @@ const MAX_BYTES: usize = 256 * 1024 * 1024;
 /// its own error instead of silently falling back to unrelated column rules.
 /// Gzip must contain exactly one complete member with no trailing data.
 /// Input bytes are borrowed during parsing; returned arrays are independent.
-/// The source checkout also rejects malformed leading numeric rows separated
+/// Since 0.2.7, this function rejects malformed leading numeric rows separated
 /// from valid rows by comments, with the offending line in the error.
 pub fn parse_measurement(bytes: &[u8]) -> Result<Measurement, ReadError> {
     if bytes.len() > MAX_BYTES {
