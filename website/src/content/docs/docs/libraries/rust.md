@@ -9,7 +9,7 @@ audience: user
 Add the stable crate:
 
 ```sh
-cargo add rexafs@0.2.5
+cargo add rexafs@0.2.6
 ```
 
 ```rust
@@ -34,10 +34,10 @@ after direct edits to legacy public fields, call `invalidate_derived()`.
 
 ## Full API reference
 
-The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.5 crate
+The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.6 crate
 with the default nalgebra backend and optional features. It excludes the legacy
 `ndarray-compat` backend, which replaces parts of that API and has different
-defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.5/rexafs/) is also available.
+defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.6/rexafs/) is also available.
 
 The [Next reference](/api/rust-next/rexafs/index.html) uses the checkout with the
 same features. Use it when working from source.
@@ -47,10 +47,15 @@ same features. Use it when working from source.
 | `Spectrum`, `Group` | Normalization, background, FFT/IFFT, collections and parallel processing |
 | `tools` | Calibration, alignment, deglitching, truncation, smoothing, rebinning, merging and differences |
 | `analysis` | Bounded linear combination fitting, combination searches, principal component analysis and target transformation |
-| `io` | Text/QAS/XDI readers and conversion to spectra |
+| `io` | Content-detected measurement import, raw columns/datasets and explicit signal selection |
 | `structure` | CIF/XYZ models, symmetry, clusters, neighbors, structure databases and FEFF input |
 | `fitting` | FEFF paths, variables/expressions, k/R/q transforms, joint and independent fitting |
 | `plot` | Optional spectrum/group/fit figures |
+
+Read beamline files with `rexafs::io::read_measurement(path)`. Inspect the returned
+scans and select stored absorption, transmission or fluorescence by column name
+or index. The [reader guide](/docs/reference/stable/measurement-reading/) explains
+automatic choices, units, angle conversion and supported containers.
 
 ## Optional features
 
@@ -64,7 +69,7 @@ same features. Use it when working from source.
 | `materials-project`, `cod` | HTTP structure-source integrations |
 | `ndarray-compat` | Legacy ndarray compatibility backend |
 
-For example, `cargo add rexafs@0.2.5 --features plotting,refeff-runner` enables
+For example, `cargo add rexafs@0.2.6 --features plotting,refeff-runner` enables
 plotting and ReFEFF. Backend availability depends on the platform; see
 [WebAssembly support](/docs/libraries/webassembly/) for browser limits.
 

@@ -198,13 +198,13 @@ website/src/content/docs/docs/reference/stable/typescript/prepostedgeoptions.md,
 website/src/content/docs/docs/reference/stable/typescript/xrayfftfoptions.md,user,generated,/docs/reference/stable/typescript/xrayfftfoptions/,Generated from source-owned API help; preserve Stable/Next channel rules.
 website/src/content/docs/docs/reference/stable/typescript/xrayfftr.md,user,generated,/docs/reference/stable/typescript/xrayfftr/,Generated from source-owned API help; preserve Stable/Next channel rules.
 website/src/content/docs/docs/reference/stable/typescript/xrayfftroptions.md,user,generated,/docs/reference/stable/typescript/xrayfftroptions/,Generated from source-owned API help; preserve Stable/Next channel rules.
-doc/measurement-reader.md,mixed,split,/docs/reference/next/measurement-reading/,Unreleased reader guide; retain implementation and fixture qualification in the checkout.
+doc/measurement-reader.md,mixed,split,/docs/reference/stable/measurement-reading/,Released reader guide; retain implementation and fixture qualification in the checkout.
 doc/universal-reader-plan.md,developer,exclude,,Implementation sequence and qualification record.
 doc/beamline-source-repositories.md,developer,exclude,,Pinned research sources and fixture redistribution evidence.
 crates/rexafs/tests/fixtures/sessions/xtunes/README.md,developer,exclude,,Original XTUNES fixture provenance and licensing.
-doc/reference-format-audit.md,developer,exclude,,Pinned upstream reader audit and fixture qualification; public behavior belongs in the Next reader guide.
+doc/reference-format-audit.md,developer,exclude,,Pinned upstream reader audit and fixture qualification; public behavior belongs in the versioned reader guide.
 doc/larix-import-plan.md,developer,exclude,,Unreleased Larix implementation sequence and qualification record.
-doc/larix-import.md,mixed,split,/docs/reference/next/measurement-reading/,Publish the unreleased import contract and limits; retain fixture qualification in the checkout.
+doc/larix-import.md,mixed,split,/docs/reference/stable/measurement-reading/,Published import contract and limits; retain fixture qualification in the checkout.
 crates/rexafs/tests/fixtures/README.md,developer,exclude,,Current fixture organization and shared test entry points.
 crates/rexafs/tests/fixtures/sessions/README.md,developer,exclude,,Current session fixture index; original bundle documents remain historical.
 crates/rexafs/tests/fixtures/sessions/larix/README.md,developer,exclude,,Original Larix fixture provenance and licensing; preserved unchanged.
@@ -224,3 +224,4 @@ crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/INDEX.md,developer,ex
 doc/release-notes-0.2.6.md,developer,exclude,,Coordinated 0.2.6 release notes; publication status is explicit.
 doc/validation/2026-09-14-release-0.2.6/review.md,developer,exclude,,Versioned release preparation and exact-build publication evidence.
 doc/development-branches.md,developer,exclude,,Development integration and nightly/stable release branch workflow.
+doc/validation/2026-09-14-release-0.2.6/import-capture.md,developer,exclude,,Signed release screenshot provenance and original measurement attribution.
