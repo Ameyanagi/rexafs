@@ -1,0 +1,11 @@
+SPDX-License-Identifier: CC0-1.0
+License-File: LICENSES/CC0-1.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit dataset license
+License-Evidence: https://uj.rodbuk.pl/dataset.xhtml?persistentId=doi:10.57903/UJ/58IJY5
+Source: https://uj.rodbuk.pl/dataset.xhtml?persistentId=doi:10.57903/UJ/58IJY5
+Download: https://uj.rodbuk.pl/api/access/datafile/41604?format=original
+Citation: Figura-Jagoda, Aleksandra; Minzoni, Camilla; Maćkosz, Krzysztof; Szkudlarek, Aleksandra; Sikora, Marcin. Reaction Mechanisms in Copper Atomic Layer Deposition Using Copper(II) Hexafluoroacetylacetonate and Diethylzinc via In Situ Time-of-Flight Mass Spectrometry - raw data. Jagiellonian University in Krakow, dataset version 1. https://doi.org/10.57903/UJ/58IJY5
+SHA256: 6c98e3f2f8994230c11bad1557431691d66ce3841c6e2c26ddb36f2027cb8dd2
+Archive-Member: XAS/AFJ_CuALD_650c_Si.dat
+Modifications: None; original downloaded measurement bytes retained.

@@ -1,0 +1,10 @@
+SPDX-License-Identifier: MIT
+License-File: LICENSES/XraySpectroscopy--pynxxas--LICENSE
+License-Basis: repository-distribution-license
+License-Scope: repository distribution license; bundled test fixtures
+License-Evidence: https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/LICENSE
+Source: https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap3.001
+Download: https://raw.githubusercontent.com/XraySpectroscopy/pynxxas/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap3.001
+Citation: Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual
+SHA256: fdad1d857235347b6058d6a6038063638925b63c5d79aa03e190c9fe96906d47
+Modifications: None; original downloaded measurement bytes retained.

@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit per-spectrum Scan.license declaration in CLS API metadata; also in the download header except Fe_idcj28n9
+License-Evidence: https://xasdb.lightsource.ca/DB/Zn/BM08-LISA/Zinc%20Cobaltite/Zinc%20Cobaltite_2024_10_26_scan1_idbkn38n.dat
+Test-Eligibility: documented-license
+Source: https://xasdb.lightsource.ca/DB/Zn/BM08-LISA/Zinc%20Cobaltite/Zinc%20Cobaltite_2024_10_26_scan1_idbkn38n.dat
+Download: https://xasdb.lightsource.ca/DB/Zn/BM08-LISA/Zinc%20Cobaltite/Zinc%20Cobaltite_2024_10_26_scan1_idbkn38n.dat
+Citation: Puri A.. Zinc Cobaltite, Zn K-edge, BM08-LISA, 2024-10-26. Canadian Light Source XAS Database, spectrum Zn_idbkn38n.
+SHA256: d496e13d9d5570211326b3d31131d3ddc55776fe6d0b91379d29ca2b0357120c
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/cls/Zn_idbkn38n.json

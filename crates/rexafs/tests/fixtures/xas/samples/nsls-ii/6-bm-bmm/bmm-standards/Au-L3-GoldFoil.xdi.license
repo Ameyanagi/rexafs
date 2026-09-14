@@ -1,0 +1,11 @@
+SPDX-License-Identifier: LicenseRef-NIST-Public-Data
+License-File: LICENSES/NSLS2--bmm-standards--LICENSE
+License-Basis: explicit-data-license
+License-Scope: NIST data; worldwide redistribution with acknowledgment
+License-Evidence: https://github.com/NSLS2/bmm-standards/blob/7f5728eb2b59d98305e41a908d0791b0baeab869/LICENSE
+Test-Eligibility: documented-license
+Source: https://github.com/NSLS2/bmm-standards/blob/7f5728eb2b59d98305e41a908d0791b0baeab869/Data/Au/Au-L3-GoldFoil.xdi
+Download: https://raw.githubusercontent.com/NSLS2/bmm-standards/7f5728eb2b59d98305e41a908d0791b0baeab869/Data/Au/Au-L3-GoldFoil.xdi
+Citation: Bruce Ravel (2025). A collection of X-ray Absorption Spectroscopy data of metals, stable oxides, and other common compounds measured at NIST’s Beamline for Materials Measurement. Version 1.0.0. National Institute of Standards and Technology. https://doi.org/10.18434/mds2-4032. Accessed 2026-09-14.
+SHA256: fd6216a18d67df8df926b8be104208a1692a176f611139ea6b58633330f3f47a
+Modifications: None; original NIST measurement bytes retained.

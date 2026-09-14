@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: individual dataset license
+License-Evidence: https://mdr.nims.go.jp/datasets/c665369d-28b1-4c1d-9198-00f61555fe34
+Test-Eligibility: documented-license
+Source: https://mdr.nims.go.jp/datasets/c665369d-28b1-4c1d-9198-00f61555fe34
+Download: https://mdr.nims.go.jp/filesets/59fe52b8-8bae-4166-90a7-db5f403cc6d7/download
+Citation: Masashi Ishii; Ritsumeikan SR Center. XAFS spectrum of Silicon dioxide (Quartz). https://doi.org/10.48505/nims.3350
+SHA256: 4eae07832380f9253ac8c0cb3899d5c8a5d3afeebc84402eac56f22b54d22315
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/mdr/c665369d-28b1-4c1d-9198-00f61555fe34/record.json

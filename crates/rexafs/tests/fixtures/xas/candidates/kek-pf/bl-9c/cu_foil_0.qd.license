@@ -1,0 +1,12 @@
+Usage-Notice-Identifier: LicenseRef-KEK-PF-Academic-Use-Notice
+License-File: LICENSES/LicenseRef-KEK-PF-Academic-Use-Notice.txt
+License-Basis: custom-academic-use-notice
+License-Scope: Custom KEK-PF usage notice: academic research excluding military-related research; contact the experimenter for publication citation. No standard data license is assigned.
+License-Evidence: https://pfxafs.kek.jp/xafsdata/
+Intended-Use: Academic, nonmilitary research and reader regression testing only.
+Publication-Citation: Contact Hiroaki Nitani (Photon Factory) through the source record before citing the data in a publication.
+Source: https://pfxafs.kek.jp/xafsdata/view.php?id=22
+Citation: Hiroaki Nitani (Photon Factory), 2018-05-30. Cu metal foil, KEK Photon Factory BL-9C, Quick Scan. PF XAFS database record 22. https://pfxafs.kek.jp/xafsdata/view.php?id=22
+SHA256: 95442847c66be92a877c72876b377230edcaab24fa0636536f77fa1bbef6fdff
+Modifications: None; complete original measurement bytes retained.
+Packaging: Repository test fixture only; excluded from crates.io, Python and npm packages.

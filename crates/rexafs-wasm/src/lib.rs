@@ -1255,3 +1255,70 @@ impl WasmSpectrum {
             .map(|v| js_sys::Float64Array::from(v.as_slice()))
     }
 }
+
+/// Owned, content-detected measurement import, available in the unreleased API.
+/// Parsing and conversion use rexafs::io on both native and WebAssembly targets.
+/// Release its native storage with free() after copying the arrays you need.
+#[wasm_bindgen(js_name = Measurement)]
+pub struct WasmMeasurement {
+    inner: rexafs::io::Measurement,
+}
+#[wasm_bindgen(js_class = Measurement)]
+impl WasmMeasurement {
+    /// Parse text, gzip, project or HDF5 bytes. Returns owned scans and metadata;
+    /// no network access, detector correction or spectrum processing occurs.
+    /// Inputs and expanded gzip text are limited to 256 MiB. Invalid files throw.
+    #[wasm_bindgen(constructor)]
+    pub fn new(bytes: &[u8]) -> Result<WasmMeasurement, JsValue> {
+        Ok(Self {
+            inner: rexafs::io::parse_measurement(bytes)
+                .map_err(|e| js_sys::Error::new(&e.to_string()))?,
+        })
+    }
+    /// Append a scan from explicit HDF5 vector paths and return its zero-based index.
+    /// Paths must be distinct nonempty vectors of equal length; arrays are copied.
+    pub fn select_datasets(&mut self, paths_json: &str) -> Result<usize, JsValue> {
+        let paths: Vec<String> =
+            serde_json::from_str(paths_json).map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        let scan = self
+            .inner
+            .dataset_scan(&paths)
+            .map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        let index = self.inner.scans.len();
+        self.inner.scans.push(scan);
+        Ok(index)
+    }
+    /// Copy the import document as JSON. Nonfinite raw cells appear as null;
+    /// conversion still validates the original numeric arrays held in Rust.
+    pub fn document_json(&self) -> Result<String, JsValue> {
+        serde_json::to_string(&self.inner).map_err(|e| js_sys::Error::new(&e.to_string()).into())
+    }
+    /// Copy a scan's converted energy and signal as JSON, in acquisition order.
+    /// Omit mapping_json only when the scan has exactly one signal candidate.
+    /// Explicit mappings accept exact column names or zero-based indices and energy units.
+    /// Errors identify invalid roles, units, ratios and nonfinite selected cells.
+    pub fn arrays_json(
+        &self,
+        scan: usize,
+        mapping_json: Option<String>,
+    ) -> Result<String, JsValue> {
+        let mapping = mapping_json
+            .map(|s| serde_json::from_str::<rexafs::io::SpectrumSelection>(&s))
+            .transpose()
+            .map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        let selected = self
+            .inner
+            .scans
+            .get(scan)
+            .ok_or_else(|| js_sys::Error::new("Scan index out of range"))?;
+        let mapping = mapping
+            .as_ref()
+            .map(|m| m.resolve(selected))
+            .transpose()
+            .map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        let arrays = selected
+            .arrays(mapping.as_ref())
+            .map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        serde_json::to_string(&arrays).map_err(|e| js_sys::Error::new(&e.to_string()).into())
+    }
+}

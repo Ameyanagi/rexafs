@@ -1,0 +1,39 @@
+For the "Predicted undulator gap offset", ID of binary files in "undulator gap detuning" folder are:
+[474,475,476,477,478] for oxygen K-edge measurements with corresponding offset gap values of [20,15,10,5,-1.672]
+[466,468,469,470,472,473] for nickel L23-edge measurements with corresponding offset gap values of [30,43,35,10,20,-1.672]
+ 
+For the "Beam blocking between data acquisition" data, files uploaded for "maximum flux" ("high_dose_5MH3PO3.txt") and "beam blocker" ("low_dose_5MH3PO3.txt")
+ 
+For the "Operation of the cell at different temperatures" data, files uploaded for 25°C ("CV_planarPt_5MH3PO3_25C.txt") and for 72°C ("CV_planarPt_5MH3PO3_72C.txt")
+ 
+For the "Detuning the undulator gap minimizes the radiation-induced oxidation" plot, in the "Undulator detuning P K-edge" folder the files are:
+["w_AuMesh,Ugap=6p0_I0=58nA_t=10min.txt",
+"w_Aumesh_Ugap=6p15_I0=9nA_t=20min.txt",
+"w_AuMesh_Ugap=6p11_I0=18nA_t=30min.txt",
+"w_AuMesh_Ugap=6p05_I0=40nA_t=40min.txt"] with [100,69,31,16]% of maximum flux respectively
+"aqueous_1M_H3PO3_exp_PK_XAS.txt" and "aqueous_1M_H3PO4_exp_PK_XAS.txt" are the reference spectra of aqueous 1M H3PO3 and 1M H3PO4 respectively
+ 
+For the "Variation of the position of the irradiated sample", in the "NCA degradation damage" folder the files are:
+[1271,1272,1273] for oxygen K-edge measurement for 1st, 2nd and 3rd scan in the same position
+[1297,1298,1299] for nickel L3-edge measurement for 1st, 2nd and 3rd scan in the same position
+[1304] for nickel L3-edge spectra for measurement in a new position
+ 
+For the "Cu samples electrodeposited under different conditions " in the "Different Cu electrodeposition protocols" folder, the files are:
+at the Cu L3-edge:
+electrolyte =  "Scan_1107_2022_10_08_aq_CuSO4.sdat"
+Cu2O = "Scan_2020_2022_11_02_Cu2O_in_CuSO4.sdat"
+Cu = "Scan_2028_2022_11_02_Cu_in_CuSO4.sdat"
+at the Cu K-edge:
+electrolyte = "Scan_2007_2022_11_02_aq_CuSO4.dat"
+Cu2O = "Scan_2021_2022_11_02_Cu2O_in_CuSO4.dat"
+Cu = "Scan_2033_2022_11_02_Cu_in_water.dat"
+and the electrochemistry:
+"scan_2027" for the Cu electrodeposition
+"3_ED_CA_XXX_CuSO4_RHE_YYY.mpr" for the 5 files related to the Cu2O electrodeposition
+ 
+The spectromicrographs are the files:
+1247 for the TFY mode
+1248 for the PFY mode
+ 
+The FEXRAV signals are given by the following IDs:
+[1998,2002,2009] for the chemical species ["sXAS-Main peak (Cu2O)","sXAS-Secondary peak (Cu(0))","hXAS-Main peak"]

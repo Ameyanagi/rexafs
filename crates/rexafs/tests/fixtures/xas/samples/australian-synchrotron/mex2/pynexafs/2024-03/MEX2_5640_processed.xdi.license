@@ -1,0 +1,10 @@
+SPDX-License-Identifier: MIT
+License-File: LICENSES/xraysoftmat--pyNexafs--LICENSE
+License-Basis: repository-distribution-license
+License-Scope: repository distribution license; bundled test fixtures
+License-Evidence: https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/LICENSE
+Source: https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/MEX2/2024-03/MEX2_5640_processed.xdi
+Download: https://raw.githubusercontent.com/xraysoftmat/pyNexafs/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/MEX2/2024-03/MEX2_5640_processed.xdi
+Citation: Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs
+SHA256: 97c301300a675be8f6d2f821781b1a925617ce2e2227fc471fe154d2f1368f02
+Modifications: None; original downloaded measurement bytes retained.

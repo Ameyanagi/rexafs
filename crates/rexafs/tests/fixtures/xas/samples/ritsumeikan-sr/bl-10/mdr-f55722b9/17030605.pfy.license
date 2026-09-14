@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: individual dataset license
+License-Evidence: https://mdr.nims.go.jp/datasets/f55722b9-7a1d-49c4-b59e-0226d4d59d5c
+Test-Eligibility: documented-license
+Source: https://mdr.nims.go.jp/datasets/f55722b9-7a1d-49c4-b59e-0226d4d59d5c
+Download: https://mdr.nims.go.jp/filesets/90973577-810d-4db3-a628-1426b2f4adb2/download
+Citation: Masashi Ishii; Ritsumeikan SR Center. XAFS spectrum of Sodium orthosilicate. https://doi.org/10.48505/nims.3332
+SHA256: 9ec24a80ed10d20e65d7d1e3b0382ceee56ff0d555a24bea92789ad4f96e4c5f
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/mdr/f55722b9-7a1d-49c4-b59e-0226d4d59d5c/record.json

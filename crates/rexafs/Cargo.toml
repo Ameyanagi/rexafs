@@ -11,6 +11,15 @@ repository = { workspace = true }
 description = "Rust-powered X-ray absorption spectroscopy analysis and EXAFS fitting"
 keywords = ["xafs", "exafs", "spectroscopy", "xray", "science"]
 categories = ["science"]
+# Keep the beamline corpus and its integration tests in Git, outside the
+# crates.io archive. Source-checkout tests read these fixtures from disk.
+exclude = [
+    "/tests/fixtures/xas/",
+    "/tests/fixtures/sessions/",
+    "/tests/beamline_formats.rs",
+    "/tests/measurement_fixtures.rs",
+    "/tests/measurement_fixtures/",
+]
 
 [dependencies]
 semver = { workspace = true }
@@ -34,7 +43,7 @@ bson = { workspace = true }
 version = { workspace = true }
 enterpolation = { workspace = true }
 easyfft = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["float_roundtrip"] }
 flate2 = { workspace = true }
 pest = { workspace = true }
 pest_derive = { workspace = true }
@@ -46,6 +55,9 @@ refeff = { workspace = true, optional = true }
 rusqlite = { version = "0.31", features = ["bundled"], optional = true }
 ureq = { version = "3", features = ["json"], optional = true }
 base64 = "0.23.1"
+hdf5-pure = "0.45.0"
+encoding_rs = "0.8"
+regex = "1"
 
 [features]
 default = ["trust-region"]
@@ -70,6 +82,7 @@ feff10 = { workspace = true, optional = true }
 pprof = { version = "0.15", features = ["flamegraph"] }
 
 [dev-dependencies]
+sha2 = "0.11"
 criterion = { version = "0.8.2", features = ["html_reports"] }
 
 [[bench]]

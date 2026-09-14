@@ -44,7 +44,8 @@
     "node.d.ts",
     "types.d.ts",
     "spectrum.js",
-    "configuration.js"
+    "configuration.js",
+    "measurement.js"
   ],
   "scripts": {
     "build": "node build.mjs",

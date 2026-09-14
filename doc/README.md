@@ -42,6 +42,10 @@ Start with the [project README](../README.md), [API guide](api.md),
 
 - [Windows installation and packaging](windows-installers.md)
 - [Linux and Windows development and repository hooks](desktop-development.md)
+- [Universal measurement reader](measurement-reader.md): unreleased beamline, HDF5 and XTUNES support.
+- [Larix session import](larix-import.md): stored absorption, complex arrays and inert session metadata; [implementation plan](larix-import-plan.md).
+- [Demeter and Larch format audit](reference-format-audit.md): pinned sources, new original fixtures and qualified reader behavior.
+- [Source repository research](beamline-source-repositories.md): pinned GitHub sources and fixture license evidence.
 - [XDI import](xdi-import.md)
 - [Multiple spectra and independent fitting](joint-fitting.md)
 - [Series browsing and trends](series.md)
@@ -73,3 +77,6 @@ and benchmark timings are historical, not assertions about the current build.
 
 - [September 7–8 processing benchmarks](benchmarks/2026-09-07-08-summary.md): rexafs 0.1.3 methodology, aggregate measurements and limitations.
 - [Normalization stability prototype](../experiments/normalization_stability/README.md): reproducible comparison of four models on Ru/Cu fixtures.
+
+The [reader refactor plan](measurement-reader-refactor-plan.md) records the
+fixture, test and adapter organization and the desktop preview follow-up.

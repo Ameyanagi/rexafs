@@ -50,6 +50,30 @@ with the Cu example and built-in Cu structure. The fitting
 walkthrough uses ReFEFF, an 8 Å cluster and one first-shell path. Values in these
 screenshots describe that demonstration, not a benchmark or universal fit result.
 
+The [Next measurement reader guide](/docs/reference/next/measurement-reading/)
+adds full, unedited 1187 × 768 captures made through computer use on
+14 September 2026 from an unreleased macOS ARM64 source build on
+`test/beamline-fixtures`. These images show the EX3 import preview and original
+header. The source measurement is Masashi Ishii and the Industrial Application
+and Partnership Division's [XAFS spectrum of Lead telluride](https://doi.org/10.48505/nims.3178),
+[MDR record](https://mdr.nims.go.jp/datasets/3c5953dc-1faa-47a7-a3f0-8211703adb58),
+licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+The measurement bytes are unchanged; the screenshots visualize its stored energy
+and absorption, without additional import corrections. The
+[capture record](https://github.com/Ameyanagi/rexafs/tree/45ccd5e72eedf07d4e6f15b8c1d0e0e9661d0d86/doc/validation/2026-09-14-measurement-import-ui)
+identifies the input and executable by checksum. These images describe unreleased
+behavior and do not replace the versioned release screenshots above.
+
+The current Next guide also shows the multiple-signal import controls in a full,
+unedited 1187 × 768 capture from 14 September 2026. Its 651-point
+`Mo foil 0001-r0003.dat` input comes from Ryuichi Shimogawa and contributors'
+[xasref collection](https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo%20foil%200001-r0003.dat),
+with the collection's [MIT distribution notice](https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/LICENSE).
+The original measurement bytes are unchanged. The screenshot plots the selected
+reference signal as `ln(it / ir)` without normalization or detector corrections.
+The repository's `doc/validation/2026-09-14-named-multisignal-import-capture.json`
+records the input, executable and image checksums.
+
 ## Scientific citations
 
 Use the [citation guide](/docs/science/references/) for algorithm references.

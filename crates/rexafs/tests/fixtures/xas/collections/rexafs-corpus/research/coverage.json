@@ -1,0 +1,15 @@
+{
+  "inventory_rows": 245,
+  "beamline_or_station_discovery_rows": 236,
+  "unresolved_attribution_rows": 9,
+  "inventory_facilities": 47,
+  "inventory_countries": 22,
+  "downloaded_confirmed_stations": 68,
+  "research_depth": {
+    "directory discovery only": 120,
+    "download and provenance verified": 77,
+    "facility capability checked": 32,
+    "specific source investigated": 16
+  },
+  "checked_on": "2026-09-14"
+}

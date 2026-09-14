@@ -1,0 +1,32 @@
+##LARIX: 1.0      Larch Session File
+##Date Saved: 2026-09-14 00:00:00
+##<CONFIG>
+##Machine Platform: Darwin
+##Machine Name: fixture-host
+##Machine MACID: 000000000000
+##Machine Version: Darwin Kernel Version 25.5.0: Mon Apr 27 20:41:26 PDT 2026; root:xnu-12377.121.6~2/RELEASE_ARM64_T8132
+##Machine Processor: arm64
+##Machine Architecture: 64bit:
+##Python Version: 3.12.12
+##Python Compiler: Clang 21.1.4 
+##Python Implementation: CPython
+##Larch Release Version: 2026.3.1
+##Larch Release Date: 2026-August-15
+##Larch Core Groups: ["_main", "_sys", "_builtin", "_math", "_math.transforms", "_io", "_xray", "_xrf", "_xafs", "_xrd", "_sys.wx", "_plotter", "_epics"]
+##Larch fixture_corpus: "larix-data"
+##Larch fixture_schema: 1
+##</CONFIG>
+##<Session Commands>
+# Synthetic command history; retained as text.
+fixture_marker = "history text only"
+##</Session Commands>
+##<Symbols: count=3>
+<:_xasgroups:>
+{"__class__": "Dict", "Fe foil \u2014 \u65e5\u672c\u8a9e \u03bc(E).dat": "typed"}
+<:typed:>
+{"__class__": "Group", "datatype": "xas", "energy": {"__class__": "b64ndarray", "__value__": "{\"_type_\": \"b64ndarray\", \"shape\": [4], \"dtype\": \"<f8\", \"value\": \"AAAAAAC8u0AAAAAAAMa7QAAAAAAA0LtAAAAAAADau0A=\"}"}, "energy_units": "eV", "filename": "Fe foil \u2014 \u65e5\u672c\u8a9e \u03bc(E).dat", "groupname": "typed", "journal": {"__class__": "StatefulObject", "__type__": "Journal", "value": {"__class__": "List", "value": [{"__class__": "Tuple", "value": ["comment", "first entry", "2026-09-14T00:00:00"]}, {"__class__": "Tuple", "value": ["comment", "second entry; preserve repeated keys", "2026-09-14T00:00:00"]}]}}, "metadata": {"__class__": "Dict", "unicode": "\u65e5\u672c\u8a9e, \u03bc(E), \u00c5", "empty": null, "flag": true, "labels": {"__class__": "Tuple", "value": ["sample", "reference"]}, "timestamp": "2026-09-14T00:00:00", "relative_path": "sources/fictional scan.dat", "matrix": {"__class__": "b64ndarray", "__value__": "{\"_type_\": \"b64ndarray\", \"shape\": [2, 3], \"dtype\": \"<f4\", \"value\": \"AAAAAAAAgD8AAABAAABAQAAAgEAAAKBA\"}"}, "big_endian": {"__class__": "b64ndarray", "__value__": "{\"_type_\": \"b64ndarray\", \"shape\": [2], \"dtype\": \">f8\", \"value\": \"P/gAAAAAAABABAAAAAAAAA==\"}"}, "counts": {"__class__": "b64ndarray", "__value__": "{\"_type_\": \"b64ndarray\", \"shape\": [2], \"dtype\": \"<i8\", \"value\": \"AAAAAAAAAAABAAAAAAAgAA==\"}"}, "mask": {"__class__": "b64ndarray", "__value__": "{\"_type_\": \"b64ndarray\", \"shape\": [2], \"dtype\": \"|b1\", \"value\": \"AQA=\"}"}, "empty_array": {"__class__": "b64ndarray", "__value__": "{\"_type_\": \"b64ndarray\", \"shape\": [0, 3], \"dtype\": \"<f8\", \"value\": \"\"}"}, "complex_scalar": {"__class__": "Complex", "value": [1.0, 2.0]}}, "mu": {"__class__": "b64ndarray", "__value__": "{\"_type_\": \"b64ndarray\", \"shape\": [4], \"dtype\": \"<f8\", \"value\": \"mpmZmZmZuT+amZmZmZnJPzMzMzMzM/M/mpmZmZmZ8T8=\"}"}, "params": {"__class__": "Parameters", "unique_symbols": {"wofz": {"__class__": "Method", "__name__": "<ufunc 'wofz'>"}, "erf": {"__class__": "Method", "__name__": "<ufunc 'erf'>"}, "amplitude": 0.9, "erfc": {"__class__": "Method", "__name__": "<ufunc 'erfc'>"}, "True": true, "pi": 3.141592653589793, "nan": NaN, "betalnfnc": {"__class__": "Method", "__name__": "<ufunc 'betaln'>"}, "little_endian": true, "inf": Infinity, "loggammafcn": {"__class__": "Method", "__name__": "<ufunc 'loggamma'>"}, "e": 2.718281828459045, "gamfcn": {"__class__": "Method", "__name__": "<ufunc 'gamma'>"}, "None": null, "False": false, "twice_amplitude": 1.8}, "params": [["amplitude", ["amplitude", 0.9, true, null, 0, 2, null, null, null, 0.9, null]], ["twice_amplitude", ["twice_amplitude", 1.8, false, "2 * amplitude", -Infinity, Infinity, null, null, null, null, null]]]}, "xdat": {"__class__": "b64ndarray", "__value__": "{\"_type_\": \"b64ndarray\", \"shape\": [4], \"dtype\": \"<f8\", \"value\": \"AAAAAAC8u0AAAAAAAMa7QAAAAAAA0LtAAAAAAADau0A=\"}"}, "ydat": {"__class__": "b64ndarray", "__value__": "{\"_type_\": \"b64ndarray\", \"shape\": [4], \"dtype\": \"<f8\", \"value\": \"mpmZmZmZuT+amZmZmZnJPzMzMzMzM/M/mpmZmZmZ8T8=\"}"}}
+<:session_note:>
+"Not a spectrum"
+<:ordinal:>
+7
+##</Symbols>

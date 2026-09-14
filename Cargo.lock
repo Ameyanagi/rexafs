@@ -4091,6 +4091,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "hdf5-pure"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f8957d1e4caef60e185085848d7dea9e5192c59b4b387daa1503af0f7f2f43c"
+dependencies = [
+ "byteorder",
+ "flate2",
+]
+
+[[package]]
 name = "heapless"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6893,6 +6903,7 @@ dependencies = [
  "numpy",
  "pyo3",
  "rexafs",
+ "serde_json",
 ]
 
 [[package]]
@@ -7493,11 +7504,13 @@ dependencies = [
  "criterion",
  "data_reader",
  "easyfft",
+ "encoding_rs",
  "enterpolation",
  "errorfunctions",
  "faer",
  "feff10",
  "flate2",
+ "hdf5-pure",
  "itertools 0.15.0",
  "lazy_static",
  "levenberg-marquardt",
@@ -7511,11 +7524,13 @@ dependencies = [
  "pprof",
  "rayon",
  "refeff",
+ "regex",
  "rusqlite",
  "ruviz",
  "semver",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "thiserror 2.0.20",
  "ureq 3.4.1",
  "version",
@@ -7561,6 +7576,7 @@ version = "0.2.5"
 dependencies = [
  "js-sys",
  "rexafs",
+ "serde_json",
  "wasm-bindgen",
 ]
 

@@ -1,0 +1,99 @@
+Index= 0	Module Name = Illum.Stigm.A	Value = 6.800013
+Index= 1	Module Name = Illum.Stigm.B	Value = 9.239982
+Index= 2	Module Name = Illum.Defl. X	Value = 13.080002
+Index= 3	Module Name = Illum.Defl. Y	Value = -18.780050
+Index= 4	Module Name = Cond. Lens 3	Value = 784.280396
+Index= 5	Module Name = CL3 Align. X	Value = -98.800072
+Index= 6	Module Name = CL3 Align. Y	Value = -122.800018
+Index= 7	Module Name = Cond. Lens 2	Value = 2200.000000
+Index= 8	Module Name = CL2 Align. X	Value = -98.499969
+Index= 9	Module Name = CL2 Align. Y	Value = 12.799995
+Index=10	Module Name = Cond. Lens 1	Value = 1095.000000
+Index=11	Module Name =    Objective	Value = 1656.430908
+Index=12	Module Name = Obj.Stigm. A	Value = 6.739957
+Index=13	Module Name = Obj.Stigm. B	Value = 9.070126
+Index=14	Module Name = Transfer Lens	Value = 678.000000
+Index=15	Module Name = Diffr.Stigm.A	Value = 35.000000
+Index=16	Module Name = Diffr.Stigm.B	Value = 23.299997
+Index=17	Module Name =   FL Align.X	Value = -9.880005
+Index=18	Module Name =   FL Align.Y	Value = -64.100014
+Index=19	Module Name =   Field Lens	Value = 1648.199951
+Index=20	Module Name =  IL Align. X	Value = -44.900002
+Index=21	Module Name = Interm. Lens	Value = 1360.099976
+Index=22	Module Name =   CCS1 +/-1A	Value = 0.000100
+Index=23	Module Name =    CCS1/CCS2	Value = 99998.898438
+Index=24	Module Name =     disabled	Value = 839.659973
+Index=25	Module Name = Ret. Align.X	Value = -26.110020
+Index=26	Module Name = Ret. Align.Y	Value = -44.790035
+Index=27	Module Name = Projective 2	Value = 1137.000000
+Index=28	Module Name =   P3 Align.X	Value = 13.700001
+Index=29	Module Name =   P3 Align.Y	Value = 14.500045
+Index=30	Module Name = Illum.Equal.X	Value = 0.000000
+Index=31	Module Name = Illum.Equal.Y	Value = 0.000000
+Index=32	Module Name = Outer Select.	Value = 645.787354
+Index=33	Module Name = Image Equal.X	Value = 0.000000
+Index=34	Module Name = Image Equal.Y	Value = 0.000000
+Index=35	Module Name = Inner Select.	Value = 339.606018
+Index=36	Module Name = Obj.Align. X	Value = 82.320045
+Index=37	Module Name = Obj.Align. Y	Value = 20.369982
+Index=38	Module Name = Start Voltage	Value = 0.000000
+Index=39	Module Name = Sample Temp.	Value = 37.147179
+Index=40	Module Name =  IL Align. Y	Value = 1.756947
+Index=41	Module Name = Bomb. Voltage	Value = 99998.898438
+Index=42	Module Name = Emission Curr.	Value = 10.717782
+Index=43	Module Name =   Temp Cntrl	Value = 99998.898438
+Index=44	Module Name = Projective 3	Value = 2200.000000
+Index=45	Module Name =    Ret. Lens	Value = 8000.000000
+Index=46	Module Name =   Inner Lens	Value = 4550.000000
+Index=47	Module Name =         BIAS	Value = 1027.999878
+Index=48	Module Name =          SEL	Value = 81.408073
+Index=49	Module Name = Acc.LensAlg.A	Value = -89.499802
+Index=50	Module Name = Acc.LensAlg.B	Value = 86.779938
+Index=51	Module Name =  Ana.Stigm.A	Value = 0.000000
+Index=52	Module Name =  Ana.Stigm.B	Value = 0.000000
+Index=53	Module Name =   Acc. Lens 	Value = 1246.000000
+Index=54	Module Name =     disabled	Value = -0.120000
+Index=55	Module Name =      Wehnelt	Value = 99998.898438
+Index=56	Module Name =  P2 Align. X	Value = 50.700016
+Index=57	Module Name =  P2 Align. Y	Value = -25.600016
+Index=58	Module Name = Auger Voltage	Value = 99998.898438
+Index=59	Module Name =   CCS2 +/-1A	Value = 0.000100
+Index=60	Module Name =       Offset	Value = 99998.898438
+Index=61	Module Name = Picoamp meter	Value = 0.002474
+Index=62	Module Name = Projective 1	Value = 1060.000000
+Index=63	Module Name =     disabled	Value = -167.300003
+Index=64	Module Name = Manipulator X	Value = -240.270477
+Index=65	Module Name = Manipulator Y	Value = -554.368286
+Index=66	Module Name = Azimuth rot.	Value = 5.561400
+Index=67	Module Name =  Slit motion	Value = 0.000000
+Index=68	Module Name =  IA Z motion	Value = -20000.000000
+Index=69	Module Name =  SA Z motion	Value = -7540.000000
+Index=70	Module Name =  CA Z motion	Value = 0.000000
+Index=71	Module Name =  CA T motion	Value = 0.000000
+Index=72	Module Name =   P1 Align.Y	Value = 5.039973
+Index=73	Module Name =   P1 Align.X	Value = 50.369938
+Index=74	Module Name =     disabled	Value = 0.000000
+Index=75	Module Name =     disabled	Value = 0.000000
+Index=76	Module Name =     disabled	Value = 0.000000
+Index=77	Module Name =     disabled	Value = 0.000000
+Index=78	Module Name =     disabled	Value = 0.000000
+Index=79	Module Name =     disabled	Value = 0.000000
+Index=80	Module Name =     disabled	Value = 0.000000
+Index=81	Module Name =     disabled	Value = 0.000000
+Index=82	Module Name =     disabled	Value = 0.000000
+Index=83	Module Name =     disabled	Value = 0.000000
+Index=84	Module Name =     disabled	Value = 0.000000
+Index=85	Module Name =     disabled	Value = 0.000000
+Index=86	Module Name =     disabled	Value = 0.000000
+Index=87	Module Name =     disabled	Value = 0.000000
+Index=88	Module Name =     disabled	Value = 0.000000
+Index=89	Module Name =     disabled	Value = 0.000000
+Index=90	Module Name =     disabled	Value = 0.000000
+Index=91	Module Name =     disabled	Value = 0.000000
+Index=92	Module Name =     disabled	Value = 0.000000
+Index=93	Module Name =     disabled	Value = 0.000000
+Index=94	Module Name =     disabled	Value = 0.000000
+Index=95	Module Name =     disabled	Value = 0.000000
+Index=96	Module Name =     disabled	Value = 0.000000
+Index=97	Module Name =     disabled	Value = 0.000000
+Index=98	Module Name =     disabled	Value = 0.000000

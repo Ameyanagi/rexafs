@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: individual dataset license
+License-Evidence: https://mdr.nims.go.jp/datasets/ef31c010-20db-4a69-89d6-eaecbfc2c91e
+Test-Eligibility: documented-license
+Source: https://mdr.nims.go.jp/datasets/ef31c010-20db-4a69-89d6-eaecbfc2c91e
+Download: https://mdr.nims.go.jp/filesets/1d525dd1-5097-45b6-aa5a-6fc03f6a3aec/download
+Citation: Masashi Ishii; Industrial Application and Partnership Division. XAFS spectrum of Barium(II) iodide, anhydrous. https://doi.org/10.48505/nims.3067
+SHA256: b42d19cd794e4b906881ed8ecf4ac8c2705b038a095cf536c5930b66e21adc22
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/mdr/ef31c010-20db-4a69-89d6-eaecbfc2c91e/record.json

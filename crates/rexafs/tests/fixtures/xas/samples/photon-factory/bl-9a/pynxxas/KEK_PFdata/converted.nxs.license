@@ -1,0 +1,10 @@
+SPDX-License-Identifier: MIT
+License-File: LICENSES/XraySpectroscopy--pynxxas--LICENSE
+License-Basis: repository-distribution-license
+License-Scope: repository distribution license; bundled test fixtures
+License-Evidence: https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/LICENSE
+Source: https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/doc/_static/manual/KEK_PFdata/converted.nxs
+Download: https://raw.githubusercontent.com/XraySpectroscopy/pynxxas/7e5f738c160e41f949c8441115856130010ca1da/doc/_static/manual/KEK_PFdata/converted.nxs
+Citation: Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual
+SHA256: e7e94f111142ae805f200faf1aecb79df573b58d11361f6f15e0ac745a287bc7
+Modifications: None; original downloaded measurement bytes retained.

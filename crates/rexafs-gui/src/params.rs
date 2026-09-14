@@ -226,9 +226,17 @@ pub struct RawData {
     pub diagnostics: ParserDiagnostics,
 }
 
+/// Non-XDI source units supplied by the shared measurement adapter.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MeasurementLayout {
+    pub format: String,
+    pub units: Vec<Option<String>>,
+}
+
 /// Three original rows and complete diagnostics shown in the Import panel.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ImportPreview {
+    pub layout: Option<MeasurementLayout>,
     pub column_count: usize,
     pub names: Option<Vec<String>>,
     pub rows: Vec<Vec<f64>>,
@@ -249,6 +257,8 @@ pub struct ImportPreview {
 /// signal validation result: even a short source is not validated at intake.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ImportDetection {
+    #[serde(default)]
+    pub layout: Option<MeasurementLayout>,
     pub column_count: usize,
     pub names: Option<Vec<String>>,
     #[serde(skip)]
@@ -268,6 +278,7 @@ pub struct ImportDetection {
 impl ImportDetection {
     pub fn resolved_config(&self, config: &ImportConfig) -> ImportConfig {
         let preview = ImportPreview {
+            layout: self.layout.clone(),
             column_count: self.column_count,
             names: self.names.clone(),
             rows: self.rows.clone(),
@@ -331,6 +342,7 @@ impl ImportPreview {
     /// Resolve a different channel against the retained original table.
     pub fn for_mapping(&self, config: &ImportConfig) -> Self {
         let data = ParsedData {
+            layout: self.layout.clone(),
             names: self.names.clone(),
             rows: self.rows.clone(),
             xdi: self.xdi.clone(),
@@ -375,6 +387,7 @@ fn available_channels(names: &Option<Vec<String>>, mode: DetectionMode) -> Vec<D
 
 #[derive(Debug)]
 struct ParsedData {
+    layout: Option<MeasurementLayout>,
     names: Option<Vec<String>>,
     rows: Vec<Vec<f64>>,
     xdi: Option<XdiHeader>,
@@ -424,6 +437,44 @@ fn fluorescence_name_matches(name: &str) -> bool {
 }
 
 fn parse_data(text: &str) -> Result<ParsedData, String> {
+    if text.lines().any(|line| line.trim() == "[EX_BEGIN]") {
+        // Reuse the core format adapter behind the established plotted editor.
+        let document = io::parse_measurement(text.as_bytes()).map_err(|e| e.to_string())?;
+        let scan = &document.scans[0];
+        let rows = (0..scan.columns[0].values.len())
+            .map(|row| {
+                scan.columns
+                    .iter()
+                    .map(|column| column.values[row])
+                    .collect()
+            })
+            .collect();
+        let source_lines = text
+            .lines()
+            .enumerate()
+            .skip_while(|(_, line)| line.trim() != "[EX_BEGIN]")
+            .skip(1)
+            .take_while(|(_, line)| line.trim() != "[EX_END]")
+            .filter(|(_, line)| !line.trim().is_empty())
+            .map(|(index, _)| index + 1)
+            .collect();
+        return Ok(ParsedData {
+            layout: Some(MeasurementLayout {
+                format: document.format,
+                units: scan.columns.iter().map(|c| c.units.clone()).collect(),
+            }),
+            names: Some(
+                scan.columns
+                    .iter()
+                    .map(|column| column.name.clone())
+                    .collect(),
+            ),
+            rows,
+            xdi: None,
+            source_lines,
+            diagnostics: ParserDiagnostics::default(),
+        });
+    }
     if io::xdi::is_xdi(text) {
         let normalized = text
             .trim_start_matches('\u{feff}')
@@ -472,6 +523,7 @@ fn parse_data(text: &str) -> Result<ParsedData, String> {
             })
             .collect();
         return Ok(ParsedData {
+            layout: None,
             source_lines,
             diagnostics,
             names: Some(
@@ -556,6 +608,7 @@ fn parse_data(text: &str) -> Result<ParsedData, String> {
         (names.len() == width).then_some(names)
     });
     Ok(ParsedData {
+        layout: None,
         names,
         rows,
         xdi: None,
@@ -781,6 +834,7 @@ fn import_detection(
     let resolved = resolve_import(data, import);
     let mapping_error = validate_mapping(data, path, import, &resolved).err();
     ImportDetection {
+        layout: data.layout.clone(),
         column_count: data.rows[0].len(),
         names: data.names.clone(),
         rows: data.rows.iter().take(3).cloned().collect(),
@@ -825,6 +879,7 @@ pub fn preview_import_raw(
     let signal_error = raw.as_ref().err().cloned();
     Ok((
         ImportPreview {
+            layout: detection.layout,
             diagnostics: data.diagnostics,
             signal_error,
             column_count: detection.column_count,
@@ -2792,6 +2847,7 @@ mod tests {
         // Exhaustive destructuring pins the absence of any diagnostics/totals
         // or full-signal result on the intake API.
         let ImportDetection {
+            layout: _,
             column_count,
             names,
             rows,

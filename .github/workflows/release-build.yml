@@ -107,6 +107,10 @@ jobs:
       - run: python scripts/test-benchmark-tools.py
       - name: Require retained compatibility fixtures for this release
         run: python scripts/check-compatibility-fixtures.py
+      - name: Verify beamline fixtures and their package exclusions
+        run: |
+          python scripts/check-beamline-fixtures.py
+          python scripts/check-beamline-fixtures.py --package
       - run: cargo test --locked -p rexafs
       - run: cargo test --locked -p rexafs --features ndarray-compat
       - run: cargo test --locked -p rexafs --features trust-region

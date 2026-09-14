@@ -1234,3 +1234,177 @@ export class Spectrum {
    */
   chiq(): Float64Array | undefined;
 }
+
+/** Source axis conversion to eV; no magnitude-based unit guessing (unreleased). */
+export type EnergyConversion =
+  | { kind: 'ev' }
+  | { kind: 'kev' }
+  | {
+      kind: 'offset_ev';
+      /** Finite origin in eV: absolute energy = source energy + offset_ev.
+       * FDMNES detection uses its declared E_edge. The source axis stays unchanged. */
+      offset_ev: number;
+    }
+  | {
+      kind: 'bragg';
+      /** Positive lattice-plane spacing in angstroms. Uses E = hc/(2 d sin(theta)). */
+      d_spacing: number;
+      /** Degrees per axis unit: 1 for degrees, 180/pi for radians. */
+      degrees_per_unit: number;
+    };
+/** Exact, case-sensitive column name or zero-based index. Duplicate names require indices. */
+export type ColumnSelector = string | number;
+
+/**
+ * Exact column names or zero-based detector roles. Transmission is ln(incident/transmitted), with
+ * nonzero matching polarity and matching units. Ratio is sum(detectors)/incident
+ * with a nonzero monitor. No dark-current, gain or dead-time correction is inferred.
+ * Direct copies the original signal and scale. See
+ * [Newville (2014)](https://doi.org/10.2138/rmg.2014.78.2) for transmission assumptions.
+ */
+export type SignalConversion<Column extends ColumnSelector = ColumnSelector> =
+  | { kind: 'direct'; column: Column }
+  | { kind: 'transmission'; incident: Column; transmitted: Column }
+  | { kind: 'ratio'; detectors: Column[]; incident: Column };
+/** Explicit, copied selection for converting one original scan.
+ * Column defaults to ColumnSelector (string | number). Detected candidates use
+ * SpectrumMapping<number>, since the reader has already resolved their indices.
+ */
+export interface SpectrumMapping<Column extends ColumnSelector = ColumnSelector> {
+  /** Exact name or zero-based index of the energy or calibrated angle column. */
+  energy_column: Column;
+  /** Source axis conversion to electronvolts. */
+  energy: EnergyConversion;
+  /** Selected detector arithmetic, without normalization or background removal. */
+  signal: SignalConversion<Column>;
+}
+/** Header-supported signal choice; several choices require explicit selection. */
+export interface SignalCandidate {
+  /** Display label for this signal. */
+  name: string;
+  /** Fully specified axis and signal conversion. */
+  mapping: SpectrumMapping<number>;
+}
+/** Original owned numeric channel in acquisition order. */
+export interface MeasurementColumn {
+  /** Source label, or column_N when absent (N is one-based). */
+  name: string;
+  /** Declared source units; null means absent. */
+  units: string | null;
+  /** Raw samples. JSON snapshots encode nonfinite source values as null. */
+  values: (number | null)[];
+}
+/** One scan or project group; reading alone does not convert detector values. */
+export interface MeasurementScan {
+  /** Original scan identifier or dataset-group path. */
+  id: string;
+  /** Display label from the source. */
+  label: string;
+  /** Channels in source order, retaining units and repeated energies. */
+  columns: MeasurementColumn[];
+  /** Original header, or complete XTUNES record text, retained for interpretation. */
+  header: string;
+  /** Extracted metadata. XTUNES ordered_parameters holds ordered JSON section/key/value triples. */
+  metadata: Record<string, string>;
+  /** Detected choices; empty means that explicit mapping is required. */
+  signals: SignalCandidate[];
+  /** Unit assumptions, conflicting metadata and historical-format observations. */
+  warnings: string[];
+}
+/** Numeric dataset or archived Larix/XTUNES result; its quantity may not be absorption. */
+export interface MeasurementDataset {
+  /** HDF5 path, XTUNES table path, or Larix /symbol/attribute path (JSON Pointer escaping: ~0 for ~ and ~1 for /). */
+  path: string;
+  /** Dimensions in HDF5 order; empty means scalar. */
+  shape: number[];
+  /** Row-major values; nonfinite values appear as null in snapshots. */
+  values: (number | null)[];
+  /** Imaginary components matching values and shape for a complex Larix array;
+   * null for real data. Values contains the real components. */
+  imaginary: (number | null)[] | null;
+  /** Source attributes. Larix retains exact numeric bytes in larix.bytes_base64
+   * with NumPy dtype in larix.dtype, including integers rounded by the f64 view. */
+  attributes: Record<string, string>;
+}
+/** Independent snapshot of a universal import; editing it does not change Rust data. */
+export interface MeasurementDocument {
+  /** Content-detected format family. */
+  format: string;
+  /** All recovered scans, including those requiring manual mapping. */
+  scans: MeasurementScan[];
+  /** HDF5 datasets and saved Larix/XTUNES arrays, retaining shapes and independent grids. */
+  datasets: MeasurementDataset[];
+  /** Container provenance. Larix uses larix.session_text, larix.command_history
+   * and larix.symbol_order; commands and saved Python objects remain inert text. */
+  metadata: Record<string, string>;
+  /** Encoding, container and unreadable HDF5 alias-group diagnostics. */
+  warnings: string[];
+}
+/** Convenient scan and column selection (unreleased). Names must be exact and unique.
+ * Supply energy and exactly one of mu, it or iff; it/iff also require i0.
+ * Conflicting/incomplete options throw. Omit column options to use automatic detection.
+ */
+export interface MeasurementOptions {
+  /** Zero-based scan index; defaults to 0. */
+  scan?: number;
+  /** Axis name or zero-based index; required with explicit signal roles. */
+  energy?: ColumnSelector;
+  /** Override detected axis calibration; omitted retains detected/declared units. Unknown units require a choice. */
+  energy_unit?: 'eV' | 'keV';
+  /** Stored absorption column; cannot be combined with i0, it or iff. */
+  mu?: ColumnSelector;
+  /** Incident monitor, required for it or iff. */
+  i0?: ColumnSelector;
+  /** Transmitted intensity; produces ln(i0 / it), using the shared conversion checks. */
+  it?: ColumnSelector;
+  /** Fluorescence/yield detector or explicit list; summed then divided by i0, without corrections. */
+  iff?: ColumnSelector | ColumnSelector[];
+}
+
+/**
+ * Owned universal reader (unreleased). Supports text/CSV, beamline layouts,
+ * historical binary, Athena Perl/JSON, Larix 1.0 sessions, XTUNES, gzip and HDF5. Browser callers first await
+ * init(). No filesystem/network access, processing or input mutation occurs.
+ * Input and expanded gzip text are each limited to 256 MiB; HDF5 numeric values
+ * have a 256 MiB decoded budget. Gzip requires one complete member with no
+ * trailing data. Malformed input throws Error. Inspect warnings
+ * and choose a scan and signal; detector images require reduction/calibration.
+ */
+export class Measurement {
+  /** Parse UTF-8 text or binary bytes into independent native storage. */
+  constructor(data: string | Uint8Array);
+  /** Copy metadata and raw arrays. Nonfinite source cells are represented by null. */
+  readonly document: MeasurementDocument;
+  /**
+   * Copy converted energy in eV and signal to Float64Arrays in acquisition order.
+   * scan defaults to 0. Omit mapping only when there is exactly one detected
+   * signal. Select a candidate's mapping or supply exact names or zero-based roles.
+   * Rejects invalid indices, conflicting roles, nonfinite selected cells,
+   * nonpositive energy, invalid Bragg calibration and invalid intensity ratios.
+   * Duplicates and source order remain; Spectrum construction requires strictly
+   * increasing unique energy. No processing or cached results are changed.
+   */
+  arrays(scan?: number, mapping?: SpectrumMapping): { energy: Float64Array; mu: Float64Array };
+  /** Select columns with exact names or indices, for example arrays({energy:"energy", i0:"I0", it:"It"}).
+   * Missing/duplicate names fail. Retains the same owned arrays, ordering, conversion checks and
+   * no-processing behavior as the positional overload. Cannot combine options with a mapping.
+   */
+  arrays(options: MeasurementOptions): { energy: Float64Array; mu: Float64Array };
+  /**
+   * Append copied real dataset vectors in path order; return the new scan index.
+   * Requires at least two distinct nonempty vectors of equal length. Invalid
+   * paths/shapes and complex arrays throw. Multidimensional detector arrays require reduction.
+   * No processing occurs; original scans and datasets remain unchanged.
+   */
+  select_datasets(paths: string[]): number;
+  /** Release native data. Copied arrays remain valid; repeated free() is harmless. */
+  free(): void;
+}
+/**
+ * Parse measurement content with the shared Rust reader (unreleased).
+ * Accepts UTF-8 text or Uint8Array, including Node Buffers and browser file bytes.
+ * Returns owned Measurement storage; free it after copying the arrays you need.
+ * Same limits/errors as Measurement. No filesystem/network access or processing
+ * occurs. Example: read_measurement(new Uint8Array(await file.arrayBuffer())).
+ */
+export function read_measurement(data: string | Uint8Array): Measurement;

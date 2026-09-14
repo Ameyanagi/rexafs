@@ -1,0 +1,12 @@
+Attribution: Obtained from RefXAS.
+SPDX-License-Identifier: LicenseRef-RefXAS-Usage-Notice
+License-File: LICENSES/LicenseRef-RefXAS-Usage-Notice.txt
+License-Basis: custom-notice-unverified-scope
+License-Scope: Custom website usage notice only; no explicit repository fixture redistribution grant located. The notice-to-fixture scope is unverified.
+License-Evidence: http://xafsdb.ddns.net/
+Test-Eligibility: review-required
+Source: https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/Pt_foil_Pt%20L3%20SLS.txt
+Download: https://raw.githubusercontent.com/San-WierPa/xafsdb_webserver/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/Pt_foil_Pt%20L3%20SLS.txt
+Citation: Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.
+SHA256: 85072844ffbdddf2b2f0ba0258c88fc2b775c107b1bed60b634e1179564b0c33
+Modifications: None; original downloaded measurement bytes retained.

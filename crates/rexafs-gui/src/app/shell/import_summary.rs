@@ -58,7 +58,16 @@ impl StudioApp {
             panel = panel.child(
                 div()
                     .px_3()
-                    .text_color(t.warn)
+                    .text_color(
+                        if self
+                            .import_preview_error
+                            .starts_with("Original measurement")
+                        {
+                            t.text_muted
+                        } else {
+                            t.warn
+                        },
+                    )
                     .child(self.import_preview_error.clone()),
             );
         }

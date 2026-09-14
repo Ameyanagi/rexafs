@@ -180,3 +180,25 @@ APIs. MBack and ILPBkg are unimplemented placeholders; TrustRegionDogLeg require
 a native Rust feature absent from Wasm. The recommended LinearDirect/FixedPenalty
 path works in both bindings. See [FFT compatibility](../doc/fft-grid-compatibility.md).
 Licensed under MIT OR Apache-2.0.
+
+## Universal measurement reader (unreleased)
+
+The source checkout adds content-detected beamline text, CSV, Athena, XTUNES
+and HDF5 import through the shared Rust reader. Read a document, inspect its
+scans, columns, units and warnings, then select a signal mapping. Ambiguous
+channels require explicit selection; detector images require reduction before
+creating an absorption spectrum. Reading performs no processing or corrections.
+See the [reader guide](../doc/measurement-reader.md) for language examples,
+unit conversions, dataset selection, fixture coverage and limits. This API is
+not included in the published 0.2.5 packages.
+
+Larix 1.0 session import is available in the unreleased shared reader, including
+stored absorption, complex saved arrays and inert session metadata. See the
+[Larix import guide](../doc/larix-import.md).
+
+Column selections accept exact, case-sensitive names as well as zero-based indices.
+For QAS data, use `measurement.arrays({energy: "energy", i0: "i0", it: "it"})`
+for transmission, `iff: "iff"` instead of `it` for fluorescence, or
+`i0: "it", it: "ir"` for the reference. Existing positional mappings remain valid.
+Duplicate names require indices. Omit `energy_unit` to preserve detected axis
+calibration, or explicitly override it with `"eV"` or `"keV"`.

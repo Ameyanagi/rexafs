@@ -1,29 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { inspectSource, parseSource, validateSettings, validateNumericalWorkspace, MAX_ROWS } from '../src/browser/input.ts';
-const absorption = { energy: 0, signal: 1, quantity: 'mu', energyUnit: 'eV' };
+import { validateImportedArrays, validateSettings, validateNumericalWorkspace, MAX_ROWS } from '../src/browser/input.ts';
+import { read_measurement } from '../../js-rexafs/node.js';
 const settings = { rbkg: 1, kmin: 2, kmax: 15, kweight: 2, dk: 1, nfft: 2048, grid: 'Input' };
-
-test('browser import preserves rows and selected units, with CSV and # comments', () => {
-  const input = '# energy, mu, extra\n8.97, 0.5, 8\n8.98, 0.6, 9 # note\n';
-  assert.deepEqual(inspectSource(input), { columnCount: 3, rowCount: 2 });
-  const result = parseSource(input, { ...absorption, energyUnit: 'keV' });
-  assert.deepEqual([...result.energy], [8970, 8980]);
-  assert.deepEqual([...result.mu], [0.5, 0.6]);
-  const transmission = parseSource('8970 10 5\n8980 8 2', { ...absorption, quantity: 'transmission', reference: 1, signal: 2 });
-  assert.deepEqual([...transmission.mu], [Math.log(2), Math.log(4)]);
+function importArrays(text,mapping) {
+  const document=read_measurement(text);
+  try {const arrays=document.arrays(0,mapping);validateImportedArrays(arrays.energy,arrays.mu);return arrays;}finally{document.free();}
+}
+test('browser uses the shared reader for numeric CSV, units and detector arithmetic',()=>{
+  const data=importArrays('energy_keV,mu,extra\n8.97,0.5,8\n8.98,0.6,9 # note\n');
+  assert.deepEqual([...data.energy],[8970,8980]);assert.deepEqual([...data.mu],[0.5,0.6]);
+  const trans=importArrays('# energy i0 it\n8970 10 5\n8980 8 2\n');
+  assert.ok(Math.abs(trans.mu[0]-Math.log(2))<1e-14);
+  assert.ok(Math.abs(trans.mu[1]-Math.log(4))<1e-14);
 });
-
-test('browser import rejects ambiguous or nonfinite data instead of changing it silently', () => {
-  for (const input of ['2 3\n1 4', '1 3\n1 4', '1 3\n2 NaN', '1,3\n2,', '1 3\n2 4 5', '1 3\n1e308 4']) {
-    assert.throws(() => parseSource(input, absorption));
+test('browser validates selected arrays without discarding source rows',()=>{
+  for(const body of ['2 3\n1 4','1 3\n1 4','1 3\n2 NaN','1,3\n2,','1 3\n2 4 5','1 3\n1e308 4']) {
+    assert.throws(()=>importArrays('# energy mu\n'+body));
   }
-  assert.throws(() => inspectSource('energy mu\n1 3\n2 4'), /header/);
-  assert.throws(() => parseSource('1 3\n2 4', { ...absorption, signal: 0 }), /different/);
-  assert.throws(() => parseSource('1 0 4\n2 2 4', { ...absorption, quantity: 'transmission', reference: 1, signal: 2 }), /positive/);
-  assert.throws(() => parseSource('1 3\n2 4', { ...absorption, signal: 3 }), /valid/);
-  assert.throws(() => inspectSource('1 2\n'.repeat(MAX_ROWS + 1)), /100,000/);
-  assert.throws(() => inspectSource(('1 '.repeat(65) + '\n').repeat(2)), /64 columns/);
+  assert.throws(()=>importArrays('# energy i0 it\n1 1 0\n2 1 1'));
+  assert.throws(()=>importArrays('# energy i0 it if\n7100 10 2 3\n7101 10 2 4'),/mapping/);
+  const energy=Float64Array.from({length:MAX_ROWS+1},(_,i)=>i+1);
+  assert.throws(()=>validateImportedArrays(energy,energy),/100,000/);
 });
 
 test('browser settings validate allocation limits before entering WASM', () => {

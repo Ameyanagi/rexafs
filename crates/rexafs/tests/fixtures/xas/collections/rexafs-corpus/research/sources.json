@@ -1,0 +1,2470 @@
+[
+  {
+    "url": "https://access.sesame.org.jo/get-your-data",
+    "title_or_description": "SESAME data access",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://api.figshare.com/v2/articles/29637206",
+    "title_or_description": "inspected Figshare metadata",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://archive.synchrotron.org.au/aussyncbeamlines/x-ray-absorption-spectroscopy/sakura",
+    "title_or_description": "Sakura",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://beams.se/spectable/",
+    "title_or_description": "reference service",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://bl01b1.spring8.or.jp/tech.html",
+    "title_or_description": "BL01B1 technical material",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "title_or_description": "CC BY-NC-SA 4.0 terms",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://creativecommons.org/licenses/by/4.0/",
+    "title_or_description": "CC BY 4.0 terms",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://darus.uni-stuttgart.de/dataset.xhtml?persistentId=doi:10.18419/DARUS-5088",
+    "title_or_description": "DaRUS 5088",
+    "evidence_use": [
+      "collected source",
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Lorena Fritsch; Pia Rhesies; Wael Barakat; Deven Estes; Matthias Bauer (2025). Replication data for Detection and Characterization of Hydride Ligands in Copper Complexes by Hard X-ray Spectroscopy. DaRUS, V1. https://doi.org/10.18419/DARUS-5088",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://data.mendeley.com/datasets/nyjbjdkx38/1",
+    "title_or_description": "Mendeley dataset",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://dice.nims.go.jp/services/MDR/manual/html/api.html",
+    "title_or_description": "MDR API documentation",
+    "evidence_use": [
+      "research report",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://doi.org/10.1021/acsomega.3c07805",
+    "title_or_description": "Indus BL9 article",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://doi.org/10.1107/S1600577524006751",
+    "title_or_description": "RefXAS publication",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://doi.org/10.18419/DARUS-5088",
+    "title_or_description": "DaRUS 5088",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://doi.org/10.5281/zenodo.13865096",
+    "title_or_description": "SSRF / BL08U1-A",
+    "evidence_use": [
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://doi.org/10.5281/zenodo.14276766",
+    "title_or_description": "SPring-8 / BL12B2",
+    "evidence_use": [
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://doi.org/10.5281/zenodo.17072596",
+    "title_or_description": "NSRRC TLS / 01C1",
+    "evidence_use": [
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://doi.org/10.5522/04/24530623.v1",
+    "title_or_description": "Figshare dataset",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://doi.org/10.57903/UJ/58IJY5",
+    "title_or_description": "copper ALD dataset",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://doi.org/10.57903/UJ/VRJ85T",
+    "title_or_description": "sulfur reference library",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://doi.org/10.6084/m9.figshare.28944977",
+    "title_or_description": "source data",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://ejm.copernicus.org/articles/36/55/2024/",
+    "title_or_description": "niobium study methods",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://eprints.soton.ac.uk/486003/",
+    "title_or_description": "I20 thesis-data lead",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://eprints.soton.ac.uk/501722/",
+    "title_or_description": "Southampton D3532",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://eprints.soton.ac.uk/501722/1/README_XAS_Dat.txt",
+    "title_or_description": "D3532 README: B18/I18 XAS, I20 XES, DAT columns and embargo",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "Connor Matthew Sherwin (2024). X-ray absorption spectroscopy data from the thesis Operando X-ray studies of gas evolving and consuming catalysts. University of Southampton. https://doi.org/10.5258/SOTON/D3532",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/Ameyanagi/xasref",
+    "title_or_description": "Ameyanagi/xasref",
+    "evidence_use": [
+      "collected source"
+    ],
+    "citation": "Ryuichi Shimogawa and contributors. xasref: reference XAS spectra. https://github.com/Ameyanagi/xasref",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo foil 0001-r0003.dat",
+    "title_or_description": "Ameyanagi/xasref",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Ryuichi Shimogawa and contributors. xasref: reference XAS spectra. https://github.com/Ameyanagi/xasref",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Pd foil 0001.dat",
+    "title_or_description": "Ameyanagi/xasref",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Ryuichi Shimogawa and contributors. xasref: reference XAS spectra. https://github.com/Ameyanagi/xasref",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Rh foil 0001.dat",
+    "title_or_description": "Ameyanagi/xasref",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Ryuichi Shimogawa and contributors. xasref: reference XAS spectra. https://github.com/Ameyanagi/xasref",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/RedhouaneBJM/ProSPyX",
+    "title_or_description": "ProSPyX",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "collected source"
+    ],
+    "citation": "S. Paripsa et al. (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example data/SYNCHROTRON/Ag_foil_CATACT KIT",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example data/SYNCHROTRON/Au foil_Au L3_180.xdi",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example data/SYNCHROTRON/Co_metal_Delta.txt",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example data/SYNCHROTRON/Cu foil Cu K SLRI",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example data/SYNCHROTRON/Cu2O Cu K Elettra.txt",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example data/SYNCHROTRON/ESRF_052022_01_RT_EXAFS.h5",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example data/SYNCHROTRON/FeO FeK BM 23ESRF.dat",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example data/SYNCHROTRON/Fe_foil_Fe_K_300.xdi",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example data/SYNCHROTRON/Mo_foil Mo K ROCK Soleil.txt",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example data/SYNCHROTRON/Mo_foil_Mo_K_300.xdi",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example data/SYNCHROTRON/Pt_foil Pt L3 SAMBA Soleil.txt",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example data/SYNCHROTRON/Pt_foil_Pt L3 SLS.txt",
+    "title_or_description": "San-WierPa/xafsdb_webserver",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Sebastian Paripsa, Abhijeet Gaur, Frank Förste, Dmitry E. Doronkin, Wolfgang Malzer, Christopher Schlesiger, Birgit Kanngießer, Edmund Welter, Jan-Dierk Grunwaldt and Dirk Lützenkirchen-Hecht (2024). RefXAS: an open access database of X-ray absorption spectra. Journal of Synchrotron Radiation 31, 1105–1117. https://doi.org/10.1107/S1600577524006751. RefXAS repository contributors; original contributor is not separately identified in each fixture.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XASDataLibrary",
+    "title_or_description": "XraySpectroscopy/XASDataLibrary",
+    "evidence_use": [
+      "collected source"
+    ],
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/As/as2o3_10K_scan1.xdi",
+    "title_or_description": "XraySpectroscopy/XASDataLibrary",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Co/co_metal_rt.xdi",
+    "title_or_description": "XraySpectroscopy/XASDataLibrary",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cr/cr2o3_100K_001.xdi",
+    "title_or_description": "XraySpectroscopy/XASDataLibrary",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cr/cr2o3_ssrl4_1_rt_001.xdi",
+    "title_or_description": "XraySpectroscopy/XASDataLibrary",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/Cu2S_13K_01.xdi",
+    "title_or_description": "XraySpectroscopy/XASDataLibrary",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_10K.xdi",
+    "title_or_description": "XraySpectroscopy/XASDataLibrary",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi",
+    "title_or_description": "XraySpectroscopy/XASDataLibrary",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Fe/Fe2O3_rt_01.xdi",
+    "title_or_description": "XraySpectroscopy/XASDataLibrary",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Mn/MnO_rt_01.xdi",
+    "title_or_description": "XraySpectroscopy/XASDataLibrary",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/S/CdS_rt_01.xdi",
+    "title_or_description": "XraySpectroscopy/XASDataLibrary",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Zn/Chorover13BM_ZnSO4_rt_01.xdi",
+    "title_or_description": "XraySpectroscopy/XASDataLibrary",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "collected source"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/doc/_static/manual/BlissMultiModal/converted.nxs",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/doc/_static/manual/Fe_XDIFiles/converted.nxs",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/doc/_static/manual/KEK_PFdata/converted.nxs",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/doc/_static/manual/MultiElementFluor/converted.nxs",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/BlissMultiModal/test_Assolution_Mauro_0001.h5",
+    "title_or_description": "Native fixture",
+    "evidence_use": [
+      "research report",
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/Fe_XDIFiles/fe2o3_rt.xdi",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/Fe_XDIFiles/fe_metal_rt.xdi",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/Fe_XDIFiles/feo_rt1.xdi",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap1.001",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap10.001",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap11.001",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap12.001",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap2.001",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap3.001",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap4.001",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap5.001",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap6.001",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap7.001",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap8.001",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/MultiElementFluor/V_XANES_ap9.001",
+    "title_or_description": "XraySpectroscopy/pynxxas",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Xray Spectroscopy contributors. pynxxas manual experimental examples. https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/README.md",
+    "title_or_description": "Conversion documentation",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/XraySpectroscopy/pynxxas/tree/7e5f738c160e41f949c8441115856130010ca1da/examples/manual",
+    "title_or_description": "pynxxas manual examples",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/bruceravel/demeter",
+    "title_or_description": "bruceravel/demeter",
+    "evidence_use": [
+      "collected source"
+    ],
+    "citation": "Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/dubble.dat",
+    "title_or_description": "bruceravel/demeter",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/lnls.dat",
+    "title_or_description": "bruceravel/demeter",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/lytle.dat",
+    "title_or_description": "bruceravel/demeter",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/srs32.dat",
+    "title_or_description": "bruceravel/demeter",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/srs9.dat",
+    "title_or_description": "bruceravel/demeter",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/srsc.dat",
+    "title_or_description": "bruceravel/demeter",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/ssrlb.dat",
+    "title_or_description": "bruceravel/demeter",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/x10c.dat",
+    "title_or_description": "bruceravel/demeter",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/x15b.dat",
+    "title_or_description": "bruceravel/demeter",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Bruce Ravel. Demeter. B. Ravel and M. Newville (2005), ATHENA, ARTEMIS, HEPHAESTUS: data analysis for X-ray absorption spectroscopy using IFEFFIT. https://doi.org/10.1107/S0909049505012719",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/bruceravel/demeter/tree/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes",
+    "title_or_description": "Demeter file types",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/kklmn/ParSeq-XAS",
+    "title_or_description": "kklmn/ParSeq-XAS",
+    "evidence_use": [
+      "collected source"
+    ],
+    "citation": "Konstantin Klementiev and contributors. ParSeq-XAS. https://github.com/kklmn/ParSeq-XAS",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/CuO_lnt.fio",
+    "title_or_description": "kklmn/ParSeq-XAS",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Konstantin Klementiev and contributors. ParSeq-XAS. https://github.com/kklmn/ParSeq-XAS",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/Cu_lnt1.fio",
+    "title_or_description": "kklmn/ParSeq-XAS",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Konstantin Klementiev and contributors. ParSeq-XAS. https://github.com/kklmn/ParSeq-XAS",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/HERFD/20230318.h5",
+    "title_or_description": "kklmn/ParSeq-XAS",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Konstantin Klementiev and contributors. ParSeq-XAS. https://github.com/kklmn/ParSeq-XAS",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/HERFD/scan-24212_eiger_streaming.h5",
+    "title_or_description": "kklmn/ParSeq-XAS",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Konstantin Klementiev and contributors. ParSeq-XAS. https://github.com/kklmn/ParSeq-XAS",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/HERFD/scan-24213_eiger_streaming.h5",
+    "title_or_description": "kklmn/ParSeq-XAS",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Konstantin Klementiev and contributors. ParSeq-XAS. https://github.com/kklmn/ParSeq-XAS",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/foils/Cu-foil_EXAFS_23068.dat",
+    "title_or_description": "kklmn/ParSeq-XAS",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Konstantin Klementiev and contributors. ParSeq-XAS. https://github.com/kklmn/ParSeq-XAS",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/foils/Fe-foil_EXAFS_23147.dat",
+    "title_or_description": "kklmn/ParSeq-XAS",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Konstantin Klementiev and contributors. ParSeq-XAS. https://github.com/kklmn/ParSeq-XAS",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "collected source"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/AgL3_CAMD.prj",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/Fe-K-ALS-10.3.2.prj",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/FeFoil_QXAFS_Compare.prj",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/P_CAMD.prj",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/dispersive.prj",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/json_unzipped.prj",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS10BM_2019.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS12BM_2019.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS13ID_2008.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS13ID_2019.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS20BM_2001.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS20ID_2018.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS20ID_2022.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS9BM_2006.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS9BM_2019.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/CLSHXMA.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/ESRF_BM08_LISA_2021.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/ESRF_SNBL_2013.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/NSLS6BM_2019.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Chris Patridge. NSLS6BM_2019.dat. Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/NSLS8ID_2019.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/NSLS_XDAC_2011.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/PF9A_2022.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/PFBL12C_2005.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/SLS_PHOENIX_2023.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/SSRL1_2006.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/SSRLmicro_2008.dat",
+    "title_or_description": "xraypy/xraylarch",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraypy/xraylarch/tree/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines",
+    "title_or_description": "Larch beamline fixtures",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "collected source"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/MEX1/MEX1_40747.mda",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/MEX1/MEX1_40747_processed.asc",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/MEX1/MEX1_40747_processed.xdi",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/MEX2/2024-03/MEX2_5640.mda",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/MEX2/2024-03/MEX2_5640_processed.xdi",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/MEX2/2024-03/MEX2_5641.mda",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/MEX2/2024-03/MEX2_5641_processed.xdi",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/MEX2/2025-03/MEX2_13366.mda",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/MEX2/2025-03/MEX2_13366_processed.xdi",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/SXR/2024-03/sxr129577.asc",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/SXR/2024-03/sxr129577.mda",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/SXR/2024-03/sxr129578.asc",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/blob/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data/au/SXR/2024-03/sxr129578.mda",
+    "title_or_description": "xraysoftmat/pyNexafs",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Matt Gebert and pyNexafs contributors. pyNexafs test fixtures. https://github.com/xraysoftmat/pyNexafs",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://github.com/xraysoftmat/pyNexafs/tree/c3a6a08d3fc076c22310c3ad5361961d6a115a89/tests/test_data",
+    "title_or_description": "pyNexafs",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://ihep.cas.cn/dkxzz/HEPS/zzjs/gsxz/201903/t20190328_5262833.html",
+    "title_or_description": "HEPS ID46",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://ihep.cas.cn/dkxzz/HEPS/zzjs/gsxz/201903/t20190328_5262840.html",
+    "title_or_description": "HEPS BM44",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://info.rrcat.gov.in/beamline/",
+    "title_or_description": "Indus-2 portal",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://ixdb.jxafs.org/",
+    "title_or_description": "International XAFS Database Portal",
+    "evidence_use": [
+      "research report",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://lightsources.org/lightsources-of-the-world/",
+    "title_or_description": "Lightsources.org",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://lightsources.org/lightsources-of-the-world/africa/",
+    "title_or_description": "Lightsources.org Africa",
+    "evidence_use": [
+      "research report",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://lnls.cnpem.br/facilities/carnauba-en/",
+    "title_or_description": "CARNAUBA",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://lnls.cnpem.br/facilities/quati/",
+    "title_or_description": "QUATI",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/collections/a0f3fbf1-f94a-4be7-8a66-6b91a24f6b54",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "collected source"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/0468e6b4-e1d0-4be4-a82c-e02b2e2a1102",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Ritsumeikan SR Center. XAFS spectrum of Sodium fluoride. https://doi.org/10.48505/nims.3357",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/12b7b42c-7362-48ab-9c86-35a5dfdf53ce",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; SAGA-LS. XAFS spectrum of Titanium(IV) dioxide (Rutile). https://doi.org/10.48505/nims.4186",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/191de9cf-581e-41a2-ab53-a74e21039ffb",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Photon Factory. XAFS spectrum of Copper(II) oxide. https://doi.org/10.48505/nims.3611",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/1c05e9f1-08af-4eb8-9292-1e12971165a9",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; SAGA-LS. XAFS spectrum of Calcium(II) hydroxide. https://doi.org/10.48505/nims.4185",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/2434ccfd-1f19-477b-9e80-885b866c715e",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Photon Factory. XAFS spectrum of Cerium(IV) oxide. https://doi.org/10.48505/nims.3697",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/24efb0bd-cb8b-4c73-ac70-1d3489b03ef7",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Aichi SR. XAFS spectrum of Zirconium. https://doi.org/10.48505/nims.3887",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/3c5953dc-1faa-47a7-a3f0-8211703adb58",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Industrial Application and Partnership Division. XAFS spectrum of Lead telluride. https://doi.org/10.48505/nims.3178",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/3f67b1c0-bd32-4efe-bec6-39dbb3d6e853",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Ritsumeikan SR Center. XAFS spectrum of Potassium sulfate. https://doi.org/10.48505/nims.3349",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/3ff63598-8621-4ef6-8de9-5426bf12adac",
+    "title_or_description": "supplied ZrN record",
+    "evidence_use": [
+      "research report",
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Photon Factory. XAFS spectrum of Zirconium nitride. https://doi.org/10.48505/nims.3579",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/5812be74-854f-47fc-b3e0-901c302ed0d1",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; SAGA-LS. XAFS spectrum of Lithium cobalt oxide. https://doi.org/10.48505/nims.4190",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/6ad6ede8-ac7e-4901-bf2e-44183416f868",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Photon Factory. XAFS spectrum of Titanium. https://doi.org/10.48505/nims.3612",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/6d8d2c63-6e40-4da5-a720-cdfd19f98914",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; SAGA-LS. XAFS spectrum of Nickel(II) oxide. https://doi.org/10.48505/nims.4191",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/97686182-97b6-42e1-aeef-d4a9afd12244",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Ritsumeikan SR Center. XAFS spectrum of Iron(III) oxide (haematite). https://doi.org/10.48505/nims.3342",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/9b267eea-9f16-4e50-841c-ae08512128ce",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Ritsumeikan SR Center. XAFS spectrum of Titanium(IV) dioxide (Rutile). https://doi.org/10.48505/nims.3343",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/9d3101cf-ba6f-4c9d-aed3-26fc784e8d23",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; SAGA-LS. XAFS spectrum of Lithium cobalt oxide. https://doi.org/10.48505/nims.4189",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/9dc840e3-f936-43a1-b731-f87dec2309de",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Photon Factory. XAFS spectrum of Copper(I) iodide, anhydrous. https://doi.org/10.48505/nims.3688",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/a1c60905-b457-4280-8115-9a47ec2ce602",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Ritsumeikan SR Center. XAFS spectrum of Lanthanum fluoride, anhydrous. https://doi.org/10.48505/nims.3356",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/a75da7e1-9760-4458-b2fc-a9824221dcd1",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Ritsumeikan SR Center. XAFS spectrum of Muscovite. https://doi.org/10.48505/nims.3333",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/b8ade3fa-b3da-4090-9b54-ed2baf307f7e",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Aichi SR. XAFS spectrum of Ruthenium(IV) oxide. https://doi.org/10.48505/nims.3886",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/c665369d-28b1-4c1d-9198-00f61555fe34",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Ritsumeikan SR Center. XAFS spectrum of Silicon dioxide (Quartz). https://doi.org/10.48505/nims.3350",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/c7c8a33f-e754-4b87-8c4b-49b463e72b54",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; SAGA-LS. XAFS spectrum of Nickel(II) oxide. https://doi.org/10.48505/nims.4192",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/edad880c-c8ad-4615-b5ba-ff77eb528623",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Aichi SR. XAFS spectrum of Zirconium oxide. https://doi.org/10.48505/nims.3951",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/ef31c010-20db-4a69-89d6-eaecbfc2c91e",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Industrial Application and Partnership Division. XAFS spectrum of Barium(II) iodide, anhydrous. https://doi.org/10.48505/nims.3067",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/f48a5ce8-0004-42d1-b5de-387e3f5f5958",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Photon Factory. XAFS spectrum of Iron(III) oxide. https://doi.org/10.48505/nims.3655",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/f5204d19-dea0-497d-bbad-152131bf9ab8",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Photon Factory. XAFS spectrum of Iron(II) oxide. https://doi.org/10.48505/nims.3654",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/f55722b9-7a1d-49c4-b59e-0226d4d59d5c",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Ritsumeikan SR Center. XAFS spectrum of Sodium orthosilicate. https://doi.org/10.48505/nims.3332",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://mdr.nims.go.jp/datasets/fc4fa43d-6bd1-45b9-b783-264e62f1923d",
+    "title_or_description": "MDR XAFS DB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Masashi Ishii; Aichi SR. XAFS spectrum of Zirconium. https://doi.org/10.48505/nims.3950",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://photon-science.desy.de/facilities/petra_iii/beamlines/p64_advanced_xafs/unified_data_sheet/index_eng.html",
+    "title_or_description": "DESY PETRA III / P64",
+    "evidence_use": [
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12356906/",
+    "title_or_description": "PLS-II methods",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://pubs.rsc.org/en/content/articlehtml/2025/ra/d5ra00682a",
+    "title_or_description": "ASTRA methods",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://rdr.ucl.ac.uk/articles/dataset/XAS-PEEM_XRD_and_XPS_data_from_Compositional_evolution_of_individual_CoNPs_on_Co_TiO2_during_CO_and_syngas_treatment_resolved_through_soft_XAS_PEEM/24530623",
+    "title_or_description": "Figshare 24530623",
+    "evidence_use": [
+      "collected source",
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Andrew Beale; Chengwu Qiu; Yaroslav Odarchenko. XAS-PEEM, XRD and XPS data from Compositional evolution of individual CoNPs on Co/TiO2 during CO and syngas treatment resolved through soft XAS/PEEM. Figshare. https://doi.org/10.5522/04/24530623.v1",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://sesame.org.jo/announcement/sesame-call-proposals-2026",
+    "title_or_description": "2026 call",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://sesame.org.jo/beamlines/heseb",
+    "title_or_description": "HESEB",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://springernature.figshare.com/articles/dataset/Selective_reduction_in_epitaxial_SrFe0_5Co0_5O2_5_and_its_reversibility/28944977",
+    "title_or_description": "Figshare 28944977",
+    "evidence_use": [
+      "collected source",
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Joonhyuk Lee; Yu-Seong Seo; Krishna Chaitanya Pitike; Gowoon Kim; Sangkyun Ryu; Hyeyun Chung; Su Ryang Park; Sangmoon Yoon; Younghak Kim; Valentino\nR. Cooper; Hiromichi Ohta; Jinhyung Cho; Hyoungjeen Jeen. Selective reduction in epitaxial SrFe0.5Co0.5O2.5 and its reversibility. Figshare. https://doi.org/10.6084/m9.figshare.28944977.v1",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://ssrf.sari.ac.cn/dkxzz/tbfs/gsxz_gb/xzdl_tbfs/bl11b/xzjs/202406/t20240620_442936.html",
+    "title_or_description": "SSRF BL11B",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://ssrf.sari.ac.cn/zzjs/bl14w1/",
+    "title_or_description": "SSRF BL14W1",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://tpsbl.nsrrc.org.tw/bd_page.aspx?lang=en&pid=1064&port=27A",
+    "title_or_description": "TPS 27A",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://tpsbl.nsrrc.org.tw/bd_page.aspx?lang=en&pid=1065&port=44A",
+    "title_or_description": "TPS 44A",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://tpsbl.nsrrc.org.tw/bd_page.aspx?lang=en&pid=1138&port=31A",
+    "title_or_description": "TPS 31A",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://tpsbl.nsrrc.org.tw/bd_page.aspx?lang=en&pid=1166&port=32A",
+    "title_or_description": "TPS 32A",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://tpsbl.nsrrc.org.tw/bd_page.aspx?lang=en&pid=1251&port=47A",
+    "title_or_description": "TPS 47A",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://uj.rodbuk.pl/dataset.xhtml?persistentId=doi:10.57903/UJ/58IJY5",
+    "title_or_description": "RODBUK 10.57903/UJ/58IJY5",
+    "evidence_use": [
+      "collected source",
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Figura-Jagoda, Aleksandra; Minzoni, Camilla; Maćkosz, Krzysztof; Szkudlarek, Aleksandra; Sikora, Marcin. Reaction Mechanisms in Copper Atomic Layer Deposition Using Copper(II) Hexafluoroacetylacetonate and Diethylzinc via In Situ Time-of-Flight Mass Spectrometry - raw data. Jagiellonian University in Krakow, dataset version 1. https://doi.org/10.57903/UJ/58IJY5",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://uj.rodbuk.pl/dataset.xhtml?persistentId=doi:10.57903/UJ/VRJ85T",
+    "title_or_description": "RODBUK 10.57903/UJ/VRJ85T",
+    "evidence_use": [
+      "collected source",
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Klonecka, Agnieszka. XANES reference database of sulphur containing compounds for biological research: A preliminary report from the ASTRA Beamline at the SOLARIS Synchrotron Radiation Centre. Jagiellonian University in Krakow, dataset version 1. https://doi.org/10.57903/UJ/VRJ85T",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://user.nanoterasu.jp/project-apply/2701/",
+    "title_or_description": "NanoTerasu 2026B coalition call",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://wiki.sshade.eu/sshade/interface/rules",
+    "title_or_description": "SSHADE rules",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://wiki.sshade.eu/sshade/interface/user_tutorial",
+    "title_or_description": "SSHADE tutorial",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.africanlightsource.org/",
+    "title_or_description": "African Light Source",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.aichisr.jp/userguide/beamline_lists/BL11S2.html",
+    "title_or_description": "Aichi SR / BL11S2",
+    "evidence_use": [
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.aichisr.jp/userguide/beamline_lists/BL6N1.html",
+    "title_or_description": "Aichi SR / BL6N1",
+    "evidence_use": [
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.ansto.gov.au/facilities/australian-synchrotron/data-access-retention-guide",
+    "title_or_description": "ANSTO data guide",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.bnl.gov/nsls2/userguide/available-beamlines.php",
+    "title_or_description": "NSLS-II available-beamline guide",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.diamond.ac.uk/Instruments/Spectroscopy/B18.html",
+    "title_or_description": "Diamond / B18",
+    "evidence_use": [
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.esrf.fr/home/UsersAndScience/Experiments/CRG/BM16.html",
+    "title_or_description": "BM16",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.esrf.fr/home/UsersAndScience/UserGuide/crg-at-esrf/CRGProposalGuidelines-old.html",
+    "title_or_description": "ESRF / BM28",
+    "evidence_use": [
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.ims.ac.jp/guide/2023zenki/uvsor_1.html",
+    "title_or_description": "UVSOR instruments",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.iucr.org/who-we-are/commissions/commission-on-xafs/beamlines-in-asia-and-oceania",
+    "title_or_description": "IUCr Asia/Oceania",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution",
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.iucr.org/who-we-are/commissions/commission-on-xafs/beamlines-in-europe",
+    "title_or_description": "IUCr Europe",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.iucr.org/who-we-are/commissions/commission-on-xafs/beamlines-in-the-americas",
+    "title_or_description": "IUCr Americas",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.lightsource.ca/science/xas-database.php",
+    "title_or_description": "CLS XAS database and license",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.maxiv.lu.se/beamlines-accelerators/beamlines/balder/user-information/data-handling/",
+    "title_or_description": "BALDER data handling",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.nature.com/articles/s41467-024-45319-7",
+    "title_or_description": "associated article",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.nsrrc.org.tw/ViewNews/MediaLayout01.aspx?Lang=English&ViewID=M20211208084610064",
+    "title_or_description": "SPring-8 / BL12B2",
+    "evidence_use": [
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.qst.go.jp/site/nt-center/ntc.html",
+    "title_or_description": "NanoTerasu public beamlines",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.sesame.org.jo/beamlines/xafs-xrf",
+    "title_or_description": "BM08",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.slri.or.th/en_web/beamline.html",
+    "title_or_description": "SLRI beamlines",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.slri.or.th/th/user-56.html",
+    "title_or_description": "SLRI user information",
+    "evidence_use": [
+      "research report",
+      "beamline discovery or attribution"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.sshade.eu/db/fame",
+    "title_or_description": "FAME database",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.synchrotron-soleil.fr/en/news/soleil-establishes-data-management-policy",
+    "title_or_description": "SOLEIL data policy",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://www.xaslib.xrayabsorption.org/beamlines/",
+    "title_or_description": "worldwide: beamline catalog",
+    "evidence_use": [
+      "download lead"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "collected source"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Fe/BIOXAS-S/Ferrihydrite/Ferrihydrite_2021_03_11_scan1_ida0notq.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Ferrihydrite, Fe K-edge, BIOXAS-S, 2021-03-11. Canadian Light Source XAS Database, spectrum Fe_ida0notq. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Fe/BIOXAS-S/Iron Foil/Fe-Foil_2024_04_07_scan1_idcj28n9.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Morgane Desmau, Roman Chernikov. Iron Foil, Fe K-edge, BIOXAS-S, 2024-04-07. Canadian Light Source XAS Database, spectrum Fe_idcj28n9. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Fe/BIOXAS-S/Jarosite/Jarosite_2021_03_12_scan1_ids1dc72.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Jarosite, Fe K-edge, BIOXAS-S, 2021-03-12. Canadian Light Source XAS Database, spectrum Fe_ids1dc72. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Fe/BM08-GILDA/Iron (II) Oxide/Iron (II) Oxide_2003_08_26_scan1_idxvotm2.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Puri A.. Iron (II) Oxide, Fe K-edge, BM08-GILDA, 2003-08-26. Canadian Light Source XAS Database, spectrum Fe_idxvotm2.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Fe/BM08-GILDA/Iron (II) Oxide/Iron (II) Oxide_2008_08_25_scan1_idq2cv7k.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Puri A.. Iron (II) Oxide, Fe K-edge, BM08-GILDA, 2008-08-25. Canadian Light Source XAS Database, spectrum Fe_idq2cv7k.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Fe/BM08-GILDA/Iron (II) Oxide/Iron (II) Oxide_2018_10_07_scan1_idg74ufm.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Puri A.. Iron (II) Oxide, Fe K-edge, BM08-GILDA, 2018-10-07. Canadian Light Source XAS Database, spectrum Fe_idg74ufm.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Fe/SXRMB/Iron Foil/Fe-foil_2024_04_30_1_scan1_idyxpl8x.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Mehrnaz Mikhchian. Iron Foil, Fe K-edge, SXRMB, 2024-04-30. Canadian Light Source XAS Database, spectrum Fe_idyxpl8x. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/S/ID21/Gypsum/Gypsum_2006_06_06_scan1_id8r6xst.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Andreas Scheinost. Gypsum, S K-edge, ID21, 2006-06-06. Canadian Light Source XAS Database, spectrum S_id8r6xst.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/S/ID21/Jarosite/Jarosite_2006_06_23_scan1_idnra3o7.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Andreas Scheinost. Jarosite, S K-edge, ID21, 2006-06-23. Canadian Light Source XAS Database, spectrum S_idnra3o7.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/S/ID21/Pyrite/Pyrite_2005_11_19_scan1_idvvf2ra.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Magnus Sandström. Pyrite, S K-edge, ID21, 2005-11-19. Canadian Light Source XAS Database, spectrum S_idvvf2ra.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/S/VLS-PGM/Diphenyl Disulfide/C12H10S2_201601_01_scan1_id1hi2lv.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Diphenyl Disulfide, S L2-edge, VLS-PGM, 201601-01-scan1. Canadian Light Source XAS Database, spectrum S_id1hi2lv. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/S/VLS-PGM/Iron (II) Sulfate/FeSO4_2016_01_scan1_idafhtzf.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Iron (II) Sulfate, S L2-edge, VLS-PGM, 2016-01-scan1. Canadian Light Source XAS Database, spectrum S_idafhtzf. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/S/VLS-PGM/Iron (II) Sulfate/FeSO4_2016_01_scan2_id4x4lhj.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Iron (II) Sulfate, S L2-edge, VLS-PGM, 2016-01-scan2. Canadian Light Source XAS Database, spectrum S_id4x4lhj. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Zn/BM08-LISA/Zinc Cobaltite/Zinc Cobaltite_2024_10_26_scan1_idbkn38n.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Puri A.. Zinc Cobaltite, Zn K-edge, BM08-LISA, 2024-10-26. Canadian Light Source XAS Database, spectrum Zn_idbkn38n.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Zn/BM08-LISA/Zinc Foil/Zinc Foil_2024_02_10_scan1_idbx9xsg.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Puri A.. Zinc Foil, Zn K-edge, BM08-LISA, 2024-02-10. Canadian Light Source XAS Database, spectrum Zn_idbx9xsg.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Zn/BM08-LISA/Zinc Oxide/Zinc Oxide_2024_02_10_scan1_idzz5ccy.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Puri A.. Zinc Oxide, Zn K-edge, BM08-LISA, 2024-02-10. Canadian Light Source XAS Database, spectrum Zn_idzz5ccy.",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Zn/HXMA/Zinc Acetate Dihydrate/Zn(OOCCH3)2H2O_2012_07_05_scan1_idrfof85.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Zinc Acetate Dihydrate, Zn K-edge, HXMA, 2012-07-05. Canadian Light Source XAS Database, spectrum Zn_idrfof85. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Zn/HXMA/Zinc Ferrite/ZnFeO_2010_02_10_scan1_id1x8obl.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Zinc Ferrite, Zn K-edge, HXMA, 2010-02-10. Canadian Light Source XAS Database, spectrum Zn_id1x8obl. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Zn/HXMA/Zinc Ferrite/ZnFeO_2010_02_10_scan2_ideutfwr.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Zinc Ferrite, Zn K-edge, HXMA, 2010-02-10. Canadian Light Source XAS Database, spectrum Zn_ideutfwr. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Zn/IDEAS/Zinc Selenide/ZnSe_2022_06_3_id3hy6kf.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Zinc Selenide, Zn K-edge, IDEAS, 2022-06-3. Canadian Light Source XAS Database, spectrum Zn_id3hy6kf. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Zn/IDEAS/Zinc Selenide/ZnSe_2022_06_4_idqeo94d.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Zinc Selenide, Zn K-edge, IDEAS, 2022-06-4. Canadian Light Source XAS Database, spectrum Zn_idqeo94d. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Zn/IDEAS/Zinc Sulfide/ZnS_2022_03_20_scan2_idja8kfp.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Peter Blanchard, Miranda Vu, Joel Reid, Erika Bergen, Jeff Warner. Zinc Sulfide, Zn K-edge, IDEAS, 2022-03-20. Canadian Light Source XAS Database, spectrum Zn_idja8kfp. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Zn/SXRMB/Zinc Foil/Zn-foil_2024_04_30_1_scan1_idx8ttpj.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Mehrnaz Mikhchian. Zinc Foil, Zn K-edge, SXRMB, 2024-04-30. Canadian Light Source XAS Database, spectrum Zn_idx8ttpj. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xasdb.lightsource.ca/DB/Zn/SXRMB/Zinc Foil/Zn-foil_2024_04_30_2_scan1_idvphxym.dat",
+    "title_or_description": "CLS XASDB",
+    "evidence_use": [
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Mehrnaz Mikhchian. Zinc Foil, Zn K-edge, SXRMB, 2024-04-30. Canadian Light Source XAS Database, spectrum Zn_idvphxym. https://doi.org/10.20383/103.01329",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://xrayabsorption.org/q2xafs2024_dataformats/",
+    "title_or_description": "Q2XAFS data-format discussion",
+    "evidence_use": [
+      "research report"
+    ],
+    "citation": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://zenodo.org/records/10044133",
+    "title_or_description": "artificial-spin-ice dataset",
+    "evidence_use": [
+      "research report",
+      "collected source",
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Strømberg, Anders; Jensen, Johannes H.; Breivik, Ida; Penty, Arthur; Niño, Miguel Angel; Khaliq, Muhammad Waqas; Foerster, Michael; Tufte, Gunnar; Folven, Erik (2023). XMCD data and XAS spectra, and simulation data for Clocked Dynamics in Artificial Spin Ice. Zenodo. https://doi.org/10.5281/zenodo.10044134",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://zenodo.org/records/10866536",
+    "title_or_description": "operando energy-materials dataset",
+    "evidence_use": [
+      "research report",
+      "collected source",
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Garcia-Diez, Raul (2024). Studying energy materials under operating conditions by X-ray absorption spectroscopy using the new OÆSE endstation at BESSY II. Zenodo. https://doi.org/10.5281/zenodo.10866536",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://zenodo.org/records/18522047",
+    "title_or_description": "Aichi dataset",
+    "evidence_use": [
+      "research report",
+      "collected source",
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Nakamura, Keisuke (2026). Synchrotron XRD and XAFS datasets of dental yttria-stabilized zirconia. Zenodo. https://doi.org/10.5281/zenodo.18522047",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://zenodo.org/records/5669967",
+    "title_or_description": "As-bearing minerals",
+    "evidence_use": [
+      "research report",
+      "collected source",
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Emily M. Saurette; Y. Zou Frinfrock; Brent Verbuyst; David W. Blowes; Joyce McBeth; Carol J. Ptacek (2021). As-bearing Minerals Raw XAS Data. Zenodo. https://doi.org/10.5281/zenodo.5669967",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "url": "https://zenodo.org/records/7801896",
+    "title_or_description": "niobium-mineral dataset",
+    "evidence_use": [
+      "research report",
+      "collected source",
+      "file provenance",
+      "beamline discovery or attribution"
+    ],
+    "citation": "Quentin Bollaert; Mathieu Chassé; Guillaume Morin; Benoît Baptiste; Alexandra Courtin; Laurence Galoisy; Gautier Landrot; Cécile Quantin; Georges Calas (2023). Atomic-scale environment of niobium in minerals as revealed by X-ray absorption spectroscopy at the Nb K-edge. Zenodo. https://doi.org/10.5281/zenodo.7801896",
+    "checked_on": "2026-09-14"
+  }
+]

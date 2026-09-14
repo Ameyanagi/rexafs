@@ -1,0 +1,35 @@
+{
+  "sid": "S_idnra3o7",
+  "url": "https://xasdb.lightsource.ca/DB/S/ID21/Jarosite/Jarosite_2006_06_23_scan1_idnra3o7.dat",
+  "cache_path": ".gather-cache/cls/files/S/ID21/Jarosite/Jarosite_2006_06_23_scan1_idnra3o7.dat",
+  "header": {
+    "XDI/1.0": "",
+    "Scan.license": "CC BY 4.0",
+    "Publication.authors": " Andreas Scheinost",
+    "Publication.affiliation": " HZDR; ESRF",
+    "Sample.reference": "CaSO4 2482.5 eV",
+    "ScanParameters.E0": "",
+    "Facility.name": "ESRF",
+    "Sample.temperature": "r.t.",
+    "Sample.prep": "powder",
+    "Sample.formula": "KFeIII3(SO4)2(OH)6",
+    "Sample.smiles": "[K+].[Fe+3].[Fe+3].[Fe+3].[O-]S(=O)(=O)[O-].[O-]S(=O)(=O)[O-]",
+    "Sample.name": "Jarosite",
+    "Scan.number": "scan1",
+    "Sample.id": "nra3o7",
+    "Scan.start_time": "2006-06-23",
+    "Element.symbol": "S",
+    "Facility.energy": "6.0 GeV",
+    "Beamline.name": "ID21",
+    "Beamline.energy_range": "2.1 - 10.5",
+    "Beamline.scan_mode": "transmission",
+    "Beamline.detector": "Photodiode",
+    "Beamline.website": "https://www.esrf.fr/UsersAndScience/Experiments/ID21",
+    "Beamline.spot_size": "130 nm x 130 nm to 2 mm x 2 mm",
+    "Mono.name": "Si(111)",
+    "Element.edge": {
+      "K": 2472
+    }
+  },
+  "filepath": "S/ID21/Jarosite/Jarosite_2006_06_23_scan1_idnra3o7.dat"
+}

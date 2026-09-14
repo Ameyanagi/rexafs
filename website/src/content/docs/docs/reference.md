@@ -49,3 +49,5 @@ Stable uses the published crate; Next uses the checkout.
 
 For equations, units and citations, see [processing theory](/docs/science/processing/)
 and [scientific references](/docs/science/references/).
+
+The [unreleased measurement reader guide](/docs/reference/next/measurement-reading/) explains automatic beamline, HDF5 and XTUNES import across the libraries and interfaces.

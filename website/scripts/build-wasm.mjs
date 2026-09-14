@@ -11,7 +11,7 @@ if (build.status !== 0) process.exit(build.status ?? 1);
 // Do not retain a module or helper from an older binding build.
 rmSync(target, { recursive: true, force: true });
 mkdirSync(resolve(target, 'dist/web'), { recursive: true });
-for (const file of ['browser.js', 'configuration.js', 'spectrum.js', 'validate.js']) {
+for (const file of ['browser.js', 'measurement.js', 'configuration.js', 'spectrum.js', 'validate.js']) {
   copyFileSync(resolve(root, 'js-rexafs', file), resolve(target, file));
 }
 for (const file of ['rexafs_wasm.js', 'rexafs_wasm_bg.wasm']) {

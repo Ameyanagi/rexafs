@@ -1,0 +1,122 @@
+{
+  "@context": "http://schema.org",
+  "@graph": [
+    {
+      "@id": "https://mdrs-external.nims.go.jp/datasets/24efb0bd-cb8b-4c73-ac70-1d3489b03ef7",
+      "@type": "Dataset",
+      "datePublished": null,
+      "name": "XAFS spectrum of Zirconium",
+      "description": "This dataset consists of X-ray absorption fine structure (XAFS) spectra at Zr K-edge of zirconium measured at Aichi SR BL11S2, and is a part of XAFS database (MDR XAFS DB, https://doi.org/10.48505/nims.1447) as a collection of MDR",
+      "distribution": [
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/6c8f72ac-4512-44bb-a8b8-253dd1a8c88d/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/6937bdd7-311a-4abd-9470-64b64d39557c/download",
+          "encodingFormat": "application/octet-stream"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/1fca1b24-5d36-4220-8119-ca6f70987550/download",
+          "encodingFormat": "application/json"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/62316b1e-b5cf-4607-84fd-7f5c6a802be8/download",
+          "encodingFormat": "text/tab-separated-values"
+        },
+        {
+          "@type": "DataDownload",
+          "contentUrl": "https://mdrs-external.nims.go.jp/filesets/759f0a29-58d7-4d20-9ad4-4d596bca883a/download",
+          "encodingFormat": "image/png"
+        }
+      ],
+      "identifier": "https://doi.org/10.48505/nims.3887",
+      "license": [
+        {
+          "@id": "cc-by-nc-sa-4.0"
+        }
+      ],
+      "hasPart": [
+        {
+          "@id": "ZrFoil-f-AichiSR-BL11S-20200327.dat"
+        },
+        {
+          "@id": "metadata.yml"
+        },
+        {
+          "@id": "metadata.json"
+        },
+        {
+          "@id": "primary.tsv"
+        },
+        {
+          "@id": "ZrFoil-f-AichiSR-BL11S-20200327.png"
+        }
+      ],
+      "author": [
+        {
+          "@id": "#b054295e-317c-496e-9730-10d4e2ff4331"
+        },
+        {
+          "@id": "#a7d044fb-f24f-4e21-94fd-69751c0fe38a"
+        }
+      ],
+      "publisher": {
+        "@id": "#22550043-d129-4676-abd0-89f348f87e80"
+      }
+    },
+    {
+      "@id": "ZrFoil-f-AichiSR-BL11S-20200327.dat",
+      "url": "https://mdrs-external.nims.go.jp/filesets/6c8f72ac-4512-44bb-a8b8-253dd1a8c88d",
+      "@type": "File",
+      "contentSize": 252600,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "metadata.yml",
+      "url": "https://mdrs-external.nims.go.jp/filesets/6937bdd7-311a-4abd-9470-64b64d39557c",
+      "@type": "File",
+      "contentSize": 8812,
+      "encodingFormat": "application/octet-stream"
+    },
+    {
+      "@id": "metadata.json",
+      "url": "https://mdrs-external.nims.go.jp/filesets/1fca1b24-5d36-4220-8119-ca6f70987550",
+      "@type": "File",
+      "contentSize": 16038,
+      "encodingFormat": "application/json"
+    },
+    {
+      "@id": "primary.tsv",
+      "url": "https://mdrs-external.nims.go.jp/filesets/62316b1e-b5cf-4607-84fd-7f5c6a802be8",
+      "@type": "File",
+      "contentSize": 13768,
+      "encodingFormat": "text/tab-separated-values"
+    },
+    {
+      "@id": "ZrFoil-f-AichiSR-BL11S-20200327.png",
+      "url": "https://mdrs-external.nims.go.jp/filesets/759f0a29-58d7-4d20-9ad4-4d596bca883a",
+      "@type": "File",
+      "contentSize": 23266,
+      "encodingFormat": "image/png"
+    },
+    {
+      "@id": "#b054295e-317c-496e-9730-10d4e2ff4331",
+      "name": "Masashi Ishii",
+      "identifier": "https://orcid.org/0000-0003-0357-2832"
+    },
+    {
+      "@id": "#a7d044fb-f24f-4e21-94fd-69751c0fe38a",
+      "name": "Aichi SR"
+    },
+    {
+      "@id": "#22550043-d129-4676-abd0-89f348f87e80",
+      "@type": "Organization",
+      "name": "Aichi Synchrotron Radiation Center"
+    }
+  ]
+}

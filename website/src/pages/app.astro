@@ -37,23 +37,35 @@ const canonical = new URL(url('app/'), Astro.site).href;
           <section class="source-controls" aria-labelledby="source-title">
             <h2 id="source-title"><span class="section-number">01</span> Spectrum</h2>
             <label class="file-label" for="source-file">Open a data file</label>
-            <input id="source-file" type="file" accept=".txt,.dat,.csv,.xmu,.xdi,text/plain,text/csv" aria-describedby="source-help" />
-            <p class="field-help" id="source-help">Numeric text or CSV, up to 8 MiB and 100,000 rows. Begin header lines with #.</p>
+            <input id="source-file" type="file" aria-describedby="source-help" />
+            <p class="field-help" id="source-help">Beamline text, CSV, HDF5, Athena, Larix and XTUNES files, up to 8 MiB. Processing accepts 2–100,000 points with increasing, unique energies.</p>
             <button id="load-example" class="secondary-button" type="button">Load Cu example</button>
             <p id="source-name" class="source-name">No spectrum loaded</p>
             <p id="source-details" class="field-help"></p>
           </section>
           <form id="analysis-form">
             <fieldset id="data-mapping" disabled>
-              <legend>Columns and units</legend>
+              <legend>Scans, columns and units</legend>
+              <div class="field"><label for="source-scan">Scan / project record</label><select id="source-scan"></select></div>
+              <div class="field"><label for="source-signal">Detected signal</label><select id="source-signal"></select></div>
+              <p id="mapping-summary" class="field-help"></p>
+              <p id="reader-warnings" class="field-help"></p>
+              <details><summary>Original header and saved tables</summary><pre id="reader-header" style="max-height:12rem;overflow:auto;white-space:pre-wrap"></pre></details>
+              <details id="dataset-review"><summary>Dataset selection and saved arrays</summary><p class="field-help">Select equal-length real vectors to define channels. Images and complex saved results require separate interpretation.</p><label for="dataset-paths">Numeric datasets and shapes</label><select id="dataset-paths" multiple size="5"></select><button id="use-datasets" type="button" class="secondary-button">Use selected vectors</button></details>
+              <details id="custom-mapping"><summary>Custom columns and units</summary>
               <div class="field-grid">
                 <div class="field"><label for="energy-column">Energy column</label><select id="energy-column" name="energy-column"></select></div>
-                <div class="field"><label for="energy-unit">Energy unit</label><select id="energy-unit" name="energy-unit"><option value="eV">eV</option><option value="keV">keV</option></select></div>
-                <div class="field full-field"><label for="signal-quantity">Signal type</label><select id="signal-quantity" name="signal-quantity"><option value="mu">Absorption μ(E)</option><option value="transmission">Transmission: ln(I₀ / Iₜ)</option></select></div>
+                <div class="field"><label for="energy-unit">Energy unit</label><select id="energy-unit" name="energy-unit"><option value="eV">eV</option><option value="keV">keV</option><option value="offset_ev">Relative eV + energy origin</option><option value="bragg">Bragg angle / motor steps</option></select></div>
+                <div class="field full-field"><label for="signal-quantity">Signal type</label><select id="signal-quantity" name="signal-quantity"><option value="mu">Absorption μ(E)</option><option value="transmission">Transmission: ln(I₀ / Iₜ)</option><option value="ratio">Fluorescence / yield: detectors / I₀</option></select></div>
                 <div class="field"><label id="signal-column-label" for="signal-column">Absorption column</label><select id="signal-column" name="signal-column"></select></div>
                 <div class="field" id="reference-field" hidden><label for="reference-column">Incident I₀ column</label><select id="reference-column" name="reference-column"></select></div>
               </div>
-              <p id="transmission-help" class="field-help" hidden>I₀ and Iₜ must be positive intensities in matching units.</p>
+              <div id="bragg-fields" class="field-grid" hidden><div class="field"><label for="crystal-spacing">Crystal d spacing (Å)</label><input id="crystal-spacing" type="number" step="any" value="3.1355" /></div><div class="field"><label for="angle-scale">Degrees per axis unit</label><input id="angle-scale" type="number" step="any" value="1" /></div><p class="field-help">Use 1 for degrees, 180/π for radians, or the reciprocal of motor steps per degree.</p></div>
+              <div id="energy-origin-field" class="field" hidden><label for="energy-origin">Energy origin (eV)</label><input id="energy-origin" type="number" step="any" value="0" /><p class="field-help">Added to every source energy. FDMNES supplies its declared edge energy; its original relative axis is retained.</p></div>
+              <div id="detector-fields" class="field" hidden><label for="detector-columns">Detector columns to sum</label><select id="detector-columns" multiple size="4"></select></div>
+              <p id="transmission-help" class="field-help" hidden>Transmission requires nonzero intensities with the same sign and matching units. Yield uses the selected detector sum divided by a nonzero incident monitor. No detector corrections are applied.</p>
+              <button id="confirm-mapping" class="secondary-button" type="button">Use these columns and units</button>
+              </details>
             </fieldset>
             <fieldset class="processing-settings">
               <legend><span class="section-number">02</span> Processing</legend>

@@ -1,0 +1,10 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit dataset license
+License-Evidence: https://zenodo.org/records/7801896
+Source: https://zenodo.org/records/7801896
+Download: https://zenodo.org/api/records/7801896/files/Ba_pcl_0001.txt/content
+Citation: Quentin Bollaert; Mathieu Chassé; Guillaume Morin; Benoît Baptiste; Alexandra Courtin; Laurence Galoisy; Gautier Landrot; Cécile Quantin; Georges Calas (2023). Atomic-scale environment of niobium in minerals as revealed by X-ray absorption spectroscopy at the Nb K-edge. Zenodo. https://doi.org/10.5281/zenodo.7801896
+SHA256: 9d0194f02fab50cea5c85798053b534b99c0b25d4ae0fc40bee72e0eeac58e5a
+Modifications: None; original downloaded measurement bytes retained.

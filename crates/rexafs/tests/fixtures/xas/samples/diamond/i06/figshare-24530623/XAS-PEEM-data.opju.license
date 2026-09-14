@@ -1,0 +1,10 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit dataset license
+License-Evidence: https://rdr.ucl.ac.uk/articles/dataset/XAS-PEEM_XRD_and_XPS_data_from_Compositional_evolution_of_individual_CoNPs_on_Co_TiO2_during_CO_and_syngas_treatment_resolved_through_soft_XAS_PEEM/24530623
+Source: https://rdr.ucl.ac.uk/articles/dataset/XAS-PEEM_XRD_and_XPS_data_from_Compositional_evolution_of_individual_CoNPs_on_Co_TiO2_during_CO_and_syngas_treatment_resolved_through_soft_XAS_PEEM/24530623
+Download: https://ndownloader.figshare.com/files/43089439
+Citation: Andrew Beale; Chengwu Qiu; Yaroslav Odarchenko. XAS-PEEM, XRD and XPS data from Compositional evolution of individual CoNPs on Co/TiO2 during CO and syngas treatment resolved through soft XAS/PEEM. Figshare. https://doi.org/10.5522/04/24530623.v1
+SHA256: 00ac73e0649540c90c7413b1a2cbd5c341ec27e96ff28d13797fe21f3515d185
+Modifications: None; original downloaded measurement bytes retained.

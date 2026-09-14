@@ -1,0 +1,399 @@
+{
+    "data_info": {
+        "facility": "Ritsumeikan-SR",
+        "beamline": "BL-11",
+        "id": "BL11_O-K_001",
+        "related_id": "BL11_Fe-L_001",
+        "date": {
+            "create_time": "2021-08-03 00:00:00",
+            "update_time": "2021-12-17 00:00:00"
+        },
+        "data_depositor": {
+            "name": "Hirona Yamagishi",
+            "affiliation": "Ritsumeikan SR Center"
+        },
+        "comment": null
+    },
+    "sample": {
+        "chemical_formula": "a-Fe2O3",
+        "name": "Hematite, Iron(III) oxide",
+        "CAS_number": "1309-37-1",
+        "manufacturer": "FUJIFILM Wako Pure Chemical Corporation",
+        "Product_number": "094-02822",
+        "sample_lot_number": "DCM1088",
+        "additional_data": "powder, on indium plate"
+    },
+    "measurement": {
+        "absorption_edge": "O K-edge",
+        "energy_calibration": [
+            {
+                "standard_sample": "a-Fe2O3",
+                "calibration_position": "first pre-edge peak maximum",
+                "energy": 529.4,
+                "energy_unit": "eV"
+            }
+        ],
+        "incident_angle": 60,
+        "incident_angle_unit": "deg",
+        "tune_angle": null,
+        "tune_angle_unit": "deg",
+        "tune_energy": null,
+        "tune_energy_unit": null,
+        "data_points": 223,
+        "section": {
+            "section_number": 6,
+            "section_blocks": [
+                {
+                    "start_energy": 510,
+                    "start_energy_unit": "eV",
+                    "end_energy": 524,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 16,
+                    "delta_energy": 1,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 0.5,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 1,
+                    "dwelling_time_unit": "s"
+                },
+                {
+                    "start_energy": 524,
+                    "start_energy_unit": "eV",
+                    "end_energy": 533,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 90,
+                    "delta_energy": 0.1,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 0.5,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 1,
+                    "dwelling_time_unit": "s"
+                },
+                {
+                    "start_energy": 533,
+                    "start_energy_unit": "eV",
+                    "end_energy": 543,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 50,
+                    "delta_energy": 0.2,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 0.5,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 1,
+                    "dwelling_time_unit": "s"
+                },
+                {
+                    "start_energy": 543,
+                    "start_energy_unit": "eV",
+                    "end_energy": 554,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 22,
+                    "delta_energy": 0.5,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 0.5,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 1,
+                    "dwelling_time_unit": "s"
+                },
+                {
+                    "start_energy": 554,
+                    "start_energy_unit": "eV",
+                    "end_energy": 575,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 21,
+                    "delta_energy": 1,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 0.5,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 1,
+                    "dwelling_time_unit": "s"
+                },
+                {
+                    "start_energy": 575,
+                    "start_energy_unit": "eV",
+                    "end_energy": 620,
+                    "end_energy_unit": "eV",
+                    "sampling_number": 23,
+                    "delta_energy": 2,
+                    "delta_energy_unit": "eV",
+                    "waiting_time": 0.5,
+                    "waiting_time_unit": "s",
+                    "dwelling_time": 1,
+                    "dwelling_time_unit": "s"
+                }
+            ]
+        },
+        "start_ring_current": 132.68,
+        "end_ring_current": 130.66,
+        "ring_current_unit": "mA",
+        "start_time": "2020-03-30 13:47:15",
+        "end_time": "2020-03-30 13:55:37"
+    },
+    "instrument": {
+        "I0": {
+            "detector": [
+                {
+                    "type": "Au mesh",
+                    "manufacturer": "The Nilaco Corporation",
+                    "model_number": "AU-468091",
+                    "coating_element": "Au",
+                    "aperture_ratio": 78,
+                    "aperture_ratio_unit": "%",
+                    "applied_voltage": null,
+                    "applied_voltage_unit": null
+                }
+            ],
+            "Ammeter": [
+                {
+                    "range": 20,
+                    "range_unit": "pA",
+                    "manufacturer": "KEITHLEY",
+                    "model_number": "6514"
+                }
+            ],
+            "additional_data": null
+        },
+        "TEY": {
+            "Ammeter": [
+                {
+                    "range": 20,
+                    "range_unit": "pA",
+                    "manufacturer": "KEITHLEY",
+                    "model_number": "6514"
+                }
+            ],
+            "additional_data": null
+        },
+        "PFY": {
+            "detector": [
+                {
+                    "type": "SDD",
+                    "manufacturer": "KETEK",
+                    "model_number": null,
+                    "amp_gain": 5.0,
+                    "amp_gain_unit": "mV/keV",
+                    "peaking_time": 1,
+                    "peaking_time_unit": "us",
+                    "deadtime": null,
+                    "deadtime_unit": "%",
+                    "deadtime_setting_energy": null,
+                    "deadtime_setting_energy_unit": "eV",
+                    "element_number": 1,
+                    "ROI": [
+                        {
+                            "ROI_energy_lower": 0.38,
+                            "ROI_energy_upper": 0.58,
+                            "ROI_energy_unit": "keV"
+                        },
+                        {
+                            "ROI_energy_lower": 0.0,
+                            "ROI_energy_upper": 1.023,
+                            "ROI_energy_unit": "keV"
+                        }
+                    ]
+                }
+            ],
+            "additional_data": null
+        },
+        "PEY": {
+            "detector": [
+                {
+                    "type": "MCP",
+                    "manufacturer": null,
+                    "model_number": null,
+                    "applied_voltage_front": 0,
+                    "applied_voltage_front_unit": "V",
+                    "applied_voltage_end": 2000,
+                    "applied_voltage_end_unit": "V",
+                    "battery_box_voltage": 2520,
+                    "battery_box_voltage_unit": "V",
+                    "retarding_voltage": -350,
+                    "retarding_voltage_unit": "V",
+                    "deflection_voltage": null,
+                    "deflection_voltage_unit": null
+                }
+            ],
+            "Ammeter": [
+                {
+                    "range": 20,
+                    "range_unit": "nA",
+                    "manufacturer": "KEITHLEY",
+                    "model_number": "6514"
+                }
+            ],
+            "additional_data": null
+        },
+        "monochromator": {
+            "type": "grating",
+            "detail": [
+                {
+                    "crystal_plane": null,
+                    "d": null,
+                    "d_unit": null,
+                    "material": "Au",
+                    "groove_density": 1200,
+                    "groove_density_unit": "mm^-1",
+                    "groove_depth": 6,
+                    "groove_depth_unit": "nm",
+                    "deflection_angle": 174,
+                    "deflection_angle_unit": "deg"
+                }
+            ]
+        },
+        "slit": [
+            {
+                "name": "S1",
+                "vertical_size": 40,
+                "vertical_size_unit": "um",
+                "horizontal_size": null,
+                "horizontal_size_unit": null
+            },
+            {
+                "name": "S2",
+                "vertical_size": 40,
+                "vertical_size_unit": "um",
+                "horizontal_size": null,
+                "horizontal_size_unit": null
+            }
+        ],
+        "filter": null,
+        "measurement_chamber_environment": "Vac"
+    },
+    "file": {
+        "file_name": "21033010.dat",
+        "raw_data_format": [
+            {
+                "extension": "dat",
+                "format": "BL-11",
+                "columns": [
+                    {
+                        "name": "Energy(PM16C)",
+                        "unit": "eV"
+                    },
+                    {
+                        "name": "Ch0(SC)",
+                        "unit": "cps"
+                    },
+                    {
+                        "name": "Ch1(MCP)",
+                        "unit": "cps"
+                    },
+                    {
+                        "name": "Ch2(SDD ROI1)",
+                        "unit": "cps"
+                    },
+                    {
+                        "name": "Ch3(SDD ROI2)",
+                        "unit": "cps"
+                    },
+                    {
+                        "name": "Ch4(SDD ROI3)",
+                        "unit": "cps"
+                    },
+                    {
+                        "name": "Ch5(SDD ROI4)",
+                        "unit": "cps"
+                    },
+                    {
+                        "name": "Ch6(I0)",
+                        "unit": "cps"
+                    },
+                    {
+                        "name": "Ch7(Ring)",
+                        "unit": "10^-1 mA"
+                    },
+                    {
+                        "name": "Pluse",
+                        "unit": "pls"
+                    },
+                    {
+                        "name": "Real eV",
+                        "unit": "eV"
+                    },
+                    {
+                        "name": "Ch0/I0",
+                        "unit": null
+                    },
+                    {
+                        "name": "Ch1/I0",
+                        "unit": null
+                    },
+                    {
+                        "name": "Ch2/I0",
+                        "unit": null
+                    }
+                ]
+            }
+        ],
+        "processed_data_format": [
+            {
+                "extension": "tey",
+                "format": "Athena",
+                "columns": [
+                    {
+                        "name": "photon energy",
+                        "unit": "eV",
+                        "formula": "column[12]",
+                        "normalizing_process": [
+                            {
+                                "BG_subtraction": null,
+                                "Normalization": null
+                            }
+                        ],
+                        "input": {
+                            "columns": "raw_data_format[0].columns"
+                        }
+                    },
+                    {
+                        "name": "Normalized Ie/I0 (TEY)",
+                        "unit": null,
+                        "formula": "column[13]",
+                        "normalizing_process": [
+                            {
+                                "BG_subtraction": "1.754686-0.00162878*column[12]",
+                                "Normalization": "2.017218-0.00118826*column[12]"
+                            }
+                        ],
+                        "input": {
+                            "columns": "raw_data_format[0].columns"
+                        }
+                    }
+                ]
+            },
+            {
+                "extension": "pey",
+                "format": "Athena",
+                "columns": [
+                    {
+                        "name": "photon energy",
+                        "unit": "eV",
+                        "formula": "column[12]",
+                        "normalizing_process": [
+                            {
+                                "BG_subtraction": null,
+                                "Normalization": null
+                            }
+                        ],
+                        "input": {
+                            "columns": "raw_data_format[0].columns"
+                        }
+                    },
+                    {
+                        "name": "Normalized Ie/I0 (PEY)",
+                        "unit": null,
+                        "formula": "column[14]",
+                        "normalizing_process": [
+                            {
+                                "BG_subtraction": "-0.932130+0.0037333*column[12]",
+                                "Normalization": "4.993289-0.00383487*column[12]"
+                            }
+                        ],
+                        "input": {
+                            "columns": "raw_data_format[0].columns"
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

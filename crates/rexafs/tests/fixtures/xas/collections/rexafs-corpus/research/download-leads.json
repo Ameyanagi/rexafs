@@ -1,0 +1,202 @@
+[
+  {
+    "facility": "MAX IV",
+    "beamlines": "Balder",
+    "url": "https://beams.se/spectable/",
+    "status": "public download links; license unresolved",
+    "reason": "Reference ZIP links are advertised from the official BALDER data-handling page; no dataset redistribution license found. Some listed links have malformed month/filename separators.",
+    "priority": "high",
+    "format_hints": "HDF5 master + detector files; ASCII exports",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "ESRF",
+    "beamlines": "BM30B FAME|BM16 FAME-UHD",
+    "url": "https://wiki.sshade.eu/sshade/interface/user_tutorial",
+    "status": "export requires account; terms to check",
+    "reason": "SSHADE export documentation requires login and describes metadata/license records within exports; no account was created. Wiki footer license is not assumed to license spectra.",
+    "priority": "high",
+    "format_hints": "XDI; metadata ZIP",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "Diamond",
+    "beamlines": "B18|I18|I20",
+    "url": "https://eprints.soton.ac.uk/501722/1/README_XAS_Dat.txt",
+    "status": "identified dataset under embargo",
+    "reason": "D3532 README assigns DAT XAS files to B18 and I18, and Cu XES files to I20. Access is through Diamond ICAT after an embargo until September 2027; no restricted files retrieved. This is a dataset-specific embargo.",
+    "priority": "high",
+    "format_hints": "DAT: qexafs_energy, time, I0, It, IRef, lnI0It, lnItIref, FFI0; I20 subset is XES",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "Diamond",
+    "beamlines": "I20",
+    "url": "https://eprints.soton.ac.uk/486003/",
+    "status": "public thesis-data lead; retrieval unresolved",
+    "reason": "Thesis battery spectroscopy lead; no licensed measurement payload selected during this pass.",
+    "priority": "medium",
+    "format_hints": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "Diamond",
+    "beamlines": "B18",
+    "url": "https://api.figshare.com/v2/articles/29637206",
+    "status": "inspected dataset lacks selected XAS files",
+    "reason": "Two isotope/desorption spreadsheets were listed; these do not establish a B18 XAS fixture.",
+    "priority": "low",
+    "format_hints": "XLSX, non-XAS",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "SOLEIL",
+    "beamlines": "HERMES",
+    "url": "https://github.com/RedhouaneBJM/ProSPyX",
+    "status": "software inspected; no bundled measurements",
+    "reason": "Public repository tree contains analysis code but no measurement examples; article links it as software/data availability.",
+    "priority": "medium",
+    "format_hints": "ptychography/STXM",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "SESAME",
+    "beamlines": "BM08 XAFS/XRF|ID11L HESEB",
+    "url": "https://access.sesame.org.jo/get-your-data",
+    "status": "user data portal; no public licensed fixture selected",
+    "reason": "Facility guidance is for access to experiment data. CCD training pages and public RefXAS search did not yield an attributable licensed measurement in this pass.",
+    "priority": "high",
+    "format_hints": "XDI; HDF5; DXDAT",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "SPring-8",
+    "beamlines": "BL01B1",
+    "url": "https://bl01b1.spring8.or.jp/tech.html",
+    "status": "public reference lead; license unresolved",
+    "reason": "Technical pages link reference spectra; no clear per-file redistribution license was established for a new selection.",
+    "priority": "high",
+    "format_hints": "9809; transmission/fluorescence references",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "SSRF",
+    "beamlines": "BL14W1",
+    "url": "https://data.mendeley.com/datasets/nyjbjdkx38/1",
+    "status": "licensed dataset found; download blocked",
+    "reason": "Landing record explicitly says CC BY 4.0 and BL14W1. File enumeration through direct HTTP and the public API returned HTTP 403, so no payload was added.",
+    "priority": "high",
+    "format_hints": "Ir/Ce XAS; payload format unresolved",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "SSRF",
+    "beamlines": "BL08U1-A|BL14W1",
+    "url": "https://doi.org/10.5281/zenodo.13865096",
+    "status": "publication-linked dataset; retrieval unresolved",
+    "reason": "Associated Nature article names SSRF stations; record retrieval did not return usable metadata. File-level station assignment and license remain unverified.",
+    "priority": "medium",
+    "format_hints": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "NSRRC TPS",
+    "beamlines": "44A",
+    "url": "https://doi.org/10.5281/zenodo.17072596",
+    "status": "publication-linked dataset; retrieval unresolved",
+    "reason": "Publication acknowledges TLS01C1/TPS44A1; Zenodo export returned 404. DOI may refer to a concept record/version; no measurement attribution inferred.",
+    "priority": "high",
+    "format_hints": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "NSRRC TLS",
+    "beamlines": "01C1",
+    "url": "https://doi.org/10.5281/zenodo.17072596",
+    "status": "publication-linked dataset; retrieval unresolved",
+    "reason": "Publication acknowledges TLS01C1/TPS44A1; no downloadable payload verified.",
+    "priority": "high",
+    "format_hints": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "SPring-8",
+    "beamlines": "BL12B2",
+    "url": "https://doi.org/10.5281/zenodo.14276766",
+    "status": "publication-linked dataset; retrieval unresolved",
+    "reason": "RSC paper D4EE04528A links this dataset; export endpoint did not return JSON. Mode, license and file-level metadata require a successful retrieval.",
+    "priority": "high",
+    "format_hints": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "Indus-2",
+    "beamlines": "BL-9",
+    "url": "https://doi.org/10.1021/acsomega.3c07805",
+    "status": "article located; no machine-readable fixture selected",
+    "reason": "Article states transmission Au L3-edge XAFS at BL9. A paper/figure alone is not a measurement-file download.",
+    "priority": "high",
+    "format_hints": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "Australian Synchrotron",
+    "beamlines": "XAS",
+    "url": "https://archive.synchrotron.org.au/aussyncbeamlines/x-ray-absorption-spectroscopy/sakura",
+    "status": "format documented; no new licensed fixture selected",
+    "reason": "Sakura documents Australian MDA/netCDF handling; inspected source tree had no bundled MDA measurements. pyNexafs MEX/SXR examples were selected separately.",
+    "priority": "high",
+    "format_hints": "EPICS MDA; netCDF",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "worldwide",
+    "beamlines": "",
+    "url": "https://ixdb.jxafs.org/",
+    "status": "cross-database discovery service",
+    "reason": "Useful entry point for MDR, CLS, SSHADE/FAME, LISA, XASLIB, ID21 and China XASDB; the portal does not grant a common data license.",
+    "priority": "high",
+    "format_hints": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "worldwide",
+    "beamlines": "",
+    "url": "https://www.xaslib.xrayabsorption.org/beamlines/",
+    "status": "beamline catalog",
+    "reason": "A beamline registration is not proof of an available spectrum or a raw acquisition file. Use per-spectrum metadata.",
+    "priority": "medium",
+    "format_hints": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "Japan",
+    "beamlines": "",
+    "url": "https://dice.nims.go.jp/services/MDR/manual/html/api.html",
+    "status": "documented API; selected records already downloaded",
+    "reason": "MDR supports metadata search. Existing corpus uses per-record evidence; CC BY and CC BY-NC-SA records must remain distinguishable.",
+    "priority": "high",
+    "format_hints": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "Africa",
+    "beamlines": "",
+    "url": "https://lightsources.org/lightsources-of-the-world/africa/",
+    "status": "facility project context",
+    "reason": "The regional directory describes the African Light Source project rather than an operating beamline. No fictitious station/file row was created.",
+    "priority": "context",
+    "format_hints": "",
+    "checked_on": "2026-09-14"
+  },
+  {
+    "facility": "Russia",
+    "beamlines": "",
+    "url": "https://www.iucr.org/who-we-are/commissions/commission-on-xafs/beamlines-in-asia-and-oceania",
+    "status": "directory-level coverage only",
+    "reason": "Novosibirsk EXAFS/Soft EXAFS names are retained as historical discovery leads; current station identifiers and public licensed files were not established.",
+    "priority": "medium",
+    "format_hints": "",
+    "checked_on": "2026-09-14"
+  }
+]

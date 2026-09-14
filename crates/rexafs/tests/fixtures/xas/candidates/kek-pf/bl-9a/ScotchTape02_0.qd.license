@@ -1,0 +1,12 @@
+Usage-Notice-Identifier: LicenseRef-KEK-PF-Academic-Use-Notice
+License-File: LICENSES/LicenseRef-KEK-PF-Academic-Use-Notice.txt
+License-Basis: custom-academic-use-notice
+License-Scope: Custom KEK-PF usage notice: academic research excluding military-related research; contact the experimenter for publication citation. No standard data license is assigned.
+License-Evidence: https://pfxafs.kek.jp/xafsdata/
+Intended-Use: Academic, nonmilitary research and reader regression testing only.
+Publication-Citation: Contact Yasuo Takeichi (Photon Factory) through the source record before citing the data in a publication.
+Source: https://pfxafs.kek.jp/xafsdata/view.php?id=133
+Citation: Yasuo Takeichi (Photon Factory), 2021-11-19. Scotch tape AL-25DC, KEK Photon Factory BL-9A, Quick Scan. PF XAFS database record 133. https://pfxafs.kek.jp/xafsdata/view.php?id=133
+SHA256: 7f6e8b15d7fb2b39138cc87447db120afbfbbe64ee0ba30b65aa90ed190a4ec4
+Modifications: None; complete original measurement bytes retained.
+Packaging: Repository test fixture only; excluded from crates.io, Python and npm packages.

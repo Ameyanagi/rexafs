@@ -1,0 +1,155 @@
+path,format,scan_points,signal_choices,numeric_datasets,container_warnings,source_url
+samples/als/10-3-2/xraylarch/Fe-K-ALS-10.3.2.prj,athena,251;241;265;270;248;235;268;378,1;1;1;1;1;1;1;1,0,1,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/Fe-K-ALS-10.3.2.prj
+samples/aps/10-bm/xraylarch/APS10BM_2019.dat,text,3464,3,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS10BM_2019.dat
+samples/aps/12-bm/xraylarch/APS12BM_2019.dat,aps_12bm,492,1,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS12BM_2019.dat
+samples/aps/13-bm-d/xasdatalibrary/Chorover13BM_ZnSO4_rt_01.xdi,xdi,415,1,0,0,https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Zn/Chorover13BM_ZnSO4_rt_01.xdi
+samples/aps/13-bm-d/xraylarch/APS13ID_2008.dat,text,469,1,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS13ID_2008.dat
+samples/aps/13-id-c/xasdatalibrary/co_metal_rt.xdi,xdi,417,1,0,0,https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Co/co_metal_rt.xdi
+samples/aps/13-id-c/xasdatalibrary/cu_metal_rt.xdi,xdi,408,1,0,0,https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi
+samples/aps/13-id-e/xasdatalibrary/CdS_rt_01.xdi,xdi,229,1,0,0,https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/S/CdS_rt_01.xdi
+samples/aps/13-id-e/xraylarch/APS13ID_2019.dat,xdi,221,1,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS13ID_2019.dat
+samples/aps/20-bm/xasdatalibrary/Fe2O3_rt_01.xdi,xdi,412,1,0,0,https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Fe/Fe2O3_rt_01.xdi
+samples/aps/20-bm/xraylarch/APS20BM_2001.dat,text,412,0,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS20BM_2001.dat
+samples/aps/20-id/xraylarch/APS20ID_2018.dat,text,379,0,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS20ID_2018.dat
+samples/aps/20-id/xraylarch/APS20ID_2022.dat,text,259,0,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS20ID_2022.dat
+samples/aps/9-bm/xraylarch/APS9BM_2006.dat,spec,258,0,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS9BM_2006.dat
+samples/aps/9-bm/xraylarch/APS9BM_2019.dat,text,442,0,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/APS9BM_2019.dat
+samples/aichi-sr/bl11s2/mdr-24efb0bd/ZrFoil-f-AichiSR-BL11S-20200327.dat,9809,4129,2,0,0,https://mdr.nims.go.jp/datasets/24efb0bd-cb8b-4c73-ac70-1d3489b03ef7
+samples/aichi-sr/bl11s2/mdr-b8ade3fa/RuO2-f-AichiSR-BL11S-20200903.dat,9809,4369,2,0,0,https://mdr.nims.go.jp/datasets/b8ade3fa-b3da-4090-9b54-ed2baf307f7e
+samples/aichi-sr/bl5s1/mdr-edad880c/ZrO2-AichiSR-BL5S1-20220712.dat,9809,4245,2,0,0,https://mdr.nims.go.jp/datasets/edad880c-c8ad-4615-b5ba-ff77eb528623
+samples/aichi-sr/bl5s1/mdr-fc4fa43d/Zr-AichiSR-BL5S1-20220712.dat,9809,4245,2,0,0,https://mdr.nims.go.jp/datasets/fc4fa43d-6bd1-45b9-b783-264e62f1923d
+samples/camd/unspecified/xraylarch/AgL3_CAMD.prj,athena,581;541;541;541;581;581;481;581;581;581;581;581;581;581;581;581;581;581;581;571;581;581;581;521;481;481;581;541;541,1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1,0,1,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/AgL3_CAMD.prj
+samples/camd/unspecified/xraylarch/P_CAMD.prj,athena,415;488;338;395;338;395;395;488;415;375;375;415;321;415;395,1;1;1;1;1;1;1;1;1;1;1;1;1;1;1,0,1,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/P_CAMD.prj
+samples/cls/bioxas-s/cls-xasdb/Fe-Foil_2024_04_07_scan1_idcj28n9.dat,xdi,413,0,0,0,https://xasdb.lightsource.ca/DB/Fe/BIOXAS-S/Iron%20Foil/Fe-Foil_2024_04_07_scan1_idcj28n9.dat
+samples/cls/bioxas-s/cls-xasdb/Ferrihydrite_2021_03_11_scan1_ida0notq.dat,xdi,347,1,0,0,https://xasdb.lightsource.ca/DB/Fe/BIOXAS-S/Ferrihydrite/Ferrihydrite_2021_03_11_scan1_ida0notq.dat
+samples/cls/bioxas-s/cls-xasdb/Jarosite_2021_03_12_scan1_ids1dc72.dat,xdi,347,1,0,0,https://xasdb.lightsource.ca/DB/Fe/BIOXAS-S/Jarosite/Jarosite_2021_03_12_scan1_ids1dc72.dat
+samples/cls/hxma/cls-xasdb/Zn(OOCCH3)2H2O_2012_07_05_scan1_idrfof85.dat,text,418,0,0,0,https://xasdb.lightsource.ca/DB/Zn/HXMA/Zinc%20Acetate%20Dihydrate/Zn%28OOCCH3%292H2O_2012_07_05_scan1_idrfof85.dat
+samples/cls/hxma/cls-xasdb/ZnFeO_2010_02_10_scan1_id1x8obl.dat,text,458,0,0,0,https://xasdb.lightsource.ca/DB/Zn/HXMA/Zinc%20Ferrite/ZnFeO_2010_02_10_scan1_id1x8obl.dat
+samples/cls/hxma/cls-xasdb/ZnFeO_2010_02_10_scan2_ideutfwr.dat,text,458,0,0,0,https://xasdb.lightsource.ca/DB/Zn/HXMA/Zinc%20Ferrite/ZnFeO_2010_02_10_scan2_ideutfwr.dat
+samples/cls/hxma/xraylarch/CLSHXMA.dat,cls_acquisition,414,2,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/CLSHXMA.dat
+samples/cls/ideas/cls-xasdb/ZnS_2022_03_20_scan2_idja8kfp.dat,text,418,0,0,0,https://xasdb.lightsource.ca/DB/Zn/IDEAS/Zinc%20Sulfide/ZnS_2022_03_20_scan2_idja8kfp.dat
+samples/cls/ideas/cls-xasdb/ZnSe_2022_06_3_id3hy6kf.dat,text,413,0,0,0,https://xasdb.lightsource.ca/DB/Zn/IDEAS/Zinc%20Selenide/ZnSe_2022_06_3_id3hy6kf.dat
+samples/cls/ideas/cls-xasdb/ZnSe_2022_06_4_idqeo94d.dat,text,413,0,0,0,https://xasdb.lightsource.ca/DB/Zn/IDEAS/Zinc%20Selenide/ZnSe_2022_06_4_idqeo94d.dat
+samples/cls/sxrmb/cls-xasdb/Fe-foil_2024_04_30_1_scan1_idyxpl8x.dat,text,384,0,0,0,https://xasdb.lightsource.ca/DB/Fe/SXRMB/Iron%20Foil/Fe-foil_2024_04_30_1_scan1_idyxpl8x.dat
+samples/cls/sxrmb/cls-xasdb/Zn-foil_2024_04_30_1_scan1_idx8ttpj.dat,text,221,0,0,0,https://xasdb.lightsource.ca/DB/Zn/SXRMB/Zinc%20Foil/Zn-foil_2024_04_30_1_scan1_idx8ttpj.dat
+samples/cls/sxrmb/cls-xasdb/Zn-foil_2024_04_30_2_scan1_idvphxym.dat,text,221,0,0,0,https://xasdb.lightsource.ca/DB/Zn/SXRMB/Zinc%20Foil/Zn-foil_2024_04_30_2_scan1_idvphxym.dat
+samples/cls/vls-pgm/cls-xasdb/C12H10S2_201601_01_scan1_id1hi2lv.dat,text,343,0,0,0,https://xasdb.lightsource.ca/DB/S/VLS-PGM/Diphenyl%20Disulfide/C12H10S2_201601_01_scan1_id1hi2lv.dat
+samples/cls/vls-pgm/cls-xasdb/FeSO4_2016_01_scan1_idafhtzf.dat,text,301,0,0,0,https://xasdb.lightsource.ca/DB/S/VLS-PGM/Iron%20%28II%29%20Sulfate/FeSO4_2016_01_scan1_idafhtzf.dat
+samples/cls/vls-pgm/cls-xasdb/FeSO4_2016_01_scan2_id4x4lhj.dat,text,301,0,0,0,https://xasdb.lightsource.ca/DB/S/VLS-PGM/Iron%20%28II%29%20Sulfate/FeSO4_2016_01_scan2_id4x4lhj.dat
+samples/desy-doris/unspecified/parseq-xas/CuO_lnt.fio,fio,800,0,0,0,https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/CuO_lnt.fio
+samples/desy-doris/unspecified/parseq-xas/Cu_lnt1.fio,fio,848,0,0,0,https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/Cu_lnt1.fio
+samples/esrf/bm08-lisa/cls-xasdb/Iron (II) Oxide_2003_08_26_scan1_idxvotm2.dat,xdi,372,1,0,0,https://xasdb.lightsource.ca/DB/Fe/BM08-GILDA/Iron%20%28II%29%20Oxide/Iron%20%28II%29%20Oxide_2003_08_26_scan1_idxvotm2.dat
+samples/esrf/bm08-lisa/cls-xasdb/Iron (II) Oxide_2008_08_25_scan1_idq2cv7k.dat,xdi,473,0,0,0,https://xasdb.lightsource.ca/DB/Fe/BM08-GILDA/Iron%20%28II%29%20Oxide/Iron%20%28II%29%20Oxide_2008_08_25_scan1_idq2cv7k.dat
+samples/esrf/bm08-lisa/cls-xasdb/Iron (II) Oxide_2018_10_07_scan1_idg74ufm.dat,xdi,263,1,0,0,https://xasdb.lightsource.ca/DB/Fe/BM08-GILDA/Iron%20%28II%29%20Oxide/Iron%20%28II%29%20Oxide_2018_10_07_scan1_idg74ufm.dat
+samples/esrf/bm08-lisa/cls-xasdb/Zinc Cobaltite_2024_10_26_scan1_idbkn38n.dat,xdi,610,1,0,0,https://xasdb.lightsource.ca/DB/Zn/BM08-LISA/Zinc%20Cobaltite/Zinc%20Cobaltite_2024_10_26_scan1_idbkn38n.dat
+samples/esrf/bm08-lisa/cls-xasdb/Zinc Foil_2024_02_10_scan1_idbx9xsg.dat,xdi,393,1,0,0,https://xasdb.lightsource.ca/DB/Zn/BM08-LISA/Zinc%20Foil/Zinc%20Foil_2024_02_10_scan1_idbx9xsg.dat
+samples/esrf/bm08-lisa/cls-xasdb/Zinc Oxide_2024_02_10_scan1_idzz5ccy.dat,xdi,393,1,0,0,https://xasdb.lightsource.ca/DB/Zn/BM08-LISA/Zinc%20Oxide/Zinc%20Oxide_2024_02_10_scan1_idzz5ccy.dat
+samples/esrf/bm08-lisa/xraylarch/ESRF_BM08_LISA_2021.dat,text,198,1,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/ESRF_BM08_LISA_2021.dat
+samples/esrf/bm26a-dubble/demeter/dubble.dat,srs,377,0,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/dubble.dat
+samples/esrf/id21/cls-xasdb/Gypsum_2006_06_06_scan1_id8r6xst.dat,xdi,400,1,0,0,https://xasdb.lightsource.ca/DB/S/ID21/Gypsum/Gypsum_2006_06_06_scan1_id8r6xst.dat
+samples/esrf/id21/cls-xasdb/Jarosite_2006_06_23_scan1_idnra3o7.dat,xdi,400,1,0,0,https://xasdb.lightsource.ca/DB/S/ID21/Jarosite/Jarosite_2006_06_23_scan1_idnra3o7.dat
+samples/esrf/id21/cls-xasdb/Pyrite_2005_11_19_scan1_idvvf2ra.dat,xdi,400,1,0,0,https://xasdb.lightsource.ca/DB/S/ID21/Pyrite/Pyrite_2005_11_19_scan1_idvvf2ra.dat
+samples/esrf/id24/xraylarch/dispersive.prj,athena,725;1241;1241;1241;1241;1241;1241;1241;1241;1241;1241;1241,1;1;0;0;0;0;0;0;0;0;0;0,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/dispersive.prj
+samples/esrf/snbl-bm01b/xraylarch/ESRF_SNBL_2013.dat,spec,456;906,0;0,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/ESRF_SNBL_2013.dat
+samples/lnls-uvx/unspecified-xas/demeter/lnls.dat,lnls,999,0,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/lnls.dat
+samples/max-iv/balder-unconfirmed/parseq-xas/20230318.h5,hdf5,601;526;601;526,0;0;0;0,62,0,https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/HERFD/20230318.h5
+samples/max-iv/balder-unconfirmed/parseq-xas/Cu-foil_EXAFS_23068.dat,spec,4096,0,0,0,https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/foils/Cu-foil_EXAFS_23068.dat
+samples/max-iv/balder-unconfirmed/parseq-xas/Fe-foil_EXAFS_23147.dat,spec,4096,0,0,0,https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/foils/Fe-foil_EXAFS_23147.dat
+samples/max-iv/balder-unconfirmed/parseq-xas/scan-24212_eiger_streaming.h5,hdf5,,,2,1,https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/HERFD/scan-24212_eiger_streaming.h5
+samples/max-iv/balder-unconfirmed/parseq-xas/scan-24213_eiger_streaming.h5,hdf5,,,2,1,https://github.com/kklmn/ParSeq-XAS/blob/a47a7999572ba1e45e5fa059fff54232a0a6faa1/parseq_XAS/data/HERFD/scan-24213_eiger_streaming.h5
+samples/nsls/x10c/demeter/x10c.dat,x10c,547,1,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/x10c.dat
+samples/nsls/x11a/xasdatalibrary/cu_metal_10K.xdi,xdi,612,1,0,0,https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_10K.xdi
+samples/nsls/x15b/demeter/x15b.dat,x15b,321,2,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/x15b.dat
+samples/nsls/x23a2/xraylarch/NSLS_XDAC_2011.dat,text,422,6,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/NSLS_XDAC_2011.dat
+samples/nsls-ii/6-bm-bmm/xraylarch/NSLS6BM_2019.dat,xdi,352,1,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/NSLS6BM_2019.dat
+samples/nsls-ii/7-bm-qas/xasref/Mo foil 0001-r0003.dat,text,651,3,0,0,https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo%20foil%200001-r0003.dat
+samples/nsls-ii/7-bm-qas/xasref/Pd foil 0001.dat,text,646,3,0,0,https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Pd%20foil%200001.dat
+samples/nsls-ii/7-bm-qas/xasref/Rh foil 0001.dat,text,647,3,0,0,https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Rh%20foil%200001.dat
+samples/nsls-ii/8-id-iss/xraylarch/NSLS8ID_2019.dat,text,647,0,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/NSLS8ID_2019.dat
+samples/photon-factory/ar-nw10a/mdr-2434ccfd/No4_CeO2.dat,9809,481,1,0,0,https://mdr.nims.go.jp/datasets/2434ccfd-1f19-477b-9e80-885b866c715e
+samples/photon-factory/ar-nw10a/mdr-9dc840e3/i03.dat,9809,481,1,0,0,https://mdr.nims.go.jp/datasets/9dc840e3-f936-43a1-b731-f87dec2309de
+samples/photon-factory/bl-12c/mdr-3ff63598/zr02.dat,9809,621,1,0,0,https://mdr.nims.go.jp/datasets/3ff63598-8621-4ef6-8de9-5426bf12adac
+samples/photon-factory/bl-12c/xraylarch/PFBL12C_2005.dat,9809,818,1,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/PFBL12C_2005.dat
+samples/photon-factory/bl-9a/mdr-191de9cf/Cu104.dat,9809,726,1,0,0,https://mdr.nims.go.jp/datasets/191de9cf-581e-41a2-ab53-a74e21039ffb
+samples/photon-factory/bl-9a/mdr-6ad6ede8/Ti103.dat,9809,726,1,0,0,https://mdr.nims.go.jp/datasets/6ad6ede8-ac7e-4901-bf2e-44183416f868
+samples/photon-factory/bl-9a/xraylarch/PF9A_2022.dat,9809,1426,1,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/PF9A_2022.dat
+samples/photon-factory/bl-9c/mdr-f48a5ce8/Fe011.dat,9809,676,1,0,0,https://mdr.nims.go.jp/datasets/f48a5ce8-0004-42d1-b5de-387e3f5f5958
+samples/photon-factory/bl-9c/mdr-f5204d19/Fe010.dat,9809,676,1,0,0,https://mdr.nims.go.jp/datasets/f5204d19-dea0-497d-bbad-152131bf9ab8
+samples/ritsumeikan-sr/bl-10/mdr-a75da7e1/17032306.dat,text,354,1,0,0,https://mdr.nims.go.jp/datasets/a75da7e1-9760-4458-b2fc-a9824221dcd1
+samples/ritsumeikan-sr/bl-10/mdr-a75da7e1/17032306.pfy,text,240,0,0,0,https://mdr.nims.go.jp/datasets/a75da7e1-9760-4458-b2fc-a9824221dcd1
+samples/ritsumeikan-sr/bl-10/mdr-f55722b9/17030605.dat,text,354,1,0,0,https://mdr.nims.go.jp/datasets/f55722b9-7a1d-49c4-b59e-0226d4d59d5c
+samples/ritsumeikan-sr/bl-10/mdr-f55722b9/17030605.pfy,text,240,0,0,0,https://mdr.nims.go.jp/datasets/f55722b9-7a1d-49c4-b59e-0226d4d59d5c
+samples/ritsumeikan-sr/bl-11/mdr-97686182/21033010.dat,ritsumeikan,223,3,0,0,https://mdr.nims.go.jp/datasets/97686182-97b6-42e1-aeef-d4a9afd12244
+samples/ritsumeikan-sr/bl-11/mdr-97686182/21033010.pey,text,223,0,0,0,https://mdr.nims.go.jp/datasets/97686182-97b6-42e1-aeef-d4a9afd12244
+samples/ritsumeikan-sr/bl-11/mdr-9b267eea/21020420.dat,ritsumeikan,358,3,0,0,https://mdr.nims.go.jp/datasets/9b267eea-9f16-4e50-841c-ae08512128ce
+samples/ritsumeikan-sr/bl-11/mdr-9b267eea/21020420.pey,text,358,0,0,0,https://mdr.nims.go.jp/datasets/9b267eea-9f16-4e50-841c-ae08512128ce
+samples/ritsumeikan-sr/bl-13/mdr-3f67b1c0/20060504.dat,text,352,0,0,0,https://mdr.nims.go.jp/datasets/3f67b1c0-bd32-4efe-bec6-39dbb3d6e853
+samples/ritsumeikan-sr/bl-13/mdr-3f67b1c0/20060504.tey,text,352,0,0,0,https://mdr.nims.go.jp/datasets/3f67b1c0-bd32-4efe-bec6-39dbb3d6e853
+samples/ritsumeikan-sr/bl-13/mdr-c665369d/20052209.dat,text,276,0,0,0,https://mdr.nims.go.jp/datasets/c665369d-28b1-4c1d-9198-00f61555fe34
+samples/ritsumeikan-sr/bl-13/mdr-c665369d/20052209.tey,text,276,0,0,0,https://mdr.nims.go.jp/datasets/c665369d-28b1-4c1d-9198-00f61555fe34
+samples/ritsumeikan-sr/bl-2/mdr-0468e6b4/21030223.dat,ritsumeikan,546,3,0,0,https://mdr.nims.go.jp/datasets/0468e6b4-e1d0-4be4-a82c-e02b2e2a1102
+samples/ritsumeikan-sr/bl-2/mdr-0468e6b4/21030223.tey,text,545,0,0,0,https://mdr.nims.go.jp/datasets/0468e6b4-e1d0-4be4-a82c-e02b2e2a1102
+samples/ritsumeikan-sr/bl-2/mdr-a1c60905/21021611.dat,ritsumeikan,469,3,0,0,https://mdr.nims.go.jp/datasets/a1c60905-b457-4280-8115-9a47ec2ce602
+samples/ritsumeikan-sr/bl-2/mdr-a1c60905/21021611.tey,text,448,0,0,0,https://mdr.nims.go.jp/datasets/a1c60905-b457-4280-8115-9a47ec2ce602
+samples/saga-ls/bl10/mdr-6d8d2c63/NiO_Ni-L.tey,text,286,0,0,0,https://mdr.nims.go.jp/datasets/6d8d2c63-6e40-4da5-a720-cdfd19f98914
+samples/saga-ls/bl10/mdr-9d3101cf/LiCoO2_Co-L.tey,text,335,0,0,0,https://mdr.nims.go.jp/datasets/9d3101cf-ba6f-4c9d-aed3-26fc784e8d23
+samples/saga-ls/bl11/mdr-12b7b42c/rTiO2_Ti-K.dat,9809,581,2,0,0,https://mdr.nims.go.jp/datasets/12b7b42c-7362-48ab-9c86-35a5dfdf53ce
+samples/saga-ls/bl11/mdr-12b7b42c/rTiO2_Ti-K.pfy,text,581,0,0,0,https://mdr.nims.go.jp/datasets/12b7b42c-7362-48ab-9c86-35a5dfdf53ce
+samples/saga-ls/bl11/mdr-1c05e9f1/Ca(OH)2_Ca-K.cey,text,541,0,0,0,https://mdr.nims.go.jp/datasets/1c05e9f1-08af-4eb8-9292-1e12971165a9
+samples/saga-ls/bl11/mdr-1c05e9f1/Ca(OH)2_Ca-K.dat,9809,541,2,0,0,https://mdr.nims.go.jp/datasets/1c05e9f1-08af-4eb8-9292-1e12971165a9
+samples/saga-ls/bl12/mdr-5812be74/LiCoO2_Co-L.tey,text,340,0,0,0,https://mdr.nims.go.jp/datasets/5812be74-854f-47fc-b3e0-901c302ed0d1
+samples/saga-ls/bl12/mdr-c7c8a33f/NiO_Ni-L.tey,text,276,0,0,0,https://mdr.nims.go.jp/datasets/c7c8a33f-e754-4b87-8c4b-49b463e72b54
+samples/sls/phoenix/xraylarch/SLS_PHOENIX_2023.dat,text,301,0,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/SLS_PHOENIX_2023.dat
+samples/spring-8/bl14b2/mdr-3c5953dc/Pb-L1_PbTe_Si311_50ms_210210.ex3,ex3,624,1,0,0,https://mdr.nims.go.jp/datasets/3c5953dc-1faa-47a7-a3f0-8211703adb58
+samples/spring-8/bl14b2/mdr-3c5953dc/Pb-L21_PbTe_Si311_50ms_210210.dat,9809,6727,2,0,0,https://mdr.nims.go.jp/datasets/3c5953dc-1faa-47a7-a3f0-8211703adb58
+samples/spring-8/bl14b2/mdr-ef31c010/Ba-K_BaI2_Si311_50m_200220_001.dat,9809,5018,1,0,0,https://mdr.nims.go.jp/datasets/ef31c010-20db-4a69-89d6-eaecbfc2c91e
+samples/spring-8/bl14b2/mdr-ef31c010/Ba-K_BaI2_Si311_50m_200220_001_fe.ex3,ex3,595,1,0,0,https://mdr.nims.go.jp/datasets/ef31c010-20db-4a69-89d6-eaecbfc2c91e
+samples/spring-8/bl14b2/mdr-ef31c010/Ba-K_BaI2_Si311_50m_200220_002.dat,9809,5018,1,0,0,https://mdr.nims.go.jp/datasets/ef31c010-20db-4a69-89d6-eaecbfc2c91e
+samples/srs-daresbury/sox1/demeter/srsc.dat,srs,205,0,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/srsc.dat
+samples/srs-daresbury/ex1a/demeter/srs9.dat,srs,397,0,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/srs9.dat
+samples/srs-daresbury/exf9/demeter/srs32.dat,srs,353,0,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/srs32.dat
+samples/ssrl/2-3/xasdatalibrary/cr2o3_100K_001.xdi,xdi,396,1,0,0,https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cr/cr2o3_100K_001.xdi
+samples/ssrl/2-3/xraylarch/SSRL1_2006.dat,ssrl_ascii,455,1,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/SSRL1_2006.dat
+samples/ssrl/2-3/xasdatalibrary/as2o3_10K_scan1.xdi,xdi,413,1,0,0,https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/As/as2o3_10K_scan1.xdi
+samples/ssrl/4-1/xasdatalibrary/cr2o3_ssrl4_1_rt_001.xdi,xdi,381,1,0,0,https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cr/cr2o3_ssrl4_1_rt_001.xdi
+samples/ssrl/4-3/xasdatalibrary/Cu2S_13K_01.xdi,xdi,454,1,0,0,https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/Cu2S_13K_01.xdi
+samples/ssrl/4-3/xasdatalibrary/MnO_rt_01.xdi,xdi,217,1,0,0,https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Mn/MnO_rt_01.xdi
+samples/ssrl/7-3/demeter/ssrlb.dat,ssrl_binary,635,1,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/ssrlb.dat
+samples/ssrl/unspecified-microprobe/xraylarch/SSRLmicro_2008.dat,ssrl_micro,296,32,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/SSRLmicro_2008.dat
+samples/unspecified/lytle-archive/demeter/lytle.dat,lytle,480,1,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/lytle.dat
+samples/unspecified/unspecified/xraylarch/FeFoil_QXAFS_Compare.prj,athena,504;494;494;406,1;1;1;1,0,1,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/FeFoil_QXAFS_Compare.prj
+samples/unspecified/unspecified/xraylarch/json_unzipped.prj,athena,442;442;442;441,1;1;1;1,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/json_unzipped.prj
+candidates/refxas/delta/unspecified/xafsdb-webserver/Co_metal_Delta.txt,text,433,0,0,0,https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/Co_metal_Delta.txt
+candidates/refxas/desy-petra-iii/p65/xafsdb-webserver/Au foil_Au L3_180.xdi,text,1513,0,0,0,https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/Au%20foil_Au%20L3_180.xdi
+candidates/refxas/desy-petra-iii/p65/xafsdb-webserver/Fe_foil_Fe_K_300.xdi,text,1361,0,0,0,https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/Fe_foil_Fe_K_300.xdi
+candidates/refxas/desy-petra-iii/p65/xafsdb-webserver/Mo_foil_Mo_K_300.xdi,text,2423,0,0,0,https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/Mo_foil_Mo_K_300.xdi
+candidates/refxas/esrf/bm23/xafsdb-webserver/ESRF_052022_01_RT_EXAFS.h5,hdf5,2601;2601;2601;2601,0;0;0;0,1408,4,https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/ESRF_052022_01_RT_EXAFS.h5
+candidates/refxas/esrf/bm23/xafsdb-webserver/FeO FeK BM 23ESRF.dat,spec,1052,0,0,0,https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/FeO%20FeK%20BM%2023ESRF.dat
+candidates/refxas/elettra/xafs/xafsdb-webserver/Cu2O Cu K Elettra.txt,text,720,0,0,0,https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/Cu2O%20Cu%20K%20Elettra.txt
+candidates/refxas/kit-anka/catact/xafsdb-webserver/Ag_foil_CATACT KIT,spec,495,0,0,0,https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/Ag_foil_CATACT%20KIT
+candidates/refxas/slri/bl8/xafsdb-webserver/Cu foil Cu K SLRI,text,440,1,0,0,https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/Cu%20foil%20Cu%20K%20SLRI
+candidates/refxas/sls/superxas/xafsdb-webserver/Pt_foil_Pt L3 SLS.txt,text,513,0,0,0,https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/Pt_foil_Pt%20L3%20SLS.txt
+candidates/refxas/soleil/rock/xafsdb-webserver/Mo_foil Mo K ROCK Soleil.txt,text,768,1,0,0,https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/Mo_foil%20Mo%20K%20ROCK%20Soleil.txt
+candidates/refxas/soleil/samba/xafsdb-webserver/Pt_foil Pt L3 SAMBA Soleil.txt,text,2800,0,0,0,https://github.com/San-WierPa/xafsdb_webserver/blob/91b3f9be8e628e4c140de663a73b913ad138ad1a/quality_control/example%20data/SYNCHROTRON/Pt_foil%20Pt%20L3%20SAMBA%20Soleil.txt
+samples/nsls-ii/6-bm-bmm/bmm-standards/Fe-K-IronFoil.xdi,xdi,393,1,0,0,https://github.com/NSLS2/bmm-standards/blob/7f5728eb2b59d98305e41a908d0791b0baeab869/Data/Fe/Fe-K-IronFoil.xdi
+samples/nsls-ii/6-bm-bmm/bmm-standards/Au-L3-GoldFoil.xdi,xdi,393,1,0,0,https://github.com/NSLS2/bmm-standards/blob/7f5728eb2b59d98305e41a908d0791b0baeab869/Data/Au/Au-L3-GoldFoil.xdi
+samples/nsls-ii/6-bm-bmm/bmm-standards/As-K-ArsenicTrioxide.xdi,xdi,393,1,0,0,https://github.com/NSLS2/bmm-standards/blob/7f5728eb2b59d98305e41a908d0791b0baeab869/Data/As/As-K-ArsenicTrioxide.xdi
+samples/ssrl/2-3/demeter/ssrla.dat,ssrl_ascii,455,1,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/ssrla.dat
+samples/ssrl/microexafs-unconfirmed/demeter/ssrlmicro.dat,ssrl_micro,296,32,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/ssrlmicro.dat
+samples/nsls/x23a2/demeter/x23a2med.dat,text,422,6,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/t/filetypes/x23a2med.dat
+samples/nsls/x23a2/demeter/re4chan.000,text,387,4,0,0,https://github.com/bruceravel/demeter/blob/06afc8da08a5a7d5a26ee14992170fcf5dc67406/examples/recipes/MultiChannel/re4chan.000
+samples/unspecified/fdmnes/xraylarch/FDMNES_2022_Mo2C_out.dat,fdmnes,559,1,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/FDMNES_2022_Mo2C_out.dat
+samples/unspecified/fdmnes/xraylarch/FDMNES_2022_Mo2C_out_conv.dat,fdmnes,589,1,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/FDMNES_2022_Mo2C_out_conv.dat
+samples/unspecified/multielement/xraylarch/fe_xanes_8ch.xdi,xdi,100,1,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/fe_xanes_8ch.xdi
+samples/unspecified/chi/xraylarch/nonuniform.chi,text,476,0,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/nonuniform.chi
+samples/unspecified/generic/xraylarch/generic_columns_no_header.dat,text,198,0,0,0,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/beamlines/generic_columns_no_header.dat
+samples/unspecified/athena-legacy/xraylarch/AsKa_standards.prj,athena,312;312;312,1;1;1,0,1,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/AsKa_standards.prj
+samples/unspecified/athena-legacy/xraylarch/AsXAFS_a.prj,athena,397;397;449;397;397;449;449;449;449;449;449;449;449;397;397;397;449;397;397;397;397;397;397;397;397;397;397;397;397;397;397;397;397;397;397;397;449;449;397;397;449;449;449;397;449;449,1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1,0,1,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/AsXAFS_a.prj
+samples/unspecified/athena-legacy/xraylarch/Br.prj,athena,545;543;545;545;545,1;1;1;1;1,0,1,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/Br.prj
+samples/unspecified/athena-legacy/xraylarch/ESRF_Athena0920.prj,athena,565;563,1;1,0,1,https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/ESRF_Athena0920.prj
+samples/esrf/bm16/pynxxas/test_Assolution_Mauro_0001.h5,hdf5,4000;4001;4000;4001,0;0;0;0,1974,64,https://github.com/XraySpectroscopy/pynxxas/blob/7e5f738c160e41f949c8441115856130010ca1da/examples/manual/BlissMultiModal/test_Assolution_Mauro_0001.h5
+candidates/kek-pf/bl-9a/ScotchTape02_0.qd,9809,452,0,0,0,https://pfxafs.kek.jp/xafsdata/view.php?id=133
+candidates/kek-pf/ar-nw10a/sr01_0.qd,9809,3999,1,0,0,https://pfxafs.kek.jp/xafsdata/view.php?id=153
+candidates/kek-pf/bl-9c/Fe003_0.qd,9809,4000,1,0,0,https://pfxafs.kek.jp/xafsdata/view.php?id=187
+candidates/kek-pf/bl-9c/cu_foil_0.qd,9809,5135,1,0,0,https://pfxafs.kek.jp/xafsdata/view.php?id=22
+candidates/kek-pf/bl-12c/fe002_0.qd,9809,3917,1,0,0,https://pfxafs.kek.jp/xafsdata/view.php?id=132

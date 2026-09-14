@@ -143,6 +143,14 @@ impl StudioApp {
         body = match menu {
             Menu::Project => body
                 .child(self.menu_entry(
+                    "menu-measurement",
+                    Icon::Import,
+                    "Open measurement…",
+                    "",
+                    |a, _, c| a.open_measurement(c),
+                    cx,
+                ))
+                .child(self.menu_entry(
                     "menu-import",
                     Icon::Import,
                     "Import…",

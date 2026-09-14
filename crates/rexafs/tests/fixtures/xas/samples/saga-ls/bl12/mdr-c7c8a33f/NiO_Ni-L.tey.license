@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-NC-SA-4.0
+License-File: LICENSES/CC-BY-NC-SA-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: individual dataset license
+License-Evidence: https://mdr.nims.go.jp/datasets/c7c8a33f-e754-4b87-8c4b-49b463e72b54
+Test-Eligibility: documented-license
+Source: https://mdr.nims.go.jp/datasets/c7c8a33f-e754-4b87-8c4b-49b463e72b54
+Download: https://mdr.nims.go.jp/filesets/b7c29195-1331-41bb-a027-cd52f7391e79/download
+Citation: Masashi Ishii; SAGA-LS. XAFS spectrum of Nickel(II) oxide. https://doi.org/10.48505/nims.4192
+SHA256: 7e20529c4b1eca395eb04bad79c8a63a762a806b101ac66ad2cdd84e337fa627
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/mdr/c7c8a33f-e754-4b87-8c4b-49b463e72b54/record.json

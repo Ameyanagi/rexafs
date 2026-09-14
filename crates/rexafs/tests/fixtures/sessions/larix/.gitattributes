@@ -1,0 +1,3 @@
+fixtures/** -text -whitespace
+sources/** -text -whitespace
+LICENSE.txt -text -whitespace

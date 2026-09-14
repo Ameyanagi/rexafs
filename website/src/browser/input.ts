@@ -1,4 +1,4 @@
-import type { AnalysisSettings, InputColumns } from './protocol';
+import type { AnalysisSettings } from './protocol';
 
 /** Application import limits, separate from the underlying Rust API's contract. */
 export const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
@@ -13,78 +13,6 @@ const MAX_SPLINE_BASIS_VALUES = 2_000_000;
 // E - E0 = KTOE * k², in eV and Å⁻¹; mirror xafs/constants.rs (CODATA 2022).
 const KTOE = 1e20 * (6.62607015e-34 / (2 * Math.PI)) ** 2
   / (2 * 9.1093837139e-31 * 1.602176634e-19);
-
-/** Split numeric comma/whitespace columns. Blank lines and # comments are ignored. */
-function sourceRows(text: string): { line: number; cells: string[] }[] {
-  if (new TextEncoder().encode(text).byteLength > MAX_SOURCE_BYTES) {
-    throw new Error('This browser preview accepts files up to 8 MiB.');
-  }
-  const rows: { line: number; cells: string[] }[] = [];
-  for (const [index, raw] of text.split(/\r?\n/).entries()) {
-    const line = raw.split('#', 1)[0].trim();
-    if (!line) continue;
-    const cells = line.includes(',') ? line.split(',').map(value => value.trim()) : line.split(/\s+/);
-    if (cells.length > 64) throw new Error('This browser preview accepts up to 64 columns.');
-    if (rows.length && cells.length !== rows[0].cells.length) {
-      throw new Error(`Line ${index + 1} has ${cells.length} columns; expected ${rows[0].cells.length}. Use a consistent numeric table.`);
-    }
-    rows.push({ line: index + 1, cells });
-    if (rows.length > MAX_ROWS) throw new Error('This browser preview accepts up to 100,000 data rows.');
-  }
-  if (rows.length < 2) throw new Error('Provide at least two numeric data rows; headers and comments must start with #.');
-  return rows;
-}
-
-/** Inspect columns without sorting or modifying the file; final validation happens in the Worker. */
-export function inspectSource(text: string): { columnCount: number; rowCount: number } {
-  const rows = sourceRows(text);
-  if (rows[0].cells.some(value => !value || !Number.isFinite(Number(value)))) {
-    throw new Error(`Line ${rows[0].line} is not numeric. Prefix header lines with #.`);
-  }
-  return { columnCount: rows[0].cells.length, rowCount: rows.length };
-}
-
-/**
- * Read selected columns into owned arrays, converting keV to eV and transmission
- * to mu = ln(I0 / It). Intensities must be positive and in matching units.
- * Reject nonfinite/blank values and non-increasing energy; never silently sort,
- * drop rows or merge repeated energies. No filesystem or network access occurs.
- */
-export function parseSource(text: string, columns: InputColumns): { energy: Float64Array; mu: Float64Array } {
-  const rows = sourceRows(text);
-  if (!['mu', 'transmission'].includes(columns.quantity) || !['eV', 'keV'].includes(columns.energyUnit)) {
-    throw new Error('Choose absorption or transmission and an energy unit of eV or keV.');
-  }
-  const selected = [columns.energy, columns.signal];
-  if (columns.quantity === 'transmission') selected.push(columns.reference as number);
-  if (selected.some(column => !Number.isInteger(column) || column < 0 || column >= rows[0].cells.length)) {
-    throw new Error('Select valid energy and signal columns, plus I0 for transmission.');
-  }
-  if (new Set(selected).size !== selected.length) throw new Error('Energy and signal roles must use different columns.');
-  const energy = new Float64Array(rows.length);
-  const mu = new Float64Array(rows.length);
-  const numberAt = (row: typeof rows[number], column: number) => {
-    const cell = row.cells[column];
-    const value = Number(cell);
-    if (!cell || !Number.isFinite(value)) throw new Error(`Line ${row.line}, column ${column + 1}: expected a finite number.`);
-    return value;
-  };
-  for (const [index, row] of rows.entries()) {
-    energy[index] = numberAt(row, columns.energy) * (columns.energyUnit === 'keV' ? 1000 : 1);
-    if (energy[index] <= 0 || energy[index] > 1_000_000) throw new Error(`Line ${row.line}: this preview supports energies above 0 and up to 1,000,000 eV.`);
-    if (!Number.isFinite(energy[index]) || (index > 0 && energy[index] <= energy[index - 1])) {
-      throw new Error(`Line ${row.line}: energy must be finite and strictly increasing, without duplicates.`);
-    }
-    const signal = numberAt(row, columns.signal);
-    if (columns.quantity === 'transmission') {
-      const reference = numberAt(row, columns.reference!);
-      if (signal <= 0 || reference <= 0) throw new Error(`Line ${row.line}: I0 and It must both be positive.`);
-      mu[index] = Math.log(reference / signal);
-    } else mu[index] = signal;
-    if (!Number.isFinite(mu[index])) throw new Error(`Line ${row.line}: absorption is not finite; check the intensity ratio.`);
-  }
-  return { energy, mu };
-}
 
 /** Validate this preview's settings before allocating numerical workspaces. */
 export function validateSettings(settings: AnalysisSettings): void {
@@ -136,5 +64,21 @@ export function validateNumericalWorkspace(energy: Float64Array, e0: number, set
   const knots = Math.min(128, Math.max(5, 1 + Math.floor(2 * settings.rbkg * kmax / Math.PI)));
   if (Math.max(rawPoints, points) * knots > MAX_SPLINE_BASIS_VALUES) {
     throw new Error('This input exceeds the browser preview’s spline-workspace budget (2 million values). Use a smaller dataset or a lower Rbkg.');
+  }
+}
+
+/** Validate selected Rust-reader output against the browser processing budget.
+ * Preserve acquisition order: sorting or removing duplicates requires a separate
+ * user decision before import. Detector arithmetic is owned by the Rust reader.
+ */
+export function validateImportedArrays(energy: Float64Array, mu: Float64Array): void {
+  if (energy.length < 2 || energy.length > MAX_ROWS || energy.length !== mu.length) {
+    throw new Error('Select paired arrays with 2 through 100,000 data rows.');
+  }
+  for (let i = 0; i < energy.length; i++) {
+    if (!Number.isFinite(energy[i]) || energy[i] <= 0 || energy[i] > 1_000_000 || !Number.isFinite(mu[i])) {
+      throw new Error(`Row ${i + 1}: select finite absorption and energy above 0 and up to 1,000,000 eV.`);
+    }
+    if (i && energy[i] <= energy[i - 1]) throw new Error(`Row ${i + 1}: energy must be strictly increasing, without duplicates. Review acquisition order before processing.`);
   }
 }

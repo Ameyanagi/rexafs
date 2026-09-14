@@ -1,0 +1,1390 @@
+{
+  "access": {
+    "embargo": {
+      "active": false,
+      "reason": null
+    },
+    "files": "public",
+    "record": "public",
+    "status": "open"
+  },
+  "created": "2026-02-08T03:53:36.267209+00:00",
+  "custom_fields": {},
+  "deletion_status": {
+    "is_deleted": false,
+    "status": "P"
+  },
+  "files": {
+    "count": 71,
+    "enabled": true,
+    "entries": {
+      "3YSZ_aged-1.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:d7152a439c90543a07b1fd3cda391b53",
+        "ext": "dat",
+        "id": "41a79e35-f565-4ae7-8640-2fa1fcbedd70",
+        "key": "3YSZ_aged-1.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-1.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-1.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "3YSZ_aged-1.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:11939fc0bb51a560b63ccb931ebae2be",
+        "ext": "ras",
+        "id": "c3423b3f-1e35-4b82-940e-1a25bc0a2548",
+        "key": "3YSZ_aged-1.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-1.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-1.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 200756,
+        "storage_class": "L"
+      },
+      "3YSZ_aged-2.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:733765d21d17c034ff23d25c1b4ff837",
+        "ext": "dat",
+        "id": "811231ac-192c-4782-8e09-f7c7afbd0e2a",
+        "key": "3YSZ_aged-2.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-2.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-2.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "3YSZ_aged-2.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:dd22d6800cbff3eda6bcaec0b523b005",
+        "ext": "ras",
+        "id": "25be6bad-8231-4120-bd6f-d6b4a27835de",
+        "key": "3YSZ_aged-2.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-2.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-2.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 200740,
+        "storage_class": "L"
+      },
+      "3YSZ_aged-3.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:370820d60f23efe4c99ed726007f6199",
+        "ext": "dat",
+        "id": "6dfc1c25-0a15-43f5-be58-ef049d4fd79c",
+        "key": "3YSZ_aged-3.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-3.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-3.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "3YSZ_aged-3.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:59274d506e52aeae5834138b0060e422",
+        "ext": "ras",
+        "id": "84b4ac16-7af7-4af8-bd9a-c3ca826295ba",
+        "key": "3YSZ_aged-3.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-3.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-3.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 200673,
+        "storage_class": "L"
+      },
+      "3YSZ_aged-4.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:f87c09203ec344ca2e0aac78d6dcb053",
+        "ext": "dat",
+        "id": "85fe250f-24fd-4df9-9348-1502d3685929",
+        "key": "3YSZ_aged-4.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-4.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-4.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "3YSZ_aged-5.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:53d64c296af131b8a0bdd787deb05278",
+        "ext": "dat",
+        "id": "e6bc059a-fa80-443c-80b3-62619331dee6",
+        "key": "3YSZ_aged-5.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-5.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-5.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "3YSZ_aged-6.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:aac406e78e29232da726935bfbe18474",
+        "ext": "dat",
+        "id": "eaf13df1-e300-4a33-bed8-bea2d7a679be",
+        "key": "3YSZ_aged-6.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-6.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_aged-6.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "3YSZ_unaged-1.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:68c9339c1cb5c0234f0c99631351336a",
+        "ext": "dat",
+        "id": "65438d9a-ea9f-4b5c-9a87-116bdb5c40ff",
+        "key": "3YSZ_unaged-1.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-1.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-1.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "3YSZ_unaged-1.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:8c5ddfd6202f26846b453f8956066a3b",
+        "ext": "ras",
+        "id": "bfbb4dfd-7b87-426c-a226-2974050f6caa",
+        "key": "3YSZ_unaged-1.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-1.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-1.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 198701,
+        "storage_class": "L"
+      },
+      "3YSZ_unaged-2.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:ecc5841f9e006fb5808751f637f2eadf",
+        "ext": "dat",
+        "id": "063afe0c-c6b8-49ed-8261-bd6202a4a45b",
+        "key": "3YSZ_unaged-2.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-2.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-2.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "3YSZ_unaged-2.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:d10f3d54c82abb8380137ada2a63fb0d",
+        "ext": "ras",
+        "id": "bb81124c-f49c-4981-a47c-c50124b10b50",
+        "key": "3YSZ_unaged-2.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-2.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-2.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 198704,
+        "storage_class": "L"
+      },
+      "3YSZ_unaged-3.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:00873aa2df38a4cba451e4e7f4c59019",
+        "ext": "dat",
+        "id": "5ebf26b1-fedf-49a8-9d7f-b47d6a2bd950",
+        "key": "3YSZ_unaged-3.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-3.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-3.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "3YSZ_unaged-3.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:6fc9e1d3bfe8b716bec8a6608106d0c6",
+        "ext": "ras",
+        "id": "09680742-2099-4f3b-9fd0-2441170223aa",
+        "key": "3YSZ_unaged-3.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-3.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-3.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 198688,
+        "storage_class": "L"
+      },
+      "3YSZ_unaged-4.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:00a6a475759b5e1caa4ef0621f4dbe32",
+        "ext": "dat",
+        "id": "6f00afc8-08fd-415f-b134-1ccc73168859",
+        "key": "3YSZ_unaged-4.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-4.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-4.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "3YSZ_unaged-5.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:cef018f21fa37aa051bee73186f283fe",
+        "ext": "dat",
+        "id": "cd5a08b3-9849-495a-816c-ee63837c79eb",
+        "key": "3YSZ_unaged-5.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-5.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-5.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "3YSZ_unaged-6.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:f76efc7cf2dc2d7d702fc076911e94d1",
+        "ext": "dat",
+        "id": "74f65582-31bd-4c50-b296-8bbec7e86573",
+        "key": "3YSZ_unaged-6.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-6.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/3YSZ_unaged-6.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "4YSZ_aged-1.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:12d12321cba4235f19bfe2180387e45a",
+        "ext": "dat",
+        "id": "df3c8cba-0ae8-46f6-a01d-42e0e1ebccc1",
+        "key": "4YSZ_aged-1.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-1.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-1.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "4YSZ_aged-1.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:7b7d2b76b5bb58af238ac0835ee7727a",
+        "ext": "ras",
+        "id": "44dde003-7f3f-41d6-ab87-bb0adeb2f946",
+        "key": "4YSZ_aged-1.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-1.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-1.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 200413,
+        "storage_class": "L"
+      },
+      "4YSZ_aged-2.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:950885d12f45ac6f4db181ca810475a8",
+        "ext": "dat",
+        "id": "a7cf781a-5d6d-4e29-b4bb-88279a96f1b3",
+        "key": "4YSZ_aged-2.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-2.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-2.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "4YSZ_aged-2.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:b8f7ddd5cb9438cad3108ae8d5837d16",
+        "ext": "ras",
+        "id": "bfdcc75d-3ea6-49ec-955e-0017f40e2825",
+        "key": "4YSZ_aged-2.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-2.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-2.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 200365,
+        "storage_class": "L"
+      },
+      "4YSZ_aged-3.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:f0c0bc06b450aa27b6e645630bfc5e73",
+        "ext": "dat",
+        "id": "aa57fde6-d483-4ff1-b7fb-bbec7e1ae66f",
+        "key": "4YSZ_aged-3.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-3.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-3.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "4YSZ_aged-3.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:540cb7f1599663cbe62d1fe258cb7746",
+        "ext": "ras",
+        "id": "996a7ff3-a337-40b7-abcd-af884d6157a8",
+        "key": "4YSZ_aged-3.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-3.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-3.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 200483,
+        "storage_class": "L"
+      },
+      "4YSZ_aged-4.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:dcde4b2e3e7e8ff050007354e359311b",
+        "ext": "dat",
+        "id": "f90d7637-1cf2-4c02-9795-dfae23007b69",
+        "key": "4YSZ_aged-4.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-4.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-4.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "4YSZ_aged-5.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:72662583311ec71c2ad2af61f1817b79",
+        "ext": "dat",
+        "id": "5ff59a70-754c-444f-9cff-0be04021dc34",
+        "key": "4YSZ_aged-5.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-5.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-5.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "4YSZ_aged-6.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:5cf6cdf594c203b1187f8af0641e9abb",
+        "ext": "dat",
+        "id": "45df49ce-2a2d-4fd1-b861-82abaf8b3928",
+        "key": "4YSZ_aged-6.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-6.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_aged-6.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "4YSZ_unaged-1.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:d18e49dbee6ffddc09cb983b2f913418",
+        "ext": "dat",
+        "id": "df9f5b77-1a17-492b-811e-33b64dc920e0",
+        "key": "4YSZ_unaged-1.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-1.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-1.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "4YSZ_unaged-1.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:042ef2c3af4ea8bfcde2ee5472d50ba9",
+        "ext": "ras",
+        "id": "b98cc2ac-7ecc-47b2-ba48-24689d9be55b",
+        "key": "4YSZ_unaged-1.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-1.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-1.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 198894,
+        "storage_class": "L"
+      },
+      "4YSZ_unaged-2.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:bba99ec232923bc2e7475a712d48d23b",
+        "ext": "dat",
+        "id": "455e291d-8ee7-4409-97e0-a153ce1c0644",
+        "key": "4YSZ_unaged-2.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-2.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-2.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "4YSZ_unaged-2.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:330c7de2531ddd045ba85f35d60996b4",
+        "ext": "ras",
+        "id": "bc9a3236-8d9d-488c-a239-f3c3cd66f6b2",
+        "key": "4YSZ_unaged-2.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-2.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-2.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 198896,
+        "storage_class": "L"
+      },
+      "4YSZ_unaged-3.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:3349452ff5910b89511c3f534a6ca2cc",
+        "ext": "dat",
+        "id": "db3ca160-56ba-4572-b6b5-e72ece875e4a",
+        "key": "4YSZ_unaged-3.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-3.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-3.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "4YSZ_unaged-3.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:7b0e978a8b7bd5629a1fb64b971e8a2f",
+        "ext": "ras",
+        "id": "7e1ea361-462a-4a47-b882-ec2839597105",
+        "key": "4YSZ_unaged-3.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-3.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-3.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 198900,
+        "storage_class": "L"
+      },
+      "4YSZ_unaged-4.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:6fd69fe4f908c491653cb62b82cfffbd",
+        "ext": "dat",
+        "id": "020b18e0-868f-4b3e-9663-d9eedc650297",
+        "key": "4YSZ_unaged-4.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-4.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-4.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "4YSZ_unaged-5.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:ab042a9e4b8c67d914672e45ea56b604",
+        "ext": "dat",
+        "id": "f69c687d-4546-422f-88b9-fba29df499bb",
+        "key": "4YSZ_unaged-5.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-5.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-5.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "4YSZ_unaged-6.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:51819db01437c6d730cc887296f68e5c",
+        "ext": "dat",
+        "id": "16dcd432-def6-4582-bef9-4b00847f1973",
+        "key": "4YSZ_unaged-6.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-6.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/4YSZ_unaged-6.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "5YSZ_aged-1.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:27c19486435ae170862a01a5956e520c",
+        "ext": "dat",
+        "id": "cc9a8894-6066-424c-8bb0-f4a106b807f3",
+        "key": "5YSZ_aged-1.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-1.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-1.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "5YSZ_aged-1.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:c66283084b61fb00c7d41dfc83ff2964",
+        "ext": "ras",
+        "id": "b597fe9c-ae22-4485-bd1e-3a41e25a8819",
+        "key": "5YSZ_aged-1.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-1.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-1.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 199552,
+        "storage_class": "L"
+      },
+      "5YSZ_aged-2.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:56250a6a4367c88e257db0dc96e1d999",
+        "ext": "dat",
+        "id": "01137f77-a8ba-423c-8150-449d936d71a1",
+        "key": "5YSZ_aged-2.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-2.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-2.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "5YSZ_aged-2.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:cbf9ae4ba25d394a33efbc5bc51266c3",
+        "ext": "ras",
+        "id": "88f0bd76-9869-425a-ab12-52355490c604",
+        "key": "5YSZ_aged-2.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-2.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-2.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 199530,
+        "storage_class": "L"
+      },
+      "5YSZ_aged-3.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:95a192282541193d896343363e0349f0",
+        "ext": "dat",
+        "id": "a9c3892c-d7a7-41e6-89d2-b5ce52b36921",
+        "key": "5YSZ_aged-3.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-3.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-3.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "5YSZ_aged-3.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:e45dbff1fc606bd88f221fba667786b3",
+        "ext": "ras",
+        "id": "7bc89963-8eec-4890-b37a-260315cb6212",
+        "key": "5YSZ_aged-3.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-3.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-3.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 199390,
+        "storage_class": "L"
+      },
+      "5YSZ_aged-4.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:d4b560de598b3cf6d01f719b3f1b78ce",
+        "ext": "dat",
+        "id": "8b8fe64e-1931-441d-ba4a-57ef681c1ae9",
+        "key": "5YSZ_aged-4.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-4.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-4.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "5YSZ_aged-5.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:5ff12553550037c52cddb25c3e4932c5",
+        "ext": "dat",
+        "id": "9ba42b6e-a616-4bca-85aa-c1d766e443af",
+        "key": "5YSZ_aged-5.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-5.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-5.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "5YSZ_aged-6.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:4af75be6455eec6efb2081b707d486a8",
+        "ext": "dat",
+        "id": "1e779622-5f15-4e3b-bd01-6faad6065204",
+        "key": "5YSZ_aged-6.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-6.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_aged-6.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "5YSZ_unaged-1.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:ea56c456b21f2c72cdaf6af3ee212f5c",
+        "ext": "dat",
+        "id": "df3a9b96-eb51-48d0-97b5-d01d5521d9c9",
+        "key": "5YSZ_unaged-1.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-1.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-1.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "5YSZ_unaged-1.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:e5c4a0180e4bc119c4bb00efb0cc5a80",
+        "ext": "ras",
+        "id": "19e7760d-4cc5-4263-a34b-ec5fec853395",
+        "key": "5YSZ_unaged-1.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-1.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-1.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 199462,
+        "storage_class": "L"
+      },
+      "5YSZ_unaged-2.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:73b93ed7cafae14eec5fd925623952a9",
+        "ext": "dat",
+        "id": "2d9b8d2e-34b3-482e-b269-9f69f0bab60c",
+        "key": "5YSZ_unaged-2.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-2.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-2.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "5YSZ_unaged-2.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:7bf05f62c27d4f83a2edaa1de11859fc",
+        "ext": "ras",
+        "id": "cbc567bb-bd65-4a8e-a5ef-98a1a904edc0",
+        "key": "5YSZ_unaged-2.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-2.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-2.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 199507,
+        "storage_class": "L"
+      },
+      "5YSZ_unaged-3.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:8c2543afb623a32ca177412fa74675dd",
+        "ext": "dat",
+        "id": "04095079-d284-4a64-9788-74ed7a6549db",
+        "key": "5YSZ_unaged-3.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-3.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-3.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "5YSZ_unaged-3.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:ecc9426f5b15589d17808fd4c42e5c3c",
+        "ext": "ras",
+        "id": "846c24d3-2e74-43ca-ba3c-b24cb6c19811",
+        "key": "5YSZ_unaged-3.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-3.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-3.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 199444,
+        "storage_class": "L"
+      },
+      "5YSZ_unaged-4.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:60f9e3c6ba665487053e4b3259b8ce71",
+        "ext": "dat",
+        "id": "952496e3-b5fb-43bb-8931-ad2cb01f50e3",
+        "key": "5YSZ_unaged-4.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-4.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-4.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "5YSZ_unaged-5.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:db9d826c886120717ae6da9f9af3a751",
+        "ext": "dat",
+        "id": "4342335d-0dfb-4635-8793-2a5bdaf67f72",
+        "key": "5YSZ_unaged-5.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-5.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-5.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "5YSZ_unaged-6.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:f8be36e155f4f5bbcc663e776fdd811c",
+        "ext": "dat",
+        "id": "9f733289-1a23-447b-9576-91cc03a06870",
+        "key": "5YSZ_unaged-6.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-6.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/5YSZ_unaged-6.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "8YSZ_unaged-1.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:a08f89d987a9a47e060157a06b4489f8",
+        "ext": "dat",
+        "id": "14f6fc28-4f7a-406a-afc1-8f544cdf6746",
+        "key": "8YSZ_unaged-1.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-1.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-1.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "8YSZ_unaged-1.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:172f73b619b52ce05dce0d512f41ede4",
+        "ext": "ras",
+        "id": "472f7b91-1450-4217-8ee8-239591486327",
+        "key": "8YSZ_unaged-1.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-1.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-1.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 200664,
+        "storage_class": "L"
+      },
+      "8YSZ_unaged-2.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:324e963b6082be09ffed9912f0de19ec",
+        "ext": "dat",
+        "id": "c89bdf30-e258-4064-b296-4f6a8bac21ba",
+        "key": "8YSZ_unaged-2.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-2.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-2.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "8YSZ_unaged-2.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:24e6a2c76e7caf485a04ad962f54491f",
+        "ext": "ras",
+        "id": "5a6443d7-e42d-4977-8673-619651895091",
+        "key": "8YSZ_unaged-2.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-2.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-2.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 200638,
+        "storage_class": "L"
+      },
+      "8YSZ_unaged-3.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:58e840e6a8dabc8e68f0ac19cf45fa48",
+        "ext": "dat",
+        "id": "4e1fafcf-4d17-4d32-aa7d-16d7f0b6f7c5",
+        "key": "8YSZ_unaged-3.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-3.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-3.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "8YSZ_unaged-3.ras": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:fdef31e070451f98c96248e53611099f",
+        "ext": "ras",
+        "id": "6cc01a1c-ecb0-4906-a719-811f1e5a5ebd",
+        "key": "8YSZ_unaged-3.ras",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-3.ras/content",
+          "self": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-3.ras"
+        },
+        "metadata": {},
+        "mimetype": "image/x-cmu-raster",
+        "size": 200615,
+        "storage_class": "L"
+      },
+      "8YSZ_unaged-4.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:b0dff82e6e2584ff7df0de6bb665ef9d",
+        "ext": "dat",
+        "id": "b0f1154d-1f80-4831-8230-bee7eee2c5bb",
+        "key": "8YSZ_unaged-4.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-4.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-4.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "8YSZ_unaged-5.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:df9fa4f0d4a898e9647331fdd689f9a5",
+        "ext": "dat",
+        "id": "da1c040b-69b8-4f03-89c3-42658d28a97f",
+        "key": "8YSZ_unaged-5.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-5.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-5.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "8YSZ_unaged-6.dat": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:f4a131b60e242073358218dea94bc9f6",
+        "ext": "dat",
+        "id": "2553f710-d000-4da3-a57a-9cb6f363d2f0",
+        "key": "8YSZ_unaged-6.dat",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-6.dat/content",
+          "self": "https://zenodo.org/api/records/18522047/files/8YSZ_unaged-6.dat"
+        },
+        "metadata": {},
+        "mimetype": "application/octet-stream",
+        "size": 217196,
+        "storage_class": "L"
+      },
+      "Appendix_Fig_1.xlsx": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:c38568ec6972ec50e4d475d95fe9cc49",
+        "ext": "xlsx",
+        "id": "3a7f6cd0-e389-443c-9d24-840f020222f6",
+        "key": "Appendix_Fig_1.xlsx",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/Appendix_Fig_1.xlsx/content",
+          "self": "https://zenodo.org/api/records/18522047/files/Appendix_Fig_1.xlsx"
+        },
+        "metadata": {},
+        "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "size": 1012579,
+        "storage_class": "L"
+      },
+      "Appendix_Table_1.xlsx": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:849ac0312d4ad3dadc758911dcbb9abb",
+        "ext": "xlsx",
+        "id": "8efddf8a-a0a7-45d3-a83e-d58bf7fb9921",
+        "key": "Appendix_Table_1.xlsx",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/Appendix_Table_1.xlsx/content",
+          "self": "https://zenodo.org/api/records/18522047/files/Appendix_Table_1.xlsx"
+        },
+        "metadata": {},
+        "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "size": 16145,
+        "storage_class": "L"
+      },
+      "Fig_1.xlsx": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:3dbfcc6a0fa49eba2ca6c400c56b1f2f",
+        "ext": "xlsx",
+        "id": "3238af17-5ac1-4cb4-b53f-f3870733b58d",
+        "key": "Fig_1.xlsx",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/Fig_1.xlsx/content",
+          "self": "https://zenodo.org/api/records/18522047/files/Fig_1.xlsx"
+        },
+        "metadata": {},
+        "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "size": 3271298,
+        "storage_class": "L"
+      },
+      "Fig_2.xlsx": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:42356f73ba37d6e895dbc0dc0022c07a",
+        "ext": "xlsx",
+        "id": "a5f31eaf-d960-4312-ab74-ef642e114841",
+        "key": "Fig_2.xlsx",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/Fig_2.xlsx/content",
+          "self": "https://zenodo.org/api/records/18522047/files/Fig_2.xlsx"
+        },
+        "metadata": {},
+        "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "size": 201571,
+        "storage_class": "L"
+      },
+      "Fig_3.xlsx": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:28ef5c97e9a550ed419bc891870fd2ea",
+        "ext": "xlsx",
+        "id": "1a1b9f8b-19b3-4cff-93c0-ceba781f5e43",
+        "key": "Fig_3.xlsx",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/Fig_3.xlsx/content",
+          "self": "https://zenodo.org/api/records/18522047/files/Fig_3.xlsx"
+        },
+        "metadata": {},
+        "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "size": 281637,
+        "storage_class": "L"
+      },
+      "Fig_4.xlsx": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:5d156eb56adc25e43231d6796d83950a",
+        "ext": "xlsx",
+        "id": "eba49eaf-d319-4da1-b31d-39e765b5b842",
+        "key": "Fig_4.xlsx",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/Fig_4.xlsx/content",
+          "self": "https://zenodo.org/api/records/18522047/files/Fig_4.xlsx"
+        },
+        "metadata": {},
+        "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "size": 53939,
+        "storage_class": "L"
+      },
+      "README.txt": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:702e9ec00d6eb7a9207ee34adf2f74da",
+        "ext": "txt",
+        "id": "c432055f-4c02-45c2-82c7-14c620b64062",
+        "key": "README.txt",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/README.txt/content",
+          "self": "https://zenodo.org/api/records/18522047/files/README.txt"
+        },
+        "metadata": {},
+        "mimetype": "text/plain",
+        "size": 564,
+        "storage_class": "L"
+      },
+      "Table_1.xlsx": {
+        "access": {
+          "hidden": false
+        },
+        "checksum": "md5:28087fbe1d2eb9a642e3518a9209da16",
+        "ext": "xlsx",
+        "id": "3c944779-e236-414f-8ccc-e425eeb48bf7",
+        "key": "Table_1.xlsx",
+        "links": {
+          "content": "https://zenodo.org/api/records/18522047/files/Table_1.xlsx/content",
+          "self": "https://zenodo.org/api/records/18522047/files/Table_1.xlsx"
+        },
+        "metadata": {},
+        "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "size": 20014,
+        "storage_class": "L"
+      }
+    },
+    "order": [],
+    "total_bytes": 18174994
+  },
+  "id": "18522047",
+  "is_draft": false,
+  "is_published": true,
+  "links": {
+    "access": "https://zenodo.org/api/records/18522047/access",
+    "access_grants": "https://zenodo.org/api/records/18522047/access/grants",
+    "access_links": "https://zenodo.org/api/records/18522047/access/links",
+    "access_request": "https://zenodo.org/api/records/18522047/access/request",
+    "access_users": "https://zenodo.org/api/records/18522047/access/users",
+    "archive": "https://zenodo.org/api/records/18522047/files-archive",
+    "archive_media": "https://zenodo.org/api/records/18522047/media-files-archive",
+    "communities": "https://zenodo.org/api/records/18522047/communities",
+    "communities-suggestions": "https://zenodo.org/api/records/18522047/communities-suggestions",
+    "doi": "https://doi.org/10.5281/zenodo.18522047",
+    "draft": "https://zenodo.org/api/records/18522047/draft",
+    "file_modification": "https://zenodo.org/api/records/18522047/file-modification",
+    "files": "https://zenodo.org/api/records/18522047/files",
+    "latest": "https://zenodo.org/api/records/18522047/versions/latest",
+    "latest_html": "https://zenodo.org/records/18522047/latest",
+    "media_files": "https://zenodo.org/api/records/18522047/media-files",
+    "parent": "https://zenodo.org/api/records/18522046",
+    "parent_doi": "https://doi.org/10.5281/zenodo.18522046",
+    "parent_doi_html": "https://zenodo.org/doi/10.5281/zenodo.18522046",
+    "parent_html": "https://zenodo.org/records/18522046",
+    "preview_html": "https://zenodo.org/records/18522047?preview=1",
+    "quota_increase": "https://zenodo.org/api/records/18522047/quota-increase",
+    "request_deletion": "https://zenodo.org/api/records/18522047/request-deletion",
+    "requests": "https://zenodo.org/api/records/18522047/requests",
+    "reserve_doi": "https://zenodo.org/api/records/18522047/draft/pids/doi",
+    "self": "https://zenodo.org/api/records/18522047",
+    "self_doi": "https://doi.org/10.5281/zenodo.18522047",
+    "self_doi_html": "https://zenodo.org/doi/10.5281/zenodo.18522047",
+    "self_html": "https://zenodo.org/records/18522047",
+    "self_iiif_manifest": "https://zenodo.org/api/iiif/record:18522047/manifest",
+    "self_iiif_sequence": "https://zenodo.org/api/iiif/record:18522047/sequence/default",
+    "versions": "https://zenodo.org/api/records/18522047/versions"
+  },
+  "media_files": {
+    "count": 0,
+    "enabled": false,
+    "entries": {},
+    "order": [],
+    "total_bytes": 0
+  },
+  "metadata": {
+    "creators": [
+      {
+        "affiliations": [
+          {
+            "name": "Tohoku University Graduate School of Dentistry"
+          }
+        ],
+        "person_or_org": {
+          "family_name": "Nakamura",
+          "given_name": "Keisuke",
+          "identifiers": [
+            {
+              "identifier": "0000-0002-6368-2569",
+              "scheme": "orcid"
+            }
+          ],
+          "name": "Nakamura, Keisuke",
+          "type": "personal"
+        },
+        "role": {
+          "id": "projectleader",
+          "title": {
+            "de": "ProjektleiterIn",
+            "en": "Project leader"
+          }
+        }
+      }
+    ],
+    "description": "<p>The dataset includes raw X-ray diffraction (XRD) data files in .ras format,&nbsp;raw X-ray absorption fine structure (XAFS) data files in .dat format,&nbsp;and processed data used for figure and table generation provided as .xlsx files.</p>",
+    "publication_date": "2026-02-08",
+    "publisher": "Zenodo",
+    "resource_type": {
+      "id": "dataset",
+      "title": {
+        "de": "Datensatz",
+        "en": "Dataset"
+      }
+    },
+    "rights": [
+      {
+        "description": {
+          "en": "The Creative Commons Attribution license allows re-distribution and re-use of a licensed work on the condition that the creator is appropriately credited."
+        },
+        "icon": "cc-by-icon",
+        "id": "cc-by-4.0",
+        "props": {
+          "scheme": "spdx",
+          "url": "https://creativecommons.org/licenses/by/4.0/legalcode"
+        },
+        "title": {
+          "en": "Creative Commons Attribution 4.0 International"
+        }
+      }
+    ],
+    "title": "Synchrotron XRD and XAFS datasets of dental yttria-stabilized zirconia"
+  },
+  "parent": {
+    "access": {
+      "owned_by": {
+        "user": "1539939"
+      },
+      "settings": {
+        "accept_conditions_text": null,
+        "allow_guest_requests": false,
+        "allow_user_requests": false,
+        "secret_link_expiration": 0
+      }
+    },
+    "communities": {},
+    "id": "18522046",
+    "pids": {
+      "doi": {
+        "client": "datacite",
+        "identifier": "10.5281/zenodo.18522046",
+        "provider": "datacite"
+      }
+    }
+  },
+  "pids": {
+    "doi": {
+      "client": "datacite",
+      "identifier": "10.5281/zenodo.18522047",
+      "provider": "datacite"
+    },
+    "oai": {
+      "identifier": "oai:zenodo.org:18522047",
+      "provider": "oai"
+    }
+  },
+  "revision_id": 4,
+  "stats": {
+    "all_versions": {
+      "data_volume": 211498433.0,
+      "downloads": 781,
+      "unique_downloads": 700,
+      "unique_views": 34,
+      "views": 36
+    },
+    "this_version": {
+      "data_volume": 211498433.0,
+      "downloads": 781,
+      "unique_downloads": 700,
+      "unique_views": 34,
+      "views": 36
+    }
+  },
+  "status": "published",
+  "swh": {},
+  "updated": "2026-02-08T03:53:39.642505+00:00",
+  "versions": {
+    "index": 1,
+    "is_latest": true
+  }
+}

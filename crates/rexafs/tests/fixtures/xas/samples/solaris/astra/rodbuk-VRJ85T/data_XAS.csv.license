@@ -1,0 +1,10 @@
+SPDX-License-Identifier: CC0-1.0
+License-File: LICENSES/CC0-1.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit dataset license
+License-Evidence: https://uj.rodbuk.pl/dataset.xhtml?persistentId=doi:10.57903/UJ/VRJ85T
+Source: https://uj.rodbuk.pl/dataset.xhtml?persistentId=doi:10.57903/UJ/VRJ85T
+Download: https://uj.rodbuk.pl/api/access/datafile/19251?format=original
+Citation: Klonecka, Agnieszka. XANES reference database of sulphur containing compounds for biological research: A preliminary report from the ASTRA Beamline at the SOLARIS Synchrotron Radiation Centre. Jagiellonian University in Krakow, dataset version 1. https://doi.org/10.57903/UJ/VRJ85T
+SHA256: 52c219a9a9cc861a4e4548ff1ad6f45a2139c2861ce382117c775ed0cd2f3ef8
+Modifications: None; original downloaded measurement bytes retained.

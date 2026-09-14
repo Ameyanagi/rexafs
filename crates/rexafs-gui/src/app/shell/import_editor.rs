@@ -1,4 +1,5 @@
 //! A modal owns a draft and immutable target; focus/current/marks are independent.
+mod measurement_view;
 use std::collections::HashMap;
 
 use gpui::{
@@ -8,6 +9,7 @@ use gpui::{
 use ruviz::prelude::Plot;
 use ruviz_gpui::{RuvizPlot, plot_builder};
 
+use super::measurement_import::MeasurementImport;
 use super::tools::ToolTarget;
 
 fn check_target(
@@ -62,9 +64,22 @@ enum Action {
     GlobalRecipe,
     ConfirmUnits,
     Recipe,
+    Selector(u8),
+    Scan(usize),
+    Signal(usize),
+    IncludeSignal(usize),
+    Mode(u8),
+    Dataset(usize),
+    UseDatasets,
+    DatasetView,
+    Columns,
 }
 
 pub(crate) struct ImportEditor {
+    measurement: Option<MeasurementImport>,
+    selector: Option<u8>,
+    show_columns: bool,
+    choose_datasets: bool,
     studio: WeakEntity<StudioApp>,
     target: ToolTarget,
     params: PipelineParams,
@@ -125,6 +140,45 @@ fn change_primary(
 }
 
 impl StudioApp {
+    pub(crate) fn open_measurement_editor(
+        &mut self,
+        source: MeasurementImport,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let target = ToolTarget {
+            group_id: Some(crate::group_identity::GroupId::new_result()),
+            ix: NO_ENTRY,
+            fingerprint: 0,
+            label: source
+                .path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned(),
+            path: source.path.clone(),
+            derived_id: None,
+            project_generation: self.project_generation,
+            catalog_generation: 0,
+            size: None,
+        };
+        let params = PipelineParams {
+            import: source.config(),
+            ..Default::default()
+        };
+        let studio = cx.weak_entity();
+        let theme = self.theme;
+        let editor = cx.new(|cx| {
+            let mut editor = ImportEditor::new(studio, target, params, theme, false, window, cx);
+            editor.show_columns = !source.confirmed;
+            editor.measurement = Some(source);
+            editor.reload(cx);
+            editor
+        });
+        self.import_editor = Some(editor);
+        cx.notify();
+    }
+
     pub(crate) fn open_import_review(
         &mut self,
         batch: usize,
@@ -330,6 +384,10 @@ impl ImportEditor {
         })
         .detach();
         Self {
+            measurement: None,
+            selector: None,
+            show_columns: false,
+            choose_datasets: false,
             studio,
             target,
             params,
@@ -390,7 +448,11 @@ impl ImportEditor {
         self.preview.invalidate();
         self.error = None;
         self.open_role = None;
-        self.source_revision = match SourceRevision::read(&self.target.path) {
+        self.source_revision = match if self.measurement.is_some() {
+            Ok(SourceRevision::snapshot())
+        } else {
+            SourceRevision::read(&self.target.path)
+        } {
             Ok(revision) => Some(revision),
             Err(error) => {
                 self.error = Some(error);
@@ -406,6 +468,7 @@ impl ImportEditor {
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
         self.save_review_draft();
+        self.save_measurement_draft();
         self.invalidate_validation();
         self.generation += 1;
         self.preview.invalidate();
@@ -429,6 +492,7 @@ impl ImportEditor {
     ) {
         self.preview.begin(key.clone());
         let generation = self.generation;
+        let measurement = self.measurement.clone();
         cx.spawn(async move |this, cx| {
             if !initial {
                 cx.background_executor()
@@ -446,7 +510,12 @@ impl ImportEditor {
                 .spawn({
                     let key = key.clone();
                     let config = config.clone();
-                    async move { import_preview::load(&key, &config) }
+                    async move {
+                        match measurement {
+                            Some(source) => source.preview(&config),
+                            None => import_preview::load(&key, &config),
+                        }
+                    }
                 })
                 .await;
             this.update(cx, |this, cx| {
@@ -477,6 +546,14 @@ impl ImportEditor {
                         let spacing = match config.axis {
                             AxisConversion::AngleDegrees { d_spacing }
                             | AxisConversion::AngleRadians { d_spacing } => d_spacing.to_string(),
+                            _ if this.measurement.is_some() => {
+                                match this.measurement.as_ref().unwrap().selected_mapping().energy {
+                                    rexafs::io::EnergyConversion::Bragg { d_spacing, .. } => {
+                                        d_spacing.to_string()
+                                    }
+                                    _ => String::new(),
+                                }
+                            }
                             _ => result
                                 .table
                                 .xdi
@@ -502,9 +579,10 @@ impl ImportEditor {
                             .label("Raw μ(E)")
                             .into();
                         this.plot = Some(
-                            plot_builder(
-                                plot.xlabel("Energy (eV)").ylabel("μ(E)").size_px(420, 280),
-                            )
+                            plot_builder(plot.xlabel("Energy (eV)").ylabel("μ(E)").size_px(
+                                if this.measurement.is_some() { 600 } else { 420 },
+                                if this.measurement.is_some() { 340 } else { 280 },
+                            ))
                             .interactive()
                             .build(cx),
                         );
@@ -551,7 +629,41 @@ impl ImportEditor {
         let Some(key) = self.key(draft.revision) else {
             return;
         };
-        if self.locked || draft.validate().is_err() || !self.preview.ready(&key) {
+        let preview_required = self
+            .measurement
+            .as_ref()
+            .is_none_or(|s| s.preview_included());
+        if self.locked
+            || (preview_required && (draft.validate().is_err() || !self.preview.ready(&key)))
+        {
+            return;
+        }
+        if let Some(source) = &self.measurement {
+            let groups = match source.materialize_selected(draft.config()) {
+                Ok(group) => group,
+                Err(error) => {
+                    self.error = Some(error);
+                    cx.notify();
+                    return;
+                }
+            };
+            let expected = self.target.project_generation;
+            let accepted = self
+                .studio
+                .update(cx, |studio, cx| {
+                    if studio.project_generation != expected {
+                        return false;
+                    }
+                    studio.accept_measurements(groups, cx);
+                    true
+                })
+                .unwrap_or(false);
+            if accepted {
+                self.close(window, cx);
+            } else {
+                self.error = Some("The project changed; reopen the import.".into());
+                cx.notify();
+            }
             return;
         }
         if SourceRevision::read(&key.path).ok().as_ref() != Some(&key.source_revision) {
@@ -692,6 +804,9 @@ impl ImportEditor {
     }
 
     fn activate(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
+        if self.activate_measurement(action, cx) {
+            return;
+        }
         match action {
             Action::Recipe => {
                 self.recipe_open = !self.recipe_open;
@@ -905,6 +1020,7 @@ impl ImportEditor {
         match action {
             Action::Reset => draft.use_detected(),
             Action::Axis(unit) => {
+                self.selector = None;
                 let d_spacing = self.spacing.read(cx).text().parse().unwrap_or(0.);
                 draft.set_axis(match unit {
                     0 => AxisConversion::Auto,
@@ -983,6 +1099,12 @@ impl ImportEditor {
             .ok();
         })
         .detach();
+    }
+
+    fn save_measurement_draft(&mut self) {
+        if let (Some(source), Some(draft)) = (&mut self.measurement, &self.draft) {
+            source.remember_config(draft.config());
+        }
     }
 
     fn save_review_draft(&mut self) {
@@ -1167,7 +1289,9 @@ impl ImportEditor {
             Action::ReviewPrimary(_) | Action::ReviewEdit(_) | Action::Axis(_) => {
                 accesskit::Role::Tab
             }
-            Action::ReviewOutput(_) | Action::ConfirmUnits => accesskit::Role::CheckBox,
+            Action::ReviewOutput(_) | Action::ConfirmUnits | Action::IncludeSignal(_) => {
+                accesskit::Role::CheckBox
+            }
             _ => accesskit::Role::Button,
         };
         let selected = match action {
@@ -1175,6 +1299,9 @@ impl ImportEditor {
                 .review_outputs
                 .contains(&REVIEW_CHANNELS[index as usize]),
             Action::ConfirmUnits => self.confirmed_units,
+            Action::IncludeSignal(index) => {
+                self.measurement.as_ref().is_some_and(|s| s.included[index])
+            }
             _ => selected,
         };
         crate::accessibility::Control::new(
@@ -1262,6 +1389,9 @@ impl ImportEditor {
 impl Render for ImportEditor {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.visible_focus.clear();
+        if self.measurement.is_some() {
+            return self.render_measurement(cx);
+        }
         let t = self.theme;
         let mut panel = div()
             .id("mapping-editor-panel")
@@ -1334,7 +1464,7 @@ impl Render for ImportEditor {
                         .child(div().flex_1())
                         .child(self.button(Action::Cancel, "Review later", true, cx)),
                 );
-            return self.modal(panel, cx);
+            return self.modal(panel, cx).into_any_element();
         }
         let mut body = div()
             .id("mapping-scroll")
@@ -1935,7 +2065,7 @@ impl Render for ImportEditor {
                 ))
                 .child(self.button(Action::Apply, apply_label, ready, cx)),
         );
-        self.modal(panel, cx)
+        self.modal(panel, cx).into_any_element()
     }
 }
 

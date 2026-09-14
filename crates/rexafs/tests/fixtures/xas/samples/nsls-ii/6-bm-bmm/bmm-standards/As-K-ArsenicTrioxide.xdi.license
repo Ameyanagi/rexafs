@@ -1,0 +1,11 @@
+SPDX-License-Identifier: LicenseRef-NIST-Public-Data
+License-File: LICENSES/NSLS2--bmm-standards--LICENSE
+License-Basis: explicit-data-license
+License-Scope: NIST data; worldwide redistribution with acknowledgment
+License-Evidence: https://github.com/NSLS2/bmm-standards/blob/7f5728eb2b59d98305e41a908d0791b0baeab869/LICENSE
+Test-Eligibility: documented-license
+Source: https://github.com/NSLS2/bmm-standards/blob/7f5728eb2b59d98305e41a908d0791b0baeab869/Data/As/As-K-ArsenicTrioxide.xdi
+Download: https://raw.githubusercontent.com/NSLS2/bmm-standards/7f5728eb2b59d98305e41a908d0791b0baeab869/Data/As/As-K-ArsenicTrioxide.xdi
+Citation: Bruce Ravel (2025). A collection of X-ray Absorption Spectroscopy data of metals, stable oxides, and other common compounds measured at NIST’s Beamline for Materials Measurement. Version 1.0.0. National Institute of Standards and Technology. https://doi.org/10.18434/mds2-4032. Accessed 2026-09-14.
+SHA256: 7bd39ef6ac0c59782ae0afcce1e45257bcb404ea6f692c165c26b3a5f54cb0eb
+Modifications: None; original NIST measurement bytes retained.

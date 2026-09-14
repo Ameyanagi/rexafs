@@ -1,0 +1,10 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit dataset license
+License-Evidence: https://zenodo.org/records/5669967
+Source: https://zenodo.org/records/5669967
+Download: https://zenodo.org/api/records/5669967/files/Arsenopyrite.0001/content
+Citation: Emily M. Saurette; Y. Zou Frinfrock; Brent Verbuyst; David W. Blowes; Joyce McBeth; Carol J. Ptacek (2021). As-bearing Minerals Raw XAS Data. Zenodo. https://doi.org/10.5281/zenodo.5669967
+SHA256: 0d851f25bab1484bbcc608464af73b54e331e949fd5267758f040e137b82f35c
+Modifications: None; original downloaded measurement bytes retained.

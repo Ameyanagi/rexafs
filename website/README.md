@@ -75,7 +75,8 @@ removing a public member's help fails generation.
 
 `/app/` runs spectrum processing locally in a module Worker, using this checkout's
 WASM bindings. It is labeled as an unreleased preview. It supports numeric
-text/CSV import, explicit column roles and energy units, normalization, AUTOBK,
+text/CSV, beamline, HDF5, Athena and XTUNES import through the shared Rust
+reader, explicit scan/detector/dataset roles and energy calibration, normalization, AUTOBK,
 forward Fourier transforms and CSV/JSON export.
 
 `/app/scattering/` runs the published ReFEFF 0.4.0 WASI engine through its browser
@@ -173,8 +174,10 @@ follow the vendor README and preserve the original notice bytes.
   Extraction includes the Python declarations/native help, every TypeScript
   entry-point declaration, Wasm help and the Rust core's public documentation.
 - `public/` contains only selected public assets. Application screenshots are
-  full, unedited 1192 × 768 JPEG captures made with computer use from the official
-  macOS ARM64 0.2.4 release. Keep their version, input and capture provenance in
+  full, unedited JPEG captures made with computer use. The released guides retain
+  1192 × 768 captures from the official macOS ARM64 0.2.4 release; Next import
+  documentation uses separate 1187 × 768 source-build captures in `screenshots/next/`.
+  Keep their version, input and capture provenance in
   the public licenses page. Do not crop them or replace plots with mockups.
 
 The writing and scientific baseline in [CONTRIBUTING.md](../CONTRIBUTING.md)

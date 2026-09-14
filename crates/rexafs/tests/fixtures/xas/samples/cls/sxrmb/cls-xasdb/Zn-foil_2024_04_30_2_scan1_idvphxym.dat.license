@@ -1,0 +1,12 @@
+SPDX-License-Identifier: CC-BY-4.0
+License-File: LICENSES/CC-BY-4.0.txt
+License-Basis: explicit-data-license
+License-Scope: explicit per-spectrum Scan.license declaration in CLS API metadata; also in the download header except Fe_idcj28n9
+License-Evidence: https://xasdb.lightsource.ca/DB/Zn/SXRMB/Zinc%20Foil/Zn-foil_2024_04_30_2_scan1_idvphxym.dat
+Test-Eligibility: documented-license
+Source: https://xasdb.lightsource.ca/DB/Zn/SXRMB/Zinc%20Foil/Zn-foil_2024_04_30_2_scan1_idvphxym.dat
+Download: https://xasdb.lightsource.ca/DB/Zn/SXRMB/Zinc%20Foil/Zn-foil_2024_04_30_2_scan1_idvphxym.dat
+Citation: Mehrnaz Mikhchian. Zinc Foil, Zn K-edge, SXRMB, 2024-04-30. Canadian Light Source XAS Database, spectrum Zn_idvphxym. https://doi.org/10.20383/103.01329
+SHA256: c9115b9ca14cebd7184fbd3e0e0fb8082df58666c2f894abf177decd9abe1207
+Modifications: None; original downloaded measurement bytes retained.
+Local-License-Evidence: provenance/cls/Zn_idvphxym.json

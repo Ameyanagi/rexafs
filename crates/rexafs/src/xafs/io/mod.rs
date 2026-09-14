@@ -1,5 +1,9 @@
 //! Readers and interchange formats for measured XAS data.
 //!
+//! For unreleased automatic import, start with [`read_measurement`] (path) or
+//! [`parse_measurement`] (bytes), inspect scans/warnings, then select a mapping.
+//! The shared reader covers beamline tables, Athena, XTUNES and HDF5 containers.
+//!
 //! [`read_qas_transmission`] reads whitespace-delimited energy/I0/It columns.
 //! [`XdiFile`] imports self-described XAS Data Interchange files and retains
 //! metadata; [`AthenaProject`] reads and writes Athena `.prj` collections.
@@ -14,6 +18,7 @@
 #![allow(unused_variables)]
 
 pub mod athena;
+pub mod reader;
 pub mod xafs_bson;
 pub mod xafs_json;
 pub mod xasdatatype;
@@ -21,6 +26,11 @@ pub mod xdi;
 
 pub use athena::{AthenaGroup, AthenaParams, AthenaProject, AthenaValue};
 pub use load_spectrum_QAS_trans as read_qas_transmission;
+pub use reader::{
+    parse_measurement, read_measurement, ColumnSelector, EnergyConversion, Measurement,
+    MeasurementColumn, MeasurementDataset, MeasurementScan, ReadError, SignalCandidate,
+    SignalConversion, SignalSelection, SpectrumMapping, SpectrumSelection,
+};
 pub use xdi::{XdiColumn, XdiError, XdiFile, XdiHeader, XdiSignal};
 
 use crate::xafs::errors::IOError;
