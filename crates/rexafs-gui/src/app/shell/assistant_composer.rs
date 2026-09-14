@@ -206,10 +206,6 @@ impl AssistantWindow {
         }
         match key {
             "escape" => self.close_model_picker(window, cx),
-            "enter" | "space" if self.composer_menu == Some(menu) => {
-                self.choose_composer_option(self.model_highlight, window, cx)
-            }
-            "enter" | "space" => self.open_composer_menu(menu, window, cx),
             "up" | "down" => {
                 if self.composer_menu != Some(menu) {
                     self.open_composer_menu(menu, window, cx);
@@ -288,9 +284,13 @@ impl AssistantWindow {
                     accesskit::Role::Button,
                 ),
                 !busy,
-                cx.listener(move |this, _: &ClickEvent, window, cx| {
+                cx.listener(move |this, event: &ClickEvent, window, cx| {
                     if this.composer_menu == Some(menu) {
-                        this.close_model_picker(window, cx);
+                        if matches!(event, ClickEvent::Keyboard(_)) {
+                            this.choose_composer_option(this.model_highlight, window, cx);
+                        } else {
+                            this.close_model_picker(window, cx);
+                        }
                     } else {
                         this.open_composer_menu(menu, window, cx);
                     }
@@ -413,19 +413,6 @@ impl AssistantWindow {
                         this.stop(cx);
                     } else {
                         this.run(cx);
-                    }
-                }),
-            )
-            .on_key_down(
-                cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
-                    if enabled && matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        if stopping {
-                            this.stop(cx);
-                        } else {
-                            this.run(cx);
-                        }
                     }
                 }),
             )
@@ -578,15 +565,6 @@ impl AssistantWindow {
                 .when(menu == ComposerMenu::Access && index == 2, |d| {
                     d.role(accesskit::Role::CheckBox)
                 })
-                .on_key_down(
-                    cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
-                        if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                            window.prevent_default();
-                            cx.stop_propagation();
-                            this.choose_composer_option(index, window, cx);
-                        }
-                    }),
-                )
                 .h(px(row_height))
                 .flex_shrink_0()
                 .px(px(10.))

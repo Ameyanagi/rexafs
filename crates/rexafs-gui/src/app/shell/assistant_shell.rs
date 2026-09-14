@@ -130,7 +130,9 @@ pub(super) fn control_key_activates(key: &str, modified: bool) -> bool {
 }
 
 pub(super) fn model_picker_handles_key(open: bool, key: &str, modified: bool) -> bool {
-    !modified && (matches!(key, "enter" | "space" | "up" | "down") || (open && key == "escape"))
+    // GPUI invokes a focused control's click listener on Enter/Space key-up.
+    // Handling those keys here as well would activate the control twice.
+    !modified && (matches!(key, "up" | "down") || (open && key == "escape"))
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -301,10 +303,15 @@ mod tests {
         }
     }
     #[test]
-    fn assistant_model_trigger_keeps_activation_and_escape_fallthrough() {
-        for key in ["enter", "space", "up", "down"] {
+    fn assistant_model_trigger_handles_navigation_and_delegates_native_activation() {
+        for key in ["up", "down"] {
             assert!(model_picker_handles_key(false, key, false));
             assert!(model_picker_handles_key(true, key, false));
+        }
+        for key in ["enter", "space"] {
+            for open in [false, true] {
+                assert!(!model_picker_handles_key(open, key, false));
+            }
         }
         assert!(!model_picker_handles_key(false, "escape", false));
         assert!(model_picker_handles_key(true, "escape", false));
