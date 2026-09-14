@@ -1,6 +1,9 @@
 # rexafs 0.2.6
 
-Release preparation: publication and signed desktop downloads are pending.
+Published on 14 September 2026: [desktop downloads](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.6),
+[crates.io](https://crates.io/crates/rexafs/0.2.6),
+[PyPI](https://pypi.org/project/rexafs/0.2.6/) and
+[npm](https://www.npmjs.com/package/rexafs/v/0.2.6).
 The [qualification record](validation/2026-09-14-release-0.2.6/review.md) tracks
 the immutable source tag, GitHub builds, signing and registry verification.
 

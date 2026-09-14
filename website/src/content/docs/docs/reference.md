@@ -4,12 +4,12 @@ description: "Generated signatures and source documentation for stable and upcom
 audience: user
 ---
 
-The tutorials and stable reference target **published 0.2.5**. Choose Next only
+The tutorials and stable reference target **published 0.2.6**. Choose Next only
 when working from the source checkout.
 
 ## Choose your language
 
-These links describe **stable 0.2.5**:
+These links describe **stable 0.2.6**:
 
 | Task | Python | TypeScript | Rust |
 |---|---|---|---|
@@ -18,7 +18,8 @@ These links describe **stable 0.2.5**:
 | Configure background removal | [AUTOBK](/docs/reference/stable/python/autobk/) | [AUTOBK](/docs/reference/stable/typescript/autobk/) | [AUTOBK](/api/rust/rexafs/xafs/background/struct.AUTOBK.html) |
 | Configure the k → R transform | [XrayFFTF](/docs/reference/stable/python/xrayfftf/) | [XrayFFTF](/docs/reference/stable/typescript/xrayfftf/) | [XrayFFTF](/api/rust/rexafs/xafs/xrayfft/struct.XrayFFTF.html) |
 | Configure the R → q back-transform | [XrayFFTR](/docs/reference/stable/python/xrayfftr/) | [XrayFFTR](/docs/reference/stable/typescript/xrayfftr/) | [XrayFFTR](/api/rust/rexafs/xafs/xrayfft/struct.XrayFFTR.html) |
-| Read files or initialize the runtime | [QAS reader](/docs/reference/stable/python/io-read_qas_transmission/) | [Browser init](/docs/reference/stable/typescript/init-browser/) · [Node init](/docs/reference/stable/typescript/init-node/) | [I/O](/api/rust/rexafs/xafs/io/index.html) |
+| Read a measurement | [read_measurement](/docs/reference/stable/python/io-read_measurement/) | [read_measurement](/docs/reference/stable/typescript/read_measurement/) | [I/O](/api/rust/rexafs/xafs/io/index.html) |
+| Initialize WebAssembly | — | [Browser init](/docs/reference/stable/typescript/init-browser/) · [Node init](/docs/reference/stable/typescript/init-node/) | — |
 
 The [full Rust reference](/api/rust/rexafs/index.html) also covers groups, data
 treatment, analysis, structures, fitting and optional plotting.
@@ -50,4 +51,4 @@ Stable uses the published crate; Next uses the checkout.
 For equations, units and citations, see [processing theory](/docs/science/processing/)
 and [scientific references](/docs/science/references/).
 
-The [unreleased measurement reader guide](/docs/reference/next/measurement-reading/) explains automatic beamline, HDF5 and XTUNES import across the libraries and interfaces.
+The [measurement reader guide](/docs/reference/stable/measurement-reading/) explains automatic beamline, HDF5 and XTUNES import across the libraries and interfaces.
