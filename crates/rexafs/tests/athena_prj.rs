@@ -182,6 +182,38 @@ fn athena_typed_params_win_on_write() {
 }
 
 #[test]
+fn athena_edited_optional_arrays_override_retained_absence_markers() {
+    let source = b"# Athena project file -- Demeter version 0.9.26\n$old_group = 'test';\n@x = (7100,7101);\n@y = (1,2);\n@i0 = (undef);\n@signal = ( undef );\n@stddev = (\nundef\n);\n@xdi = ('unchanged metadata');\n[record]\n1;\n";
+    let mut project = AthenaProject::read_from(&mut source.as_slice()).unwrap();
+    let evidence = project.groups[0].extra.clone();
+    assert_eq!(evidence.len(), 4);
+    for edited in [false, true] {
+        if edited {
+            let group = &mut project.groups[0];
+            group.i0 = Some(vec![100., 200.]);
+            group.signal = Some(vec![10., 20.]);
+            group.stddev = Some(vec![0.1, 0.2]);
+        }
+        for _ in 0..2 {
+            let mut bytes = Vec::new();
+            project.write_to(&mut bytes).unwrap();
+            let restored = AthenaProject::read_from(&mut bytes.as_slice()).unwrap();
+            let group = &restored.groups[0];
+            assert_eq!(group.i0, project.groups[0].i0);
+            assert_eq!(group.signal, project.groups[0].signal);
+            assert_eq!(group.stddev, project.groups[0].stddev);
+            assert_eq!(group.x, [7100., 7101.]);
+            assert_eq!(group.y, [1., 2.]);
+            assert_eq!(
+                group.extra, evidence,
+                "retain historical markers and unrelated metadata"
+            );
+            project = restored;
+        }
+    }
+}
+
+#[test]
 fn athena_export_from_scratch() {
     let mut spectrum = io::load_spectrum_QAS_trans(testfile("Ru_QAS.dat")).unwrap();
     spectrum.set_name("Ru_QAS");
