@@ -2,7 +2,7 @@ name: Windows installer
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - '.github/workflows/windows-installer.yml'
       - 'scripts/windows_installer.py'
