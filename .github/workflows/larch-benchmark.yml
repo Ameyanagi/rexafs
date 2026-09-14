@@ -2,7 +2,7 @@ name: Larch comparison
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - '.github/workflows/larch-benchmark.yml'
       - 'Cargo.toml'
