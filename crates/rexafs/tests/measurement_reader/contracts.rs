@@ -119,6 +119,33 @@ fn malformed_rows_are_never_silently_dropped() {
         assert!(parse_measurement(bytes).is_err());
     }
 }
+
+#[test]
+fn malformed_leading_rows_are_rejected_across_comments() {
+    for bad_row in [
+        "7100 bad",
+        "7100\u{2003}bad",
+        "7.100D+03 bad",
+        "7100,",
+        "7100",
+    ] {
+        for comment in ["# interrupted scan", "; note", "! note", "* note"] {
+            let text = format!("# energy mu\n{bad_row}\n\n{comment}\n# resumed\n7101 2\n7102 3\n");
+            let error = parse_measurement(text.as_bytes()).unwrap_err().to_string();
+            assert!(
+                error.contains("text, line 2: invalid first numeric row"),
+                "{text}: {error}"
+            );
+        }
+    }
+    let valid = parse_measurement(b"# energy mu\n# before data\n7100 1\n; note\n7101 2\n").unwrap();
+    assert_eq!(
+        valid.scans[0]
+            .arrays(Some(&direct(EnergyConversion::Ev)))
+            .unwrap(),
+        (vec![7100., 7101.], vec![1., 2.])
+    );
+}
 #[test]
 fn conversion_validates_mutated_documents_and_indices() {
     let mut doc = parse_measurement(b"7100 1\n7101 2\n").unwrap();

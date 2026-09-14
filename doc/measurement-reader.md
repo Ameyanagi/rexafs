@@ -5,6 +5,25 @@
 Rust, Python, TypeScript/WebAssembly, desktop and browser interfaces. Existing
 specialized XDI, QAS and Athena APIs remain available.
 
+## Reader corrections in development
+
+The source checkout includes the following corrections after 0.2.6:
+
+- Shared header inference requires a unique column for each detector role.
+  Repeated `I0` headings, or both `I0` and its `monitor` alias, require explicit
+  selection for that role. Use column indices when names repeat. Stored
+  `mutrans` and `mufluor` columns remain
+  separate choices; repeated stored-signal labels include their one-based column
+  number in the choice label. Mapping indices remain zero-based.
+- A malformed leading numeric row returns a line-specific error even when blank
+  lines or comments separate it from valid rows. It is not discarded as metadata.
+- Athena project export retains historical `(undef)` statements before current
+  optional arrays. Edited `i0`, `signal` and `stddev` values therefore survive
+  saving and reopening, while the original absence markers remain in `extra`.
+
+These corrections use the shared core reader and do not change API signatures.
+They are not included in the 0.2.6 packages.
+
 ## Read first, select a spectrum second
 
 Reading returns an owned `Measurement`: scans, original numeric channels,

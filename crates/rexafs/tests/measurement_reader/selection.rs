@@ -1,6 +1,90 @@
 use rexafs::io::*;
 
 #[test]
+fn duplicate_detector_roles_require_explicit_columns() {
+    for (header, incident, transmitted) in [
+        ("energy,I0,I0,It", 1usize, 3usize),
+        ("energy,I0,monitor,It", 2, 3),
+        ("energy,I0,It,I1", 1, 2),
+    ] {
+        let text = format!("{header}\n7100,100,20,5\n7101,200,40,10\n");
+        let scan = parse_measurement(text.as_bytes()).unwrap().scans.remove(0);
+        assert!(scan.signals.is_empty(), "{header}: {:?}", scan.signals);
+        assert!(scan.arrays(None).is_err(), "{header}");
+        let (_, mu) = scan
+            .arrays_with(
+                &SpectrumSelection::transmission(0usize, incident, transmitted)
+                    .with_energy(EnergyConversion::Ev),
+            )
+            .unwrap();
+        let expected =
+            (scan.columns[incident].values[0] / scan.columns[transmitted].values[0]).ln();
+        assert!(mu.iter().all(|value| (value - expected).abs() < 1e-14));
+        assert_eq!(scan.columns.len(), 4);
+        assert_eq!(scan.columns[2].values, [20., 40.]);
+    }
+}
+
+#[test]
+fn every_stored_signal_remains_an_explicit_choice() {
+    for header in ["energy,mutrans,mufluor", "energy,mu,mu"] {
+        let text = format!("{header}\n7100,0.2,0.3\n7101,0.4,0.5\n");
+        let scan = parse_measurement(text.as_bytes()).unwrap().scans.remove(0);
+        assert_eq!(scan.signals.len(), 2, "{header}");
+        assert_ne!(scan.signals[0].name, scan.signals[1].name);
+        assert!(scan.arrays(None).is_err(), "{header}");
+        for (candidate, expected) in scan.signals.iter().zip([[0.2, 0.4], [0.3, 0.5]]) {
+            assert_eq!(scan.arrays(Some(&candidate.mapping)).unwrap().1, expected);
+        }
+    }
+    let scan = parse_measurement(
+        b"energy,mufluor,mutrans,I0,It\n7100,0.3,0.2,100,20\n7101,0.5,0.4,200,40\n",
+    )
+    .unwrap()
+    .scans
+    .remove(0);
+    assert_eq!(
+        scan.signals
+            .iter()
+            .map(|signal| signal.name.as_str())
+            .collect::<Vec<_>>(),
+        ["mufluor", "mutrans"]
+    );
+    assert_eq!(
+        scan.arrays_with(&SpectrumSelection::direct("energy", "mutrans"))
+            .unwrap()
+            .1,
+        [0.2, 0.4]
+    );
+}
+
+#[test]
+fn hdf5_stored_signals_use_the_same_explicit_selection_contract() {
+    let mut file = hdf5_pure::FileBuilder::new();
+    file.create_dataset("energy").with_f64_data(&[7100., 7101.]);
+    file.create_dataset("mutrans").with_f64_data(&[0.2, 0.4]);
+    file.create_dataset("mufluor").with_f64_data(&[0.3, 0.5]);
+    let scan = parse_measurement(&file.finish().unwrap())
+        .unwrap()
+        .scans
+        .remove(0);
+    assert_eq!(scan.signals.len(), 2);
+    assert!(scan.arrays(None).is_err());
+    assert_eq!(
+        scan.arrays_with(&SpectrumSelection::direct("energy", "mutrans"))
+            .unwrap()
+            .1,
+        [0.2, 0.4]
+    );
+    assert_eq!(
+        scan.arrays_with(&SpectrumSelection::direct("energy", "mufluor"))
+            .unwrap()
+            .1,
+        [0.3, 0.5]
+    );
+}
+
+#[test]
 fn names_indices_and_reordered_columns_select_the_same_signal() {
     for text in [
         "energy (keV),I0,It,IFF1,IFF2,mu\n7.1,10,2,3,4,0.5\n7.2,20,4,8,10,0.6\n",
