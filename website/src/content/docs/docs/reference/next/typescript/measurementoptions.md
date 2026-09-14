@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Convenient scan and column selection (unreleased). Names must be exact and unique.
+Convenient scan and column selection (since 0.2.6). Names must be exact and unique.
 Supply energy and exactly one of mu, it or iff; it/iff also require i0.
 Conflicting/incomplete options throw. Omit column options to use automatic detection.
 

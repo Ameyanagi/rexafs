@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Parse measurement content with the shared Rust reader (unreleased).
+Parse measurement content with the shared Rust reader (since 0.2.6).
 Accepts UTF-8 text or Uint8Array, including Node Buffers and browser file bytes.
 Returns owned Measurement storage; free it after copying the arrays you need.
 Same limits/errors as Measurement. No filesystem/network access or processing

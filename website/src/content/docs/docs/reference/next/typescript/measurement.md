@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Owned universal reader (unreleased). Supports text/CSV, beamline layouts,
+Owned universal reader (since 0.2.6). Supports text/CSV, beamline layouts,
 historical binary, Athena Perl/JSON, Larix 1.0 sessions, XTUNES, gzip and HDF5. Browser callers first await
 init(). No filesystem/network access, processing or input mutation occurs.
 Input and expanded gzip text are each limited to 256 MiB; HDF5 numeric values

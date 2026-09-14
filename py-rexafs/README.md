@@ -169,7 +169,7 @@ is `rexafs`; `_core` is an implementation detail.
 
 ## Build from source
 
-**Unreleased packaging change:** this checkout enables PyO3's `abi3-py310`
+**Packaging since 0.2.6:** the Python binding enables PyO3's `abi3-py310`
 feature, sharing one wheel per platform across GIL-enabled CPython 3.10–3.14.
 The published 0.2.5 wheels remain unchanged. The release workflow tests the same
 wheel on every supported interpreter with its minimum available NumPy wheel
@@ -195,9 +195,9 @@ raise errors when processed. See [AUTOBK defaults](../doc/autobk-fixed-penalty.m
 and [FFT grid compatibility](../doc/fft-grid-compatibility.md).
 Licensed under MIT OR Apache-2.0.
 
-## Universal measurement reader (unreleased)
+## Universal measurement reader (since 0.2.6)
 
-The source checkout adds content-detected beamline text, CSV, Athena, XTUNES
+Version 0.2.6 adds content-detected beamline text, CSV, Athena, XTUNES
 and HDF5 import through the shared Rust reader. Read a document, inspect its
 scans, columns, units and warnings, then select a signal mapping. Ambiguous
 channels require explicit selection; detector images require reduction before
@@ -206,7 +206,7 @@ See the [reader guide](../doc/measurement-reader.md) for language examples,
 unit conversions, dataset selection, fixture coverage and limits. This API is
 not included in the published 0.2.5 packages.
 
-Larix 1.0 session import is available in the unreleased shared reader, including
+Larix 1.0 session import is available in the shared reader since 0.2.6, including
 stored absorption, complex saved arrays and inert session metadata. See the
 [Larix import guide](../doc/larix-import.md).
 

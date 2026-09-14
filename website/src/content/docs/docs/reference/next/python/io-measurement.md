@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/io.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/io.pyi)
 
-Owned, content-detected measurement document (unreleased).
+Owned, content-detected measurement document (since 0.2.6).
 
 Use read_measurement(path) or parse_measurement(data). Reading retains scans,
 headers, channel units and dataset shapes, including Larix 1.0 sessions. It does not normalize,
@@ -93,5 +93,5 @@ exclusive. Uses arrays() conversion rules, then sorts energy and signal together
 Duplicate energies remain and may require cleanup before processing.
 No normalization/background/FFT prerequisites run; existing objects and
 source files are unchanged. Selection and conversion errors are the
-same as arrays(). This unreleased reader differs from the strict
+same as arrays(). This reader differs from the strict
 Spectrum array constructor, which requires increasing, unique energy.

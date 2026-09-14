@@ -1,6 +1,6 @@
 # Reading beamline measurements
 
-**Unreleased source-checkout feature.** The universal reader in
+**Available since 0.2.6.** The universal reader in
 [`rexafs::io::reader`](../crates/rexafs/src/xafs/io/reader/mod.rs) supplies the
 Rust, Python, TypeScript/WebAssembly, desktop and browser interfaces. Existing
 specialized XDI, QAS and Athena APIs remain available.
@@ -94,14 +94,14 @@ provide supporting context. The latter repository is private.
 
 ## Examples
 
-The following APIs are unreleased. Existing zero-based numeric mappings remain
+The following APIs require 0.2.6 or newer. Existing zero-based numeric mappings remain
 valid. Explicit selectors also accept exact, case-sensitive column names from
 `scan.columns`; names are resolved separately for each scan, so reordered columns
 do not change their meaning. Missing or duplicate names produce an error; use an
 index to distinguish repeated labels. Names are not detector aliases: `I0` and
 `i0` select different labels, and the string `"1"` is a name, not index 1.
 
-Rust, from a source checkout:
+Rust:
 
 ```rust,no_run
 use rexafs::io::read_measurement;

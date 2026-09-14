@@ -202,9 +202,9 @@ fit.plot().k().dataset(0).save_png("fit_dataset0_k.png")?;
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-## Universal measurement reader (unreleased)
+## Universal measurement reader (since 0.2.6)
 
-The source checkout adds content-detected beamline text, CSV, Athena, XTUNES
+Version 0.2.6 adds content-detected beamline text, CSV, Athena, XTUNES
 and HDF5 import through the shared Rust reader. Read a document, inspect its
 scans, columns, units and warnings, then select a signal mapping. Ambiguous
 channels require explicit selection; detector images require reduction before
@@ -213,6 +213,6 @@ See the [reader guide](../../doc/measurement-reader.md) for language examples,
 unit conversions, dataset selection, fixture coverage and limits. This API is
 not included in the published 0.2.5 packages.
 
-Larix 1.0 session import is available in the unreleased shared reader, including
+Larix 1.0 session import is available in the shared reader since 0.2.6, including
 stored absorption, complex saved arrays and inert session metadata. See the
 [Larix import guide](../../doc/larix-import.md).

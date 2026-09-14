@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Source axis conversion to eV; no magnitude-based unit guessing (unreleased).
+Source axis conversion to eV; no magnitude-based unit guessing (since 0.2.6).
 
 ```typescript
 export type EnergyConversion =

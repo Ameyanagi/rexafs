@@ -1,6 +1,6 @@
 # Importing Larix sessions
 
-**Unreleased source-checkout feature.** The shared Rust measurement reader
+**Available since 0.2.6.** The shared Rust measurement reader
 accepts Larix 1.0 `.larix` sessions in gzip or plain UTF-8 form. Python,
 TypeScript/WebAssembly, the desktop reader and browser workspace use the same
 parser. It imports saved data and provenance; it does not restore an executable

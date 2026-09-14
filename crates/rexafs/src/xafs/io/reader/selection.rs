@@ -3,7 +3,7 @@ use super::{EnergyConversion, MeasurementScan, ReadError, SignalConversion, Spec
 use crate::xafs::xasspectrum::XASSpectrum;
 use serde::{Deserialize, Serialize};
 
-/// A zero-based index or exact source column name (unreleased).
+/// A zero-based index or exact source column name (since 0.2.6).
 /// Names are case-sensitive and must identify exactly one column in the selected
 /// scan. Use an index for duplicate labels; numeric strings remain names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,7 +30,7 @@ impl From<String> for ColumnSelector {
     }
 }
 
-/// Detector arithmetic using names, indices, or both (unreleased).
+/// Detector arithmetic using names, indices, or both (since 0.2.6).
 /// Resolution delegates to [`SignalConversion`]; no extra detector corrections,
 /// normalization, or changes to the stored columns occur.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -58,7 +58,7 @@ pub enum SignalSelection {
     },
 }
 
-/// Explicit column selection by name or index (unreleased).
+/// Explicit column selection by name or index (since 0.2.6).
 ///
 /// Constructors use the selected axis's detected calibration or declared eV/keV
 /// units. Missing or conflicting calibration requires [`Self::with_energy`].

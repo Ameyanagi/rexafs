@@ -1256,7 +1256,7 @@ impl WasmSpectrum {
     }
 }
 
-/// Owned, content-detected measurement import, available in the unreleased API.
+/// Owned, content-detected measurement import, available since 0.2.6.
 /// Parsing and conversion use rexafs::io on both native and WebAssembly targets.
 /// Release its native storage with free() after copying the arrays you need.
 #[wasm_bindgen(js_name = Measurement)]

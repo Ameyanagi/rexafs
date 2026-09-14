@@ -221,3 +221,5 @@ crates/rexafs/tests/fixtures/xas/candidates/kek-pf/README.md,developer,exclude,,
 doc/validation/2026-09-14-measurement-import-ui/README.md,developer,exclude,,Original computer-use captures and source attribution for unreleased import workflows.
 doc/validation/2026-09-14-named-multisignal-import.md,developer,exclude,,Named-column API and multiple-signal UI qualification including Windows checkout correction.
 crates/rexafs/tests/fixtures/xas/collections/rexafs-corpus/INDEX.md,developer,exclude,,Canonical paths and unchanged historical expanded-corpus records.
+doc/release-notes-0.2.6.md,developer,exclude,,Coordinated 0.2.6 release notes; publication status is explicit.
+doc/validation/2026-09-14-release-0.2.6/review.md,developer,exclude,,Versioned release preparation and exact-build publication evidence.
