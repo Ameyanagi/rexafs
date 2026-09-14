@@ -81,7 +81,7 @@ forward Fourier transforms and CSV/JSON export.
 
 `/app/scattering/` runs the published ReFEFF 0.4.0 WASI engine through its browser
 Worker. It accepts a FEFF input, displays calculated EXAFS and offers generated
-files and a provenance record for download. Native rexafs 0.2.5 retains its
+files and a provenance record for download. Native rexafs 0.2.6 retains its
 ReFEFF 0.3.0 dependency; the two browser engines have separate manifests.
 
 `npm run dev` and `npm run build` first prepare both engines. Install `wasm-pack 0.15.0`
@@ -146,9 +146,8 @@ follow the vendor README and preserve the original notice bytes.
 - `src/content/docs/` owns the curated public manual. Every page requires
   `audience: user`; the collection schema rejects any other audience.
 - `doc/` retains source-checkout guides and historical records. Website guides
-  target published 0.2.5; they intentionally differ from checkout guides that
-  document unreleased APIs. Keep shared scientific explanations synchronized
-  when the underlying method changes. Do not import `doc/` recursively.
+  target published 0.2.6; source-checkout additions belong in Next. Keep shared
+  scientific explanations synchronized when the underlying method changes. Do not import `doc/` recursively.
 - `src/content/docs/docs/reference/{stable,next}/` is generated. Edit Python
   stubs/native docstrings or TypeScript declarations, then regenerate. Stable
   membership and signatures come from the release tag; Next uses the checkout.
