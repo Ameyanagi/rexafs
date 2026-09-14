@@ -191,7 +191,12 @@ impl AssistantWindow {
         cx: &mut Context<Self>,
     ) {
         let key = event.keystroke.key.as_str();
-        if !model_picker_handles_key(self.composer_menu.is_some(), key) {
+        let modifiers = event.keystroke.modifiers;
+        if !model_picker_handles_key(
+            self.composer_menu.is_some(),
+            key,
+            modifiers.control || modifiers.platform || modifiers.alt || modifiers.shift,
+        ) {
             return;
         }
         window.prevent_default();

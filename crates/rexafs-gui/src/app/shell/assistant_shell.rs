@@ -129,8 +129,8 @@ pub(super) fn control_key_activates(key: &str, modified: bool) -> bool {
     !modified && matches!(key, "enter" | "space")
 }
 
-pub(super) fn model_picker_handles_key(open: bool, key: &str) -> bool {
-    open || key != "escape"
+pub(super) fn model_picker_handles_key(open: bool, key: &str, modified: bool) -> bool {
+    !modified && (matches!(key, "enter" | "space" | "up" | "down") || (open && key == "escape"))
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -303,11 +303,24 @@ mod tests {
     #[test]
     fn assistant_model_trigger_keeps_activation_and_escape_fallthrough() {
         for key in ["enter", "space", "up", "down"] {
-            assert!(model_picker_handles_key(false, key));
-            assert!(model_picker_handles_key(true, key));
+            assert!(model_picker_handles_key(false, key, false));
+            assert!(model_picker_handles_key(true, key, false));
         }
-        assert!(!model_picker_handles_key(false, "escape"));
-        assert!(model_picker_handles_key(true, "escape"));
+        assert!(!model_picker_handles_key(false, "escape", false));
+        assert!(model_picker_handles_key(true, "escape", false));
+    }
+    #[test]
+    fn assistant_composer_menus_leave_focus_and_workspace_shortcuts_alone() {
+        for open in [false, true] {
+            for key in ["tab", "j", "b", "k", "s", "a", "."] {
+                for modified in [false, true] {
+                    assert!(!model_picker_handles_key(open, key, modified));
+                }
+            }
+            for key in ["enter", "space", "up", "down", "escape"] {
+                assert!(!model_picker_handles_key(open, key, true));
+            }
+        }
     }
     #[test]
     fn assistant_controls_cover_all_states() {
