@@ -6,6 +6,41 @@ needed, the panel provides Retry and login controls. rexafs does not store a
 separate model API key. Choose the model and reasoning effort in the panel;
 availability comes from the connected server.
 
+## Connection troubleshooting
+
+An installed Codex launcher can still fail before connecting. For example,
+macOS apps opened from Finder do not necessarily inherit Terminal's `PATH`.
+An npm/Bun launcher using `#!/usr/bin/env node` then needs Node.js on the app's
+search path, even if `codex --version` succeeds in Terminal. In rexafs 0.2.6,
+the resulting startup error can appear only as **Codex disconnected**.
+
+For 0.2.6, save your project and quit rexafs, then start it from a Terminal
+where `codex --version` works:
+
+```sh
+/Applications/rexafs.app/Contents/MacOS/rexafs
+```
+
+This uses Terminal's environment for that launch; it does not change Finder's
+environment. `REXAFS_CODEX` can select an explicit Codex executable when needed.
+Connection initialization does not send the draft message or analysis context;
+Send shares the context described below. Codex owns authentication through its
+[app-server protocol](https://learn.chatgpt.com/docs/app-server).
+
+**Source-checkout fix, not included in 0.2.6:** the
+[launcher](../crates/rexafs-gui/src/codex_client.rs) preserves absolute inherited
+search-path entries and adds common Bun, npm, Homebrew, Nix, Volta and mise
+locations for the child process. It does not read shell startup files or change
+the parent environment. On macOS, it also checks the Codex app's bundled CLI
+when no standalone launcher is found. Explicit executable overrides retain
+priority. Relative/empty path entries are excluded so the temporary assistant
+workspace is not searched for executables.
+
+Connection failures show the final nonempty stderr line, limited to 300
+characters; only the last 4 KiB is retained in memory. This diagnostic is not
+written into a saved project. The launcher change does not alter authentication,
+Review/Edit analysis permissions or Extended access.
+
 ## Compact composer (unreleased)
 
 The source checkout places the message above a compact footer with **Model**,
