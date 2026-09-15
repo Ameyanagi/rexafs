@@ -1,0 +1,61 @@
+{
+  "saved_project_sha256": "02cf5baf5e5178bc447cee869bab02b1ed0662e5583f10ffa2c83c72e171858c",
+  "groups": [
+    {
+      "source": "xas/samples/unspecified/unspecified/xraylarch/json_unzipped.prj",
+      "record_id": "qsekm",
+      "points": 442,
+      "exact_arrays": true,
+      "exact_original_bytes": true
+    },
+    {
+      "source": "xas/samples/unspecified/unspecified/xraylarch/json_unzipped.prj",
+      "record_id": "qmdqc",
+      "points": 442,
+      "exact_arrays": true,
+      "exact_original_bytes": true
+    },
+    {
+      "source": "xas/samples/unspecified/unspecified/xraylarch/json_unzipped.prj",
+      "record_id": "pnmsn",
+      "points": 442,
+      "exact_arrays": true,
+      "exact_original_bytes": true
+    },
+    {
+      "source": "xas/samples/unspecified/unspecified/xraylarch/json_unzipped.prj",
+      "record_id": "gwrcc",
+      "points": 441,
+      "exact_arrays": true,
+      "exact_original_bytes": true
+    },
+    {
+      "source": "sessions/larix/fixtures/valid/two-analyzed.larix",
+      "record_id": "pfbl12c",
+      "points": 818,
+      "exact_arrays": true,
+      "exact_original_bytes": true
+    },
+    {
+      "source": "sessions/larix/fixtures/valid/two-analyzed.larix",
+      "record_id": "pf9a",
+      "points": 1420,
+      "exact_arrays": true,
+      "exact_original_bytes": true
+    },
+    {
+      "source": "sessions/xtunes/two-analyzed.xtsp",
+      "record_id": "record_1",
+      "points": 818,
+      "exact_arrays": true,
+      "exact_original_bytes": true
+    },
+    {
+      "source": "sessions/xtunes/two-analyzed.xtsp",
+      "record_id": "record_2",
+      "points": 1420,
+      "exact_arrays": true,
+      "exact_original_bytes": true
+    }
+  ]
+}

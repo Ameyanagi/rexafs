@@ -48,6 +48,10 @@ impl ImportEditor {
                 self.show_columns = !source.confirmed;
                 self.reload(cx);
             }
+            Action::IncludeScan(index) => {
+                source.selected_scans[index] = !source.selected_scans[index];
+            }
+            Action::AllScans(include) => source.selected_scans.fill(include),
             Action::IncludeSignal(index) => {
                 if source.included[index] || source.candidate_errors[index].is_none() {
                     source.included[index] = !source.included[index];
@@ -130,10 +134,20 @@ impl ImportEditor {
         if source.document.scans.len() > 1 || !source.document.datasets.is_empty() {
             selectors = selectors.child(self.button(
                 Action::Selector(0),
-                format!("Scan: {} ▾", scan.map_or("Choose…", |s| s.label.as_str())),
+                format!(
+                    "Scan: {} ▾",
+                    scan.map_or("Choose…", |_| source.scan_label(source.scan))
+                ),
                 true,
                 cx,
             ));
+        }
+        if source.document.scans.len() > 1 {
+            let selected = source.selected_scans.iter().filter(|&&v| v).count();
+            selectors = selectors.child(div().text_color(t.text_muted).child(format!(
+                "{selected} / {} scans selected",
+                source.document.scans.len()
+            )));
         }
         if scan.is_some() {
             let label: String = if source.confirmed {
@@ -260,15 +274,7 @@ impl ImportEditor {
             );
         }
         if let Some(which @ (0 | 1)) = self.selector {
-            let labels: Vec<_> = if which == 0 {
-                source
-                    .document
-                    .scans
-                    .iter()
-                    .enumerate()
-                    .map(|(i, s)| (Action::Scan(i), s.label.clone()))
-                    .collect()
-            } else {
+            let labels: Vec<_> = if which == 1 {
                 scan.into_iter()
                     .flat_map(|s| {
                         s.signals.iter().enumerate().map(|(i, s)| {
@@ -276,6 +282,8 @@ impl ImportEditor {
                         })
                     })
                     .collect()
+            } else {
+                vec![]
             };
             let mut choices = div()
                 .id("measurement-source-choices")
@@ -287,6 +295,64 @@ impl ImportEditor {
                 .p_2()
                 .rounded_md()
                 .bg(t.surface);
+            if which == 0 {
+                choices = choices.child(
+                    div()
+                        .flex()
+                        .gap_2()
+                        .child(self.button(Action::AllScans(true), "All scans", true, cx))
+                        .child(self.button(Action::AllScans(false), "None", true, cx)),
+                );
+                for index in 0..source.document.scans.len() {
+                    let (count, valid) = source.scan_status(index);
+                    choices =
+                        choices.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(div().flex_1().min_w_0().overflow_hidden().child(
+                                    self.button(
+                                        Action::IncludeScan(index),
+                                        format!(
+                                            "{} {}",
+                                            if source.selected_scans[index] {
+                                                "☑"
+                                            } else {
+                                                "☐"
+                                            },
+                                            source.scan_label(index)
+                                        ),
+                                        true,
+                                        cx,
+                                    ),
+                                ))
+                                .child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .text_color(if valid { t.text_muted } else { t.warn })
+                                        .child(if valid {
+                                            format!(
+                                                "{count} {}",
+                                                if count == 1 { "spectrum" } else { "spectra" }
+                                            )
+                                        } else {
+                                            "Needs mapping".into()
+                                        }),
+                                )
+                                .child(self.button(
+                                    Action::Scan(index),
+                                    if index == source.scan {
+                                        "Previewing"
+                                    } else {
+                                        "Preview"
+                                    },
+                                    true,
+                                    cx,
+                                )),
+                        );
+                }
+            }
             for (action, label) in labels {
                 choices = choices.child(self.button(action, label, true, cx));
             }
@@ -309,7 +375,7 @@ impl ImportEditor {
                     .absolute()
                     .top(px(85.))
                     .left(px(16.))
-                    .w(px(400.))
+                    .w(px(if which == 0 { 580. } else { 400. }))
                     .occlude()
                     .border_1()
                     .border_color(t.border)
@@ -563,8 +629,7 @@ impl ImportEditor {
             body = body.child(details);
         }
         let ready = !self.choose_datasets
-            && source.confirmed
-            && source.included_valid()
+            && source.import_ready()
             && (!source.preview_included()
                 || (self.error.is_none()
                     && self
@@ -614,14 +679,25 @@ impl ImportEditor {
                     .border_t_1()
                     .border_color(t.border)
                     .child(self.button(Action::Reset, "Reset mapping", self.draft.is_some(), cx))
+                    .when(
+                        !source.import_ready() && source.selected_scans.iter().any(|&v| v),
+                        |d| {
+                            d.child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(t.warn)
+                                    .child("Review the selected scans that need mapping."),
+                            )
+                        },
+                    )
                     .child(div().flex_1())
                     .child(self.button(Action::Cancel, "Cancel", true, cx))
                     .child(self.button(
                         Action::Apply,
                         format!(
                             "Import {} {}",
-                            source.included_count(),
-                            if source.included_count() == 1 {
+                            source.import_count(),
+                            if source.import_count() == 1 {
                                 "spectrum"
                             } else {
                                 "spectra"

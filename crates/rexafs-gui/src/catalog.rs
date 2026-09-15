@@ -18,7 +18,7 @@ use futures::{SinkExt, channel::mpsc, executor::block_on};
 const SPECTRUM_EXTENSIONS: &[&str] = &[
     "dat", "txt", "xmu", "chi", "xdi", "qd", "ex3", "csv", "tsv", "asc", "ascii", "spec", "fio",
     "raw", "tey", "pfy", "pey", "cey", "xes", "sdat", "h5", "hdf5", "hdf", "nxs", "nx", "prj",
-    "larix", "xtunes", "xtsp", "xas",
+    "larix", "xtunes", "xts", "xtsp", "xas",
 ];
 
 /// Shared folder-discovery rule for intake, catalog restoration and embedding.
@@ -678,6 +678,19 @@ mod tests {
                 is_spectrum_path(&root.join(path)),
                 "Folder discovery omitted {path}"
             );
+        }
+        for name in [
+            "pf9a-bg.xts",
+            "pf9a-ft.xts",
+            "pfbl12c-bg.xts",
+            "pfbl12c-ft.xts",
+            "two-analyzed.xtsp",
+            "mixed-raw-analyzed.xtsp",
+        ] {
+            let path = root.join("../sessions/xtunes").join(name);
+            assert!(is_spectrum_path(&path), "Folder discovery omitted {name}");
+            assert!(measurement_preview_required(&path));
+            assert!(rexafs::io::read_measurement(&path).is_ok());
         }
         assert!(paths.len() >= 200);
         println!(

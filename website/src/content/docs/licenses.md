@@ -93,6 +93,19 @@ chemical standards were used in these two images. The source checkout's
 calculated results and capture hashes. These are separate from the released
 0.2.7 screenshots and do not describe the published 0.2.8 packages.
 
+The [whole-project import guide](/docs/desktop/import/#import-a-whole-project-unreleased)
+includes a full, unedited 1187 × 768 JPEG captured through computer use on
+15 September 2026 from an unreleased macOS ARM64 source build on
+`fix/import-all-scans`. It shows all four records from Larch's
+[`json_unzipped.prj`](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/json_unzipped.prj),
+distributed under the repository's
+[MIT notice](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/LICENSE).
+The preview displays stored absorption without further correction. Original
+measurement bytes are unchanged. The source checkout's
+`doc/validation/2026-09-15-import-all-scans/capture.json` records the input,
+source files, executable and screenshot checksums. The capture describes
+unreleased behavior, not the published 0.2.8 packages.
+
 ## Scientific citations
 
 Use the [citation guide](/docs/science/references/) for algorithm references.
