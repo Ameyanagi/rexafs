@@ -38,6 +38,14 @@ check verified 40 samples and unchanged historical hashes. Coordinated version
 checks, formatting, generated API references and the website source check
 (37 files, no errors or warnings) also passed.
 
+During PR #80 qualification, the website generation gate detected a missing
+MCR citation entry; regenerating the index fixed it. The Python source archive
+job then encountered a Rustup `cargo-clippy` file conflict while implicitly
+installing toolchain-file extras. That job now explicitly selects its installed
+Rust 1.98.1 toolchain for Cargo metadata and the isolated source rebuild. Local
+archive creation and source-license/ABI3 checks passed with that setting; the
+GitHub run remains the cross-platform qualification gate.
+
 ## Remaining release gates
 
 - Green feature and release pull requests, with a merge commit for `dev` → `main`.
