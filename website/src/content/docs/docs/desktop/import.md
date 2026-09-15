@@ -51,9 +51,41 @@ recovery. A readable container does not mean every channel is available. The
 [format guide](/docs/reference/stable/measurement-reading/) describes Athena,
 Larix, XTUNES, 9809/KEK `.qd` and other supported formats and their limits.
 
-Folders and multiple-file selections retain the batch workflow below. Import
-containers individually. Source files are unchanged; saved desktop projects
+Released versions through 0.2.7 retain the older batch workflow for folders and
+multiple-file selections; import containers individually in these versions.
+Source files are unchanged; saved desktop projects
 retain original measurement bytes and accepted signal mappings.
+
+### File extensions and folder discovery
+
+The file picker and single-file drops have no extension restriction. The shared
+reader checks the contents, including Athena `.prj`, Larix `.larix`, XTUNES
+saves, text measurements and supported HDF5/NeXus containers. KEK `.qd` files
+using the supported 9809 layout contain measurements; `.qc` condition files
+are not spectra.
+
+**Unreleased:** folder discovery now includes the following names, without
+regard to letter case. Beamline formats and containers appear under **Pending
+import**; select one to review its scans and signals in the plotted preview.
+Plain text and XDI retain the recipe-based batch workflow.
+
+Projects containing accepted measurement imports reopen their saved groups and
+explicit source list. They do not rescan the original folder and create duplicate
+groups; import the folder again when you want to review newly added files.
+
+| Files | Extensions |
+| --- | --- |
+| Numeric tables and absorption exports | `.dat`, `.txt`, `.xmu`, `.chi`, `.xdi`, `.csv`, `.tsv`, `.asc`, `.ascii`, `.raw`, `.xas` |
+| Beamline measurements | `.qd`, `.ex3`, `.spec`, `.fio`, `.tey`, `.pfy`, `.pey`, `.cey`, `.xes`, `.sdat` |
+| HDF5 and NeXus | `.h5`, `.hdf5`, `.hdf`, `.nxs`, `.nx` |
+| Saved measurements | `.prj`, `.larix`, `.xtunes`, `.xtsp` |
+| Numbered scans and compressed measurements | Numeric suffixes such as `.001` and `.0001`; known measurement suffixes followed by `.gz` |
+
+Extensionless files and `.json` files are also discovered when a bounded content
+check recognizes measurement data. Select an unusual filename individually if
+the folder scan misses it. Discovery does not guarantee conversion: the preview
+reports unsupported layouts, damaged files, missing units and ambiguous signals.
+Saved rexafs `.rxs` projects use **Open project…**.
 
 **Since 0.2.7:** duplicate detector-role headings require
 explicit column selection, and each stored absorption column appears as its own

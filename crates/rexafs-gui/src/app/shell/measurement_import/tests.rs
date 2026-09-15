@@ -80,8 +80,31 @@ fn every_beamline_signal_has_the_same_preview_and_import_conversion() {
         serde_json::from_slice(&std::fs::read(root.join("manifest.json")).unwrap()).unwrap();
     let mut sources = 0;
     let mut conversions = 0;
-    for sample in manifest["samples"].as_array().unwrap() {
-        let path = root.join(sample["path"].as_str().unwrap());
+    let mut paths = manifest["samples"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|sample| sample["path"].as_str().unwrap().to_owned())
+        .collect::<std::collections::BTreeSet<_>>();
+    let mapping: std::collections::BTreeMap<String, String> = serde_json::from_slice(
+        &std::fs::read(root.join("collections/rexafs-corpus/paths.json")).unwrap(),
+    )
+    .unwrap();
+    let coverage: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(root.join("../../measurement_fixtures/format_corpus_coverage.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    paths.extend(
+        coverage["records"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|record| record["status"] != "rejected")
+            .map(|record| mapping[record["path"].as_str().unwrap()].clone()),
+    );
+    for path in paths {
+        let path = root.join(path);
         let (document, bytes) = read_source(&path).unwrap();
         let mut source = MeasurementImport::new(path.clone(), document, bytes);
         sources += 1;
@@ -119,7 +142,7 @@ fn every_beamline_signal_has_the_same_preview_and_import_conversion() {
             }
         }
     }
-    assert!(sources >= 148 && conversions >= 100);
+    assert!(sources >= 200 && conversions >= 298);
     println!("{sources} source files; {conversions} valid GUI signal previews matched the core.");
 }
 

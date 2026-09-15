@@ -8278,7 +8278,25 @@ impl StudioApp {
             group_state,
             header: self.project_header.clone(),
             version: PROJECT_VERSION,
-            source_dir: self.source_dir.clone(),
+            // Reviewed measurements are materialized records, not one raw
+            // catalog row per source file. Rewalking their directory on reopen
+            // would create duplicates and admit still-unreviewed containers.
+            // Persist the explicit raw catalog alongside these records instead.
+            source_dir: self.source_dir.clone().filter(|_| {
+                !self.derived.iter().any(|group| {
+                    group
+                        .operation
+                        .as_ref()
+                        .is_some_and(|op| op.tool == "Measurement import")
+                }) && !self.intake.history.iter().any(|batch| {
+                    batch.sources.values().any(|source| {
+                        source
+                            .pending
+                            .as_ref()
+                            .is_some_and(|pending| pending.measurement_reader)
+                    })
+                })
+            }),
             spectrum_file: self.pending_project_spectrum.clone().or_else(|| {
                 (!self.current_path.as_os_str().is_empty()).then(|| self.current_path.clone())
             }),

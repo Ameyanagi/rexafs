@@ -186,6 +186,14 @@ impl StudioApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if let Some(source) = self.pending_clusters(batch).get(cluster)
+            && source.measurement_reader
+        {
+            let path = source.files[0].clone();
+            self.import_editor = None;
+            self.open_measurement_path(path, false, cx);
+            return;
+        }
         let Some(scope) = self.capture_review_scope(batch, cluster) else {
             return;
         };
@@ -611,10 +619,18 @@ impl ImportEditor {
         self.studio
             .update(cx, |studio, cx| {
                 studio.import_editor = None;
+                if self.measurement.is_some() {
+                    // Accepting a pending measurement removes its opener row.
+                    // Restore a live workspace focus after the dialog unmounts.
+                    let focus = studio.root_focus.clone();
+                    cx.defer_in(window, move |_, window, cx| focus.focus(window, cx));
+                }
                 cx.notify();
             })
             .ok();
-        if let Some(opener) = &self.opener {
+        if self.measurement.is_none()
+            && let Some(opener) = &self.opener
+        {
             window.focus(opener, cx);
         }
     }

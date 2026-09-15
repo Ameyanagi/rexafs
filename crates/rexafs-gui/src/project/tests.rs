@@ -231,6 +231,7 @@ fn recipes_exact_applications_and_pending_sources_survive_conflicting_machine_li
                         pending.clone(),
                         SourceOutcome {
                             pending: Some(PendingSource {
+                                measurement_reader: false,
                                 detection: None,
                                 suggestion: None,
                                 reason: "Locate source".into(),
