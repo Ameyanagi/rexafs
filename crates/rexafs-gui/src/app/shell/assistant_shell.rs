@@ -160,6 +160,16 @@ impl ControlState {
             close: !analysis_open,
         }
     }
+
+    /// Freeze actions that could change the recovery snapshot, including
+    /// receipt navigation/undo in a separate Assistant window. Copy stays usable.
+    pub fn pause_for_update(&mut self) {
+        self.send = false;
+        self.composer = false;
+        self.preferences = false;
+        self.starters = false;
+        self.navigation = false;
+    }
 }
 
 const STARTERS: [(&str, &str); 5] = [
@@ -348,6 +358,17 @@ mod tests {
                 }
             }
         }
+    }
+    #[test]
+    fn update_pause_blocks_receipt_actions_without_closing_the_session() {
+        let mut controls = ControlState::derive(true, true, true, false);
+        assert!(controls.navigation && controls.send);
+        controls.pause_for_update();
+        // Receipt view/undo and model actions use these gates in both hosts.
+        assert!(!controls.navigation && !controls.preferences && !controls.send);
+        assert!(controls.copy && !controls.close);
+        // Cancellation recomputes the live controls, rather than retiring receipts.
+        assert!(ControlState::derive(true, true, true, false).navigation);
     }
     #[test]
     fn assistant_starters_are_distinct_editable_prompts() {

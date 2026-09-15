@@ -459,8 +459,19 @@ impl StudioApp {
         }
         let first = self.derived.len();
         let mut ids = std::collections::BTreeSet::new();
+        let mut imported_sources =
+            std::collections::BTreeMap::<PathBuf, Vec<crate::group_identity::GroupId>>::new();
         for mut group in groups {
             group.id = self.next_group_id();
+            if let Some(path) = group
+                .operation
+                .as_ref()
+                .and_then(|operation| operation.parameters.get("source_path"))
+                .and_then(|value| serde_json::from_value::<PathBuf>(value.clone()).ok())
+                && let Some(id) = &group.group_id
+            {
+                imported_sources.entry(path).or_default().push(id.clone());
+            }
             ids.insert(
                 group
                     .group_id
@@ -468,6 +479,20 @@ impl StudioApp {
                     .expect("Materialized measurement has an identity"),
             );
             self.derived.push(group);
+        }
+        for batch in &mut self.intake.history {
+            for (path, created) in &imported_sources {
+                if let Some(source) = batch.sources.get_mut(path)
+                    && source
+                        .pending
+                        .as_ref()
+                        .is_some_and(|pending| pending.measurement_reader)
+                {
+                    source.pending = None;
+                    source.failed = None;
+                    source.created.extend(created.iter().cloned());
+                }
+            }
         }
         self.rekey_after_catalog_change();
         self.record_created_groups(ids, format!("Import {count} measurement spectra"));

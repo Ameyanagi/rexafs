@@ -173,6 +173,7 @@ pub(crate) struct AssistantWindow {
     processing_checks: Vec<(std::path::PathBuf, super::Stage, u64)>,
     panel_memory: PanelMemory,
     analysis_closed: bool,
+    update_paused: bool,
     account_expanded: bool,
     account_trigger_bounds: Rc<Cell<gpui::Bounds<gpui::Pixels>>>,
     focus_composer: bool,
@@ -483,7 +484,24 @@ impl AssistantWindow {
             controls.composer = false;
             controls.starters = false;
         }
+        if self.update_paused {
+            controls.pause_for_update();
+        }
         controls
+    }
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    pub(crate) fn can_restart_for_update(&self) -> bool {
+        !self.transcript.busy
+            && !self.transcript.stop_pending
+            && !pending_blocks_run(&self.pending)
+            && self.tool_calls.is_empty()
+            && self.prepared.is_none()
+            && self.access.is_empty()
+    }
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    pub(crate) fn pause_for_update(&mut self, paused: bool, cx: &mut Context<Self>) {
+        self.update_paused = paused;
+        cx.notify();
     }
     pub(crate) fn analysis_closed(&mut self, cx: &mut Context<Self>) {
         if self.analysis_closed {
@@ -848,6 +866,7 @@ impl AssistantWindow {
                 })
                 .unwrap_or_default(),
             analysis_closed: false,
+            update_paused: false,
             account_expanded: false,
             account_trigger_bounds: Rc::default(),
             focus_composer: true,

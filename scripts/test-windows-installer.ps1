@@ -1,4 +1,4 @@
-param([Parameter(Mandatory = $true)][string]$Directory)
+param([Parameter(Mandatory = $true)][string]$Directory, [switch]$CheckUpdates)
 
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true') {
@@ -116,6 +116,21 @@ Set-Content -LiteralPath $sentinel -Value $sentinelText -NoNewline
 Install-Checked 'reinstall.log'
 if ((Get-Content -Raw -LiteralPath $sentinel) -ne $sentinelText) { throw 'Reinstall changed user data' }
 
+# Exercise the actual update helper against this disposable registered install,
+# including a deliberately mismatched payload that must roll Setup back.
+# release-build.yml requires this check; the separate historical installer job
+# stages a previously published binary that predates the updater.
+if ($CheckUpdates) {
+    $bundle = Get-ChildItem -LiteralPath $Directory -Directory -Filter 'rexafs-*-pc-windows-msvc'
+    if (@($bundle).Count -ne 1) { throw 'Expected one Windows source bundle' }
+    uv run --no-project python scripts/smoke-desktop-updater.py $bundle.FullName --installed $installed --setup $setup
+    if ($LASTEXITCODE -ne 0) { throw 'Windows one-button updater qualification failed' }
+    if ((Get-ItemProperty -Path $registry).DisplayVersion -ne $record.source_build.version) { throw 'Updater lost the installed version registration' }
+    foreach ($link in @($startLink, $desktopLink)) {
+        if ([InstallerShortcut]::Target($link) -ne (Join-Path $installed 'rexafs.exe')) { throw 'Updater changed a shortcut target' }
+    }
+}
+
 $executable = Join-Path $installed 'rexafs.exe'
 if ((Get-PeMachine $executable) -ne $targetPolicy.Machine) {
     throw 'Installed desktop architecture does not match its target.'
@@ -184,6 +199,7 @@ $qualification = [ordered]@{
         'user-uninstall-registration', 'reinstall', 'build-identity', 'packaged-example',
         'embedded-feff-runner', 'native-desktop-architecture', 'engine-architecture',
         'uninstall', 'preserve-user-project', 'unicode-install-path')
+    update_checks = [bool]$CheckUpdates
     interactive_gui = 'not tested on hosted runner'
     signed = $false
 }

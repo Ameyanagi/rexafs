@@ -51,6 +51,18 @@ fn main() {
     feff10::worker::init();
 
     let first_arg = std::env::args_os().nth(1);
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    if first_arg.as_deref() == Some(std::ffi::OsStr::new("--finish-update")) {
+        let result = std::env::args_os()
+            .nth(2)
+            .ok_or("Missing update transaction".into())
+            .and_then(|path| updates::install::finish_update(std::path::Path::new(&path)));
+        if let Err(error) = result {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     match first_arg.as_deref().and_then(std::ffi::OsStr::to_str) {
         Some("--version") => {
             println!("rexafs {}", updates::installed_label());
