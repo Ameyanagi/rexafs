@@ -31,6 +31,26 @@ This launch inherits Terminal's executable search path. It does not reinstall
 Codex or change your account. The development source adds runtime discovery and
 more useful startup errors; that fix is not part of the 0.2.6 download.
 
+## Compact composer in development
+
+The development build places **Model**, **Reasoning**, and **Access** menus below
+the message. The first two show the effective selections; their menus retain
+**Automatic** and **Model default**. Use arrow keys to browse, Enter or Space to
+choose, and Escape to close a menu. The arrow button sends; it becomes Stop
+during a response.
+
+The **Access** menu describes **Review** and **Edit analysis**. Its **Workspace
+commands** switch is the existing Extended access setting, with the same sandbox
+and approval rules. An amber dot on Access indicates that it is enabled.
+**Plot images** and **Web search** are in Assistant settings (the gear button).
+Opening **Parameters** or **Groups**, by its toolbar button or keyboard
+shortcut, keeps that panel visible beside the Assistant. When space is tight,
+the older panel closes first and the Assistant narrows temporarily. Its preferred
+width returns when space is available. On small windows, the plot can be narrower
+than the usual 360 px target so the requested panel remains usable.
+
+This layout is not included in the 0.2.6 download.
+
 ## Controls and access
 
 - **Review** permits inspection and navigation. **Edit analysis** enables the

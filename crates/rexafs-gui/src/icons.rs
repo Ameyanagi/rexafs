@@ -28,6 +28,7 @@ pub(crate) enum Icon {
     External,
     Chat,
     Send,
+    ArrowUp,
     Stop,
     PanelLeft,
     PanelRight,
@@ -48,7 +49,7 @@ pub(crate) enum Icon {
 }
 
 impl Icon {
-    pub(crate) const ALL: [Self; 40] = [
+    pub(crate) const ALL: [Self; 41] = [
         Self::Folder,
         Self::Import,
         Self::Save,
@@ -72,6 +73,7 @@ impl Icon {
         Self::External,
         Self::Chat,
         Self::Send,
+        Self::ArrowUp,
         Self::Stop,
         Self::PanelLeft,
         Self::PanelRight,
@@ -127,6 +129,7 @@ impl Icon {
             Self::Download => r#"<path d="M12 3v13m-5-5 5 5 5-5M4 19v2h16v-2"/>"#,
             Self::External => r#"<path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/>"#,
             Self::Chat => r#"<path d="M4 4h16v12H9l-5 5V4Z"/>"#,
+            Self::ArrowUp => r#"<path d="M12 20V4m-6 6 6-6 6 6"/>"#,
             Self::Send => r#"<path d="m3 3 19 9-19 9 4-9-4-9Zm4 9h15"/>"#,
             Self::Stop => r#"<rect x="5" y="5" width="14" height="14" rx="2"/>"#,
             Self::PanelLeft => {

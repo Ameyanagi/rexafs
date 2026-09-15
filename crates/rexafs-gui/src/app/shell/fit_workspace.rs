@@ -290,7 +290,7 @@ impl StudioApp {
                     self.context_panel_open,
                 )
                 .on_click(cx.listener(|this, _, _, cx| {
-                    this.context_panel_open = !this.context_panel_open;
+                    this.toggle_side_panel(super::assistant_shell::SidePanel::Inspector);
                     cx.notify();
                 })),
             )
