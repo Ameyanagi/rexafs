@@ -54,6 +54,11 @@ hashes are unchanged. The 29 project tests passed with the explicit writer
 ignored. The coordinated version check and formatting passed. Core strict Clippy
 and the default core suite also passed before the metadata-only version change.
 
+A final review extended the update pause to Assistant receipt navigation/undo
+and preferences, including the separate-window host. The 70 selected Assistant
+tests passed, including the recovery-pause regression. CI must qualify this
+final correction before either branch promotion.
+
 1. Retain the reviewed 0.2.8 linked and embedded fixture pair with this source.
 2. Pass and merge the feature PR into `dev`; review its nightly and selected CI.
 3. Pass the `dev` → `main` release PR and merge with a merge commit.

@@ -479,13 +479,13 @@ impl AssistantWindow {
             self.account,
             self.transcript.busy || self.transcript.stop_pending,
         );
-        if self.update_paused
-            || self.history_read_only
-            || self.pending.values().any(|m| m == "thread/resume")
-        {
+        if self.history_read_only || self.pending.values().any(|m| m == "thread/resume") {
             controls.send = false;
             controls.composer = false;
             controls.starters = false;
+        }
+        if self.update_paused {
+            controls.pause_for_update();
         }
         controls
     }
