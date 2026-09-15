@@ -105,6 +105,20 @@ pub(crate) fn can_install(release: &crate::updates::AvailableRelease) -> bool {
     release.asset.is_some() && installed_app().is_ok()
 }
 
+pub(crate) fn download_size(release: &crate::updates::AvailableRelease) -> u64 {
+    #[cfg(windows)]
+    let needs_setup =
+        installed_app().is_ok_and(|target| windows::registered_install(&target).unwrap_or(false));
+    #[cfg(not(windows))]
+    let needs_setup = false;
+    release.asset.as_ref().map_or(0, |asset| asset.size)
+        + if needs_setup {
+            release.installer.as_ref().map_or(0, |asset| asset.size)
+        } else {
+            0
+        }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

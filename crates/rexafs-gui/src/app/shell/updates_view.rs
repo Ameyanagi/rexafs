@@ -496,7 +496,7 @@ impl StudioApp {
                                 )
                                 .child(div().text_color(t.text_muted).child(format!(
                                     "{:.1} MB · Reopens a recovery copy of your analysis.",
-                                    asset.size as f64 / 1_000_000.
+                                    updates::install::download_size(release) as f64 / 1_000_000.
                                 )));
                         }
                         if !automatic || self.updates.preferences_open {
