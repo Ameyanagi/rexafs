@@ -345,6 +345,7 @@ pub(crate) fn finish_update(root: &Path) -> Result<(), String> {
             super::windows::backup_registration(&root)?;
             replacing = true;
             return super::windows::install(&root, &plan.target, || {
+                payload::retire_obsolete(&previous, &plan.target, &root.join("retired"))?;
                 payload::verify(&plan.target, true)?;
                 if hash_file(&plan.target.join(payload::MANIFEST))? != plan.manifest_hash {
                     return Err("Installer payload differs from the verified archive".into());
@@ -379,12 +380,13 @@ pub(crate) fn finish_update(root: &Path) -> Result<(), String> {
 }
 
 pub(super) fn launch(target: &Path, recovery: &Path) -> Result<(), String> {
+    let log = File::create(recovery.with_file_name("reopened.log")).map_err(|e| e.to_string())?;
     let mut child = Command::new(target.join(binary_name()))
         .arg(recovery)
         .current_dir(target)
         .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stdout(log.try_clone().map_err(|e| e.to_string())?)
+        .stderr(log)
         .spawn()
         .map_err(|e| e.to_string())?;
     // The receipt supports troubleshooting without collecting any project data.

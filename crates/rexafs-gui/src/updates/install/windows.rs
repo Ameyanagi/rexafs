@@ -76,8 +76,7 @@ pub(super) fn backup_registration(root: &Path) -> Result<(), String> {
     run(Command::new(registry_tool()?)
         .arg("export")
         .arg(format!("HKCU\\{}", subkey()))
-        .arg(root.join("registration.reg"))
-        .arg("/reg:64"))?;
+        .arg(root.join("registration.reg")))?;
     Ok(())
 }
 

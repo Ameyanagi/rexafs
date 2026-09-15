@@ -354,6 +354,8 @@ jobs:
           xvfb-run -a -s "-screen 0 1366x768x24" python scripts/smoke-linux-gui.py \
             target/distributions/rexafs-*-unknown-linux-gnu/rexafs \
             crates/rexafs-gui/tests/fixtures/projects/rexafs-0.2.3-embedded.rxs
+          xvfb-run -a -s "-screen 0 1366x768x24" python scripts/test-desktop-updater.py \
+            target/distributions/rexafs-*-unknown-linux-gnu
       - name: Archive target-specific Linux GUI evidence
         if: always() && runner.os == 'Linux'
         run: |
@@ -379,6 +381,19 @@ jobs:
       - name: Install, reinstall and uninstall Windows package
         if: runner.os == 'Windows'
         run: ./scripts/test-windows-installer.ps1 -Directory target/distributions
+      - name: Qualify portable Windows update and recovery
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bundle = Get-ChildItem target/distributions -Directory -Filter 'rexafs-*-pc-windows-msvc'
+          if (@($bundle).Count -ne 1) { throw 'Expected one Windows bundle' }
+          uv run --no-project python scripts/test-desktop-updater.py $bundle.FullName
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always() && runner.os != 'macOS'
+        with:
+          name: update-smoke-${{ matrix.target }}
+          path: target/update-smoke
+          if-no-files-found: warn
       - name: Build and smoke-test unsigned Mac installer preview
         if: runner.os == 'macOS'
         run: |

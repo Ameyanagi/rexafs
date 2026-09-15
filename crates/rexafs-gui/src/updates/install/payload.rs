@@ -176,6 +176,37 @@ pub(super) fn copy_tree(source: &Path, destination: &Path) -> Result<(), String>
     Ok(())
 }
 
+/// Inno Setup replaces current files but does not remove files retired by a new
+/// release. Retain those formerly owned files outside the live installation.
+#[cfg(any(windows, test))]
+pub(super) fn retire_obsolete(
+    previous: &Path,
+    target: &Path,
+    retired: &Path,
+) -> Result<(), String> {
+    let old = manifest(previous)?;
+    let new = manifest(target)?;
+    for (name, hash) in old {
+        if new.contains_key(&name) {
+            continue;
+        }
+        let path = target.join(&name);
+        if !path.exists() {
+            continue;
+        }
+        if !regular_metadata(&path)?.is_file() || hash_file(&path)? != hash {
+            return Err(format!(
+                "A retired package file changed during installation: {name}"
+            ));
+        }
+        let destination = retired.join(name);
+        fs::create_dir_all(destination.parent().ok_or("Missing retired-file parent")?)
+            .map_err(|e| e.to_string())?;
+        fs::rename(path, destination).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// User files are retained; a new package cannot claim an existing user path.
 pub(super) fn preserve_extras(current: &Path, incoming: &Path, copy: bool) -> Result<(), String> {
     let owned = manifest(current)?;
@@ -527,6 +558,33 @@ mod tests {
             verify(directory.path(), false)
                 .unwrap_err()
                 .contains("Unlisted")
+        );
+    }
+
+    #[test]
+    fn installer_retires_only_previously_owned_unchanged_files() {
+        let directory = tempfile::tempdir().unwrap();
+        let old = directory.path().join("old");
+        fs::create_dir(&old).unwrap();
+        fs::write(old.join("retired.dll"), "old library").unwrap();
+        fs::write(old.join("rexafs"), "binary").unwrap();
+        inventory(&old);
+        let target = directory.path().join("target");
+        copy_tree(&old, &target).unwrap();
+        fs::remove_file(target.join("retired.dll")).unwrap();
+        inventory(&target);
+        fs::write(target.join("retired.dll"), "old library").unwrap();
+        fs::write(target.join("my project.rxs"), "user data").unwrap();
+        let retired = directory.path().join("retired");
+        retire_obsolete(&old, &target, &retired).unwrap();
+        assert!(!target.join("retired.dll").exists());
+        assert_eq!(
+            fs::read(retired.join("retired.dll")).unwrap(),
+            b"old library"
+        );
+        assert_eq!(
+            fs::read(target.join("my project.rxs")).unwrap(),
+            b"user data"
         );
     }
 

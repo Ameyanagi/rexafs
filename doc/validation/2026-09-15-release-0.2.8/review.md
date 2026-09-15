@@ -76,7 +76,7 @@ candidate selects native x64/ARM64 archives, verifies a package-file inventory,
 preserves user files, and restores a recovery project after restarting. Windows
 installations use the matching per-user installer and retain an uninstall-key
 backup; portable Windows and Linux copies replace the full extracted folder.
-The local updater suite currently passes 16 tests, including archive traversal,
+The local updater suite currently passes 17 tests, including archive traversal,
 links, case collisions, inventory validation, user-file preservation and rollback.
 Native Windows/Linux handoff and installer qualification must pass before merge
 or publication. Earlier CI results apply to the preceding macOS-only revision.
