@@ -23,7 +23,7 @@ in-situ measurement series quickly and reproducibly.
 
 **Is the software finished?**
 The desktop is stable on macOS, with Windows and Linux previews. This manual
-covers 0.2.6; **Next** documents the source checkout. See
+covers 0.2.7; **Next** documents the source checkout. See
 [release history](/releases/).
 
 ## Scope
@@ -52,7 +52,7 @@ the x64 packages. Windows ARM64 requires Windows 11 for its bundled x64 FEFF10
 helper. See [ARM64 availability](/docs/getting-started/install/#arm64-availability).
 
 **Which scattering engine is used?**
-Every 0.2.6 desktop package includes ReFEFF and FEFF10. Rust exposes them as
+Every 0.2.7 desktop package includes ReFEFF and FEFF10. Rust exposes them as
 optional features. Record the engine and version you used; the analysis export
 includes them. The browser scattering preview uses ReFEFF 0.4.0 separately.
 

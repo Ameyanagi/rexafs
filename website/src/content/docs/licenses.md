@@ -44,7 +44,7 @@ numerical changes from the XrayLarch example collection at revision
 
 ## Documentation screenshots
 
-The desktop guides show full, unedited window captures from the published
+The original desktop walkthroughs show full, unedited window captures from the published
 macOS ARM64 0.2.4 package, captured through computer use on 13 September 2026
 with the Cu example and built-in Cu structure. The fitting
 walkthrough uses ReFEFF, an 8 Å cluster and one first-shell path. Values in these
@@ -73,6 +73,16 @@ The original measurement bytes are unchanged. The screenshot plots the selected
 reference signal as `ln(it / ir)` without normalization or detector corrections.
 The repository's `doc/validation/2026-09-14-named-multisignal-import-capture.json`
 records the input, executable and image checksums.
+
+The [Assistant guide](/docs/desktop/assistant/) shows three full, unedited
+1192 × 768 JPEG captures made through computer use on 15 September 2026 from
+the signed and notarized macOS ARM64 0.2.7 app. They show its compact menus beside
+the normalization parameters and bundled `cu_150k.xmu` example. No assistant
+message was sent. Model availability depends on the connected installation.
+The [0.2.7 qualification record](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-09-15-release-0.2.7/review.md)
+identifies the original release build, signed executable and image checksums.
+The Cu measurement retains the source attribution above; its original bytes are
+unchanged. Older screenshots retain their original version labels.
 
 ## Scientific citations
 

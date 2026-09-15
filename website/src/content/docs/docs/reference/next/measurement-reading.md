@@ -9,7 +9,7 @@ pagefind: false
 Use the [Stable reader guide](/docs/reference/stable/measurement-reading/)
 for the published release.
 
-## Unreleased reader corrections
+## Reader corrections since 0.2.7
 
 - Detector roles must match a unique column. Repeated headings or competing
   aliases require explicit selection. Each stored absorption column remains a
@@ -19,7 +19,7 @@ for the published release.
 - Athena export retains historical `(undef)` markers before current optional
   arrays, so edited `i0`, `signal` and `stddev` values survive saving and reopening.
 
-These corrections are not included in the 0.2.6 packages. The Rust core supplies
+The Rust core supplies
 the same reader behavior to Python, TypeScript, desktop and browser imports.
 
 ## Inspect and select

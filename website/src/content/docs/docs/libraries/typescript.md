@@ -9,11 +9,11 @@ audience: user
 Install with [Bun](https://bun.sh/docs/installation):
 
 ```sh
-bun add rexafs@0.2.6
+bun add rexafs@0.2.7
 ```
 
 The package runs in Node 22+ and browsers with WebAssembly support. You can also
-install it with `npm install rexafs@0.2.6` or `pnpm add rexafs@0.2.6`.
+install it with `npm install rexafs@0.2.7` or `pnpm add rexafs@0.2.7`.
 Use ECMAScript modules and TypeScript `moduleResolution: "NodeNext"` for Node or
 `"Bundler"` for browser bundlers. Typed declarations are included; see the
 [stable API reference](/docs/reference/stable/typescript/spectrum/).
