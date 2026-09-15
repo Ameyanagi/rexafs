@@ -52,6 +52,41 @@ fn specimen(dir: &Path) -> ProjectFile {
 }
 
 #[test]
+fn joint_materialized_groups_keep_empty_locators_on_save_and_reopen() {
+    let temp = Temp::new();
+    let mut project = specimen(&temp.join("source"));
+    project.joint.datasets[0].file = PathBuf::new();
+    project.joint.datasets[0].group_id = Some(project.derived[0].id);
+    project.fit_history[0].joint = Some(project.joint.clone());
+    let arrays = project.derived[0].mu.clone();
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let file = temp.join(if mode == DataStorage::Paths {
+            "linked-joint.rxs"
+        } else {
+            "embedded-joint.rxs"
+        });
+        let header = save_with_storage(&file, &project, mode).unwrap();
+        assert!(
+            header
+                .files
+                .iter()
+                .all(|source| source.path.is_relative() && !source.path.as_os_str().is_empty())
+        );
+        let mut loaded = load(&file).unwrap();
+        loaded.assign_group_ids();
+        assert!(loaded.joint.datasets[0].file.as_os_str().is_empty());
+        assert!(
+            loaded.fit_history[0].joint.as_ref().unwrap().datasets[0]
+                .file
+                .as_os_str()
+                .is_empty()
+        );
+        assert_eq!(loaded.derived[0].mu, arrays);
+        save_with_storage(&file, &loaded, mode).unwrap();
+    }
+}
+
+#[test]
 fn embedded_restore_uses_the_injected_cache_and_links_need_no_cache() {
     let temp = Temp::new();
     let project = specimen(&temp.join("source"));

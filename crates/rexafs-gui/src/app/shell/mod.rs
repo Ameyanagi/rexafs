@@ -8,6 +8,7 @@
 
 pub(crate) mod assistant;
 pub(crate) mod assistant_actions;
+mod assistant_analysis;
 mod assistant_receipts;
 pub(crate) mod assistant_shell;
 mod assistant_state;

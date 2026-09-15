@@ -191,10 +191,12 @@ impl ToolField {
 #[derive(Default)]
 pub struct AnalysisState {
     pub lcf: Option<rexafs::prelude::LcfResult>,
+    pub(super) lcf_sources: Vec<ToolTarget>,
     /// Ranked combinations ("fit all combinations"), best first.
     pub ranked: Vec<rexafs::prelude::LcfResult>,
     pub pca: Option<rexafs::prelude::PcaModel>,
     pub pca_fit: Option<rexafs::prelude::PcaFit>,
+    pub(super) pca_sources: Vec<ToolTarget>,
     /// Which tool the center plot shows.
     pub shown: Option<Tool>,
     pub plot: Option<Entity<ruviz_gpui::RuvizPlot>>,
@@ -784,11 +786,15 @@ impl StudioApp {
 
     /// Run the LCF / PCA tool on the current group (synchronous: both are
     /// milliseconds) and show the result in the center.
-    fn run_analysis_tool(&mut self, tool: Tool, cx: &mut Context<Self>) {
+    pub(super) fn run_analysis_tool(
+        &mut self,
+        tool: Tool,
+        cx: &mut Context<Self>,
+    ) -> Result<String, String> {
         let Some(unknown) = self.spectrum.clone() else {
             self.tools.message = "no current group".into();
             cx.notify();
-            return;
+            return Err("no current group".into());
         };
         self.tools.sync_range(cx);
         let standards = self.marked_spectra();
@@ -835,7 +841,8 @@ impl StudioApp {
                     pcfg.space = cfg.space;
                     rexafs::prelude::pca_train(&spectra, &pcfg)
                         .map_err(|e| e.to_string())
-                        .and_then(|model| {
+                        .and_then(|mut model| {
+                            model.labels = names.clone();
                             let n = self.tools.pca_components.min(model.n_components().max(1));
                             let fit = model
                                 .target_transform(&unknown, n)
@@ -855,22 +862,39 @@ impl StudioApp {
             }
             _ => Err("not an analysis tool".into()),
         };
-        match outcome {
+        match &outcome {
             Ok(msg) => {
+                let sources = self
+                    .current_tool_target()
+                    .into_iter()
+                    .chain(
+                        crate::app::cached_marked_indices(&self.selection, &self.cache, |ix| {
+                            self.effective_fingerprint(ix)
+                        })
+                        .filter(|&ix| Some(ix) != self.current_group_index())
+                        .filter_map(|ix| self.tool_target(ix)),
+                    )
+                    .collect();
+                match tool {
+                    Tool::Lcf => self.analysis.lcf_sources = sources,
+                    Tool::Pca => self.analysis.pca_sources = sources,
+                    _ => {}
+                }
                 self.record(
                     format!("{} on {}: {msg}", tool.name(), self.current_group_label()),
                     None,
                 );
-                self.tools.message = msg.into();
+                self.tools.message = msg.clone().into();
                 self.analysis.shown = Some(tool);
                 self.rebuild_analysis_plot(cx);
                 self.invalidate_explore_plots(cx);
             }
             Err(msg) => {
-                self.tools.message = msg.into();
+                self.tools.message = msg.clone().into();
             }
         }
         cx.notify();
+        outcome
     }
 
     /// (Re)build the analysis plot entity from the current result.
@@ -1210,7 +1234,7 @@ impl StudioApp {
             return;
         }
         if tool.is_analysis() {
-            self.run_analysis_tool(tool, cx);
+            let _ = self.run_analysis_tool(tool, cx);
             return;
         }
         let Some(source) = self.spectrum.clone() else {

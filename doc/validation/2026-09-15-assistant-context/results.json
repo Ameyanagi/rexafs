@@ -1,0 +1,141 @@
+{
+  "source_build": "unreleased; base dev 7bacc022d6c2587c5911509b7cf78fb8d753f856",
+  "gui_executable_sha256": "adb9d4205fca37b35c0772c60167d92cf0774dff634909b84c0f27aafaabfa94",
+  "synthetic_raw_arrays_and_explicit_processing_unchanged": true,
+  "lcf": {
+    "weights": [
+      {
+        "index": 0,
+        "name": "Synthetic component A",
+        "weight": 0.20000910779088554,
+        "stderr": 4.11789059115676e-06,
+        "e0_shift": 0.0,
+        "e0_shift_stderr": null
+      },
+      {
+        "index": 1,
+        "name": "Synthetic component B",
+        "weight": 0.2999970484999355,
+        "stderr": 3.0591106529547393e-06,
+        "e0_shift": 0.0,
+        "e0_shift_stderr": null
+      },
+      {
+        "index": 2,
+        "name": "Synthetic component C",
+        "weight": 0.4999938437091789,
+        "stderr": 3.866945548900883e-06,
+        "e0_shift": 0.0,
+        "e0_shift_stderr": null
+      }
+    ],
+    "r_factor": 3.881469490473707e-11,
+    "n_data": 101,
+    "sum_of_weights": 1.0
+  },
+  "pca": {
+    "centered": false,
+    "labels": [
+      "Synthetic mixture 2",
+      "Synthetic mixture 3",
+      "Synthetic mixture 4",
+      "Synthetic mixture 5",
+      "Synthetic mixture 6"
+    ],
+    "variance_explained": [
+      0.998595586132967,
+      0.0011725485426893009,
+      0.00023186532434387103,
+      7.251543710021308e-32,
+      3.131389084325897e-33
+    ],
+    "cumulative_variance": [
+      0.998595586132967,
+      0.9997681346756563,
+      1.0000000000000002,
+      1.0000000000000002,
+      1.0000000000000002
+    ]
+  },
+  "pca_target_3": {
+    "n_components": 3,
+    "weights": [
+      9.499443563599229,
+      -0.0027707642449955076,
+      0.10297994163263761
+    ],
+    "r_factor": 3.826245696784246e-11
+  },
+  "pca_target_2_r_factor_from_assistant_tool_report": 0.000117505452,
+  "export_manifest_notices": [],
+  "captures": {
+    "header-retrieval.jpg": "2d9e48523ade02f383bae1325bedd5bc0a9d02e0ece03dabc241fee203f6cd74",
+    "independent-fits.jpg": "1f124589eedcf707cdfd675f9bfa722ad27185a9661efccbcb11aa675a51d556",
+    "joint-fit.jpg": "5a19ba18374b433aaef3d33bc6d65e3772d65a914353aff44b7140dcce4a3f32",
+    "joint-save-verified.jpg": "372b733687e4a7b756a8dace9b3cb28810c7b77f614758296e7a48059f711858",
+    "lcf-verified.jpg": "c37d3f32f8b9955842c6d9d082f9501de6228dbf9527a8416ca37ff40d8ce621",
+    "pca-verified.jpg": "aca8b1ebb44c0837295cc2e8ec860fcd9e516aca787796f0e9c4e3e4d0a57942",
+    "processing-edit-receipt.jpg": "a1f5ef736ba3e68b9be47bad923b98531c365f63b67691fdbc0a98bd165fe007"
+  },
+  "inputs": {
+    "Context overflow reproduction.rxs": "dee4c33c673f57316d8d608331aa12e0311a3aa6a6b03b59b767d0d88547abf6",
+    "Cu batch and joint.rxs": "6b083cc4062f24a6bdb0c679e1d3395015cb9e78d3a792df5667928cb547b7fe",
+    "Synthetic LCF PCA.rxs": "1263f27f8d90f080d8e20d149b9d754e0505c2ddd5b9c35c76eb3c16ef235e13"
+  },
+  "synthetic_mixture_truth": [
+    {
+      "group_id": "result:qa-4",
+      "weights": [
+        0.2,
+        0.3,
+        0.5
+      ],
+      "noise_amplitude": 1e-05
+    },
+    {
+      "group_id": "result:qa-5",
+      "weights": [
+        0.07461694861458526,
+        0.23012561176646365,
+        0.695257439618951
+      ],
+      "noise_amplitude": 0
+    },
+    {
+      "group_id": "result:qa-6",
+      "weights": [
+        0.4013488240964137,
+        0.1760367574328867,
+        0.4226144184706996
+      ],
+      "noise_amplitude": 0
+    },
+    {
+      "group_id": "result:qa-7",
+      "weights": [
+        0.30934295109196785,
+        0.11758668024702132,
+        0.5730703686610108
+      ],
+      "noise_amplitude": 0
+    },
+    {
+      "group_id": "result:qa-8",
+      "weights": [
+        0.3450796315682556,
+        0.5160550981667835,
+        0.13886527026496084
+      ],
+      "noise_amplitude": 0
+    },
+    {
+      "group_id": "result:qa-9",
+      "weights": [
+        0.23005708818464227,
+        0.2765688636825261,
+        0.49337404813283164
+      ],
+      "noise_amplitude": 0
+    }
+  ]
+}

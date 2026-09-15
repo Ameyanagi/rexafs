@@ -1,4 +1,5 @@
-//! A local, inspectable analysis record. The same snapshot feeds the optional assistant.
+//! A local, inspectable analysis record. The Assistant uses a separate summary.
+pub(crate) mod assistant_context;
 pub(crate) mod figures;
 pub(crate) mod report;
 use crate::{params::PipelineParams, plotting, project::ProjectFile, theme::Theme};

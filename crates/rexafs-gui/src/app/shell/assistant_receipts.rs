@@ -334,6 +334,8 @@ mod tests {
             "xray_set_fit_parameter",
             "xray_set_processing",
             "xray_run_fit",
+            "xray_configure_fit",
+            "xray_run_analysis",
         ];
         let review = [
             "xray_get_state",
