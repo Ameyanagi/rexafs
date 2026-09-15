@@ -20,6 +20,12 @@ use crate::params::{DerivedSpectrum, Operation, OperationInput, PipelineParams, 
 use crate::widgets::numeric_field::{FieldEvent, FieldKind, NumericField};
 use crate::widgets::text_input::{InputEvent, TextInput};
 
+mod analysis_range;
+mod collection;
+mod mcr;
+mod mcr_reference;
+mod result_groups;
+
 /// Match the group panel's stable order: additional groups, then files.
 pub(crate) fn marked_group_indices(marks: &BTreeSet<usize>) -> impl Iterator<Item = usize> + '_ {
     marks
@@ -51,6 +57,7 @@ pub enum Tool {
     Difference,
     Lcf,
     Pca,
+    Mcr,
 }
 
 impl Tool {
@@ -66,10 +73,10 @@ impl Tool {
     ];
 
     /// Analysis tools (results, not new groups).
-    pub const ANALYSIS: [Tool; 2] = [Tool::Lcf, Tool::Pca];
+    pub const ANALYSIS: [Tool; 3] = [Tool::Lcf, Tool::Pca, Tool::Mcr];
 
     pub fn is_analysis(self) -> bool {
-        matches!(self, Tool::Lcf | Tool::Pca)
+        matches!(self, Tool::Lcf | Tool::Pca | Tool::Mcr)
     }
 
     fn needs_standard(self) -> bool {
@@ -87,6 +94,7 @@ impl Tool {
             Tool::Difference => "Difference spectrum",
             Tool::Lcf => "Linear combination fit",
             Tool::Pca => "Principal components",
+            Tool::Mcr => "Resolve components (MCR-ALS)",
         }
     }
 
@@ -101,6 +109,7 @@ impl Tool {
             Tool::Difference => "target − named baseline (normalized μ)",
             Tool::Lcf => "current as a mix of the marked standards",
             Tool::Pca => "components of the marked groups",
+            Tool::Mcr => "Estimate component spectra and fractions from all marked groups",
         }
     }
 
@@ -119,6 +128,13 @@ impl Tool {
                 ToolField::RangeHi,
                 ToolField::Components,
             ],
+            Tool::Mcr => &[
+                ToolField::RangeLo,
+                ToolField::RangeHi,
+                ToolField::McrComponents,
+                ToolField::McrIterations,
+                ToolField::McrSeed,
+            ],
         }
     }
 
@@ -126,6 +142,7 @@ impl Tool {
         match self {
             Tool::Lcf => "Fit",
             Tool::Pca => "Train + target transform",
+            Tool::Mcr => "Resolve components",
             _ => "Apply → new group",
         }
     }
@@ -147,10 +164,50 @@ pub enum ToolField {
     RangeLo,
     RangeHi,
     Components,
+    McrIterations,
+    McrSeed,
+    McrComponents,
+}
+
+/// Blank endpoints select defaults only when both are blank.
+fn analysis_range_from_fields(
+    lo: Option<f64>,
+    hi: Option<f64>,
+) -> Result<Option<(f64, f64)>, String> {
+    match (lo, hi) {
+        (None, None) => Ok(None),
+        (Some(lo), Some(hi)) => {
+            rexafs::xafs::analysis::validate_range(lo, hi).map_err(|e| e.to_string())?;
+            Ok(Some((lo, hi)))
+        }
+        _ => Err("Enter both range endpoints, or clear both for the default interval".into()),
+    }
+}
+
+#[cfg(test)]
+mod analysis_range_tests {
+    use super::analysis_range_from_fields;
+    #[test]
+    fn invalid_explicit_ranges_never_fall_back_to_defaults() {
+        assert_eq!(analysis_range_from_fields(None, None).unwrap(), None);
+        assert_eq!(
+            analysis_range_from_fields(Some(-20.), Some(30.)).unwrap(),
+            Some((-20., 30.))
+        );
+        for (lo, hi) in [
+            (Some(10.), None),
+            (None, Some(10.)),
+            (Some(10.), Some(-10.)),
+            (Some(0.), Some(0.)),
+            (Some(f64::NAN), Some(1.)),
+        ] {
+            assert!(analysis_range_from_fields(lo, hi).is_err());
+        }
+    }
 }
 
 impl ToolField {
-    const ALL: [ToolField; 14] = [
+    const ALL: [ToolField; 17] = [
         ToolField::WinLo,
         ToolField::WinHi,
         ToolField::Target,
@@ -165,6 +222,9 @@ impl ToolField {
         ToolField::RangeLo,
         ToolField::RangeHi,
         ToolField::Components,
+        ToolField::McrIterations,
+        ToolField::McrSeed,
+        ToolField::McrComponents,
     ];
 
     fn spec(self) -> (&'static str, &'static str, Option<f64>) {
@@ -183,6 +243,9 @@ impl ToolField {
             ToolField::RangeLo => ("range start (rel. E₀)", "auto (−20)", None),
             ToolField::RangeHi => ("range end (rel. E₀)", "auto (+30)", None),
             ToolField::Components => ("components", "2", Some(2.0)),
+            ToolField::McrIterations => ("maximum iterations", "500", Some(500.0)),
+            ToolField::McrSeed => ("initialization seed", "0", Some(0.0)),
+            ToolField::McrComponents => ("components", "3", Some(3.0)),
         }
     }
 }
@@ -190,13 +253,27 @@ impl ToolField {
 /// Results of the analysis tools (LCF / PCA) for the current group.
 #[derive(Default)]
 pub struct AnalysisState {
+    pub lcf_series: Option<crate::project::LcfSeriesAnalysis>,
     pub lcf: Option<rexafs::prelude::LcfResult>,
+    pub lcf_config: Option<LcfConfig>,
     pub(super) lcf_sources: Vec<ToolTarget>,
+    pub lcf_inputs: Vec<crate::project::AnalysisInput>,
     /// Ranked combinations ("fit all combinations"), best first.
     pub ranked: Vec<rexafs::prelude::LcfResult>,
     pub pca: Option<rexafs::prelude::PcaModel>,
     pub pca_fit: Option<rexafs::prelude::PcaFit>,
+    pub pca_view: crate::plotting::analysis::PcaView,
+    pub pca_all_components: bool,
+    pub pca_scale: crate::plotting::analysis::PcaScale,
+    pub mcr_view: crate::plotting::analysis::McrView,
     pub(super) pca_sources: Vec<ToolTarget>,
+    pub pca_inputs: Vec<crate::project::AnalysisInput>,
+    pub mcr: Option<crate::project::McrAnalysis>,
+    pub(super) mcr_sources: Vec<ToolTarget>,
+    pub mcr_cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
+    mcr_generation: u64,
+    pub(super) collection_generation: u64,
+    pub(super) collection_loading: bool,
     /// Which tool the center plot shows.
     pub shown: Option<Tool>,
     pub plot: Option<Entity<ruviz_gpui::RuvizPlot>>,
@@ -232,6 +309,8 @@ pub struct ToolState {
     pub lcf_all_combinations: bool,
     pub lcf_range: Option<(f64, f64)>,
     pub pca_components: usize,
+    pub pca_center: bool,
+    pub mcr_nonnegative_spectra: bool,
 }
 
 /// The preview and Apply use the same operation on a private spectrum copy.
@@ -312,7 +391,9 @@ fn process_tool(
                 operation.parameters = serde_json::json!({"form": "Gaussian", "sigma_ev": sigma});
                 format!("smooth: {name} (σ {sigma:.2} eV)")
             }
-            Tool::Lcf | Tool::Pca => return Err("Use the analysis action for this tool".into()),
+            Tool::Lcf | Tool::Pca | Tool::Mcr => {
+                return Err("Use the analysis action for this tool".into());
+            }
             Tool::Difference => {
                 operation.parameters = serde_json::json!({"space": Quantity::NormalizedMu});
                 let (ref_name, reference) = standard.ok_or("Choose a standard")?;
@@ -563,8 +644,8 @@ fn calibrate_from_standard(
 /// Space an LCF / PCA runs in (the χ variant uses the plot k-weight).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum LcfSpaceChoice {
-    #[default]
     Norm,
+    #[default]
     Flat,
     Deriv,
     Chi,
@@ -661,7 +742,7 @@ impl ToolState {
         PcaConfig {
             space: self.lcf_space.space(2.0),
             range: self.lcf_range,
-            center: false,
+            center: self.pca_center,
         }
     }
 
@@ -673,16 +754,14 @@ impl ToolState {
     }
 
     /// Pull the range fields into `lcf_range` (None = the space default).
-    fn sync_range(&mut self, cx: &gpui::App) {
+    pub(crate) fn sync_range(&mut self, cx: &gpui::App) -> Result<(), String> {
         let lo = self.field_value(ToolField::RangeLo, cx);
         let hi = self.field_value(ToolField::RangeHi, cx);
-        self.lcf_range = match (lo, hi) {
-            (Some(lo), Some(hi)) if hi > lo => Some((lo, hi)),
-            _ => None,
-        };
+        self.lcf_range = analysis_range_from_fields(lo, hi)?;
         if let Some(n) = self.field_value(ToolField::Components, cx) {
             self.pca_components = (n.round() as usize).max(1);
         }
+        Ok(())
     }
 }
 
@@ -712,7 +791,12 @@ impl StudioApp {
                             this.status = message.clone();
                             cx.notify();
                         }
-                        FieldEvent::Changed(_) => this.queue_tool_preview(cx),
+                        FieldEvent::Changed(_) => {
+                            this.queue_tool_preview(cx);
+                            if this.tools.open.is_some_and(|tool| tool.is_analysis()) {
+                                this.invalidate_explore_plots(cx);
+                            }
+                        }
                         _ => {}
                     })
                     .detach();
@@ -721,6 +805,14 @@ impl StudioApp {
                 .collect();
         }
         self.tools.open = Some(tool);
+        if tool == Tool::Mcr
+            && !matches!(
+                self.tools.lcf_space,
+                LcfSpaceChoice::Norm | LcfSpaceChoice::Flat
+            )
+        {
+            self.tools.lcf_space = LcfSpaceChoice::Flat;
+        }
         self.tools.message = SharedString::default();
         self.tools.target = self.current_tool_target();
         self.tools.standard_picker_open = false;
@@ -762,6 +854,7 @@ impl StudioApp {
         self.choose_tool_standard(standard, cx);
         if tool.is_analysis() {
             self.analysis.shown = Some(tool);
+            self.rebuild_analysis_plot(cx);
         }
         self.set_stage(super::Stage::Data, cx);
         self.set_side_panel_visible(super::assistant_shell::SidePanel::Inspector, true);
@@ -771,33 +864,32 @@ impl StudioApp {
         cx.notify();
     }
 
-    /// Standards / training set: every marked group other than the current
-    /// one whose processed spectrum is cached.
-    fn marked_spectra(&self) -> Vec<(String, std::sync::Arc<XASSpectrum>)> {
-        let current = self.current_group_index().and_then(|ix| self.group_id(ix));
-        let marks = analysis_marks(&self.selection, current.as_ref(), |ix| self.group_id(ix));
-        crate::app::cached_marked_spectra(
-            &marks,
-            &self.cache,
-            |ix| self.effective_fingerprint(ix),
-            |ix| self.entry_label(ix),
-        )
-    }
-
-    /// Run the LCF / PCA tool on the current group (synchronous: both are
-    /// milliseconds) and show the result in the center.
+    /// Prepare all operands, then fit LCF or train PCA and reconstruct the
+    /// current target. Large input loading runs on a background worker.
     pub(super) fn run_analysis_tool(
         &mut self,
         tool: Tool,
         cx: &mut Context<Self>,
     ) -> Result<String, String> {
+        if tool == Tool::Mcr {
+            return self.start_mcr(cx);
+        }
         let Some(unknown) = self.spectrum.clone() else {
             self.tools.message = "no current group".into();
             cx.notify();
             return Err("no current group".into());
         };
-        self.tools.sync_range(cx);
-        let standards = self.marked_spectra();
+        self.tools.sync_range(cx)?;
+        if self.prepare_analysis_collection(tool, cx)? {
+            return Ok(self.tools.message.to_string());
+        }
+        let marks = self.analysis_selection(tool);
+        let standards = crate::app::cached_marked_spectra(
+            &marks,
+            &self.cache,
+            |ix| self.effective_fingerprint(ix),
+            |ix| self.entry_label(ix),
+        );
         let names: Vec<String> = standards.iter().map(|(n, _)| n.clone()).collect();
         let spectra: Vec<std::sync::Arc<XASSpectrum>> =
             standards.into_iter().map(|(_, sp)| sp).collect();
@@ -864,20 +956,41 @@ impl StudioApp {
         };
         match &outcome {
             Ok(msg) => {
-                let sources = self
+                let sources: Vec<ToolTarget> = self
                     .current_tool_target()
                     .into_iter()
                     .chain(
                         crate::app::cached_marked_indices(&self.selection, &self.cache, |ix| {
                             self.effective_fingerprint(ix)
                         })
-                        .filter(|&ix| Some(ix) != self.current_group_index())
+                        .filter(|&ix| tool == Tool::Pca || Some(ix) != self.current_group_index())
                         .filter_map(|ix| self.tool_target(ix)),
                     )
                     .collect();
                 match tool {
-                    Tool::Lcf => self.analysis.lcf_sources = sources,
-                    Tool::Pca => self.analysis.pca_sources = sources,
+                    Tool::Lcf => {
+                        self.analysis.lcf_config = Some(cfg.clone());
+                        self.analysis.lcf_inputs = sources
+                            .iter()
+                            .map(|s| crate::project::AnalysisInput {
+                                group_id: s.group_id.clone(),
+                                label: s.label.clone(),
+                                fingerprint: s.fingerprint,
+                            })
+                            .collect();
+                        self.analysis.lcf_sources = sources;
+                    }
+                    Tool::Pca => {
+                        self.analysis.pca_inputs = sources
+                            .iter()
+                            .map(|s| crate::project::AnalysisInput {
+                                group_id: s.group_id.clone(),
+                                label: s.label.clone(),
+                                fingerprint: s.fingerprint,
+                            })
+                            .collect();
+                        self.analysis.pca_sources = sources;
+                    }
                     _ => {}
                 }
                 self.record(
@@ -899,37 +1012,62 @@ impl StudioApp {
 
     /// (Re)build the analysis plot entity from the current result.
     pub(crate) fn rebuild_analysis_plot(&mut self, cx: &mut Context<Self>) {
-        let kw = self.fft_summary().3;
-        let space = self.tools.lcf_space;
-        let (xlabel, ylabel) = match space {
-            LcfSpaceChoice::Chi => (
-                crate::plotting::K_AXIS.to_string(),
-                crate::plotting::chik_label(kw),
-            ),
-            LcfSpaceChoice::Deriv => ("Energy (eV)".to_string(), "dμ/dE".to_string()),
-            LcfSpaceChoice::Norm => ("Energy (eV)".to_string(), "normalized μ(E)".to_string()),
-            LcfSpaceChoice::Flat => ("Energy (eV)".to_string(), "flattened μ(E)".to_string()),
+        use crate::plotting::analysis::{
+            PcaView, analysis_axis_labels, build_mcr_diagnostic, build_pca_diagnostic,
         };
         let plot = match self.analysis.shown {
-            Some(Tool::Lcf) => self
-                .analysis
-                .lcf
-                .as_ref()
-                .map(|r| crate::plotting::build_lcf_plot(r, &xlabel, &ylabel, &self.theme)),
-            Some(Tool::Pca) => self
-                .analysis
-                .pca_fit
-                .as_ref()
-                .map(|f| crate::plotting::build_pca_plot(f, &xlabel, &ylabel, &self.theme)),
+            Some(Tool::Lcf) => self.analysis.lcf.as_ref().map(|r| {
+                let (x, y) = analysis_axis_labels(r.space);
+                crate::plotting::build_lcf_plot(r, &x, &y, &self.theme)
+            }),
+            Some(Tool::Pca) => self.analysis.pca.as_ref().and_then(|m| {
+                let retained = self
+                    .analysis
+                    .pca_fit
+                    .as_ref()
+                    .map_or(self.tools.pca_components, |f| f.n_components);
+                if self.analysis.pca_view == PcaView::Residual {
+                    Some(crate::plotting::analysis::build_pca_residual_plot(
+                        m,
+                        self.analysis.pca_fit.as_ref(),
+                        self.analysis.pca_all_components,
+                        self.analysis.pca_scale,
+                        &self.theme,
+                    ))
+                } else if self.analysis.pca_view == PcaView::Target {
+                    let (x, y) = analysis_axis_labels(m.space);
+                    self.analysis
+                        .pca_fit
+                        .as_ref()
+                        .map(|f| crate::plotting::build_pca_plot(f, &x, &y, &self.theme))
+                } else {
+                    Some(build_pca_diagnostic(
+                        m,
+                        self.analysis.pca_view,
+                        retained,
+                        self.analysis.pca_all_components,
+                        self.analysis.pca_scale,
+                        &self.theme,
+                    ))
+                }
+            }),
+            Some(Tool::Mcr) => self.analysis.mcr.as_ref().map(|m| {
+                if self.analysis.mcr_view == crate::plotting::analysis::McrView::References {
+                    crate::plotting::analysis::build_mcr_reference_plot(m, &self.theme)
+                } else {
+                    build_mcr_diagnostic(&m.result, self.analysis.mcr_view, &self.theme)
+                }
+            }),
             _ => None,
         };
         let Some(plot) = plot else {
             self.analysis.plot = None;
             return;
         };
-        let plot = plot.size_px(820, 300);
+        let (width, height) = self.card_px.get(&300).copied().unwrap_or((820, 580));
+        let plot = plot.size_px(width, height);
         match &self.analysis.plot {
-            Some(entity) => entity.update(cx, |rp, cx| rp.set_plot_keep_view(plot, cx)),
+            Some(entity) => entity.update(cx, |rp, cx| rp.set_plot(plot, cx)),
             None => {
                 self.analysis.plot = Some(ruviz_gpui::plot_builder(plot).interactive().build(cx));
             }
@@ -1077,6 +1215,9 @@ impl StudioApp {
     }
 
     fn tool_readiness(&self, tool: Tool) -> Result<(), ReadinessReason> {
+        if tool == Tool::Mcr && self.analysis.mcr_cancel.is_some() {
+            return Ok(());
+        }
         let current = self.current_tool_target();
         let standard = tool.needs_standard().then(|| {
             let current = self
@@ -1107,10 +1248,10 @@ impl StudioApp {
                     .chain(self.tools.standard.iter().filter(|_| tool.needs_standard()))
                 {
                     if input.ix >= DERIVED_BASE
-                        && self
-                            .derived
-                            .get(input.ix - DERIVED_BASE)
-                            .is_some_and(|g| g.processing_block_reason().is_some())
+                        && self.derived.get(input.ix - DERIVED_BASE).is_some_and(|g| {
+                            g.processing_block_reason().is_some()
+                                || (!tool.is_analysis() && !g.quantity.is_absorption())
+                        })
                     {
                         return Err(ReadinessReason::Quantity);
                     }
@@ -1234,7 +1375,10 @@ impl StudioApp {
             return;
         }
         if tool.is_analysis() {
-            let _ = self.run_analysis_tool(tool, cx);
+            if let Err(error) = self.run_analysis_tool(tool, cx) {
+                self.tools.message = error.into();
+                cx.notify();
+            }
             return;
         }
         let Some(source) = self.spectrum.clone() else {
@@ -1374,7 +1518,8 @@ impl StudioApp {
                     .bg(t.bg)
                     .flex()
                     .flex_col();
-                form = form.child(div().px_3().py_1().text_size(px(11.)).child(format!(
+                if tool != Tool::Mcr {
+                    form = form.child(div().px_3().py_1().text_size(px(11.)).child(format!(
                         "Target: {}",
                         self.tools
                             .target
@@ -1382,6 +1527,7 @@ impl StudioApp {
                             .map(|t| t.label.as_str())
                             .unwrap_or("none")
                     )));
+                }
                 if tool.needs_standard() {
                     form = form.child(self.standard_picker(tool, cx));
                 }
@@ -1432,15 +1578,24 @@ impl StudioApp {
                         .items_center()
                         .gap_2()
                         .child(
-                            button(&t, "tool-apply", tool.apply_label(), readiness.is_ok())
-                                .when(readiness.is_err(), |d| {
-                                    d.disabled(true).opacity(0.45).cursor_default()
-                                })
-                                .when(readiness.is_ok(), |d| {
-                                    d.on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
-                                        this.apply_tool(cx)
-                                    }))
-                                }),
+                            button(
+                                &t,
+                                "tool-apply",
+                                if tool == Tool::Mcr && self.analysis.mcr_cancel.is_some() {
+                                    "Cancel calculation"
+                                } else {
+                                    tool.apply_label()
+                                },
+                                readiness.is_ok(),
+                            )
+                            .when(readiness.is_err(), |d| {
+                                d.disabled(true).opacity(0.45).cursor_default()
+                            })
+                            .when(readiness.is_ok(), |d| {
+                                d.on_click(
+                                    cx.listener(|this, _: &ClickEvent, _w, cx| this.apply_tool(cx)),
+                                )
+                            }),
                         )
                         .child(
                             super::controls::icon_button(
@@ -1650,9 +1805,11 @@ impl StudioApp {
 
     fn analysis_operands(&self, tool: Tool, cx: &mut Context<Self>) -> gpui::Div {
         let t = self.theme;
-        let current = self.current_group_index().and_then(|ix| self.group_id(ix));
-        let marks = analysis_marks(&self.selection, current.as_ref(), |ix| self.group_id(ix));
-        let ready = self.marked_spectra().len();
+        let marks = self.analysis_selection(tool);
+        let ready = crate::app::cached_marked_indices(&marks, &self.cache, |ix| {
+            self.effective_fingerprint(ix)
+        })
+        .count();
         let skipped = marks.len().saturating_sub(ready);
         let open = self.ui.sections.contains("Analysis inputs");
         let mut panel = div().px_2().child(
@@ -1667,7 +1824,7 @@ impl StudioApp {
                         "Training set"
                     },
                     if skipped > 0 {
-                        format!(" · {skipped} unavailable")
+                        format!(" · {skipped} load on run")
                     } else {
                         String::new()
                     }
@@ -1702,7 +1859,7 @@ impl StudioApp {
                             if cached {
                                 ""
                             } else {
-                                " · skipped: unavailable"
+                                " · loads when analysis starts"
                             }
                         )),
                 );
@@ -1717,6 +1874,9 @@ impl StudioApp {
         let t = self.theme;
         let mut seg = super::segmented(&t);
         for (i, choice) in LcfSpaceChoice::ALL.into_iter().enumerate() {
+            if tool == Tool::Mcr && !matches!(choice, LcfSpaceChoice::Norm | LcfSpaceChoice::Flat) {
+                continue;
+            }
             seg = seg.child(
                 super::segment(
                     &t,
@@ -1739,6 +1899,32 @@ impl StudioApp {
             .items_center()
             .gap_1p5()
             .child(seg);
+        if self.tools.lcf_space != LcfSpaceChoice::Chi {
+            row = row.child(
+                div()
+                    .w_full()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child("Analysis range (relative to E₀)"),
+            );
+            for (i, label, range) in [
+                (0, "XANES: −20…+80", Some((-20., 80.))),
+                (1, "−200…+800", Some((-200., 800.))),
+                (2, "Common full range", None),
+            ] {
+                row = row.child(
+                    super::chip(
+                        &t,
+                        SharedString::from(format!("analysis-range-{i}")),
+                        label,
+                        false,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.set_analysis_range_preset(tool, range, cx)
+                    })),
+                );
+            }
+        }
         if tool == Tool::Lcf {
             row = row
                 .child(
@@ -1766,6 +1952,43 @@ impl StudioApp {
                     )
                     .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
                         this.tools.lcf_all_combinations = !this.tools.lcf_all_combinations;
+                        cx.notify();
+                    })),
+                );
+        }
+        if tool == Tool::Pca {
+            row = row.child(
+                super::chip(&t, "pca-center", "Subtract mean", self.tools.pca_center).on_click(
+                    cx.listener(|this, _, _, cx| {
+                        this.tools.pca_center = !this.tools.pca_center;
+                        cx.notify();
+                    }),
+                ),
+            );
+        }
+        if tool == Tool::Mcr {
+            row = row
+                .child(
+                    super::chip(
+                        &t,
+                        "mcr-closure",
+                        "Fractions sum to 1",
+                        self.tools.lcf_sum_to_one,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.tools.lcf_sum_to_one = !this.tools.lcf_sum_to_one;
+                        cx.notify();
+                    })),
+                )
+                .child(
+                    super::chip(
+                        &t,
+                        "mcr-positive",
+                        "Nonnegative spectra",
+                        self.tools.mcr_nonnegative_spectra,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.tools.mcr_nonnegative_spectra = !this.tools.mcr_nonnegative_spectra;
                         cx.notify();
                     })),
                 );
@@ -1837,20 +2060,54 @@ impl StudioApp {
             }
             Tool::Pca => {
                 if let Some(m) = &self.analysis.pca {
-                    let ind_min = m.suggested_components_ind();
+                    let suggestion = crate::plotting::analysis::pca_count_suggestion(m);
+                    out.push(row(
+                        "Training spectra".into(),
+                        m.n_spectra().to_string(),
+                        false,
+                    ));
+                    out.push(row(
+                        "Mean subtraction".into(),
+                        if m.centered { "On" } else { "Off" }.into(),
+                        false,
+                    ));
+                    if let Some((count, basis)) = suggestion {
+                        out.push(row(format!("Try {count} components"), basis.into(), false));
+                    } else {
+                        out.push(row(
+                            "Component count".into(),
+                            "Inspect the scree plot".into(),
+                            false,
+                        ));
+                    }
+                    out.push(row(
+                        "99.9% / 99.99% retained".into(),
+                        format!(
+                            "{} / {}",
+                            m.suggested_components_variance(0.999),
+                            m.suggested_components_variance(0.9999)
+                        ),
+                        false,
+                    ));
+                    out.push(div().px_3().py_1().text_size(px(11.)).text_color(t.text_muted)
+                        .child(if m.centered {"PCA counts variation directions. With sum-to-one mixtures, the mean can account for another chemical component."} else {"A suggested rank is not a chemical identification. Check noise, preprocessing and reconstruction."}).into_any_element());
                     for i in 0..m.n_components().min(6) {
                         let var = m.variance_explained.get(i).copied().unwrap_or(0.0) * 100.0;
                         let cum = m.cumulative_variance.get(i).copied().unwrap_or(0.0) * 100.0;
                         let ind = m
                             .ind
-                            .get(i)
+                            .get(i + 1)
                             .map(|v| format!(" · IND {v:.2e}"))
                             .unwrap_or_default();
                         out.push(row(
                             format!(
                                 "PC{} {}",
                                 i + 1,
-                                if i + 1 == ind_min { "← IND" } else { "" }
+                                if suggestion.is_some_and(|(n, _)| n == i + 1) {
+                                    "←"
+                                } else {
+                                    ""
+                                }
                             ),
                             format!("{var:.2} % · Σ {cum:.2} %{ind}"),
                             false,
@@ -1863,6 +2120,56 @@ impl StudioApp {
                         format!("R {:.2e}", f.r_factor),
                         f.r_factor > 1e-2,
                     ));
+                }
+            }
+            Tool::Mcr => {
+                if let Some(saved) = &self.analysis.mcr {
+                    let r = &saved.result;
+                    out.push(row(
+                        "Samples / components".into(),
+                        format!("{} / {}", r.labels.len(), r.spectra.nrows()),
+                        false,
+                    ));
+                    out.push(row(
+                        "Stopped".into(),
+                        format!("{:?} · {} iterations", r.termination, r.iterations),
+                        r.termination != rexafs::prelude::McrTermination::Converged,
+                    ));
+                    out.push(row(
+                        "Relative squared residual".into(),
+                        format!("{:.3e}", r.relative_error),
+                        false,
+                    ));
+                    out.push(row(
+                        "Energy range (eV)".into(),
+                        format!("{:.1}–{:.1}", r.x[0], r.x[r.x.len() - 1]),
+                        false,
+                    ));
+                    out.push(row(
+                        "Saved calculation".into(),
+                        format!(
+                            "{} · seed {}",
+                            if r.config.sum_to_one {
+                                "Σ = 1"
+                            } else {
+                                "free sum"
+                            },
+                            r.config.seed
+                        ),
+                        false,
+                    ));
+                    out.push(row(
+                        "Inputs".into(),
+                        if self.mcr_result_current() {
+                            "Unchanged"
+                        } else {
+                            "Historical result"
+                        }
+                        .into(),
+                        !self.mcr_result_current(),
+                    ));
+                    out.push(div().px_3().py_1().text_size(px(11.)).text_color(t.text_muted)
+                        .child("A good reconstruction does not prove unique pure spectra. Results are saved in the project and analysis export.").into_any_element());
                 }
             }
             _ => {}

@@ -1,21 +1,25 @@
-//! Multi-spectrum analysis: linear combination fitting (LCF) and principal
-//! component analysis (PCA) of XANES / EXAFS spectra.
+//! Multi-spectrum analysis: linear combination fitting (LCF), principal
+//! component analysis (PCA) and multivariate curve resolution (MCR-ALS).
 //!
-//! Both tools operate on one of the [`AnalysisSpace`]s of a spectrum
+//! These tools operate on one of the [`AnalysisSpace`]s of a spectrum
 //! (normalized μ, flattened μ, dμ/dE of normalized μ, or k-weighted χ(k))
 //! over a fit range, with every spectrum interpolated linearly onto the grid
-//! of a reference spectrum (the unknown for LCF, the first spectrum for PCA).
+//! of a reference spectrum (the unknown for LCF, the first spectrum for PCA/MCR).
+//! Missing processing stages run on copies using input settings; all inputs
+//! must cover a finite increasing interval. Original spectra remain unchanged.
 //!
 //! * [`lcf()`] / [`lcf_combinatorial`] — Athena / Larch style linear combination
 //!   fitting with bounded weights, optional sum-to-one constraint and optional
 //!   per-standard energy shifts.
 //! * [`pca_train`] / [`PcaModel`] — SVD based principal component analysis,
 //!   Malinowski's indicator function and target transformation.
+//! * [`mcr_als`] — constrained factorization into coefficients and spectra.
 
 pub mod lcf;
+pub mod mcr;
 pub mod pca;
 
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 
 use nalgebra::DVector;
 use serde::{Deserialize, Serialize};
@@ -25,20 +29,26 @@ use super::normalization::Normalization;
 use super::tools::{dmude, interp_linear};
 use super::xasspectrum::XASSpectrum;
 
-pub use lcf::{lcf, lcf_combinatorial, LcfComponent, LcfConfig, LcfResult};
-pub use pca::{pca_train, PcaConfig, PcaFit, PcaModel};
+pub use lcf::{
+    lcf, lcf_batch, lcf_batch_with_progress, lcf_combinatorial, LcfComponent, LcfConfig, LcfResult,
+};
+pub use mcr::{mcr_als, mcr_als_with_progress, McrAnchor, McrConfig, McrResult, McrTermination};
+pub use pca::{
+    pca_train, PcaConfig, PcaCountBasis, PcaCountSuggestion, PcaFit, PcaModel,
+    PcaReconstructionError,
+};
 
 /// Which array of a spectrum an analysis is performed on.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub enum AnalysisSpace {
-    /// Normalized μ(E) (requires `normalize()`).
+    /// Normalized μ(E); missing normalization is calculated on a copy.
     #[default]
     Norm,
-    /// Flattened normalized μ(E) (requires `normalize()`).
+    /// Flattened normalized μ(E); missing normalization is calculated on a copy.
     Flat,
-    /// Derivative dμ/dE of the normalized μ(E) (requires `normalize()`).
+    /// Derivative dμ/dE of normalized μ(E); missing normalization is calculated on a copy.
     Deriv,
-    /// k-weighted χ(k)·k^kweight on the k grid (requires `calc_background()`).
+    /// k-weighted χ(k)·k^kweight; missing background is calculated on a copy.
     /// The real exponent is used directly, unlike the processing FFT's floored
     /// nonnegative integer weight. For dimensionless χ, y has units Å⁻ᵏʷᵉⁱᵍʰᵗ.
     Chi {
@@ -67,10 +77,67 @@ impl AnalysisSpace {
         }
     }
 
-    /// Owned copies `(x, y)` in this space; does not run preprocessing.
-    /// Energy axes use eV, k axes Å⁻¹. Normalized/flattened μ is dimensionless;
-    /// its derivative has units eV⁻¹. Missing arrays or unequal lengths error.
+    /// Owned, validated `(x, y)` arrays in this representation.
+    ///
+    /// Reuses existing results. If missing, runs normalization (Norm, Flat,
+    /// Deriv) or background subtraction (Chi) on a temporary copy using the
+    /// spectrum's settings, or stage defaults when unset. Inputs are unchanged.
+    /// Energy axes use eV, k axes Å⁻¹; norm/flat absorption is dimensionless
+    /// and its derivative has units eV⁻¹. Nonfinite values, unequal lengths,
+    /// nonincreasing axes and failed preparation return contextual errors.
+    /// A prepared Norm-only component needs explicit normalization settings
+    /// before Flat can be calculated; its stored representation is never relabeled.
     pub fn arrays(
+        &self,
+        spectrum: &XASSpectrum,
+    ) -> Result<(DVector<f64>, DVector<f64>), AnalysisError> {
+        let input = AnalysisInput::new(spectrum, *self)?;
+        Ok((input.x, input.y))
+    }
+
+    fn prepare<'a>(
+        &self,
+        spectrum: &'a XASSpectrum,
+    ) -> Result<Cow<'a, XASSpectrum>, AnalysisError> {
+        let ready = match self {
+            Self::Norm | Self::Deriv => spectrum
+                .normalization
+                .as_ref()
+                .and_then(|n| n.get_norm())
+                .is_some(),
+            Self::Flat => spectrum
+                .normalization
+                .as_ref()
+                .and_then(|n| n.get_flat())
+                .is_some(),
+            Self::Chi { .. } => spectrum.k().is_some() && spectrum.chi().is_some(),
+        };
+        if ready {
+            return Ok(Cow::Borrowed(spectrum));
+        }
+        if *self == Self::Flat
+            && spectrum.preserves_prepared_values()
+            && spectrum.prepared_space() == Some(Self::Norm)
+        {
+            return Err(AnalysisError::InvalidInput {
+                spectrum: spectrum_label(spectrum, "unnamed spectrum".into()),
+                reason: "a prepared Norm component has no Flat array; explicitly set a normalization method to refit it, or select Norm".into(),
+            });
+        }
+        let mut prepared = spectrum.clone();
+        let result = if self.is_k_space() {
+            prepared.calc_background()
+        } else {
+            prepared.normalize()
+        };
+        result.map_err(|source| AnalysisError::Preparation {
+            spectrum: spectrum_label(spectrum, "unnamed spectrum".into()),
+            source: Box::new(source),
+        })?;
+        Ok(Cow::Owned(prepared))
+    }
+
+    fn stored_arrays(
         &self,
         spectrum: &XASSpectrum,
     ) -> Result<(DVector<f64>, DVector<f64>), AnalysisError> {
@@ -92,6 +159,13 @@ impl AnalysisSpace {
                     return Err(super::errors::DataError::LengthMismatch {
                         energy_len: energy.len(),
                         mu_len: y.len(),
+                    }
+                    .into());
+                }
+                if energy.len() < 2 {
+                    return Err(super::errors::DataError::InsufficientData {
+                        min: 2,
+                        actual: energy.len(),
                     }
                     .into());
                 }
@@ -135,49 +209,143 @@ pub(crate) fn spectrum_label(spectrum: &XASSpectrum, fallback: String) -> String
     spectrum.name.clone().unwrap_or(fallback)
 }
 
-/// Build the analysis grid of `reference` in `space`, restricted to `range`
-/// (relative to E₀ for energy spaces, absolute k for χ; `None` → Athena's
-/// defaults). Returns `(x, y)` of the reference on that grid.
-pub(crate) fn reference_grid(
-    reference: &XASSpectrum,
-    space: AnalysisSpace,
-    range: Option<(f64, f64)>,
-    min_points: usize,
-) -> Result<(DVector<f64>, DVector<f64>), AnalysisError> {
-    let (x, y) = space.arrays(reference)?;
-    let (lo, hi) = range.unwrap_or_else(|| space.default_range());
-    let (lo, hi) = if space.is_k_space() {
-        (lo, hi)
-    } else {
-        let e0 = spectrum_e0(reference).ok_or_else(|| AnalysisError::MissingArray {
-            field: "e0 (run normalize() or set_e0() first)".to_string(),
-        })?;
-        (e0 + lo, e0 + hi)
-    };
-    let (lo, hi) = if lo <= hi { (lo, hi) } else { (hi, lo) };
-    let idx: Vec<usize> = (0..x.len()).filter(|&i| x[i] >= lo && x[i] <= hi).collect();
-    if idx.len() < min_points {
-        return Err(AnalysisError::EmptyRange {
-            lo,
-            hi,
-            n_points: idx.len(),
-            min: min_points,
-        });
-    }
-    let xs = DVector::from_iterator(idx.len(), idx.iter().map(|&i| x[i]));
-    let ys = DVector::from_iterator(idx.len(), idx.iter().map(|&i| y[i]));
-    Ok((xs, ys))
+/// Prepared arrays and the edge origin used by every analysis frontend.
+pub(crate) struct AnalysisInput {
+    pub x: DVector<f64>,
+    pub y: DVector<f64>,
+    pub e0: Option<f64>,
+    pub label: String,
 }
 
-/// Arrays of `spectrum` in `space`, interpolated linearly onto `grid`
-/// (clamped at the ends of the spectrum's own range).
+impl AnalysisInput {
+    pub fn new(spectrum: &XASSpectrum, space: AnalysisSpace) -> Result<Self, AnalysisError> {
+        Self::with_label(spectrum, space, "unnamed spectrum".into())
+    }
+
+    pub fn with_label(
+        spectrum: &XASSpectrum,
+        space: AnalysisSpace,
+        fallback: String,
+    ) -> Result<Self, AnalysisError> {
+        let label = spectrum_label(spectrum, fallback);
+        let prepared = space.prepare(spectrum).map_err(|error| match error {
+            AnalysisError::Preparation { source, .. } => AnalysisError::Preparation {
+                spectrum: label.clone(),
+                source,
+            },
+            AnalysisError::InvalidInput { reason, .. } => AnalysisError::InvalidInput {
+                spectrum: label.clone(),
+                reason,
+            },
+            other => other,
+        })?;
+        let (x, y) = space.stored_arrays(&prepared)?;
+        if x.len() < 2
+            || x.iter().chain(y.iter()).any(|v| !v.is_finite())
+            || x.as_slice().windows(2).any(|w| w[0] >= w[1])
+        {
+            return Err(AnalysisError::InvalidInput {
+                spectrum: label,
+                reason: "need at least two finite samples on a strictly increasing axis".into(),
+            });
+        }
+        Ok(Self {
+            x,
+            y,
+            e0: spectrum_e0(&prepared),
+            label,
+        })
+    }
+
+    pub fn bounds(
+        &self,
+        space: AnalysisSpace,
+        range: Option<(f64, f64)>,
+    ) -> Result<(f64, f64), AnalysisError> {
+        let (lo, hi) = range.unwrap_or_else(|| space.default_range());
+        validate_range(lo, hi)?;
+        let origin = if space.is_k_space() {
+            0.0
+        } else {
+            self.e0
+                .filter(|v| v.is_finite())
+                .ok_or_else(|| AnalysisError::InvalidInput {
+                    spectrum: self.label.clone(),
+                    reason: "need a finite E0 to resolve energy offsets".into(),
+                })?
+        };
+        let bounds = (origin + lo, origin + hi);
+        validate_range(bounds.0, bounds.1)?;
+        Ok(bounds)
+    }
+
+    pub fn select(
+        &self,
+        bounds: (f64, f64),
+        min: usize,
+    ) -> Result<(DVector<f64>, DVector<f64>), AnalysisError> {
+        self.cover(bounds)?;
+        let (lo, hi) = bounds;
+        let idx: Vec<_> = (0..self.x.len())
+            .filter(|&i| self.x[i] >= lo && self.x[i] <= hi)
+            .collect();
+        if idx.len() < min {
+            return Err(AnalysisError::EmptyRange {
+                lo,
+                hi,
+                n_points: idx.len(),
+                min,
+            });
+        }
+        Ok((
+            DVector::from_iterator(idx.len(), idx.iter().map(|&i| self.x[i])),
+            DVector::from_iterator(idx.len(), idx.iter().map(|&i| self.y[i])),
+        ))
+    }
+
+    pub fn cover(&self, (lo, hi): (f64, f64)) -> Result<(), AnalysisError> {
+        let available_lo = self.x[0];
+        let available_hi = self.x[self.x.len() - 1];
+        if available_lo > lo || available_hi < hi {
+            return Err(AnalysisError::IncompleteCoverage {
+                spectrum: self.label.clone(),
+                lo,
+                hi,
+                available_lo,
+                available_hi,
+            });
+        }
+        Ok(())
+    }
+
+    pub fn interpolate(
+        &self,
+        grid: &DVector<f64>,
+        bounds: (f64, f64),
+    ) -> Result<DVector<f64>, AnalysisError> {
+        self.cover(bounds)?;
+        Ok(interp_linear(grid, &self.x, &self.y)?)
+    }
+}
+
+/// Require finite increasing bounds in the selected axis units.
+/// Energy-space callers pass offsets from E₀; k-space callers pass Å⁻¹.
+/// No bounds are reordered and no automatic interval replaces invalid input.
+pub fn validate_range(lo: f64, hi: f64) -> Result<(), AnalysisError> {
+    if !lo.is_finite() || !hi.is_finite() || lo >= hi {
+        return Err(AnalysisError::InvalidRange { lo, hi });
+    }
+    Ok(())
+}
+
+/// Interpolate only inside the measured coverage of the prepared input.
 pub(crate) fn on_grid(
     spectrum: &XASSpectrum,
     space: AnalysisSpace,
     grid: &DVector<f64>,
 ) -> Result<DVector<f64>, AnalysisError> {
-    let (x, y) = space.arrays(spectrum)?;
-    Ok(interp_linear(grid, &x, &y)?)
+    let input = AnalysisInput::new(spectrum, space)?;
+    input.interpolate(grid, (grid[0], grid[grid.len() - 1]))
 }
 
 /// Relative squared discrepancy Σ(data − fit)² / Σ data².

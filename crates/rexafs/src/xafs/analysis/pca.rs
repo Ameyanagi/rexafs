@@ -35,8 +35,8 @@
 //! A target transform ([`PcaModel::target_transform`]) projects a spectrum
 //! onto the first `n` components (weights = `C · (y − mean)` since the
 //! components are orthonormal) and reports the reconstruction quality.
-//! Inputs are borrowed, results own their arrays, and preprocessing is not
-//! run automatically. See [Larch's PCA guide](https://xraypy.github.io/xraylarch/xafs_xanes.html#principal-component-analysis)
+//! Inputs are borrowed, results own their arrays, and missing processing stages
+//! run on temporary copies using the input settings. See [Larch's PCA guide](https://xraypy.github.io/xraylarch/xafs_xanes.html#principal-component-analysis)
 //! for a centered comparison workflow; rexafs defaults to no centering.
 
 use std::borrow::Borrow;
@@ -44,7 +44,7 @@ use std::borrow::Borrow;
 use nalgebra::{DMatrix, DVector, SVD};
 use serde::{Deserialize, Serialize};
 
-use super::{as_refs, on_grid, r_factor, reference_grid, spectrum_label, AnalysisSpace};
+use super::{as_refs, on_grid, r_factor, spectrum_label, AnalysisInput, AnalysisSpace};
 use crate::xafs::errors::AnalysisError;
 use crate::xafs::xasspectrum::XASSpectrum;
 
@@ -56,7 +56,7 @@ pub struct PcaConfig {
     pub space: AnalysisSpace,
     /// Range: relative to the first spectrum's E₀ for energy spaces,
     /// absolute k for `Chi`. `None` selects −20 to +30 eV or 3 to 12 Å⁻¹.
-    /// Reversed bounds are swapped; only reference-grid samples in the range are kept.
+    /// Bounds must be finite, increasing and fully covered by every input.
     pub range: Option<(f64, f64)>,
     /// Subtract the mean spectrum before the SVD (default `false`).
     pub center: bool,
@@ -106,6 +106,36 @@ pub struct PcaModel {
     pub scores: DMatrix<f64>,
 }
 
+/// Evidence used for a component-count suggestion; neither variant estimates
+/// chemical species or experimental noise automatically.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PcaCountBasis {
+    /// Singular values above the rexafs floating-point tolerance.
+    NumericalRank,
+    /// A positive interior minimum of the Malinowski indicator.
+    IndicatorMinimum,
+}
+
+/// Suggested retained directions and the evidence behind the suggestion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PcaCountSuggestion {
+    /// Number of varying directions (the mean is separate when centered).
+    pub count: usize,
+    /// Diagnostic used; inspect the curves before choosing a chemical model.
+    pub basis: PcaCountBasis,
+}
+
+/// One point of the training reconstruction-error curve.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PcaReconstructionError {
+    /// Retained directions; zero retains only the model's mean.
+    pub components: usize,
+    /// Sum of squared residuals over all rows and grid points, in squared signal units.
+    pub sse: f64,
+    /// SSE divided by sum of squared original training values; NaN for zero data.
+    pub relative_error: f64,
+}
+
 /// Reconstruction of a spectrum from a subset of components.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PcaFit {
@@ -129,12 +159,12 @@ pub struct PcaFit {
     pub r_factor: f64,
 }
 
-/// Train an owned PCA model from at least two already-processed spectra.
+/// Train an owned PCA model from at least two spectra.
 ///
-/// Linear interpolation uses the first spectrum's selected grid and holds the
-/// other spectra's endpoint values outside their coverage. Select a common
-/// measured interval to avoid introducing artificial constant tails. Returns
-/// an error for missing processing arrays, fewer than two selected points,
+/// Linear interpolation uses the first spectrum's selected grid. Every input
+/// must cover the entire requested interval; no extrapolation is performed.
+/// Missing processing arrays are calculated on copies using input settings.
+/// Returns an error for failed preparation, fewer than two selected points,
 /// invalid interpolation inputs, or failed singular-value decomposition.
 pub fn pca_train<S: Borrow<XASSpectrum>>(
     spectra: &[S],
@@ -145,13 +175,16 @@ pub fn pca_train<S: Borrow<XASSpectrum>>(
     if n < 2 {
         return Err(AnalysisError::InsufficientSpectra { min: 2, actual: n });
     }
-    let (x, y0) = reference_grid(refs[0], cfg.space, cfg.range, 2)?;
+    let first = AnalysisInput::with_label(refs[0], cfg.space, "spectrum0".into())?;
+    let bounds = first.bounds(cfg.space, cfg.range)?;
+    let (x, y0) = first.select(bounds, 2)?;
     let p = x.len();
 
     let mut data = DMatrix::zeros(n, p);
     data.set_row(0, &y0.transpose());
     for (i, s) in refs.iter().enumerate().skip(1) {
-        let y = on_grid(s, cfg.space, &x)?;
+        let y = AnalysisInput::with_label(s, cfg.space, format!("spectrum{i}"))?
+            .interpolate(&x, bounds)?;
         data.set_row(i, &y.transpose());
     }
     let labels = refs
@@ -249,8 +282,76 @@ impl PcaModel {
         self.components.nrows()
     }
 
+    /// Numerical rank using σ > ε max(n, p) ‖D‖F, where ε is f64 precision,
+    /// n/p are training dimensions and D is the original (uncentered) matrix.
+    /// This rexafs tolerance suppresses centering roundoff; it is not a measured
+    /// noise threshold and should not be interpreted as a chemical-species count.
+    pub fn numerical_rank(&self) -> usize {
+        let tolerance =
+            f64::EPSILON * self.data.nrows().max(self.data.ncols()) as f64 * self.data.norm();
+        self.eigenvalues
+            .iter()
+            .filter(|&&v| {
+                v.is_finite() && (v.max(0.0) * self.n_spectra() as f64).sqrt() > tolerance
+            })
+            .count()
+    }
+
+    /// Suggest a retained count with its basis, consistently across frontends.
+    /// Exact low-rank data use numerical rank; otherwise a positive interior IND
+    /// minimum is a heuristic. Zero data or a boundary minimum return `None`.
+    /// Centered counts describe varying directions in addition to the mean.
+    pub fn component_count_suggestion(&self) -> Option<PcaCountSuggestion> {
+        let rank = self.numerical_rank();
+        let possible = self
+            .n_components()
+            .min(self.n_spectra().saturating_sub(usize::from(self.centered)));
+        if rank == 0 {
+            return None;
+        }
+        if rank < possible {
+            return Some(PcaCountSuggestion {
+                count: rank,
+                basis: PcaCountBasis::NumericalRank,
+            });
+        }
+        let limit = possible.min(self.ind.len().saturating_sub(1));
+        let best = (1..limit)
+            .filter(|&k| self.ind[k].is_finite() && self.ind[k] > 0.0)
+            .min_by(|&a, &b| self.ind[a].total_cmp(&self.ind[b]))?;
+        self.ind
+            .get(limit)
+            .is_some_and(|&last| self.ind[best] < last && self.ind[best] < self.ind[0])
+            .then_some(PcaCountSuggestion {
+                count: best,
+                basis: PcaCountBasis::IndicatorMinimum,
+            })
+    }
+
+    /// Training error versus retained count from zero through all SVD directions.
+    /// SSE is n times the sum of discarded eigenvalues, equivalent to the sum
+    /// of squared reconstruction residuals up to SVD roundoff. The denominator
+    /// for relative error is the original data norm even for a centered model.
+    /// No logarithm or display floor is applied; plotting scale is a frontend choice.
+    pub fn reconstruction_errors(&self) -> Vec<PcaReconstructionError> {
+        let norm = self.data.norm_squared();
+        (0..=self.n_components())
+            .map(|components| {
+                let sse =
+                    self.eigenvalues.iter().skip(components).sum::<f64>() * self.n_spectra() as f64;
+                PcaReconstructionError {
+                    components,
+                    sse,
+                    relative_error: if norm > 0.0 { sse / norm } else { f64::NAN },
+                }
+            })
+            .collect()
+    }
+
     /// Number of significant components suggested by the minimum of the
-    /// Malinowski indicator function (at least 1).
+    /// Malinowski indicator function (at least 1). Historical compatibility helper;
+    /// new callers should use [`Self::component_count_suggestion`] for boundary
+    /// and roundoff checks and an explicit `None` when no suggestion is supported.
     pub fn suggested_components_ind(&self) -> usize {
         let mut best = 1;
         let mut best_val = f64::INFINITY;

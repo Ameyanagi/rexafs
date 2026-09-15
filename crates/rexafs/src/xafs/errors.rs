@@ -467,6 +467,46 @@ impl From<Box<dyn std::error::Error>> for BackgroundError {
 /// Errors raised by the linear-combination-fitting / PCA analysis module.
 #[derive(Error, Debug, Clone)]
 pub enum AnalysisError {
+    /// Normalization or background subtraction failed on a temporary input copy.
+    #[error("could not prepare {spectrum}: {source}")]
+    Preparation {
+        /// Input name, or an explicit unnamed-input label.
+        spectrum: String,
+        /// Original processing error.
+        #[source]
+        source: Box<super::XAFSError>,
+    },
+    /// Analysis data or their edge origin are not usable.
+    #[error("invalid analysis input {spectrum}: {reason}")]
+    InvalidInput {
+        /// Input name.
+        spectrum: String,
+        /// Contextual validation failure.
+        reason: String,
+    },
+    /// Bounds must be finite and strictly increasing; they are never swapped.
+    #[error("analysis range [{lo}, {hi}] must be finite and increasing")]
+    InvalidRange {
+        /// Requested lower bound, in axis units or energy offsets.
+        lo: f64,
+        /// Requested upper bound, in the same units.
+        hi: f64,
+    },
+    /// The entire requested interval must be measured; extrapolation is disabled.
+    #[error("{spectrum} covers [{available_lo}, {available_hi}], not the requested [{lo}, {hi}]; extrapolation is disabled")]
+    IncompleteCoverage {
+        /// Input name.
+        spectrum: String,
+        /// Requested absolute lower bound, in eV or Å⁻¹.
+        lo: f64,
+        /// Requested absolute upper bound.
+        hi: f64,
+        /// First available axis value.
+        available_lo: f64,
+        /// Last available axis value.
+        available_hi: f64,
+    },
+
     #[error("missing array for analysis: {field}")]
     /// The chosen analysis space requires an array that has not been calculated.
     MissingArray {

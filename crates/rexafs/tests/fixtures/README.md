@@ -11,6 +11,7 @@ shared data, not two physical copies.
 | [Beamline measurements](xas/README.md) | 154 valid files, grouped by facility and beamline | [Per-file source manifest](xas/manifest.json), [citations](xas/CITATIONS.md), [license index](xas/LICENSE.md) |
 | [Expanded measurement corpus](xas/collections/rexafs-corpus/INDEX.md) | 222 files: 182 parsed, including five partial HDF5 recoveries; 40 known rejections | [Original manifest](xas/collections/rexafs-corpus/manifest.json), [licenses](xas/collections/rexafs-corpus/LICENSE.md), [snapshot checksums](xas/collections/rexafs-corpus/SNAPSHOT.json) |
 | [Saved sessions](sessions/README.md) | 6 XTUNES files, 15 valid Larix sessions and 6 intentionally invalid Larix sessions | Separate original bundle manifests, source records and MIT notices |
+| [Copper mixture recovery](analysis/cu-mixtures/README.md) | 100 generated mixtures and three prepared standards | Exact fractions, seed, source checksum and explicit permission record; upstream open-data license not established |
 
 The `xas/` and session suites cover **175 readable inputs**. Readability includes preserved tables,
 images and saved results that require explicit interpretation before conversion

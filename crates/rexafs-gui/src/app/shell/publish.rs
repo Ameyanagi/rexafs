@@ -209,7 +209,7 @@ impl StudioApp {
             current: self.current_path.clone(),
             spectra,
             results,
-            analysis: serde_json::json!({"lcf":self.analysis.lcf,"ranked_lcf":self.analysis.ranked,"pca":self.analysis.pca,"pca_fit":self.analysis.pca_fit}),
+            analysis: serde_json::json!({"lcf":self.analysis.lcf,"ranked_lcf":self.analysis.ranked,"pca":self.analysis.pca,"pca_fit":self.analysis.pca_fit,"mcr":self.analysis.mcr,"lcf_series":self.analysis.lcf_series}),
             batch_csv: self
                 .batch_fit
                 .as_ref()

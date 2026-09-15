@@ -1,0 +1,43 @@
+{
+  "space": "Flat",
+  "spectra": 100,
+  "standards": 3,
+  "calculated_groups": 8,
+  "points": 190,
+  "versions": {
+    "numpy": "2.5.3",
+    "pymcr": "0.5.1",
+    "matplotlib": "3.11.2"
+  },
+  "lcf": {
+    "max_absolute_weight_error": 1.3529455333838314e-13,
+    "max_r_factor": 1.621662452416406e-28
+  },
+  "pca": {
+    "centered": true,
+    "first_fractions": [
+      0.759144743397578,
+      0.240855256602422,
+      3.7922585778206085e-27,
+      2.295360471854077e-28
+    ],
+    "varying_directions": 2
+  },
+  "mcr": {
+    "iterations": 776,
+    "relative_squared_residual": 9.78121680381365e-25,
+    "termination": "Converged",
+    "matched_component_indices": [
+      1,
+      2,
+      0
+    ],
+    "relative_spectral_errors": [
+      0.002393505739773443,
+      0.0003424878638832408,
+      0.0025056285459686797
+    ],
+    "max_absolute_fraction_error": 0.02387084582383392,
+    "native_pymcr_max_spectral_difference": 2.6206259384764508e-11
+  }
+}
