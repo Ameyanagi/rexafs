@@ -50,7 +50,7 @@ The 0.2.8 signed release must be checked separately after its GitHub build.
 
 The 0.2.8 maintainer writer saved and reopened both linked and embedded fixtures.
 All 38 retained samples passed checksum/header validation; historical bytes and
-hashes are unchanged. The 26 project tests passed with the explicit writer
+hashes are unchanged. The 29 project tests passed with the explicit writer
 ignored. The coordinated version check and formatting passed. Core strict Clippy
 and the default core suite also passed before the metadata-only version change.
 
