@@ -422,6 +422,9 @@ pub struct AthenaGroup {
     /// Complete raw `@args` list in file order.
     pub args: Vec<(String, AthenaValue)>,
     /// Statements inside the record we do not model (e.g. `@xdi = ...`), verbatim.
+    /// Includes historical `(undef)` markers for absent optional arrays. The
+    /// writer since 0.2.7 places these before current `i0`, `signal` and `stddev`
+    /// arrays so retained markers cannot overwrite edits to those fields.
     pub extra: Vec<String>,
 }
 
@@ -1000,6 +1003,12 @@ impl AthenaProject {
             out.push_str(");\n");
             push_array(&mut out, "x", &group.x);
             push_array(&mut out, "y", &group.y);
+            // Historical optional-array (undef) statements remain verbatim,
+            // but current optional arrays must be the final assignments.
+            for statement in &group.extra {
+                out.push_str(statement);
+                out.push('\n');
+            }
             if let Some(i0) = &group.i0 {
                 push_array(&mut out, "i0", i0);
             }
@@ -1008,10 +1017,6 @@ impl AthenaProject {
             }
             if let Some(stddev) = &group.stddev {
                 push_array(&mut out, "stddev", stddev);
-            }
-            for statement in &group.extra {
-                out.push_str(statement);
-                out.push('\n');
             }
             out.push_str("[record]   # create object and set arrays in ifeffit\n\n");
         }

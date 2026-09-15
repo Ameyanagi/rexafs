@@ -6,6 +6,74 @@ needed, the panel provides Retry and login controls. rexafs does not store a
 separate model API key. Choose the model and reasoning effort in the panel;
 availability comes from the connected server.
 
+## Connection troubleshooting
+
+An installed Codex launcher can still fail before connecting. For example,
+macOS apps opened from Finder do not necessarily inherit Terminal's `PATH`.
+An npm/Bun launcher using `#!/usr/bin/env node` then needs Node.js on the app's
+search path, even if `codex --version` succeeds in Terminal. In rexafs 0.2.6,
+the resulting startup error can appear only as **Codex disconnected**.
+
+For 0.2.6, save your project and quit rexafs, then start it from a Terminal
+where `codex --version` works:
+
+```sh
+/Applications/rexafs.app/Contents/MacOS/rexafs
+```
+
+This uses Terminal's environment for that launch; it does not change Finder's
+environment. `REXAFS_CODEX` can select an explicit Codex executable when needed.
+Connection initialization does not send the draft message or analysis context;
+Send shares the context described below. Codex owns authentication through its
+[app-server protocol](https://learn.chatgpt.com/docs/app-server).
+
+**Version 0.2.7 correction:** the
+[launcher](../crates/rexafs-gui/src/codex_client.rs) preserves absolute inherited
+search-path entries and adds common Bun, npm, Homebrew, Nix, Volta and mise
+locations for the child process. It does not read shell startup files or change
+the parent environment. On macOS, it also checks the Codex app's bundled CLI
+when no standalone launcher is found. Explicit executable overrides retain
+priority. Relative/empty path entries are excluded so the temporary assistant
+workspace is not searched for executables.
+
+Connection failures show the final nonempty stderr line, limited to 300
+characters; only the last 4 KiB is retained in memory. This diagnostic is not
+written into a saved project. The launcher change does not alter authentication,
+Review/Edit analysis permissions or Extended access.
+
+## Compact composer in 0.2.7
+
+Version 0.2.7 places the message above a compact footer with **Model**,
+**Reasoning**, and **Access** menus. The footer wraps in a narrow docked panel;
+the same composer is used in a separate Assistant window. The rounded arrow
+sends the message and becomes Stop while a response is running.
+
+The model button shows the resolved model name. Its menu retains **Automatic**;
+hover the button to see whether the selection is automatic. The reasoning button
+shows the effective level, while its menu distinguishes **Model default** from an
+explicit choice. Model changes retain the existing supported-level fallback.
+Use arrow keys to move through a menu, Enter or Space to choose, and Escape to
+close it. Long model and reasoning lists scroll.
+
+**Access** contains **Review** and **Edit analysis** with descriptions of their
+scope. **Workspace commands** is the existing Extended access switch: it starts
+off and does not change the selected analysis mode. A small amber dot on the
+Access button indicates that workspace commands are enabled. Command approvals
+and the assistant sandbox still apply. **Plot images** and **Web search** are
+in **Assistant settings** (the gear button).
+
+Opening **Parameters** or **Groups**, by its toolbar button or keyboard
+shortcut, keeps that panel visible beside the Assistant. When space is tight,
+the older panel closes first and the Assistant narrows temporarily. Its preferred
+width returns when space is available. On small windows, the plot can be narrower
+than the usual 360 px target so the requested panel remains usable.
+
+These presentation changes are not included in the 0.2.6 download. The
+[composer implementation](../crates/rexafs-gui/src/app/shell/assistant_composer.rs)
+uses the existing preference persistence and permission checks.
+
+## Workspace and conversations
+
 The Assistant opens at the right of the analysis. Drag its left border to resize
 between 320 and 640 px. **Pop out** moves the same conversation to a separate
 window; **Dock**, or closing that window, brings it back. Closing the docked panel

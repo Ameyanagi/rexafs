@@ -125,6 +125,9 @@ pub struct MeasurementScan {
     /// Extracted metadata. Original spelling remains in `header`.
     pub metadata: BTreeMap<String, String>,
     /// Header-supported signal mappings. Empty means manual mapping is needed.
+    /// Shared header inference requires unique detector-role matches. Each stored
+    /// absorption column remains a separate choice, even when labels repeat
+    /// (since 0.2.7).
     pub signals: Vec<SignalCandidate>,
     /// Unit assumptions, ambiguous channels and historical-format observations.
     pub warnings: Vec<String>,
