@@ -51,6 +51,60 @@ source paths, bounded source comments, processing settings, model inputs,
 analysis results, journal entries and enabled plots through your Codex account.
 Imported comments and previous conversations are labelled as data.
 
+## Unreleased: context retrieval and analysis
+
+In source builds, new messages send a short overview of the current
+group and up to 50 available groups. The Assistant retrieves relevant source
+headers, import mappings, processing settings, fit models or historical results
+when needed. Headers and long group lists are paginated; plots are requested on
+demand when Plot images is enabled. Original measurement bytes, full raw tables
+and unrelated saved conversations stay out of the prompt. This prevents large
+import archives from exceeding the Assistant's input limit. Project saves and
+publication exports still retain their original data. These changes are not in
+the 0.2.7 screenshots above or the 0.2.8 release.
+
+The Assistant can select imported groups by
+identity, run independent EXAFS fits in sequence, and configure a joint fit with
+explicit shared and per-spectrum variables. Each independent fit creates a
+separate History entry. Joint fitting produces one result for the assigned
+spectra. Existing paths, ranges, expressions and local values are retained.
+
+It can also run **Linear combination fit** or **Principal components** in Data.
+Specify the target, references and energy interval. The interval is relative to
+the target's edge energy for LCF and the first training spectrum's edge energy
+for PCA; the GUI defaults to −20 to +30 eV. Use compatible absorption edges and
+a measured interval shared by every spectrum. LCF defaults to nonnegative
+weights summing to one and no fitted energy shifts. PCA uses the GUI's
+uncentered convention and requires a retained component count: its percentages
+describe squared signal, not chemical concentrations. Results and residual
+plots appear in the main workspace. The Assistant checks current processing
+for every requested operand before running these operations. See the
+[analysis guide](/docs/science/analysis/) for assumptions and interpretation.
+
+[![Unreleased rexafs Assistant completing LCF of a synthetic mixture, with its weights and residual visible](/screenshots/next/assistant-lcf.jpg)](/screenshots/next/assistant-lcf.jpg)
+
+Example request: “Fit Synthetic mixture 1 using components A, B and C in
+normalized μ, from −20 to +80 eV relative to E₀. Keep the processing settings,
+constrain weights to sum to one, and inspect the fit and residual.” This
+controlled example recovers the known 20%, 30% and 50% weights.
+
+[![Unreleased rexafs Assistant comparing two- and three-component PCA reconstructions of synthetic spectra](/screenshots/next/assistant-pca.jpg)](/screenshots/next/assistant-pca.jpg)
+
+Example request: “Train PCA on mixtures 2–6 and reconstruct mixture 1 over the
+same interval. Compare two and three retained components, then show the
+three-component residual.” Here three components reproduce the known synthetic
+signal. This example does not establish a component count for experimental data.
+
+Both captures show an unreleased macOS source build tested through computer use
+on 15 September 2026. The inputs are generated mathematical signals, not measured
+Cu oxidation-state standards. See [screenshot provenance](/licenses/).
+
+Changing an input marks its earlier analysis result as stale in the Assistant's
+state; stale results are not supplied as current analysis plots. LCF/PCA outputs
+are session results: use **Publish → Analysis folder → Export** to retain the
+computed arrays and report. Saving an `.rxs` project retains the input groups and
+completed conversation, but does not restore the LCF/PCA result panels.
+
 ## Keep the workspace visible
 
 Open **Parameters** or **Groups** with the toolbar or their keyboard shortcuts.

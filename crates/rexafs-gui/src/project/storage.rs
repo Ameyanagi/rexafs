@@ -184,7 +184,12 @@ pub(super) fn map_paths(
         f: &mut impl FnMut(&Path) -> Result<PathBuf, String>,
     ) -> Result<(), String> {
         for d in &mut j.datasets {
-            d.file = f(&d.file)?;
+            // Materialized/imported spectra are identified by group_id and may
+            // have no file. Resolving an empty locator against the working or
+            // project directory would invent a source and make saving fail.
+            if !d.file.as_os_str().is_empty() {
+                d.file = f(&d.file)?;
+            }
             for p in &mut d.paths {
                 *p = f(p)?;
             }
