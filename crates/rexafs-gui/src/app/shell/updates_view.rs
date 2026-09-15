@@ -10,12 +10,19 @@ use crate::{
 };
 use gpui::{Context, IntoElement, ParentElement, Styled, div, prelude::*, px};
 use std::path::PathBuf;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 #[derive(Default)]
 pub(crate) struct UpdateState {
     pub open: bool,
     checking: bool,
     downloading: bool,
+    installing: bool,
+    cancel: Option<Arc<AtomicBool>>,
+    progress: Option<String>,
     generation: u64,
     pub result: Option<UpdateCheck>,
     error: Option<String>,
@@ -23,6 +30,12 @@ pub(crate) struct UpdateState {
     focus: Option<gpui::FocusHandle>,
     return_focus: Option<gpui::FocusHandle>,
     preferences_open: bool,
+}
+
+impl UpdateState {
+    pub(crate) fn is_installing(&self) -> bool {
+        self.installing
+    }
 }
 
 impl StudioApp {
@@ -53,6 +66,10 @@ impl StudioApp {
         cx.notify();
     }
     fn close_updates(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        if self.updates.installing {
+            self.cancel_update(cx);
+            return;
+        }
         self.updates.open = false;
         let focus = self
             .updates
@@ -63,7 +80,7 @@ impl StudioApp {
         cx.notify();
     }
     pub(crate) fn check_for_updates(&mut self, cx: &mut Context<Self>) {
-        if self.updates.checking || self.updates.downloading {
+        if self.updates.checking || self.updates.downloading || self.updates.installing {
             return;
         }
         self.updates.generation += 1;
@@ -72,6 +89,7 @@ impl StudioApp {
         self.updates.checking = true;
         self.updates.error = None;
         self.updates.downloaded = None;
+        self.updates.result = None;
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
@@ -110,7 +128,10 @@ impl StudioApp {
         cx.notify();
     }
     fn set_update_channel(&mut self, channel: UpdateChannel, cx: &mut Context<Self>) {
-        if self.updates.downloading || channel == self.structure.settings.update_channel {
+        if self.updates.downloading
+            || self.updates.installing
+            || channel == self.structure.settings.update_channel
+        {
             return;
         }
         let mut settings = self.structure.settings.clone();
@@ -138,7 +159,7 @@ impl StudioApp {
         cx.notify();
     }
     fn download_update(&mut self, cx: &mut Context<Self>) {
-        if self.updates.downloading {
+        if self.updates.downloading || self.updates.installing {
             return;
         }
         let Some(release) = self.updates.result.as_ref().and_then(|r| r.release.clone()) else {
@@ -171,6 +192,193 @@ impl StudioApp {
             .ok();
         })
         .detach();
+        cx.notify();
+    }
+
+    fn cancel_update(&mut self, cx: &mut Context<Self>) {
+        if let Some(cancel) = &self.updates.cancel {
+            cancel.store(true, Ordering::Relaxed);
+            self.updates.progress = Some("Cancelling…".into());
+            cx.notify();
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn update_and_restart(&mut self, cx: &mut Context<Self>) {
+        if self.updates.installing || self.updates.downloading || self.updates.checking {
+            return;
+        }
+        let Some(release) = self
+            .updates
+            .result
+            .as_ref()
+            .filter(|result| result.available)
+            .and_then(|result| result.release.clone())
+        else {
+            return;
+        };
+        if self.running_job_count() > 0
+            || self.project_saving
+            || self.structure.search_running
+            || self.structure.fetch_running
+            || self
+                .assistant
+                .as_ref()
+                .is_some_and(|view| !view.read(cx).can_restart_for_update())
+        {
+            self.updates.error = Some("Wait for the current calculation, import or Assistant turn to finish, then update.".into());
+            cx.notify();
+            return;
+        }
+        if let Err(error) = updates::install::installed_app() {
+            self.updates.error = Some(error);
+            cx.notify();
+            return;
+        }
+        let mut project = self.project_file();
+        // Restart reopens exactly the current accepted inputs; it must not
+        // discover new files that appeared in a watched folder during download.
+        project.source_dir = None;
+        let project_generation = self.project_generation;
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.updates.cancel = Some(cancel.clone());
+        self.updates.installing = true;
+        self.updates.open = true;
+        self.updates.error = None;
+        self.updates.progress = Some("Downloading…".into());
+        if let Some(assistant) = &self.assistant {
+            assistant.update(cx, |view, cx| view.pause_for_update(true, cx));
+        }
+        let (progress_tx, progress_rx) = std::sync::mpsc::channel();
+        let progress_view = cx.weak_entity();
+        cx.spawn(async move |_, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(100))
+                    .await;
+                let latest = progress_rx.try_iter().last();
+                let active = progress_view
+                    .update(cx, |app, cx| {
+                        if let Some(progress) = latest
+                            && app
+                                .updates
+                                .cancel
+                                .as_ref()
+                                .is_some_and(|cancel| !cancel.load(Ordering::Relaxed))
+                        {
+                            app.updates.progress = Some(progress);
+                            cx.notify();
+                        }
+                        app.updates.installing
+                    })
+                    .unwrap_or(false);
+                if !active {
+                    break;
+                }
+            }
+        })
+        .detach();
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let check_cancel = || {
+                        if cancel.load(Ordering::Relaxed) {
+                            Err("Update cancelled. Your app is unchanged.".to_owned())
+                        } else {
+                            Ok(())
+                        }
+                    };
+                    let mut last_percent = None;
+                    let archive =
+                        updates::download_with_progress(&release, |downloaded, total| {
+                            check_cancel()?;
+                            let percent = downloaded.saturating_mul(100) / total.max(1);
+                            if last_percent != Some(percent) {
+                                let _ = progress_tx.send(format!("Downloading · {percent}%"));
+                                last_percent = Some(percent);
+                            }
+                            Ok(())
+                        })?;
+                    check_cancel()?;
+                    let _ = progress_tx.send("Verifying the app…".into());
+                    let prepared = updates::install::prepare(&release, &archive)?;
+                    check_cancel()?;
+                    let _ = progress_tx.send("Saving your analysis…".into());
+                    crate::project::save_with_storage(
+                        &prepared.recovery_path(),
+                        &project,
+                        crate::project::DataStorage::Embedded,
+                    )
+                    .map_err(|e| {
+                        format!("Could not save update recovery; rexafs will stay open: {e}")
+                    })?;
+                    crate::project::load(&prepared.recovery_path()).map_err(|e| {
+                        format!("Could not verify update recovery; rexafs will stay open: {e}")
+                    })?;
+                    check_cancel()?;
+                    Ok::<_, String>(prepared)
+                })
+                .await;
+            match result {
+                Ok(prepared) => {
+                    let proceed = this
+                        .update(cx, |app, cx| {
+                            if app.project_generation != project_generation {
+                                app.finish_update_error("The analysis changed while preparing the update. Try again from the current project.".into(), cx);
+                                return false;
+                            }
+                            let proceed = app
+                                .updates
+                                .cancel
+                                .take()
+                                .is_some_and(|cancel| !cancel.load(Ordering::Relaxed));
+                            if proceed {
+                                app.updates.progress = Some("Restarting…".into());
+                                cx.notify();
+                            }
+                            proceed
+                        })
+                        .unwrap_or(false);
+                    if !proceed {
+                        let _ = this.update(cx, |app, cx| {
+                            if app.updates.installing {
+                                app.finish_update_error(
+                                    "Update cancelled. Your app is unchanged.".into(),
+                                    cx,
+                                );
+                            }
+                        });
+                        return;
+                    }
+                    let armed = cx.background_spawn(async move { prepared.start() }).await;
+                    let _ = this.update(cx, |app, cx| match armed {
+                        Ok(_) => cx.quit(),
+                        Err(error) => app.finish_update_error(error, cx),
+                    });
+                }
+                Err(error) => {
+                    let _ = this.update(cx, |app, cx| app.finish_update_error(error, cx));
+                }
+            }
+        })
+        .detach();
+        cx.notify();
+    }
+
+    #[cfg(target_os = "macos")]
+    fn finish_update_error(&mut self, error: String, cx: &mut Context<Self>) {
+        self.updates.installing = false;
+        self.updates.cancel = None;
+        self.updates.progress = None;
+        if error == "Update cancelled. Your app is unchanged." {
+            self.updates.error = None;
+            self.status = "Update cancelled.".into();
+        } else {
+            self.updates.error = Some(error);
+        }
+        if let Some(assistant) = &self.assistant {
+            assistant.update(cx, |view, cx| view.pause_for_update(false, cx));
+        }
         cx.notify();
     }
     pub(crate) fn updates_overlay(&self, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
@@ -208,10 +416,14 @@ impl StudioApp {
                 .items_center()
                 .gap_3()
                 .child(div().flex_1().text_size(px(18.)).child("Updates"))
-                .child(
-                    icon_button(&t, "close-updates", Icon::Close, "Close updates", false)
-                        .on_click(cx.listener(|app, _, window, cx| app.close_updates(window, cx))),
-                ),
+                .when(!self.updates.installing, |d| {
+                    d.child(
+                        icon_button(&t, "close-updates", Icon::Close, "Close updates", false)
+                            .on_click(
+                                cx.listener(|app, _, window, cx| app.close_updates(window, cx)),
+                            ),
+                    )
+                }),
         )
         .child(div().text_color(t.text_muted).child(format!(
             "{} · {}",
@@ -249,22 +461,45 @@ impl StudioApp {
                 );
                 if let Some(asset) = &release.asset {
                     if !self.updates.downloading
+                        && !self.updates.installing
                         && self.updates.downloaded.is_none()
                         && (result.available || self.updates.preferences_open)
                     {
-                        panel = panel.child(
-                            button(
-                                &t,
-                                "download-update",
-                                format!(
-                                    "Download {} · {:.1} MB",
-                                    release.tag,
+                        #[cfg(target_os = "macos")]
+                        let automatic = result.available
+                            && channel == updates::installed_channel()
+                            && updates::install::installed_app().is_ok();
+                        #[cfg(not(target_os = "macos"))]
+                        let automatic = false;
+                        #[cfg(target_os = "macos")]
+                        if automatic {
+                            panel = panel
+                                .child(
+                                    button(&t, "install-update", "Update and restart", true)
+                                        .on_click(
+                                            cx.listener(|app, _, _, cx| app.update_and_restart(cx)),
+                                        ),
+                                )
+                                .child(div().text_color(t.text_muted).child(format!(
+                                    "{:.1} MB · Reopens a recovery copy of your analysis.",
                                     asset.size as f64 / 1_000_000.
-                                ),
-                                result.available,
-                            )
-                            .on_click(cx.listener(|app, _, _, cx| app.download_update(cx))),
-                        );
+                                )));
+                        }
+                        if !automatic || self.updates.preferences_open {
+                            panel = panel.child(
+                                button(
+                                    &t,
+                                    "download-update",
+                                    format!(
+                                        "Download {} · {:.1} MB",
+                                        release.tag,
+                                        asset.size as f64 / 1_000_000.
+                                    ),
+                                    !automatic,
+                                )
+                                .on_click(cx.listener(|app, _, _, cx| app.download_update(cx))),
+                            );
+                        }
                     }
                 } else if result.available {
                     panel = panel.child(
@@ -275,6 +510,20 @@ impl StudioApp {
                 }
             } else {
                 panel = panel.child(format!("No {} releases yet", channel.label()));
+            }
+        }
+        if self.updates.installing {
+            panel = panel.child(
+                self.updates
+                    .progress
+                    .clone()
+                    .unwrap_or_else(|| "Updating…".into()),
+            );
+            if self.updates.cancel.is_some() {
+                panel = panel.child(
+                    button(&t, "cancel-update", "Cancel", false)
+                        .on_click(cx.listener(|app, _, _, cx| app.cancel_update(cx))),
+                );
             }
         }
         if self.updates.downloading {
@@ -303,33 +552,35 @@ impl StudioApp {
         if let Some(error) = &self.updates.error {
             panel = panel.child(div().text_color(t.error).child(error.clone()));
         }
-        panel = panel.child(
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(
-                    disclosure(
-                        &t,
-                        "update-preferences",
-                        "Preferences",
-                        self.updates.preferences_open,
-                        false,
+        panel = panel.when(!self.updates.installing, |panel| {
+            panel.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        disclosure(
+                            &t,
+                            "update-preferences",
+                            "Preferences",
+                            self.updates.preferences_open,
+                            false,
+                        )
+                        .flex_1()
+                        .on_click(cx.listener(|app, _, _, cx| {
+                            app.updates.preferences_open = !app.updates.preferences_open;
+                            cx.notify();
+                        })),
                     )
-                    .flex_1()
-                    .on_click(cx.listener(|app, _, _, cx| {
-                        app.updates.preferences_open = !app.updates.preferences_open;
-                        cx.notify();
-                    })),
-                )
-                .when(!self.updates.checking && !self.updates.downloading, |d| {
-                    d.child(
-                        icon_button(&t, "check-updates", Icon::Refresh, "Check again", false)
-                            .on_click(cx.listener(|app, _, _, cx| app.check_for_updates(cx))),
-                    )
-                }),
-        );
-        if self.updates.preferences_open {
+                    .when(!self.updates.checking && !self.updates.downloading, |d| {
+                        d.child(
+                            icon_button(&t, "check-updates", Icon::Refresh, "Check again", false)
+                                .on_click(cx.listener(|app, _, _, cx| app.check_for_updates(cx))),
+                        )
+                    }),
+            )
+        });
+        if self.updates.preferences_open && !self.updates.installing {
             panel = panel
                 .child(
                     div()

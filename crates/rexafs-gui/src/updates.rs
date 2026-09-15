@@ -1,5 +1,7 @@
 //! Official desktop release discovery and checksum-verified downloads.
-//! Installation stays an explicit user action; no running app or project is replaced.
+//! Installation and restart occur only after the user chooses the update action.
+#[cfg(any(target_os = "macos", test))]
+pub(crate) mod install;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -228,16 +230,34 @@ pub fn check(channel: UpdateChannel) -> Result<UpdateCheck, String> {
     ))
 }
 
+#[cfg(test)]
 fn verify_stream(
     mut reader: impl Read,
     mut output: impl Write,
     expected_size: u64,
     expected_hash: &str,
 ) -> Result<(), String> {
+    verify_stream_with_progress(
+        &mut reader,
+        &mut output,
+        expected_size,
+        expected_hash,
+        |_, _| Ok(()),
+    )
+}
+
+fn verify_stream_with_progress(
+    mut reader: impl Read,
+    mut output: impl Write,
+    expected_size: u64,
+    expected_hash: &str,
+    mut progress: impl FnMut(u64, u64) -> Result<(), String>,
+) -> Result<(), String> {
     let mut hash = Sha256::new();
     let mut total = 0u64;
     let mut buffer = [0u8; 64 * 1024];
     loop {
+        progress(total, expected_size)?;
         let n = reader.read(&mut buffer).map_err(|e| e.to_string())?;
         if n == 0 {
             break;
@@ -266,6 +286,16 @@ fn hex(bytes: &[u8]) -> String {
 /// temporary downloads are removed. No installer is opened and no running app
 /// or project is replaced; installation remains a separate user action.
 pub fn download(release: &AvailableRelease) -> Result<PathBuf, String> {
+    download_with_progress(release, |_, _| Ok(()))
+}
+
+/// Download with cancellable byte progress, including cache verification.
+/// Returning an error from the callback stops before installation. The callback
+/// runs on the download worker; callers must not touch UI entities from it.
+pub fn download_with_progress(
+    release: &AvailableRelease,
+    mut progress: impl FnMut(u64, u64) -> Result<(), String>,
+) -> Result<PathBuf, String> {
     let asset = release
         .asset
         .as_ref()
@@ -278,18 +308,7 @@ pub fn download(release: &AvailableRelease) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
     let destination = root.join(&asset.name);
     if destination.exists() {
-        verify_stream(
-            std::fs::File::open(&destination).map_err(|e| e.to_string())?,
-            std::io::sink(),
-            asset.size,
-            digest,
-        )
-        .map_err(|error| {
-            format!(
-                "{error} Remove the damaged cached download at {} and try again.",
-                destination.display()
-            )
-        })?;
+        verify_cached_download(&destination, asset.size, digest, &mut progress)?;
         return Ok(destination);
     }
     let nonce = std::time::SystemTime::now()
@@ -308,11 +327,12 @@ pub fn download(release: &AvailableRelease) -> Result<PathBuf, String> {
             .header("User-Agent", "rexafs-updater")
             .call()
             .map_err(|e| e.to_string())?;
-        verify_stream(
+        verify_stream_with_progress(
             response.body_mut().as_reader(),
             &mut file,
             asset.size,
             digest,
+            &mut progress,
         )?;
         file.sync_all().map_err(|e| e.to_string())?;
         drop(file);
@@ -322,6 +342,36 @@ pub fn download(release: &AvailableRelease) -> Result<PathBuf, String> {
     })();
     let _ = std::fs::remove_file(temporary);
     result
+}
+
+fn verify_cached_download(
+    path: &std::path::Path,
+    size: u64,
+    digest: &str,
+    mut progress: impl FnMut(u64, u64) -> Result<(), String>,
+) -> Result<(), String> {
+    let mut interrupted = false;
+    verify_stream_with_progress(
+        std::fs::File::open(path).map_err(|e| e.to_string())?,
+        std::io::sink(),
+        size,
+        digest,
+        |done, total| {
+            let result = progress(done, total);
+            interrupted = result.is_err();
+            result
+        },
+    )
+    .map_err(|error| {
+        if interrupted {
+            error // Cancelling verification is not evidence of damaged bytes.
+        } else {
+            format!(
+                "{error} Remove the damaged cached download at {} and try again.",
+                path.display()
+            )
+        }
+    })
 }
 
 #[cfg(test)]
@@ -468,5 +518,49 @@ mod tests {
         ] {
             assert!(verify_stream(&bytes[..], std::io::sink(), size, &digest).is_err());
         }
+    }
+
+    #[test]
+    fn cancellation_stops_the_stream_before_writing_further_bytes() {
+        let bytes = vec![42u8; 150_000];
+        let hash = hex(&Sha256::digest(&bytes));
+        let mut written = Vec::new();
+        let mut progress = Vec::new();
+        let result = verify_stream_with_progress(
+            &bytes[..],
+            &mut written,
+            bytes.len() as u64,
+            &hash,
+            |done, total| {
+                progress.push((done, total));
+                if done >= 64 * 1024 {
+                    Err("cancelled".into())
+                } else {
+                    Ok(())
+                }
+            },
+        );
+        assert_eq!(result.unwrap_err(), "cancelled");
+        assert_eq!(written.len(), 64 * 1024);
+        assert_eq!(progress, [(0, 150_000), (65_536, 150_000)]);
+    }
+
+    #[test]
+    fn cancelling_cache_verification_preserves_a_reusable_download() {
+        // A tracked source is a read-only stand-in for cached download bytes.
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        let bytes = std::fs::read(&path).unwrap();
+        let hash = hex(&Sha256::digest(&bytes));
+        let result = verify_cached_download(&path, bytes.len() as u64, &hash, |_, _| {
+            Err("cancelled".into())
+        });
+        assert_eq!(result.unwrap_err(), "cancelled");
+        verify_cached_download(&path, bytes.len() as u64, &hash, |_, _| Ok(())).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        assert!(
+            verify_cached_download(&path, bytes.len() as u64 + 1, &hash, |_, _| Ok(()))
+                .unwrap_err()
+                .contains("damaged cached download")
+        );
     }
 }

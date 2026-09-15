@@ -1,5 +1,36 @@
 # Desktop updates and release channels
 
+## Next desktop build (unreleased)
+
+The macOS **Update and restart** action downloads the selected current-channel
+release, verifies its SHA-256 and size, checks its official Developer ID signature,
+Gatekeeper acceptance, architecture and compiled release identity, and runs the
+packaged-example check. It saves and reloads an embedded `.rxs` recovery copy
+before arming a helper. Active calculations, imports and Assistant turns must
+finish first. Cancel remains available until the helper handoff.
+
+The helper waits for the parent process to exit. A filesystem lock excludes
+concurrent updates of the same app. Staging and the old-app backup are in a
+private directory beside the destination, so replacement uses local renames.
+Replacement or launch failures trigger rollback; the previous app and recovery
+project remain available. The reopened analysis is a recovery copy, not a write
+to the original project. Saved project data survive; the undo stack and running
+jobs are not serialized. Large or unavailable embedded inputs can prevent the
+recovery save, in which case rexafs stays open and reports the error.
+
+Implementation: [`updates/install`](../crates/rexafs-gui/src/updates/install.rs)
+and the [update dialog](../crates/rexafs-gui/src/app/shell/updates_view.rs).
+Signature checks follow Apple's [Code Signing Tasks](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/Procedures/Procedures.html)
+and [code requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
+The updater additionally pins the rexafs Developer ID team and channel bundle
+identifier; that trust policy and the recovery workflow are rexafs choices.
+
+No administrator helper is installed. Read-only disk images, translocated apps,
+unwritable installation folders, channel changes and other operating systems
+retain manual installation. Released versions through 0.2.7 behave as below.
+
+## Released download workflow
+
 Open **Help → Updates**, or search for **Check for updates** with Cmd+K
 on macOS or Ctrl+K on Windows/Linux.
 
