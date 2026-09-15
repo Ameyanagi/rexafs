@@ -176,7 +176,7 @@ impl XASSpectrum {
     }
 
     /// Copy already normalized or flattened absorption into a processable spectrum
-    /// (unreleased). Energy is in eV, `mu` is dimensionless, and `e0` must be
+    /// (introduced in 0.2.9). Energy is in eV, `mu` is dimensionless, and `e0` must be
     /// finite and strictly inside the measured interval. Only `Norm` and `Flat`
     /// are accepted; use `from_arrays` for raw measurements.
     ///
