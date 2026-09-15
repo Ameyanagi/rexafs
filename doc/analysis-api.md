@@ -1,8 +1,8 @@
 # LCF, PCA and MCR-ALS APIs
 
-This describes the Rust source checkout on `test/cu-mixture-recovery`, including
-**unreleased** MCR-ALS and prepared-component processing. It is not a claim about
-the installed 0.2.8 package. LCF means linear combination fitting; PCA means
+This describes the **0.2.9 release candidate**, including native MCR-ALS and
+prepared-component processing. Publication is pending; this is not a claim
+about the installed 0.2.8 package. LCF means linear combination fitting; PCA means
 principal component analysis; MCR-ALS means multivariate curve resolution by
 alternating least squares.
 
@@ -193,7 +193,7 @@ chemical components. The native implementation and its relation to the
 pyMCR method are documented in
 [`mcr.rs`](../crates/rexafs/src/xafs/analysis/mcr.rs).
 
-`component_spectrum(index)` is the new **unreleased** bridge to the normal
+`component_spectrum(index)` is the new **0.2.9 candidate** bridge to the normal
 spectrum API. It copies one component, preserves its declared norm/flat values,
 uses E₀ from the calculation and a unit edge step, and retains that input type
 through edits and serialization. No second pre-edge fit or flattening occurs
@@ -267,5 +267,5 @@ with Cu foil, Cu₂O and CuO, after resolving their arbitrary component order.
   chaining both can currently use `Result<_, Box<dyn std::error::Error>>`.
 
 The preparation, common validation, batch LCF and core PCA diagnostics described
-above are implemented in this unreleased branch. The binding tasks remain open;
+above are implemented in the 0.2.9 candidate. The binding tasks remain open;
 no Python or TypeScript analysis API is being claimed here.
