@@ -5,6 +5,14 @@ with a merge commit before tagging. Nightly desktop builds follow `dev`; they
 do not substitute for the qualified stable tag build below. See the
 [development branch workflow](development-branches.md).
 
+## Preparing 0.2.8
+
+The [0.2.8 notes](release-notes-0.2.8.md) and
+[qualification record](validation/2026-09-15-release-0.2.8/review.md) track
+one-button macOS updates and GUI measurement discovery. Publication remains
+pending until the reviewed source, immutable-tag build and signed downloads
+pass the release gates below.
+
 ## Published 0.2.7
 
 The [0.2.7 notes](release-notes-0.2.7.md) and
