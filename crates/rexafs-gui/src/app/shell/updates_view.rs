@@ -21,6 +21,8 @@ pub(crate) struct UpdateState {
     checking: bool,
     downloading: bool,
     installing: bool,
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    handoff: Option<updates::install::UpdateHandoff>,
     cancel: Option<Arc<AtomicBool>>,
     progress: Option<String>,
     generation: u64,
@@ -203,7 +205,7 @@ impl StudioApp {
         }
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     fn update_and_restart(&mut self, cx: &mut Context<Self>) {
         if self.updates.installing || self.updates.downloading || self.updates.checking {
             return;
@@ -300,8 +302,8 @@ impl StudioApp {
                             Ok(())
                         })?;
                     check_cancel()?;
-                    let _ = progress_tx.send("Verifying the app…".into());
-                    let prepared = updates::install::prepare(&release, &archive)?;
+                    let _ = progress_tx.send("Preparing update…".into());
+                    let prepared = updates::install::prepare(&release, &archive, check_cancel)?;
                     check_cancel()?;
                     let _ = progress_tx.send("Saving your analysis…".into());
                     crate::project::save_with_storage(
@@ -352,7 +354,7 @@ impl StudioApp {
                     }
                     let armed = cx.background_spawn(async move { prepared.start() }).await;
                     let _ = this.update(cx, |app, cx| match armed {
-                        Ok(_) => cx.quit(),
+                        Ok(handoff) => { app.updates.handoff = Some(handoff); cx.quit(); },
                         Err(error) => app.finish_update_error(error, cx),
                     });
                 }
@@ -365,7 +367,7 @@ impl StudioApp {
         cx.notify();
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     fn finish_update_error(&mut self, error: String, cx: &mut Context<Self>) {
         self.updates.installing = false;
         self.updates.cancel = None;
@@ -465,13 +467,25 @@ impl StudioApp {
                         && self.updates.downloaded.is_none()
                         && (result.available || self.updates.preferences_open)
                     {
-                        #[cfg(target_os = "macos")]
+                        #[cfg(any(
+                            target_os = "macos",
+                            target_os = "windows",
+                            target_os = "linux"
+                        ))]
                         let automatic = result.available
                             && channel == updates::installed_channel()
-                            && updates::install::installed_app().is_ok();
-                        #[cfg(not(target_os = "macos"))]
+                            && updates::install::can_install(release);
+                        #[cfg(not(any(
+                            target_os = "macos",
+                            target_os = "windows",
+                            target_os = "linux"
+                        )))]
                         let automatic = false;
-                        #[cfg(target_os = "macos")]
+                        #[cfg(any(
+                            target_os = "macos",
+                            target_os = "windows",
+                            target_os = "linux"
+                        ))]
                         if automatic {
                             panel = panel
                                 .child(

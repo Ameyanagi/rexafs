@@ -1,8 +1,22 @@
-//! In-place macOS updates. Preparation never changes the installed application.
+//! In-place desktop updates. Preparation never changes the installed application.
 //! A copied helper waits for the GUI process to exit, replaces the bundle on
 //! the same filesystem, and rolls back if replacement or launch fails.
 
 use std::path::{Path, PathBuf};
+mod common;
+#[cfg(any(target_os = "windows", target_os = "linux", test))]
+mod payload;
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+mod portable;
+#[cfg(target_os = "windows")]
+mod windows;
+
+/// Kept by the GUI until it exits. Windows file locks cannot be inherited by
+/// the helper; it acquires its own lock after the parent process has stopped.
+pub(crate) struct UpdateHandoff {
+    _directory: PathBuf,
+    _lock: Option<std::fs::File>,
+}
 
 /// Source builds and other platforms retain the manual download workflow.
 #[cfg(target_os = "macos")]
@@ -10,6 +24,7 @@ pub(crate) fn installed_app() -> Result<PathBuf, String> {
     app_for_executable(&std::env::current_exe().map_err(|e| e.to_string())?)
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn app_for_executable(executable: &Path) -> Result<PathBuf, String> {
     let app = executable
         .parent()
@@ -28,7 +43,6 @@ fn app_for_executable(executable: &Path) -> Result<PathBuf, String> {
     Ok(app.to_path_buf())
 }
 
-#[cfg(any(target_os = "macos", test))]
 fn replace_and_launch(
     target: &Path,
     staged: &Path,
@@ -78,6 +92,18 @@ fn replace_and_launch(
 mod macos;
 #[cfg(target_os = "macos")]
 pub(crate) use macos::{finish_update, prepare};
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+pub(crate) use portable::{finish_update, installed_app, prepare};
+
+pub(crate) fn can_install(release: &crate::updates::AvailableRelease) -> bool {
+    #[cfg(target_os = "windows")]
+    if release.installer.is_none()
+        && installed_app().is_ok_and(|target| windows::registered_install(&target).unwrap_or(true))
+    {
+        return false;
+    }
+    release.asset.is_some() && installed_app().is_ok()
+}
 
 #[cfg(test)]
 mod tests {

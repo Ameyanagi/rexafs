@@ -30,7 +30,7 @@ the error does not establish that your version is current.
 
 ### Next desktop build: update and restart
 
-**Unreleased:** on macOS, choose **Update and restart** to download, verify and
+**Unreleased:** on macOS, Windows and Linux, choose **Update and restart** to download, verify and
 install a newer build of the current channel. rexafs saves an embedded recovery
 copy of the analysis, then reopens that copy after restarting. Your original
 project is unchanged. Save the reopened project to your preferred location;
@@ -42,9 +42,16 @@ verification error keeps the current app open. A failed replacement or launch
 restores the previous app. The previous bundle and recovery file remain in a
 private `.rexafs-update-*` folder beside the application.
 
-Run the app from a writable Applications folder, rather than from its installer
-disk image. Switching Stable/Nightly, Windows, Linux and source executables keep
-the manual download workflow. **Preferences** also offers a download-only action.
+Windows installations run the matching installer automatically, preserving
+shortcuts and the uninstall entry. Portable Windows and Linux copies update the
+complete extracted folder. User files inside that folder are preserved; a file
+collision stops the update before replacement. x64 and ARM64 use their matching
+packages. The first installation of 0.2.8 still uses the manual workflow.
+
+Run the app from a writable installation folder. Source executables, macOS disk
+images, channel changes and system-managed Linux packages retain manual updates.
+**Preferences** also offers a download-only action. An update appears only when
+a matching release asset has been published for your platform.
 
 Keep a backup when moving between versions. New releases read earlier released
 project formats; an older executable may not preserve newer features when saving.

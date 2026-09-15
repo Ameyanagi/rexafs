@@ -1,6 +1,6 @@
 //! Official desktop release discovery and checksum-verified downloads.
 //! Installation and restart occur only after the user chooses the update action.
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux", test))]
 pub(crate) mod install;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -62,7 +62,10 @@ fn desktop_target() -> Option<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "aarch64") => Some("aarch64-apple-darwin"),
         ("macos", "x86_64") => Some("x86_64-apple-darwin"),
-        // Linux/Windows archives have not yet passed public graphical qualification.
+        ("windows", "x86_64") => Some("x86_64-pc-windows-msvc"),
+        ("windows", "aarch64") => Some("aarch64-pc-windows-msvc"),
+        ("linux", "x86_64") => Some("x86_64-unknown-linux-gnu"),
+        ("linux", "aarch64") => Some("aarch64-unknown-linux-gnu"),
         _ => None,
     }
 }
@@ -88,6 +91,8 @@ pub struct AvailableRelease {
     pub tag: String,
     pub url: String,
     pub asset: Option<Asset>,
+    /// Matching native Windows installer; other platforms use the archive.
+    pub installer: Option<Asset>,
 }
 #[derive(Clone)]
 pub struct UpdateCheck {
@@ -166,27 +171,56 @@ fn select_release(
         }
     };
     let asset = target.and_then(|target| {
-        r.assets.into_iter().find(|a| {
-            a.name.starts_with("rexafs-")
-                && a.name.ends_with(&format!("-{target}.zip"))
-                && a.name
-                    .bytes()
-                    .all(|c| c.is_ascii_alphanumeric() || b"-_.".contains(&c))
-                && a.size > 0
-                && a.size <= 1024 * 1024 * 1024
-                && checksum(a).is_ok()
-                && a.browser_download_url
-                    == format!("{REPOSITORY}/releases/download/{}/{}", r.tag_name, a.name)
-        })
+        let extension = if target.ends_with("linux-gnu") {
+            ".tar.gz"
+        } else {
+            ".zip"
+        };
+        select_asset(&r, target, extension)
     });
+    let installer = target
+        .filter(|t| t.ends_with("windows-msvc"))
+        .and_then(|target| select_asset(&r, target, "-setup.exe"))
+        .filter(|setup| {
+            asset.as_ref().is_some_and(|archive| {
+                setup.name.strip_suffix("-setup.exe") == archive.name.strip_suffix(".zip")
+            })
+        });
     UpdateCheck {
         release: Some(AvailableRelease {
             tag: r.tag_name,
             url: r.html_url,
             asset,
+            installer,
         }),
         available,
     }
+}
+fn select_asset(release: &Release, target: &str, suffix: &str) -> Option<Asset> {
+    let suffix = format!("-{target}{suffix}");
+    let mut matches = release.assets.iter().filter(|asset| {
+        let version = asset
+            .name
+            .strip_prefix("rexafs-")
+            .and_then(|name| name.strip_suffix(&suffix));
+        version.is_some_and(|version| {
+            semver::Version::parse(version).is_ok()
+                && (release.prerelease || release.tag_name == format!("v{version}"))
+        }) && asset
+            .name
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b"-_.".contains(&c))
+            && asset.size > 0
+            && asset.size <= 1024 * 1024 * 1024
+            && checksum(asset).is_ok()
+            && asset.browser_download_url
+                == format!(
+                    "{REPOSITORY}/releases/download/{}/{}",
+                    release.tag_name, asset.name
+                )
+    });
+    let asset = matches.next()?.clone();
+    matches.next().is_none().then_some(asset)
 }
 fn agent(seconds: u64) -> ureq::Agent {
     ureq::Agent::config_builder()
@@ -199,7 +233,8 @@ fn agent(seconds: u64) -> ureq::Agent {
 /// Stable uses the latest stable release endpoint; Nightly selects from the most
 /// recent 100 release records. The request has a 15-second total timeout. A
 /// release can be discoverable while its verified archive is unavailable for
-/// this platform: built-in downloads support macOS only in 0.2.4.
+/// this platform. Since 0.2.8, verified downloads cover the six official macOS,
+/// Windows and Linux desktop targets (0.2.4–0.2.7 supported macOS downloads).
 /// Network and malformed-response failures return an explanatory message.
 pub fn check(channel: UpdateChannel) -> Result<UpdateCheck, String> {
     let mut response = agent(15)
@@ -517,6 +552,55 @@ mod tests {
             (bytes.len() as u64, "0".repeat(64)),
         ] {
             assert!(verify_stream(&bytes[..], std::io::sink(), size, &digest).is_err());
+        }
+    }
+
+    #[test]
+    fn windows_and_linux_select_exact_architecture_and_matching_installer() {
+        for target in [
+            "x86_64-pc-windows-msvc",
+            "aarch64-pc-windows-msvc",
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu",
+        ] {
+            let mut r = release("v0.2.8", false, "2026-09-15T00:00:00Z");
+            let extension = if target.contains("linux") {
+                ".tar.gz"
+            } else {
+                ".zip"
+            };
+            for suffix in [extension, "-setup.exe"] {
+                let name = format!("rexafs-0.2.8-{target}{suffix}");
+                r.assets.push(Asset {
+                    name: name.clone(),
+                    size: 100,
+                    digest: Some(format!("sha256:{}", "a".repeat(64))),
+                    browser_download_url: format!("{REPOSITORY}/releases/download/v0.2.8/{name}"),
+                });
+            }
+            let select = |r| {
+                select_release(
+                    vec![r],
+                    UpdateChannel::Stable,
+                    UpdateChannel::Stable,
+                    "v0.2.7",
+                    "0.2.7",
+                    None,
+                    Some(target),
+                )
+                .release
+                .unwrap()
+            };
+            let selected = select(r.clone());
+            assert!(selected.asset.unwrap().name.ends_with(extension));
+            assert_eq!(selected.installer.is_some(), target.contains("windows"));
+            r.assets.push(r.assets[0].clone());
+            assert!(
+                select(r.clone()).asset.is_none(),
+                "duplicate assets are ambiguous"
+            );
+            r.assets.clear();
+            assert!(select(r).asset.is_none());
         }
     }
 

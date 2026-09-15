@@ -6,11 +6,12 @@ reviewed source, exact-tag build, signing and package publication.
 
 ## Desktop updates
 
-On macOS, **Update and restart** downloads and verifies a newer release of the
+On macOS, Windows and Linux, **Update and restart** downloads and verifies a newer release of the
 current channel, saves an embedded recovery project, installs the app and reopens
-that project. The downloaded bundle must have the official Developer ID signature,
-pass Gatekeeper and match the requested channel, version and architecture before
-its executable runs. The previous app and recovery project are retained.
+that project. macOS requires the official Developer ID signature and Gatekeeper
+acceptance. Windows uses its per-user installer for installed apps; portable
+Windows and Linux copies replace the extracted folder. Release downloads and
+package contents are verified before installation. The previous app and recovery project are retained.
 
 Progress and cancellation are available before restart. Active calculations,
 imports and Assistant turns must finish first. A failed preparation keeps the
@@ -19,7 +20,7 @@ The recovered analysis is a separate project copy. Save it to your preferred
 location; the session undo stack and running calculations are not restored.
 
 Run the app from a writable installation folder. Disk images, source executables,
-channel changes and Windows/Linux retain the manual download workflow. Released
+channel changes and unwritable installations retain the manual download workflow. Released
 0.2.7 and earlier still need manual installation to acquire this new updater.
 
 ## Measurement discovery and preview

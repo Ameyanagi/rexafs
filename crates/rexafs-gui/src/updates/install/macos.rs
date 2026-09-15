@@ -1,12 +1,14 @@
-use super::{app_for_executable, replace_and_launch};
+use super::{
+    UpdateHandoff, app_for_executable,
+    common::{hash_file, run},
+    replace_and_launch,
+};
 use crate::updates::{AvailableRelease, UpdateChannel};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File, OpenOptions},
-    io::Read,
     path::{Component, Path, PathBuf},
-    process::{Command, Stdio},
+    process::Command,
     thread,
     time::{Duration, Instant},
 };
@@ -39,6 +41,7 @@ pub(crate) struct PreparedUpdate {
 pub(crate) fn prepare(
     release: &AvailableRelease,
     archive: &Path,
+    mut cancelled: impl FnMut() -> Result<(), String>,
 ) -> Result<PreparedUpdate, String> {
     let executable = std::env::current_exe().map_err(|e| e.to_string())?;
     let target = app_for_executable(&executable)?
@@ -65,6 +68,7 @@ pub(crate) fn prepare(
                 parent.display()
             )
         })?;
+    cancelled()?;
     validate_archive(archive)?;
     let extracted = directory.path().join("extracted");
     fs::create_dir(&extracted).map_err(|e| e.to_string())?;
@@ -85,6 +89,7 @@ pub(crate) fn prepare(
     let [app] = apps.as_slice() else {
         return Err("The download must contain exactly one rexafs app.".into());
     };
+    cancelled()?;
     verify_app(app, &release.tag, channel)?;
     // Detect incomplete packages before touching the installed app.
     run(Command::new(app.join("Contents/MacOS/rexafs")).arg("--self-check"))?;
@@ -113,7 +118,7 @@ impl PreparedUpdate {
     /// Arm a separate copy of this executable. The caller quits only after the
     /// helper acknowledges the validated plan. Recovery and the old bundle are
     /// retained in the private transaction directory, including after errors.
-    pub(crate) fn start(self) -> Result<PathBuf, String> {
+    pub(crate) fn start(self) -> Result<UpdateHandoff, String> {
         let root = self.directory.keep();
         let helper = root.join("installer");
         fs::copy(std::env::current_exe().map_err(|e| e.to_string())?, &helper)
@@ -143,7 +148,10 @@ impl PreparedUpdate {
                 ));
             }
             if root.join("ready").is_file() {
-                return Ok(root);
+                return Ok(UpdateHandoff {
+                    _directory: root,
+                    _lock: None,
+                });
             }
             if started.elapsed() > Duration::from_secs(15) {
                 let _ = child.kill();
@@ -352,68 +360,6 @@ fn validate_archive(archive: &Path) -> Result<(), String> {
         return Err("The update archive contains unsupported links or special files.".into());
     }
     Ok(())
-}
-
-fn hash_file(path: &Path) -> Result<String, String> {
-    let mut file = File::open(path).map_err(|e| e.to_string())?;
-    let mut hash = Sha256::new();
-    let mut buffer = [0u8; 64 * 1024];
-    loop {
-        let n = file.read(&mut buffer).map_err(|e| e.to_string())?;
-        if n == 0 {
-            break;
-        }
-        hash.update(&buffer[..n]);
-    }
-    Ok(crate::updates::hex(&hash.finalize()))
-}
-
-/// Bound external tools without a pipe deadlock; never execute a shell string.
-fn run(command: &mut Command) -> Result<Vec<u8>, String> {
-    let mut output = tempfile::tempfile().map_err(|e| e.to_string())?;
-    let mut errors = tempfile::tempfile().map_err(|e| e.to_string())?;
-    let mut child = command
-        .stdin(Stdio::null())
-        .stdout(output.try_clone().map_err(|e| e.to_string())?)
-        .stderr(errors.try_clone().map_err(|e| e.to_string())?)
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    let started = Instant::now();
-    let status = loop {
-        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
-            break status;
-        }
-        if started.elapsed() > Duration::from_secs(60) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(format!(
-                "{} timed out",
-                command.get_program().to_string_lossy()
-            ));
-        }
-        thread::sleep(Duration::from_millis(50));
-    };
-    use std::io::{Seek, SeekFrom};
-    errors.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
-    if !status.success() {
-        let mut text = String::new();
-        let _ = errors.take(4096).read_to_string(&mut text);
-        return Err(format!(
-            "{} failed: {}",
-            command.get_program().to_string_lossy(),
-            text.trim()
-        ));
-    }
-    output.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
-    let mut bytes = Vec::new();
-    output
-        .take(4 * 1024 * 1024 + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|e| e.to_string())?;
-    if bytes.len() > 4 * 1024 * 1024 {
-        return Err("Update tool output exceeded its limit".into());
-    }
-    Ok(bytes)
 }
 
 #[cfg(test)]

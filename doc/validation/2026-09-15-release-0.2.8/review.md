@@ -68,3 +68,20 @@ final correction before either branch promotion.
    only the qualified checksummed desktop and registry artifacts.
 6. Verify public package bytes and fresh consumers, update public release
    metadata and Stable references, and merge the released state back to `dev`.
+
+## Windows and Linux updater work (qualification pending)
+
+The release scope now includes one-button updates on Windows and Linux. The
+candidate selects native x64/ARM64 archives, verifies a package-file inventory,
+preserves user files, and restores a recovery project after restarting. Windows
+installations use the matching per-user installer and retain an uninstall-key
+backup; portable Windows and Linux copies replace the full extracted folder.
+The local updater suite currently passes 16 tests, including archive traversal,
+links, case collisions, inventory validation, user-file preservation and rollback.
+Native Windows/Linux handoff and installer qualification must pass before merge
+or publication. Earlier CI results apply to the preceding macOS-only revision.
+
+A whole-GUI strict Clippy attempt also found pre-existing lint failures outside
+the updater (including `depth_controls.rs` formatting and a `journal.rs` import).
+Those diagnostics are not a passing strict GUI check; the release workflow's
+required checks remain authoritative.

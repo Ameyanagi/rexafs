@@ -51,7 +51,7 @@ fn main() {
     feff10::worker::init();
 
     let first_arg = std::env::args_os().nth(1);
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     if first_arg.as_deref() == Some(std::ffi::OsStr::new("--finish-update")) {
         let result = std::env::args_os()
             .nth(2)

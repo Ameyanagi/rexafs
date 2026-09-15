@@ -14,6 +14,7 @@ from desktop_channels import app_name, identity
 from feff10_worker import install_helper
 from macos_installer import include_notices
 from windows_installer import stage_runtime
+from update_manifest import write_manifest
 
 root = Path(__file__).resolve().parents[1]
 metadata = json.loads(subprocess.check_output(
@@ -153,6 +154,8 @@ if system in {"Darwin", "Linux"}:
     "github_run_id": os.environ.get("GITHUB_RUN_ID"),
     "signed": False, "notarized": False,
 }, indent=2) + "\n")
+if system in {"Windows", "Linux"}:
+    write_manifest(bundle)
 if system == "Darwin":
     archive = out / f"{stem}.zip"
     subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(bundle), str(archive)], check=True)

@@ -2,17 +2,17 @@
 
 ## Next desktop build (unreleased)
 
-The macOS **Update and restart** action downloads the selected current-channel
-release, verifies its SHA-256 and size, checks its official Developer ID signature,
-Gatekeeper acceptance, architecture and compiled release identity, and runs the
-packaged-example check. It saves and reloads an embedded `.rxs` recovery copy
+On macOS, Windows and Linux, **Update and restart** downloads the selected
+current-channel release, verifies its SHA-256 and size, checks the architecture
+and compiled release identity, and runs the packaged-example check. macOS also
+requires the official Developer ID signature and Gatekeeper acceptance. It saves and reloads an embedded `.rxs` recovery copy
 before arming a helper. Active calculations, imports and Assistant turns must
 finish first. Cancel remains available until the helper handoff.
 
 The helper waits for the parent process to exit. A filesystem lock excludes
 concurrent updates of the same app. Staging and the old-app backup are in a
 private directory beside the destination, so replacement uses local renames.
-Replacement or launch failures trigger rollback; the previous app and recovery
+Replacement or detected startup failures trigger rollback; the previous app and recovery
 project remain available. The reopened analysis is a recovery copy, not a write
 to the original project. Saved project data survive; the undo stack and running
 jobs are not serialized. Large or unavailable embedded inputs can prevent the
@@ -25,9 +25,30 @@ and [code requirements](https://developer.apple.com/documentation/technotes/tn31
 The updater additionally pins the rexafs Developer ID team and channel bundle
 identifier; that trust policy and the recovery workflow are rexafs choices.
 
-No administrator helper is installed. Read-only disk images, translocated apps,
-unwritable installation folders, channel changes and other operating systems
-retain manual installation. Released versions through 0.2.7 behave as below.
+Windows installations use the matching per-user Setup installer automatically,
+preserving their shortcuts and uninstall registration. The GUI downloads and
+checks the ZIP payload and installer, then closes before Setup runs silently.
+Setup cannot reboot Windows or force-close other applications. A failed install
+restores the previous folder and the saved rexafs uninstall registration.
+Portable Windows ZIP copies and Linux tar.gz copies replace their extracted app
+folder. No terminal commands or manual extraction are needed for the update.
+The Windows flags follow the official
+[Inno Setup command-line reference](https://jrsoftware.org/ishelp/topic_setupcmdline.htm).
+
+Windows and Linux packages include an inventory of package-owned files, beginning
+with 0.2.8. User files in the app folder are preserved. A collision with a new
+package file, a modified package file, links or special files stops the update
+before installation. The inventory is not a signature: Windows and Linux releases
+are currently unsigned and rely on the official HTTPS release metadata and
+SHA-256 checks. Both x64 and ARM64 use their matching native packages.
+
+No administrator helper is installed. Source builds, read-only disk images,
+translocated apps, unwritable folders and channel changes retain manual
+installation. System-managed Linux installations should use their package
+manager. Automatic updates require a published matching asset; nightlies that
+publish only macOS assets do not offer a Windows/Linux update. Install 0.2.8
+once using the existing manual workflow; its updater handles subsequent releases.
+Released versions through 0.2.7 behave as below.
 
 ## Released download workflow
 
