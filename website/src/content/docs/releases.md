@@ -8,9 +8,28 @@ Published changes and migration notes are listed below. Back up projects before
 updating. Source-checkout APIs are documented in the [Next API
 reference](/docs/reference/).
 
-## Stable 0.2.6
+## Stable 0.2.7
 
-[Download 0.2.6](/download/) or read the
+[Download 0.2.7](/download/) or read the
+[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.7).
+
+- The [Assistant](/docs/desktop/assistant/) has compact Model, Reasoning and
+  Access menus. Parameters and Groups stay accessible beside it, with the
+  Assistant narrowing when space is tight.
+- Codex launchers opened from Finder can find their installed runtimes.
+  Connection failures show a startup diagnostic and a Retry action.
+- Ambiguous detector labels require explicit column selection. Distinct stored
+  absorption columns remain separate signal choices, and malformed leading
+  numeric rows produce an error rather than dropping samples.
+- Edited Athena optional arrays survive save/reopen when the original project
+  contains historical absence markers. The original markers remain retained.
+- Public API signatures, numerical defaults, project format and Assistant
+  permissions are unchanged. All package channels and six desktop targets
+  remain available; Windows and Linux remain desktop previews.
+
+## Previous stable 0.2.6
+
+[Download 0.2.6](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.6) or read the
 [published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.6).
 
 - A shared reader across Rust, Python, TypeScript, the desktop and browser
@@ -57,7 +76,7 @@ reference](/docs/reference/).
   browser Worker, with generated FEFF files and a provenance record.
 
 These follow website deployment, separately from the versioned npm API. Native
-rexafs 0.2.6 retains ReFEFF 0.3.0. See [WASM scope](/docs/libraries/webassembly/).
+rexafs 0.2.7 retains ReFEFF 0.3.0. See [WASM scope](/docs/libraries/webassembly/).
 
 ## Earlier releases
 

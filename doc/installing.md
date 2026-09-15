@@ -1,6 +1,6 @@
 # Install rexafs
 
-This guide targets 0.2.6. The [download page](https://rexafs.com/download/) lists
+This guide targets 0.2.7. The [download page](https://rexafs.com/download/) lists
 current packages and checksums.
 
 ## Desktop
@@ -14,8 +14,8 @@ Choose your platform on the [latest release](https://github.com/Ameyanagi/rexafs
 | Linux x86-64 / ARM64 preview | Extract the matching archive and run `./rexafs` from its folder. See the runtime requirements below. |
 
 The latest-release link follows new stable versions automatically. For the six
-desktop targets in 0.2.6, see its
-[qualification record](validation/2026-09-14-release-0.2.6/review.md). Windows ARM64
+desktop targets in 0.2.7, see its
+[qualification record](validation/2026-09-15-release-0.2.7/review.md). Windows ARM64
 requires Windows 11 because its FEFF10 helper runs as an x64 process; rexafs and
 ReFEFF themselves are native. See [native development](desktop-development.md)
 for source builds.
@@ -77,7 +77,7 @@ For Python, create a project with the current stable
 ```sh
 uv init --python 3.12 rexafs-analysis
 cd rexafs-analysis
-uv add rexafs==0.2.6
+uv add rexafs==0.2.7
 uv run python -c "import rexafs; print(rexafs.__version__)"
 ```
 
@@ -87,8 +87,8 @@ activation. Keep the project files with your analysis scripts; see
 [uv's project workflow](https://docs.astral.sh/uv/guides/projects/).
 
 For TypeScript/JavaScript, use the current stable
-[Bun](https://bun.sh/docs/installation) and run `bun add rexafs@0.2.6` in your
-application directory. For Rust, use `cargo add rexafs@0.2.6` in a Cargo project.
+[Bun](https://bun.sh/docs/installation) and run `bun add rexafs@0.2.7` in your
+application directory. For Rust, use `cargo add rexafs@0.2.7` in a Cargo project.
 Package registries supply the Python wheels, source distribution, npm/Wasm
 package, and Rust crate; these are not duplicated in the desktop release assets.
 
@@ -104,7 +104,7 @@ destination. uv does not provide a `pip download` subcommand, so use pip in a
 temporary uv-managed environment for this preparation step:
 
 ```sh
-uv run --no-project --python 3.12 --with pip python -m pip download --only-binary=:all: rexafs==0.2.6 --dest wheelhouse
+uv run --no-project --python 3.12 --with pip python -m pip download --only-binary=:all: rexafs==0.2.7 --dest wheelhouse
 ```
 
 On the offline computer, create the project:
@@ -118,7 +118,7 @@ Copy `wheelhouse` into this project directory, then add the dependency and run
 Python:
 
 ```sh
-uv add --offline --no-index --find-links wheelhouse rexafs==0.2.6
+uv add --offline --no-index --find-links wheelhouse rexafs==0.2.7
 uv run --offline python -c "import rexafs; print(rexafs.__version__)"
 ```
 
@@ -130,14 +130,14 @@ complete cross-platform package archive. See [uv's project
 workflow](https://docs.astral.sh/uv/guides/projects/).
 
 For TypeScript/JavaScript, install Bun on the destination first. Download the
-[0.2.6 package archive](https://registry.npmjs.org/rexafs/-/rexafs-0.2.6.tgz)
+[0.2.7 package archive](https://registry.npmjs.org/rexafs/-/rexafs-0.2.7.tgz)
 on the connected computer, copy it to your project on the offline computer, and run:
 
 ```sh
-bun add ./rexafs-0.2.6.tgz
+bun add ./rexafs-0.2.7.tgz
 ```
 
-The rexafs 0.2.6 archive includes its WebAssembly binaries and has no runtime
+The rexafs 0.2.7 archive includes its WebAssembly binaries and has no runtime
 package dependencies. Your application may have other dependencies that need to
 be prepared separately. Bun supports [installing local
 tarballs](https://bun.sh/docs/pm/cli/add). For Rust, use `cargo vendor` in your

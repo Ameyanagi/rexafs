@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.6.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
+**Stable 0.2.7.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.6/py-rexafs/python/rexafs/io.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/io.pyi)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.7/py-rexafs/python/rexafs/io.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/io.pyi)
 
 One original scan with headers, metadata, columns, signal choices and diagnostics.
 

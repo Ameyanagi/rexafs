@@ -1,8 +1,10 @@
 # rexafs 0.2.7
 
-Release preparation: publication is pending. The
+Published on 15 September 2026 on crates.io, PyPI, npm and GitHub Releases. The
 [qualification record](validation/2026-09-15-release-0.2.7/review.md) tracks the
 reviewed source, exact-tag builds, package publication and signed downloads.
+See the [illustrated Assistant guide](https://rexafs.com/docs/desktop/assistant/)
+for the updated menus and panel workflow.
 
 ## Assistant
 

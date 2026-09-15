@@ -39,7 +39,7 @@ workspace is not searched for executables.
 Connection failures show the final nonempty stderr line, limited to 300
 characters; only the last 4 KiB is retained in memory. This diagnostic is not
 written into a saved project. The launcher change does not alter authentication,
-Review/Edit analysis permissions or Extended access.
+Review/Edit analysis permissions or workspace-command approval behavior.
 
 ## Compact composer in 0.2.7
 
@@ -68,7 +68,8 @@ the older panel closes first and the Assistant narrows temporarily. Its preferre
 width returns when space is available. On small windows, the plot can be narrower
 than the usual 360 px target so the requested panel remains usable.
 
-These presentation changes are not included in the 0.2.6 download. The
+These presentation changes are not included in the 0.2.6 download. See the updated [illustrated Assistant guide](https://rexafs.com/docs/desktop/assistant/)
+for the released interface. The
 [composer implementation](../crates/rexafs-gui/src/app/shell/assistant_composer.rs)
 uses the existing preference persistence and permission checks.
 
@@ -91,7 +92,7 @@ leave room for plots. Width and preferred host are computer settings.
   decisions and completed answers remain in the transcript. **Copy conversation**
   includes the transcript text.
 - **Web search** can be toggled. Structure retrieval validates destinations and
-  the returned structure before importing it. **Extended access** starts off;
+  the returned structure before importing it. **Workspace commands** starts off;
   turning it on requires session consent, and command approvals remain explicit.
   It does not silently enable arbitrary analysis edits.
 

@@ -1,107 +1,110 @@
 ---
 title: "Optional analysis assistant"
-description: "Use the assistant with explicit access controls and project context."
+description: "Choose a model, review spectra and edit analysis with explicit access controls."
 audience: user
 ---
 
-Open **Assistant** in the top bar to connect to an installed Codex CLI using
-your signed-in account. Use the panel's Retry or login controls if needed.
-rexafs stores no separate model API key. Choose a model and reasoning effort
-from those supplied by the connected server.
+Open **Assistant** in the top bar to connect to your installed Codex CLI and
+signed-in account. Use **Retry** or the login controls if needed. rexafs stores
+no separate model API key. The Assistant remains experimental; review scientific
+choices and results before relying on them.
 
-Drag the panel's left border to resize it between 320 and 640 px. **Pop out**
-moves the conversation to a separate window; **Dock**, or closing that window,
-returns it. Closing the docked panel keeps the connection and transcript.
-**Hide side panels / Restore side panels** controls Groups and the inspector;
-they can also collapse automatically to leave room for plots. Panel width and
-window preference are computer settings.
+[![rexafs 0.2.7 showing the Assistant composer beside the Cu spectrum and Parameters panel](/screenshots/0.2.7/assistant-layout.jpg)](/screenshots/0.2.7/assistant-layout.jpg)
 
-## If Codex is installed but disconnected
+Captured from the signed 0.2.7 Mac app with the bundled Cu example. The available
+models and reasoning levels depend on the connected Codex installation.
+Select an image to view it at full size.
 
-On macOS, rexafs 0.2.6 opened from Finder can find an npm/Bun Codex launcher
-but fail to find the Node.js runtime it needs. To work around this, save your
-project and quit rexafs, then open it from a Terminal where `codex --version`
-works:
+## Write and send
+
+Write your request in the message field. The footer has three menus:
+
+- **Model** shows the effective model. Its menu retains **Automatic**, which
+  follows Codex's default; hover the button to check whether it is automatic.
+- **Reasoning** shows the effective level. Choose **Model default** to follow
+  the selected model, or select one of its supported levels.
+- **Access** selects what the Assistant may do in the analysis.
+
+[![Model menu in the rexafs 0.2.7 Assistant](/screenshots/0.2.7/assistant-models.jpg)](/screenshots/0.2.7/assistant-models.jpg)
+
+Use arrow keys to browse a menu, Enter or Space to choose, and Escape to close.
+**Enter** in the message field sends; **Shift+Enter** inserts a newline. The arrow
+button becomes **Stop** during a response. Stopping interrupts the assistant
+turn; an analysis calculation already running can finish independently.
+
+## Choose access
+
+[![Access menu in the rexafs 0.2.7 Assistant](/screenshots/0.2.7/assistant-access.jpg)](/screenshots/0.2.7/assistant-access.jpg)
+
+**Review** permits inspection and navigation. **Edit analysis** also permits
+supported parameter changes and calculations. App-authored receipts describe
+changes and provide View/Undo while those operations remain available.
+
+**Workspace commands** is a separate switch, previously labelled Extended access.
+It starts off and requires session consent. Command approvals and the assistant
+sandbox still apply. An amber dot on Access shows when the switch is enabled;
+it does not change the selected analysis mode.
+
+Open **Assistant settings** with the gear button to choose **Plot images** and
+**Web search**, or inspect **Shared context**. Sending shares spectrum names,
+source paths, bounded source comments, processing settings, model inputs,
+analysis results, journal entries and enabled plots through your Codex account.
+Imported comments and previous conversations are labelled as data.
+
+## Keep the workspace visible
+
+Open **Parameters** or **Groups** with the toolbar or their keyboard shortcuts.
+The newly opened panel stays visible beside the Assistant. When space is tight,
+the older panel closes first, then the Assistant narrows temporarily. Its
+preferred width returns when more space is available.
+
+Drag the Assistant's left border to resize it between 320 and 640 px. **Pop out**
+moves it to a separate window; **Dock**, or closing that window, returns it.
+Closing the docked panel keeps the connection and transcript. Panel width and
+window preference are saved on this computer.
+
+## Conversations and results
+
+Thinking starts folded. Tool activity, processing progress, permission decisions
+and answers remain in the transcript. **Copy conversation** copies its text.
+**Conversations** lists saved conversations; select one to read it, then choose
+**Resume**. **New** starts a fresh conversation on the next Send.
+
+Resume first tries the stored Codex thread. If unavailable or unsupported, it
+starts a new thread using the last ten entries, each limited to 2000 characters,
+as labelled previous context. The transcript identifies which route was used.
+Restate important settings from longer calculations; commands and permissions
+are not replayed.
+
+Project Save retains the newest five completed conversations by default. Change
+**Conversations kept per project**, or set zero to disable saving. Running turns
+are not serialized. Restored receipts have no live approval or undo tokens, and
+older projects start with no conversation history.
+
+The Assistant inspects each assigned spectrum's processing before fitting.
+Processing edits target the current spectrum and are calculated and validated
+before being applied. Review column mappings in Data; the Assistant does not
+edit import interpretation. Access requests expire after five minutes, and Stop
+invalidates unapproved requests. See the [processing tool contract](https://github.com/Ameyanagi/rexafs/blob/v0.2.7/crates/rexafs-gui/src/codex_client.rs)
+and [request handling](https://github.com/Ameyanagi/rexafs/blob/v0.2.7/crates/rexafs-gui/src/app/shell/assistant.rs).
+
+## If Codex does not connect
+
+Version 0.2.7 discovers common runtime installations needed by npm/Bun Codex
+launchers when macOS opens rexafs from Finder. A failed connection shows a short
+startup diagnostic. Check that the installed Codex CLI works, then choose **Retry**.
+
+<details>
+<summary>Workaround for the older 0.2.6 Mac download</summary>
+
+Save your project and quit rexafs, then launch it from a Terminal where
+`codex --version` works:
 
 ```sh
 /Applications/rexafs.app/Contents/MacOS/rexafs
 ```
 
-This launch inherits Terminal's executable search path. It does not reinstall
-Codex or change your account. The development source adds runtime discovery and
-more useful startup errors; that fix is not part of the 0.2.6 download.
+This launch inherits Terminal's executable search path. It does not change your
+Codex account. Version 0.2.7 includes the runtime-discovery correction.
 
-## Compact composer in development
-
-The development build places **Model**, **Reasoning**, and **Access** menus below
-the message. The first two show the effective selections; their menus retain
-**Automatic** and **Model default**. Use arrow keys to browse, Enter or Space to
-choose, and Escape to close a menu. The arrow button sends; it becomes Stop
-during a response.
-
-The **Access** menu describes **Review** and **Edit analysis**. Its **Workspace
-commands** switch is the existing Extended access setting, with the same sandbox
-and approval rules. An amber dot on Access indicates that it is enabled.
-**Plot images** and **Web search** are in Assistant settings (the gear button).
-Opening **Parameters** or **Groups**, by its toolbar button or keyboard
-shortcut, keeps that panel visible beside the Assistant. When space is tight,
-the older panel closes first and the Assistant narrows temporarily. Its preferred
-width returns when space is available. On small windows, the plot can be narrower
-than the usual 360 px target so the requested panel remains usable.
-
-This layout is not included in the 0.2.6 download.
-
-## Controls and access
-
-- **Review** permits inspection and navigation. **Edit analysis** enables the
-  supported analysis edits for the current turn. App-authored receipts describe
-  what changed and provide View/Undo when those operations are still valid.
-- **Enter** sends; **Shift+Enter** inserts a newline. **Stop** interrupts the
-  assistant turn. A calculation already running in the analysis engine can
-  finish independently.
-- Thinking starts folded. Tool activity, processing progress, permission decisions
-  and answers remain in the transcript. **Copy conversation** copies its text.
-- **Web search** can be toggled. Structure retrieval validates destinations and
-  the returned structure before importing it. **Extended access** starts off;
-  turning it on requires session consent, and command approvals remain explicit.
-  It does not silently enable arbitrary analysis edits.
-
-## Saved conversations
-
-**Conversations** lists saved conversations with update times and turn counts.
-**New** starts a fresh conversation on the next Send. Select a saved entry to
-read it, then **Resume** to continue under the current session's access policy.
-The client first tries the stored server thread. If unavailable or unsupported,
-it opens a new thread with the last ten entries as labelled previous context.
-The transcript states which route was used.
-
-Fallback context keeps at most 2000 characters per entry; restate relevant
-settings from longer calculations. It does not replay commands or permissions.
-The saved transcript remains readable in the project.
-
-Project Save keeps the newest five completed conversations by default. Change
-**Conversations kept per project** in the picker, or set zero to disable saving.
-An asterisk in the project label marks unsaved conversation changes. Running
-turns are not serialized; the latest completed snapshot is retained. Restored
-thinking starts folded, and saved receipts have no live approval or undo tokens.
-Older projects start with no conversation history.
-
-## Shared context and analysis edits
-
-Sending shares analysis context and enabled plots through your Codex account:
-spectrum names, source paths, bounded source comments, requested processing
-settings, model inputs, fit history, additional analyses and the action journal.
-Imported comments and previous conversations are labelled as data. Verify the
-phase, paths, ranges and scientific interpretation before relying on a fit.
-
-The Assistant follows Data → Normalize → Background → Transform → Structure →
-Calculate → Paths → Model → Results. It must inspect each assigned spectrum's
-current processing before fitting. Plot access supports review but cannot
-certify scientific quality.
-
-Processing edits target the current spectrum. Proposed settings are run and
-validated before applying them. Column mappings are excluded; review import
-interpretation in Data. Access requests expire after five minutes; stopping a
-turn invalidates unapproved requests. See the [processing tool
-contract](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/codex_client.rs#L547)
-and [access request lifetime](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/app/shell/assistant.rs#L2127).
+</details>

@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.6.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
+**Stable 0.2.7.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.6/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.7/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
 Owned universal reader (since 0.2.6). Supports text/CSV, beamline layouts,
 historical binary, Athena Perl/JSON, Larix 1.0 sessions, XTUNES, gzip and HDF5. Browser callers first await
