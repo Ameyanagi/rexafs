@@ -1,6 +1,198 @@
 use super::*;
 
 #[test]
+fn project_import_includes_every_selected_scan_with_original_arrays_and_identity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../rexafs/tests/fixtures");
+    for (file, count) in [
+        (
+            "xas/samples/unspecified/unspecified/xraylarch/json_unzipped.prj",
+            4,
+        ),
+        (
+            "xas/samples/unspecified/athena-legacy/xraylarch/ESRF_Athena0920.prj",
+            2,
+        ),
+        ("sessions/larix/fixtures/valid/two-analyzed.larix", 2),
+        ("sessions/xtunes/two-analyzed.xtsp", 2),
+    ] {
+        let path = root.join(file);
+        let (document, bytes) = read_source(&path).unwrap();
+        let original = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        let mut source = MeasurementImport::new(path, document, bytes);
+        assert_eq!(source.document.scans.len(), count, "{file}");
+        assert!(source.import_ready(), "{file}");
+        assert_eq!(source.import_count(), count, "{file}");
+        let groups = source.materialize_import(&source.config()).unwrap();
+        assert_eq!(groups.len(), count, "{file}");
+        let ids: std::collections::BTreeSet<_> = groups.iter().map(|g| &g.group_id).collect();
+        assert_eq!(ids.len(), count);
+        for (scan, group) in source.document.scans.iter().zip(&groups) {
+            let (energy, mu) = scan.arrays(None).unwrap();
+            assert_eq!(group.energy, energy);
+            assert_eq!(group.mu, mu);
+            assert!(group.label.ends_with(&scan.label));
+            let evidence = &group.operation.as_ref().unwrap().parameters;
+            assert_eq!(evidence["record_id"], scan.id);
+            assert_eq!(evidence["original_bytes_base64"], original);
+        }
+        // Previewing another scan must not change which groups are imported.
+        source.select_scan(count - 1);
+        source.selected_scans[0] = false;
+        let subset = source.materialize_import(&source.config()).unwrap();
+        assert_eq!(subset.len(), count - 1);
+        assert_eq!(subset[0].mu, groups[1].mu);
+        println!("{file}: {count} scans imported and source arrays verified");
+    }
+}
+
+#[test]
+fn scan_selection_keeps_independent_detector_choices_and_edits() {
+    let bytes = b"#F two.spec\n#S 1 first\n#N 5\n#L energy  I0  It  Ir  IFF\n7100 100 50 25 3\n7200 200 50 10 8\n#S 2 second\n#N 5\n#L energy  I0  It  Ir  IFF\n7100 100 20 10 4\n7200 200 40 10 6\n";
+    let doc = rexafs::io::parse_measurement(bytes).unwrap();
+    let mut source = MeasurementImport::new("two.spec".into(), doc, bytes.to_vec());
+    assert_eq!(source.import_count(), 6);
+    let original = source.materialize_import(&source.config()).unwrap();
+    assert_eq!(original.len(), 6);
+    source.included = vec![false, true, false];
+    source.select_scan(1);
+    source.included = vec![true, false, true];
+    source.signal = Some(2);
+    let mut config = source.config();
+    config.it_col = Some(1);
+    source.remember_config(&config);
+    source.select_scan(0);
+    assert_eq!(source.included, [false, true, false]);
+    assert_eq!(source.import_count(), 3);
+    let groups = source.materialize_import(&source.config()).unwrap();
+    assert_eq!(groups[0].mu, original[1].mu);
+    assert_eq!(groups[1].mu, original[3].mu);
+    for (actual, expected) in groups[2].mu.iter().zip([10_f64.ln(), 20_f64.ln()]) {
+        assert!((actual - expected).abs() < 1e-13);
+    }
+    source.select_scan(1);
+    assert_eq!(source.signal, Some(2));
+    assert_eq!(source.config(), config);
+}
+
+#[test]
+fn empty_session_requires_data_and_rejects_import_without_panicking() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../rexafs/tests/fixtures/sessions/larix/fixtures/valid/empty.larix");
+    let (document, bytes) = read_source(&path).unwrap();
+    let mut source = MeasurementImport::new(path, document, bytes);
+    assert!(source.document.scans.is_empty());
+    source.select_scan(0);
+    let config = source.config();
+    source.remember_config(&config);
+    assert_eq!(source.import_count(), 0);
+    assert!(!source.import_ready());
+    assert!(source.materialize_import(&config).is_err());
+    assert!(source.preview(&config).is_err());
+}
+
+#[test]
+fn per_scan_custom_units_and_invalid_mapping_survive_preview_switches() {
+    let bytes = b"#F two.spec\n#S 1 first\n#N 2\n#L axis  stored\n7.1 2\n7.2 3\n#S 2 second\n#N 2\n#L axis  stored\n7100 4\n7200 5\n";
+    let doc = rexafs::io::parse_measurement(bytes).unwrap();
+    let mut source = MeasurementImport::new("two.spec".into(), doc, bytes.to_vec());
+    assert_eq!(source.document.scans.len(), 2);
+    assert!(!source.import_ready());
+    let first = ImportConfig {
+        axis: AxisConversion::EnergyKev,
+        mode: DetectionMode::MuColumn,
+        energy_col: Some(0),
+        mu_col: Some(1),
+        ..Default::default()
+    };
+    source.confirmed = true;
+    source.remember_config(&first);
+    source.select_scan(1);
+    let second = ImportConfig {
+        axis: AxisConversion::EnergyEv,
+        ..first.clone()
+    };
+    source.confirmed = true;
+    source.remember_config(&second);
+    assert!(source.import_ready());
+    source.select_scan(0);
+    assert_eq!(source.config(), first);
+    let groups = source.materialize_import(&source.config()).unwrap();
+    assert_eq!(groups[0].energy, [7100., 7200.]);
+    assert_eq!(groups[1].energy, [7100., 7200.]);
+    assert_eq!(groups[0].mu, [2., 3.]);
+    assert_eq!(groups[1].mu, [4., 5.]);
+    source.select_scan(1);
+    let bad = ImportConfig {
+        mu_col: Some(99),
+        ..second.clone()
+    };
+    source.remember_config(&bad);
+    source.select_scan(0);
+    assert!(!source.import_ready());
+    assert!(source.materialize_import(&source.config()).is_err());
+    // Exclusion is explicit, and an excluded invalid preview cannot block others.
+    source.selected_scans[1] = false;
+    source.select_scan(1);
+    assert_eq!(source.config(), bad);
+    assert!(!source.preview_included());
+    assert_eq!(
+        source.materialize_import(&source.config()).unwrap().len(),
+        1
+    );
+    source.selected_scans.fill(false);
+    assert!(!source.import_ready());
+    assert!(source.materialize_import(&source.config()).is_err());
+}
+
+#[test]
+fn nexus_import_keeps_explicit_record_selection_and_individual_mappings() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../rexafs/tests/fixtures/xas/samples/aps/13-bm-d/pynxxas/Fe_XDIFiles/converted.nxs");
+    let (document, bytes) = read_source(&path).unwrap();
+    let mut source = MeasurementImport::new(path, document, bytes);
+    assert_eq!(source.document.scans.len(), 6);
+    assert!(!source.import_ready());
+    source.selected_scans.fill(false);
+    // This container also exposes instrument-only tables. Explicitly select
+    // only its three stored energy/intensity records; do not invent an axis for
+    // the independent i0/itrans tables or treat them as additional spectra.
+    for index in 0..6 {
+        let names: Vec<_> = source.document.scans[index]
+            .columns
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        if names != ["energy", "intensity"] {
+            continue;
+        }
+        source.select_scan(index);
+        source.selected_scans[index] = true;
+        source.confirmed = true;
+        source.remember_config(&ImportConfig {
+            mode: DetectionMode::MuColumn,
+            axis: AxisConversion::EnergyEv,
+            energy_col: Some(0),
+            mu_col: Some(1),
+            ..Default::default()
+        });
+    }
+    assert!(source.import_ready());
+    let groups = source.materialize_import(&source.config()).unwrap();
+    assert_eq!(groups.len(), 3);
+    assert_eq!(
+        groups.iter().map(|g| g.energy.len()).collect::<Vec<_>>(),
+        [348, 348, 412]
+    );
+    for group in &groups {
+        let record = &group.operation.as_ref().unwrap().parameters["source_record"];
+        let x: Vec<f64> = serde_json::from_value(record["columns"][0]["values"].clone()).unwrap();
+        let y: Vec<f64> = serde_json::from_value(record["columns"][1]["values"].clone()).unwrap();
+        assert_eq!(group.energy, x);
+        assert_eq!(group.mu, y);
+    }
+}
+
+#[test]
 fn qas_imports_checked_outputs_with_independent_mappings_and_provenance() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
         "../rexafs/tests/fixtures/xas/samples/nsls-ii/7-bm-qas/xasref/Mo foil 0001-r0003.dat",

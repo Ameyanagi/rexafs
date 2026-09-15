@@ -66,6 +66,8 @@ enum Action {
     Recipe,
     Selector(u8),
     Scan(usize),
+    IncludeScan(usize),
+    AllScans(bool),
     Signal(usize),
     IncludeSignal(usize),
     Mode(u8),
@@ -655,7 +657,7 @@ impl ImportEditor {
             return;
         }
         if let Some(source) = &self.measurement {
-            let groups = match source.materialize_selected(draft.config()) {
+            let groups = match source.materialize_import(draft.config()) {
                 Ok(group) => group,
                 Err(error) => {
                     self.error = Some(error);
@@ -1305,9 +1307,10 @@ impl ImportEditor {
             Action::ReviewPrimary(_) | Action::ReviewEdit(_) | Action::Axis(_) => {
                 accesskit::Role::Tab
             }
-            Action::ReviewOutput(_) | Action::ConfirmUnits | Action::IncludeSignal(_) => {
-                accesskit::Role::CheckBox
-            }
+            Action::ReviewOutput(_)
+            | Action::ConfirmUnits
+            | Action::IncludeSignal(_)
+            | Action::IncludeScan(_) => accesskit::Role::CheckBox,
             _ => accesskit::Role::Button,
         };
         let selected = match action {
@@ -1318,6 +1321,10 @@ impl ImportEditor {
             Action::IncludeSignal(index) => {
                 self.measurement.as_ref().is_some_and(|s| s.included[index])
             }
+            Action::IncludeScan(index) => self
+                .measurement
+                .as_ref()
+                .is_some_and(|s| s.selected_scans[index]),
             _ => selected,
         };
         crate::accessibility::Control::new(

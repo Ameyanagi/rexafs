@@ -26,6 +26,12 @@ They are not included in the 0.2.6 packages.
 
 ## Read first, select a spectrum second
 
+The unreleased desktop scan selector can import all selected scans in one
+operation, with separate mapping drafts for each scan. See the
+[whole-project workflow](../website/src/content/docs/docs/desktop/import.md#import-a-whole-project-unreleased).
+It uses the existing core scan conversions; the public reader APIs are unchanged.
+XTUNES `.xts` checkpoints are also included in desktop folder discovery.
+
 Reading returns an owned `Measurement`: scans, original numeric channels,
 headers, unit declarations, signal choices, numeric datasets and diagnostics.
 Content signatures select an adapter before generic numeric-text fallback;

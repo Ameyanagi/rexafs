@@ -10,6 +10,9 @@ use base64::Engine as _;
 use rexafs::io::{EnergyConversion, Measurement, SignalConversion, SpectrumMapping};
 use std::{io::Read, path::PathBuf, sync::Arc};
 
+mod scan_choices;
+use scan_choices::ScanChoice;
+
 /// One immutable source snapshot; editing a mapping never rereads or changes it.
 #[derive(Clone)]
 pub(crate) struct MeasurementImport {
@@ -23,6 +26,10 @@ pub(crate) struct MeasurementImport {
     pub configs: Vec<ImportConfig>,
     pub candidate_errors: Vec<Option<String>>,
     pub dataset_paths: Vec<String>,
+    pub selected_scans: Vec<bool>,
+    choices: Vec<Option<ScanChoice>>,
+    custom_config: Option<ImportConfig>,
+    custom_error: Option<String>,
 }
 
 fn initial_mapping(document: &Measurement, scan: usize) -> SpectrumMapping {
@@ -40,18 +47,28 @@ fn initial_mapping(document: &Measurement, scan: usize) -> SpectrumMapping {
 
 impl MeasurementImport {
     pub fn new(path: PathBuf, document: Measurement, bytes: Vec<u8>) -> Self {
+        let count = document.scans.len();
         let mut source = Self {
             path,
             original_bytes: Arc::new(bytes),
             document: Arc::new(document),
-            scan: 0,
+            scan: usize::MAX,
             signal: None,
             confirmed: false,
             included: vec![],
             configs: vec![],
             candidate_errors: vec![],
             dataset_paths: vec![],
+            selected_scans: vec![true; count],
+            choices: vec![None; count],
+            custom_config: None,
+            custom_error: None,
         };
+        // Validate detected outputs once, rather than on every render. Unknown
+        // mappings remain selected and visibly block import until reviewed.
+        for index in 0..count {
+            source.select_scan(index);
+        }
         source.select_scan(0);
         source
     }
@@ -65,6 +82,9 @@ impl MeasurementImport {
     }
     pub fn config(&self) -> ImportConfig {
         if let Some(config) = self.signal.and_then(|i| self.configs.get(i)) {
+            return config.clone();
+        }
+        if let Some(config) = &self.custom_config {
             return config.clone();
         }
         self.original_config()
@@ -120,10 +140,22 @@ impl MeasurementImport {
         config
     }
     pub fn select_scan(&mut self, index: usize) {
+        if index >= self.document.scans.len() {
+            return;
+        }
+        if self.scan < self.choices.len() {
+            self.choices[self.scan] = Some(ScanChoice::capture(self));
+        }
         self.scan = index;
+        if let Some(choice) = self.choices[index].clone() {
+            choice.restore(self);
+            return;
+        }
         self.configs.clear();
         self.candidate_errors.clear();
         self.included.clear();
+        self.custom_config = None;
+        self.custom_error = None;
         if let Some(scan) = self.document.scans.get(index) {
             for candidate in &scan.signals {
                 let mut config = self.config_for_mapping(&candidate.mapping);
@@ -156,16 +188,20 @@ impl MeasurementImport {
         self.confirmed = self.signal.is_some();
     }
     pub fn remember_config(&mut self, config: &ImportConfig) {
+        let error = self
+            .mapping(config)
+            .and_then(|m| {
+                self.document.scans[self.scan]
+                    .arrays(Some(&m))
+                    .map_err(|e| e.to_string())
+            })
+            .err();
         if let Some(index) = self.signal {
             self.configs[index] = config.clone();
-            self.candidate_errors[index] = self
-                .mapping(config)
-                .and_then(|m| {
-                    self.document.scans[self.scan]
-                        .arrays(Some(&m))
-                        .map_err(|e| e.to_string())
-                })
-                .err();
+            self.candidate_errors[index] = error;
+        } else {
+            self.custom_config = Some(config.clone());
+            self.custom_error = error;
         }
     }
     pub fn included_count(&self) -> usize {
@@ -177,7 +213,7 @@ impl MeasurementImport {
     }
     pub fn included_valid(&self) -> bool {
         if self.signal.is_none() {
-            return self.confirmed;
+            return self.confirmed && self.custom_error.is_none();
         }
         self.included_count() > 0
             && self
@@ -187,7 +223,8 @@ impl MeasurementImport {
                 .all(|(include, error)| !include || error.is_none())
     }
     pub fn preview_included(&self) -> bool {
-        self.signal.is_none_or(|index| self.included[index])
+        self.selected_scans.get(self.scan) == Some(&true)
+            && self.signal.is_none_or(|index| self.included[index])
     }
     /// Convert every checked output before adding any group to the project.
     pub fn materialize_selected(
@@ -368,6 +405,8 @@ impl MeasurementImport {
             .map_err(|e| e.to_string())?;
         let document = Arc::make_mut(&mut self.document);
         document.scans.push(scan);
+        self.selected_scans.push(true);
+        self.choices.push(None);
         self.select_scan(self.document.scans.len() - 1);
         Ok(())
     }

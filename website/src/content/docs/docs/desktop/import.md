@@ -56,6 +56,38 @@ multiple-file selections; import containers individually in these versions.
 Source files are unchanged; saved desktop projects
 retain original measurement bytes and accepted signal mappings.
 
+### Import a whole project (unreleased)
+
+Use **Import…** to select an Athena `.prj`, an Athena-compatible `.prj` saved by
+Larch, or a Larix `.larix` session. In this source build, every scan is initially
+selected; a project group appears as a scan in the preview.
+
+1. Open the **Scan** menu to inspect the list. **All scans** selects the complete
+   list; individual checkboxes choose a subset.
+2. Use **Preview** beside a scan to inspect its plot, source header and signals.
+   Each scan keeps its own column mapping, units and checked signals when you
+   switch previews.
+3. Choose **Import N spectra** to add every checked output from the selected
+   scans. The number counts spectra, so one scan can contribute several signals.
+
+![Unreleased import dialog with all four Athena project groups selected](/screenshots/next/import-project-scans.jpg)
+
+Captured from the unreleased macOS source build. This example uses Larch's
+MIT-distributed `json_unzipped.prj`; see the [screenshot attribution](/licenses/#documentation-screenshots).
+
+Selected scans that need mapping block import until you resolve them or explicitly
+uncheck them. The app validates the complete selection before adding any groups.
+It preserves the stored absorption and original evidence; saved Athena/Larch
+processing results and commands remain provenance rather than active rexafs
+processing settings.
+
+This selection also applies to XTUNES `.xtsp` projects and multi-scan SPEC or
+HDF5/NeXus files. HDF5 tables containing only detectors or images are not
+automatically absorption spectra: choose compatible one-dimensional datasets and
+their axis/signal mapping. Historical pixel-axis Athena groups require calibration.
+MDA binary files remain unsupported. Released versions through 0.2.8 import the
+selected scan's signals; the multi-scan selection described here is unreleased.
+
 ### File extensions and folder discovery
 
 The file picker and single-file drops have no extension restriction. The shared
@@ -78,7 +110,7 @@ groups; import the folder again when you want to review newly added files.
 | Numeric tables and absorption exports | `.dat`, `.txt`, `.xmu`, `.chi`, `.xdi`, `.csv`, `.tsv`, `.asc`, `.ascii`, `.raw`, `.xas` |
 | Beamline measurements | `.qd`, `.ex3`, `.spec`, `.fio`, `.tey`, `.pfy`, `.pey`, `.cey`, `.xes`, `.sdat` |
 | HDF5 and NeXus | `.h5`, `.hdf5`, `.hdf`, `.nxs`, `.nx` |
-| Saved measurements | `.prj`, `.larix`, `.xtunes`, `.xtsp` |
+| Saved measurements | `.prj`, `.larix`, `.xtunes`, `.xts`, `.xtsp` |
 | Numbered scans and compressed measurements | Numeric suffixes such as `.001` and `.0001`; known measurement suffixes followed by `.gz` |
 
 Extensionless files and `.json` files are also discovered when a bounded content
