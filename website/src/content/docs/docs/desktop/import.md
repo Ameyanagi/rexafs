@@ -55,10 +55,10 @@ Folders and multiple-file selections retain the batch workflow below. Import
 containers individually. Source files are unchanged; saved desktop projects
 retain original measurement bytes and accepted signal mappings.
 
-**Reader corrections in development:** duplicate detector-role headings require
+**Since 0.2.7:** duplicate detector-role headings require
 explicit column selection, and each stored absorption column appears as its own
 signal choice. Malformed leading numeric rows produce an error even when comments
-separate them from later data. These corrections are not part of the 0.2.6 download.
+separate them from later data.
 
 ## Recipes and groups
 

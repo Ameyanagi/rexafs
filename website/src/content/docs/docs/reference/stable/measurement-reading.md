@@ -4,8 +4,21 @@ description: Automatic beamline, HDF5, Athena, Larix and XTUNES import since 0.2
 audience: user
 ---
 
-**Stable API · 0.2.6.** These examples use the published Rust, Python and
+**Stable API · 0.2.7.** These examples use the published Rust, Python and
 TypeScript packages. Existing specialized readers remain available.
+
+## Reader corrections since 0.2.7
+
+- Detector roles must match a unique column. Repeated headings or competing
+  aliases require explicit selection. Each stored absorption column remains a
+  separate signal choice; repeated labels show their one-based column number.
+- Malformed leading numeric rows produce a line-specific error even when
+  comments separate them from later valid rows.
+- Athena export retains historical `(undef)` markers before current optional
+  arrays, so edited `i0`, `signal` and `stddev` values survive saving and reopening.
+
+The Rust core supplies
+the same reader behavior to Python, TypeScript, desktop and browser imports.
 
 ## Inspect and select
 
