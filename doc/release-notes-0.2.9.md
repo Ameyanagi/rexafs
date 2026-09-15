@@ -48,6 +48,8 @@ The release also contains the macOS, Windows and Linux updater and expanded
 measurement discovery introduced in [0.2.8](release-notes-0.2.8.md). The 0.2.8
 registry packages were published; its GitHub desktop release remained a draft
 when this candidate was prepared. Existing tags and package bytes are preserved.
+Desktop users on 0.2.7 or earlier need one manual installation to acquire the
+new updater; subsequent supported installations offer **Update and restart**.
 
 ## Compatibility and validation
 
