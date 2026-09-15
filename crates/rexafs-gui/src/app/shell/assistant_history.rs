@@ -181,7 +181,7 @@ impl AssistantWindow {
                         self.history_open,
                         cx.listener(|this, _, _, cx| {
                             this.history_open = !this.history_open;
-                            this.model_picker_open = false;
+                            this.composer_menu = None;
                             this.account_expanded = false;
                             cx.notify();
                         }),

@@ -102,6 +102,11 @@ pub struct InputStyle {
     pub multiline: bool,
     /// Maximum visible visual rows (clamped to at least one).
     pub max_lines: usize,
+    /// Minimum visible rows for multiline fields, bounded by `max_lines`. Defaults to one.
+    pub min_lines: usize,
+    /// Use the enclosing surface and border, for a field inside a larger composer.
+    /// Defaults to false; focus, keyboard input and accessibility are unchanged.
+    pub embedded: bool,
 }
 
 impl Default for InputStyle {
@@ -112,6 +117,8 @@ impl Default for InputStyle {
             placeholder_accent: false,
             multiline: false,
             max_lines: 6,
+            min_lines: 1,
+            embedded: false,
         }
     }
 }
@@ -1156,6 +1163,7 @@ impl Element for TextElement {
             let input = self.input.read(cx);
             let content = input.content.clone();
             let max_lines = input.style.max_lines;
+            let min_lines = input.style.min_lines;
             let text_style = window.text_style();
             let font_size = text_style.font_size.to_pixels(window.rem_size());
             let line_height = window.line_height();
@@ -1180,7 +1188,7 @@ impl Element for TextElement {
                     );
                     size(
                         width,
-                        visible_height(layout.rows.len(), max_lines, line_height),
+                        visible_height(layout.rows.len().max(min_lines), max_lines, line_height),
                     )
                 }),
                 (),
@@ -1470,17 +1478,22 @@ impl Render for TextInput {
             .w_full()
             .min_w_0()
             .max_h(px(self.style.max_lines.max(1) as f32 * 18. + 6.))
+            .when(self.style.multiline, |d| {
+                d.min_h(
+                    visible_height(self.style.min_lines, self.style.max_lines, px(18.)) + px(6.),
+                )
+            })
             .overflow_hidden()
             .px(px(6.))
             .py(px(3.))
             .rounded_sm()
-            .bg(t.bg)
-            .border_1()
-            .border_color(t.border)
+            .when(!self.style.embedded, |d| {
+                d.bg(t.bg).border_1().border_color(t.border)
+            })
             .text_color(t.text_muted)
-            .opacity(0.5)
+            .when(!self.style.embedded, |d| d.opacity(0.5))
             .line_height(px(18.))
-            .text_size(px(12.))
+            .text_size(px(if self.style.embedded { 14. } else { 12. }))
             .child(if self.content.is_empty() {
                 self.placeholder.clone()
             } else {
@@ -1557,18 +1570,18 @@ impl Render for TextInput {
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .w_full()
             .rounded_sm()
-            .bg(t.bg)
-            .border_1()
-            .border_color(if self.error {
-                t.error
-            } else if focused {
-                t.accent
-            } else {
-                t.border
+            .when(!self.style.embedded, |d| {
+                d.bg(t.bg).border_1().border_color(if self.error {
+                    t.error
+                } else if focused {
+                    t.accent
+                } else {
+                    t.border
+                })
             })
             .text_color(t.text)
             .line_height(px(18.))
-            .text_size(px(12.))
+            .text_size(px(if self.style.embedded { 14. } else { 12. }))
             .child(
                 div()
                     .when(!self.style.multiline, |d| d.h(px(18. + 3. * 2.)))
@@ -1696,6 +1709,8 @@ mod tests {
         let style = InputStyle::default();
         assert!(!style.multiline);
         assert_eq!(style.max_lines, 6);
+        assert_eq!(style.min_lines, 1);
+        assert!(!style.embedded);
         assert!(!style.align_right && !style.mono && !style.placeholder_accent);
     }
 
