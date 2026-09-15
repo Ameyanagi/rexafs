@@ -32,8 +32,8 @@
 //! use the projected nonlinear residual Jacobian. These are separate local
 //! approximations, not a joint weight/shift covariance or confidence interval.
 //! Neither the objective nor the reported chi-square is divided by measured
-//! noise variance. Inputs are borrowed; results own their arrays and no
-//! processing stages run automatically.
+//! noise variance. Inputs are borrowed; results own their arrays and
+//! missing processing stages run on temporary copies with the input settings.
 
 use std::borrow::Borrow;
 
@@ -41,7 +41,7 @@ use levenberg_marquardt::{LeastSquaresProblem, LevenbergMarquardt};
 use nalgebra::{DMatrix, DVector, Dyn, Owned, SVD};
 use serde::{Deserialize, Serialize};
 
-use super::{as_refs, on_grid, r_factor, reference_grid, spectrum_label, AnalysisSpace};
+use super::{as_refs, r_factor, spectrum_label, AnalysisInput, AnalysisSpace};
 use crate::xafs::errors::AnalysisError;
 use crate::xafs::lmutils::forward_jacobian_nalgebra_f64;
 use crate::xafs::tools::interp_linear;
@@ -150,11 +150,12 @@ impl LcfResult {
     }
 }
 
-/// Fit an already-processed `unknown` as a linear combination of `standards`.
+/// Fit `unknown` as a linear combination of `standards`.
 ///
 /// Uses the unknown's selected grid; standards are interpolated linearly and
-/// their endpoint values are held outside coverage. Prefer an interval measured
-/// for every spectrum. Requires at least one standard and `standards.len() + 1`
+/// every input must cover the entire requested interval. References must also
+/// cover ±`max_e0_shift` beyond it when shifts are fitted. Missing arrays are
+/// prepared on copies using each spectrum's settings; existing results are reused. Requires at least one standard and `standards.len() + 1`
 /// selected unknown samples. Missing arrays, infeasible bounds/sum constraints,
 /// invalid interpolation inputs, or a failed solve return [`AnalysisError`].
 /// Returns owned arrays without modifying the input spectra.
@@ -166,6 +167,61 @@ pub fn lcf<S: Borrow<XASSpectrum>>(
     let refs = as_refs(standards);
     let indices: Vec<usize> = (0..refs.len()).collect();
     lcf_subset(unknown, &refs, &indices, cfg)
+}
+
+/// Fit every target against the same standards and settings, in input order.
+///
+/// Missing arrays are prepared on temporary copies. Each row retains its own
+/// result or error; one bad target does not discard other fits. Energy offsets
+/// are resolved from each target's E₀. An invalid standard produces an error
+/// for every target. Empty targets return an empty vector. For streaming progress
+/// or cancellation, use [`lcf_batch_with_progress`].
+pub fn lcf_batch<T: Borrow<XASSpectrum>, S: Borrow<XASSpectrum>>(
+    targets: &[T],
+    standards: &[S],
+    cfg: &LcfConfig,
+) -> Vec<Result<LcfResult, AnalysisError>> {
+    lcf_batch_with_progress(targets, standards, cfg, |_, _| true)
+}
+
+/// Batch LCF with `progress(index, result)` after each completed target.
+///
+/// The zero-based index identifies the target. Returning false stops before the
+/// next target; the returned vector contains the completed prefix, including the
+/// row just reported. Failures also count as completed rows. Callbacks and fits
+/// run on the caller's thread. Standards are prepared once per batch and original
+/// spectra remain unchanged. No input ordering or parallel scheduling is imposed
+/// on other application work; desktop callers should use a worker thread.
+pub fn lcf_batch_with_progress<T: Borrow<XASSpectrum>, S: Borrow<XASSpectrum>>(
+    targets: &[T],
+    standards: &[S],
+    cfg: &LcfConfig,
+    mut progress: impl FnMut(usize, &Result<LcfResult, AnalysisError>) -> bool,
+) -> Vec<Result<LcfResult, AnalysisError>> {
+    if targets.is_empty() {
+        return Vec::new();
+    }
+    let prepared = standards
+        .iter()
+        .map(|s| cfg.space.prepare(s.borrow()))
+        .collect::<Result<Vec<_>, _>>();
+    let refs = prepared
+        .as_ref()
+        .map(|v| v.iter().map(|s| s.as_ref()).collect::<Vec<_>>());
+    let indices: Vec<_> = (0..standards.len()).collect();
+    let mut rows = Vec::with_capacity(targets.len());
+    for (index, target) in targets.iter().enumerate() {
+        let result = match &refs {
+            Ok(refs) => lcf_subset(target.borrow(), refs, &indices, cfg),
+            Err(error) => Err((*error).clone()),
+        };
+        let proceed = progress(index, &result);
+        rows.push(result);
+        if !proceed {
+            break;
+        }
+    }
+    rows
 }
 
 /// Fit every combination of 1…`max_standards` standards and return the
@@ -247,12 +303,28 @@ fn lcf_subset(
         return Err(AnalysisError::NoSpectra);
     }
     let n_std = indices.len();
-    let (x, data) = reference_grid(unknown, cfg.space, cfg.range, n_std + 1)?;
+    let unknown = AnalysisInput::with_label(unknown, cfg.space, "target".into())?;
+    let bounds = unknown.bounds(cfg.space, cfg.range)?;
+    let (x, data) = unknown.select(bounds, n_std + 1)?;
+    let margin = if cfg.fit_e0_shift {
+        cfg.max_e0_shift
+    } else {
+        0.0
+    };
+    if !margin.is_finite() || margin < 0.0 {
+        return Err(AnalysisError::InvalidInput {
+            spectrum: "LCF settings".into(),
+            reason: "maximum axis shift must be finite and nonnegative".into(),
+        });
+    }
 
     // Standards in the fit space on their own grids (for shifting) and on the unknown's grid.
     let mut std_arrays = Vec::with_capacity(n_std);
     for &i in indices {
-        std_arrays.push(cfg.space.arrays(standards[i])?);
+        let standard = AnalysisInput::with_label(standards[i], cfg.space, format!("standard{i}"))?;
+        // Every allowed shift must remain within measured reference coverage.
+        standard.cover((bounds.0 - margin, bounds.1 + margin))?;
+        std_arrays.push((standard.x, standard.y));
     }
     let (lo, hi) = cfg.weight_bounds;
     let lo_v = vec![lo; n_std];

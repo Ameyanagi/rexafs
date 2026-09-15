@@ -1,0 +1,6 @@
+# Reproduction environment only; not application or package dependencies.
+rexafs==0.2.8
+numpy==2.5.3
+scipy==1.18.1
+pymcr==0.5.1
+matplotlib==3.11.2

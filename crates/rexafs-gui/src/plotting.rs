@@ -16,6 +16,8 @@ use ruviz::render::{Color, LineStyle};
 
 use crate::theme::Theme;
 
+pub(crate) mod analysis;
+
 fn vecs(v: &nalgebra::DVector<f64>) -> Vec<f64> {
     v.iter().copied().collect()
 }
@@ -30,8 +32,13 @@ pub struct QuadTrace {
 }
 
 pub(crate) fn mixed_kweights(traces: &[QuadTrace]) -> bool {
-    let first = traces.first().and_then(|t| t.sp.kweight()).copied();
-    traces.iter().any(|t| t.sp.kweight().copied() != first)
+    // Calculated absorption groups have no Fourier transform. An absent
+    // transform is not a different Fourier weight from the reference spectra.
+    let mut weights = traces.iter().filter_map(|t| t.sp.kweight());
+    let Some(first) = weights.next() else {
+        return false;
+    };
+    weights.any(|weight| weight != first)
 }
 
 pub(crate) fn ft_trace_label(trace: &QuadTrace) -> String {
@@ -51,6 +58,12 @@ pub enum TraceLayout {
 /// Explore-view display options (see doc/gui-ux-design.md).
 #[derive(Clone, Copy)]
 pub struct ViewOptions {
+    /// Preview samples at most 12 traces; false plots the full comparison set.
+    pub sample_overlay: bool,
+    /// Continuous Viridis colors in comparison order, without changing group colors.
+    pub gradient: bool,
+    /// Display-only energy bounds relative to the current E0; None shows all data.
+    pub energy_view_range: Option<(f64, f64)>,
     pub layout: TraceLayout,
     /// Waterfall offset as a fraction of the first trace's peak-to-peak.
     pub offset_frac: f64,
@@ -79,6 +92,9 @@ pub struct ViewOptions {
 impl Default for ViewOptions {
     fn default() -> Self {
         Self {
+            sample_overlay: false,
+            gradient: false,
+            energy_view_range: None,
             layout: TraceLayout::Overlay,
             offset_frac: 0.6,
             legend: true,
@@ -570,7 +586,17 @@ pub(crate) fn quantity_quadrant_specs(
     in_plot_legend: bool,
     quantity: crate::params::Quantity,
 ) -> [QuadrantSpec; 5] {
-    let mut specs = build_quadrant_specs(traces, view, theme, in_plot_legend);
+    let mut adjusted = *view;
+    if matches!(
+        quantity,
+        crate::params::Quantity::FlattenedMu | crate::params::Quantity::FlattenedDifference
+    ) {
+        adjusted.flat = true;
+    }
+    if quantity == crate::params::Quantity::NormalizedMu {
+        adjusted.flat = false;
+    }
+    let mut specs = build_quadrant_specs(traces, &adjusted, theme, in_plot_legend);
     if matches!(
         quantity,
         crate::params::Quantity::NormalizedMu | crate::params::Quantity::NormalizedDifference
@@ -864,22 +890,22 @@ pub fn build_heatmap(
         .into()
 }
 
-/// One overview frame as a plain line (energy / R spaces), with the
-/// reference standards behind it when given.
-pub fn build_frame_row(
+/// Source-backed energy or R-space cursor frame. Replacing the observable
+/// redraws the selected frame without rebuilding its interactive viewport.
+pub fn build_frame_row_source(
     grid: &[f64],
-    row: &[f64],
+    values: Observable<Vec<f64>>,
     xlabel: &str,
     ylabel: &str,
     theme: &Theme,
 ) -> Plot {
-    let n = grid.len().min(row.len());
-    let plot: Plot = Plot::new()
+    Plot::new()
         .theme(theme.plot_theme())
-        .line(&grid[..n], &row[..n])
+        .line_source(grid, values)
         .color(trace_color(theme, 0))
-        .into();
-    plot.xlabel(xlabel).ylabel(ylabel)
+        .xlabel(xlabel)
+        .ylabel(ylabel)
+        .into()
 }
 
 /// Source-backed chi(k) of one operando frame. Replacing `values` redraws the
@@ -1185,6 +1211,29 @@ pub fn build_lcf_plot(
     plot.legend_position(ruviz::core::LegendPosition::UpperRight)
         .xlabel(xlabel)
         .ylabel(ylabel)
+}
+
+/// Estimated MCR spectra, without arbitrary offsets or inferred chemical labels.
+pub fn build_mcr_plot(result: &rexafs::prelude::McrResult, theme: &Theme) -> Plot {
+    let x = vecs(&result.x);
+    let mut plot = Plot::new().theme(theme.plot_theme());
+    for i in 0..result.spectra.nrows() {
+        let y: Vec<_> = result.spectra.row(i).iter().copied().collect();
+        plot = plot
+            .line(&x, &y)
+            .color(trace_color(theme, i))
+            .label(format!("Component {}", i + 1))
+            .into();
+    }
+    plot.xlabel("Energy (eV)")
+        .ylabel(
+            if result.config.space == rexafs::prelude::AnalysisSpace::Flat {
+                "flattened μ(E)"
+            } else {
+                "normalized μ(E)"
+            },
+        )
+        .legend_position(ruviz::core::LegendPosition::UpperRight)
 }
 
 /// PCA target transform: data vs reconstruction with the residual below.

@@ -91,7 +91,7 @@ impl StudioApp {
             // confirmation prompt; a blocked quantity (Δμnorm) gets the plain
             // notice; every other derived group renders the normal body.
             let blocked = group.processing_block_reason();
-            if !group.quantity_unconfirmed && blocked.is_none() {
+            if !group.quantity_unconfirmed && (blocked.is_none() || self.stage == Stage::Data) {
                 body
             } else {
                 let mut notice = div()
@@ -108,6 +108,8 @@ impl StudioApp {
                     for quantity in [
                         Quantity::RawMu,
                         Quantity::NormalizedMu,
+                        Quantity::FlattenedMu,
+                        Quantity::FlattenedDifference,
                         Quantity::NormalizedDifference,
                         Quantity::ChiK,
                     ] {
@@ -654,6 +656,46 @@ impl StudioApp {
     }
 
     fn normalize_inspector(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let prepared = self.spectrum_quantity.prepared_space().is_some();
+        let refit = self.ui_params().refit_prepared;
+        let prepared_controls = prepared.then(|| {
+            div()
+                .p_3()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(self.note(if refit {
+                    "Refitting baselines. Original recovered values are retained."
+                } else {
+                    "Recovered values · unit edge step. Optional baseline correction below."
+                }))
+                .child(
+                    super::chip(&self.theme, "refit-prepared", "Refit pre/post-edge", refit)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.edit_parameters(
+                                "Toggle component pre/post-edge fitting".into(),
+                                cx,
+                                |p| {
+                                    p.refit_prepared = !p.refit_prepared;
+                                    Ok(())
+                                },
+                            );
+                        })),
+                )
+                .into_any_element()
+        });
+        if prepared && !refit {
+            return div()
+                .flex()
+                .flex_col()
+                .children(prepared_controls)
+                .child(self.section(
+                    "Edge",
+                    None,
+                    self.field(ParamKey::E0, cx).into_iter().collect(),
+                    cx,
+                ));
+        }
         let sp = self.spectrum.as_deref();
         let e0 = sp.and_then(|s| s.e0());
         let step = self.edge_step();
@@ -666,6 +708,7 @@ impl StudioApp {
         div()
             .flex()
             .flex_col()
+            .children(prepared_controls)
             .child(
                 self.section(
                     "Edge",

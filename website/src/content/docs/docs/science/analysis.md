@@ -6,6 +6,9 @@ audience: user
 
 These tools are available in the desktop and Rust in 0.2.4; Python and TypeScript
 expose spectrum processing. In the desktop, use **Data → Parameters** or action search.
+The LCF/PCA descriptions below document released behavior; the
+[unreleased changes](#unreleased-collection-analysis) explain the new input
+preparation and strict coverage contract.
 
 ## Linear combination fitting
 
@@ -128,6 +131,79 @@ noise, and reconstruction error along with either rank suggestion.
 PCA reconstruction `chi_square` is also a raw squared residual sum; its reduced
 value divides by `max(m - c, 1)`. No experimental noise variance is supplied to
 this calculation, so this number is not a calibrated chi-square test.
+
+## Unreleased collection analysis
+
+Source checkouts add native MCR-ALS in **Data → Parameters**, alongside LCF and
+PCA. These additions are not available in published 0.2.8 or its Python and
+TypeScript bindings. The desktop analysis selector starts on **flat**, with norm
+still selectable; core APIs retain their existing norm default.
+
+The unreleased Rust APIs now prepare missing normalization/background arrays on
+temporary copies using each input's settings, while reusing existing results.
+Core defaults remain Norm; select `AnalysisSpace::Flat` explicitly for flat data.
+LCF, PCA and MCR all reject nonfinite/reversed bounds and incomplete coverage
+instead of extending endpoint values. Energy bounds remain offsets from E₀;
+LCF references also need coverage for the permitted shift margin.
+
+`lcf_batch` keeps each target's result or error in input order, and
+`lcf_batch_with_progress` supports cancellation after completed rows. The desktop
+Series workflow uses this core API. PCA's `component_count_suggestion`,
+`numerical_rank` and `reconstruction_errors` now supply the desktop's count
+suggestions and error curves. Python and TypeScript analysis bindings are
+explicit follow-up tasks, including parity tests for this shared behavior.
+
+The collection plot offers **Plot all**, **Preview 12** and **Gradient**. Preview
+sampling affects the display only. PCA and MCR use every marked spectrum,
+including the current group. Plot range presets change the view; separate
+analysis presets and dashed bounds specify the calculation interval.
+
+PCA adds scree, cumulative contribution, **Error vs count**, score projections,
+loadings and similarity views. Error versus count measures reconstruction,
+not cross-validation. For closed three-standard mixtures, mean-centered PCA can
+have two varying directions plus the mean; that does not imply two species.
+Numerical-rank and interior IND suggestions are labeled diagnostics. Scree,
+Error vs count and IND offer **Y axis → Linear / Log**. Log is the default and
+uses a display-only floor of 10⁻³²; Linear preserves zeros. Cumulative
+contribution remains linear. Switching scales does not recalculate PCA or
+change exported values.
+
+MCR fits the bilinear model $D = C S + R$, with spectra as rows of $D$,
+nonnegative coefficient rows in $C$, component spectra as rows of $S$, and
+residuals $R$. Closure and spectral nonnegativity are separate constraints.
+It requires prepared norm or flat arrays with complete common measured coverage.
+Inspect convergence, per-sample residuals and component spectra; a small residual
+does not establish unique chemical factors. See the
+[NIST pyMCR paper](https://doi.org/10.6028/jres.124.018) for the model and the
+[unreleased Rust API](/api/rust-next/rexafs/xafs/analysis/mcr/index.html) for
+rexafs's independent implementation, defaults and error conditions.
+
+After fitting, mark standards and use **Compare marked standards** for a matched
+spectral overlay without rescaling. **Add to Groups** retains each MCR component,
+or an LCF fit, residual and weighted contributions, as calculated norm/flat
+groups. They can be compared with references using the usual group plot without
+normalizing the calculated arrays again. Operation metadata records the source
+identities and calculation settings. Portable projects retain owned analysis
+results; Publish exports add calculated data files with metadata headers and
+companion provenance JSON. Derivative and χ-space LCF arrays remain available
+in analysis JSON, but currently cannot be added as calculated groups.
+
+Recovered norm/flat component groups can continue through **Background →
+Transform → Fit**. Their values and unit edge step are preserved by default.
+Normalize offers E₀ and an optional **Refit pre/post-edge** action, which enables
+the ordinary baseline and edge-step controls even for flattened input. The
+original recovered arrays remain stored, and disabling the option restores
+the default path. Residual groups remain
+differences. A component only covers the retained MCR interval, so repeat MCR
+over wider measured coverage before doing broad-range EXAFS fitting. The Rust
+`McrResult::component_spectrum(index)` method provides this conversion; these
+analysis APIs are not yet exposed by the Python or TypeScript bindings.
+
+The Series view separately offers norm and flat absorption, with flat initially
+selected. Cursor plots follow the selected frame in energy, k and R spaces.
+Batch LCF coefficients and settings are retained in projects and exported as
+`data/lcf-series.csv` and JSON; inspect failed/cancelled frame records before
+interpreting an incomplete batch.
 
 ## Data-treatment choices
 

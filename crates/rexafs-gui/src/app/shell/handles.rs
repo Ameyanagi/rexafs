@@ -227,12 +227,20 @@ impl StudioApp {
         let Some(sp) = self.spectrum.as_deref() else {
             return (Vec::new(), Vec::new());
         };
+        if !self.spectrum_quantity.supports_exafs() {
+            return (Vec::new(), Vec::new());
+        }
         let p = self.ui_params();
         match (self.stage, plot) {
             (Stage::Normalize, PLOT_MU | PLOT_NORM) => {
                 let Some(e0) = p.e0.or_else(|| sp.e0()) else {
                     return (Vec::new(), Vec::new());
                 };
+                if self.spectrum_quantity.prepared_space().is_some() && !p.refit_prepared {
+                    // The component already has its declared scale. Only its
+                    // energy origin is editable; baseline ranges do not apply.
+                    return (vec![(HandleKey::E0, e0)], Vec::new());
+                }
                 let ppe = match sp.normalization.as_ref() {
                     Some(NormalizationMethod::PrePostEdge(ppe)) => Some(ppe),
                     _ => None,

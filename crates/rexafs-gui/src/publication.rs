@@ -266,6 +266,33 @@ pub(crate) fn export(mut snapshot: Snapshot, destination: &Path) -> Result<PathB
     fs::create_dir(&data).map_err(|e| e.to_string())?;
     write_json(&destination.join("state.json"), &snapshot.context())?;
     crate::project::save(&destination.join("project.rxs"), &snapshot.project)?;
+    if let Some(series) = &snapshot.project.lcf_series_analysis {
+        write_json(&data.join("lcf-series.json"), series)?;
+        let quote = |v: &str| format!("\"{}\"", v.replace('"', "\"\""));
+        let mut csv = format!(
+            "frame,label,{},r_factor\n",
+            series
+                .standards
+                .iter()
+                .map(|s| quote(&s.label))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        for (frame, values) in &series.rows {
+            let label = series.inputs.get(frame).map_or("", |s| s.label.as_str());
+            csv.push_str(&format!(
+                "{},{},{}\n",
+                frame + 1,
+                quote(label),
+                values
+                    .iter()
+                    .map(|v| format!("{v:.17e}"))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ));
+        }
+        fs::write(data.join("lcf-series.csv"), csv).map_err(|e| e.to_string())?;
+    }
     let project_sources = match snapshot.project.data_storage {
         crate::project::DataStorage::Paths => {
             "The .rxs project links to source spectra and FEFF inputs using paths relative to its directory. Move the source folders with it, or select Raw: embedded before exporting a portable archive."
@@ -282,6 +309,27 @@ pub(crate) fn export(mut snapshot: Snapshot, destination: &Path) -> Result<PathB
     );
     for (i, s) in snapshot.spectra.iter_mut().enumerate() {
         let id = format!("spectrum-{:03}", i + 1);
+        // Export retained calculation evidence even when the selected downstream
+        // processing cannot run on a short or edge-free interval.
+        if let Some(group) = &s.group
+            && let Some(operation) = &group.operation
+            && matches!(
+                operation.tool.as_str(),
+                "MCR-ALS" | "Linear combination fit"
+            )
+        {
+            write_json(&data.join(format!("{id}-provenance.json")), group)?;
+            let mut text = format!(
+                "# rexafs calculated spectrum; not a raw measurement\n# Quantity: {}\n# Retained calculated values; preserve scale by default. Optional baseline refits are recorded separately in processing settings.\n# Operation: {}\n# energy_eV calculated_signal\n",
+                group.quantity.label(),
+                serde_json::to_string(operation).map_err(|e| e.to_string())?
+            );
+            for (x, y) in group.energy.iter().zip(&group.mu) {
+                text.push_str(&format!("{x:.17e} {y:.17e}\n"));
+            }
+            fs::write(data.join(format!("{id}-calculated.dat")), text)
+                .map_err(|e| e.to_string())?;
+        }
         let result = s.for_display();
         match result {
             Ok(sp) => {
@@ -384,6 +432,109 @@ const BIBTEX: &str = "@article{Newville1993, author={M. Newville and P. Livins a
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn calculated_flat_groups_export_exact_arrays_and_provenance_headers() {
+        let group = crate::params::DerivedSpectrum {
+            label: "MCR component 1".into(),
+            energy: vec![8950., 8951., 8952.],
+            mu: vec![-0.01, 0.7, 1.01],
+            quantity: crate::params::Quantity::FlattenedMu,
+            operation: Some(crate::params::Operation {
+                tool: "MCR-ALS".into(),
+                parameters: json!({"space":"Flat","component_index":1,"seed":71}),
+                inputs: vec![],
+                applied_energy_shift_ev: 0.,
+            }),
+            ..Default::default()
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let output = dir.path().join("export");
+        export(
+            Snapshot {
+                project: ProjectFile {
+                    derived: vec![group.clone()],
+                    lcf_series_analysis: Some(crate::project::LcfSeriesAnalysis {
+                        config: rexafs::prelude::LcfConfig {
+                            space: rexafs::prelude::AnalysisSpace::Flat,
+                            ..Default::default()
+                        },
+                        inputs: [(
+                            0,
+                            crate::project::AnalysisInput {
+                                group_id: None,
+                                label: "sample, \"one\"".into(),
+                                fingerprint: 7,
+                            },
+                        )]
+                        .into(),
+                        standards: vec![crate::project::AnalysisInput {
+                            group_id: None,
+                            label: "Cu foil".into(),
+                            fingerprint: 9,
+                        }],
+                        rows: [(0, vec![1.0, 0.0])].into(),
+                        errors: Default::default(),
+                        complete: true,
+                        cancelled: false,
+                    }),
+                    ..Default::default()
+                },
+                current: PathBuf::new(),
+                spectra: vec![SpectrumInput {
+                    group: Some(group.clone()),
+                    label: group.label.clone(),
+                    ..Default::default()
+                }],
+                results: BTreeMap::new(),
+                analysis: Value::Null,
+                batch_csv: None,
+                batch_stale: false,
+                journal: vec![],
+                screen: Value::Null,
+            },
+            &output,
+        )
+        .unwrap();
+        let csv = fs::read_to_string(output.join("data/lcf-series.csv")).unwrap();
+        assert!(csv.starts_with("frame,label,\"Cu foil\",r_factor\n"));
+        assert!(
+            csv.contains("1,\"sample, \"\"one\"\"\",1.00000000000000000e0,0.00000000000000000e0")
+        );
+        let record: crate::project::LcfSeriesAnalysis =
+            serde_json::from_slice(&fs::read(output.join("data/lcf-series.json")).unwrap())
+                .unwrap();
+        assert_eq!(record.config.space, rexafs::prelude::AnalysisSpace::Flat);
+        assert_eq!(record.rows[&0], vec![1.0, 0.0]);
+        let text = fs::read_to_string(output.join("data/spectrum-001-calculated.dat")).unwrap();
+        let header = text
+            .lines()
+            .find_map(|line| line.strip_prefix("# Operation: "))
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(header).unwrap()["parameters"]["seed"],
+            71
+        );
+        let rows: Vec<Vec<f64>> = text
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .map(|line| {
+                line.split_whitespace()
+                    .map(|x| x.parse().unwrap())
+                    .collect()
+            })
+            .collect();
+        assert_eq!(
+            rows,
+            vec![vec![8950., -0.01], vec![8951., 0.7], vec![8952., 1.01]]
+        );
+        let saved: crate::params::DerivedSpectrum = serde_json::from_slice(
+            &fs::read(output.join("data/spectrum-001-provenance.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(saved.mu, group.mu);
+        assert_eq!(saved.quantity, crate::params::Quantity::FlattenedMu);
+    }
+
     #[test]
     fn missing_channel_never_falls_back_to_primary_file() {
         let input = SpectrumInput {

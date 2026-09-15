@@ -16,6 +16,8 @@ categories = ["science"]
 exclude = [
     "/tests/fixtures/xas/",
     "/tests/fixtures/sessions/",
+    "/tests/fixtures/analysis/",
+    "/tests/cu_mixture_recovery.rs",
     "/tests/beamline_formats.rs",
     "/tests/measurement_fixtures.rs",
     "/tests/measurement_fixtures/",

@@ -33,8 +33,10 @@ pub use crate::xafs::xrayfft::{FFTGrid, FFTUtils, XrayFFTF, XrayFFTR};
 #[cfg(feature = "plotting")]
 pub use crate::plot::{PlotError, PlotXAS, XASPlotBuilder};
 pub use crate::xafs::analysis::{
-    lcf, lcf_combinatorial, pca_train, AnalysisSpace, LcfComponent, LcfConfig, LcfResult, LcfSpace,
-    PcaConfig, PcaFit, PcaModel,
+    lcf, lcf_batch, lcf_batch_with_progress, lcf_combinatorial, mcr_als, mcr_als_with_progress,
+    pca_train, AnalysisSpace, LcfComponent, LcfConfig, LcfResult, LcfSpace, McrAnchor, McrConfig,
+    McrResult, McrTermination, PcaConfig, PcaCountBasis, PcaCountSuggestion, PcaFit, PcaModel,
+    PcaReconstructionError,
 };
 pub use crate::xafs::errors::AnalysisError;
 pub use crate::xafs::fitting::template::{

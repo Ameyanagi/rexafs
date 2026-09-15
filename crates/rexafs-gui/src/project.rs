@@ -16,6 +16,68 @@ mod compact;
 mod storage;
 pub use storage::{DataStorage, ProjectHeader};
 
+/// Stable input identity for a retained collection analysis. Result arrays own the
+/// prepared input, so historical calculations survive subsequent preprocessing.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct AnalysisInput {
+    pub group_id: Option<crate::group_identity::GroupId>,
+    pub label: String,
+    pub fingerprint: u64,
+}
+
+/// Retained native MCR result, with its exact settings and ordered input identities.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct McrAnalysis {
+    pub result: rexafs::prelude::McrResult,
+    pub inputs: Vec<AnalysisInput>,
+    #[serde(default)]
+    pub comparison: Option<McrReferenceComparison>,
+}
+
+/// Independently selected references on the retained MCR energy grid.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct McrReferenceComparison {
+    pub spectra: nalgebra::DMatrix<f64>,
+    /// Reference-row order mapped to recovered component rows; no rescaling.
+    pub component_indices: Vec<usize>,
+    /// Relative Euclidean spectral errors after permutation matching.
+    pub relative_errors: Vec<f64>,
+    pub inputs: Vec<AnalysisInput>,
+}
+
+/// Owned PCA model and target reconstruction retained for reproducible figures.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PcaAnalysis {
+    pub model: rexafs::prelude::PcaModel,
+    pub target: Option<rexafs::prelude::PcaFit>,
+    /// Target identity first, followed by training-row identities. A marked
+    /// target occurs twice because it participates in both roles.
+    pub inputs: Vec<AnalysisInput>,
+}
+
+/// Owned LCF result and the identities of the target and standards.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct LcfAnalysis {
+    #[serde(default)]
+    pub config: Option<rexafs::prelude::LcfConfig>,
+    pub result: rexafs::prelude::LcfResult,
+    pub inputs: Vec<AnalysisInput>,
+}
+
+/// Historical LCF coefficient series. Frame keys are zero-based acquisition
+/// indices; each row contains weights in `standards` order and an R-factor last.
+/// These retained results are not recomputed by opening the project.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct LcfSeriesAnalysis {
+    pub config: rexafs::prelude::LcfConfig,
+    pub inputs: std::collections::BTreeMap<usize, AnalysisInput>,
+    pub standards: Vec<AnalysisInput>,
+    pub rows: std::collections::BTreeMap<usize, Vec<f64>>,
+    pub errors: std::collections::BTreeMap<usize, String>,
+    pub complete: bool,
+    pub cancelled: bool,
+}
+
 /// One spectrum's parameter override. Catalog indices are only stable
 /// within a single scan session, so persistence keys overrides by the
 /// file's full path (dir + name) and re-resolves them to indices when the
@@ -29,6 +91,10 @@ pub struct ParamOverride {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProjectFile {
+    pub lcf_series_analysis: Option<LcfSeriesAnalysis>,
+    pub pca_analysis: Option<PcaAnalysis>,
+    pub lcf_analysis: Option<LcfAnalysis>,
+    pub mcr_analysis: Option<McrAnalysis>,
     pub parser_evidence: std::collections::BTreeMap<
         crate::group_identity::GroupId,
         crate::source_evidence::ParserRecord,

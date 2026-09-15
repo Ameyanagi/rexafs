@@ -18,6 +18,21 @@ use crate::app::{
 use crate::icons::Icon;
 
 impl StudioApp {
+    /// Display the source directory recorded by a portable project, rather than
+    /// the private extraction-cache directory used to read its files.
+    fn series_scan_label(&self, index: usize) -> String {
+        let Some(scan) = self.catalog.scans.get(index) else {
+            return "Select scan".into();
+        };
+        let file = self.catalog.path(scan.start);
+        self.project_source_origins
+            .get(&file)
+            .and_then(|p| p.parent())
+            .and_then(|p| p.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| scan.label.clone())
+    }
+
     pub(crate) fn series_ready(&self) -> bool {
         self.active_scan.is_some_and(|scan| {
             self.catalog.scans.get(scan).is_some_and(|s| s.len > 0)
@@ -64,7 +79,7 @@ impl StudioApp {
             let available =
                 !crate::app::active_scan_indices(&self.group_registry, scan.start, scan.len, 1)
                     .is_empty();
-            let label = scan.label.clone();
+            let label = self.series_scan_label(index);
             list = list.child(
                 button(&t, ("select-series-scan", index), label, false)
                     .h(px(40.))
@@ -124,7 +139,12 @@ impl StudioApp {
     ) -> impl IntoElement + use<> {
         let t = self.theme;
         let label: SharedString = match self.active_scan.and_then(|ix| self.catalog.scans.get(ix)) {
-            Some(scan) => format!("{} · {} frames", scan.label, scan.len).into(),
+            Some(scan) => format!(
+                "{} · {} frames",
+                self.series_scan_label(self.active_scan.unwrap()),
+                scan.len
+            )
+            .into(),
             None => "no scan selected".into(),
         };
         div()
@@ -238,6 +258,7 @@ impl StudioApp {
         let frame_label: SharedString = format!("frame {} / {frames}", self.time_pos + 1).into();
         let space_label: SharedString = match self.stage_view.series_space {
             SeriesSpace::Energy => "normalized μ(E)".into(),
+            SeriesSpace::Flat => "flattened μ(E)".into(),
             SeriesSpace::K => crate::plotting::chik_label(
                 self.operando.as_ref().map(|d| d.kweight).unwrap_or(2.0),
             )
@@ -317,7 +338,16 @@ impl StudioApp {
                     .child(
                         card(format!("{space_label} · heatmap").into())
                             .flex_1()
-                            .child(div().flex_1().min_h_0().min_w_0().p_1().child(heatmap))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .min_w_0()
+                                    .p_1()
+                                    .relative()
+                                    .child(heatmap)
+                                    .child(self.measure_card(301, cx)),
+                            )
                             .child(self.time_scrubber(cx))
                             .child(
                                 div()
@@ -340,12 +370,28 @@ impl StudioApp {
                             .child(
                                 card(format!("frame {} · {space_label}", self.time_pos + 1).into())
                                     .flex_1()
-                                    .child(div().flex_1().min_h_0().min_w_0().p_1().child(chik)),
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_h_0()
+                                            .min_w_0()
+                                            .p_1()
+                                            .relative()
+                                            .child(chik)
+                                            .child(self.measure_card(302, cx)),
+                                    ),
                             )
                             .child(
-                                card(format!("trend · {trend_name}").into())
-                                    .flex_1()
-                                    .child(div().flex_1().min_h_0().min_w_0().p_1().child(trend)),
+                                card(format!("trend · {trend_name}").into()).flex_1().child(
+                                    div()
+                                        .flex_1()
+                                        .min_h_0()
+                                        .min_w_0()
+                                        .p_1()
+                                        .relative()
+                                        .child(trend)
+                                        .child(self.measure_card(303, cx)),
+                                ),
                             ),
                     ),
             )
@@ -356,8 +402,9 @@ impl StudioApp {
         let t = self.theme;
         let space = self.stage_view.series_space;
         let kw = self.operando.as_ref().map(|d| d.kweight).unwrap_or(2.0);
-        let options: [(SeriesSpace, String); 3] = [
+        let options: [(SeriesSpace, String); 4] = [
             (SeriesSpace::Energy, "norm μ(E)".into()),
+            (SeriesSpace::Flat, "flat μ(E)".into()),
             (SeriesSpace::K, crate::plotting::chik_label(kw)),
             (SeriesSpace::R, "|χ(R)|".into()),
         ];
@@ -393,7 +440,7 @@ impl StudioApp {
             .flex_wrap()
             .child(
                 button(&t, "series-change-scan", self.active_scan
-                    .and_then(|ix| self.catalog.scans.get(ix)).map(|s| s.label.clone())
+                    .map(|ix| self.series_scan_label(ix))
                     .unwrap_or_else(|| "Select scan".into()), false)
                     .max_w(px(180.)).overflow_hidden().text_ellipsis()
                     .child(icon(&t, Icon::ChevronDown))
@@ -705,8 +752,13 @@ impl StudioApp {
                         .text_size(px(11.))
                         .text_color(t.text_muted)
                         .child(format!(
-                            "space {} · sum to one",
-                            self.tools.lcf_space_label()
+                            "space {} · {}",
+                            self.tools.lcf_space_label(),
+                            if self.tools.lcf_sum_to_one {
+                                "sum to one"
+                            } else {
+                                "free sum"
+                            }
                         )),
                 )
                 .child(

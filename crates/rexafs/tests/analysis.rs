@@ -227,14 +227,15 @@ fn analysis_lcf_e0_shift_recovers_shift() {
 }
 
 #[test]
-fn analysis_lcf_reports_missing_arrays() {
+fn analysis_lcf_prepares_missing_arrays_and_rejects_invalid_inputs() {
     let a = standard_a();
     let mut raw = io::load_spectrum_QAS_trans(testfile("Ru_QAS.dat")).unwrap();
     raw.find_e0().unwrap();
-    assert!(matches!(
-        lcf(&raw, &[&a], &LcfConfig::default()),
-        Err(AnalysisError::MissingArray { .. })
-    ));
+    let fit = lcf(&raw, &[&a], &LcfConfig::default()).unwrap();
+    let mut manual = raw.clone();
+    manual.normalize().unwrap();
+    assert_eq!(fit, lcf(&manual, &[&a], &LcfConfig::default()).unwrap());
+    assert!(raw.norm().is_none());
     let no_std: Vec<XASSpectrum> = Vec::new();
     assert!(matches!(
         lcf(&a, &no_std, &LcfConfig::default()),
@@ -246,7 +247,7 @@ fn analysis_lcf_reports_missing_arrays() {
     };
     assert!(matches!(
         lcf(&a, &[&a], &empty_range),
-        Err(AnalysisError::EmptyRange { .. })
+        Err(AnalysisError::IncompleteCoverage { .. })
     ));
 }
 

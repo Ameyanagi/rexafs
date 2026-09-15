@@ -196,7 +196,7 @@ impl Default for StageView {
             fit_show_re: false,
             fit_show_im: false,
             fit_show_batch: false,
-            series_space: crate::app::SeriesSpace::Energy,
+            series_space: crate::app::SeriesSpace::Flat,
         }
     }
 }

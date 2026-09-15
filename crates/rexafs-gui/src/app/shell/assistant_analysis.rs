@@ -25,6 +25,8 @@ pub(super) struct AnalysisRequest {
     #[serde(default)]
     pub fit_energy_shifts: bool,
     pub components: Option<usize>,
+    #[serde(default)]
+    pub center: bool,
 }
 fn normalized() -> String {
     "norm".into()
@@ -67,8 +69,8 @@ impl AnalysisRequest {
                 "PCA components must be between one and the number of training groups".into(),
             );
         }
-        if tool == Tool::Lcf && self.components.is_some() {
-            return Err("components applies only to PCA".into());
+        if tool == Tool::Lcf && (self.components.is_some() || self.center) {
+            return Err("components and center apply only to PCA".into());
         }
         if tool == Tool::Pca && self.fit_energy_shifts {
             return Err("PCA does not fit energy shifts".into());
@@ -141,6 +143,7 @@ impl StudioApp {
         self.selection = references;
         self.open_tool(tool, cx);
         self.tools.lcf_space = space;
+        self.tools.pca_center = request.center;
         self.tools.lcf_sum_to_one = request.sum_to_one;
         self.tools.lcf_e0_shift = request.fit_energy_shifts;
         self.tools.lcf_all_combinations = false;

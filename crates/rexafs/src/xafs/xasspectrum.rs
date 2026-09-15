@@ -96,6 +96,13 @@ pub struct XASSpectrum {
     /// Last normalization output, used to recognize later public-field edits.
     #[serde(skip_serializing_if = "Option::is_none")]
     normalization_edge_step_last_result: Option<f64>,
+    /// Input already expressed in edge-step units. `None` retains raw-input
+    /// behavior; use `from_prepared` to establish this invariant with validation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prepared_space: Option<super::analysis::AnalysisSpace>,
+    /// Explicit pre/post-edge fitting of prepared input. False preserves its
+    /// values and unit step; true is selected by `set_normalization_method`.
+    refit_prepared: bool,
 }
 
 impl XASSpectrum {
@@ -168,6 +175,99 @@ impl XASSpectrum {
         Ok(spectrum)
     }
 
+    /// Copy already normalized or flattened absorption into a processable spectrum
+    /// (unreleased). Energy is in eV, `mu` is dimensionless, and `e0` must be
+    /// finite and strictly inside the measured interval. Only `Norm` and `Flat`
+    /// are accepted; use `from_arrays` for raw measurements.
+    ///
+    /// By default this preserves every supplied value and records a unit edge step. Calling
+    /// `normalize` refreshes that identity mapping without fitting pre/post-edge
+    /// curves or flattening again, unless `set_normalization_method` explicitly
+    /// selects a new normalization fit. AUTOBK, Fourier transforms and EXAFS fitting
+    /// can then use the ordinary spectrum API. On flattened input AUTOBK operates
+    /// on those flattened values; the original unflattened signal is not recovered.
+    /// `set_e0` and data edits preserve the input type; `set_spectrum` replaces it
+    /// with raw input. Arrays must be finite, paired and strictly increasing.
+    pub fn from_prepared(
+        energy: &[f64],
+        mu: &[f64],
+        space: super::analysis::AnalysisSpace,
+        e0: f64,
+    ) -> Result<Self, XAFSError> {
+        use super::analysis::AnalysisSpace;
+        if !matches!(space, AnalysisSpace::Norm | AnalysisSpace::Flat) {
+            return Err(NormalizationError::Other {
+                message: "Prepared absorption requires AnalysisSpace::Norm or Flat".into(),
+            }
+            .into());
+        }
+        let mut spectrum = Self::from_arrays(energy, mu)?;
+        spectrum.prepared_space = Some(space);
+        spectrum.e0 = Some(e0);
+        spectrum.normalize()?;
+        Ok(spectrum)
+    }
+
+    /// Input representation established by `from_prepared`, or `None` for raw
+    /// measurements. This records input units, not the last displayed plot.
+    pub fn prepared_space(&self) -> Option<super::analysis::AnalysisSpace> {
+        self.prepared_space
+    }
+
+    /// Whether normalization currently preserves prepared values with a unit
+    /// edge step. Explicit `set_normalization_method` opts into refitting and
+    /// returns false here; the original prepared input type remains recorded.
+    pub fn preserves_prepared_values(&self) -> bool {
+        self.prepared_space.is_some() && !self.refit_prepared
+    }
+
+    fn normalize_prepared(&mut self) -> Result<&mut Self, XAFSError> {
+        self.invalidate_derived();
+        if !matches!(
+            self.prepared_space,
+            Some(super::analysis::AnalysisSpace::Norm | super::analysis::AnalysisSpace::Flat)
+        ) {
+            return Err(NormalizationError::Other {
+                message: "Prepared absorption requires AnalysisSpace::Norm or Flat".into(),
+            }
+            .into());
+        }
+        let energy = self.energy.as_ref().ok_or_else(|| DataError::MissingData {
+            field: "energy".into(),
+        })?;
+        let mu = self
+            .mu
+            .as_ref()
+            .ok_or_else(|| DataError::MissingData { field: "mu".into() })?;
+        Self::validate_energy_mu_inputs(energy, mu)?;
+        let e0 = self.e0.ok_or_else(|| DataError::MissingData {
+            field: "e0 for prepared absorption".into(),
+        })?;
+        if !e0.is_finite() || e0 <= energy[0] || e0 >= energy[energy.len() - 1] {
+            return Err(NormalizationError::E0OutOfRange {
+                e0,
+                data_min: energy[0],
+                data_max: energy[energy.len() - 1],
+            }
+            .into());
+        }
+        let mut output = normalization::PrePostEdge::new();
+        output.e0 = Some(e0);
+        output.edge_step = Some(1.0);
+        #[cfg(not(feature = "ndarray-compat"))]
+        let values = mu.clone();
+        #[cfg(feature = "ndarray-compat")]
+        let values = ndarray::Array1::from_vec(mu.as_slice().to_vec());
+        output.norm = Some(values.clone());
+        if self.prepared_space == Some(super::analysis::AnalysisSpace::Flat) {
+            output.flat = Some(values);
+        }
+        self.normalization = Some(normalization::NormalizationMethod::PrePostEdge(output));
+        self.normalization_edge_step_override = Some(1.0);
+        self.normalization_edge_step_last_result = Some(1.0);
+        Ok(self)
+    }
+
     /// Borrow the background k grid without cloning its buffer (Å⁻¹).
     /// Returns `None` before a valid AUTOBK result; no calculation is triggered.
     pub fn k(&self) -> Option<&[f64]> {
@@ -219,6 +319,12 @@ impl XASSpectrum {
         energy: T,
         mu: M,
     ) -> &mut Self {
+        if self.prepared_space.take().is_some() {
+            self.normalization = None;
+            self.normalization_edge_step_override = None;
+            self.normalization_edge_step_last_result = None;
+        }
+        self.refit_prepared = false;
         let raw_energy = energy.into();
         let raw_mu = mu.into();
 
@@ -357,10 +463,16 @@ impl XASSpectrum {
     /// `None` selects default pre/post-edge normalization. A configured edge energy
     /// takes precedence over the existing E0; an explicit edge step remains an override.
     /// No normalization is performed by this setter.
+    /// For prepared input this explicitly enables fitting new pre/post-edge
+    /// curves, replacing the default unit-step identity mapping. The original
+    /// input arrays and their declared representation remain intact; subsequent
+    /// `normalize()` calls use these settings. The edge step is fitted unless
+    /// the supplied method overrides it. This choice survives serialization.
     pub fn set_normalization_method(
         &mut self,
         method: impl Into<Option<normalization::NormalizationMethod>>,
     ) -> Result<&mut Self, XAFSError> {
+        self.refit_prepared = self.prepared_space.is_some();
         let method = method.into();
         self.invalidate_derived();
         if let Some(method) = method {
@@ -405,6 +517,9 @@ impl XASSpectrum {
     /// Recomputing invalidates background and Fourier results. Missing/invalid data,
     /// an unusable fitting range, or an unsupported method returns a typed error.
     pub fn normalize(&mut self) -> Result<&mut Self, XAFSError> {
+        if self.preserves_prepared_values() {
+            return self.normalize_prepared();
+        }
         // Capture explicitly configured edge_step before the algorithm fills it.
         if let Some(method) = &self.normalization {
             if method.get_norm().is_none() {
@@ -1044,6 +1159,10 @@ impl XASSpectrum {
 
     /// Copy normalized absorption in edge-step units on the current energy grid.
     /// Returns `None` until normalization succeeds or after it is invalidated.
+    /// When `preserves_prepared_values()` is true this copies the supplied
+    /// unit-step values, including flattened values for declared `Flat` input.
+    /// After explicitly setting a normalization method it returns the new fit's
+    /// normalized output instead, without replacing the original input arrays.
     pub fn norm(&self) -> Option<DVector<f64>> {
         #[cfg(feature = "ndarray-compat")]
         {
@@ -1060,7 +1179,11 @@ impl XASSpectrum {
 
     /// Copy flattened normalized absorption on the current energy grid.
     /// Flattening removes the fitted post-edge trend; it is a display/analysis result,
-    /// not the input used by AUTOBK. Returns `None` without valid normalization.
+    /// not the raw-measurement input used by AUTOBK. While prepared values are
+    /// preserved, `Flat` copies the supplied input and `Norm` has no flat output.
+    /// Explicit pre/post-edge refitting creates a new flattened result in either
+    /// case, without replacing the original input arrays.
+    /// Returns `None` without a valid flattened representation.
     pub fn flat(&self) -> Option<DVector<f64>> {
         #[cfg(feature = "ndarray-compat")]
         {

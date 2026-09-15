@@ -1129,6 +1129,10 @@ pub struct PipelineParams {
     pub e0: Option<f64>,
     /// Positive measured edge-step override; None derives it from the fits.
     pub edge_step: Option<f64>,
+    /// Refit pre/post-edge baselines on calculated norm/flat input. Off by
+    /// default, preserving recovered values and a unit edge step. Original
+    /// calculated arrays remain unchanged. Has no effect on raw input.
+    pub refit_prepared: bool,
     /// Pre-edge fit start relative to E₀ in eV. Desktop Auto starts at -200 eV.
     pub pre_edge_start: Option<f64>,
     /// Pre-edge fit end relative to E₀ in eV. Desktop Auto starts at -30 eV.
@@ -1343,6 +1347,9 @@ impl PipelineParams {
     pub fn fingerprint(&self) -> u64 {
         let mut hasher = std::hash::DefaultHasher::new();
         self.hash_raw_fields(&mut hasher);
+        if self.refit_prepared {
+            "refit_prepared".hash(&mut hasher);
+        }
         self.bkg_kweight_linked.hash(&mut hasher);
         self.fft_grid.hash(&mut hasher);
         for v in [
@@ -1510,7 +1517,9 @@ pub enum Quantity {
     #[default]
     RawMu,
     NormalizedMu,
+    FlattenedMu,
     NormalizedDifference,
+    FlattenedDifference,
     ChiK,
 }
 
@@ -1520,10 +1529,27 @@ impl Quantity {
         self == Self::RawMu
     }
 
+    /// Confirmed absorption inputs that can enter AUTOBK and Fourier processing.
+    /// Residuals and weighted chi arrays retain their separate display-only path.
+    pub fn supports_exafs(self) -> bool {
+        matches!(self, Self::RawMu | Self::NormalizedMu | Self::FlattenedMu)
+    }
+
+    pub fn prepared_space(self) -> Option<rexafs::prelude::AnalysisSpace> {
+        use rexafs::prelude::AnalysisSpace;
+        match self {
+            Self::NormalizedMu => Some(AnalysisSpace::Norm),
+            Self::FlattenedMu => Some(AnalysisSpace::Flat),
+            _ => None,
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::RawMu => "μ(E)",
             Self::NormalizedMu => "μnorm",
+            Self::FlattenedMu => "μflat",
+            Self::FlattenedDifference => "Δμflat",
             Self::NormalizedDifference => "Δμnorm",
             Self::ChiK => "χ(k)",
         }
@@ -1587,7 +1613,7 @@ impl DerivedSpectrum {
     pub fn processing_block_reason(&self) -> Option<String> {
         if self.quantity_unconfirmed {
             Some("Quantity unconfirmed: confirm the quantity before normalization/AUTOBK; plotting/export available.".into())
-        } else if !self.quantity.is_absorption() {
+        } else if !self.quantity.supports_exafs() {
             Some(format!(
                 "{}: normalization/AUTOBK disabled; plotting/export available.",
                 self.quantity.label()
@@ -1602,7 +1628,25 @@ impl DerivedSpectrum {
             return Err(reason);
         }
         let (energy, mu) = self.raw(params)?;
-        process_arrays(energy, mu, params)
+        if let Some(space) = self.quantity.prepared_space() {
+            let e0 = if let Some(e0) = params.e0 {
+                e0
+            } else {
+                let mut estimate =
+                    XASSpectrum::from_arrays(&energy, &mu).map_err(|e| e.to_string())?;
+                estimate.find_e0().map_err(|e| e.to_string())?;
+                estimate.e0().ok_or("Could not determine component E0")?
+            };
+            let sp =
+                XASSpectrum::from_prepared(&energy, &mu, space, e0).map_err(|e| e.to_string())?;
+            if params.refit_prepared {
+                normalize_and_process(sp, params)
+            } else {
+                process_exafs(sp, params)
+            }
+        } else {
+            process_arrays(energy, mu, params)
+        }
     }
 
     /// Display/export bypass for quantities that must not enter the pipeline.
@@ -1626,7 +1670,22 @@ impl DerivedSpectrum {
                 ..Default::default()
             }));
         } else {
-            sp.set_spectrum(energy, mu);
+            sp.set_spectrum(energy, mu.clone());
+            if matches!(
+                self.quantity,
+                Quantity::NormalizedMu | Quantity::FlattenedMu | Quantity::FlattenedDifference
+            ) {
+                // Adapter for a saved calculated array, not a new normalization.
+                let mut output = PrePostEdge::new();
+                output.e0 = params.e0;
+                if self.quantity == Quantity::NormalizedMu {
+                    output.norm = Some(mu.into());
+                } else {
+                    output.flat = Some(mu.into());
+                }
+                sp.e0 = params.e0;
+                sp.normalization = Some(NormalizationMethod::PrePostEdge(output));
+            }
         }
         Ok(sp)
     }
@@ -1773,6 +1832,13 @@ pub fn process_arrays(
     let mut sp = XASSpectrum::new();
     sp.set_spectrum(energy, mu);
 
+    normalize_and_process(sp, params)
+}
+
+fn normalize_and_process(
+    mut sp: XASSpectrum,
+    params: &PipelineParams,
+) -> Result<XASSpectrum, String> {
     match params.e0 {
         Some(e0) => {
             sp.set_e0(e0);
@@ -1814,6 +1880,15 @@ pub fn process_arrays(
         .map_err(|e| e.to_string())?;
     sp.normalize().map_err(|e| e.to_string())?;
 
+    process_exafs(sp, params)
+}
+
+/// Continue from the retained absorption representation. Prepared component
+/// arrays have a unit edge step and must not be normalized a second time.
+fn process_exafs(mut sp: XASSpectrum, params: &PipelineParams) -> Result<XASSpectrum, String> {
+    if params.bkg_nclamp.is_some_and(|value| value < 0) {
+        return Err("Clamp points must be zero or greater.".into());
+    }
     let mut autobk = AUTOBK::new();
     if let Some(ek0) = params.bkg_ek0 {
         let energy = sp.energy.as_ref().unwrap();
@@ -2061,7 +2136,7 @@ mod tests {
         };
         for quantity in [
             Quantity::NormalizedDifference,
-            Quantity::NormalizedMu,
+            Quantity::FlattenedDifference,
             Quantity::ChiK,
         ] {
             let group = DerivedSpectrum {
@@ -2075,7 +2150,17 @@ mod tests {
             assert!(reason.contains(quantity.label()));
             assert!(reason.contains("normalization/AUTOBK disabled"));
             let sp = group.for_display(&params).unwrap();
-            assert!(sp.normalization.is_none() && sp.xftf.is_none());
+            assert!(sp.xftf.is_none());
+            if quantity == Quantity::NormalizedMu {
+                assert_eq!(sp.norm().unwrap().as_slice(), group.mu);
+            } else if matches!(
+                quantity,
+                Quantity::FlattenedMu | Quantity::FlattenedDifference
+            ) {
+                assert_eq!(sp.flat().unwrap().as_slice(), group.mu);
+            } else {
+                assert!(sp.normalization.is_none());
+            }
             let (x, y) = if quantity == Quantity::ChiK {
                 (sp.k(), sp.chi())
             } else {
@@ -2106,6 +2191,100 @@ mod tests {
             assert!(!quantity.is_absorption());
         }
         assert!(Quantity::RawMu.is_absorption());
+    }
+
+    #[test]
+    fn prepared_components_preserve_values_while_background_and_transform_are_editable() {
+        let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../rexafs/tests/fixtures/analysis/cu-mixtures/standards/cufoil_abs.xdi");
+        let params = PipelineParams {
+            import: ImportConfig {
+                mode: DetectionMode::MuColumn,
+                ..Default::default()
+            },
+            e0: Some(8979.),
+            edge_step: Some(1.),
+            pre_edge_start: Some(-150.),
+            pre_edge_end: Some(-75.),
+            norm_start: Some(150.),
+            norm_end: Some(650.),
+            norm_polyorder: Some(2),
+            n_victoreen: Some(0),
+            ..Default::default()
+        };
+        let original = process_file(&file, &params).unwrap();
+        for quantity in [Quantity::NormalizedMu, Quantity::FlattenedMu] {
+            let values = if quantity == Quantity::NormalizedMu {
+                original.norm()
+            } else {
+                original.flat()
+            }
+            .unwrap();
+            let group = DerivedSpectrum {
+                quantity,
+                energy: original.energy.as_ref().unwrap().as_slice().to_vec(),
+                mu: values.as_slice().to_vec(),
+                ..Default::default()
+            };
+            // Stale source normalization settings must not rescale the component.
+            let mut settings = params.clone();
+            settings.edge_step = Some(17.);
+            settings.norm_start = Some(10000.);
+            settings.norm_end = Some(11000.);
+            let processed = group.process(&settings).unwrap();
+            assert_eq!(processed.norm().unwrap().as_slice(), group.mu);
+            assert_eq!(processed.prepared_space(), quantity.prepared_space());
+            assert!(processed.chi().unwrap().iter().all(|v| v.is_finite()));
+            assert!(processed.xftf.is_some());
+            settings.rbkg = Some(1.4);
+            let updated = group.process(&settings).unwrap();
+            assert_ne!(updated.chi(), processed.chi());
+            assert_eq!(updated.norm().unwrap().as_slice(), group.mu);
+            let figures = crate::publication::figures::quantity_figures(
+                std::sync::Arc::new(updated),
+                "component",
+                Some(quantity),
+            );
+            assert!(
+                figures
+                    .iter()
+                    .any(|f| f.key == "chi-k" && !f.series.is_empty())
+            );
+            assert!(
+                figures
+                    .iter()
+                    .any(|f| f.key == "chi-r" && !f.series.is_empty())
+            );
+            let mut corrected = params.clone();
+            corrected.edge_step = None;
+            corrected.refit_prepared = true;
+            let refitted = group.process(&corrected).unwrap();
+            let expected =
+                process_arrays(group.energy.clone(), group.mu.clone(), &corrected).unwrap();
+            assert_eq!(refitted.norm(), expected.norm());
+            assert_eq!(refitted.flat(), expected.flat());
+            assert!(!refitted.preserves_prepared_values());
+            assert_eq!(refitted.prepared_space(), quantity.prepared_space());
+            assert_eq!(refitted.raw_mu.as_ref().unwrap().as_slice(), group.mu);
+            let refit_fingerprint = corrected.fingerprint();
+            let refit_raw = corrected.raw_fingerprint();
+            let restored: PipelineParams =
+                serde_json::from_str(&serde_json::to_string(&corrected).unwrap()).unwrap();
+            assert!(restored.refit_prepared);
+            assert_eq!(group.process(&restored).unwrap().norm(), refitted.norm());
+            corrected.refit_prepared = false;
+            assert_ne!(corrected.fingerprint(), refit_fingerprint);
+            assert_eq!(corrected.raw_fingerprint(), refit_raw);
+            assert_eq!(
+                group
+                    .process(&corrected)
+                    .unwrap()
+                    .norm()
+                    .unwrap()
+                    .as_slice(),
+                group.mu
+            );
+        }
     }
 
     #[test]
