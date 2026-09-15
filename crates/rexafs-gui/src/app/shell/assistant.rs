@@ -489,7 +489,7 @@ impl AssistantWindow {
         }
         controls
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     pub(crate) fn can_restart_for_update(&self) -> bool {
         !self.transcript.busy
             && !self.transcript.stop_pending
@@ -498,7 +498,7 @@ impl AssistantWindow {
             && self.prepared.is_none()
             && self.access.is_empty()
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     pub(crate) fn pause_for_update(&mut self, paused: bool, cx: &mut Context<Self>) {
         self.update_paused = paused;
         cx.notify();

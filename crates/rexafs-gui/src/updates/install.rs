@@ -95,6 +95,7 @@ pub(crate) use macos::{finish_update, prepare};
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 pub(crate) use portable::{finish_update, installed_app, prepare};
 
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 pub(crate) fn can_install(release: &crate::updates::AvailableRelease) -> bool {
     #[cfg(target_os = "windows")]
     if release.installer.is_none()
@@ -105,6 +106,7 @@ pub(crate) fn can_install(release: &crate::updates::AvailableRelease) -> bool {
     release.asset.is_some() && installed_app().is_ok()
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 pub(crate) fn download_size(release: &crate::updates::AvailableRelease) -> u64 {
     #[cfg(windows)]
     let needs_setup =
