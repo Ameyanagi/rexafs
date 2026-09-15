@@ -388,11 +388,18 @@ jobs:
           $bundle = Get-ChildItem target/distributions -Directory -Filter 'rexafs-*-pc-windows-msvc'
           if (@($bundle).Count -ne 1) { throw 'Expected one Windows bundle' }
           uv run --no-project python scripts/smoke-desktop-updater.py $bundle.FullName
+      - name: Archive target-specific updater evidence
+        if: always() && runner.os != 'macOS'
+        shell: bash
+        run: |
+          if [ -d target/update-smoke ]; then
+            tar -czf "target/update-smoke-${REXAFS_EXPECTED_TARGET}.tar.gz" -C target update-smoke
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always() && runner.os != 'macOS'
         with:
           name: update-smoke-${{ matrix.target }}
-          path: target/update-smoke
+          path: target/update-smoke-${{ matrix.target }}.tar.gz
           if-no-files-found: warn
       - name: Build and smoke-test unsigned Mac installer preview
         if: runner.os == 'macOS'

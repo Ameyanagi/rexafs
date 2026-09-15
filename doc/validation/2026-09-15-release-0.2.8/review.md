@@ -2,7 +2,7 @@
 
 Status: release preparation. No 0.2.8 artifacts have been published.
 
-This release adds one-button macOS updates and extends GUI folder discovery to
+This release adds one-button desktop updates and extends GUI folder discovery to
 the formats already handled by the core measurement reader. Feature development
 started from `dev` at `e5cbccb1060c56ce9bb6b18bf2e9bb4a02ef0608`.
 The [release runbook](../../releasing.md) governs source promotion, exact-tag
@@ -69,7 +69,7 @@ final correction before either branch promotion.
 6. Verify public package bytes and fresh consumers, update public release
    metadata and Stable references, and merge the released state back to `dev`.
 
-## Windows and Linux updater work (qualification pending)
+## Windows and Linux updater qualification
 
 The release scope now includes one-button updates on Windows and Linux. The
 candidate selects native x64/ARM64 archives, verifies a package-file inventory,
@@ -78,8 +78,24 @@ installations use the matching per-user installer and retain an uninstall-key
 backup; portable Windows and Linux copies replace the full extracted folder.
 The local updater suite currently passes 17 tests, including archive traversal,
 links, case collisions, inventory validation, user-file preservation and rollback.
-Native Windows/Linux handoff and installer qualification must pass before merge
-or publication. Earlier CI results apply to the preceding macOS-only revision.
+At `d5215e83d124e910284d05f5818b0db8227c8de7`, all six native desktop jobs
+passed in [release build 34934449396](https://github.com/Ameyanagi/rexafs/actions/runs/34934449396).
+Both Windows architectures passed portable and installed updates, damaged-payload
+rejection, installer rollback, recovery launch, user-file preservation, shortcut
+checks and uninstall. Both Linux architectures passed portable updates,
+damaged-payload rejection and recovery launch; their saved screenshots showed
+the reopened fixture workspace and spectra. Windows checks verified a visible
+native window, but did not exercise interaction on a physical Windows desktop.
+
+That run's final manifest job failed because the new updater evidence contained
+duplicate basenames such as `checks.json`. The workflow now archives each target's
+evidence under a unique name, preserving the receipts while maintaining the
+manifest's duplicate-name rejection. The corrected workflow must pass before
+merge or publication; successful desktop jobs alone do not qualify the run.
+Local verification downloaded the failed run's complete artifact set,
+reproduced the duplicate-name error, then executed the corrected archive command
+for all four updater targets. All 56 original evidence files retained identical
+contents, and creation and verification of the 35-asset manifest passed.
 
 A whole-GUI strict Clippy attempt also found pre-existing lint failures outside
 the updater (including `depth_controls.rs` formatting and a `journal.rs` import).

@@ -18,7 +18,7 @@ pub(crate) struct UpdateHandoff {
     _lock: Option<std::fs::File>,
 }
 
-/// Source builds and other platforms retain the manual download workflow.
+/// Locate an installed macOS bundle; source executables use manual downloads.
 #[cfg(target_os = "macos")]
 pub(crate) fn installed_app() -> Result<PathBuf, String> {
     app_for_executable(&std::env::current_exe().map_err(|e| e.to_string())?)

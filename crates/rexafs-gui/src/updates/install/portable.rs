@@ -1,4 +1,4 @@
-//! Native Windows installer updates and atomic Windows/Linux folder updates.
+//! Native Windows installer updates and Windows/Linux folder replacement with rollback.
 use super::{
     UpdateHandoff,
     common::{hash_file, run},
