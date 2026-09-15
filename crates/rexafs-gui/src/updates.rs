@@ -1,5 +1,7 @@
 //! Official desktop release discovery and checksum-verified downloads.
-//! Installation stays an explicit user action; no running app or project is replaced.
+//! Installation and restart occur only after the user chooses the update action.
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux", test))]
+pub(crate) mod install;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -60,7 +62,10 @@ fn desktop_target() -> Option<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "aarch64") => Some("aarch64-apple-darwin"),
         ("macos", "x86_64") => Some("x86_64-apple-darwin"),
-        // Linux/Windows archives have not yet passed public graphical qualification.
+        ("windows", "x86_64") => Some("x86_64-pc-windows-msvc"),
+        ("windows", "aarch64") => Some("aarch64-pc-windows-msvc"),
+        ("linux", "x86_64") => Some("x86_64-unknown-linux-gnu"),
+        ("linux", "aarch64") => Some("aarch64-unknown-linux-gnu"),
         _ => None,
     }
 }
@@ -86,6 +91,8 @@ pub struct AvailableRelease {
     pub tag: String,
     pub url: String,
     pub asset: Option<Asset>,
+    /// Matching native Windows installer; other platforms use the archive.
+    pub installer: Option<Asset>,
 }
 #[derive(Clone)]
 pub struct UpdateCheck {
@@ -164,27 +171,56 @@ fn select_release(
         }
     };
     let asset = target.and_then(|target| {
-        r.assets.into_iter().find(|a| {
-            a.name.starts_with("rexafs-")
-                && a.name.ends_with(&format!("-{target}.zip"))
-                && a.name
-                    .bytes()
-                    .all(|c| c.is_ascii_alphanumeric() || b"-_.".contains(&c))
-                && a.size > 0
-                && a.size <= 1024 * 1024 * 1024
-                && checksum(a).is_ok()
-                && a.browser_download_url
-                    == format!("{REPOSITORY}/releases/download/{}/{}", r.tag_name, a.name)
-        })
+        let extension = if target.ends_with("linux-gnu") {
+            ".tar.gz"
+        } else {
+            ".zip"
+        };
+        select_asset(&r, target, extension)
     });
+    let installer = target
+        .filter(|t| t.ends_with("windows-msvc"))
+        .and_then(|target| select_asset(&r, target, "-setup.exe"))
+        .filter(|setup| {
+            asset.as_ref().is_some_and(|archive| {
+                setup.name.strip_suffix("-setup.exe") == archive.name.strip_suffix(".zip")
+            })
+        });
     UpdateCheck {
         release: Some(AvailableRelease {
             tag: r.tag_name,
             url: r.html_url,
             asset,
+            installer,
         }),
         available,
     }
+}
+fn select_asset(release: &Release, target: &str, suffix: &str) -> Option<Asset> {
+    let suffix = format!("-{target}{suffix}");
+    let mut matches = release.assets.iter().filter(|asset| {
+        let version = asset
+            .name
+            .strip_prefix("rexafs-")
+            .and_then(|name| name.strip_suffix(&suffix));
+        version.is_some_and(|version| {
+            semver::Version::parse(version).is_ok()
+                && (release.prerelease || release.tag_name == format!("v{version}"))
+        }) && asset
+            .name
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b"-_.".contains(&c))
+            && asset.size > 0
+            && asset.size <= 1024 * 1024 * 1024
+            && checksum(asset).is_ok()
+            && asset.browser_download_url
+                == format!(
+                    "{REPOSITORY}/releases/download/{}/{}",
+                    release.tag_name, asset.name
+                )
+    });
+    let asset = matches.next()?.clone();
+    matches.next().is_none().then_some(asset)
 }
 fn agent(seconds: u64) -> ureq::Agent {
     ureq::Agent::config_builder()
@@ -197,7 +233,8 @@ fn agent(seconds: u64) -> ureq::Agent {
 /// Stable uses the latest stable release endpoint; Nightly selects from the most
 /// recent 100 release records. The request has a 15-second total timeout. A
 /// release can be discoverable while its verified archive is unavailable for
-/// this platform: built-in downloads support macOS only in 0.2.4.
+/// this platform. Since 0.2.8, verified downloads cover the six official macOS,
+/// Windows and Linux desktop targets (0.2.4–0.2.7 supported macOS downloads).
 /// Network and malformed-response failures return an explanatory message.
 pub fn check(channel: UpdateChannel) -> Result<UpdateCheck, String> {
     let mut response = agent(15)
@@ -228,16 +265,34 @@ pub fn check(channel: UpdateChannel) -> Result<UpdateCheck, String> {
     ))
 }
 
+#[cfg(test)]
 fn verify_stream(
     mut reader: impl Read,
     mut output: impl Write,
     expected_size: u64,
     expected_hash: &str,
 ) -> Result<(), String> {
+    verify_stream_with_progress(
+        &mut reader,
+        &mut output,
+        expected_size,
+        expected_hash,
+        |_, _| Ok(()),
+    )
+}
+
+fn verify_stream_with_progress(
+    mut reader: impl Read,
+    mut output: impl Write,
+    expected_size: u64,
+    expected_hash: &str,
+    mut progress: impl FnMut(u64, u64) -> Result<(), String>,
+) -> Result<(), String> {
     let mut hash = Sha256::new();
     let mut total = 0u64;
     let mut buffer = [0u8; 64 * 1024];
     loop {
+        progress(total, expected_size)?;
         let n = reader.read(&mut buffer).map_err(|e| e.to_string())?;
         if n == 0 {
             break;
@@ -266,6 +321,16 @@ fn hex(bytes: &[u8]) -> String {
 /// temporary downloads are removed. No installer is opened and no running app
 /// or project is replaced; installation remains a separate user action.
 pub fn download(release: &AvailableRelease) -> Result<PathBuf, String> {
+    download_with_progress(release, |_, _| Ok(()))
+}
+
+/// Download with cancellable byte progress, including cache verification.
+/// Returning an error from the callback stops before installation. The callback
+/// runs on the download worker; callers must not touch UI entities from it.
+pub fn download_with_progress(
+    release: &AvailableRelease,
+    mut progress: impl FnMut(u64, u64) -> Result<(), String>,
+) -> Result<PathBuf, String> {
     let asset = release
         .asset
         .as_ref()
@@ -278,18 +343,7 @@ pub fn download(release: &AvailableRelease) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
     let destination = root.join(&asset.name);
     if destination.exists() {
-        verify_stream(
-            std::fs::File::open(&destination).map_err(|e| e.to_string())?,
-            std::io::sink(),
-            asset.size,
-            digest,
-        )
-        .map_err(|error| {
-            format!(
-                "{error} Remove the damaged cached download at {} and try again.",
-                destination.display()
-            )
-        })?;
+        verify_cached_download(&destination, asset.size, digest, &mut progress)?;
         return Ok(destination);
     }
     let nonce = std::time::SystemTime::now()
@@ -308,11 +362,12 @@ pub fn download(release: &AvailableRelease) -> Result<PathBuf, String> {
             .header("User-Agent", "rexafs-updater")
             .call()
             .map_err(|e| e.to_string())?;
-        verify_stream(
+        verify_stream_with_progress(
             response.body_mut().as_reader(),
             &mut file,
             asset.size,
             digest,
+            &mut progress,
         )?;
         file.sync_all().map_err(|e| e.to_string())?;
         drop(file);
@@ -322,6 +377,36 @@ pub fn download(release: &AvailableRelease) -> Result<PathBuf, String> {
     })();
     let _ = std::fs::remove_file(temporary);
     result
+}
+
+fn verify_cached_download(
+    path: &std::path::Path,
+    size: u64,
+    digest: &str,
+    mut progress: impl FnMut(u64, u64) -> Result<(), String>,
+) -> Result<(), String> {
+    let mut interrupted = false;
+    verify_stream_with_progress(
+        std::fs::File::open(path).map_err(|e| e.to_string())?,
+        std::io::sink(),
+        size,
+        digest,
+        |done, total| {
+            let result = progress(done, total);
+            interrupted = result.is_err();
+            result
+        },
+    )
+    .map_err(|error| {
+        if interrupted {
+            error // Cancelling verification is not evidence of damaged bytes.
+        } else {
+            format!(
+                "{error} Remove the damaged cached download at {} and try again.",
+                path.display()
+            )
+        }
+    })
 }
 
 #[cfg(test)]
@@ -468,5 +553,98 @@ mod tests {
         ] {
             assert!(verify_stream(&bytes[..], std::io::sink(), size, &digest).is_err());
         }
+    }
+
+    #[test]
+    fn windows_and_linux_select_exact_architecture_and_matching_installer() {
+        for target in [
+            "x86_64-pc-windows-msvc",
+            "aarch64-pc-windows-msvc",
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu",
+        ] {
+            let mut r = release("v0.2.8", false, "2026-09-15T00:00:00Z");
+            let extension = if target.contains("linux") {
+                ".tar.gz"
+            } else {
+                ".zip"
+            };
+            for suffix in [extension, "-setup.exe"] {
+                let name = format!("rexafs-0.2.8-{target}{suffix}");
+                r.assets.push(Asset {
+                    name: name.clone(),
+                    size: 100,
+                    digest: Some(format!("sha256:{}", "a".repeat(64))),
+                    browser_download_url: format!("{REPOSITORY}/releases/download/v0.2.8/{name}"),
+                });
+            }
+            let select = |r| {
+                select_release(
+                    vec![r],
+                    UpdateChannel::Stable,
+                    UpdateChannel::Stable,
+                    "v0.2.7",
+                    "0.2.7",
+                    None,
+                    Some(target),
+                )
+                .release
+                .unwrap()
+            };
+            let selected = select(r.clone());
+            assert!(selected.asset.unwrap().name.ends_with(extension));
+            assert_eq!(selected.installer.is_some(), target.contains("windows"));
+            r.assets.push(r.assets[0].clone());
+            assert!(
+                select(r.clone()).asset.is_none(),
+                "duplicate assets are ambiguous"
+            );
+            r.assets.clear();
+            assert!(select(r).asset.is_none());
+        }
+    }
+
+    #[test]
+    fn cancellation_stops_the_stream_before_writing_further_bytes() {
+        let bytes = vec![42u8; 150_000];
+        let hash = hex(&Sha256::digest(&bytes));
+        let mut written = Vec::new();
+        let mut progress = Vec::new();
+        let result = verify_stream_with_progress(
+            &bytes[..],
+            &mut written,
+            bytes.len() as u64,
+            &hash,
+            |done, total| {
+                progress.push((done, total));
+                if done >= 64 * 1024 {
+                    Err("cancelled".into())
+                } else {
+                    Ok(())
+                }
+            },
+        );
+        assert_eq!(result.unwrap_err(), "cancelled");
+        assert_eq!(written.len(), 64 * 1024);
+        assert_eq!(progress, [(0, 150_000), (65_536, 150_000)]);
+    }
+
+    #[test]
+    fn cancelling_cache_verification_preserves_a_reusable_download() {
+        // A tracked source is a read-only stand-in for cached download bytes.
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        let bytes = std::fs::read(&path).unwrap();
+        let hash = hex(&Sha256::digest(&bytes));
+        let result = verify_cached_download(&path, bytes.len() as u64, &hash, |_, _| {
+            Err("cancelled".into())
+        });
+        assert_eq!(result.unwrap_err(), "cancelled");
+        verify_cached_download(&path, bytes.len() as u64, &hash, |_, _| Ok(())).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        assert!(
+            verify_cached_download(&path, bytes.len() as u64 + 1, &hash, |_, _| Ok(()))
+                .unwrap_err()
+                .contains("damaged cached download")
+        );
     }
 }

@@ -15,6 +15,9 @@ use gpui::Context;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct PendingSource {
+    /// Open the shared scan/signal editor instead of applying a text-table recipe.
+    #[serde(default)]
+    pub measurement_reader: bool,
     pub detection: Option<ImportDetection>,
     #[serde(default)]
     pub suggestion: Option<crate::import_recipes::RecipeVersion>,
@@ -23,6 +26,7 @@ pub(crate) struct PendingSource {
 
 #[derive(Clone)]
 pub(crate) struct ReviewCluster {
+    pub measurement_reader: bool,
     pub key: Option<LayoutKey>,
     pub files: Vec<PathBuf>,
     pub reason: String,
@@ -32,6 +36,15 @@ pub(crate) struct ReviewCluster {
 
 impl ReviewCluster {
     pub fn label(&self) -> String {
+        if self.measurement_reader {
+            return format!(
+                "Review measurement · {}",
+                self.files[0]
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+            );
+        }
         match &self.key {
             Some(key) => format!(
                 "{} files · {} columns · {}",
@@ -69,6 +82,7 @@ pub(crate) fn clusters(
             cluster.files.push(path);
         } else {
             clusters.push(ReviewCluster {
+                measurement_reader: pending.measurement_reader,
                 key,
                 suggestion: pending.suggestion,
                 files: vec![path],
@@ -461,6 +475,7 @@ mod tests {
             pending.push((
                 path,
                 PendingSource {
+                    measurement_reader: false,
                     detection,
                     reason,
                     suggestion: None,

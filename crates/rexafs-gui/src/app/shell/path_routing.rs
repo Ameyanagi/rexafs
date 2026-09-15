@@ -93,6 +93,11 @@ impl StudioApp {
         remember: bool,
         cx: &mut Context<Self>,
     ) {
+        if self.updates.is_installing() {
+            self.status = "Update in progress. Cancel it before opening another analysis.".into();
+            cx.notify();
+            return;
+        }
         let route = route_paths(paths, Path::is_dir);
         match route {
             DropRoute::Nothing => return,

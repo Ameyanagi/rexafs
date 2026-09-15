@@ -282,13 +282,7 @@ fn inputs(
             for entry in walkdir::WalkDir::new(dir).follow_links(false) {
                 let entry =
                     entry.map_err(|e| format!("Cannot include the complete source folder: {e}"))?;
-                if entry.file_type().is_file()
-                    && entry.path().extension().is_some_and(|ext| {
-                        crate::catalog::SPECTRUM_EXTENSIONS
-                            .iter()
-                            .any(|e| ext.eq_ignore_ascii_case(e))
-                    })
-                {
+                if entry.file_type().is_file() && crate::catalog::is_spectrum_path(entry.path()) {
                     raw(entry.path());
                 }
             }

@@ -375,9 +375,19 @@ are retained as evidence and cannot be treated directly as absorption signals.
 
 Saved projects embed the selected record, mapping, original file bytes and
 applicable archived result tables, so loading the spectrum does not depend on
-the old source path. Desktop review accepts inputs up to 256 MiB. Folder and
-multi-file recipe imports retain the existing workflow; those batch recipes do
-not yet use the universal container reader. Import a container as a single file.
+the old source path. Desktop review accepts inputs up to 256 MiB. Released
+versions through 0.2.7 require importing containers as single files.
+
+In the next desktop build (unreleased), folders and multiple-file selections
+also retain core-format sources for the shared measurement preview. Select a
+source under **Pending import**, choose its scan and signals, then import. Plain
+text/XDI batches retain the saved-recipe workflow. Folder discovery includes
+`.qd`, `.ex3`, SPEC/FIO tables, detector-yield exports, Athena/Larix/XTUNES
+sessions, HDF5/NeXus, numbered scans and compressed measurement names. The
+[GUI import guide](../website/src/content/docs/docs/desktop/import.md#file-extensions-and-folder-discovery)
+lists the exact suffixes and bounded checks for extensionless/JSON files. The
+file picker and single-file drops remain unrestricted by extension. `.qc`
+condition files are not spectra.
 Starting another file read clears the previous review, so a failed load cannot
 add a record from the old file.
 

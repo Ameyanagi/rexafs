@@ -14,7 +14,7 @@ Save your project, then open **Help → Updates**. You can also search for
 use. Checks do not install software or upload spectra; the channel and startup
 preference are saved on this computer.
 
-On macOS, the updater downloads and verifies an archive. Quit rexafs before
+In released versions through 0.2.7, the macOS updater downloads and verifies an archive. Quit rexafs before
 moving the updated app into Applications. Nightly has a separate app name and
 can coexist with Stable.
 
@@ -27,6 +27,31 @@ Cached downloads are verified again before reuse. If a size or SHA-256 check
 fails, remove the file named in the error and retry. Failed new downloads discard
 their temporary files. After a network error, retry or check the release page;
 the error does not establish that your version is current.
+
+### Next desktop build: update and restart
+
+**Unreleased:** on macOS, Windows and Linux, choose **Update and restart** to download, verify and
+install a newer build of the current channel. rexafs saves an embedded recovery
+copy of the analysis, then reopens that copy after restarting. Your original
+project is unchanged. Save the reopened project to your preferred location;
+the session undo stack and running calculations are not restored.
+
+Progress and **Cancel** remain available until the restart begins. Finish active
+imports, calculations and Assistant turns before updating. A recovery-save or
+verification error keeps the current app open. A failed replacement or launch
+restores the previous app. The previous bundle and recovery file remain in a
+private `.rexafs-update-*` folder beside the application.
+
+Windows installations run the matching installer automatically, preserving
+shortcuts and the uninstall entry. Portable Windows and Linux copies update the
+complete extracted folder. User files inside that folder are preserved; a file
+collision stops the update before replacement. x64 and ARM64 use their matching
+packages. The first installation of 0.2.8 still uses the manual workflow.
+
+Run the app from a writable installation folder. Source executables, macOS disk
+images, channel changes and system-managed Linux packages retain manual updates.
+**Preferences** also offers a download-only action. An update appears only when
+a matching release asset has been published for your platform.
 
 Keep a backup when moving between versions. New releases read earlier released
 project formats; an older executable may not preserve newer features when saving.

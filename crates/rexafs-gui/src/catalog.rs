@@ -12,8 +12,121 @@ use std::sync::Arc;
 
 use futures::{SinkExt, channel::mpsc, executor::block_on};
 
-/// File extensions treated as spectrum data files during a scan.
-pub const SPECTRUM_EXTENSIONS: &[&str] = &["dat", "txt", "xmu", "chi", "xdi"];
+/// Measurement suffixes discovered in folders (case insensitive).
+/// These are discovery hints, not proof of a readable spectrum. Containers
+/// are reviewed with the universal reader before any spectra are created.
+const SPECTRUM_EXTENSIONS: &[&str] = &[
+    "dat", "txt", "xmu", "chi", "xdi", "qd", "ex3", "csv", "tsv", "asc", "ascii", "spec", "fio",
+    "raw", "tey", "pfy", "pey", "cey", "xes", "sdat", "h5", "hdf5", "hdf", "nxs", "nx", "prj",
+    "larix", "xtunes", "xtsp", "xas",
+];
+
+/// Shared folder-discovery rule for intake, catalog restoration and embedding.
+/// Also includes numbered scans (for example `.001`) and gzip-wrapped text
+/// measurements. Unusual or extensionless names can be selected individually.
+/// KEK `.qc` condition files are not measurements and are excluded.
+pub(crate) fn is_spectrum_path(path: &Path) -> bool {
+    let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
+        return content_is_measurement(path);
+    };
+    if ext.eq_ignore_ascii_case("json") {
+        return content_is_measurement(path);
+    }
+    if ext.eq_ignore_ascii_case("gz") {
+        return path.file_stem().is_some_and(|stem| {
+            let inner = Path::new(stem);
+            !inner
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("gz"))
+                && is_spectrum_path(inner)
+        });
+    }
+    SPECTRUM_EXTENSIONS
+        .iter()
+        .any(|e| ext.eq_ignore_ascii_case(e))
+        || (!ext.is_empty() && ext.bytes().all(|c| c.is_ascii_digit()))
+}
+
+fn content_is_measurement(path: &Path) -> bool {
+    use std::io::Read;
+    if path
+        .file_name()
+        .is_none_or(|name| name.to_string_lossy().starts_with('.'))
+    {
+        return false;
+    }
+    let mut bytes = Vec::new();
+    if std::fs::File::open(path)
+        .and_then(|f| f.take(64 * 1024).read_to_end(&mut bytes))
+        .is_err()
+    {
+        return false;
+    }
+    if bytes.starts_with(&[0x1f, 0x8b]) || bytes.starts_with(b"\x89HDF\r\n\x1a\n") {
+        return true;
+    }
+    if bytes.len() == 64 * 1024
+        && let Some(end) = bytes.iter().rposition(|b| matches!(b, b'\n' | b'\r'))
+    {
+        bytes.truncate(end + 1);
+    }
+    rexafs::io::parse_measurement(&bytes).is_ok()
+}
+
+/// Prefer the shared measurement editor for beamline layouts, saved sessions,
+/// compressed files and binary containers. Legacy table recipes remain available
+/// for plain text and XDI batches. Prefixes are only routing hints: the editor
+/// reads and validates the complete source before enabling import.
+pub(crate) fn measurement_preview_required(path: &Path) -> bool {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    if std::fs::File::open(path)
+        .and_then(|f| f.take(64 * 1024).read_to_end(&mut bytes))
+        .is_err()
+    {
+        return true;
+    }
+    if bytes.starts_with(&[0x1f, 0x8b]) || bytes.contains(&0) {
+        return true;
+    }
+    let Ok(text) = std::str::from_utf8(&bytes) else {
+        return true; // The core also recognizes legacy Shift-JIS and binary layouts.
+    };
+    let text = text.trim_start_matches('\u{feff}').trim_start();
+    if text.starts_with("##LARIX:")
+        || text.starts_with("# Athena project")
+        || text.starts_with('{')
+        || text.starts_with("DataFileName=")
+        || text.starts_with("#XTSP FilePath=")
+        || text
+            .lines()
+            .next()
+            .is_some_and(|line| line.contains("9809"))
+        || text
+            .lines()
+            .any(|line| line.starts_with("#S ") || line.trim() == "[EX_BEGIN]")
+    {
+        return true;
+    }
+    // An incomplete final row is not evidence of a malformed full source.
+    if bytes.len() == 64 * 1024 {
+        if let Some(end) = bytes.iter().rposition(|b| matches!(b, b'\n' | b'\r')) {
+            bytes.truncate(end + 1);
+        }
+    }
+    if let Ok(source) = rexafs::io::parse_measurement(&bytes)
+        && (source.scans.len() != 1 || !matches!(source.format.as_str(), "text" | "xdi"))
+    {
+        return true;
+    }
+    !path.extension().is_some_and(|ext| {
+        [
+            "dat", "txt", "xmu", "chi", "xdi", "csv", "tsv", "asc", "ascii",
+        ]
+        .iter()
+        .any(|known| ext.eq_ignore_ascii_case(known))
+    })
+}
 
 const BATCH_SIZE: usize = 2048;
 
@@ -65,13 +178,7 @@ pub fn start_scan(root: PathBuf) -> mpsc::Receiver<ScanEvent> {
                     continue;
                 }
                 let name = entry.file_name().to_string_lossy();
-                let Some(ext) = name.rsplit('.').next() else {
-                    continue;
-                };
-                if !SPECTRUM_EXTENSIONS
-                    .iter()
-                    .any(|e| ext.eq_ignore_ascii_case(e))
-                {
+                if !is_spectrum_path(entry.path()) {
                     continue;
                 }
                 let parent = entry.path().parent().unwrap_or(&root);
@@ -538,6 +645,56 @@ pub fn load_index(path: &Path, root: &Path) -> Result<Catalog, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn discovery_covers_every_readable_fixture_in_both_corpora() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../rexafs/tests/fixtures/xas");
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join("manifest.json")).unwrap()).unwrap();
+        let mut paths = manifest["samples"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|sample| sample["path"].as_str().unwrap().to_owned())
+            .collect::<std::collections::BTreeSet<_>>();
+        let mapping: std::collections::BTreeMap<String, String> = serde_json::from_slice(
+            &std::fs::read(root.join("collections/rexafs-corpus/paths.json")).unwrap(),
+        )
+        .unwrap();
+        let coverage: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(root.join("../../measurement_fixtures/format_corpus_coverage.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        paths.extend(
+            coverage["records"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|record| record["status"] != "rejected")
+                .map(|record| mapping[record["path"].as_str().unwrap()].clone()),
+        );
+        for path in &paths {
+            assert!(
+                is_spectrum_path(&root.join(path)),
+                "Folder discovery omitted {path}"
+            );
+        }
+        assert!(paths.len() >= 200);
+        println!(
+            "{} readable original fixtures are discoverable in folders",
+            paths.len()
+        );
+        for path in [
+            "sample.qc",
+            "sample.rxs",
+            "sample.dat.gz.gz",
+            "notes.md",
+            "notes.json",
+        ] {
+            assert!(!is_spectrum_path(Path::new(path)), "{path}");
+        }
+    }
+
     use futures::StreamExt;
 
     use super::*;

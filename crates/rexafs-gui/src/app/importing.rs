@@ -236,13 +236,7 @@ fn start_import_reviewed(
                 if !entry.file_type().is_file() {
                     continue;
                 }
-                if !explicit_file
-                    && !entry.path().extension().is_some_and(|ext| {
-                        crate::catalog::SPECTRUM_EXTENSIONS
-                            .iter()
-                            .any(|e| ext.eq_ignore_ascii_case(e))
-                    })
-                {
+                if !explicit_file && !crate::catalog::is_spectrum_path(entry.path()) {
                     if !send(
                         &mut tx,
                         ImportEvent::Skipped(
@@ -271,7 +265,17 @@ fn start_import_reviewed(
                         .as_ref()
                         == Some(&approval.source)
                 });
-                let reference = if detect_channels && approved_unchanged {
+                let reference = if review_new
+                    && crate::catalog::measurement_preview_required(entry.path())
+                {
+                    pending = Some(PendingSource {
+                        measurement_reader: true,
+                        detection: None,
+                        suggestion: None,
+                        reason: "Choose scans and signals in the measurement preview.".into(),
+                    });
+                    None
+                } else if detect_channels && approved_unchanged {
                     // The reviewed full source is stronger evidence than a prefix
                     // that may end inside a long header. It was validated in full.
                     None
@@ -289,7 +293,7 @@ fn start_import_reviewed(
                                             &preview,
                                         ) != approved.layout
                                     {
-                                        pending = Some(PendingSource { detection: Some(preview.clone()), suggestion: None,
+                                        pending = Some(PendingSource { measurement_reader: false, detection: Some(preview.clone()), suggestion: None,
                                             reason: "Source changed after review; confirm its new layout.".into() });
                                     }
                                 } else {
@@ -316,7 +320,7 @@ fn start_import_reviewed(
                                             } => suggestion.clone(),
                                             _ => None,
                                         };
-                                        pending = Some(PendingSource {
+                                        pending = Some(PendingSource { measurement_reader: false,
                                             detection: Some(preview.clone()),
                                             suggestion,
                                             reason: preview.review_reason().unwrap_or_else(|| "Choose the main spectrum and any additional channels.".into()),
@@ -355,7 +359,7 @@ fn start_import_reviewed(
                                                     });
                                                     applied_recipe = Some(recipe);
                                                 } else {
-                                                    pending = Some(PendingSource { detection: Some(preview.clone()), suggestion: None,
+                                                    pending = Some(PendingSource { measurement_reader: false, detection: Some(preview.clone()), suggestion: None,
                                                     reason: "Cannot verify the source revision; review it before adding groups.".into() });
                                                 }
                                             }
@@ -364,6 +368,7 @@ fn start_import_reviewed(
                                                 suggestion,
                                             } => {
                                                 pending = Some(PendingSource {
+                                                    measurement_reader: false,
                                                     detection: Some(preview.clone()),
                                                     reason,
                                                     suggestion,
@@ -372,6 +377,7 @@ fn start_import_reviewed(
                                             crate::import_recipes::Dispatch::Detection => {
                                                 if let Some(reason) = preview.review_reason() {
                                                     pending = Some(PendingSource {
+                                                        measurement_reader: false,
                                                         detection: Some(preview.clone()),
                                                         reason,
                                                         suggestion: None,
@@ -406,7 +412,7 @@ fn start_import_reviewed(
                         }
                         Ok(None) => {
                             if review_new {
-                                pending = Some(PendingSource { detection: None, suggestion: None, reason: "The bounded header read did not reach numeric data; review the full source.".into() });
+                                pending = Some(PendingSource { measurement_reader: false, detection: None, suggestion: None, reason: "The bounded header read did not reach numeric data; review the full source.".into() });
                             }
                             None
                         }
@@ -418,7 +424,7 @@ fn start_import_reviewed(
                                 return;
                             }
                             if review_new {
-                                pending = Some(PendingSource { detection: None, suggestion: None, reason: "Source could not be parsed. Repair or locate it, then reload its preview.".into() });
+                                pending = Some(PendingSource { measurement_reader: false, detection: None, suggestion: None, reason: "Source could not be parsed. Repair or locate it, then reload its preview.".into() });
                             }
                             // Retain sources that need manual mapping.
                             None
@@ -703,7 +709,7 @@ impl StudioApp {
                                     super::import_preview::SourceRevision::read(&path).ok().as_ref() != Some(&approval.source)
                                 }) {
                                     app.intake.approved.remove(&path);
-                                    app.intake.history[id].sources.entry(path).or_default().pending = Some(PendingSource {
+                                    app.intake.history[id].sources.entry(path).or_default().pending = Some(PendingSource { measurement_reader: false,
                                         detection: None, suggestion: None, reason: "Source changed while adding reviewed files; reload and confirm it again.".into()
                                     });
                                     continue;
@@ -716,7 +722,7 @@ impl StudioApp {
                                 if let Some(recipe) = file.recipe {
                                     if let Err(error) = app.imports.recipes.remember(recipe.clone()) {
                                         app.record_intake_problem(id, &path, error.clone(), ProblemSeverity::Error);
-                                        app.intake.history[id].sources.entry(path).or_default().pending = Some(PendingSource { detection: None, suggestion: None, reason: error });
+                                        app.intake.history[id].sources.entry(path).or_default().pending = Some(PendingSource { measurement_reader: false, detection: None, suggestion: None, reason: error });
                                         continue;
                                     }
                                     if let Some(application_id) = file.approval.as_ref().and_then(|a| a.application.clone())
@@ -818,7 +824,7 @@ impl StudioApp {
                         ImportEvent::Error(path, e) => {
                             app.intake.history[id].sources.entry(path.clone()).or_default().failed = Some(e.clone());
                             if !restore && app.catalog.find_by_canonical_path(&path).is_none() {
-                                app.intake.history[id].sources.entry(path.clone()).or_default().pending.get_or_insert_with(|| PendingSource { detection: None, suggestion: None, reason: e.clone() });
+                                app.intake.history[id].sources.entry(path.clone()).or_default().pending.get_or_insert_with(|| PendingSource { measurement_reader: false, detection: None, suggestion: None, reason: e.clone() });
                             }
                             app.record_intake_problem(id, &path, e, ProblemSeverity::Error);
                         }
@@ -899,6 +905,64 @@ impl StudioApp {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn folder_import_routes_qd_and_containers_to_the_core_preview() {
+        // Original KEK fixtures retain their academic/nonmilitary usage notice
+        // under xas/candidates/kek-pf; do not copy or relicense their bytes.
+        let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../rexafs/tests/fixtures");
+        let root =
+            std::env::temp_dir().join(format!("rexafs-universal-intake-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        for (source, name) in [
+            ("xas/candidates/kek-pf/bl-9c/cu_foil_0.qd", "copper.QD"),
+            (
+                "sessions/larix/fixtures/valid/two-analyzed.larix",
+                "session.larix",
+            ),
+        ] {
+            std::fs::copy(fixtures.join(source), root.join(name)).unwrap();
+        }
+        std::fs::write(root.join("scan.qc"), "measurement conditions").unwrap();
+        let events = futures::executor::block_on(
+            super::start_import_reviewed(
+                vec![root.clone()],
+                ImportConfig::default(),
+                true,
+                Default::default(),
+                false,
+                true,
+                true,
+                Default::default(),
+                None,
+            )
+            .flat_map(futures::stream::iter)
+            .collect::<Vec<_>>(),
+        );
+        let files = events
+            .iter()
+            .filter_map(|event| match event {
+                ImportEvent::Batch(files) => Some(files.as_slice()),
+                _ => None,
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        assert_eq!(files.len(), 2);
+        assert!(
+            files
+                .iter()
+                .all(|file| file.pending.as_ref().is_some_and(|p| p.measurement_reader))
+        );
+        assert!(events.iter().any(
+            |event| matches!(event, ImportEvent::Skipped(path, _) if path.ends_with("scan.qc"))
+        ));
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, ImportEvent::Error(_, _)))
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     fn start_import(
         paths: Vec<PathBuf>,
         import: ImportConfig,
