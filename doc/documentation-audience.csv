@@ -225,3 +225,5 @@ doc/release-notes-0.2.6.md,developer,exclude,,Coordinated 0.2.6 release notes; p
 doc/validation/2026-09-14-release-0.2.6/review.md,developer,exclude,,Versioned release preparation and exact-build publication evidence.
 doc/development-branches.md,developer,exclude,,Development integration and nightly/stable release branch workflow.
 doc/validation/2026-09-14-release-0.2.6/import-capture.md,developer,exclude,,Signed release screenshot provenance and original measurement attribution.
+doc/release-notes-0.2.7.md,developer,exclude,,Coordinated 0.2.7 release notes; publication status is explicit.
+doc/validation/2026-09-15-release-0.2.7/review.md,developer,exclude,,Versioned release preparation and exact-build publication evidence.

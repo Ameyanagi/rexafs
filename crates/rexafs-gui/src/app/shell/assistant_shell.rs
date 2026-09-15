@@ -46,33 +46,60 @@ pub(crate) enum SidePanel {
     Inspector,
 }
 
-/// Collapse older panels first, and both when one is insufficient. The dock's
-/// requested width remains intact; the centre retains at least 360 px at 1000 px.
+/// Fixed width of the Parameters panel, shared with its renderer.
+pub(super) const PARAMETERS_WIDTH: f32 = 312.;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct AssistantLayout {
+    pub panels: PanelMemory,
+    /// Width for this frame; the user's preferred dock width is not changed.
+    pub width: f32,
+}
+
+/// Keep the most recently opened panel visible. Collapse older panels first,
+/// then narrow the Assistant if needed to leave 360 px for the plot. At the
+/// Assistant's 320 px minimum, a smaller plot is preferable to hiding the panel
+/// the user just opened. Use the actual Groups width, including user resizing.
 pub(super) fn fit_assistant_panels(
     available: f32,
     width: f32,
     mut panels: PanelMemory,
     just_opened: Option<SidePanel>,
-) -> PanelMemory {
+    groups_width: f32,
+) -> AssistantLayout {
+    let mut width = clamp_assistant_width(width);
+    let panel_width = |panels: PanelMemory| {
+        (if panels.file_browser {
+            groups_width
+        } else {
+            0.
+        }) + if panels.inspector {
+            PARAMETERS_WIDTH
+        } else {
+            0.
+        }
+    };
     let order = if just_opened == Some(SidePanel::Inspector) {
         [SidePanel::Groups, SidePanel::Inspector]
     } else {
         [SidePanel::Inspector, SidePanel::Groups]
     };
     for panel in order {
-        let center = available
-            - clamp_assistant_width(width)
-            - if panels.file_browser { 248. } else { 0. }
-            - if panels.inspector { 312. } else { 0. };
-        if center >= 360. {
+        if available - width - panel_width(panels) >= 360. {
             break;
+        }
+        if Some(panel) == just_opened {
+            continue;
         }
         match panel {
             SidePanel::Groups => panels.file_browser = false,
             SidePanel::Inspector => panels.inspector = false,
         }
     }
-    panels
+    width = width.min(clamp_assistant_width(
+        available - panel_width(panels) - 360.,
+    ));
+    AssistantLayout { panels, width }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -102,8 +129,10 @@ pub(super) fn control_key_activates(key: &str, modified: bool) -> bool {
     !modified && matches!(key, "enter" | "space")
 }
 
-pub(super) fn model_picker_handles_key(open: bool, key: &str) -> bool {
-    open || key != "escape"
+pub(super) fn model_picker_handles_key(open: bool, key: &str, modified: bool) -> bool {
+    // GPUI invokes a focused control's click listener on Enter/Space key-up.
+    // Handling those keys here as well would activate the control twice.
+    !modified && (matches!(key, "up" | "down") || (open && key == "escape"))
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -274,13 +303,31 @@ mod tests {
         }
     }
     #[test]
-    fn assistant_model_trigger_keeps_activation_and_escape_fallthrough() {
-        for key in ["enter", "space", "up", "down"] {
-            assert!(model_picker_handles_key(false, key));
-            assert!(model_picker_handles_key(true, key));
+    fn assistant_model_trigger_handles_navigation_and_delegates_native_activation() {
+        for key in ["up", "down"] {
+            assert!(model_picker_handles_key(false, key, false));
+            assert!(model_picker_handles_key(true, key, false));
         }
-        assert!(!model_picker_handles_key(false, "escape"));
-        assert!(model_picker_handles_key(true, "escape"));
+        for key in ["enter", "space"] {
+            for open in [false, true] {
+                assert!(!model_picker_handles_key(open, key, false));
+            }
+        }
+        assert!(!model_picker_handles_key(false, "escape", false));
+        assert!(model_picker_handles_key(true, "escape", false));
+    }
+    #[test]
+    fn assistant_composer_menus_leave_focus_and_workspace_shortcuts_alone() {
+        for open in [false, true] {
+            for key in ["tab", "j", "b", "k", "s", "a", "."] {
+                for modified in [false, true] {
+                    assert!(!model_picker_handles_key(open, key, modified));
+                }
+            }
+            for key in ["enter", "space", "up", "down", "escape"] {
+                assert!(!model_picker_handles_key(open, key, true));
+            }
+        }
     }
     #[test]
     fn assistant_controls_cover_all_states() {
@@ -446,36 +493,133 @@ mod host_tests {
             file_browser: true,
             inspector: true,
         };
-        assert_eq!(fit_assistant_panels(1400., 380., both, None), both);
         assert_eq!(
-            fit_assistant_panels(1000., 380., both, Some(SidePanel::Groups)),
+            fit_assistant_panels(1400., 380., both, None, 248.).panels,
+            both
+        );
+        assert_eq!(
+            fit_assistant_panels(1000., 380., both, Some(SidePanel::Groups), 248.).panels,
             PanelMemory {
                 file_browser: true,
                 inspector: false
             }
         );
         assert_eq!(
-            fit_assistant_panels(1100., 380., both, Some(SidePanel::Inspector)),
+            fit_assistant_panels(1100., 380., both, Some(SidePanel::Inspector), 248.).panels,
             PanelMemory {
                 file_browser: false,
                 inspector: true
             }
         );
-        // At 1000 even the inspector alone leaves only 308 px: collapse both.
+        // Narrow the Assistant to 328 px instead of undoing Open Parameters.
         assert_eq!(
-            fit_assistant_panels(1000., 380., both, Some(SidePanel::Inspector)),
+            fit_assistant_panels(1000., 380., both, Some(SidePanel::Inspector), 248.),
+            AssistantLayout {
+                panels: PanelMemory {
+                    file_browser: false,
+                    inspector: true
+                },
+                width: 328.,
+            }
+        );
+        assert_eq!(
+            fit_assistant_panels(1000., 640., both, None, 248.).panels,
             PanelMemory::default()
         );
         assert_eq!(
-            fit_assistant_panels(1000., 640., both, None),
-            PanelMemory::default()
-        );
-        assert_eq!(
-            fit_assistant_panels(1000., 320., both, Some(SidePanel::Inspector)),
+            fit_assistant_panels(1000., 320., both, Some(SidePanel::Inspector), 248.).panels,
             PanelMemory {
                 file_browser: false,
                 inspector: true
             }
         );
+    }
+    #[test]
+    fn assistant_open_parameters_reclaims_space_and_keeps_the_preference() {
+        let both = PanelMemory {
+            file_browser: true,
+            inspector: true,
+        };
+        let layout = fit_assistant_panels(1440., 580., both, Some(SidePanel::Inspector), 280.);
+        assert_eq!(
+            layout.panels,
+            PanelMemory {
+                file_browser: false,
+                inspector: true
+            }
+        );
+        assert_eq!(layout.width, 580.);
+
+        // A wide Assistant used to prevent Parameters from opening at all.
+        let narrow = fit_assistant_panels(1000., 640., both, Some(SidePanel::Inspector), 280.);
+        assert_eq!(narrow.panels, layout.panels);
+        assert_eq!(narrow.width, 328.);
+        assert_eq!(1000. - narrow.width - PARAMETERS_WIDTH, 360.);
+        let wider =
+            fit_assistant_panels(1440., 640., narrow.panels, Some(SidePanel::Inspector), 280.);
+        assert_eq!(wider.width, 640.);
+        assert!(wider.panels.inspector);
+
+        // The real, resizable Groups panel can be wider than its old estimate.
+        let groups = fit_assistant_panels(1360., 640., both, Some(SidePanel::Groups), 400.);
+        assert_eq!(
+            groups.panels,
+            PanelMemory {
+                file_browser: true,
+                inspector: false
+            }
+        );
+        assert_eq!(groups.width, 600.);
+    }
+
+    #[test]
+    fn assistant_requested_panel_survives_resizing_and_repeated_layout() {
+        for available in [960., 1000., 1100., 1440., 1920.] {
+            for requested in [320., 380., 580., 640.] {
+                for groups_width in [240., 280., 400.] {
+                    for panel in [SidePanel::Groups, SidePanel::Inspector] {
+                        let layout = fit_assistant_panels(
+                            available,
+                            requested,
+                            PanelMemory {
+                                file_browser: true,
+                                inspector: true,
+                            },
+                            Some(panel),
+                            groups_width,
+                        );
+                        assert!(match panel {
+                            SidePanel::Groups => layout.panels.file_browser,
+                            SidePanel::Inspector => layout.panels.inspector,
+                        });
+                        assert!((320. ..=requested).contains(&layout.width));
+                        let center = available
+                            - layout.width
+                            - if layout.panels.file_browser {
+                                groups_width
+                            } else {
+                                0.
+                            }
+                            - if layout.panels.inspector {
+                                PARAMETERS_WIDTH
+                            } else {
+                                0.
+                            };
+                        assert!(center >= if available >= 1100. { 360. } else { 240. });
+                        // Studio and Assistant both resolve layout: the second pass must not hide anything.
+                        assert_eq!(
+                            fit_assistant_panels(
+                                available,
+                                requested,
+                                layout.panels,
+                                Some(panel),
+                                groups_width
+                            ),
+                            layout
+                        );
+                    }
+                }
+            }
+        }
     }
 }

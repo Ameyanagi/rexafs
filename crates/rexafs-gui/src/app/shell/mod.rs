@@ -604,8 +604,7 @@ impl StudioApp {
                 "Groups · ⌘B",
                 self.data_panel_open,
                 |a, c| {
-                    a.data_panel_open = !a.data_panel_open;
-                    a.fit_assistant_layout();
+                    a.toggle_side_panel(assistant_shell::SidePanel::Groups);
                     c.notify();
                 },
             ))
@@ -616,8 +615,7 @@ impl StudioApp {
                     "Parameters · ⌘J",
                     self.context_panel_open,
                     |a, c| {
-                        a.context_panel_open = !a.context_panel_open;
-                        a.fit_assistant_layout();
+                        a.toggle_side_panel(assistant_shell::SidePanel::Inspector);
                         c.notify();
                     },
                 ))

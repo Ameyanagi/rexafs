@@ -8643,9 +8643,7 @@ impl StudioApp {
     }
 
     fn focus_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.data_panel_open = true;
-        self.last_opened_side_panel = Some(shell::assistant_shell::SidePanel::Groups);
-        self.fit_assistant_layout();
+        self.set_side_panel_visible(shell::assistant_shell::SidePanel::Groups, true);
         let input = self.filter_input.clone();
         cx.notify();
         // The panel may have been collapsed. Defer focus until the notified
@@ -9511,23 +9509,13 @@ impl Render for StudioApp {
                 }))
                 .on_action(
                     cx.listener(|this: &mut Self, _: &ToggleDataPanel, _window, cx| {
-                        this.data_panel_open = !this.data_panel_open;
-                        if this.data_panel_open {
-                            this.last_opened_side_panel =
-                                Some(shell::assistant_shell::SidePanel::Groups);
-                        }
-                        this.fit_assistant_layout();
+                        this.toggle_side_panel(shell::assistant_shell::SidePanel::Groups);
                         cx.notify();
                     }),
                 )
                 .on_action(
                     cx.listener(|this: &mut Self, _: &ToggleContextPanel, _window, cx| {
-                        this.context_panel_open = !this.context_panel_open;
-                        if this.context_panel_open {
-                            this.last_opened_side_panel =
-                                Some(shell::assistant_shell::SidePanel::Inspector);
-                        }
-                        this.fit_assistant_layout();
+                        this.toggle_side_panel(shell::assistant_shell::SidePanel::Inspector);
                         cx.notify();
                     }),
                 )

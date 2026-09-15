@@ -19,6 +19,7 @@ are not supported or retained as compatibility fixtures.
 | `rexafs-0.2.4-links.rxs`, `rexafs-0.2.4-embedded.rxs` | Saved and reopened through the 0.2.4 writer; unchanged format-1 state |
 | `rexafs-0.2.5-links.rxs`, `rexafs-0.2.5-embedded.rxs` | Saved and reopened through the 0.2.5 writer; format 1 with explicit Input FFT defaults and refreshed save/source metadata |
 | `rexafs-0.2.6-links.rxs`, `rexafs-0.2.6-embedded.rxs` | Saved and reopened through the 0.2.6 writer; format 1 with unchanged numerical defaults and preserved import state |
+| `rexafs-0.2.7-links.rxs`, `rexafs-0.2.7-embedded.rxs` | Saved and reopened through the 0.2.7 writer; unchanged format-1 state, numerical defaults and retained Assistant conversations |
 | `future-version.rxs` | Future format: reject without modification |
 | `truncated.rxs` | Corrupt/incomplete input: reject without modification |
 | `data/*.xmu`, `feff/*.dat` | Real inputs for relocation, byte recovery and processing checks |
