@@ -27,6 +27,9 @@ mod plotting;
 mod project;
 mod publication;
 mod series_measurements;
+// Live intake is not connected to the desktop until queue/recovery qualification.
+#[allow(dead_code)]
+mod live_intake;
 mod settings;
 mod source_evidence;
 mod spectrum_colors;
