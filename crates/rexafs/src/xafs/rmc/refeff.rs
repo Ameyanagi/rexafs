@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 /// ReFEFF work counters. Counts include failed pipeline attempts; byte counts
 /// measure retained cache keys and numerical/artifact payloads, not total process RAM.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct RefeffCacheStats {
     /// Full potential/phase/path pipeline attempts, including pinned-reference setup.
     pub full_calculations: u64,
@@ -29,6 +30,29 @@ pub struct RefeffCacheStats {
     pub spectrum_bytes: usize,
     /// Retained pinned-reference artifact and key payload bytes.
     pub reference_bytes: usize,
+    /// Time generating local clusters and FEFF input for requested geometries,
+    /// in seconds. Includes cache-hit requests, excludes lazy reference setup.
+    pub input_seconds: f64,
+    /// Total wall time inside the pipeline wrapper, in seconds, including
+    /// artifact transport, output decoding and failed attempts.
+    pub pipeline_seconds: f64,
+    /// Completed ReFEFF stage timings, aggregated over full and path pipelines.
+    /// Stage sums can differ from pipeline wall time; transport/setup is separate.
+    pub stages: BTreeMap<String, RefeffStageTiming>,
+}
+
+/// Aggregated timing from ReFEFF's completed stage reports. This is runtime
+/// instrumentation, not part of the scientific calculator/checkpoint identity.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RefeffStageTiming {
+    /// Number of completed stage reports, including reused stages.
+    pub calls: u64,
+    /// Sum of ReFEFF-reported wall durations, in milliseconds.
+    pub milliseconds: u64,
+    /// Sum of the stage's handled rows/artifacts; interpret using `unit`.
+    pub count: u64,
+    /// Backend unit for `count`; a changed unit is reported as `mixed`.
+    pub unit: String,
 }
 struct Cache<T> {
     entries: HashMap<String, (Arc<T>, usize, u64)>,
@@ -187,7 +211,7 @@ impl RefeffCalculator {
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect();
-        self.identity = format!("rexafs-rmc-v2/refeff-0.3.0/{digest}");
+        self.identity = format!("rexafs-rmc-v2/refeff-0.4.0/{digest}");
     }
     /// Set the byte limit for each of the spectrum and reference caches, clearing
     /// both. Default 64 MiB each. Zero disables reuse; oversized entries are not kept.
@@ -211,6 +235,9 @@ impl RefeffCalculator {
     /// Borrow default calculator settings; per-dataset overrides are independent.
     pub fn options(&self) -> &RefeffOptions {
         &self.options
+    }
+    pub(super) fn set_cancellation(&mut self, token: CancellationToken) {
+        self.cancellation = token;
     }
     /// Shared cooperative cancellation token. Cancellation is checked even on
     /// cache hits. Create a new calculator after cancellation to resume a session.
@@ -352,13 +379,14 @@ impl RefeffCalculator {
         };
         result.map_err(|e| RmcError::Invalid(e.to_string()))
     }
-    fn run_pipeline(
+    pub(super) fn run_pipeline(
         &mut self,
         input: String,
         options: &RefeffOptions,
         selection: ArtifactSelection,
         artifacts: Option<&BTreeMap<String, Vec<u8>>>,
     ) -> Result<::refeff::MemoryRunResult, RmcError> {
+        let started = Instant::now();
         let mut request = MemoryRunRequest::new(input.into_bytes());
         if let Some(artifacts) = artifacts {
             for (path, bytes) in artifacts {
@@ -367,13 +395,25 @@ impl RefeffCalculator {
                     .map_err(|e| RmcError::Calculator(e.to_string()))?;
             }
         }
-        let output = Runner::new()
+        let result = Runner::new()
             .with_threads(NonZeroUsize::new(options.threads).unwrap())
             .with_cancellation(self.cancellation.clone())
             .with_deadline(Instant::now() + Duration::from_secs_f64(options.timeout_seconds))
             .with_artifacts(selection)
-            .run_in_memory(request)
-            .map_err(|e| RmcError::Calculator(e.to_string()))?;
+            .run_in_memory(request);
+        self.stats.pipeline_seconds += started.elapsed().as_secs_f64();
+        let output = result.map_err(|e| RmcError::Calculator(e.to_string()))?;
+        for stage in &output.report.stages {
+            let timing = self.stats.stages.entry(stage.name.clone()).or_default();
+            if timing.calls == 0 {
+                timing.unit = stage.unit.clone();
+            } else if timing.unit != stage.unit {
+                timing.unit = "mixed".into();
+            }
+            timing.calls += 1;
+            timing.milliseconds += stage.duration_ms;
+            timing.count += stage.count as u64;
+        }
         for d in &output.report.diagnostics {
             self.diagnostics
                 .insert(format!("{}: {}", d.code, d.message));
@@ -493,12 +533,15 @@ impl ExafsCalculator for RefeffCalculator {
                 && request.k.windows(2).all(|v| v[1] > v[0]),
             "requested ReFEFF k grid is invalid or exceeds kmax",
         )?;
-        let mut input = self.input_for_with_options(
+        let input_started = Instant::now();
+        let input = self.input_for_with_options(
             request.configuration,
             request.absorber,
             request.edge,
             &options,
-        )?;
+        );
+        self.stats.input_seconds += input_started.elapsed().as_secs_f64();
+        let mut input = input?;
         if !request.paths {
             input = input.replace("PRINT 0 0 0 0 0 3", "PRINT 0 0 0 0 0 0");
         }
@@ -635,7 +678,11 @@ impl ExafsCalculator for RefeffCalculator {
         Ok(result)
     }
 }
-fn interpolate(grid: &[f64], values: &[f64], query: &[f64]) -> Result<Vec<f64>, RmcError> {
+pub(super) fn interpolate(
+    grid: &[f64],
+    values: &[f64],
+    query: &[f64],
+) -> Result<Vec<f64>, RmcError> {
     require(
         grid.len() >= 2
             && grid.len() == values.len()

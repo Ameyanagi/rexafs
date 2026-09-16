@@ -1,4 +1,5 @@
 path,audience,website_action,proposed_route,notes
+doc/rmc-cu2o-demo.md,developer,exclude,,Unreleased experimental Cu2O RMC run recipe and interpretation limits; local user measurement is not redistributed.
 .github/pull_request_template.md,developer,exclude,,Contribution review template.
 AGENTS.md,developer,exclude,,Repository assistant instructions.
 CHANGELOG.md,mixed,split,/releases/,Publish released user-visible changes; omit Unreleased and withheld 0.2.2 download claims from stable documentation.
@@ -231,3 +232,6 @@ doc/validation/2026-09-14-release-0.2.6/import-capture.md,developer,exclude,,Sig
 doc/release-notes-0.2.7.md,developer,exclude,,Coordinated 0.2.7 release notes; publication status is explicit.
 doc/validation/2026-09-15-release-0.2.7/review.md,developer,exclude,,Versioned release preparation and exact-build publication evidence.
 doc/rmc-performance.md,developer,exclude,,Unreleased RMC extension validation and measured full/cache/pinned-potential performance.
+doc/rmc-acceleration.md,developer,exclude,,Unreleased prepared ReFEFF API and numerical conventions; not stable release behavior.
+doc/rmc-implementation-progress.md,developer,exclude,,Unreleased implementation and dated local validation evidence.
+doc/rmc-search-upgrade.md,developer,exclude,,Unreleased hybrid search and adaptive basis APIs; cache benchmark and scientific limits.

@@ -326,3 +326,13 @@ The [performance record](rmc-performance.md) states measured boundaries and
 approximation errors. Further qualification on larger, diverse structures and
 experimental data remains necessary. No PDF/Bragg fitting, RMCProfile adapter,
 EVAX job compatibility, uncertainty quantification or desktop workflow is added.
+
+## Prepared paths and new workflows (unreleased)
+
+The [prepared-path guide](rmc-acceleration.md) documents ReFEFF 0.4.0 contexts,
+exact affected-path updates, optional representative tables and controlled moments,
+population batches, cooling and collective proposals, calibration, local Fourier
+maps, structural restraints, and streaming trajectories. The
+[work record](rmc-implementation-progress.md) separates measurements from remaining
+scientific qualification. Existing examples below that cite older dependencies
+remain historical; backend upgrades require a new checkpoint identity.

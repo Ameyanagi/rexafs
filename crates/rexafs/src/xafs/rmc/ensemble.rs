@@ -63,6 +63,7 @@ impl From<RmcProblem> for EnsembleProblem {
 
 /// Borrowed request for one absorber. The structure index identifies a pinned
 /// reference structure in calculators that freeze scattering potentials.
+#[derive(Clone, Copy)]
 pub struct CalculationRequest<'a> {
     /// Zero-based mixture component index, stable throughout a session.
     pub structure: usize,

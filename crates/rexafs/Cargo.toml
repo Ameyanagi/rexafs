@@ -67,9 +67,9 @@ sha2 = "0.11"
 [features]
 default = ["trust-region"]
 trust-region = ["dep:apex-solver", "dep:nalgebra-apex", "dep:faer"]
-ndarray-compat = ["ndarray"]
+ndarray-compat = ["dep:ndarray"]
 plotting = ["ruviz"]
-refeff-runner = ["dep:refeff"]
+refeff-runner = ["dep:refeff", "dep:ndarray"]
 feff10-runner = ["dep:feff10"]
 amcsd = ["dep:rusqlite"]
 # HTTP client shared by the online structure sources.
@@ -115,4 +115,24 @@ required-features = ["refeff-runner"]
 
 [[example]]
 name = "rmc_benchmark"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_cu2o"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_path_benchmark"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_prepared"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_cu2o_search"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_population_benchmark"
 required-features = ["refeff-runner"]

@@ -19,6 +19,9 @@ pub enum Objective {
     Q(FeffFitTransform),
     /// Mean squared complex, Gaussian-windowed Fourier residual on a k–R grid.
     Wavelet(WaveletSettings),
+    /// Masked Morlet or Gaussian STFT map with direct/FFT evaluation. The dataset's
+    /// noise scale and k weight apply once before this transform.
+    LocalSpectrum(LocalSpectrumSettings),
 }
 
 /// Morlet analysis settings. This explicitly normalized project convention is
@@ -46,6 +49,7 @@ pub(super) enum PreparedObjective {
         q: bool,
     },
     Wavelet(Vec<Vec<Complex64>>),
+    LocalSpectrum(LocalSpectrumTransform),
 }
 
 impl Objective {
@@ -74,6 +78,9 @@ impl Objective {
     pub(super) fn prepare(&self, k: &[f64]) -> Result<PreparedObjective, RmcError> {
         match self {
             Self::K => Ok(PreparedObjective::K),
+            Self::LocalSpectrum(settings) => Ok(PreparedObjective::LocalSpectrum(
+                LocalSpectrumTransform::new(k, settings)?,
+            )),
             Self::R(t) | Self::Q(t) => {
                 crate::xafs::fitting::transform::validate_transform(t)
                     .map_err(|e| RmcError::Invalid(e.to_string()))?;
@@ -210,6 +217,7 @@ impl PreparedObjective {
             .collect();
         let raw = match self {
             Self::K => residual.iter().map(|v| v * v).sum::<f64>() / residual.len() as f64,
+            Self::LocalSpectrum(transform) => transform.score(&residual)?,
             Self::Wavelet(kernels) => {
                 kernels
                     .iter()
@@ -263,4 +271,46 @@ impl PreparedObjective {
         )?;
         Ok(score)
     }
+}
+
+/// Transform an individual path with the same Fourier support/interpolation as
+/// RMC objectives (unreleased). Input χ is dimensionless and already includes
+/// degeneracy; apply S₀² and absorber/mixture weights explicitly when comparing
+/// components to an experimental fit. The measured k grid is in Å⁻¹ and may
+/// start above zero; unmeasured support is padded with zero. The returned owned
+/// complex R and real filtered-q arrays use the existing rexafs conventions.
+/// kweight is 0..=3 and applied exactly once, with no noise scaling. Complex
+/// contributions add linearly; their magnitudes do not. No scattering runs here.
+pub fn transform_path_fourier(
+    path: &PathContribution,
+    k: &[f64],
+    kweight: u8,
+    settings: &FeffFitTransform,
+) -> Result<crate::fitting::transform::KweightTransform, RmcError> {
+    require(
+        k.len() >= 2
+            && k.len() == path.chi.len()
+            && kweight <= 3
+            && k.iter().all(|v| v.is_finite() && *v >= 0.)
+            && k.windows(2).all(|w| w[1] > w[0])
+            && path.chi.iter().all(|v| v.is_finite()),
+        "invalid path Fourier arrays or kweight",
+    )?;
+    let PreparedObjective::Fourier {
+        settings,
+        grid,
+        mapping,
+        ..
+    } = Objective::R(settings.clone()).prepare(k)?
+    else {
+        unreachable!()
+    };
+    let values = DVector::from_iterator(
+        grid.len(),
+        mapping
+            .iter()
+            .map(|entry| entry.map_or(0., |(i, t)| path.chi[i] * (1. - t) + path.chi[i + 1] * t)),
+    );
+    apply_kweight_transform(&grid, &values, &settings, f64::from(kweight))
+        .map_err(|e| RmcError::Invalid(e.to_string()))
 }

@@ -3,7 +3,7 @@
 //! RMC proposes atomic displacements and compares calculated extended X-ray
 //! absorption fine structure (EXAFS) with measured, unweighted χ(k). This module
 //! uses symmetric single-atom proposals and Metropolis acceptance. It is a
-//! Rust implementation with exact local-environment caching and an opt-in
+//! Rust implementation with exact affected-path updates and an opt-in
 //! ReFEFF mode that pins reference potentials while updating geometry and paths.
 //! No EVAX or RMCProfile source is incorporated.
 //!
@@ -12,7 +12,9 @@
 //! [`EvolutionSession`] adds population search. The simpler [`RmcProblem`],
 //! [`RmcSettings`] and [`refine`] interface remains available. Enable Cargo feature
 //! `refeff-runner` for `RefeffCalculator`. Finite clusters and explicit periodic
-//! cells are supported; atom order is stable and there is no symmetry expansion
+//! cells are supported. `PreparedRefeffCalculator` adds an immutable path catalogue,
+//! bounded batches and an optional validated representative basis. Atom order is
+//! stable and there is no symmetry expansion
 //! during refinement. Results are owned and serializable. Inputs remain unchanged.
 //!
 //! For dataset d with the default k-space objective, the spectral term is
@@ -35,29 +37,55 @@
 //! Method background: [McGreevy and Pusztai (1988)](https://doi.org/10.1080/08927028808080958).
 //! Scattering background: [Rehr and Albers (2000)](https://doi.org/10.1103/RevModPhys.72.621).
 
+#[cfg(feature = "refeff-runner")]
+mod accelerated;
 mod analysis;
+mod calibration;
 mod constraints;
+mod convergence;
 mod engine;
 mod ensemble;
 mod evolution;
+mod first_shell;
 mod geometry;
+mod local_spectrum;
+mod moments;
 mod objective;
 mod options;
+mod paths;
+#[cfg(feature = "refeff-runner")]
+mod prepared;
+mod proposals;
 #[cfg(feature = "refeff-runner")]
 mod refeff;
 mod session;
+mod structural;
+mod workflows;
 
+#[cfg(feature = "refeff-runner")]
+pub use accelerated::*;
 pub use analysis::*;
+pub use calibration::*;
 pub use constraints::*;
+pub use convergence::*;
 pub use engine::{evaluate, refine, refine_with_progress};
 pub use ensemble::*;
 pub use evolution::*;
+pub use first_shell::*;
 pub use geometry::{Atom, Configuration};
-pub use objective::{Objective, WaveletSettings};
+pub use local_spectrum::*;
+pub use moments::*;
+pub use objective::{transform_path_fourier, Objective, WaveletSettings};
 pub use options::RefeffOptions;
+pub use paths::*;
 #[cfg(feature = "refeff-runner")]
-pub use refeff::{RefeffCacheStats, RefeffCalculator};
+pub use prepared::*;
+pub use proposals::*;
+#[cfg(feature = "refeff-runner")]
+pub use refeff::{RefeffCacheStats, RefeffCalculator, RefeffStageTiming};
 pub use session::*;
+pub use structural::*;
+pub use workflows::*;
 
 use crate::structure::Edge;
 use serde::{Deserialize, Serialize};
@@ -128,6 +156,18 @@ pub trait ExafsCalculator {
             )?,
             paths: Vec::new(),
         })
+    }
+    /// Evaluate independent absorber requests in input order. The default is
+    /// serial; prepared calculators can share immutable scattering contexts and
+    /// use a bounded worker pool. Errors must not be interpreted as MC rejections.
+    fn calculate_batch(
+        &mut self,
+        requests: &[CalculationRequest<'_>],
+    ) -> Result<Vec<CalculatedSpectrum>, RmcError> {
+        requests
+            .iter()
+            .map(|request| self.calculate_request(*request))
+            .collect()
     }
 }
 
