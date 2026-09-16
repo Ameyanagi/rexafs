@@ -681,6 +681,7 @@ impl StudioApp {
                             let derived_start = app.derived.len();
                             for file in batch {
                                 let path = PathBuf::from(file.meta.dir.as_ref()).join(file.meta.name.as_ref());
+                                if app.intake.history[id].sources.get(&path).is_some_and(|s| s.skipped_review.is_some()) { continue; }
                                 for folder in &recent_folders {
                                     if path.starts_with(folder) { imported_folders.insert(folder.clone()); }
                                 }
@@ -823,7 +824,8 @@ impl StudioApp {
                         }
                         ImportEvent::Error(path, e) => {
                             app.intake.history[id].sources.entry(path.clone()).or_default().failed = Some(e.clone());
-                            if !restore && app.catalog.find_by_canonical_path(&path).is_none() {
+                            if !restore && app.catalog.find_by_canonical_path(&path).is_none()
+                                && app.intake.history[id].sources.get(&path).is_none_or(|s| s.skipped_review.is_none()) {
                                 app.intake.history[id].sources.entry(path.clone()).or_default().pending.get_or_insert_with(|| PendingSource { measurement_reader: false, detection: None, suggestion: None, reason: e.clone() });
                             }
                             app.record_intake_problem(id, &path, e, ProblemSeverity::Error);

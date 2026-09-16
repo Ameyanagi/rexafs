@@ -6,6 +6,28 @@ use std::time::{Duration, SystemTime};
 
 pub type BatchId = usize;
 
+/// Identifies one pending source in one import, never future imports of its path.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct PendingTarget {
+    pub batch: BatchId,
+    pub path: PathBuf,
+}
+
+impl PendingTarget {
+    pub(crate) fn extension(&self) -> Option<String> {
+        self.path
+            .extension()
+            .map(|s| s.to_string_lossy().to_ascii_lowercase())
+    }
+}
+
+/// Retain the original review evidence when the user skips a source.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct SkippedReview {
+    pending: super::import_review::PendingSource,
+    previous_reason: Option<String>,
+}
+
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct SourceOutcome {
@@ -18,6 +40,7 @@ pub struct SourceOutcome {
     pub cached: bool,
     pub failed: Option<String>,
     pub skipped: Option<String>,
+    pub skipped_review: Option<SkippedReview>,
     pub warnings: Vec<String>,
 }
 
@@ -162,6 +185,7 @@ pub struct IntakeState {
     pub receipt: Option<BatchId>,
     pub history_open: bool,
     pub reveal: Vec<GroupId>,
+    pub(crate) last_skip: Vec<PendingTarget>,
     // Session metadata complements the catalog's stored size. Older indexes
     // have no mtime; report that separately from a detected change.
     pub modified: BTreeMap<PathBuf, SystemTime>,
@@ -175,6 +199,107 @@ pub struct IntakeOrigin {
 }
 
 impl IntakeState {
+    pub(crate) fn pending_targets(&self) -> Vec<PendingTarget> {
+        self.history
+            .iter()
+            .enumerate()
+            .flat_map(|(batch, state)| {
+                state
+                    .sources
+                    .iter()
+                    .filter(|(path, source)| {
+                        source.pending.is_some() && !self.approved.contains_key(*path)
+                    })
+                    .map(move |(path, _)| PendingTarget {
+                        batch,
+                        path: path.clone(),
+                    })
+            })
+            .collect()
+    }
+
+    /// Skip only captured sources that still await review. Files and groups are
+    /// unchanged. Later imports are independent; the original evidence is saved.
+    pub(crate) fn skip_pending(&mut self, targets: &[PendingTarget]) -> usize {
+        let mut skipped = Vec::new();
+        for target in targets {
+            if self.approved.contains_key(&target.path) {
+                continue;
+            }
+            let Some(source) = self
+                .history
+                .get_mut(target.batch)
+                .and_then(|batch| batch.sources.get_mut(&target.path))
+            else {
+                continue;
+            };
+            let Some(pending) = source.pending.take() else {
+                continue;
+            };
+            source.skipped_review = Some(SkippedReview {
+                pending,
+                previous_reason: source.skipped.replace("Skipped by user".into()),
+            });
+            skipped.push(target.clone());
+        }
+        let count = skipped.len();
+        if count > 0 {
+            self.last_skip = skipped;
+        }
+        count
+    }
+
+    /// Restore the latest skipped selection, unless the same source has since
+    /// been imported or entered another pending review. No source is reread.
+    pub(crate) fn undo_pending_skip(&mut self) -> usize {
+        let mut restored = 0;
+        for target in std::mem::take(&mut self.last_skip) {
+            if self.approved.contains_key(&target.path)
+                || self.history.iter().enumerate().any(|(id, batch)| {
+                    id > target.batch
+                        && batch.sources.get(&target.path).is_some_and(|s| {
+                            s.pending.is_some() || !s.created.is_empty() || !s.existing.is_empty()
+                        })
+                })
+            {
+                continue;
+            }
+            let Some(source) = self
+                .history
+                .get_mut(target.batch)
+                .and_then(|batch| batch.sources.get_mut(&target.path))
+            else {
+                continue;
+            };
+            if source.pending.is_some() {
+                continue;
+            }
+            if let Some(review) = source.skipped_review.take() {
+                source.pending = Some(review.pending);
+                source.skipped = review.previous_reason;
+                self.receipt = Some(target.batch);
+                restored += 1;
+            }
+        }
+        restored
+    }
+
+    /// A previously opened measurement preview cannot accept skipped or already
+    /// accepted sources. Check the complete selection before creating any groups.
+    pub(crate) fn measurement_review_is_current(&self, batch: BatchId, paths: &[PathBuf]) -> bool {
+        !paths.is_empty()
+            && self.history.get(batch).is_some_and(|batch| {
+                paths.iter().all(|path| {
+                    batch.sources.get(path).is_some_and(|source| {
+                        source
+                            .pending
+                            .as_ref()
+                            .is_some_and(|pending| pending.measurement_reader)
+                    })
+                })
+            })
+    }
+
     pub fn from_history(mut history: Vec<IntakeBatch>) -> Self {
         for batch in &mut history {
             if !batch.finished {
@@ -349,6 +474,123 @@ pub fn flush_due(first: bool, count: usize, elapsed: Duration) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pending_source() -> SourceOutcome {
+        SourceOutcome {
+            pending: Some(super::super::import_review::PendingSource {
+                measurement_reader: true,
+                detection: None,
+                suggestion: None,
+                reason: "Choose the signals".into(),
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn skip_pending_types_is_case_insensitive_scoped_and_preserves_groups() {
+        let mut state = IntakeState::default();
+        let batch = state.enqueue(vec!["/run".into()], false, vec![]);
+        for name in ["a.prj", "b.PRJ", "c.xts", "d.QD", "no_extension"] {
+            state.history[batch]
+                .sources
+                .insert(name.into(), pending_source());
+        }
+        state.history[batch].sources.insert(
+            "already.prj".into(),
+            SourceOutcome {
+                created: vec![id(4)],
+                ..Default::default()
+            },
+        );
+        let captured: Vec<_> = state
+            .pending_targets()
+            .into_iter()
+            .filter(|t| t.extension().as_deref() == Some("prj"))
+            .collect();
+        let later = state.enqueue(vec!["later.prj".into()], false, vec![]);
+        state.history[later]
+            .sources
+            .insert("later.prj".into(), pending_source());
+        assert_eq!(state.skip_pending(&captured), 2);
+        assert_eq!(state.pending_targets().len(), 4);
+        assert_eq!(
+            state.history[batch].created().cloned().collect::<Vec<_>>(),
+            vec![id(4)]
+        );
+        assert!(state.is_pending(std::path::Path::new("later.prj")));
+        assert!(state.history[batch].receipt().contains("2 skipped"));
+        assert_eq!(state.skip_pending(&captured), 0);
+        assert_eq!(state.undo_pending_skip(), 2);
+        assert_eq!(state.pending_targets().len(), 6);
+        assert!(
+            state.history[batch].sources[&PathBuf::from("a.prj")]
+                .skipped
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn skipped_review_survives_project_roundtrip_without_reentering_pending() {
+        let mut state = IntakeState::default();
+        let batch = state.enqueue(vec!["sample.prj".into()], false, vec![]);
+        let mut source = pending_source();
+        source.failed = Some("historical read error".into());
+        source.skipped = Some("historical note".into());
+        state.history[batch]
+            .sources
+            .insert("sample.prj".into(), source);
+        let captured = state.pending_targets();
+        let paths = vec![PathBuf::from("sample.prj")];
+        assert!(state.measurement_review_is_current(batch, &paths));
+        assert_eq!(state.skip_pending(&captured), 1);
+        assert!(!state.measurement_review_is_current(batch, &paths));
+        let history =
+            serde_json::from_str(&serde_json::to_string(&state.history).unwrap()).unwrap();
+        let restored = IntakeState::from_history(history);
+        assert!(restored.pending_targets().is_empty());
+        let source = &restored.history[batch].sources[&paths[0]];
+        assert_eq!(
+            source.skipped_review.as_ref().unwrap().pending.reason,
+            "Choose the signals"
+        );
+        assert_eq!(source.failed.as_deref(), Some("historical read error"));
+        assert_eq!(state.undo_pending_skip(), 1);
+        assert_eq!(
+            state.history[batch].sources[&paths[0]].skipped.as_deref(),
+            Some("historical note")
+        );
+        assert!(state.measurement_review_is_current(batch, &paths));
+    }
+
+    #[test]
+    fn undo_skip_does_not_duplicate_a_later_import_and_stale_reviews_are_rejected() {
+        let mut state = IntakeState::default();
+        let batch = state.enqueue(vec!["a.qd".into(), "b.qd".into()], false, vec![]);
+        for name in ["a.qd", "b.qd"] {
+            state.history[batch]
+                .sources
+                .insert(name.into(), pending_source());
+        }
+        let paths = vec![PathBuf::from("a.qd"), PathBuf::from("b.qd")];
+        let captured = state.pending_targets();
+        assert_eq!(state.skip_pending(&captured[..1]), 1);
+        assert!(!state.measurement_review_is_current(batch, &paths));
+        assert!(state.measurement_review_is_current(batch, &paths[1..]));
+        let later = state.enqueue(vec![paths[0].clone()], false, vec![]);
+        state.history[later]
+            .sources
+            .insert(paths[0].clone(), pending_source());
+        assert!(state.measurement_review_is_current(later, &paths[..1]));
+        assert_eq!(state.undo_pending_skip(), 0);
+        state.history[batch]
+            .sources
+            .get_mut(&paths[1])
+            .unwrap()
+            .pending = None;
+        assert_eq!(state.skip_pending(&captured[1..]), 0);
+        assert!(!state.measurement_review_is_current(batch, &paths[1..]));
+    }
 
     #[test]
     fn project_restore_keeps_the_saved_intake_receipt_available() {

@@ -12,6 +12,7 @@ pub(crate) struct Presentation {
     pub marked_removal: Option<super::marked_removal::MarkedRemoval>,
     pub merge_review: Option<crate::app::merge::MergeReview>,
     pub scan_picker: bool,
+    pub pending_skip: Vec<crate::app::import_state::PendingTarget>,
     pub menu: Option<Menu>,
     pub reverse_colors: bool,
     pub menu_focus: Option<FocusHandle>,
@@ -30,6 +31,7 @@ pub(crate) enum Menu {
     Structure,
     Merge,
     RemoveMarked,
+    SkipImports,
 }
 
 pub(crate) fn icon(t: &Theme, icon: Icon) -> gpui::Svg {

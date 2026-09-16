@@ -32,6 +32,14 @@ operation, with separate mapping drafts for each scan. See the
 It uses the existing core scan conversions; the public reader APIs are unchanged.
 XTUNES `.xts` checkpoints are also included in desktop folder discovery.
 
+The unreleased desktop **Pending** list supports skipping one file with its ×,
+or a filename extension/all pending entries through **Skip ▾**. **Undo skip**
+restores the latest selection during the session. This affects only that intake,
+not future imports or the files on disk. The import ledger retains the original
+review evidence and skipped status when saved in a project. See the
+[desktop workflow](../website/src/content/docs/docs/desktop/import.md#skip-unwanted-pending-files-development-version)
+and [`IntakeState::skip_pending`](../crates/rexafs-gui/src/app/import_state.rs).
+
 Reading returns an owned `Measurement`: scans, original numeric channels,
 headers, unit declarations, signal choices, numeric datasets and diagnostics.
 Content signatures select an adapter before generic numeric-text fallback;

@@ -84,6 +84,28 @@ review files individually. One undo removes the accepted batch.
 Implemented by the desktop's `measurement_import::batch` module. This option
 is newer than the released 0.2.9 GUI shown in the screenshots below.
 
+### Skip unwanted pending files (development version)
+
+Under **Pending**, choose the **× beside a filename** to skip that file.
+The **Skip ▾** menu offers **Skip .prj**, **Skip .xts**, and the other extensions
+currently waiting, or **Skip all pending**. Extension matching ignores letter
+case, so `.prj` and `.PRJ` are grouped together. Hover over a filename to read
+its review reason.
+
+**Undo skip** restores the most recent skipped selection in this session.
+Skipping applies only to the pending entries captured when you opened the menu;
+it does not exclude that extension from future imports. Original files and
+already imported groups remain intact. To reconsider a file later, import it again.
+Saved projects retain its skipped status and original review evidence.
+
+The **× on the import summary bar** only hides that summary. It does not skip
+pending files. Use the row's × or the Skip menu to remove them from the queue.
+
+[![Skip pending files individually or by extension](/screenshots/next/pending-import-skip.jpg)](/screenshots/next/pending-import-skip.jpg)
+
+This unreleased interface was checked through computer use on 2026-09-17 using
+generated software-test signals. The screenshot contains no experimental data.
+
 <a id="import-a-whole-project-unreleased"></a>
 
 ### Import a whole project
