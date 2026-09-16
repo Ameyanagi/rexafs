@@ -6,6 +6,10 @@ audience: user
 
 This guide describes **rexafs 0.2.9**.
 
+The source development branch adds a **Measurements** view for complete
+point/region calculations on imported groups or folder scans. This is unreleased;
+the screenshots and sampled-overview description below remain specific to 0.2.9.
+
 Import a folder of related spectra, then open **Series → Select scan**.
 The heatmap shows the scan; adjacent plots show the selected frame and trend.
 Choose **flat μ(E)** (the initial selection), **norm μ(E)**, weighted **χ(k)**

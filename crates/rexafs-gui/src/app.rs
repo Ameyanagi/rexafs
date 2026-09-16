@@ -1089,6 +1089,7 @@ pub struct StudioApp {
     handles: HandleState,
     tools: ToolState,
     analysis: shell::tools::AnalysisState,
+    measurements: shell::measurements::MeasurementState,
     journal: shell::journal::JournalState,
     palette: Option<shell::palette::PaletteState>,
     path_route: Option<shell::path_routing::RoutingCard>,
@@ -2958,6 +2959,7 @@ impl StudioApp {
             handles: HandleState::default(),
             tools: ToolState::new(),
             analysis: shell::tools::AnalysisState::default(),
+            measurements: Default::default(),
             journal: shell::journal::JournalState::default(),
             palette: None,
             path_route: None,
@@ -8393,6 +8395,7 @@ impl StudioApp {
         let mut group_state = self.group_state.clone();
         self.capture_group_state(&mut group_state);
         ProjectFile {
+            series_measurements: self.measurements.archive.clone(),
             parser_evidence: self.parser_evidence.clone(),
             imports: self.imports.clone(),
             import_history: self.intake.history.clone(),
@@ -8684,6 +8687,10 @@ impl StudioApp {
         if let Some(cancel) = self.analysis.mcr_cancel.take() {
             cancel.store(true, std::sync::atomic::Ordering::Relaxed);
         }
+        self.measurements.stop();
+        self.measurements = shell::measurements::MeasurementState::from_archive(
+            project.series_measurements.clone(),
+        );
         self.analysis.mcr_generation_advance();
         self.analysis.mcr = project.mcr_analysis.clone();
         self.analysis.lcf_series = project.lcf_series_analysis.clone();

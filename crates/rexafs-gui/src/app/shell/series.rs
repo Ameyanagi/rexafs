@@ -184,7 +184,7 @@ impl StudioApp {
             )
     }
 
-    pub(crate) fn series_stage_center(
+    pub(crate) fn series_overview_center(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
