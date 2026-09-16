@@ -6,6 +6,9 @@ coordinates against extended X-ray absorption fine structure (EXAFS). ReFEFF is
 the primary calculator and runs in the current process. Desktop controls and
 Python/JavaScript bindings are not implemented yet.
 
+The [EVAX comparison and gap audit](rmc-evax-gap-analysis.md) identifies missing
+capabilities, source evidence and the suggested development order.
+
 The implementation is original Rust code. It does not incorporate EVAX or
 RMCProfile source, execute either program, or claim compatibility with their
 input formats. Reverse Monte Carlo (RMC) supplies the general proposal and
