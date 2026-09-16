@@ -72,13 +72,43 @@ signal unit by axis units. R is not a phase-corrected bond length.
 
 ## Desktop workflow
 
-Open **Series → Measurements**. Create a series from marked groups, the current
-folder scan or all groups. Membership is explicit and includes reviewed imports
-and materialized components. New imports do not silently enter that series.
-**Edit series** supports natural filename/label ordering, acquisition-time
-ordering, manual moves, adding marked groups and removing individual members.
-Each edit creates a series revision. Saved runs retain their own membership,
-order and coordinates, so an old result never moves to a different spectrum.
+Open **Series** to browse the heatmap, selected spectrum and trend together.
+The source selector accepts folder scans and named series of imported groups,
+including project-stored spectra. **Use loaded groups** starts a series from an
+existing project. The selector also offers **Use marked groups** and **Use all
+groups**. Membership is explicit; later imports do not silently enter a series.
+
+To calculate a trend:
+
+1. Choose **Add trend…**.
+2. Choose Maximum, Mean, Integral, Point or Edge energy. New trends start with
+   **Flat**, 0–30 eV from each frame's E₀. These are desktop starting values;
+   the core API still defaults to Norm.
+3. Set the range or use **Select on plot**. The preview updates after a committed
+   edit, with dashed lines marking the resolved boundaries. It zooms around the
+   selected interval; **Full spectrum** restores the complete axis.
+4. Choose **Calculate all N frames**. A completed trend returns to the overview.
+
+The trend is a saved result; changing the overview's signal selector does not
+recalculate it. Its title records the representation and range. Select saved
+trends in the inspector. **Results…** opens history, individual rows and CSV/JSON
+exports, including failed or cancelled frames. A row opens a preview using the
+run's retained settings. **Show in Series** returns a compatible result to the
+overview. Changed membership/order cannot attach an old result to new frames.
+
+![Compact trend editor with a visible range on a synthetic spectrum](../website/public/screenshots/next/series-add-trend.jpg)
+
+![A saved 513-frame trend beside the heatmap and selected synthetic frame](../website/public/screenshots/next/series-trend-overview.jpg)
+
+These development screenshots were captured through computer use on 2026-09-16.
+They show generated spectra from `scripts/generate-series-metric-example.py`,
+including the deliberately larger signal at frame 258. No experimental data are
+included. See [the validation record](validation/2026-09-16-series-ux.md).
+
+**Advanced** contains series editing, presets, recipes and recovery copies.
+**Edit series** supports natural label ordering, acquisition-time ordering,
+manual moves, adding marked groups and removing members. Each edit creates a
+series revision; saved runs retain their original membership and coordinates.
 
 Declare a physical coordinate's name, unit and source (for example Temperature,
 K, thermocouple). Enter a frame value or export the coordinates CSV for bulk
@@ -94,9 +124,8 @@ seconds from the earliest retained timestamp, while **Physical coordinate**
 uses the declared value/unit. Missing coordinates produce gaps. File modification
 time and application arrival time are never presented as acquisition time.
 
-Choose Point, Maximum, Integral, Mean or absolute E₀. Select the representation
-and coordinate origin, then **Preview** a named frame. Dashed lines show the
-resolved point/region on its spectrum. **Select on plot** accepts one click for
+The preview uses the selected representation and coordinate origin. Arrow
+buttons browse frames without changing the series membership. **Select on plot** accepts one click for
 a point, or two clicks for interval boundaries. It converts the displayed
 absolute coordinates to the selected origin; review the numerical fields
 before calculating. Outside-plot clicks do not define a coordinate.
@@ -137,9 +166,8 @@ For recipe runs, source checks use frozen recipe settings rather than unrelated
 changes to the group editor.
 
 **Calculate all N frames** calculates
-every member, independently of the older sampled overview. The default maximum
-range is −20…+50 eV; a conventional white-line definition can be entered as
-0…+30 eV in an explicitly selected Norm or Flat representation.
+every member, independently of the sampled overview. The initial maximum uses
+Flat over 0…+30 eV from E₀; review this interval for the sample and energy coverage.
 
 The worker first records input revisions, then prepares one spectrum at a time.
 Normalized metrics stop after normalization; k metrics stop after background
@@ -151,8 +179,8 @@ input and the result table displays 50 rows at a time without limiting export.
 **Cancel** retains finished rows. **Resume unfinished** uses the saved definition
 and checks input/settings revisions before calculating unfinished rows. Changed
 inputs fail with a reason; start a new run to analyze the new data. Earlier runs
-remain available. **Check input revisions** compares current sources/settings
-without changing historical values. Opening Measurements starts background
+remain available. **Check inputs** compares current sources/settings
+without changing historical values. Opening Series starts background
 checks of the selected run every ten seconds, without overlapping checks.
 Source digests and processing settings are compared; changed or missing inputs
 are marked stale. This polling is separate from the future Live ingestion system.
@@ -160,17 +188,33 @@ are marked stale. This polling is separate from the future Live ingestion system
 Saving a project retains series, frame/group identities, definitions, settings,
 resolved preparation, source digests, outcomes and run history. Portable replay
 still requires embedded inputs or unchanged linked sources. **Export CSV**
-includes all statuses and values; **Export definition and results** writes the
+includes all statuses and values; **Export JSON** writes the
 full JSON metadata, including the frozen recipe. Recipe identity, revision and
 name are also included in CSV. A figure alone is not a replay record. Old projects still
-open and the older **Scan overview** keeps its historical sampled definitions.
+open and the overview keeps its historical sampled definitions.
+
+### Open the heatmap and frame browser
+
+Choose **Series** to open the earlier heatmap, cursor spectrum,
+and trend layout, including spectra stored directly in a project. The selector
+above the plots lists named series and imported directory scans. If groups are
+loaded but no series exists yet, **Use loaded groups** creates one; reimporting
+the spectra is unnecessary.
+
+Named series keep their recorded order and resolve members by their saved group
+identities. Missing or removed members keep their positions as gaps. The heatmap
+and built-in trends sample at most 192 available frames; selecting a frame loads
+that exact group's processed spectrum. The overview uses each group's current
+processing settings, independently of saved recipe runs. Return to
+**Results…** for complete scalar results, or **Add trend… → Advanced** for recipe replay. The older
+overview's batch-fit and LCF-trend controls remain specific to directory scans.
 
 ## Recovery
 
 Each run freezes its definition and input revisions before calculation. A private
 checkpoint stores the workspace, run and append-only result chunks; a chunk is
 flushed before it appears as completed in the GUI. After an interruption, open
-Series and choose **Open recovery copy**. This replaces the current workspace
+**Series → Recovery…** and choose **Open recovery copy**. This replaces the current workspace
 with an unsaved copy; save other work first. It does not overwrite the original
 project or automatically restart calculation. Review the retained results and
 choose **Resume unfinished**. Changed unfinished inputs fail explicitly.

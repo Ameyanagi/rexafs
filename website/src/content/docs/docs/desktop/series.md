@@ -6,15 +6,27 @@ audience: user
 
 This guide describes **rexafs 0.2.9**.
 
-The source development branch adds a **Measurements** view for complete
-point/region calculations on imported groups or folder scans. This is unreleased;
-the screenshots and sampled-overview description below remain specific to 0.2.9.
-Development features include explicit series ordering/coordinates, named presets,
-plot-selected ranges, versioned processing/measurement recipes, recovery copies
-and complete CSV/JSON exports. Recipes check source layouts and quantities before
-replay, and retain automatic per-frame processing choices. See the
-[source-checkout workflow and qualification](https://github.com/Ameyanagi/rexafs/blob/feature/complete-analysis/doc/full-frame-measurements.md)
-and the Next API reference for the new `Spectrum.measure` bindings.
+The **unreleased development branch** keeps the heatmap and frame browser as
+the main Series view, including named series of project-stored spectra.
+**Add trend… → choose metric and range → Calculate all N frames** adds a saved
+trend. New desktop trends use Flat, 0–30 eV from each frame's E₀; the core API
+still defaults to Norm. A preview marks the range and updates after edits.
+**Results…** contains saved runs, per-frame failures and CSV/JSON export.
+**Advanced** holds ordering, coordinates, presets, recipes and recovery.
+
+The source selector lists named series and folder scans. **Use loaded groups**
+starts from spectra already in a project. The overview samples at most 192
+available frames, while custom trends calculate every member. Saved trends retain
+their original settings; changing the overview representation does not recalculate
+them. The older batch-fit and LCF controls still require a folder scan.
+See the [development workflow](https://github.com/Ameyanagi/rexafs/blob/feature/complete-analysis/doc/full-frame-measurements.md)
+for details.
+
+[![Development Series overview with a saved trend from 513 synthetic spectra](/screenshots/next/series-trend-overview.jpg)](/screenshots/next/series-trend-overview.jpg)
+
+Development screenshot captured through computer use on 2026-09-16, using the
+project's synthetic series generator. It contains no experimental data.
+The remainder of this page and its versioned screenshot describe 0.2.9.
 
 Import a folder of related spectra, then open **Series → Select scan**.
 The heatmap shows the scan; adjacent plots show the selected frame and trend.

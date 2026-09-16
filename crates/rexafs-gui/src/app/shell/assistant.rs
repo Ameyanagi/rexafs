@@ -359,7 +359,8 @@ impl StudioApp {
 
     fn visible_side_panels(&self) -> PanelMemory {
         let inspector_visible = !matches!(self.stage, super::Stage::Fit | super::Stage::Publish)
-            && (self.stage != super::Stage::Series || self.series_ready());
+            && (self.stage != super::Stage::Series
+                || (self.measurements.overview && self.series_ready()));
         PanelMemory {
             file_browser: self.data_panel_open,
             inspector: self.context_panel_open && inspector_visible,

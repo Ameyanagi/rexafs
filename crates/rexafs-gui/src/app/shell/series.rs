@@ -1,5 +1,5 @@
 //! Series stage (operando / time-resolved): a sampled scan overview in
-//! catalog filename order, not a timestamp-derived time axis.
+//! directory scans or named project series, using their recorded frame order.
 //! Heatmap with a cursor row on the left, the cursor frame and a
 //! trend on the right; the inspector carries the cursor readout, the trend
 //! table and the batch / LCF-trend cards.
@@ -20,7 +20,7 @@ use crate::icons::Icon;
 impl StudioApp {
     /// Display the source directory recorded by a portable project, rather than
     /// the private extraction-cache directory used to read its files.
-    fn series_scan_label(&self, index: usize) -> String {
+    pub(crate) fn series_scan_label(&self, index: usize) -> String {
         let Some(scan) = self.catalog.scans.get(index) else {
             return "Select scan".into();
         };
@@ -34,12 +34,16 @@ impl StudioApp {
     }
 
     pub(crate) fn series_ready(&self) -> bool {
-        self.active_scan.is_some_and(|scan| {
-            self.catalog.scans.get(scan).is_some_and(|s| s.len > 0)
-                && self
-                    .operando
-                    .as_ref()
-                    .is_some_and(|data| data.scan == scan && data.scan_len > 0)
+        self.operando.as_ref().is_some_and(|data| {
+            data.scan_len > 0
+                && match &data.source {
+                    crate::app::OverviewSource::Scan { index, .. } => {
+                        self.overview_series.is_none() && self.active_scan == Some(*index)
+                    }
+                    crate::app::OverviewSource::Series { id, .. } => {
+                        self.overview_series.as_ref() == Some(id)
+                    }
+                }
         })
     }
 
@@ -52,12 +56,13 @@ impl StudioApp {
         {
             return;
         }
-        if self.active_scan != Some(scan) {
+        if self.overview_series.is_some() || self.active_scan != Some(scan) {
             self.operando = None;
             self.operando_plots = None;
             self.time_pos = 0;
             self.pending_time_pos = None;
         }
+        self.overview_series = None;
         self.active_scan = Some(scan);
         self.ui.scan_picker = false;
         self.ensure_operando(cx);
@@ -75,6 +80,18 @@ impl StudioApp {
             .flex()
             .flex_col()
             .gap_2();
+        for (index, series) in self.measurements.archive.series.iter().enumerate() {
+            list = list.child(
+                button(
+                    &t,
+                    ("select-overview-series", index),
+                    format!("{} · {} frames", series.name, series.frames.len()),
+                    false,
+                )
+                .w_full()
+                .on_click(cx.listener(move |app, _, _, cx| app.choose_overview_series(index, cx))),
+            );
+        }
         for (index, scan) in self.catalog.scans.iter().enumerate() {
             let available =
                 !crate::app::active_scan_indices(&self.group_registry, scan.start, scan.len, 1)
@@ -114,8 +131,25 @@ impl StudioApp {
             .items_center()
             .justify_center()
             .gap_3()
-            .child(div().text_size(px(16.)).child("Select scan"))
+            .child(div().text_size(px(16.)).child("Select series or scan"))
             .child(list)
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(
+                        button(&t, "series-from-marked", "Use marked groups", false).on_click(
+                            cx.listener(|app, _, _, cx| app.create_series_from_selection(true, cx)),
+                        ),
+                    )
+                    .child(
+                        button(&t, "series-from-all", "Use all groups", false).on_click(
+                            cx.listener(|app, _, _, cx| {
+                                app.create_series_from_selection(false, cx)
+                            }),
+                        ),
+                    ),
+            )
             .child(
                 button(&t, "series-import-scan", "Import…", false)
                     .on_click(cx.listener(|app, _, _, cx| app.open_folder(cx))),
@@ -138,15 +172,12 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let t = self.theme;
-        let label: SharedString = match self.active_scan.and_then(|ix| self.catalog.scans.get(ix)) {
-            Some(scan) => format!(
-                "{} · {} frames",
-                self.series_scan_label(self.active_scan.unwrap()),
-                scan.len
-            )
-            .into(),
-            None => "no scan selected".into(),
-        };
+        let label: SharedString = format!(
+            "{} · {} frames",
+            self.overview_label(),
+            self.operando_scan_len().unwrap_or(0)
+        )
+        .into();
         div()
             .flex_none()
             .px_3()
@@ -200,8 +231,10 @@ impl StudioApp {
             .map(|p| (p.heatmap.clone(), p.chik.clone(), p.trend.clone()))
         else {
             let running = self.operando_running;
-            let has_scan = self.active_scan.is_some();
-            let can_select = !self.catalog.scans.is_empty();
+            let has_scan = self.active_scan.is_some() || self.overview_series.is_some();
+            let can_select =
+                !self.catalog.scans.is_empty() || !self.measurements.archive.series.is_empty();
+            let has_groups = !self.catalog.is_empty() || !self.derived.is_empty();
             return div()
                 .flex_1()
                 .min_h_0()
@@ -224,7 +257,9 @@ impl StudioApp {
                                     &t,
                                     "series-select-scan",
                                     if can_select {
-                                        "Select scan"
+                                        "Select series or scan"
+                                    } else if has_groups {
+                                        "Use loaded groups"
                                     } else {
                                         "Import frames…"
                                     },
@@ -235,6 +270,8 @@ impl StudioApp {
                                         if can_select {
                                             app.ui.scan_picker = true;
                                             cx.notify();
+                                        } else if has_groups {
+                                            app.create_overview_from_groups(cx);
                                         } else {
                                             app.open_folder(cx);
                                         }
@@ -439,9 +476,7 @@ impl StudioApp {
             .border_color(t.border)
             .flex_wrap()
             .child(
-                button(&t, "series-change-scan", self.active_scan
-                    .map(|ix| self.series_scan_label(ix))
-                    .unwrap_or_else(|| "Select scan".into()), false)
+                button(&t, "series-change-scan", self.overview_label(), false)
                     .max_w(px(180.)).overflow_hidden().text_ellipsis()
                     .child(icon(&t, Icon::ChevronDown))
                     .on_click(cx.listener(|app, _, _, cx| { app.ui.scan_picker = true; cx.notify(); })),
@@ -449,7 +484,7 @@ impl StudioApp {
             .child(seg)
             .child(div().w(px(1.)).h(px(18.)).bg(t.border))
             .child(div().flex_1())
-            .child(
+            .when(self.overview_series.is_none(), |d| d.child(
                 chip(
                     &t,
                     "series-preview",
@@ -459,7 +494,11 @@ impl StudioApp {
                 .on_click(
                     cx.listener(|this, _: &ClickEvent, _w, cx| this.toggle_batch_preview(cx)),
                 ).tooltip(move |_, cx| cx.new(|_| Tooltip { theme: t, label: "Calculation scope. The overview is always sampled; All frames calculates every surviving frame.".into() }).into()),
-            )
+            ))
+            .child(button(&t, "series-add-trend", "Add trend…", true)
+                .on_click(cx.listener(|app, _, _, cx| app.begin_series_trend(cx))))
+            .child(button(&t, "series-results", "Results…", false)
+                .on_click(cx.listener(|app, _, _, cx| app.series_results(cx))))
             .child(icon_button(&t, "series-shortcuts", Icon::Help, "Click a heatmap row to jump. ←/→: frame; Shift+←/→: 1%; Home/End: first/last.", false))
     }
 
@@ -502,6 +541,7 @@ impl StudioApp {
 
     fn trend_snapshot_name(&self) -> String {
         match &self.series_trend {
+            TrendSource::Measurement(i) => self.measurement_trend_name(*i),
             TrendSource::E0 => "E₀ (eV)".into(),
             TrendSource::WhiteLine => "white line".into(),
             TrendSource::FitVar(name) => format!("fit · {name}"),
@@ -523,8 +563,10 @@ impl StudioApp {
             .flex_col()
             .child(self.series_cursor_section(cx))
             .child(self.series_trends_section(cx))
-            .child(self.series_lcf_section(cx))
-            .child(self.series_batch_section(cx))
+            .when(self.overview_series.is_none(), |d| {
+                d.child(self.series_lcf_section(cx))
+                    .child(self.series_batch_section(cx))
+            })
             .child(div().h(px(12.)).bg(t.surface))
     }
 
@@ -533,15 +575,24 @@ impl StudioApp {
         let frames = self.operando_scan_len().unwrap_or(0);
         let pos = self.time_pos;
         let data = self.operando.as_ref();
-        let sample = data.map(|d| crate::app::nearest_sample_pos(pos, d.scan_len, d.e0s.len()));
-        let e0 = self
-            .spectrum
-            .as_ref()
-            .and_then(|s| s.e0())
-            .or_else(|| data.zip(sample).and_then(|(d, i)| d.e0s.get(i).copied()));
-        let whiteline = data
-            .zip(sample)
-            .and_then(|(d, i)| d.whitelines.get(i).copied());
+        // A cursor readout must use the same exact frame as its spectrum.
+        // Do not substitute a neighboring overview sample while it loads.
+        let exact = data
+            .and_then(|d| d.source.entry(pos))
+            .and_then(|ix| self.cache.peek(&(ix, self.effective_fingerprint(ix))));
+        let e0 = exact.and_then(|sp| sp.e0());
+        let whiteline = exact.and_then(|sp| {
+            let e0 = sp.e0()?;
+            let energy = sp.energy.as_ref()?;
+            let signal = sp.flat().or_else(|| sp.norm())?;
+            let value = energy
+                .iter()
+                .zip(signal.iter())
+                .filter(|(e, _)| **e >= e0 && **e <= e0 + 30.)
+                .map(|(_, value)| *value)
+                .fold(f64::NAN, f64::max);
+            value.is_finite().then_some(value)
+        });
         let fmt = |v: Option<f64>, d: usize, unit: &str| {
             v.filter(|v| v.is_finite())
                 .map(|v| format!("{v:.d$}{unit}"))
@@ -595,14 +646,37 @@ impl StudioApp {
     fn series_trends_section(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
         let mut entries: Vec<(TrendSource, String, String, bool)> = vec![
-            (TrendSource::E0, "E₀ shift".into(), "normalize".into(), true),
+            (
+                TrendSource::E0,
+                "Edge energy".into(),
+                "overview".into(),
+                true,
+            ),
             (
                 TrendSource::WhiteLine,
                 "white line".into(),
-                "normalize".into(),
+                "overview".into(),
                 true,
             ),
         ];
+        for (i, run) in self
+            .measurements
+            .archive
+            .runs
+            .iter()
+            .enumerate()
+            .rev()
+            .filter(|(i, _)| self.measurement_trend_matches(*i))
+            .take(8)
+        {
+            let good = run.rows.iter().filter(|r| r.result.is_some()).count();
+            entries.push((
+                TrendSource::Measurement(i),
+                format!("{} · #{}", run.definition.name, i + 1),
+                format!("{good}/{}", run.rows.len()),
+                true,
+            ));
+        }
         let batch_ok = self.active_batch_trend().is_some();
         if let Some(bf) = &self.batch_fit {
             for name in &bf.varying_names {
@@ -637,50 +711,56 @@ impl StudioApp {
         for (i, (source, name, origin, ready)) in entries.into_iter().enumerate() {
             let on = self.series_trend == source;
             rows.push(
-                div()
-                    .id(("trend-row", i))
-                    .mx_2()
-                    .h(px(24.))
-                    .px_1p5()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .rounded_md()
-                    .cursor_pointer()
-                    .when(on, |d| {
-                        d.bg(gpui::Rgba {
-                            a: 0.14,
-                            ..t.accent
-                        })
+                crate::accessibility::Control::new(
+                    div().id(("trend-row", i)),
+                    name.clone(),
+                    accesskit::Role::Button,
+                )
+                .tab_index(0)
+                .key_context("Control")
+                .disabled(!ready)
+                .mx_2()
+                .h(px(24.))
+                .px_1p5()
+                .flex()
+                .items_center()
+                .gap_2()
+                .rounded_md()
+                .cursor_pointer()
+                .when(on, |d| {
+                    d.bg(gpui::Rgba {
+                        a: 0.14,
+                        ..t.accent
                     })
-                    .hover(|d| d.bg(t.raised))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
-                        this.series_trend = source.clone();
-                        this.rebuild_operando_trend(cx);
-                        cx.notify();
-                    }))
-                    .child(div().w(px(8.)).h(px(8.)).rounded_full().bg(if on {
-                        t.accent
-                    } else {
-                        t.border
-                    }))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .text_color(if ready { t.text } else { t.text_muted })
-                            .child(name),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(10.5))
-                            .text_color(if ready { t.text_muted } else { t.warn })
-                            .child(origin),
-                    )
-                    .into_any_element(),
+                })
+                .hover(|d| d.bg(t.raised))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
+                    this.series_trend = source.clone();
+                    this.rebuild_operando_trend(cx);
+                    cx.notify();
+                }))
+                .child(div().w(px(8.)).h(px(8.)).rounded_full().bg(if on {
+                    t.accent
+                } else {
+                    t.border
+                }))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .text_color(if ready { t.text } else { t.text_muted })
+                        .child(name),
+                )
+                .child(
+                    div()
+                        .text_size(px(10.5))
+                        .text_color(if ready { t.text_muted } else { t.warn })
+                        .child(origin),
+                )
+                .into_any_element(),
             );
         }
         let head = div()

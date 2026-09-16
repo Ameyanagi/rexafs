@@ -63,6 +63,8 @@ pub(crate) mod import_review;
 pub(crate) mod import_state;
 mod importing;
 mod merge;
+mod series_source;
+use series_source::OverviewSource;
 mod shell;
 use shell::{Stage, StageView, handles::HandleState, thumbnails::ThumbData, tools::ToolState};
 
@@ -607,7 +609,7 @@ const K_GRID_MAX: f64 = 15.0;
 
 /// Downsampled overview of one scan, valid for one params fingerprint.
 pub(crate) struct OperandoData {
-    pub(crate) scan: usize,
+    source: OverviewSource,
     pub(crate) scan_len: usize,
     sample_frames: Vec<usize>,
     pub(crate) fingerprint: u64,
@@ -775,6 +777,8 @@ pub(crate) enum TrendSource {
     FitVar(String),
     /// Weight of the i-th standard of the LCF trend.
     Lcf(usize),
+    /// Retained full-frame scalar calculation.
+    Measurement(usize),
 }
 
 #[derive(Clone)]
@@ -920,7 +924,7 @@ impl RetainedChikSeries {
 pub(crate) struct OperandoPlots {
     /// Scan the plots currently show; a different scan gets fresh viewports
     /// instead of inheriting the previous scan's pan/zoom.
-    scan: usize,
+    source: OverviewSource,
     /// Space the heatmap / frame plot currently show.
     space: SeriesSpace,
     pub(crate) heatmap: Entity<RuvizPlot>,
@@ -1223,6 +1227,7 @@ pub struct StudioApp {
     /// even when that scan has a million members.
     expanded_scan: Option<usize>,
     active_scan: Option<usize>,
+    overview_series: Option<crate::group_identity::GroupId>,
     operando: Option<OperandoData>,
     operando_plots: Option<OperandoPlots>,
     operando_gen: u64,
@@ -1429,16 +1434,6 @@ fn short_duration(duration: Duration) -> String {
     }
 }
 
-/// Map a full-scan cursor coordinate to the nearest sampled overview row.
-pub(crate) fn nearest_sample_pos(full_pos: usize, full_len: usize, sample_len: usize) -> usize {
-    if full_len <= 1 || sample_len <= 1 {
-        return 0;
-    }
-    let numerator = full_pos.min(full_len - 1) as u128 * (sample_len - 1) as u128;
-    let denominator = (full_len - 1) as u128;
-    ((numerator + denominator / 2) / denominator) as usize
-}
-
 /// Map ruviz's full-scan data-space y coordinate to the nearest frame.
 fn frame_from_data_y(y: f64, scan_len: usize) -> Option<usize> {
     if scan_len == 0 || !y.is_finite() {
@@ -1545,7 +1540,7 @@ fn should_rebuild_explore(workspace: Workspace, dirty: &mut bool, invalidated: b
 mod thin_tests {
     use super::{
         ChikRowKey, RetainedChikSeries, Workspace, catalog_row_index, frame_from_data_y,
-        frame_from_heatmap_position, nearest_sample_pos, scan_entry_offset, should_rebuild_explore,
+        frame_from_heatmap_position, scan_entry_offset, should_rebuild_explore,
     };
 
     #[test]
@@ -1598,14 +1593,6 @@ mod thin_tests {
                 .all(|v| v.is_nan()),
             "Do not label a neighboring preview row as frame 51"
         );
-    }
-
-    #[test]
-    fn full_positions_map_to_nearest_overview_rows() {
-        assert_eq!(nearest_sample_pos(0, 1_000, 192), 0);
-        assert_eq!(nearest_sample_pos(999, 1_000, 192), 191);
-        assert_eq!(nearest_sample_pos(500, 1_000, 192), 96);
-        assert_eq!(nearest_sample_pos(42, 100, 1), 0);
     }
 
     #[test]
@@ -3048,6 +3035,7 @@ impl StudioApp {
             groups_resize: None,
             expanded_scan: None,
             active_scan: None,
+            overview_series: None,
             operando: None,
             operando_plots: None,
             operando_gen: 0,
@@ -3917,6 +3905,7 @@ impl StudioApp {
         self.expanded_sources.clear();
         self.expanded_scan = None;
         self.active_scan = None;
+        self.overview_series = None;
         self.operando = None;
         self.operando_plots = None;
         self.operando_running = false;
@@ -4902,34 +4891,32 @@ impl StudioApp {
     /// (Re)build the downsampled scan overview if the scan or parameters
     /// changed. Frames are processed in parallel on rayon.
     fn ensure_operando(&mut self, cx: &mut Context<Self>) {
-        let Some(scan_ix) = self.active_scan else {
+        let Some(source) = self.overview_source() else {
             return;
         };
-        let Some(scan) = self.catalog.scans.get(scan_ix) else {
-            return;
-        };
-        let scan_start = scan.start;
-        let scan_len = scan.len;
-        let fingerprint = scan_fingerprint(
-            &self.params,
-            &self.overrides,
-            &self.group_registry,
-            scan_start,
-            scan_len,
-        );
-        if active_scan_indices(&self.group_registry, scan_start, scan_len, 1).is_empty() {
+        let scan_len = source.len();
+        let fingerprint = self.overview_fingerprint(&source);
+        if source.samples(&self.group_registry, 1).is_empty() {
+            retire_job(
+                &mut self.operando_gen,
+                &mut self.operando_running,
+                Some(&mut self.operando_cancel),
+            );
+            self.status =
+                "No available groups in this series. Select another series or restore its inputs."
+                    .into();
             self.operando = None;
             self.operando_plots = None;
             return;
         }
-        if scan_len == 0
-            || self.operando.as_ref().is_some_and(|o| {
-                o.scan == scan_ix && o.scan_len == scan_len && o.fingerprint == fingerprint
-            })
+        if self
+            .operando
+            .as_ref()
+            .is_some_and(|o| o.source == source && o.fingerprint == fingerprint)
         {
             return;
         }
-        let preserve_time_pos = self.operando.as_ref().is_some_and(|o| o.scan == scan_ix);
+        let preserve_time_pos = self.operando.as_ref().is_some_and(|o| o.source == source);
 
         if let Some(cancel) = self.operando_cancel.take() {
             cancel.store(true, Ordering::Relaxed);
@@ -4940,25 +4927,36 @@ impl StudioApp {
         self.operando_cancel = Some(cancel.clone());
         self.operando_running = true;
         // Even sampling across the scan; first and last frames included.
-        let sample_ixs =
-            active_scan_indices(&self.group_registry, scan_start, scan_len, MAX_FRAMES);
+        let sample_frames = source.samples(&self.group_registry, MAX_FRAMES);
+        let sample_ixs: Vec<_> = sample_frames
+            .iter()
+            .filter_map(|&p| source.entry(p))
+            .collect();
         self.job_inputs[0] = sample_ixs
             .iter()
             .filter_map(|&ix| self.group_id(ix))
             .collect();
-        let frames: Vec<(usize, PathBuf, String)> = sample_ixs
+        let frames: Vec<_> = sample_ixs
             .iter()
-            .map(|&ix| (ix, self.catalog.path(ix), self.catalog.name(ix).to_string()))
+            .map(|&ix| {
+                let derived = ix
+                    .checked_sub(DERIVED_BASE)
+                    .and_then(|i| self.derived.get(i))
+                    .cloned();
+                let path = if ix < self.catalog.len() {
+                    self.catalog.path(ix)
+                } else {
+                    PathBuf::new()
+                };
+                (
+                    ix,
+                    path,
+                    self.entry_label(ix),
+                    derived,
+                    self.effective_params(ix).clone(),
+                )
+            })
             .collect();
-        // Global params plus the (usually tiny) override set for this scan;
-        // frames look their effective params up by catalog index.
-        let global = Arc::new(self.params.clone());
-        let frame_overrides: Arc<BTreeMap<usize, PipelineParams>> = Arc::new(
-            self.overrides
-                .range(scan_start..scan_start.saturating_add(scan_len))
-                .map(|(&ix, p)| (ix, p.clone()))
-                .collect(),
-        );
         let grid: Vec<f64> = (0..K_GRID_BINS)
             .map(|i| i as f64 * K_GRID_MAX / (K_GRID_BINS - 1) as f64)
             .collect();
@@ -4971,7 +4969,7 @@ impl StudioApp {
 
         let mut diagnostics: BTreeMap<_, _> = frames
             .iter()
-            .filter_map(|(ix, _, _)| {
+            .filter_map(|(ix, _, _, _, _)| {
                 self.peek_group_id(*ix).map(|id| {
                     (
                         *ix,
@@ -4986,14 +4984,13 @@ impl StudioApp {
         let job = cx.background_executor().spawn(async move {
             frames
                 .par_iter()
-                .map(|(ix, path, label)| {
+                .map(|(ix, path, label, derived, params)| {
                     if job_cancel.load(Ordering::Relaxed) {
                         return None;
                     }
-                    let params = frame_overrides.get(ix).unwrap_or(&global);
-                    let result = process_file(path, params)
-                        .map_err(|error| error.to_string())
-                        .and_then(|sp| frame_sample(&sp, &job_grid));
+                    let result =
+                        series_source::prepare_overview_frame(path, derived.as_ref(), params)
+                            .and_then(|sp| frame_sample(&sp, &job_grid));
                     Some((*ix, label.clone(), result))
                 })
                 .collect::<Vec<_>>()
@@ -5083,9 +5080,9 @@ impl StudioApp {
                 }
                 let kweight = app.params.fft_kweight.unwrap_or(2.0);
                 app.operando = Some(OperandoData {
-                    scan: scan_ix,
+                    source: source.clone(),
                     scan_len,
-                    sample_frames: sample_ixs.iter().map(|ix| ix - scan_start).collect(),
+                    sample_frames,
                     fingerprint,
                     grid,
                     matrix,
@@ -5111,21 +5108,16 @@ impl StudioApp {
                             0
                         }
                     });
-                app.time_pos = surviving_frame(
-                    &app.group_registry,
-                    scan_start,
-                    scan_len,
-                    app.time_pos,
-                    false,
-                )
-                .unwrap_or(0);
+                app.time_pos = source
+                    .surviving(&app.group_registry, app.time_pos, false)
+                    .unwrap_or(0);
                 app.rebuild_operando_plots(cx);
                 app.status = if failed == 0 {
                     "scan overview ready".into()
                 } else {
                     format!("scan overview ready · {failed} failed").into()
                 };
-                app.sync_time_selection(scan_ix, cx);
+                app.sync_time_selection(cx);
                 cx.notify();
             })
             .ok();
@@ -5141,10 +5133,7 @@ impl StudioApp {
         let Some(data) = self.operando.as_ref() else {
             return;
         };
-        let Some(scan) = self.catalog.scans.get(data.scan) else {
-            return;
-        };
-        let scan_ix = data.scan;
+        let source = data.source.clone();
         let Some((chik_key, row)) = self.series_frame_source() else {
             return;
         };
@@ -5157,13 +5146,7 @@ impl StudioApp {
             SeriesSpace::K => (K_AXIS.into(), chik_label(data.kweight)),
             SeriesSpace::R => (R_AXIS.into(), chir_label(data.kweight)),
         };
-        let heatmap_rows = overview_heatmap_rows(
-            matrix,
-            &data.sample_frames,
-            &self.group_registry,
-            scan.start,
-            data.scan_len,
-        );
+        let heatmap_rows = source.heatmap_rows(matrix, &data.sample_frames, &self.group_registry);
         let heatmap = build_heatmap(&heatmap_rows, grid, data.scan_len, &xlabel, &self.theme)
             .size_px(
                 self.card_px.get(&301).map_or(700, |v| v.0),
@@ -5204,7 +5187,7 @@ impl StudioApp {
         .major_ticks_x(self.series_tick_count(303));
         match &mut self.operando_plots {
             Some(plots) => {
-                if plots.scan == scan_ix && plots.space == space {
+                if plots.source == source && plots.space == space {
                     plots
                         .heatmap
                         .update(cx, |rp, cx| rp.set_plot_keep_view(heatmap, cx));
@@ -5220,7 +5203,7 @@ impl StudioApp {
                     }
                 } else {
                     // New scan or space: fresh viewports, the old zoom is meaningless.
-                    plots.scan = scan_ix;
+                    plots.source = source.clone();
                     plots.space = space;
                     plots.heatmap.update(cx, |rp, cx| rp.set_plot(heatmap, cx));
                     plots.chik.update(cx, |rp, cx| rp.set_plot(chik, cx));
@@ -5272,7 +5255,7 @@ impl StudioApp {
                     },
                 );
                 self.operando_plots = Some(OperandoPlots {
-                    scan: scan_ix,
+                    source,
                     space,
                     heatmap,
                     chik,
@@ -5381,11 +5364,11 @@ impl StudioApp {
     }
 
     fn set_time_pos(&mut self, pos: usize, cx: &mut Context<Self>) {
-        let Some((scan_ix, ix)) = self.update_operando_cursor(pos, cx) else {
+        let Some(ix) = self.update_operando_cursor(pos, cx) else {
             return;
         };
         if self.selected != Some(ix) {
-            self.sync_time_selection(scan_ix, cx);
+            self.sync_time_selection(cx);
         }
         cx.notify();
     }
@@ -5393,47 +5376,28 @@ impl StudioApp {
     /// Update only the operando cursor and its cursor-dependent plots. The
     /// caller decides whether selection also needs changing, preventing the
     /// two synchronization directions from recursively selecting each other.
-    fn update_operando_cursor(
-        &mut self,
-        pos: usize,
-        cx: &mut Context<Self>,
-    ) -> Option<(usize, usize)> {
+    fn update_operando_cursor(&mut self, pos: usize, cx: &mut Context<Self>) -> Option<usize> {
         let data = self.operando.as_ref()?;
-        let scan = self.catalog.scans.get(data.scan)?;
-        let scan_ix = data.scan;
-        let scan_start = scan.start;
-        let scan_len = data.scan_len.min(scan.len);
-        let pos = surviving_frame(
-            &self.group_registry,
-            scan_start,
-            scan_len,
-            pos,
-            pos < self.time_pos,
-        )?;
-        let ix = scan_start + pos;
+        let pos = data
+            .source
+            .surviving(&self.group_registry, pos, pos < self.time_pos)?;
+        let ix = data.source.entry(pos)?;
+        let len = data.scan_len;
         if pos == self.time_pos {
-            return Some((scan_ix, ix));
+            return Some(ix);
         }
         self.time_pos = pos;
         if let Some((key, row)) = self.series_frame_source() {
             self.replace_operando_chik(key, row);
         }
         self.update_operando_cursor_annotations(cx);
-        self.status = format!("frame {}/{} · {}", pos + 1, scan_len, self.catalog.name(ix)).into();
-        Some((scan_ix, ix))
+        self.status = format!("frame {}/{} · {}", pos + 1, len, self.entry_label(ix)).into();
+        Some(ix)
     }
 
-    /// Selection-to-cursor half of operando synchronization. This deliberately
-    /// does not select, so `set_time_pos` can safely use `select_entry` for the
-    /// opposite direction without a ping-pong loop.
+    /// Keep group selection and the overview cursor synchronized in either direction.
     fn sync_operando_cursor_to_entry(&mut self, ix: usize, cx: &mut Context<Self>) {
-        let Some(data) = &self.operando else {
-            return;
-        };
-        let Some(scan) = self.catalog.scans.get(data.scan) else {
-            return;
-        };
-        let Some(offset) = scan_entry_offset(scan.start, data.scan_len.min(scan.len), ix) else {
+        let Some(offset) = self.operando.as_ref().and_then(|d| d.source.position(ix)) else {
             return;
         };
         if offset != self.time_pos {
@@ -5441,35 +5405,26 @@ impl StudioApp {
         }
     }
 
-    /// Route the full-resolution cursor frame through the shared lazy,
-    /// generation-counted spectrum load path and reveal it in the current
-    /// data-panel list.
-    fn sync_time_selection(&mut self, scan_ix: usize, cx: &mut Context<Self>) {
-        let Some(scan) = self.catalog.scans.get(scan_ix) else {
+    /// Load the exact cursor frame through the shared generation-checked cache.
+    fn sync_time_selection(&mut self, cx: &mut Context<Self>) {
+        let Some(data) = &self.operando else {
             return;
         };
-        let scan_len = self
-            .operando
-            .as_ref()
-            .filter(|data| data.scan == scan_ix)
-            .map(|data| data.scan_len.min(scan.len))
-            .unwrap_or(scan.len);
-        let Some(offset) = surviving_frame(
-            &self.group_registry,
-            scan.start,
-            scan_len,
-            self.time_pos,
-            false,
-        ) else {
+        let Some(offset) = data
+            .source
+            .surviving(&self.group_registry, self.time_pos, false)
+        else {
+            return;
+        };
+        let Some(ix) = data.source.entry(offset) else {
             return;
         };
         self.time_pos = offset;
-        let ix = scan.start + offset;
-        self.reveal_time_selection(scan_ix, offset, ix);
+        self.reveal_time_selection(ix);
         self.select_entry(ix, cx);
     }
 
-    fn reveal_time_selection(&mut self, _scan_ix: usize, _offset: usize, ix: usize) {
+    fn reveal_time_selection(&mut self, ix: usize) {
         if self.group_rows().row_index(ix).is_none() {
             self.reveal_current = Some(ix);
         }
@@ -5488,18 +5443,8 @@ impl StudioApp {
         let Some(data) = &self.operando else {
             return;
         };
-        let Some(scan) = self.catalog.scans.get(data.scan) else {
-            return;
-        };
-        if data.fingerprint
-            != scan_fingerprint(
-                &self.params,
-                &self.overrides,
-                &self.group_registry,
-                scan.start,
-                scan.len,
-            )
-            || ix != scan.start + self.time_pos.min(scan.len.saturating_sub(1))
+        if data.fingerprint != self.overview_fingerprint(&data.source)
+            || data.source.entry(self.time_pos) != Some(ix)
         {
             return;
         }
@@ -6175,6 +6120,7 @@ impl StudioApp {
         self.resolve_interaction(interaction);
         self.expanded_scan = None;
         self.active_scan = None;
+        self.overview_series = None;
         self.operando = None;
         self.operando_plots = None;
         self.time_pos = 0;
@@ -6530,6 +6476,7 @@ impl StudioApp {
                 return;
             }
             self.selected = Some(ix);
+            self.sync_operando_cursor_to_entry(ix, cx);
             self.reveal_group_row(ix);
             let label: SharedString = self.entry_label(ix).into();
             self.current_path = self.derived[ix - DERIVED_BASE]
@@ -7945,13 +7892,13 @@ impl StudioApp {
 
     /// Jump to the cursor frame in the Normalize stage.
     pub(crate) fn open_frame_in_normalize(&mut self, cx: &mut Context<Self>) {
-        let Some(data) = self.operando.as_ref() else {
+        let Some(ix) = self
+            .operando
+            .as_ref()
+            .and_then(|d| d.source.entry(self.time_pos))
+        else {
             return;
         };
-        let Some(scan) = self.catalog.scans.get(data.scan) else {
-            return;
-        };
-        let ix = scan.start + self.time_pos.min(scan.len.saturating_sub(1));
         self.select_entry(ix, cx);
         self.sync_param_fields(cx);
         self.set_stage(shell::Stage::Normalize, cx);
@@ -7970,7 +7917,7 @@ impl StudioApp {
     pub(crate) fn active_batch_trend(&self) -> Option<(&BatchFitData, &str)> {
         let bf = self.batch_fit.as_ref()?;
         let data = self.operando.as_ref()?;
-        if bf.scan != data.scan
+        if Some(bf.scan) != data.source.scan_index()
             || bf.fingerprint != data.fingerprint
             || bf.model_fingerprint != self.fit_model_fingerprint()
         {
@@ -7989,6 +7936,7 @@ impl StudioApp {
             .map(|data| data.scan_len)
             .unwrap_or_default();
         match &self.series_trend {
+            TrendSource::Measurement(index) => return self.measurement_trend_snapshot(*index),
             TrendSource::FitVar(name) => {
                 if let Some((bf, _)) = self.active_batch_trend() {
                     let mut values = vec![f64::NAN; scan_len];
@@ -8069,7 +8017,8 @@ impl StudioApp {
     pub(crate) fn active_series_lcf(&self) -> Option<&SeriesLcf> {
         let lcf = self.series_lcf.as_ref()?;
         let data = self.operando.as_ref()?;
-        (lcf.scan == data.scan && lcf.fingerprint == data.fingerprint).then_some(lcf)
+        (Some(lcf.scan) == data.source.scan_index() && lcf.fingerprint == data.fingerprint)
+            .then_some(lcf)
     }
 
     /// Return the requested frame and quantity. A sampled overview never
@@ -8077,13 +8026,10 @@ impl StudioApp {
     /// the generation-checked source load completes.
     fn series_frame_source(&self) -> Option<(ChikRowKey, Vec<f64>)> {
         let data = self.operando.as_ref()?;
-        let scan = self.catalog.scans.get(data.scan)?;
         let space = self.stage_view.series_space;
         let (grid, matrix) = data.space(space);
-        let frame = self
-            .time_pos
-            .min(data.scan_len.min(scan.len).saturating_sub(1));
-        let ix = scan.start + frame;
+        let frame = self.time_pos.min(data.scan_len.saturating_sub(1));
+        let ix = data.source.entry(frame)?;
         let fingerprint = self.effective_fingerprint(ix);
         if let Some(sp) = self.cache.peek(&(ix, fingerprint))
             && let Some(row) = resample_series_frame(sp, space, grid)
@@ -8099,7 +8045,7 @@ impl StudioApp {
         let row = exact_overview_row(&data.sample_frames, matrix, frame, grid.len());
         Some((
             ChikRowKey::Sampled {
-                scan: data.scan,
+                scan: data.source.scan_index().unwrap_or(NO_ENTRY),
                 overview_fingerprint: data.fingerprint,
                 row: frame,
             },
@@ -8124,11 +8070,12 @@ impl StudioApp {
         if self
             .operando
             .as_ref()
-            .is_some_and(|data| data.scan == scan_ix)
+            .is_some_and(|data| data.source.scan_index() == Some(scan_ix))
         {
             self.set_time_pos(frame, cx);
             return;
         }
+        self.overview_series = None;
         self.active_scan = Some(scan_ix);
         self.pending_time_pos = Some(frame);
         self.time_pos = frame;
