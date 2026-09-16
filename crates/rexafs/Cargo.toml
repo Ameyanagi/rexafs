@@ -60,6 +60,8 @@ base64 = "0.23.1"
 hdf5-pure = "0.45.0"
 encoding_rs = "0.8"
 regex = "1"
+rand = { version = "0.9", default-features = false, features = ["std"] }
+rand_chacha = "0.9"
 
 [features]
 default = ["trust-region"]
@@ -98,6 +100,10 @@ harness = false
 [[bench]]
 name = "autobk_stage_benchmark"
 harness = false
+
+[[example]]
+name = "rmc_refeff"
+required-features = ["refeff-runner"]
 
 [[bench]]
 name = "feff_fitting_batch_benchmark"

@@ -20,6 +20,8 @@ Start with the [project README](../README.md), [API guide](api.md),
   AUTOBK, Fourier transforms and filtering, with equations and references.
 - [Fitting statistics](fitting-statistics.md): residuals, information counts,
   covariance, standard errors and interpretation limits.
+- [Experimental RMC with ReFEFF](rmc.md): unreleased atomic-coordinate refinement,
+  command-line example, objective, constraints and scientific limitations.
 - [Fixed-penalty AUTOBK](autobk-fixed-penalty.md): the rexafs-specific objective.
 - [Contributor documentation baseline](../CONTRIBUTING.md): requirements for
   clear English, defined symbols/units, verified citations and useful API help.
