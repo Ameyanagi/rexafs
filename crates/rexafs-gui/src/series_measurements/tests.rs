@@ -321,6 +321,14 @@ fn coordinate_sidecars_are_atomic_id_keyed_and_timezone_aware() {
     series.frames[0].acquired_at = Some("2026-09-16T12:00:03+09:00".into());
     series.frames[1].acquired_at = Some("2026-09-16T03:00:01Z".into());
     let sidecar = series.coordinates_csv().unwrap();
+    let mut unlabelled = series.clone();
+    unlabelled.coordinate = Default::default();
+    let before = unlabelled.frames.clone();
+    assert!(unlabelled.import_coordinates(&sidecar).is_err());
+    assert_eq!(
+        serde_json::to_value(unlabelled.frames).unwrap(),
+        serde_json::to_value(before).unwrap()
+    );
     let mut restored = series.clone();
     restored.frames.reverse();
     restored.import_coordinates(&sidecar).unwrap();
@@ -366,4 +374,74 @@ fn unsaved_preset_edits_reserve_distinct_revisions_in_runs() {
     assert_eq!(archive.definition_revision(&preset), 3);
     preset.measurement.metric = Metric::Point { x: 0.5 };
     assert_eq!(archive.definition_revision(&preset), 2);
+}
+
+#[test]
+fn recovery_keeps_only_complete_chunks_and_never_changes_the_saved_project() {
+    use std::io::Write;
+    let inputs = vec![input("one", 1.), input("two", 2.), input("three", 3.)];
+    let series = series(&inputs);
+    let mut run = SeriesRun::new(&series, definition(), &inputs);
+    run.freeze(&inputs, || false);
+    let project = crate::project::ProjectFile {
+        version: 1,
+        series_measurements: SeriesArchive {
+            series: vec![series],
+            runs: vec![run.clone()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let original = dir.path().join("original.rxs");
+    crate::project::save(&original, &project).unwrap();
+    let original_bytes = std::fs::read(&original).unwrap();
+    let root = dir.path().join("recovery");
+    let mut journal = recovery::RecoveryWriter::begin(&root, project, &run).unwrap();
+    assert!(
+        recovery::discover(&root).unwrap().is_empty(),
+        "active checkpoint must not be offered"
+    );
+    let row = calculate_row(&inputs[0], &run.rows[0], &run.definition);
+    journal.rows(0, &[row.clone()]).unwrap();
+    drop(journal);
+    let entry = recovery::discover(&root).unwrap().pop().unwrap();
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(entry.directory.join("rows.jsonl"))
+        .unwrap()
+        .write_all(b"{\"Rows\":{\"begin\":1")
+        .unwrap();
+    let (recovered, committed) = recovery::recover(&entry).unwrap();
+    assert_eq!(committed, 1);
+    let restored = &recovered.series_measurements.runs[0];
+    assert_eq!(restored.rows.len(), 3);
+    assert_eq!(restored.rows[0].result.as_ref().unwrap().value, 1.);
+    assert_eq!(restored.rows[1].status, FrameStatus::Cancelled);
+    assert!(restored.cancelled);
+    assert!(recovered.origin.is_none());
+    assert_eq!(std::fs::read(&original).unwrap(), original_bytes);
+    // A completed malformed line must fail, instead of silently hiding corruption.
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(entry.directory.join("rows.jsonl"))
+        .unwrap()
+        .write_all(b"\n")
+        .unwrap();
+    assert!(recovery::recover(&entry).is_err());
+    recovery::discard(&entry).unwrap();
+    assert!(recovery::discover(&root).unwrap().is_empty());
+}
+
+#[test]
+fn cancelled_before_snapshot_cannot_relabel_changed_settings() {
+    let inputs = vec![input("one", 1.)];
+    let mut run = SeriesRun::new(&series(&inputs), definition(), &inputs);
+    run.freeze(&inputs, || true);
+    run.finish(true);
+    let mut changed = inputs;
+    changed[0].settings.e0 = Some(1.);
+    run.freeze(&changed, || false);
+    assert_eq!(run.rows[0].status, FrameStatus::Failed);
+    assert!(run.rows[0].input_revision.is_none());
 }

@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use std::{path::PathBuf, sync::Arc};
 
 mod catalogue;
+pub mod recovery;
 pub use catalogue::{CoordinateDefinition, TrendAxis};
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -275,15 +276,32 @@ impl SeriesRun {
 
     /// Resolve revisions before calculation. The coordinator retains these
     /// small records; source spectra are read one at a time, then released.
+    #[cfg(test)]
     pub fn freeze(&mut self, inputs: &[FrameInput], cancelled: impl Fn() -> bool) {
-        for (row, input) in self.rows.iter_mut().zip(inputs) {
+        self.freeze_with_progress(inputs, cancelled, |_| {});
+    }
+
+    pub fn freeze_with_progress(
+        &mut self,
+        inputs: &[FrameInput],
+        cancelled: impl Fn() -> bool,
+        progress: impl Fn(usize),
+    ) {
+        for (index, (row, input)) in self.rows.iter_mut().zip(inputs).enumerate() {
             if cancelled() {
                 break;
             }
+            progress(index + 1);
             if row.input_revision.is_some() {
                 continue;
             }
             if row.frame.group != input.group {
+                continue;
+            }
+            if row.settings != input.settings {
+                row.status = FrameStatus::Failed;
+                row.reason =
+                    Some("Settings changed before the input snapshot; start a new run".into());
                 continue;
             }
             match input.revision() {

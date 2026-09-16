@@ -173,6 +173,19 @@ impl SeriesDefinition {
             if row.coordinate.is_some_and(|v| !v.is_finite()) {
                 return Err("Coordinates must be finite or blank".into());
             }
+            if row.coordinate.is_some()
+                && [
+                    self.coordinate.label.as_str(),
+                    self.coordinate.unit.as_str(),
+                    self.coordinate.source.as_str(),
+                ]
+                .iter()
+                .any(|s| s.trim().is_empty())
+            {
+                return Err(
+                    "Declare the coordinate name, unit and source before importing values".into(),
+                );
+            }
             if let Some(text) = &row.acquired_at {
                 chrono::DateTime::parse_from_rfc3339(text).map_err(|_| "Use RFC 3339 timestamps with UTC offsets, for example 2026-09-16T12:00:00+09:00")?;
             }

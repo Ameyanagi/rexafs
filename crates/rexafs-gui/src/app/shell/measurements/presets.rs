@@ -194,8 +194,16 @@ impl StudioApp {
     pub(super) fn measurement_presets(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let t = self.theme;
         if self.measurements.preset_name.is_none() {
+            let name = self
+                .measurements
+                .archive
+                .presets
+                .iter()
+                .find(|p| Some(&p.id) == self.measurements.selected_preset.as_ref())
+                .map(|p| p.name.clone())
+                .unwrap_or_default();
             self.measurements.preset_name =
-                Some(cx.new(|cx| TextInput::new("Measurement preset name", "", t, cx)));
+                Some(cx.new(|cx| TextInput::new("Measurement preset name", name, t, cx)));
         }
         let mut view = div().flex().flex_col().gap_2();
         view = view.child(

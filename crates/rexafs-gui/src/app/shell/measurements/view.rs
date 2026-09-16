@@ -4,6 +4,7 @@ use gpui::{IntoElement, ParentElement, Styled, div, prelude::*, px};
 
 impl StudioApp {
     pub(crate) fn series_stage_center(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        self.monitor_measurements(cx);
         let t = self.theme;
         let bar = div()
             .p_2()
@@ -72,10 +73,11 @@ impl StudioApp {
                 self.measurements.fields.push(field);
             }
         }
-        if self.measurements.plot.is_none() && self.measurements.selected_run.is_some() {
+        let running = self.measurements.cancel.is_some();
+        if !running && self.measurements.plot.is_none() && self.measurements.selected_run.is_some()
+        {
             self.rebuild_measurement_plot(cx);
         }
-        let running = self.measurements.cancel.is_some();
         let mut body = div()
             .id("full-frame-measurements")
             .flex_1()
@@ -86,6 +88,7 @@ impl StudioApp {
             .flex()
             .flex_col()
             .gap_3();
+        body = body.child(self.measurement_recovery_panel(cx));
         let mut create = div()
             .flex()
             .flex_wrap()
@@ -323,6 +326,18 @@ impl StudioApp {
                 .on_click(cx.listener(|app, _, _, cx| app.start_measurements(false, cx))),
             );
         }
+        if !running
+            && self
+                .measurements
+                .selected_run
+                .and_then(|i| self.measurements.archive.runs.get(i))
+                .is_some_and(|run| run.cancelled)
+        {
+            controls = controls.child(
+                button(&t, "measurement-resume", "Resume unfinished", false)
+                    .on_click(cx.listener(|app, _, _, cx| app.start_measurements(true, cx))),
+            );
+        }
         if self.measurements.kind != 4 {
             controls = controls.child(
                 button(
@@ -444,7 +459,7 @@ impl StudioApp {
             .selected_run
             .and_then(|i| self.measurements.archive.runs.get(i))
         {
-            let mut export = div()
+            let export = div()
                 .flex()
                 .flex_wrap()
                 .gap_2()
@@ -474,12 +489,6 @@ impl StudioApp {
                     )
                     .on_click(cx.listener(|app, _, _, cx| app.check_measurement_inputs(cx))),
                 );
-            if run.cancelled && !running {
-                export = export.child(
-                    button(&t, "measurement-resume", "Resume unfinished", false)
-                        .on_click(cx.listener(|app, _, _, cx| app.start_measurements(true, cx))),
-                );
-            }
             body = body.child(export).child(
                 div()
                     .text_size(px(11.))

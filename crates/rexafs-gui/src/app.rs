@@ -8489,6 +8489,13 @@ impl StudioApp {
             return;
         }
         let project = self.project_file();
+        let saved_measurement_ids: std::collections::BTreeSet<_> = project
+            .series_measurements
+            .runs
+            .iter()
+            .filter(|r| r.complete && !r.cancelled)
+            .map(|r| r.id.clone())
+            .collect();
         let history_revision = self.assistant_history_revision;
         let generation = self.project_generation;
         let mode = self.project_storage;
@@ -8520,17 +8527,22 @@ impl StudioApp {
                 })
                 .ok();
                 let save_path = path.clone();
-                let result =
-                    cx.background_executor()
-                        .spawn(async move {
-                            crate::project::save_with_storage(&save_path, &project, mode)
-                        })
-                        .await;
+                let result = cx
+                    .background_executor()
+                    .spawn(async move {
+                        let saved = crate::project::save_with_storage(&save_path, &project, mode);
+                        if saved.is_ok() {
+                            crate::series_measurements::recovery::acknowledge_saved(&project);
+                        }
+                        saved
+                    })
+                    .await;
                 this.update(cx, |app, cx| {
                     app.project_saving = false;
                     match result {
                         Ok(header) => {
                             if app.project_generation == generation {
+                                app.measurements.acknowledge_saved(&saved_measurement_ids);
                                 app.project_path = Some(path.clone());
                                 app.project_header = Some(header);
                                 app.assistant_history_saved_revision = history_revision;

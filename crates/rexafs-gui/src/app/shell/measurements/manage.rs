@@ -248,7 +248,13 @@ impl StudioApp {
                     let result = cx
                         .background_spawn(async move {
                             let mut series = series;
-                            let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+                            use std::io::Read;
+                            let mut bytes = Vec::new();
+                            std::fs::File::open(path)
+                                .map_err(|e| e.to_string())?
+                                .take(16 * 1024 * 1024 + 1)
+                                .read_to_end(&mut bytes)
+                                .map_err(|e| e.to_string())?;
                             if bytes.len() > 16 * 1024 * 1024 {
                                 return Err("Coordinate CSV exceeds 16 MiB".into());
                             }

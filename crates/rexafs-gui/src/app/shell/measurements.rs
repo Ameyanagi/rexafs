@@ -18,6 +18,7 @@ use std::{
 
 mod manage;
 mod presets;
+mod reliability;
 mod view;
 
 pub(crate) struct MeasurementState {
@@ -48,6 +49,9 @@ pub(crate) struct MeasurementState {
     preset_name: Option<Entity<crate::widgets::text_input::TextInput>>,
     selected_preset: Option<crate::group_identity::GroupId>,
     pick_range: Option<Vec<f64>>,
+    monitoring: bool,
+    recovery_entries: Vec<recovery::RecoveryEntry>,
+    recovery_busy: bool,
 }
 
 impl Default for MeasurementState {
@@ -56,6 +60,14 @@ impl Default for MeasurementState {
     }
 }
 impl MeasurementState {
+    pub fn acknowledge_saved(
+        &mut self,
+        ids: &std::collections::BTreeSet<crate::group_identity::GroupId>,
+    ) {
+        self.recovery_entries
+            .retain(|entry| !ids.contains(&entry.run));
+    }
+
     pub fn from_archive(archive: SeriesArchive) -> Self {
         let selected_series = archive.series.len().checked_sub(1);
         let selected_run = selected_series.and_then(|index| {
@@ -89,6 +101,15 @@ impl MeasurementState {
         let initial_range = definition
             .map(|d| d.measurement.metric.bounds())
             .unwrap_or((-20., 50.));
+        let selected_preset = definition.and_then(|d| {
+            archive
+                .presets
+                .iter()
+                .find(|p| {
+                    p.id == d.id && p.measurement == d.measurement && p.edge_energy == d.edge_energy
+                })
+                .map(|p| p.id.clone())
+        });
         Self {
             archive,
             overview: false,
@@ -115,8 +136,11 @@ impl MeasurementState {
             editor: None,
             trend_axis: TrendAxis::Sequence,
             preset_name: None,
-            selected_preset: None,
+            selected_preset,
             pick_range: None,
+            monitoring: false,
+            recovery_entries: vec![],
+            recovery_busy: false,
         }
     }
     pub fn stop(&mut self) {
@@ -238,19 +262,25 @@ impl StudioApp {
     }
 
     fn measurement_definition(&self, cx: &Context<Self>) -> Result<MetricDefinition, String> {
-        let start = self
-            .measurements
-            .fields
-            .first()
-            .and_then(|f| f.read(cx).value())
-            .ok_or("Enter a point or range start")?;
-        let end = self
-            .measurements
-            .fields
-            .get(1)
-            .and_then(|f| f.read(cx).value())
-            .ok_or("Enter a range end")?;
         let kind = self.measurements.kind;
+        let start = if kind == 4 {
+            0.
+        } else {
+            self.measurements
+                .fields
+                .first()
+                .and_then(|f| f.read(cx).value())
+                .ok_or("Enter a point or range start")?
+        };
+        let end = if kind == 0 || kind == 4 {
+            start + 1.
+        } else {
+            self.measurements
+                .fields
+                .get(1)
+                .and_then(|f| f.read(cx).value())
+                .ok_or("Enter a range end")?
+        };
         if kind != 0 && kind != 4 && end <= start {
             return Err("Range end must be greater than start".into());
         }
@@ -457,6 +487,11 @@ impl StudioApp {
         if self.measurements.cancel.is_some() {
             return;
         }
+        if self.catalog.scanning {
+            self.measurements.message = "Wait for the group catalogue to finish loading.".into();
+            cx.notify();
+            return;
+        }
         let Some(series) = self
             .measurements
             .selected_series
@@ -502,6 +537,7 @@ impl StudioApp {
             self.measurements.archive.runs.len() - 1
         };
         self.measurements.selected_run = Some(index);
+        self.measurements.plot = None;
         self.measurements.page = 0;
         self.measurements.stale.clear();
         self.measurements.generation += 1;
@@ -516,17 +552,71 @@ impl StudioApp {
             "Snapshotting input revisions…"
         }
         .into();
+        let recovery_project = self.project_file();
+        let recovery_root = recovery::recovery_root();
+        let snapshot_progress = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let snapshot_phase = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let monitor_progress = snapshot_progress.clone();
+        let monitor_phase = snapshot_phase.clone();
+        let count = inputs.len();
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(200))
+                    .await;
+                let phase = monitor_phase.load(Ordering::Relaxed);
+                if phase == 2 {
+                    break;
+                }
+                let progress = monitor_progress.load(Ordering::Relaxed);
+                if this
+                    .update(cx, |app, cx| {
+                        if app.project_generation != project
+                            || app.measurements.generation != generation
+                        {
+                            return false;
+                        }
+                        app.measurements.progress = (progress, count);
+                        app.measurements.message = if phase == 0 {
+                            format!("Checking input {progress} / {count}…")
+                        } else {
+                            "Saving recovery checkpoint…".into()
+                        };
+                        cx.notify();
+                        true
+                    })
+                    .ok()
+                    != Some(true)
+                {
+                    break;
+                }
+            }
+        })
+        .detach();
         cx.spawn(async move |this, cx| {
             let stop = cancel.clone();
             let sources = Arc::new(inputs);
             let sources_job = sources.clone();
-            let mut run = cx
+            let worker_phase=snapshot_phase.clone();
+            let initialized = cx
                 .background_spawn(async move {
                     let mut run = run;
-                    run.freeze(&sources_job, || stop.load(Ordering::Relaxed));
-                    run
-                })
-                .await;
+                    run.freeze_with_progress(&sources_job, || stop.load(Ordering::Relaxed), |count|snapshot_progress.store(count,Ordering::Relaxed));
+                    worker_phase.store(1,Ordering::Relaxed);
+                    let root = recovery_root?;
+                    let journal=recovery::RecoveryWriter::begin(&root,recovery_project,&run)?;
+                    Ok::<_,String>((run,journal))
+                }).await;
+            snapshot_phase.store(2,Ordering::Relaxed);
+            let (mut run, mut journal) = match initialized {
+                Ok(value)=>value,
+                Err(error)=>{
+                    this.update(cx,|app,cx|{if app.project_generation!=project||app.measurements.generation!=generation{return;}
+                        app.measurements.cancel=None; app.measurements.archive.runs[index].finish(true);
+                        app.measurements.message=format!("Could not create recovery checkpoint: {error}. Free disk space and resume.");cx.notify();
+                    }).ok();return;
+                }
+            };
             let frozen = run.clone();
             if this
                 .update(cx, |app, cx| {
@@ -537,6 +627,7 @@ impl StudioApp {
                     }
                     app.measurements.archive.runs[index] = frozen;
                     app.measurements.message = "Calculating every frame…".into();
+                    app.measurements.progress=(0,sources.len());
                     cx.notify();
                     true
                 })
@@ -547,18 +638,20 @@ impl StudioApp {
             }
             // One bounded chunk at a time. No full processed-spectrum collection
             // or nested BLAS pool is retained by the coordinator.
-            for begin in (0..sources.len()).step_by(16) {
+            let mut checkpoint_error=None;
+            let chunk_size = if sources.len() > 10_000 { 128 } else { 16 };
+            for begin in (0..sources.len()).step_by(chunk_size) {
                 if cancel.load(Ordering::Relaxed) {
                     break;
                 }
-                let end = (begin + 16).min(sources.len());
+                let end = (begin + chunk_size).min(sources.len());
                 let rows = run.rows[begin..end].to_vec();
                 let definition = run.definition.clone();
                 let worker_sources = sources.clone();
                 let stop = cancel.clone();
-                let values = cx
+                let (values, returned_journal, error) = cx
                     .background_spawn(async move {
-                        rows.into_iter()
+                        let values=rows.into_iter()
                             .enumerate()
                             .map(|(offset, row)| {
                                 if stop.load(Ordering::Relaxed)
@@ -578,9 +671,12 @@ impl StudioApp {
                                     )
                                 }
                             })
-                            .collect::<Vec<_>>()
-                    })
-                    .await;
+                            .collect::<Vec<_>>();
+                        let error=journal.rows(begin,&values).err();
+                        (values,journal,error)
+                    }).await;
+                journal=returned_journal;
+                if let Some(error)=error {checkpoint_error=Some(error);cancel.store(true,Ordering::Relaxed);break;}
                 run.rows[begin..end].clone_from_slice(&values);
                 if this
                     .update(cx, |app, cx| {
@@ -602,6 +698,13 @@ impl StudioApp {
                 }
             }
             run.finish(cancel.load(Ordering::Relaxed));
+            let cancelled=run.cancelled;
+            // A failed append can leave a torn final line. Do not append a
+            // footer after it: recovery deliberately ignores only that tail.
+            let final_error=if checkpoint_error.is_none() {
+                cx.background_spawn(async move{journal.finish(cancelled).err()}).await
+            } else { None };
+            checkpoint_error=checkpoint_error.or(final_error);
             this.update(cx, |app, cx| {
                 if app.project_generation != project || app.measurements.generation != generation {
                     return;
@@ -616,6 +719,7 @@ impl StudioApp {
                     run.rows.len(),
                     if run.cancelled { " · cancelled" } else { "" }
                 );
+                if let Some(error)=checkpoint_error {app.measurements.message=format!("Checkpoint failed: {error}. Completed rows are retained; save the project before continuing.");}
                 app.measurements.archive.runs[index] = run;
                 app.measurements.cancel = None;
                 app.rebuild_measurement_plot(cx);
@@ -635,6 +739,10 @@ impl StudioApp {
         else {
             return;
         };
+        if !run.rows.iter().any(|row| row.result.is_some()) {
+            self.measurements.plot = None;
+            return;
+        }
         let mut plot = Plot::new()
             .theme(self.theme.plot_theme())
             .xlabel(run.coordinate_label(self.measurements.trend_axis));
@@ -682,6 +790,10 @@ impl StudioApp {
     }
 
     fn check_measurement_inputs(&mut self, cx: &mut Context<Self>) {
+        self.check_measurement_inputs_internal(true, cx);
+    }
+
+    fn check_measurement_inputs_internal(&mut self, feedback: bool, cx: &mut Context<Self>) {
         if self.measurements.checking {
             return;
         }
@@ -724,9 +836,11 @@ impl StudioApp {
                 app.measurements.checking = false;
                 if app.measurements.selected_run == Some(index) {
                     let count = stale.iter().filter(|s| **s).count();
-                    app.measurements.message = format!(
-                        "{count} inputs changed or unavailable; retained values are unchanged."
-                    );
+                    if feedback || (count > 0 && app.measurements.stale != stale) {
+                        app.measurements.message = format!(
+                            "{count} inputs changed or unavailable; retained values are unchanged."
+                        );
+                    }
                     app.measurements.stale = stale;
                 }
                 cx.notify();
