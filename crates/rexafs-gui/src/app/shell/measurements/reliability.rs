@@ -71,6 +71,9 @@ impl StudioApp {
                         let next=project.assign_group_ids();
                         let registry=crate::group_identity::GroupRegistry::from_sources(std::mem::take(&mut project.source_groups));
                         app.apply_project(project,next,registry,cx);
+                        app.measurements.overview=false;
+                        app.measurements.results=true;
+                        app.measurements.advanced=true;
                         app.measurements.message=format!("Recovered {committed} committed rows into an unsaved copy. Review inputs, then resume unfinished frames or save.");
                     }
                     Ok(None)=>{app.measurements.recovery_entries.remove(index);app.measurements.message="Recovery copy discarded.".into();}

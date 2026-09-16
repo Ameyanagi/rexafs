@@ -16,17 +16,23 @@ use std::{
     },
 };
 
+pub(super) mod drag;
 mod manage;
 mod presets;
 mod recipes;
 mod reliability;
 mod view;
+mod workflow;
 
 pub(crate) struct MeasurementState {
     pub archive: SeriesArchive,
     pub overview: bool,
     pub selected_series: Option<usize>,
     pub selected_run: Option<usize>,
+    advanced: bool,
+    results: bool,
+    initialized: bool,
+    preview_timer: u64,
     kind: usize,
     initial_range: (f64, f64),
     space: MeasurementSpace,
@@ -38,6 +44,7 @@ pub(crate) struct MeasurementState {
     scroll: gpui::ScrollHandle,
     preview: Option<Entity<RuvizPlot>>,
     preview_label: String,
+    preview_full: bool,
     plot: Option<Entity<RuvizPlot>>,
     generation: u64,
     preview_generation: u64,
@@ -50,7 +57,7 @@ pub(crate) struct MeasurementState {
     preset_name: Option<Entity<crate::widgets::text_input::TextInput>>,
     selected_preset: Option<crate::group_identity::GroupId>,
     selected_recipe: Option<(crate::group_identity::GroupId, u64)>,
-    pick_range: Option<Vec<f64>>,
+    preview_data: Option<drag::MeasurementPreview>,
     monitoring: bool,
     recovery_entries: Vec<recovery::RecoveryEntry>,
     recovery_busy: bool,
@@ -71,7 +78,18 @@ impl MeasurementState {
     }
 
     pub fn from_archive(archive: SeriesArchive) -> Self {
-        let selected_series = archive.series.len().checked_sub(1);
+        // Reopen the most recently analyzed series rather than an unrelated
+        // series that happened to be created last.
+        let selected_series = archive
+            .runs
+            .last()
+            .and_then(|run| {
+                archive
+                    .series
+                    .iter()
+                    .position(|series| series.id == run.series_id)
+            })
+            .or_else(|| archive.series.len().checked_sub(1));
         let selected_run = selected_series.and_then(|index| {
             let series = &archive.series[index];
             archive
@@ -96,7 +114,7 @@ impl MeasurementState {
             .unwrap_or(1);
         let space = definition
             .map(|d| d.measurement.space)
-            .unwrap_or(MeasurementSpace::Norm);
+            .unwrap_or(MeasurementSpace::Flat);
         let relative = definition
             .map(|d| d.measurement.origin == AxisOrigin::E0)
             .unwrap_or(true);
@@ -117,7 +135,11 @@ impl MeasurementState {
             .map(|r| (r.id.clone(), r.revision));
         Self {
             archive,
-            overview: false,
+            overview: true,
+            advanced: false,
+            results: false,
+            initialized: false,
+            preview_timer: 0,
             selected_series,
             selected_run,
             kind,
@@ -131,6 +153,7 @@ impl MeasurementState {
             scroll: gpui::ScrollHandle::new(),
             preview: None,
             preview_label: String::new(),
+            preview_full: false,
             plot: None,
             generation: 0,
             preview_generation: 0,
@@ -143,7 +166,7 @@ impl MeasurementState {
             preset_name: None,
             selected_preset,
             selected_recipe,
-            pick_range: None,
+            preview_data: None,
             monitoring: false,
             recovery_entries: vec![],
             recovery_busy: false,
@@ -196,6 +219,13 @@ impl StudioApp {
             derived,
             settings: self.effective_params(ix).clone(),
             recipe: None,
+        }
+    }
+
+    pub(crate) fn create_overview_from_groups(&mut self, cx: &mut Context<Self>) {
+        self.create_measurement_series(2, cx);
+        if let Some(index) = self.measurements.selected_series {
+            self.choose_overview_series(index, cx);
         }
     }
 
@@ -263,8 +293,7 @@ impl StudioApp {
         self.measurements.plot = None;
         self.measurements.page = 0;
         self.measurements.preview_index = 0;
-        self.measurements.message =
-            "Membership saved. Review a measurement, then calculate every frame.".into();
+        self.measurements.message.clear();
         self.preview_measurement(cx);
         cx.notify();
     }
@@ -298,14 +327,7 @@ impl StudioApp {
             2 => Metric::Integral { start, end },
             _ => Metric::Mean { start, end },
         };
-        let name = [
-            "Point",
-            "Region maximum",
-            "Region integral",
-            "Region mean",
-            "Absolute E₀",
-        ][kind]
-            .to_string();
+        let name = ["Point", "Maximum", "Integral", "Mean", "Edge energy"][kind].to_string();
         let mut definition = MetricDefinition {
             id: crate::group_identity::GroupId::new_result(),
             revision: 1,
@@ -369,7 +391,12 @@ impl StudioApp {
         let definition = match self.measurement_definition(cx) {
             Ok(d) => d,
             Err(e) => {
-                self.measurements.message = e;
+                self.clear_measurement_handles();
+                self.measurements.preview_data = None;
+                self.measurements.preview_generation += 1;
+                self.measurements.preview = None;
+                self.measurements.preview_label = e;
+                cx.notify();
                 return;
             }
         };
@@ -405,6 +432,8 @@ impl StudioApp {
         expected: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        self.clear_measurement_handles();
+        self.measurements.preview_data = None;
         self.measurements.preview_generation += 1;
         let request = self.measurements.preview_generation;
         let generation = self.project_generation;
@@ -454,11 +483,37 @@ impl StudioApp {
                             .theme(app.theme.plot_theme())
                             .line(&x, &y)
                             .into();
-                        let color = ruviz::render::Color::from_gray(170);
-                        plot = plot.vline_styled(lo, color, 1.3, ruviz::render::LineStyle::Dashed);
-                        if hi != lo {
+                        if !app.measurements.preview_full {
+                            let minimum_padding = match space {
+                                MeasurementSpace::Chi { .. } => 0.5,
+                                MeasurementSpace::Fourier => 0.3,
+                                _ => 30.0,
+                            };
+                            let padding = ((hi - lo) * 0.5).max(minimum_padding);
+                            let left = (lo - padding).max(x[0]);
+                            let right = (hi + padding).min(x[x.len() - 1]);
+                            if right > left {
+                                plot = plot.xlim(left, right);
+                            }
+                        }
+                        let editable = !app.measurements.results
+                            && !app.measurements.overview
+                            && app.measurements.kind != 4;
+                        if !editable {
+                            let color = ruviz::render::Color::from_gray(170);
                             plot =
-                                plot.vline_styled(hi, color, 1.3, ruviz::render::LineStyle::Dashed);
+                                plot.vline_styled(lo, color, 1.3, ruviz::render::LineStyle::Dashed);
+                            if hi != lo {
+                                plot = plot.vline_styled(
+                                    hi,
+                                    color,
+                                    1.3,
+                                    ruviz::render::LineStyle::Dashed,
+                                );
+                            }
+                        }
+                        if matches!(space, MeasurementSpace::Chi { .. }) {
+                            plot = crate::plotting::centered_y(plot, y.iter().copied());
                         }
                         plot = plot
                             .xlabel(axis_label(space))
@@ -466,26 +521,17 @@ impl StudioApp {
                             .size_px(720, 300)
                             .major_ticks_x(5);
                         let preview = plot_builder(plot).interactive().build(cx);
-                        cx.subscribe(&preview, move |app: &mut Self, _, event: &ruviz_gpui::PlotPointerEvent, cx| {
-                            if event.kind != ruviz_gpui::PlotPointerEventKind::Click || event.mouse_button != Some(gpui::MouseButton::Left) || app.measurements.preview_generation != request { return; }
-                            let Some(position)=event.data_position else {return};
-                            let Some(picks)=&mut app.measurements.pick_range else {return};
-                            picks.push(position.x-origin);
-                            if app.measurements.kind==0 || picks.len()==2 {
-                                let lo=picks.iter().copied().fold(f64::INFINITY,f64::min);
-                                let hi=picks.iter().copied().fold(f64::NEG_INFINITY,f64::max);
-                                if app.measurements.kind!=0 && hi<=lo {app.measurements.message="Choose two distinct positions.".into();app.measurements.pick_range=Some(vec![]);cx.notify();return;}
-                                app.measurements.fields[0].update(cx,|f,cx|f.set_value(Some(lo),cx));
-                                app.measurements.fields[1].update(cx,|f,cx|f.set_value(Some(hi),cx));
-                                app.measurements.pick_range=None;
-                                app.measurements.message="Range selected from the plot; review the displayed coordinates.".into();
-                                app.preview_measurement(cx);
-                            } else { app.measurements.message="Now click the other boundary.".into(); }
-                            cx.notify();
-                        }).detach();
+                        app.measurements.preview_data =
+                            editable.then(|| drag::MeasurementPreview {
+                                x,
+                                y,
+                                metric,
+                                origin,
+                                space,
+                                label: label.clone(),
+                            });
                         app.measurements.preview = Some(preview);
-                        app.measurements.preview_label =
-                            format!("{label} · {value:.6} · [{lo:.3}, {hi:.3}]");
+                        app.measurements.preview_label = format!("{label} · {value:.6}");
                     }
                     Err(e) => {
                         app.measurements.preview_label = e;
@@ -754,10 +800,14 @@ impl StudioApp {
                     run.rows.len(),
                     if run.cancelled { " · cancelled" } else { "" }
                 );
+                let show_trend = good > 0 && !run.cancelled && checkpoint_error.is_none();
                 if let Some(error)=checkpoint_error {app.measurements.message=format!("Checkpoint failed: {error}. Completed rows are retained; save the project before continuing.");}
                 app.measurements.archive.runs[index] = Arc::new(run);
                 app.measurements.cancel = None;
                 app.rebuild_measurement_plot(cx);
+                if show_trend && !app.measurements.overview && !app.measurements.results {
+                    app.show_measurement_trend(index, cx);
+                }
                 cx.notify();
             })
             .ok();

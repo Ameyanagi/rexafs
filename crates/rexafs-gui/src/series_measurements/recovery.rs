@@ -31,7 +31,25 @@ enum Record {
 
 pub struct RecoveryWriter {
     log: File,
-    _lock: File,
+    _lock: CheckpointLock,
+}
+
+/// Release ownership explicitly before closing. A concurrently spawned child
+/// can briefly inherit a duplicate descriptor; closing only our descriptor can
+/// leave its advisory lock alive until the child closes its copy.
+struct CheckpointLock(File);
+
+impl CheckpointLock {
+    fn acquire(file: File) -> Result<Self, String> {
+        file.try_lock().map_err(|e| e.to_string())?;
+        Ok(Self(file))
+    }
+}
+
+impl Drop for CheckpointLock {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
 }
 
 pub fn recovery_root() -> Result<PathBuf, String> {
@@ -89,7 +107,7 @@ impl RecoveryWriter {
         ));
         private_directory(&directory)?;
         let lock = create_private(&directory.join("owner.lock"))?;
-        lock.try_lock().map_err(|e| e.to_string())?;
+        let lock = CheckpointLock::acquire(lock)?;
         // Run metadata has its own streaming file so the project snapshot does
         // not duplicate this run or impose the project document's size limit.
         project.series_measurements.runs.retain(|r| r.id != run.id);
@@ -155,9 +173,9 @@ pub fn discover(root: &Path) -> Result<Vec<RecoveryEntry>, String> {
         else {
             continue;
         };
-        if lock.try_lock().is_err() {
+        let Ok(_lock) = CheckpointLock::acquire(lock) else {
             continue;
-        }
+        };
         let Ok(bytes) = std::fs::read(dir.join("ready.json")) else {
             continue;
         };
@@ -170,15 +188,14 @@ pub fn discover(root: &Path) -> Result<Vec<RecoveryEntry>, String> {
     Ok(entries)
 }
 
-fn locked_entry(entry: &RecoveryEntry) -> Result<File, String> {
+fn locked_entry(entry: &RecoveryEntry) -> Result<CheckpointLock, String> {
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .open(entry.directory.join("owner.lock"))
         .map_err(|e| e.to_string())?;
-    file.try_lock()
-        .map_err(|_| "This checkpoint is still in use by another calculation".to_string())?;
-    Ok(file)
+    CheckpointLock::acquire(file)
+        .map_err(|_| "This checkpoint is still in use by another calculation".to_string())
 }
 
 /// Replay complete records only. A torn final line was never committed to the
@@ -267,5 +284,32 @@ pub fn acknowledge_saved(project: &ProjectFile) {
         {
             let _ = discard(&entry);
         }
+    }
+}
+
+#[cfg(test)]
+mod lock_tests {
+    use super::*;
+
+    #[test]
+    fn completed_owner_releases_lock_even_with_a_duplicate_descriptor() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("owner.lock");
+        let owner = CheckpointLock::acquire(create_private(&path).unwrap()).unwrap();
+        // Model the descriptor inherited between fork and exec without forking
+        // a multithreaded test process. The duplicate is intentionally kept open.
+        let inherited = owner.0.try_clone().unwrap();
+        let open = || {
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&path)
+                .unwrap()
+        };
+        assert!(CheckpointLock::acquire(open()).is_err());
+        drop(owner);
+        let next = CheckpointLock::acquire(open()).unwrap();
+        drop(next);
+        drop(inherited);
     }
 }

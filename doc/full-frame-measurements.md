@@ -72,13 +72,76 @@ signal unit by axis units. R is not a phase-corrected bond length.
 
 ## Desktop workflow
 
-Open **Series → Measurements**. Create a series from marked groups, the current
-folder scan or all groups. Membership is explicit and includes reviewed imports
-and materialized components. New imports do not silently enter that series.
-**Edit series** supports natural filename/label ordering, acquisition-time
-ordering, manual moves, adding marked groups and removing individual members.
-Each edit creates a series revision. Saved runs retain their own membership,
-order and coordinates, so an old result never moves to a different spectrum.
+Open **Series** to browse the heatmap, selected spectrum and trend together.
+The source selector accepts folder scans and named series of imported groups,
+including project-stored spectra. **Use loaded groups** starts a series from an
+existing project. The selector also offers **Use marked groups** and **Use all
+groups**. Membership is explicit; later imports do not silently enter a series.
+
+**Difference** subtracts the selected frame from the heatmap and cursor spectrum.
+Choose the frame first, then turn on Difference. **Reference… / Ref: N ▾** lets you enter
+another frame number or choose **Use current**. The reference stays fixed while
+you browse. Turning Difference off restores the original view. **Colors ▾**
+offers Viridis, Plasma, Inferno, blue–red, red–blue and gray, plus **Reverse**.
+**Auto** uses Viridis for ordinary spectra and blue–red for differences.
+Both selectors open popup menus over the workspace. The controls stay in place,
+and opening or closing a menu does not resize the plots. Escape or a click outside
+closes the menu.
+
+![Difference heatmap and palette popup using synthetic spectra](../website/public/screenshots/next/series-difference-colors.jpg)
+
+Captured through computer use on 2026-09-17. Frame 258 is shown relative to frame 1;
+the heatmap uses the automatic blue–red palette. The saved trend retains its
+original values.
+
+The difference is `frame(x) − reference(x)` on the overview’s shared axis: absolute
+eV for Norm/Flat, Å⁻¹ for weighted χ(k), and Å for |χ(R)|. There is no additional
+alignment, normalization or fitting. Both spectra retain their processing settings;
+compare consistently prepared inputs. R-space shows the difference of magnitudes,
+not the magnitude of a complex difference. Missing shared coverage, failed rows
+and incompatible k weights appear as gaps. The chosen reference is loaded exactly,
+even if it was omitted from the sampled heatmap. The cursor plot uses the exact
+frame; the heatmap remains a sampled overview.
+
+Difference colors have equal positive and negative limits, with zero at the middle
+of the color scale. Palette changes do not alter values. These are temporary view
+controls: calculations, saved trends and original groups remain unchanged. Changing
+the series or processing settings clears the reference. The implementation is in
+[`series_display.rs`](../crates/rexafs-gui/src/app/series_display.rs).
+
+To calculate a trend:
+
+1. Choose **Add trend…**.
+2. Choose Maximum, Mean, Integral, Point or Edge energy. New trends start with
+   **Flat**, 0–30 eV from each frame's E₀. These are desktop starting values;
+   the core API still defaults to Norm.
+3. Drag either boundary on the preview, or edit **From** and **To**. The shaded
+   interval, numerical fields and preview value update together. The view stays
+   in place while dragging; **Full spectrum** shows the complete axis.
+4. Choose **Calculate all N frames**. A completed trend returns to the overview.
+
+The trend is a saved result; changing the overview's signal selector does not
+recalculate it. Its title records the representation and range. Select saved
+trends in the inspector. **Results…** opens history, individual rows and CSV/JSON
+exports, including failed or cancelled frames. A row opens a preview using the
+run's retained settings. **Show in Series** returns a compatible result to the
+overview. Changed membership/order cannot attach an old result to new frames.
+
+![Compact trend editor with a visible range on a synthetic spectrum](../website/public/screenshots/next/series-add-trend.jpg)
+
+![A saved 513-frame trend beside the heatmap and selected synthetic frame](../website/public/screenshots/next/series-trend-overview.jpg)
+
+The trend editor was captured through computer use on 2026-09-17; the saved-trend
+overview was captured on 2026-09-16.
+They show generated spectra from `scripts/generate-series-metric-example.py`,
+including the deliberately larger signal at frame 258. No experimental data are
+included. See the [initial workflow record](validation/2026-09-16-series-ux.md)
+and [interaction checks](validation/2026-09-17-series-interactions.md).
+
+**Advanced** contains series editing, presets, recipes and recovery copies.
+**Edit series** supports natural label ordering, acquisition-time ordering,
+manual moves, adding marked groups and removing members. Each edit creates a
+series revision; saved runs retain their original membership and coordinates.
 
 Declare a physical coordinate's name, unit and source (for example Temperature,
 K, thermocouple). Enter a frame value or export the coordinates CSV for bulk
@@ -94,12 +157,21 @@ seconds from the earliest retained timestamp, while **Physical coordinate**
 uses the declared value/unit. Missing coordinates produce gaps. File modification
 time and application arrival time are never presented as acquisition time.
 
-Choose Point, Maximum, Integral, Mean or absolute E₀. Select the representation
-and coordinate origin, then **Preview** a named frame. Dashed lines show the
-resolved point/region on its spectrum. **Select on plot** accepts one click for
-a point, or two clicks for interval boundaries. It converts the displayed
-absolute coordinates to the selected origin; review the numerical fields
-before calculating. Outside-plot clicks do not define a coordinate.
+The preview uses the selected representation and coordinate origin. Arrow
+buttons or **Left/Right** browse frames without changing the series membership.
+Click the preview to use the keys; while editing a field they move its text cursor.
+**Shift+Left/Right** moves about 1% of the series, and **Home/End** selects its
+first/last frame. The metric and range remain unchanged. Drag a boundary
+line or its tab above the plot, as in Normalize and Transform. Point measurements
+have one handle; intervals have two. The fields retain the selected origin,
+including offsets from each frame’s E₀. Handles stop at the measured endpoints
+and cannot cross. Historical result previews retain their saved ranges.
+
+K-space spectrum plots use symmetric positive and negative vertical limits,
+with zero in the middle and 5% headroom above the largest absolute amplitude.
+Glitches remain visible. This display choice does not change the signal or its
+measured values. Deliberately offset waterfall plots keep their stacked extent;
+manual pan and zoom remain available.
 
 Name a measurement and choose **Save preset** to reuse it. Selecting a preset
 restores its operation, representation, origin and bounds. Edits create a new
@@ -137,9 +209,8 @@ For recipe runs, source checks use frozen recipe settings rather than unrelated
 changes to the group editor.
 
 **Calculate all N frames** calculates
-every member, independently of the older sampled overview. The default maximum
-range is −20…+50 eV; a conventional white-line definition can be entered as
-0…+30 eV in an explicitly selected Norm or Flat representation.
+every member, independently of the sampled overview. The initial maximum uses
+Flat over 0…+30 eV from E₀; review this interval for the sample and energy coverage.
 
 The worker first records input revisions, then prepares one spectrum at a time.
 Normalized metrics stop after normalization; k metrics stop after background
@@ -151,8 +222,8 @@ input and the result table displays 50 rows at a time without limiting export.
 **Cancel** retains finished rows. **Resume unfinished** uses the saved definition
 and checks input/settings revisions before calculating unfinished rows. Changed
 inputs fail with a reason; start a new run to analyze the new data. Earlier runs
-remain available. **Check input revisions** compares current sources/settings
-without changing historical values. Opening Measurements starts background
+remain available. **Check inputs** compares current sources/settings
+without changing historical values. Opening Series starts background
 checks of the selected run every ten seconds, without overlapping checks.
 Source digests and processing settings are compared; changed or missing inputs
 are marked stale. This polling is separate from the future Live ingestion system.
@@ -160,17 +231,33 @@ are marked stale. This polling is separate from the future Live ingestion system
 Saving a project retains series, frame/group identities, definitions, settings,
 resolved preparation, source digests, outcomes and run history. Portable replay
 still requires embedded inputs or unchanged linked sources. **Export CSV**
-includes all statuses and values; **Export definition and results** writes the
+includes all statuses and values; **Export JSON** writes the
 full JSON metadata, including the frozen recipe. Recipe identity, revision and
 name are also included in CSV. A figure alone is not a replay record. Old projects still
-open and the older **Scan overview** keeps its historical sampled definitions.
+open and the overview keeps its historical sampled definitions.
+
+### Open the heatmap and frame browser
+
+Choose **Series** to open the earlier heatmap, cursor spectrum,
+and trend layout, including spectra stored directly in a project. The selector
+above the plots lists named series and imported directory scans. If groups are
+loaded but no series exists yet, **Use loaded groups** creates one; reimporting
+the spectra is unnecessary.
+
+Named series keep their recorded order and resolve members by their saved group
+identities. Missing or removed members keep their positions as gaps. The heatmap
+and built-in trends sample at most 192 available frames; selecting a frame loads
+that exact group's processed spectrum. The overview uses each group's current
+processing settings, independently of saved recipe runs. Return to
+**Results…** for complete scalar results, or **Add trend… → Advanced** for recipe replay. The older
+overview's batch-fit and LCF-trend controls remain specific to directory scans.
 
 ## Recovery
 
 Each run freezes its definition and input revisions before calculation. A private
 checkpoint stores the workspace, run and append-only result chunks; a chunk is
 flushed before it appears as completed in the GUI. After an interruption, open
-Series and choose **Open recovery copy**. This replaces the current workspace
+**Series → Recovery…** and choose **Open recovery copy**. This replaces the current workspace
 with an unsaved copy; save other work first. It does not overwrite the original
 project or automatically restart calculation. Review the retained results and
 choose **Resume unfinished**. Changed unfinished inputs fail explicitly.

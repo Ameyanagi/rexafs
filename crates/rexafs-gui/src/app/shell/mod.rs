@@ -390,7 +390,8 @@ impl StudioApp {
             .data_panel_open
             .then(|| self.groups_panel(cx).into_any_element());
         let inspector = (self.context_panel_open
-            && (self.stage != Stage::Series || self.series_ready())
+            && (self.stage != Stage::Series
+                || (self.measurements.overview && self.series_ready()))
             && !matches!(self.stage, Stage::Fit | Stage::Publish))
         .then(|| self.inspector(cx).into_any_element());
         let assistant = self.assistant_panel(cx);
@@ -449,6 +450,7 @@ impl StudioApp {
                     .then(|| self.journal_panel(cx).into_any_element()),
             )
             .child(self.status_bar(cx))
+            .children(self.series_appearance_overlay(cx))
             .children(self.group_menu_overlay(cx))
             .children(self.palette_overlay(cx))
             .children(self.parameter_menu_overlay(cx))

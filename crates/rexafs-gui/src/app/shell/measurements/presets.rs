@@ -124,7 +124,7 @@ impl StudioApp {
         if let Some(name) = &self.measurements.preset_name {
             name.update(cx, |f, cx| f.set_text(definition.name, cx));
         }
-        self.measurements.pick_range = None;
+        self.clear_measurement_handles();
         self.preview_measurement(cx);
         cx.notify();
     }

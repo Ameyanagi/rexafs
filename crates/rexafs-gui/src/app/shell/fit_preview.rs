@@ -66,7 +66,9 @@ pub(super) fn preview_plots(
         .line(k, a.chik.as_slice())
         .color(trace_color(&t, 0))
         .into();
-    kp = kp.xlabel("k (Å⁻¹)").ylabel(chik_label(kw));
+    kp = crate::plotting::centered_y(kp, a.chik.iter().copied())
+        .xlabel("k (Å⁻¹)")
+        .ylabel(chik_label(kw));
     let mut rp: Plot = Plot::new()
         .theme(t.plot_theme())
         .line(a.r_space.r.as_slice(), a.r_space.chir_mag.as_slice())

@@ -63,6 +63,9 @@ pub(crate) mod import_review;
 pub(crate) mod import_state;
 mod importing;
 mod merge;
+pub(crate) mod series_display;
+mod series_source;
+use series_source::OverviewSource;
 mod shell;
 use shell::{Stage, StageView, handles::HandleState, thumbnails::ThumbData, tools::ToolState};
 
@@ -607,9 +610,10 @@ const K_GRID_MAX: f64 = 15.0;
 
 /// Downsampled overview of one scan, valid for one params fingerprint.
 pub(crate) struct OperandoData {
-    pub(crate) scan: usize,
+    source: OverviewSource,
     pub(crate) scan_len: usize,
     sample_frames: Vec<usize>,
+    support: Vec<series_display::SeriesSupport>,
     pub(crate) fingerprint: u64,
     /// k grid and k-weighted χ(k) rows (sampled frames × grid).
     pub(crate) grid: Vec<f64>,
@@ -654,6 +658,7 @@ pub(crate) struct SeriesLcf {
 /// One sampled frame of a scan overview, before resampling onto the
 /// shared grids.
 struct FrameSample {
+    support: series_display::SeriesSupport,
     k_row: Vec<f64>,
     e0: f64,
     whiteline: f64,
@@ -696,6 +701,7 @@ fn frame_sample(sp: &XASSpectrum, k_grid: &[f64]) -> Result<FrameSample, String>
         .map(|v| v.iter().copied().collect())
         .unwrap_or_default();
     Ok(FrameSample {
+        support: series_display::SeriesSupport::from_spectrum(sp),
         k_row,
         e0,
         whiteline,
@@ -775,6 +781,8 @@ pub(crate) enum TrendSource {
     FitVar(String),
     /// Weight of the i-th standard of the LCF trend.
     Lcf(usize),
+    /// Retained full-frame scalar calculation.
+    Measurement(usize),
 }
 
 #[derive(Clone)]
@@ -920,9 +928,10 @@ impl RetainedChikSeries {
 pub(crate) struct OperandoPlots {
     /// Scan the plots currently show; a different scan gets fresh viewports
     /// instead of inheriting the previous scan's pan/zoom.
-    scan: usize,
+    source: OverviewSource,
     /// Space the heatmap / frame plot currently show.
     space: SeriesSpace,
+    difference: bool,
     pub(crate) heatmap: Entity<RuvizPlot>,
     pub(crate) chik: Entity<RuvizPlot>,
     chik_series: RetainedChikSeries,
@@ -1223,7 +1232,9 @@ pub struct StudioApp {
     /// even when that scan has a million members.
     expanded_scan: Option<usize>,
     active_scan: Option<usize>,
+    overview_series: Option<crate::group_identity::GroupId>,
     operando: Option<OperandoData>,
+    series_display: series_display::SeriesDisplay,
     operando_plots: Option<OperandoPlots>,
     operando_gen: u64,
     operando_running: bool,
@@ -1429,16 +1440,6 @@ fn short_duration(duration: Duration) -> String {
     }
 }
 
-/// Map a full-scan cursor coordinate to the nearest sampled overview row.
-pub(crate) fn nearest_sample_pos(full_pos: usize, full_len: usize, sample_len: usize) -> usize {
-    if full_len <= 1 || sample_len <= 1 {
-        return 0;
-    }
-    let numerator = full_pos.min(full_len - 1) as u128 * (sample_len - 1) as u128;
-    let denominator = (full_len - 1) as u128;
-    ((numerator + denominator / 2) / denominator) as usize
-}
-
 /// Map ruviz's full-scan data-space y coordinate to the nearest frame.
 fn frame_from_data_y(y: f64, scan_len: usize) -> Option<usize> {
     if scan_len == 0 || !y.is_finite() {
@@ -1545,7 +1546,7 @@ fn should_rebuild_explore(workspace: Workspace, dirty: &mut bool, invalidated: b
 mod thin_tests {
     use super::{
         ChikRowKey, RetainedChikSeries, Workspace, catalog_row_index, frame_from_data_y,
-        frame_from_heatmap_position, nearest_sample_pos, scan_entry_offset, should_rebuild_explore,
+        frame_from_heatmap_position, scan_entry_offset, should_rebuild_explore,
     };
 
     #[test]
@@ -1598,14 +1599,6 @@ mod thin_tests {
                 .all(|v| v.is_nan()),
             "Do not label a neighboring preview row as frame 51"
         );
-    }
-
-    #[test]
-    fn full_positions_map_to_nearest_overview_rows() {
-        assert_eq!(nearest_sample_pos(0, 1_000, 192), 0);
-        assert_eq!(nearest_sample_pos(999, 1_000, 192), 191);
-        assert_eq!(nearest_sample_pos(500, 1_000, 192), 96);
-        assert_eq!(nearest_sample_pos(42, 100, 1), 0);
     }
 
     #[test]
@@ -2662,7 +2655,7 @@ mod keybinding_tests {
     }
 
     #[test]
-    fn operando_extreme_keys_yield_to_nested_text_input() {
+    fn series_frame_keys_yield_to_nested_text_input() {
         let bindings = studio_keybindings();
         let studio = KeyContext::parse("Studio OperandoWorkspace").unwrap();
         let operando = KeyContext::parse("Operando").unwrap();
@@ -2671,6 +2664,10 @@ mod keybinding_tests {
         let editing_context = [studio, operando, text_input];
 
         for binding in [
+            binding::<super::FramePrev>(&bindings),
+            binding::<super::FrameNext>(&bindings),
+            binding::<super::FrameJumpBack>(&bindings),
+            binding::<super::FrameJumpFwd>(&bindings),
             binding::<FrameFirst>(&bindings),
             binding::<FrameLast>(&bindings),
         ] {
@@ -3048,7 +3045,9 @@ impl StudioApp {
             groups_resize: None,
             expanded_scan: None,
             active_scan: None,
+            overview_series: None,
             operando: None,
+            series_display: series_display::SeriesDisplay::default(),
             operando_plots: None,
             operando_gen: 0,
             operando_running: false,
@@ -3917,6 +3916,7 @@ impl StudioApp {
         self.expanded_sources.clear();
         self.expanded_scan = None;
         self.active_scan = None;
+        self.overview_series = None;
         self.operando = None;
         self.operando_plots = None;
         self.operando_running = false;
@@ -4882,7 +4882,7 @@ impl StudioApp {
             field.update(cx, |f, cx| f.set_placeholder(format!("auto ({e0:.1})"), cx));
         }
         self.spectrum = Some(sp.clone());
-        self.refresh_operando_frame_plot(ix, fingerprint, &sp);
+        self.refresh_operando_frame_plot(ix, fingerprint, &sp, cx);
         self.invalidate_explore_plots(cx);
         // Scripted launches (screenshots): REXAFS_DEBUG_FIT_PATHS="a.dat:b.dat"
         // adds FEFF paths and fits the first loaded spectrum.
@@ -4902,34 +4902,32 @@ impl StudioApp {
     /// (Re)build the downsampled scan overview if the scan or parameters
     /// changed. Frames are processed in parallel on rayon.
     fn ensure_operando(&mut self, cx: &mut Context<Self>) {
-        let Some(scan_ix) = self.active_scan else {
+        let Some(source) = self.overview_source() else {
             return;
         };
-        let Some(scan) = self.catalog.scans.get(scan_ix) else {
-            return;
-        };
-        let scan_start = scan.start;
-        let scan_len = scan.len;
-        let fingerprint = scan_fingerprint(
-            &self.params,
-            &self.overrides,
-            &self.group_registry,
-            scan_start,
-            scan_len,
-        );
-        if active_scan_indices(&self.group_registry, scan_start, scan_len, 1).is_empty() {
+        let scan_len = source.len();
+        let fingerprint = self.overview_fingerprint(&source);
+        if source.samples(&self.group_registry, 1).is_empty() {
+            retire_job(
+                &mut self.operando_gen,
+                &mut self.operando_running,
+                Some(&mut self.operando_cancel),
+            );
+            self.status =
+                "No available groups in this series. Select another series or restore its inputs."
+                    .into();
             self.operando = None;
             self.operando_plots = None;
             return;
         }
-        if scan_len == 0
-            || self.operando.as_ref().is_some_and(|o| {
-                o.scan == scan_ix && o.scan_len == scan_len && o.fingerprint == fingerprint
-            })
+        if self
+            .operando
+            .as_ref()
+            .is_some_and(|o| o.source == source && o.fingerprint == fingerprint)
         {
             return;
         }
-        let preserve_time_pos = self.operando.as_ref().is_some_and(|o| o.scan == scan_ix);
+        let preserve_time_pos = self.operando.as_ref().is_some_and(|o| o.source == source);
 
         if let Some(cancel) = self.operando_cancel.take() {
             cancel.store(true, Ordering::Relaxed);
@@ -4940,25 +4938,36 @@ impl StudioApp {
         self.operando_cancel = Some(cancel.clone());
         self.operando_running = true;
         // Even sampling across the scan; first and last frames included.
-        let sample_ixs =
-            active_scan_indices(&self.group_registry, scan_start, scan_len, MAX_FRAMES);
+        let sample_frames = source.samples(&self.group_registry, MAX_FRAMES);
+        let sample_ixs: Vec<_> = sample_frames
+            .iter()
+            .filter_map(|&p| source.entry(p))
+            .collect();
         self.job_inputs[0] = sample_ixs
             .iter()
             .filter_map(|&ix| self.group_id(ix))
             .collect();
-        let frames: Vec<(usize, PathBuf, String)> = sample_ixs
+        let frames: Vec<_> = sample_ixs
             .iter()
-            .map(|&ix| (ix, self.catalog.path(ix), self.catalog.name(ix).to_string()))
+            .map(|&ix| {
+                let derived = ix
+                    .checked_sub(DERIVED_BASE)
+                    .and_then(|i| self.derived.get(i))
+                    .cloned();
+                let path = if ix < self.catalog.len() {
+                    self.catalog.path(ix)
+                } else {
+                    PathBuf::new()
+                };
+                (
+                    ix,
+                    path,
+                    self.entry_label(ix),
+                    derived,
+                    self.effective_params(ix).clone(),
+                )
+            })
             .collect();
-        // Global params plus the (usually tiny) override set for this scan;
-        // frames look their effective params up by catalog index.
-        let global = Arc::new(self.params.clone());
-        let frame_overrides: Arc<BTreeMap<usize, PipelineParams>> = Arc::new(
-            self.overrides
-                .range(scan_start..scan_start.saturating_add(scan_len))
-                .map(|(&ix, p)| (ix, p.clone()))
-                .collect(),
-        );
         let grid: Vec<f64> = (0..K_GRID_BINS)
             .map(|i| i as f64 * K_GRID_MAX / (K_GRID_BINS - 1) as f64)
             .collect();
@@ -4971,7 +4980,7 @@ impl StudioApp {
 
         let mut diagnostics: BTreeMap<_, _> = frames
             .iter()
-            .filter_map(|(ix, _, _)| {
+            .filter_map(|(ix, _, _, _, _)| {
                 self.peek_group_id(*ix).map(|id| {
                     (
                         *ix,
@@ -4986,14 +4995,13 @@ impl StudioApp {
         let job = cx.background_executor().spawn(async move {
             frames
                 .par_iter()
-                .map(|(ix, path, label)| {
+                .map(|(ix, path, label, derived, params)| {
                     if job_cancel.load(Ordering::Relaxed) {
                         return None;
                     }
-                    let params = frame_overrides.get(ix).unwrap_or(&global);
-                    let result = process_file(path, params)
-                        .map_err(|error| error.to_string())
-                        .and_then(|sp| frame_sample(&sp, &job_grid));
+                    let result =
+                        series_source::prepare_overview_frame(path, derived.as_ref(), params)
+                            .and_then(|sp| frame_sample(&sp, &job_grid));
                     Some((*ix, label.clone(), result))
                 })
                 .collect::<Vec<_>>()
@@ -5055,6 +5063,7 @@ impl StudioApp {
                 let r_grid: Vec<f64> = (0..K_GRID_BINS)
                     .map(|i| 6.0 * i as f64 / (K_GRID_BINS - 1) as f64)
                     .collect();
+                let mut support = Vec::with_capacity(samples.len());
                 let mut matrix = Vec::with_capacity(samples.len());
                 let mut e_matrix = Vec::with_capacity(samples.len());
                 let mut flat_matrix = Vec::with_capacity(samples.len());
@@ -5064,6 +5073,7 @@ impl StudioApp {
                 for sample in samples {
                     match sample {
                         Ok(f) => {
+                            support.push(f.support);
                             matrix.push(f.k_row);
                             e_matrix.push(resample_xy(&f.energy, &f.norm, &e_grid));
                             flat_matrix.push(resample_xy(&f.energy, &f.flat, &e_grid));
@@ -5072,6 +5082,7 @@ impl StudioApp {
                             whitelines.push(f.whiteline);
                         }
                         Err(_) => {
+                            support.push(Default::default());
                             matrix.push(vec![f64::NAN; grid.len()]);
                             e_matrix.push(vec![f64::NAN; e_grid.len()]);
                             flat_matrix.push(vec![f64::NAN; e_grid.len()]);
@@ -5083,9 +5094,10 @@ impl StudioApp {
                 }
                 let kweight = app.params.fft_kweight.unwrap_or(2.0);
                 app.operando = Some(OperandoData {
-                    scan: scan_ix,
+                    source: source.clone(),
                     scan_len,
-                    sample_frames: sample_ixs.iter().map(|ix| ix - scan_start).collect(),
+                    sample_frames,
+                    support,
                     fingerprint,
                     grid,
                     matrix,
@@ -5098,6 +5110,13 @@ impl StudioApp {
                     whitelines,
                     kweight,
                 });
+                if app.series_display.difference && app.active_series_reference().is_none() {
+                    // Membership, project or processing changes invalidate the reference.
+                    app.series_display.request += 1;
+                    app.series_display.difference = false;
+                    app.series_display.reference = None;
+                    app.series_display.pending_frame = None;
+                }
                 // Parameter-only rebuilds preserve the full-scan cursor;
                 // opening a different scan starts at its first frame.
                 app.time_pos = app
@@ -5111,21 +5130,16 @@ impl StudioApp {
                             0
                         }
                     });
-                app.time_pos = surviving_frame(
-                    &app.group_registry,
-                    scan_start,
-                    scan_len,
-                    app.time_pos,
-                    false,
-                )
-                .unwrap_or(0);
+                app.time_pos = source
+                    .surviving(&app.group_registry, app.time_pos, false)
+                    .unwrap_or(0);
                 app.rebuild_operando_plots(cx);
                 app.status = if failed == 0 {
                     "scan overview ready".into()
                 } else {
                     format!("scan overview ready · {failed} failed").into()
                 };
-                app.sync_time_selection(scan_ix, cx);
+                app.sync_time_selection(cx);
                 cx.notify();
             })
             .ok();
@@ -5141,40 +5155,43 @@ impl StudioApp {
         let Some(data) = self.operando.as_ref() else {
             return;
         };
-        let Some(scan) = self.catalog.scans.get(data.scan) else {
-            return;
-        };
-        let scan_ix = data.scan;
+        let source = data.source.clone();
         let Some((chik_key, row)) = self.series_frame_source() else {
             return;
         };
         let chik_series = RetainedChikSeries::new(chik_key, row);
         let space = self.stage_view.series_space;
         let (grid, matrix) = data.space(space);
-        let (xlabel, ylabel): (String, String) = match space {
+        let (xlabel, mut ylabel): (String, String) = match space {
             SeriesSpace::Energy => ("Energy (eV)".into(), "normalized μ(E)".into()),
             SeriesSpace::Flat => ("Energy (eV)".into(), "flattened μ(E)".into()),
-            SeriesSpace::K => (K_AXIS.into(), chik_label(data.kweight)),
-            SeriesSpace::R => (R_AXIS.into(), chir_label(data.kweight)),
+            SeriesSpace::K => (K_AXIS.into(), chik_label(self.series_display_kweight())),
+            SeriesSpace::R => (R_AXIS.into(), chir_label(self.series_display_kweight())),
         };
-        let heatmap_rows = overview_heatmap_rows(
-            matrix,
-            &data.sample_frames,
-            &self.group_registry,
-            scan.start,
+        if self.series_display.difference {
+            ylabel = format!("Δ {ylabel}");
+        }
+        let displayed = self.series_difference_matrix(matrix);
+        let heatmap_rows =
+            source.heatmap_rows(&displayed, &data.sample_frames, &self.group_registry);
+        let heatmap = build_heatmap(
+            &heatmap_rows,
+            grid,
             data.scan_len,
-        );
-        let heatmap = build_heatmap(&heatmap_rows, grid, data.scan_len, &xlabel, &self.theme)
-            .size_px(
-                self.card_px.get(&301).map_or(700, |v| v.0),
-                self.card_px.get(&301).map_or(900, |v| v.1),
-            )
-            .major_ticks_x(self.series_tick_count(301));
-        let chik = match space {
+            &xlabel,
+            &self.theme,
+            &self.series_display,
+        )
+        .size_px(
+            self.card_px.get(&301).map_or(700, |v| v.0),
+            self.card_px.get(&301).map_or(900, |v| v.1),
+        )
+        .major_ticks_x(self.series_tick_count(301));
+        let mut chik = match space {
             SeriesSpace::K => build_frame_chik_source(
                 &data.grid,
                 chik_series.values.clone(),
-                data.kweight,
+                self.series_display_kweight(),
                 &self.theme,
             ),
             _ => crate::plotting::build_frame_row_source(
@@ -5190,6 +5207,10 @@ impl StudioApp {
             self.card_px.get(&302).map_or(420, |v| v.1),
         )
         .major_ticks_x(self.series_tick_count(302));
+        if self.series_display.difference {
+            chik = crate::plotting::centered_y(chik, chik_series.values.read().iter().copied())
+                .ylabel(&ylabel);
+        }
         let trend_snapshot = self.trend_snapshot();
         let trend = build_trend(
             &trend_snapshot.values,
@@ -5204,7 +5225,10 @@ impl StudioApp {
         .major_ticks_x(self.series_tick_count(303));
         match &mut self.operando_plots {
             Some(plots) => {
-                if plots.scan == scan_ix && plots.space == space {
+                if plots.source == source
+                    && plots.space == space
+                    && plots.difference == self.series_display.difference
+                {
                     plots
                         .heatmap
                         .update(cx, |rp, cx| rp.set_plot_keep_view(heatmap, cx));
@@ -5220,12 +5244,13 @@ impl StudioApp {
                     }
                 } else {
                     // New scan or space: fresh viewports, the old zoom is meaningless.
-                    plots.scan = scan_ix;
+                    plots.source = source.clone();
                     plots.space = space;
                     plots.heatmap.update(cx, |rp, cx| rp.set_plot(heatmap, cx));
                     plots.chik.update(cx, |rp, cx| rp.set_plot(chik, cx));
                     plots.trend.update(cx, |rp, cx| rp.set_plot(trend, cx));
                 }
+                plots.difference = self.series_display.difference;
                 plots.chik_series = chik_series;
                 plots.trend_domain = trend_snapshot.domain;
                 plots.heatmap_cursor = None;
@@ -5272,8 +5297,9 @@ impl StudioApp {
                     },
                 );
                 self.operando_plots = Some(OperandoPlots {
-                    scan: scan_ix,
+                    source,
                     space,
+                    difference: self.series_display.difference,
                     heatmap,
                     chik,
                     chik_series,
@@ -5381,11 +5407,11 @@ impl StudioApp {
     }
 
     fn set_time_pos(&mut self, pos: usize, cx: &mut Context<Self>) {
-        let Some((scan_ix, ix)) = self.update_operando_cursor(pos, cx) else {
+        let Some(ix) = self.update_operando_cursor(pos, cx) else {
             return;
         };
         if self.selected != Some(ix) {
-            self.sync_time_selection(scan_ix, cx);
+            self.sync_time_selection(cx);
         }
         cx.notify();
     }
@@ -5393,47 +5419,28 @@ impl StudioApp {
     /// Update only the operando cursor and its cursor-dependent plots. The
     /// caller decides whether selection also needs changing, preventing the
     /// two synchronization directions from recursively selecting each other.
-    fn update_operando_cursor(
-        &mut self,
-        pos: usize,
-        cx: &mut Context<Self>,
-    ) -> Option<(usize, usize)> {
+    fn update_operando_cursor(&mut self, pos: usize, cx: &mut Context<Self>) -> Option<usize> {
         let data = self.operando.as_ref()?;
-        let scan = self.catalog.scans.get(data.scan)?;
-        let scan_ix = data.scan;
-        let scan_start = scan.start;
-        let scan_len = data.scan_len.min(scan.len);
-        let pos = surviving_frame(
-            &self.group_registry,
-            scan_start,
-            scan_len,
-            pos,
-            pos < self.time_pos,
-        )?;
-        let ix = scan_start + pos;
+        let pos = data
+            .source
+            .surviving(&self.group_registry, pos, pos < self.time_pos)?;
+        let ix = data.source.entry(pos)?;
+        let len = data.scan_len;
         if pos == self.time_pos {
-            return Some((scan_ix, ix));
+            return Some(ix);
         }
         self.time_pos = pos;
         if let Some((key, row)) = self.series_frame_source() {
-            self.replace_operando_chik(key, row);
+            self.replace_operando_chik(key, row, cx);
         }
         self.update_operando_cursor_annotations(cx);
-        self.status = format!("frame {}/{} · {}", pos + 1, scan_len, self.catalog.name(ix)).into();
-        Some((scan_ix, ix))
+        self.status = format!("frame {}/{} · {}", pos + 1, len, self.entry_label(ix)).into();
+        Some(ix)
     }
 
-    /// Selection-to-cursor half of operando synchronization. This deliberately
-    /// does not select, so `set_time_pos` can safely use `select_entry` for the
-    /// opposite direction without a ping-pong loop.
+    /// Keep group selection and the overview cursor synchronized in either direction.
     fn sync_operando_cursor_to_entry(&mut self, ix: usize, cx: &mut Context<Self>) {
-        let Some(data) = &self.operando else {
-            return;
-        };
-        let Some(scan) = self.catalog.scans.get(data.scan) else {
-            return;
-        };
-        let Some(offset) = scan_entry_offset(scan.start, data.scan_len.min(scan.len), ix) else {
+        let Some(offset) = self.operando.as_ref().and_then(|d| d.source.position(ix)) else {
             return;
         };
         if offset != self.time_pos {
@@ -5441,65 +5448,100 @@ impl StudioApp {
         }
     }
 
-    /// Route the full-resolution cursor frame through the shared lazy,
-    /// generation-counted spectrum load path and reveal it in the current
-    /// data-panel list.
-    fn sync_time_selection(&mut self, scan_ix: usize, cx: &mut Context<Self>) {
-        let Some(scan) = self.catalog.scans.get(scan_ix) else {
+    /// Load the exact cursor frame through the shared generation-checked cache.
+    fn sync_time_selection(&mut self, cx: &mut Context<Self>) {
+        let Some(data) = &self.operando else {
             return;
         };
-        let scan_len = self
-            .operando
-            .as_ref()
-            .filter(|data| data.scan == scan_ix)
-            .map(|data| data.scan_len.min(scan.len))
-            .unwrap_or(scan.len);
-        let Some(offset) = surviving_frame(
-            &self.group_registry,
-            scan.start,
-            scan_len,
-            self.time_pos,
-            false,
-        ) else {
+        let Some(offset) = data
+            .source
+            .surviving(&self.group_registry, self.time_pos, false)
+        else {
+            return;
+        };
+        let Some(ix) = data.source.entry(offset) else {
             return;
         };
         self.time_pos = offset;
-        let ix = scan.start + offset;
-        self.reveal_time_selection(scan_ix, offset, ix);
+        self.reveal_time_selection(ix);
         self.select_entry(ix, cx);
     }
 
-    fn reveal_time_selection(&mut self, _scan_ix: usize, _offset: usize, ix: usize) {
+    fn reveal_time_selection(&mut self, ix: usize) {
         if self.group_rows().row_index(ix).is_none() {
             self.reveal_current = Some(ix);
         }
         self.reveal_group_row(ix);
     }
 
-    fn replace_operando_chik(&mut self, key: ChikRowKey, row: Vec<f64>) -> bool {
-        self.operando_plots
-            .as_mut()
-            .is_some_and(|plots| plots.chik_series.replace_if_changed(key, row))
+    fn replace_operando_chik(
+        &mut self,
+        key: ChikRowKey,
+        row: Vec<f64>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let ticks = self.series_tick_count(302);
+        let kweight = self.series_display_kweight();
+        let Some(plots) = self.operando_plots.as_mut() else {
+            return false;
+        };
+        let old_limits =
+            crate::plotting::symmetric_y_limits(plots.chik_series.values.read().iter().copied());
+        let new_limits = crate::plotting::symmetric_y_limits(row.iter().copied());
+        if !plots.chik_series.replace_if_changed(key, row) {
+            return false;
+        }
+        if (plots.space == SeriesSpace::K || plots.difference)
+            && old_limits != new_limits
+            && let Some(data) = &self.operando
+        {
+            let grid = data.space(plots.space).0;
+            let (xlabel, ylabel) = match plots.space {
+                SeriesSpace::Energy => ("Energy (eV)", "normalized μ(E)".to_string()),
+                SeriesSpace::Flat => ("Energy (eV)", "flattened μ(E)".to_string()),
+                SeriesSpace::K => (K_AXIS, chik_label(kweight)),
+                SeriesSpace::R => (R_AXIS, chir_label(kweight)),
+            };
+            let label = if plots.difference {
+                format!("Δ {ylabel}")
+            } else {
+                ylabel
+            };
+            let plot = crate::plotting::build_frame_row_source(
+                grid,
+                plots.chik_series.values.clone(),
+                xlabel,
+                &label,
+                &self.theme,
+            );
+            let plot =
+                crate::plotting::centered_y(plot, plots.chik_series.values.read().iter().copied())
+                    .size_px(
+                        self.card_px.get(&302).map_or(700, |v| v.0),
+                        self.card_px.get(&302).map_or(420, |v| v.1),
+                    )
+                    .major_ticks_x(ticks);
+            plots
+                .chik
+                .update(cx, |plot_view, cx| plot_view.set_plot_keep_view(plot, cx));
+        }
+        true
     }
 
     /// Replace the sampled placeholder with the actual processed cursor
     /// frame when its generation-counted load completes.
-    fn refresh_operando_frame_plot(&mut self, ix: usize, fingerprint: u64, sp: &XASSpectrum) {
+    fn refresh_operando_frame_plot(
+        &mut self,
+        ix: usize,
+        fingerprint: u64,
+        sp: &XASSpectrum,
+        cx: &mut Context<Self>,
+    ) {
         let Some(data) = &self.operando else {
             return;
         };
-        let Some(scan) = self.catalog.scans.get(data.scan) else {
-            return;
-        };
-        if data.fingerprint
-            != scan_fingerprint(
-                &self.params,
-                &self.overrides,
-                &self.group_registry,
-                scan.start,
-                scan.len,
-            )
-            || ix != scan.start + self.time_pos.min(scan.len.saturating_sub(1))
+        if data.fingerprint != self.overview_fingerprint(&data.source)
+            || data.source.entry(self.time_pos) != Some(ix)
         {
             return;
         }
@@ -5521,7 +5563,8 @@ impl StudioApp {
         ) else {
             return;
         };
-        self.replace_operando_chik(key, row);
+        let row = self.series_difference_row(row, series_display::SeriesSupport::from_spectrum(sp));
+        self.replace_operando_chik(key, row, cx);
     }
 
     fn current_group_index(&self) -> Option<usize> {
@@ -6175,6 +6218,7 @@ impl StudioApp {
         self.resolve_interaction(interaction);
         self.expanded_scan = None;
         self.active_scan = None;
+        self.overview_series = None;
         self.operando = None;
         self.operando_plots = None;
         self.time_pos = 0;
@@ -6530,6 +6574,7 @@ impl StudioApp {
                 return;
             }
             self.selected = Some(ix);
+            self.sync_operando_cursor_to_entry(ix, cx);
             self.reveal_group_row(ix);
             let label: SharedString = self.entry_label(ix).into();
             self.current_path = self.derived[ix - DERIVED_BASE]
@@ -7945,13 +7990,13 @@ impl StudioApp {
 
     /// Jump to the cursor frame in the Normalize stage.
     pub(crate) fn open_frame_in_normalize(&mut self, cx: &mut Context<Self>) {
-        let Some(data) = self.operando.as_ref() else {
+        let Some(ix) = self
+            .operando
+            .as_ref()
+            .and_then(|d| d.source.entry(self.time_pos))
+        else {
             return;
         };
-        let Some(scan) = self.catalog.scans.get(data.scan) else {
-            return;
-        };
-        let ix = scan.start + self.time_pos.min(scan.len.saturating_sub(1));
         self.select_entry(ix, cx);
         self.sync_param_fields(cx);
         self.set_stage(shell::Stage::Normalize, cx);
@@ -7970,7 +8015,7 @@ impl StudioApp {
     pub(crate) fn active_batch_trend(&self) -> Option<(&BatchFitData, &str)> {
         let bf = self.batch_fit.as_ref()?;
         let data = self.operando.as_ref()?;
-        if bf.scan != data.scan
+        if Some(bf.scan) != data.source.scan_index()
             || bf.fingerprint != data.fingerprint
             || bf.model_fingerprint != self.fit_model_fingerprint()
         {
@@ -7989,6 +8034,7 @@ impl StudioApp {
             .map(|data| data.scan_len)
             .unwrap_or_default();
         match &self.series_trend {
+            TrendSource::Measurement(index) => return self.measurement_trend_snapshot(*index),
             TrendSource::FitVar(name) => {
                 if let Some((bf, _)) = self.active_batch_trend() {
                     let mut values = vec![f64::NAN; scan_len];
@@ -8069,7 +8115,8 @@ impl StudioApp {
     pub(crate) fn active_series_lcf(&self) -> Option<&SeriesLcf> {
         let lcf = self.series_lcf.as_ref()?;
         let data = self.operando.as_ref()?;
-        (lcf.scan == data.scan && lcf.fingerprint == data.fingerprint).then_some(lcf)
+        (Some(lcf.scan) == data.source.scan_index() && lcf.fingerprint == data.fingerprint)
+            .then_some(lcf)
     }
 
     /// Return the requested frame and quantity. A sampled overview never
@@ -8077,13 +8124,10 @@ impl StudioApp {
     /// the generation-checked source load completes.
     fn series_frame_source(&self) -> Option<(ChikRowKey, Vec<f64>)> {
         let data = self.operando.as_ref()?;
-        let scan = self.catalog.scans.get(data.scan)?;
         let space = self.stage_view.series_space;
         let (grid, matrix) = data.space(space);
-        let frame = self
-            .time_pos
-            .min(data.scan_len.min(scan.len).saturating_sub(1));
-        let ix = scan.start + frame;
+        let frame = self.time_pos.min(data.scan_len.saturating_sub(1));
+        let ix = data.source.entry(frame)?;
         let fingerprint = self.effective_fingerprint(ix);
         if let Some(sp) = self.cache.peek(&(ix, fingerprint))
             && let Some(row) = resample_series_frame(sp, space, grid)
@@ -8093,13 +8137,21 @@ impl StudioApp {
                     entry: ix,
                     params_fingerprint: fingerprint,
                 },
-                row,
+                self.series_difference_row(row, series_display::SeriesSupport::from_spectrum(sp)),
             ));
         }
         let row = exact_overview_row(&data.sample_frames, matrix, frame, grid.len());
+        let support = data
+            .sample_frames
+            .iter()
+            .position(|p| *p == frame)
+            .and_then(|i| data.support.get(i))
+            .copied()
+            .unwrap_or_default();
+        let row = self.series_difference_row(row, support);
         Some((
             ChikRowKey::Sampled {
-                scan: data.scan,
+                scan: data.source.scan_index().unwrap_or(NO_ENTRY),
                 overview_fingerprint: data.fingerprint,
                 row: frame,
             },
@@ -8124,11 +8176,12 @@ impl StudioApp {
         if self
             .operando
             .as_ref()
-            .is_some_and(|data| data.scan == scan_ix)
+            .is_some_and(|data| data.source.scan_index() == Some(scan_ix))
         {
             self.set_time_pos(frame, cx);
             return;
         }
+        self.overview_series = None;
         self.active_scan = Some(scan_ix);
         self.pending_time_pos = Some(frame);
         self.time_pos = frame;
