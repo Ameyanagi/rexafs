@@ -1,7 +1,7 @@
-//! First Live intake building block: completion evidence and immutable bytes.
+//! Live intake: completion evidence and immutable bytes.
 //!
 //! This module does not start a watcher, publish results, or resume a session.
-//! The future coordinator must journal a result before acknowledging its input.
+//! The coordinator journals each result before acknowledging its input.
 use rexafs::xafs::io::reader::{self, Measurement};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -71,7 +71,7 @@ pub enum Observation {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Fingerprint {
+pub(crate) struct Fingerprint {
     len: u64,
     modified: SystemTime,
     #[cfg(unix)]
@@ -91,7 +91,7 @@ impl Fingerprint {
             identity: (metadata.dev(), metadata.ino()),
         })
     }
-    fn at(path: &Path) -> Result<Self, String> {
+    pub(crate) fn at(path: &Path) -> Result<Self, String> {
         let metadata =
             fs::symlink_metadata(path).map_err(|e| format!("{}: {e}", path.display()))?;
         if metadata.file_type().is_symlink() {
@@ -107,6 +107,7 @@ struct Candidate {
     last_check: Option<Instant>,
     stable: u16,
     accepted: Option<String>,
+    accepted_fingerprint: Option<Fingerprint>,
     pending: Option<String>,
 }
 
@@ -140,11 +141,19 @@ impl CompletionTracker {
                     candidate.last_check = None;
                     candidate.stable = 0;
                     candidate.pending = None;
+                    candidate.accepted_fingerprint = None;
                 }
                 return Observation::Unavailable(error);
             }
         };
         let candidate = self.candidates.entry(path.to_path_buf()).or_default();
+        if candidate.accepted_fingerprint.as_ref() == Some(&fingerprint)
+            && let Some(revision) = &candidate.accepted
+        {
+            return Observation::AlreadyAccepted {
+                revision: revision.clone(),
+            };
+        }
         if candidate.fingerprint.as_ref() != Some(&fingerprint) {
             candidate.fingerprint = Some(fingerprint.clone());
             candidate.last_check = Some(now);
@@ -182,6 +191,7 @@ impl CompletionTracker {
             Err(error) => return Observation::NeedsReview(error),
         };
         if candidate.accepted.as_ref() == Some(&snapshot.revision) {
+            candidate.accepted_fingerprint = Some(fingerprint);
             return Observation::AlreadyAccepted {
                 revision: snapshot.revision,
             };
@@ -204,6 +214,7 @@ impl CompletionTracker {
             return Err("Live input revision is no longer the pending snapshot".into());
         }
         candidate.accepted = candidate.pending.take();
+        candidate.accepted_fingerprint = candidate.fingerprint.clone();
         Ok(())
     }
 

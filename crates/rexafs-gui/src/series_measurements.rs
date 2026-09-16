@@ -13,11 +13,12 @@ mod recipe;
 pub mod recovery;
 mod storage;
 pub use catalogue::{CoordinateDefinition, TrendAxis};
-pub use recipe::AnalysisRecipe;
+pub use recipe::{AnalysisRecipe, InputContract};
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SeriesArchive {
+    pub live_sessions: Vec<crate::live::LiveSession>,
     pub series: Vec<SeriesDefinition>,
     pub runs: Vec<Arc<SeriesRun>>,
     pub presets: Vec<MetricDefinition>,

@@ -32,6 +32,7 @@ pub mod inspector;
 mod joint_browser;
 pub(crate) mod joint_fit;
 pub mod journal;
+pub(crate) mod live;
 mod marked_removal;
 pub(crate) mod measurement_import;
 pub(crate) mod measurements;
@@ -391,7 +392,7 @@ impl StudioApp {
             .then(|| self.groups_panel(cx).into_any_element());
         let inspector = (self.context_panel_open
             && (self.stage != Stage::Series
-                || (self.measurements.overview && self.series_ready()))
+                || (self.measurements.overview && !self.live.open && self.series_ready()))
             && !matches!(self.stage, Stage::Fit | Stage::Publish))
         .then(|| self.inspector(cx).into_any_element());
         let assistant = self.assistant_panel(cx);
@@ -451,6 +452,7 @@ impl StudioApp {
             )
             .child(self.status_bar(cx))
             .children(self.series_appearance_overlay(cx))
+            .children(self.live_recipe_overlay(cx))
             .children(self.group_menu_overlay(cx))
             .children(self.palette_overlay(cx))
             .children(self.parameter_menu_overlay(cx))

@@ -272,7 +272,8 @@ pub fn save_with_storage(
     let mut value = serde_json::to_value(&prepared).map_err(|e| e.to_string())?;
     value["version"] = PROJECT_VERSION.into();
     let mut json = compact::encode(value)?;
-    if !measurements.series.is_empty()
+    if !measurements.live_sessions.is_empty()
+        || !measurements.series.is_empty()
         || !measurements.runs.is_empty()
         || !measurements.presets.is_empty()
         || !measurements.recipes.is_empty()

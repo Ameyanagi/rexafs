@@ -252,6 +252,10 @@ impl StudioApp {
                         .items_center()
                         .justify_center()
                         .gap_3()
+                        .child(
+                            button(&t, "series-live-empty", "Live acquisition…", false)
+                                .on_click(cx.listener(|app, _, _, cx| app.open_live(cx))),
+                        )
                         .when(running, |d| d.child("Building overview…"))
                         .when(!running, |d| {
                             d.child(
@@ -527,6 +531,8 @@ impl StudioApp {
                 .on_click(cx.listener(|app, _, window, cx| { app.begin_series_trend(cx); app.operando_focus.focus(window, cx); })))
             .child(button(&t, "series-results", "Results…", false)
                 .on_click(cx.listener(|app, _, _, cx| app.series_results(cx))))
+            .child(button(&t, "series-live", "Live…", false)
+                .on_click(cx.listener(|app, _, _, cx| app.open_live(cx))))
             .child(icon_button(&t, "series-shortcuts", Icon::Help, "Click a heatmap row to jump. ←/→: frame; Shift+←/→: 1%; Home/End: first/last.", false))
     }
 

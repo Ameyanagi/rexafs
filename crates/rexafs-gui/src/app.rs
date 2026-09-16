@@ -1099,6 +1099,7 @@ pub struct StudioApp {
     tools: ToolState,
     analysis: shell::tools::AnalysisState,
     measurements: shell::measurements::MeasurementState,
+    live: shell::live::LiveState,
     journal: shell::journal::JournalState,
     palette: Option<shell::palette::PaletteState>,
     path_route: Option<shell::path_routing::RoutingCard>,
@@ -2957,6 +2958,7 @@ impl StudioApp {
             tools: ToolState::new(),
             analysis: shell::tools::AnalysisState::default(),
             measurements: Default::default(),
+            live: Default::default(),
             journal: shell::journal::JournalState::default(),
             palette: None,
             path_route: None,
@@ -8462,10 +8464,9 @@ impl StudioApp {
             // Persist the explicit raw catalog alongside these records instead.
             source_dir: self.source_dir.clone().filter(|_| {
                 !self.derived.iter().any(|group| {
-                    group
-                        .operation
-                        .as_ref()
-                        .is_some_and(|op| op.tool == "Measurement import")
+                    group.operation.as_ref().is_some_and(|op| {
+                        matches!(op.tool.as_str(), "Measurement import" | "Live acquisition")
+                    })
                 }) && !self.intake.history.iter().any(|batch| {
                     batch.sources.values().any(|source| {
                         source
@@ -8753,6 +8754,8 @@ impl StudioApp {
             cancel.store(true, std::sync::atomic::Ordering::Relaxed);
         }
         self.measurements.stop();
+        self.live.stop();
+        self.live = Default::default();
         self.measurements = shell::measurements::MeasurementState::from_archive(
             project.series_measurements.clone(),
         );

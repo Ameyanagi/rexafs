@@ -7598,6 +7598,7 @@ dependencies = [
  "raw-window-handle",
  "rayon",
  "rexafs",
+ "rusqlite",
  "ruviz",
  "ruviz-gpui",
  "semver",

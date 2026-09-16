@@ -6,6 +6,9 @@ use gpui::{IntoElement, ParentElement, Styled, div, prelude::*, px};
 
 impl StudioApp {
     pub(crate) fn series_stage_center(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        if self.live.open {
+            return self.live_center(cx);
+        }
         self.monitor_measurements(cx);
         if !self.measurements.initialized {
             self.measurements.initialized = true;

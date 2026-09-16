@@ -1,4 +1,8 @@
-# Live acquisition: first development increment
+# Live acquisition: first development increment (historical)
+
+This record describes the initial snapshot-only prototype. The current development
+workflow is documented in [Live acquisition](live-acquisition.md), with subsequent
+work recorded in [milestones B–F](analysis-b-f-progress.md).
 
 Branch: `feature/live-acquisition`, based on the Phase A PR at `153aa88`.
 This is the start of B1 from the [analysis design](complete-analysis-design.md),

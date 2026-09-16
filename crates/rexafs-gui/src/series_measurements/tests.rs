@@ -184,6 +184,7 @@ fn project_roundtrip_preserves_ids_definitions_and_failed_rows() {
         runs: vec![Arc::new(run)],
         presets: vec![],
         recipes: vec![],
+        live_sessions: vec![],
     };
     let project = crate::project::ProjectFile {
         version: crate::project::PROJECT_VERSION,
