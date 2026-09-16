@@ -68,3 +68,25 @@ and original source retention. Release builds succeeded on this macOS host.
 The [final computer-use record](validation/2026-09-17-live/README.md) confirms
 embedded-project membership, paused recovery, retained trend reconstruction and
 editable quiet-file timing. It includes only synthetic screenshots.
+
+## C1: native peak-fit core
+
+The unreleased [`PeakFit` API](xanes-peak-fitting.md) now provides Gaussian,
+Lorentzian, pseudo-Voigt and true-Voigt peaks, error-function/arctangent steps,
+and constant/linear baselines. Joint fitting supports fixed values, bounds,
+restricted expression ties, native-point masks, selected-space errors, baseline
+initialization, cancellation and independent batch fits. Result objects retain
+initial/final definitions, component arrays, residuals and conditional covariance.
+
+The full default-backend core unit suite passes all 208 tests. Ten focused peak
+unit tests also pass on the ndarray compatibility backend, and two peak
+integration tests pass on the default backend.
+The integration tests compare all four peak shapes against pinned lmfit 1.3.4
+references and check automatic preparation without mutating the source. A bound
+regression test caught failure to refit other parameters after clamping; the new
+projected optimizer passes the analytical constrained solution. Fixtures and
+their integration test are excluded from the crate archive.
+
+GUI parameter editing, retained current/series diagnostics, Live peak recipes,
+Python/TypeScript bindings and full milestone-C qualification remain in progress.
+No GUI peak-fitting completion is claimed by this core increment.

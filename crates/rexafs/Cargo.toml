@@ -18,6 +18,7 @@ exclude = [
     "/tests/fixtures/sessions/",
     "/tests/fixtures/analysis/",
     "/tests/cu_mixture_recovery.rs",
+    "/tests/peak_fitting.rs",
     "/tests/beamline_formats.rs",
     "/tests/measurement_fixtures.rs",
     "/tests/measurement_fixtures/",

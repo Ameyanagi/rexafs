@@ -71,6 +71,7 @@ pub mod plot;
 pub mod prelude;
 pub mod xafs;
 
+pub use xafs::analysis::peakfit::{PeakFit, PeakFitError, PeakFitResult};
 pub use xafs::background::{BackgroundMethod, AUTOBK};
 pub use xafs::normalization::{NormalizationMethod, PrePostEdge};
 pub use xafs::xasgroup::XASGroup as Group;
