@@ -203,6 +203,11 @@ jobs:
     needs: scope
     if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-latest
+    env:
+      # Use the installed compiler for Cargo metadata and the isolated sdist
+      # rebuild. The repository toolchain file also requests lint/Wasm tools;
+      # installing those implicitly can conflict with the runner's Clippy files.
+      RUSTUP_TOOLCHAIN: '1.98.1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable

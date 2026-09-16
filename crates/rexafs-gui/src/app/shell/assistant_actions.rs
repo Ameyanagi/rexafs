@@ -33,6 +33,23 @@ fn spectrum_index(
 }
 
 impl StudioApp {
+    /// Resolve an opaque identity from the overview, never a model-invented path.
+    pub(super) fn assistant_group_index(
+        &self,
+        id: &crate::group_identity::GroupId,
+    ) -> Result<usize, String> {
+        self.group_registry
+            .index(id)
+            .or_else(|| {
+                self.standalone_source
+                    .as_ref()
+                    .filter(|(_, _, current)| current == id)
+                    .map(|_| crate::app::NO_ENTRY)
+            })
+            .filter(|&ix| self.tool_target(ix).is_some())
+            .ok_or_else(|| "Group is no longer available; retrieve the overview again".into())
+    }
+
     pub(crate) fn assistant_navigate(
         &mut self,
         args: &Value,
@@ -78,7 +95,14 @@ impl StudioApp {
                 return Err("Unknown fit spectrum id".into());
             }
         }
-        if let Some(file) = args["spectrum"].as_str() {
+        if let Some(id) = args.get("group_id") {
+            if args.get("spectrum").is_some() || dataset.is_some() {
+                return Err("Use exactly one spectrum selector".into());
+            }
+            let id = serde_json::from_value(id.clone()).map_err(|e| e.to_string())?;
+            let ix = self.assistant_group_index(&id)?;
+            self.select_entry(ix, cx);
+        } else if let Some(file) = args["spectrum"].as_str() {
             let catalog_index =
                 (0..self.catalog.len()).find(|&ix| self.catalog.path(ix).to_string_lossy() == file);
             if let Some(ix) = navigation_target(file, &self.current_path, catalog_index)? {
@@ -130,7 +154,7 @@ impl StudioApp {
         self.status = format!("Assistant · {}", stage.name()).into();
         cx.notify();
         Ok(
-            json!({"stage":stage.name(),"fit_step":format!("{:?}",self.stage_view.fit_step),"plot":view,"current_spectrum":self.current_path,"dataset_id":dataset,"loading":self.load_running}),
+            json!({"stage":stage.name(),"fit_step":format!("{:?}",self.stage_view.fit_step),"plot":view,"current_spectrum":self.current_path,"group_id":self.current_group_index().and_then(|ix| self.group_id(ix)),"dataset_id":dataset,"loading":self.load_running}),
         )
     }
     /// Display cached results without restoring the model used to obtain them.
@@ -167,6 +191,116 @@ impl StudioApp {
             variables: self.fit_vars.iter().map(|v| v.spec.clone()).collect(),
             joint: self.joint.config.clone(),
         }
+    }
+
+    /// Configure the existing model for one spectrum or an explicit group set.
+    /// Existing dataset ranges, paths, expressions and local values are retained.
+    /// A first joint setup may declare local names; later scope edits remain in
+    /// the GUI so this operation cannot erase per-dataset scope overrides.
+    pub(super) fn assistant_configure_fit(
+        &mut self,
+        args: &Value,
+        cx: &mut Context<Self>,
+    ) -> Result<(Value, Option<Receipt>), String> {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Request {
+            mode: String,
+            #[serde(default)]
+            group_ids: Vec<crate::group_identity::GroupId>,
+            local_parameters: Option<std::collections::BTreeSet<String>>,
+        }
+        let request: Request = serde_json::from_value(args.clone()).map_err(|e| e.to_string())?;
+        if self.fit_running || self.batch_running || self.feff_running {
+            return Err("Wait for the running calculation".into());
+        }
+        let before = self.model_settings();
+        let mut after = before.clone();
+        match request.mode.as_str() {
+            "single" => {
+                if !request.group_ids.is_empty() || request.local_parameters.is_some() {
+                    return Err(
+                        "Single mode uses the current group; omit group_ids and local_parameters"
+                            .into(),
+                    );
+                }
+                after.joint.enabled = false;
+            }
+            "multiple" => {
+                let unique: std::collections::BTreeSet<_> = request.group_ids.iter().collect();
+                if unique.len() < 2 || unique.len() != request.group_ids.len() {
+                    return Err("Select at least two distinct group_ids".into());
+                }
+                if let Some(local) = request.local_parameters {
+                    if !before.joint.datasets.is_empty() {
+                        return Err("Existing local scopes are preserved. Omit local_parameters or edit scopes in Spectra & paths".into());
+                    }
+                    if local
+                        .iter()
+                        .any(|name| !before.variables.iter().any(|v| &v.name == name))
+                    {
+                        return Err("Use existing fit variable names for local_parameters".into());
+                    }
+                    after.joint.local = local;
+                }
+                let mut next_id = before
+                    .joint
+                    .datasets
+                    .iter()
+                    .map(|d| d.id)
+                    .max()
+                    .unwrap_or(0)
+                    + 1;
+                let paths: Vec<_> = before
+                    .paths
+                    .iter()
+                    .filter(|p| p.enabled)
+                    .map(|p| p.file.clone())
+                    .collect();
+                let mut datasets = Vec::new();
+                for id in request.group_ids {
+                    let ix = self.assistant_group_index(&id)?;
+                    let target = self.tool_target(ix).ok_or("Group is unavailable")?;
+                    if let Some(existing) = before
+                        .joint
+                        .datasets
+                        .iter()
+                        .find(|d| d.source_id.as_ref() == Some(&id))
+                    {
+                        datasets.push(existing.clone());
+                    } else {
+                        datasets.push(crate::joint_fitting::JointDataset {
+                            id: next_id,
+                            file: target.path,
+                            group_id: target.derived_id,
+                            source_id: Some(id),
+                            label: target.label,
+                            paths: paths.clone(),
+                            ..Default::default()
+                        });
+                        next_id += 1;
+                    }
+                }
+                after.joint.datasets = datasets;
+                after.joint.enabled = true;
+                crate::joint_fitting::prepare(&after.joint, &after.paths, &after.variables)
+                    .map_err(|e| e.to_string())?;
+            }
+            _ => return Err("Choose single or multiple".into()),
+        }
+        let lines = diff(&json!(before.joint), &json!(after.joint));
+        self.restore_model_settings(&after, cx);
+        self.record(
+            "Assistant: fit mode and spectra",
+            Some(UndoOp::FitModel { before, after }),
+        );
+        self.joint.setup = true;
+        self.set_stage(Stage::Fit, cx);
+        self.set_fit_step(FitStep::Model, cx);
+        Ok((
+            json!({"applied":true,"joint":self.joint.config}),
+            self.model_receipt(None, "model", lines, None, cx),
+        ))
     }
     pub(crate) fn restore_model_settings(&mut self, s: &ModelSettings, cx: &mut Context<Self>) {
         self.fit_paths.clear();

@@ -1,0 +1,18 @@
+{
+  "space": "Flat",
+  "range_offsets_eV": [
+    -29.0,
+    171.0
+  ],
+  "frames": 100,
+  "errors": 0,
+  "max_absolute_weight_error": 2.8207991498163665e-13,
+  "max_r_factor": 3.870519022598052e-28,
+  "pca_training_spectra": 100,
+  "pca_centered": true,
+  "pca_first_fractions": [
+    0.7591447433975781,
+    0.24085525660242196,
+    3.792109616027419e-27
+  ]
+}

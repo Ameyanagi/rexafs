@@ -52,6 +52,41 @@ fn specimen(dir: &Path) -> ProjectFile {
 }
 
 #[test]
+fn joint_materialized_groups_keep_empty_locators_on_save_and_reopen() {
+    let temp = Temp::new();
+    let mut project = specimen(&temp.join("source"));
+    project.joint.datasets[0].file = PathBuf::new();
+    project.joint.datasets[0].group_id = Some(project.derived[0].id);
+    project.fit_history[0].joint = Some(project.joint.clone());
+    let arrays = project.derived[0].mu.clone();
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let file = temp.join(if mode == DataStorage::Paths {
+            "linked-joint.rxs"
+        } else {
+            "embedded-joint.rxs"
+        });
+        let header = save_with_storage(&file, &project, mode).unwrap();
+        assert!(
+            header
+                .files
+                .iter()
+                .all(|source| source.path.is_relative() && !source.path.as_os_str().is_empty())
+        );
+        let mut loaded = load(&file).unwrap();
+        loaded.assign_group_ids();
+        assert!(loaded.joint.datasets[0].file.as_os_str().is_empty());
+        assert!(
+            loaded.fit_history[0].joint.as_ref().unwrap().datasets[0]
+                .file
+                .as_os_str()
+                .is_empty()
+        );
+        assert_eq!(loaded.derived[0].mu, arrays);
+        save_with_storage(&file, &loaded, mode).unwrap();
+    }
+}
+
+#[test]
 fn embedded_restore_uses_the_injected_cache_and_links_need_no_cache() {
     let temp = Temp::new();
     let project = specimen(&temp.join("source"));
@@ -422,6 +457,7 @@ fn write_release_compatibility_fixtures() {
             ..Default::default()
         },
     );
+    add_synthetic_collection_results(&mut project);
     for (suffix, mode) in [
         ("links", DataStorage::Paths),
         ("embedded", DataStorage::Embedded),
@@ -432,6 +468,119 @@ fn write_release_compatibility_fixtures() {
         assert_eq!(state(&restored), state(&project));
         assert_eq!(restored.assistant.conversations.len(), 2);
         assert_eq!(restored.fit_paths[0].degen, "4");
+    }
+}
+
+/// Small numerical persistence example, not an experimental recovery claim.
+fn add_synthetic_collection_results(project: &mut ProjectFile) {
+    use rexafs::prelude::*;
+    let energy: Vec<_> = (0..=25).map(|i| 8980. + 2. * i as f64).collect();
+    let spectra: Vec<_> = [0., 0.4, 1.]
+        .into_iter()
+        .enumerate()
+        .map(|(index, fraction)| {
+            let values: Vec<_> = energy
+                .iter()
+                .map(|e| {
+                    let first = 0.5 + ((e - 8998.) / 4.).atan() / std::f64::consts::PI;
+                    let second = 0.5 + ((e - 9005.) / 3.).atan() / std::f64::consts::PI;
+                    fraction * first + (1. - fraction) * second
+                })
+                .collect();
+            let mut spectrum =
+                Spectrum::from_prepared(&energy, &values, AnalysisSpace::Flat, 9000.).unwrap();
+            spectrum.set_name(format!("Synthetic persistence sample {}", index + 1));
+            spectrum
+        })
+        .collect();
+    let inputs: Vec<_> = (0..spectra.len())
+        .map(|index| AnalysisInput {
+            group_id: None,
+            label: format!("Synthetic persistence sample {}", index + 1),
+            fingerprint: 0,
+        })
+        .collect();
+    let lcf_config = LcfConfig {
+        space: AnalysisSpace::Flat,
+        ..Default::default()
+    };
+    let standards = [&spectra[0], &spectra[2]];
+    let result = lcf(&spectra[1], &standards, &lcf_config).unwrap();
+    project.lcf_analysis = Some(LcfAnalysis {
+        config: Some(lcf_config.clone()),
+        result,
+        inputs: vec![inputs[1].clone(), inputs[0].clone(), inputs[2].clone()],
+    });
+    let rows = lcf_batch(&spectra, &standards, &lcf_config)
+        .into_iter()
+        .enumerate()
+        .map(|(index, result)| {
+            let result = result.unwrap();
+            let mut values: Vec<_> = result.weights.iter().map(|weight| weight.weight).collect();
+            values.push(result.r_factor);
+            (index, values)
+        })
+        .collect();
+    project.lcf_series_analysis = Some(LcfSeriesAnalysis {
+        config: lcf_config,
+        inputs: inputs.iter().cloned().enumerate().collect(),
+        standards: vec![inputs[0].clone(), inputs[2].clone()],
+        rows,
+        errors: Default::default(),
+        complete: true,
+        cancelled: false,
+    });
+    let model = pca_train(
+        &spectra,
+        &PcaConfig {
+            space: AnalysisSpace::Flat,
+            center: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let target = model.target_transform(&spectra[1], 1).unwrap();
+    project.pca_analysis = Some(PcaAnalysis {
+        model,
+        target: Some(target),
+        inputs: std::iter::once(inputs[1].clone())
+            .chain(inputs.iter().cloned())
+            .collect(),
+    });
+    project.mcr_analysis = Some(McrAnalysis {
+        result: mcr_als(
+            &spectra,
+            &McrConfig {
+                space: AnalysisSpace::Flat,
+                components: 2,
+                ..Default::default()
+            },
+        )
+        .unwrap(),
+        inputs,
+        comparison: None,
+    });
+}
+
+#[test]
+fn released_029_fixtures_retain_collection_results() {
+    use rexafs::prelude::AnalysisSpace;
+    for suffix in ["links", "embedded"] {
+        let project = load(&fixture(&format!("rexafs-0.2.9-{suffix}.rxs"))).unwrap();
+        let lcf = project.lcf_analysis.unwrap();
+        assert_eq!(lcf.result.space, AnalysisSpace::Flat);
+        assert!((lcf.result.weights[0].weight - 0.6).abs() < 1e-10);
+        assert!((lcf.result.weights[1].weight - 0.4).abs() < 1e-10);
+        assert_eq!(project.lcf_series_analysis.unwrap().rows.len(), 3);
+        let pca = project.pca_analysis.unwrap();
+        assert!(pca.model.centered);
+        assert_eq!(pca.model.numerical_rank(), 1);
+        assert!(pca.target.unwrap().r_factor < 1e-20);
+        let mcr = project.mcr_analysis.unwrap();
+        assert_eq!(mcr.result.config.space, AnalysisSpace::Flat);
+        assert_eq!(mcr.result.concentrations.shape(), (3, 2));
+        assert!(mcr.result.relative_error < 1e-20);
+        assert!(mcr.result.component_spectrum(0).is_ok());
     }
 }
 

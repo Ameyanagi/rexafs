@@ -24,6 +24,7 @@ settings![
     (align_target, "Alignment energy (eV)", "Import"),
     (e0, "E₀ (eV)", "Edge"),
     (edge_step, "Edge step", "Edge"),
+    (refit_prepared, "Refit prepared absorption", "Normalization"),
     (pre_edge_start, "Pre-edge start (eV)", "Pre-edge line"),
     (pre_edge_end, "Pre-edge end (eV)", "Pre-edge line"),
     (n_victoreen, "Victoreen n", "Pre-edge line"),
@@ -869,6 +870,7 @@ mod tests {
             align_target: Some(9000.),
             e0: Some(8979.),
             edge_step: Some(1.2),
+            refit_prepared: true,
             pre_edge_start: Some(-150.),
             pre_edge_end: Some(-20.),
             n_victoreen: Some(1),
@@ -961,6 +963,7 @@ mod tests {
                 &[
                     "e0",
                     "edge_step",
+                    "refit_prepared",
                     "pre_edge_start",
                     "pre_edge_end",
                     "n_victoreen",

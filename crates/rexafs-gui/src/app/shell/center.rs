@@ -57,7 +57,9 @@ impl StudioApp {
         let tool_preview = (self.stage == Stage::Data && self.tool_preview_current(cx))
             .then(|| self.tools.preview_plot.clone())
             .flatten();
-        let plots: Vec<(usize, SharedString)> = if tool_preview.is_some() {
+        let plots: Vec<(usize, SharedString)> = if tool_preview.is_some()
+            || (self.stage == Stage::Data && self.analysis.plot.is_some())
+        {
             Vec::new()
         } else {
             self.stage_plots()
@@ -97,15 +99,31 @@ impl StudioApp {
             && let Some(tool) = self.analysis.shown
         {
             let title: SharedString = match tool {
-                super::tools::Tool::Lcf => {
-                    "linear combination fit · data / fit / components / residual".into()
-                }
-                _ => "PCA target transform · data / reconstruction / residual".into(),
+                super::tools::Tool::Lcf => "Linear combination fit".into(),
+                super::tools::Tool::Pca => self
+                    .analysis
+                    .pca
+                    .as_ref()
+                    .map(|m| {
+                        format!(
+                            "PCA · {} spectra · {}",
+                            m.n_spectra(),
+                            if m.centered {
+                                "mean subtracted"
+                            } else {
+                                "mean retained"
+                            }
+                        )
+                    })
+                    .unwrap_or_default()
+                    .into(),
+                _ => "MCR-ALS · estimated components".into(),
             };
+            let views = self.analysis_view_bar(tool, cx);
             area = area.child(
                 div()
-                    .flex_none()
-                    .h(px(300.))
+                    .flex_1()
+                    .min_h_0()
                     .min_w_0()
                     .flex()
                     .flex_col()
@@ -122,14 +140,250 @@ impl StudioApp {
                             .font_weight(gpui::FontWeight::MEDIUM)
                             .child(title),
                     )
-                    .child(div().flex_1().min_h_0().min_w_0().p_1().child(plot)),
+                    .child(views)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .min_w_0()
+                            .p_1()
+                            .relative()
+                            .child(plot)
+                            .child(self.measure_card(300, cx)),
+                    ),
             );
         }
+        if self.stage == Stage::Data
+            && self.analysis.plot.is_none()
+            && let Some((lo, hi)) = self.analysis_energy_interval(cx)
+        {
+            column=column.child(div().px_3().text_size(px(11.)).text_color(t.text_muted)
+                .child(format!("Analysis interval: {lo:.1}–{hi:.1} eV · dashed boundaries on the spectrum plot. Viewing presets change only the zoom.")));
+        }
         column = column.child(area);
-        if self.view.legend && !self.legend_entries.is_empty() {
+        if self.analysis.plot.is_none() && self.view.legend && !self.legend_entries.is_empty() {
             column = column.child(self.legend_strip());
         }
         column.when(self.ui.overview, |d| d.child(self.thumbnail_strip(cx)))
+    }
+
+    fn analysis_view_bar(
+        &self,
+        tool: super::tools::Tool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
+        use super::tools::Tool;
+        use crate::plotting::analysis::{McrView, PcaScale, PcaView};
+        let t = self.theme;
+        let mut row = div().px_3().py_1().flex().flex_wrap().gap_1();
+        if matches!(tool, Tool::Mcr | Tool::Lcf) {
+            row = row.child(
+                chip(&t, "analysis-to-groups", "Add to Groups", false).on_click(
+                    cx.listener(move |this, _, _, cx| this.add_analysis_groups(tool, cx)),
+                ),
+            );
+        }
+        if tool == Tool::Pca {
+            for (i, view) in PcaView::ALL.into_iter().enumerate() {
+                row = row.child(
+                    chip(
+                        &t,
+                        SharedString::from(format!("pca-view-{i}")),
+                        view.label(),
+                        self.analysis.pca_view == view,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.analysis.pca_view = view;
+                        this.rebuild_analysis_plot(cx);
+                        cx.notify();
+                    })),
+                );
+            }
+            if matches!(
+                self.analysis.pca_view,
+                PcaView::Scree | PcaView::Cumulative | PcaView::Indicator | PcaView::Residual
+            ) {
+                row = row.child(
+                    chip(
+                        &t,
+                        "pca-show-all",
+                        "All components",
+                        self.analysis.pca_all_components,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.analysis.pca_all_components = !this.analysis.pca_all_components;
+                        this.rebuild_analysis_plot(cx);
+                        cx.notify();
+                    })),
+                );
+            }
+            if matches!(
+                self.analysis.pca_view,
+                PcaView::Scree | PcaView::Indicator | PcaView::Residual
+            ) {
+                row = row.child(div().px_2().child("Y axis"));
+                for scale in [PcaScale::Linear, PcaScale::Log] {
+                    row = row.child(
+                        chip(
+                            &t,
+                            SharedString::from(format!("pca-scale-{}", scale.label())),
+                            scale.label(),
+                            self.analysis.pca_scale == scale,
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.analysis.pca_scale = scale;
+                            this.rebuild_analysis_plot(cx);
+                            cx.notify();
+                        })),
+                    );
+                }
+            }
+        } else if tool == Tool::Mcr {
+            for (i, view) in McrView::ALL.into_iter().enumerate() {
+                row = row.child(
+                    chip(
+                        &t,
+                        SharedString::from(format!("mcr-view-{i}")),
+                        view.label(),
+                        self.analysis.mcr_view == view,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.analysis.mcr_view = view;
+                        this.rebuild_analysis_plot(cx);
+                        cx.notify();
+                    })),
+                );
+            }
+        }
+        if tool == Tool::Mcr {
+            row = row.child(
+                chip(
+                    &t,
+                    "mcr-reference-compare",
+                    "Compare marked standards",
+                    false,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    if let Err(error) = this.compare_mcr_references(cx) {
+                        this.tools.message = error.into();
+                        cx.notify();
+                    }
+                })),
+            );
+        }
+        row = row.child(
+            chip(&t, "analysis-back", "Back to spectra", false).on_click(cx.listener(
+                |this, _, _, cx| {
+                    this.analysis.shown = None;
+                    this.analysis.plot = None;
+                    cx.notify();
+                },
+            )),
+        );
+        let caption = match tool {
+            Tool::Pca => match self.analysis.pca_view {
+                PcaView::Scree => {
+                    if self.analysis.pca_all_components {
+                        "All components"
+                    } else {
+                        "First 12 components (or all if fewer)"
+                    }
+                }
+                PcaView::Residual => {
+                    "Zero components reconstruct only the mean (or zero without centering). Lower error does not prove chemical identity."
+                }
+                PcaView::Cumulative => {
+                    "Choose a retained fraction; this threshold alone does not identify chemical species."
+                }
+                PcaView::Indicator => {
+                    "IND is a rank heuristic. Minima in numerical roundoff do not indicate chemical components."
+                }
+                PcaView::Loadings => {
+                    "Retained orthonormal directions; these are not pure chemical spectra."
+                }
+                PcaView::Similarity => {
+                    "Cosine similarity of retained scores · −1 to +1 · zero vectors are undefined."
+                }
+                PcaView::Target => {
+                    "Current target at calculation time · data, reconstruction and offset residual."
+                }
+                _ => {
+                    "One point per training spectrum. Scores describe relative spectral variation, not chemical fractions."
+                }
+            },
+            Tool::Mcr => match self.analysis.mcr_view {
+                McrView::Spectra => {
+                    "Component identities and order are not known without reference information."
+                }
+                McrView::Fractions => {
+                    "All input samples in their saved order; no time axis is assumed."
+                }
+                McrView::Convergence => {
+                    "Residual after each complete iteration · plotted factors use the best accepted iteration."
+                }
+                McrView::Residuals => {
+                    "Root mean square reconstruction error for every input spectrum."
+                }
+                McrView::References => {
+                    "Solid: recovered component. Dashed: matched reference. Matching does not change the blind fit."
+                }
+            },
+            _ => "Data and fitted sum; weighted contributions and residual are vertically offset.",
+        };
+        let caption = if tool == Tool::Pca
+            && matches!(
+                self.analysis.pca_view,
+                PcaView::Scree | PcaView::Indicator | PcaView::Residual
+            )
+            && self.analysis.pca_scale == PcaScale::Log
+        {
+            format!("{caption} · Log display floor 10⁻³²")
+        } else {
+            caption.to_string()
+        };
+        let saved_range = match tool {
+            Tool::Lcf => self.analysis.lcf.as_ref().map(|r| (&r.x, r.space)),
+            Tool::Pca => self.analysis.pca.as_ref().map(|m| (&m.x, m.space)),
+            Tool::Mcr => self
+                .analysis
+                .mcr
+                .as_ref()
+                .map(|m| (&m.result.x, m.result.config.space)),
+            _ => None,
+        }
+        .map(|(x, space)| {
+            format!(
+                "Saved analysis: {:.1}–{:.1} {} · {}",
+                x[0],
+                x[x.len() - 1],
+                if matches!(space, rexafs::prelude::AnalysisSpace::Chi { .. }) {
+                    "Å⁻¹"
+                } else {
+                    "eV"
+                },
+                crate::plotting::analysis::analysis_axis_labels(space).1
+            )
+        })
+        .unwrap_or_default();
+        div()
+            .flex()
+            .flex_col()
+            .child(row)
+            .child(
+                div()
+                    .px_3()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child(saved_range),
+            )
+            .child(
+                div()
+                    .px_3()
+                    .pb_1()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child(caption),
+            )
     }
 
     /// Which quadrant plots the current stage shows, top to bottom.
@@ -139,8 +393,18 @@ impl StudioApp {
             self.stage_view,
             self.fft_summary().3,
             self.mixed_overlay_weight.is_some(),
-            self.spectrum_quantity,
+            self.processing_plot_quantity(),
         )
+    }
+
+    /// Refitting a prepared input uses the ordinary input/norm/flat plot choices;
+    /// its original quantity remains on the group and provenance record.
+    pub(crate) fn processing_plot_quantity(&self) -> crate::params::Quantity {
+        if self.spectrum_quantity.prepared_space().is_some() && self.ui_params().refit_prepared {
+            crate::params::Quantity::RawMu
+        } else {
+            self.spectrum_quantity
+        }
     }
 
     fn plot_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -187,7 +451,44 @@ impl StudioApp {
                     app.stage_view_changed(cx);
                 })),
             );
-        if self.stage.is_processing() && !self.spectrum_quantity.is_absorption() {
+        if v.scope == PlotScope::Marked {
+            bar = bar
+                .child(
+                    chip(&t, "plot-preview", "Preview 12", self.view.sample_overlay).on_click(
+                        cx.listener(|app, _, _, cx| {
+                            app.view.sample_overlay = true;
+                            app.ensure_compare_loaded(cx);
+                            app.stage_view_changed(cx);
+                        }),
+                    ),
+                )
+                .child(
+                    chip(
+                        &t,
+                        "plot-all",
+                        format!("Plot all {}", self.compare_count()),
+                        !self.view.sample_overlay,
+                    )
+                    .on_click(cx.listener(|app, _, _, cx| {
+                        app.view.sample_overlay = false;
+                        app.ensure_compare_loaded(cx);
+                        app.stage_view_changed(cx);
+                    })),
+                )
+                .child(
+                    chip(&t, "plot-gradient", "Gradient", self.view.gradient).on_click(
+                        cx.listener(|app, _, _, cx| {
+                            app.view.gradient = !app.view.gradient;
+                            app.stage_view_changed(cx);
+                        }),
+                    ),
+                );
+        }
+        if self.stage.is_processing()
+            && (!self.spectrum_quantity.supports_exafs()
+                || (matches!(self.stage, Stage::Data | Stage::Normalize)
+                    && self.processing_plot_quantity().prepared_space().is_some()))
+        {
             return bar.child(self.spectrum_quantity.label());
         }
         let mut choices = segmented(&t).flex_none();
@@ -333,6 +634,30 @@ impl StudioApp {
                     );
             }
             _ => {}
+        }
+        if matches!(self.stage, Stage::Data | Stage::Normalize) {
+            for (i, label, range) in [
+                (0, "XANES", Some((-20., 80.))),
+                (1, "−200…+800", Some((-200., 800.))),
+                (2, "Full spectrum", None),
+            ] {
+                bar = bar.child(
+                    chip(
+                        &t,
+                        SharedString::from(format!("view-energy-{i}")),
+                        label,
+                        self.view.energy_view_range == range,
+                    )
+                    .on_click(cx.listener(move |app, _, _, cx| {
+                        app.view.energy_view_range = range;
+                        app.analysis.shown = None;
+                        app.analysis.plot = None;
+                        app.quadrants.clear();
+                        app.quad_bindings.clear();
+                        app.stage_view_changed(cx);
+                    })),
+                );
+            }
         }
         bar = bar
             .child(div().flex_1())
@@ -645,9 +970,20 @@ pub(crate) fn stage_plot_selection(
     mixed_weights: bool,
     quantity: crate::params::Quantity,
 ) -> Vec<(usize, SharedString)> {
-    if stage.is_processing() && !quantity.is_absorption() {
+    if stage.is_processing()
+        && (!quantity.supports_exafs()
+            || (matches!(stage, Stage::Data | Stage::Normalize)
+                && quantity.prepared_space().is_some()))
+    {
         return vec![if quantity == crate::params::Quantity::ChiK {
             (PLOT_CHIK, crate::plotting::chik_label(kw).into())
+        } else if matches!(
+            quantity,
+            crate::params::Quantity::NormalizedMu
+                | crate::params::Quantity::FlattenedMu
+                | crate::params::Quantity::FlattenedDifference
+        ) {
+            (PLOT_NORM, quantity.label().into())
         } else {
             (PLOT_MU, quantity.label().into())
         }];

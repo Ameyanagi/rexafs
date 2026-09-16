@@ -1,0 +1,41 @@
+{
+  "date": "2026-09-15",
+  "platform": "macOS ARM64",
+  "build": "cargo build --locked --release -p rexafs-gui",
+  "branch": "fix/import-all-scans",
+  "base_commit": "0c00a45a5033c91fbfa27d9ff3abba1f9ab5834b",
+  "uncommitted_source_sha256": {
+    "crates/rexafs-gui/src/app/shell/import_editor.rs": "7308e0291e4db6018f745aca2a15512a358360bd5d33eca9a3fb4294e6f982a9",
+    "crates/rexafs-gui/src/app/shell/import_editor/measurement_view.rs": "21a4ea7f8bbaf879808dbe6ffb36297b9486f8f5f2271a8bb5552de28277d7e8",
+    "crates/rexafs-gui/src/app/shell/measurement_import.rs": "ddfdbe94365e296c04cffc561efa1b340bdcae74d9af3ac168e27d5429a70828",
+    "crates/rexafs-gui/src/app/shell/measurement_import/scan_choices.rs": "7219b9cf00aa2712cb8fbfb01d1bb11e251085e3c157fb2e15e4aac4ad64ba08",
+    "crates/rexafs-gui/src/app/shell/measurement_import/tests.rs": "1dd36df22b37a73256b982f3e7faac75608e871a47f7ac78270abe4e932f0651",
+    "crates/rexafs-gui/src/catalog.rs": "4fcc3ffde465390ba4a75f785061c570919eeb4b2fe5700df78e12a679a3b87b"
+  },
+  "signed_qa_executable_sha256": "54bc30fef5bde4e6b7ea7efdfd2681cdbe690ff4ca2c8e168082f81518854c24",
+  "screenshot": {
+    "path": "website/public/screenshots/next/import-project-scans.jpg",
+    "sha256": "cbcc22c362cd1f74e75137db82f2333568eadbfd3b7ab1da8ae54c18c9ba94db",
+    "width": 1187,
+    "height": 768,
+    "full_unedited_cua_capture": true
+  },
+  "input": {
+    "path": "crates/rexafs/tests/fixtures/xas/samples/unspecified/unspecified/xraylarch/json_unzipped.prj",
+    "sha256": "14a47fbcdb997ac6a6141837d60d83ad7c32ea80e339483d14c9d9374cd5310f",
+    "license": "MIT; retained per-file notice and repository license",
+    "source": "https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/json_unzipped.prj"
+  },
+  "final_gui_verified": {
+    "scan_count": 4,
+    "checkbox_mouse_and_space": true,
+    "preview_preserves_selection": true,
+    "imported_groups": 4,
+    "undo_all_and_redo_all": true
+  },
+  "automated_tests": {
+    "passed": 507,
+    "failed": 0,
+    "ignored": 5
+  }
+}

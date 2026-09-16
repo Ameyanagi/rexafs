@@ -1,0 +1,29 @@
+{
+  "purpose": "Unreleased component processing workflow validation, distinct from narrow-range reference-recovery experiment",
+  "space": "Flat",
+  "samples": 100,
+  "points": 517,
+  "energy_range_ev": [
+    8780.206,
+    9768.204
+  ],
+  "e0_ev": 8979.0,
+  "iterations": 870,
+  "termination": "Converged",
+  "relative_squared_residual": 9.660622670192087e-25,
+  "source_groups": 103,
+  "derived_groups": 11,
+  "component_arrays_match_retained_mcr": true,
+  "fit_interpretation": "Cu FEFF path smoke test on component 1, not a validated structural model; GUI R-factor about 1.03644 and bound warning",
+  "optional_refit": {
+    "gui_checked_on_off": true,
+    "saved": true,
+    "component": 1,
+    "pre_edge_ev": [
+      -150,
+      -75
+    ],
+    "post_edge_end_ev": 650,
+    "original_arrays_and_mcr_unchanged": true
+  }
+}

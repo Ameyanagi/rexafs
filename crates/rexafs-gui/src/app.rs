@@ -592,10 +592,6 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
     ]
 }
 
-/// Overlays beyond this many traces are unreadable; larger selections are
-/// thinned evenly (the Operando heatmap is the full-set view).
-const MAX_OVERLAY: usize = 12;
-
 /// Cache slot for the spectrum loaded outside the catalog (default file).
 const NO_ENTRY: usize = usize::MAX;
 
@@ -618,9 +614,10 @@ pub(crate) struct OperandoData {
     /// k grid and k-weighted χ(k) rows (sampled frames × grid).
     pub(crate) grid: Vec<f64>,
     pub(crate) matrix: Vec<Vec<f64>>,
-    /// Absolute-energy grid and flattened μ(E) rows, falling back to norm.
+    /// Absolute-energy grid with distinct normalized and flattened absorption rows.
     pub(crate) e_grid: Vec<f64>,
     pub(crate) e_matrix: Vec<Vec<f64>>,
+    pub(crate) flat_matrix: Vec<Vec<f64>>,
     /// R grid and |χ(R)| rows.
     pub(crate) r_grid: Vec<f64>,
     pub(crate) r_matrix: Vec<Vec<f64>>,
@@ -631,18 +628,11 @@ pub(crate) struct OperandoData {
 }
 
 impl OperandoData {
-    fn sample_pos(&self, frame: usize) -> usize {
-        self.sample_frames
-            .iter()
-            .enumerate()
-            .min_by_key(|(_, p)| p.abs_diff(frame))
-            .map_or(0, |(i, _)| i)
-    }
-
     /// Grid and matrix of a series space.
     pub(crate) fn space(&self, space: SeriesSpace) -> (&[f64], &[Vec<f64>]) {
         match space {
             SeriesSpace::Energy => (&self.e_grid, &self.e_matrix),
+            SeriesSpace::Flat => (&self.e_grid, &self.flat_matrix),
             SeriesSpace::K => (&self.grid, &self.matrix),
             SeriesSpace::R => (&self.r_grid, &self.r_matrix),
         }
@@ -669,6 +659,7 @@ struct FrameSample {
     whiteline: f64,
     energy: Vec<f64>,
     norm: Vec<f64>,
+    flat: Vec<f64>,
     r: Vec<f64>,
     mag: Vec<f64>,
 }
@@ -682,14 +673,17 @@ fn frame_sample(sp: &XASSpectrum, k_grid: &[f64]) -> Result<FrameSample, String>
         .as_ref()
         .map(|e| e.iter().copied().collect())
         .unwrap_or_default();
-    let norm: Vec<f64> = sp
+    let flat: Vec<f64> = sp
         .flat()
-        .or_else(|| sp.norm())
+        .map(|v| v.iter().copied().collect())
+        .unwrap_or_default();
+    let norm: Vec<f64> = sp
+        .norm()
         .map(|n| n.iter().copied().collect())
         .unwrap_or_default();
     let whiteline = energy
         .iter()
-        .zip(&norm)
+        .zip(if flat.is_empty() { &norm } else { &flat })
         .filter(|(e, _)| **e >= e0 && **e <= e0 + 30.0)
         .map(|(_, n)| *n)
         .fold(f64::NAN, f64::max);
@@ -707,6 +701,7 @@ fn frame_sample(sp: &XASSpectrum, k_grid: &[f64]) -> Result<FrameSample, String>
         whiteline,
         energy,
         norm,
+        flat,
         r,
         mag,
     })
@@ -739,8 +734,36 @@ fn resample_xy(x: &[f64], y: &[f64], grid: &[f64]) -> Vec<f64> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum SeriesSpace {
     Energy,
+    Flat,
     K,
     R,
+}
+
+fn resample_series_frame(sp: &XASSpectrum, space: SeriesSpace, grid: &[f64]) -> Option<Vec<f64>> {
+    if space == SeriesSpace::K {
+        return resample_chik(sp, grid);
+    }
+    let (x, y) = match space {
+        SeriesSpace::Energy => (sp.energy.as_ref()?.clone(), sp.norm()?),
+        SeriesSpace::Flat => (sp.energy.as_ref()?.clone(), sp.flat()?),
+        SeriesSpace::R => (sp.r()?, sp.chir_mag()?),
+        SeriesSpace::K => unreachable!(),
+    };
+    Some(resample_xy(x.as_slice(), y.as_slice(), grid))
+}
+
+fn exact_overview_row(
+    frames: &[usize],
+    rows: &[Vec<f64>],
+    frame: usize,
+    points: usize,
+) -> Vec<f64> {
+    frames
+        .iter()
+        .position(|&i| i == frame)
+        .and_then(|i| rows.get(i))
+        .cloned()
+        .unwrap_or_else(|| vec![f64::NAN; points])
 }
 
 /// Quantity plotted against frame in the Series trend.
@@ -1291,25 +1314,6 @@ pub struct StudioApp {
     pub(crate) viewport_h: f32,
 }
 
-/// Evenly sample `all` (sorted) down to `cap`, always keeping first, last,
-/// and `keep` when present.
-fn thin_even(all: &[usize], cap: usize, keep: Option<usize>) -> Vec<usize> {
-    if all.len() <= cap {
-        return all.to_vec();
-    }
-    let total = all.len();
-    let mut thinned: Vec<usize> = (0..cap).map(|i| all[i * (total - 1) / (cap - 1)]).collect();
-    if let Some(keep) = keep
-        && all.contains(&keep)
-        && !thinned.contains(&keep)
-    {
-        thinned[cap / 2] = keep;
-        thinned.sort_unstable();
-    }
-    thinned.dedup();
-    thinned
-}
-
 fn sample_scan_indices(start: usize, len: usize, cap: usize) -> Vec<usize> {
     if cap == 0 {
         Vec::new()
@@ -1541,23 +1545,58 @@ mod thin_tests {
     use super::{
         ChikRowKey, RetainedChikSeries, Workspace, catalog_row_index, frame_from_data_y,
         frame_from_heatmap_position, nearest_sample_pos, scan_entry_offset, should_rebuild_explore,
-        thin_even,
     };
 
     #[test]
-    fn small_sets_pass_through() {
-        assert_eq!(thin_even(&[1, 5, 9], 12, Some(5)), vec![1, 5, 9]);
-    }
-
-    #[test]
-    fn large_sets_sample_evenly_and_keep_ends_and_active() {
-        let all: Vec<usize> = (0..200).collect();
-        let out = thin_even(&all, 12, Some(7));
-        assert_eq!(out.len(), 12);
-        assert_eq!(*out.first().unwrap(), 0);
-        assert_eq!(*out.last().unwrap(), 199);
-        assert!(out.contains(&7));
-        assert!(out.windows(2).all(|w| w[0] < w[1]));
+    fn energy_frame_updates_preserve_norm_flat_and_exact_frame_identity() {
+        use rexafs::prelude::*;
+        use rexafs::xafs::normalization::PrePostEdge;
+        let grid = [8950., 8951., 8952.];
+        let make = |offset: f64| {
+            let mut sp = XASSpectrum::new();
+            sp.set_spectrum(grid.to_vec(), vec![1., 2., 3.]);
+            let mut prepared = PrePostEdge::new();
+            prepared.norm = Some(vec![0.1 + offset, 0.8 + offset, 1.2 + offset].into());
+            prepared.flat = Some(vec![0.2 + offset, 0.9 + offset, 1.0 + offset].into());
+            sp.normalization = Some(NormalizationMethod::PrePostEdge(prepared));
+            sp
+        };
+        let first = make(0.);
+        let last = make(0.3);
+        for (space, expected) in [
+            (super::SeriesSpace::Energy, vec![0.4, 1.1, 1.5]),
+            (super::SeriesSpace::Flat, vec![0.5, 1.2, 1.3]),
+        ] {
+            let row = super::resample_series_frame(&first, space, &grid).unwrap();
+            let mut series = RetainedChikSeries::new(
+                ChikRowKey::Exact {
+                    entry: 0,
+                    params_fingerprint: 1,
+                },
+                row.clone(),
+            );
+            let source = series.values.clone();
+            let next = super::resample_series_frame(&last, space, &grid).unwrap();
+            assert!(series.replace_if_changed(
+                ChikRowKey::Exact {
+                    entry: 99,
+                    params_fingerprint: 1
+                },
+                next
+            ));
+            assert_ne!(&*source.read(), &row);
+            for (actual, want) in source.read().iter().zip(expected) {
+                assert!((actual - want).abs() < 1e-12);
+            }
+        }
+        let rows = vec![vec![1., 2.], vec![3., 4.]];
+        assert_eq!(super::exact_overview_row(&[0, 99], &rows, 99, 2), rows[1]);
+        assert!(
+            super::exact_overview_row(&[0, 99], &rows, 50, 2)
+                .iter()
+                .all(|v| v.is_nan()),
+            "Do not label a neighboring preview row as frame 51"
+        );
     }
 
     #[test]
@@ -2780,7 +2819,9 @@ impl CompareLoad {
             let (path, derived) = match &self.source {
                 Ok(path) => (path.as_path(), None),
                 Err(group) => {
-                    if group.processing_block_reason().is_some() {
+                    if group.processing_block_reason().is_some()
+                        || group.quantity.prepared_space().is_some()
+                    {
                         return group.for_display(&self.params).map(|sp| (sp, None));
                     }
                     (std::path::Path::new(""), Some(group))
@@ -4771,7 +4812,8 @@ impl StudioApp {
             // Dispatch typed results before consulting the raw cache: cached
             // arrays must never bypass the quantity guard on later edits.
             if let Some(group) = &derived
-                && group.processing_block_reason().is_some()
+                && (group.processing_block_reason().is_some()
+                    || group.quantity.prepared_space().is_some())
             {
                 return group.for_display(&params).map(|sp| (sp, None));
             }
@@ -5013,6 +5055,7 @@ impl StudioApp {
                     .collect();
                 let mut matrix = Vec::with_capacity(samples.len());
                 let mut e_matrix = Vec::with_capacity(samples.len());
+                let mut flat_matrix = Vec::with_capacity(samples.len());
                 let mut r_matrix = Vec::with_capacity(samples.len());
                 let mut e0s = Vec::with_capacity(samples.len());
                 let mut whitelines = Vec::with_capacity(samples.len());
@@ -5021,6 +5064,7 @@ impl StudioApp {
                         Ok(f) => {
                             matrix.push(f.k_row);
                             e_matrix.push(resample_xy(&f.energy, &f.norm, &e_grid));
+                            flat_matrix.push(resample_xy(&f.energy, &f.flat, &e_grid));
                             r_matrix.push(resample_xy(&f.r, &f.mag, &r_grid));
                             e0s.push(f.e0);
                             whitelines.push(f.whiteline);
@@ -5028,6 +5072,7 @@ impl StudioApp {
                         Err(_) => {
                             matrix.push(vec![f64::NAN; grid.len()]);
                             e_matrix.push(vec![f64::NAN; e_grid.len()]);
+                            flat_matrix.push(vec![f64::NAN; e_grid.len()]);
                             r_matrix.push(vec![f64::NAN; r_grid.len()]);
                             e0s.push(f64::NAN);
                             whitelines.push(f64::NAN);
@@ -5044,6 +5089,7 @@ impl StudioApp {
                     matrix,
                     e_grid,
                     e_matrix,
+                    flat_matrix,
                     r_grid,
                     r_matrix,
                     e0s,
@@ -5085,6 +5131,10 @@ impl StudioApp {
         .detach();
     }
 
+    fn series_tick_count(&self, key: usize) -> usize {
+        (self.card_px.get(&key).map_or(700, |v| v.0) as usize / 110).clamp(3, 7)
+    }
+
     fn rebuild_operando_plots(&mut self, cx: &mut Context<Self>) {
         let Some(data) = self.operando.as_ref() else {
             return;
@@ -5093,36 +5143,15 @@ impl StudioApp {
             return;
         };
         let scan_ix = data.scan;
-        let scan_len = data.scan_len.min(scan.len);
-        let sample_pos = data.sample_pos(self.time_pos);
-        let cursor_ix = scan.start + self.time_pos.min(scan_len.saturating_sub(1));
-        let cursor_fingerprint = self.effective_fingerprint(cursor_ix);
-        let exact_row = self
-            .cache
-            .peek(&(cursor_ix, cursor_fingerprint))
-            .and_then(|sp| resample_chik(sp, &data.grid));
-        let (chik_key, row) = match exact_row {
-            Some(row) => (
-                ChikRowKey::Exact {
-                    entry: cursor_ix,
-                    params_fingerprint: cursor_fingerprint,
-                },
-                row,
-            ),
-            None => (
-                ChikRowKey::Sampled {
-                    scan: scan_ix,
-                    overview_fingerprint: data.fingerprint,
-                    row: sample_pos,
-                },
-                data.matrix.get(sample_pos).cloned().unwrap_or_default(),
-            ),
+        let Some((chik_key, row)) = self.series_frame_source() else {
+            return;
         };
         let chik_series = RetainedChikSeries::new(chik_key, row);
         let space = self.stage_view.series_space;
         let (grid, matrix) = data.space(space);
         let (xlabel, ylabel): (String, String) = match space {
             SeriesSpace::Energy => ("Energy (eV)".into(), "normalized μ(E)".into()),
+            SeriesSpace::Flat => ("Energy (eV)".into(), "flattened μ(E)".into()),
             SeriesSpace::K => (K_AXIS.into(), chik_label(data.kweight)),
             SeriesSpace::R => (R_AXIS.into(), chir_label(data.kweight)),
         };
@@ -5134,7 +5163,11 @@ impl StudioApp {
             data.scan_len,
         );
         let heatmap = build_heatmap(&heatmap_rows, grid, data.scan_len, &xlabel, &self.theme)
-            .size_px(700, 900);
+            .size_px(
+                self.card_px.get(&301).map_or(700, |v| v.0),
+                self.card_px.get(&301).map_or(900, |v| v.1),
+            )
+            .major_ticks_x(self.series_tick_count(301));
         let chik = match space {
             SeriesSpace::K => build_frame_chik_source(
                 &data.grid,
@@ -5142,12 +5175,19 @@ impl StudioApp {
                 data.kweight,
                 &self.theme,
             ),
-            _ => {
-                let frame_row = self.series_frame_row(space);
-                crate::plotting::build_frame_row(grid, &frame_row, &xlabel, &ylabel, &self.theme)
-            }
+            _ => crate::plotting::build_frame_row_source(
+                grid,
+                chik_series.values.clone(),
+                &xlabel,
+                &ylabel,
+                &self.theme,
+            ),
         }
-        .size_px(700, 420);
+        .size_px(
+            self.card_px.get(&302).map_or(700, |v| v.0),
+            self.card_px.get(&302).map_or(420, |v| v.1),
+        )
+        .major_ticks_x(self.series_tick_count(302));
         let trend_snapshot = self.trend_snapshot();
         let trend = build_trend(
             &trend_snapshot.values,
@@ -5155,7 +5195,11 @@ impl StudioApp {
             &trend_snapshot.name,
             &self.theme,
         )
-        .size_px(700, 420);
+        .size_px(
+            self.card_px.get(&303).map_or(700, |v| v.0),
+            self.card_px.get(&303).map_or(420, |v| v.1),
+        )
+        .major_ticks_x(self.series_tick_count(303));
         match &mut self.operando_plots {
             Some(plots) => {
                 if plots.scan == scan_ix && plots.space == space {
@@ -5254,7 +5298,11 @@ impl StudioApp {
             &snapshot.name,
             &self.theme,
         )
-        .size_px(700, 420);
+        .size_px(
+            self.card_px.get(&303).map_or(700, |v| v.0),
+            self.card_px.get(&303).map_or(420, |v| v.1),
+        )
+        .major_ticks_x(self.series_tick_count(303));
         let plots = self
             .operando_plots
             .as_mut()
@@ -5365,44 +5413,7 @@ impl StudioApp {
             return Some((scan_ix, ix));
         }
         self.time_pos = pos;
-        let sample_pos = data.sample_pos(pos);
-        let fingerprint = self.effective_fingerprint(ix);
-        let current_key = self
-            .operando_plots
-            .as_ref()
-            .map(|plots| plots.chik_series.key);
-        let sampled_key = ChikRowKey::Sampled {
-            scan: scan_ix,
-            overview_fingerprint: data.fingerprint,
-            row: sample_pos,
-        };
-        let cached = self.cache.peek(&(ix, fingerprint)).cloned();
-        let row_update = if let Some(sp) = cached {
-            let exact_key = ChikRowKey::Exact {
-                entry: ix,
-                params_fingerprint: fingerprint,
-            };
-            if current_key == Some(exact_key) {
-                None
-            } else if let Some(row) = resample_chik(&sp, &data.grid) {
-                Some((exact_key, row))
-            } else if current_key == Some(sampled_key) {
-                None
-            } else {
-                Some((
-                    sampled_key,
-                    data.matrix.get(sample_pos).cloned().unwrap_or_default(),
-                ))
-            }
-        } else if current_key == Some(sampled_key) {
-            None
-        } else {
-            Some((
-                sampled_key,
-                data.matrix.get(sample_pos).cloned().unwrap_or_default(),
-            ))
-        };
-        if let Some((key, row)) = row_update {
+        if let Some((key, row)) = self.series_frame_source() {
             self.replace_operando_chik(key, row);
         }
         self.update_operando_cursor_annotations(cx);
@@ -5501,7 +5512,11 @@ impl StudioApp {
         {
             return;
         }
-        let Some(row) = resample_chik(sp, &data.grid) else {
+        let Some(row) = resample_series_frame(
+            sp,
+            self.stage_view.series_space,
+            data.space(self.stage_view.series_space).0,
+        ) else {
             return;
         };
         self.replace_operando_chik(key, row);
@@ -5527,15 +5542,22 @@ impl StudioApp {
         group_rows::compare_set(self.current_group_index(), &self.selection)
     }
 
-    /// Selection (plus active) thinned evenly to MAX_OVERLAY, active always
-    /// kept. Returns (indices, total_before_thinning).
+    /// Every marked group plus the active group, without trace sampling.
     fn compare_indices(&self) -> (Vec<usize>, usize) {
         let all: Vec<usize> = self.compare_groups().into_iter().collect();
         let total = all.len();
-        (
-            thin_even(&all, MAX_OVERLAY, self.current_group_index()),
-            total,
-        )
+        if self.view.sample_overlay && total > 12 {
+            let mut preview: Vec<_> = (0..12).map(|i| all[i * (total - 1) / 11]).collect();
+            if let Some(current) = self.current_group_index()
+                && !preview.contains(&current)
+            {
+                preview[6] = current;
+                preview.sort_unstable();
+            }
+            (preview, total)
+        } else {
+            (all, total)
+        }
     }
 
     /// Process any compare-set members missing from the cache (rayon batch),
@@ -5768,6 +5790,13 @@ impl StudioApp {
         for (trace, color) in traces.iter_mut().zip(colors) {
             trace.color_index = color;
         }
+        if self.view.gradient && traces.len() > 1 {
+            let map = ruviz::render::ColorMap::viridis();
+            let count = traces.len();
+            for (i, trace) in traces.iter_mut().enumerate() {
+                trace.color = Some(map.sample(i as f64 / (count - 1) as f64));
+            }
+        }
         // The grid uses one shared legend strip; per-plot legends only when a
         // quadrant is maximized.
         self.mixed_overlay_weight = crate::plotting::mixed_kweights(&traces).then(|| {
@@ -5808,8 +5837,25 @@ impl StudioApp {
             &self.view,
             &self.theme,
             in_plot_legend,
-            self.spectrum_quantity,
+            self.processing_plot_quantity(),
         );
+        if let Some((lo, hi)) = self.view.energy_view_range {
+            if let Some(e0) = self.spectrum.as_ref().and_then(|sp| sp.e0()) {
+                for spec in specs.iter_mut().take(2) {
+                    spec.xlim = Some((e0 + lo, e0 + hi));
+                }
+            }
+        }
+        if self.stage == Stage::Data
+            && let Some((lo, hi)) = self.analysis_energy_interval(cx)
+        {
+            for spec in specs.iter_mut().take(2) {
+                spec.vlines
+                    .push((lo, ruviz::render::Color::from_gray(175), 1.3, true));
+                spec.vlines
+                    .push((hi, ruviz::render::Color::from_gray(175), 1.3, true));
+            }
+        }
         self.plot_coverage =
             std::array::from_fn(|i| specs[i].coverage(total, sampled, traces.len()));
         if self.stage == Stage::Background
@@ -7271,7 +7317,11 @@ impl StudioApp {
             return;
         }
         self.card_px.insert(key, size);
-        if (shell::fit_preview::PREVIEW_K..=shell::fit_preview::PREVIEW_Q).contains(&key) {
+        if key == 300 {
+            self.rebuild_analysis_plot(cx);
+        } else if (301..=303).contains(&key) {
+            self.rebuild_operando_plots(cx);
+        } else if (shell::fit_preview::PREVIEW_K..=shell::fit_preview::PREVIEW_Q).contains(&key) {
             self.rebuild_fit_preview_plots(cx, false);
         } else if key >= shell::handles::PLOT_FIT_K {
             self.rebuild_fit_plots(cx);
@@ -7651,9 +7701,16 @@ impl StudioApp {
             cx.notify();
             return;
         };
+        if let Err(error) = self.tools.sync_range(cx) {
+            self.status = error.into();
+            cx.notify();
+            return;
+        }
         let standards = self.lcf_standards();
-        if standards.len() < 2 {
-            self.status = "mark at least two standards (their spectra must be loaded)".into();
+        if standards.len() < 2 || standards.len() != self.selection.len() {
+            self.status =
+                "Mark at least two standards and load every marked spectrum before running LCF."
+                    .into();
             cx.notify();
             return;
         }
@@ -7694,6 +7751,35 @@ impl StudioApp {
             })
             .collect();
         let total = frames.len();
+        self.analysis.lcf_series = Some(crate::project::LcfSeriesAnalysis {
+            config: self.tools.lcf_config(),
+            inputs: frames
+                .iter()
+                .map(|(frame, ix, _, label)| {
+                    (
+                        *frame,
+                        crate::project::AnalysisInput {
+                            group_id: self.group_id(*ix),
+                            label: label.clone(),
+                            fingerprint: self.effective_fingerprint(*ix),
+                        },
+                    )
+                })
+                .collect(),
+            standards: cached_marked_indices(&self.selection, &self.cache, |ix| {
+                self.effective_fingerprint(ix)
+            })
+            .map(|ix| crate::project::AnalysisInput {
+                group_id: self.group_id(ix),
+                label: self.entry_label(ix),
+                fingerprint: self.effective_fingerprint(ix),
+            })
+            .collect(),
+            rows: BTreeMap::new(),
+            errors: BTreeMap::new(),
+            complete: false,
+            cancelled: false,
+        });
         self.lcf_gen += 1;
         let generation = self.lcf_gen;
         let cancel = Arc::new(AtomicBool::new(false));
@@ -7726,24 +7812,54 @@ impl StudioApp {
         let (tx, mut rx) = futures::channel::mpsc::unbounded::<(usize, Result<Vec<f64>, String>)>();
         let job_cancel = cancel.clone();
         let job = cx.background_executor().spawn(async move {
-            frames.par_iter().for_each(|(frame, ix, path, _label)| {
+            // Bound memory while keeping file preparation parallel. The core
+            // owns fitting, per-row failures and cancellation within each batch.
+            for chunk in frames.chunks(16) {
                 if job_cancel.load(Ordering::Relaxed) {
-                    return;
+                    break;
                 }
-                let params = frame_overrides.get(ix).unwrap_or(&global);
-                let result = process_file(path, params)
-                    .map_err(|e| e.to_string())
-                    .and_then(|sp| {
-                        rexafs::prelude::lcf(&sp, standards.as_slice(), &cfg)
-                            .map_err(|e| e.to_string())
+                let loaded: Vec<_> = chunk
+                    .par_iter()
+                    .map(|(frame, ix, path, _)| {
+                        let params = frame_overrides.get(ix).unwrap_or(&global);
+                        (*frame, process_file(path, params))
                     })
-                    .map(|res| {
-                        let mut w: Vec<f64> = res.weights.iter().map(|c| c.weight).collect();
-                        w.push(res.r_factor);
-                        w
-                    });
-                let _ = tx.unbounded_send((*frame, result));
-            });
+                    .collect();
+                if job_cancel.load(Ordering::Relaxed) {
+                    break;
+                }
+                let mut prepared = Vec::new();
+                let mut frame_ids = Vec::new();
+                for (frame, result) in loaded {
+                    match result {
+                        Ok(spectrum) => {
+                            frame_ids.push(frame);
+                            prepared.push(spectrum);
+                        }
+                        Err(error) => {
+                            let _ = tx.unbounded_send((frame, Err(error.to_string())));
+                        }
+                    }
+                }
+                rexafs::prelude::lcf_batch_with_progress(
+                    &prepared,
+                    standards.as_slice(),
+                    &cfg,
+                    |index, result| {
+                        let row = result
+                            .as_ref()
+                            .map(|fit| {
+                                let mut weights: Vec<_> =
+                                    fit.weights.iter().map(|c| c.weight).collect();
+                                weights.push(fit.r_factor);
+                                weights
+                            })
+                            .map_err(|error| error.to_string());
+                        tx.unbounded_send((frame_ids[index], row)).is_ok()
+                            && !job_cancel.load(Ordering::Relaxed)
+                    },
+                );
+            }
         });
         cx.spawn(async move |this, cx| {
             while let Some((frame, result)) = rx.next().await {
@@ -7754,11 +7870,17 @@ impl StudioApp {
                         }
                         match result {
                             Ok(weights) => {
+                                if let Some(saved) = &mut app.analysis.lcf_series {
+                                    saved.rows.insert(frame, weights.clone());
+                                }
                                 if let Some(lcf) = &mut app.series_lcf {
                                     lcf.rows.insert(frame, weights);
                                 }
                             }
                             Err(error) => {
+                                if let Some(saved) = &mut app.analysis.lcf_series {
+                                    saved.errors.insert(frame, error.clone());
+                                }
                                 app.record_job_error(format!("LCF frame {}", frame + 1), error);
                             }
                         }
@@ -7776,9 +7898,8 @@ impl StudioApp {
                     break;
                 }
             }
-        })
-        .detach();
-        cx.spawn(async move |this, cx| {
+            // Drain every per-frame result before completing the job. A fast
+            // worker must not invalidate the receiver while rows remain queued.
             job.await;
             this.update(cx, |app, cx| {
                 if app.lcf_gen != generation {
@@ -7788,6 +7909,10 @@ impl StudioApp {
                 app.lcf_running = false;
                 app.lcf_cancel = None;
                 let cancelled = cancel.load(Ordering::Relaxed);
+                if let Some(saved) = &mut app.analysis.lcf_series {
+                    saved.cancelled = cancelled;
+                    saved.complete = true;
+                }
                 if let Some(lcf) = &mut app.series_lcf {
                     lcf.cancelled = cancelled;
                     app.status = format!(
@@ -7945,42 +8070,39 @@ impl StudioApp {
         (lcf.scan == data.scan && lcf.fingerprint == data.fingerprint).then_some(lcf)
     }
 
-    /// The frame row in an energy / R space: the exact processed cursor
-    /// frame when cached, else the nearest sampled overview row.
-    fn series_frame_row(&self, space: SeriesSpace) -> Vec<f64> {
-        let Some(data) = self.operando.as_ref() else {
-            return Vec::new();
-        };
+    /// Return the requested frame and quantity. A sampled overview never
+    /// substitutes a neighboring frame: missing exact rows remain blank until
+    /// the generation-checked source load completes.
+    fn series_frame_source(&self) -> Option<(ChikRowKey, Vec<f64>)> {
+        let data = self.operando.as_ref()?;
+        let scan = self.catalog.scans.get(data.scan)?;
+        let space = self.stage_view.series_space;
         let (grid, matrix) = data.space(space);
-        if let Some(scan) = self.catalog.scans.get(data.scan) {
-            let scan_len = data.scan_len.min(scan.len);
-            let cursor_ix = scan.start + self.time_pos.min(scan_len.saturating_sub(1));
-            let fp = self.effective_fingerprint(cursor_ix);
-            if let Some(sp) = self.cache.peek(&(cursor_ix, fp)) {
-                let exact = match space {
-                    SeriesSpace::Energy => sp
-                        .energy
-                        .as_ref()
-                        .zip(sp.flat().or_else(|| sp.norm()))
-                        .map(|(e, n)| {
-                            let e: Vec<f64> = e.iter().copied().collect();
-                            let n: Vec<f64> = n.iter().copied().collect();
-                            resample_xy(&e, &n, grid)
-                        }),
-                    SeriesSpace::R => sp.r().zip(sp.chir_mag()).map(|(r, m)| {
-                        let r: Vec<f64> = r.iter().copied().collect();
-                        let m: Vec<f64> = m.iter().copied().collect();
-                        resample_xy(&r, &m, grid)
-                    }),
-                    SeriesSpace::K => None,
-                };
-                if let Some(row) = exact {
-                    return row;
-                }
-            }
+        let frame = self
+            .time_pos
+            .min(data.scan_len.min(scan.len).saturating_sub(1));
+        let ix = scan.start + frame;
+        let fingerprint = self.effective_fingerprint(ix);
+        if let Some(sp) = self.cache.peek(&(ix, fingerprint))
+            && let Some(row) = resample_series_frame(sp, space, grid)
+        {
+            return Some((
+                ChikRowKey::Exact {
+                    entry: ix,
+                    params_fingerprint: fingerprint,
+                },
+                row,
+            ));
         }
-        let sample_pos = data.sample_pos(self.time_pos);
-        matrix.get(sample_pos).cloned().unwrap_or_default()
+        let row = exact_overview_row(&data.sample_frames, matrix, frame, grid.len());
+        Some((
+            ChikRowKey::Sampled {
+                scan: data.scan,
+                overview_fingerprint: data.fingerprint,
+                row: frame,
+            },
+            row,
+        ))
     }
 
     fn toggle_batch_problems(&mut self, cx: &mut Context<Self>) {
@@ -8315,6 +8437,26 @@ impl StudioApp {
             fit_history: self.fit_history.clone(),
             joint: self.joint.config.clone(),
             publication: self.publish.settings.clone(),
+            mcr_analysis: self.analysis.mcr.clone(),
+            lcf_series_analysis: self.analysis.lcf_series.clone(),
+            pca_analysis: self
+                .analysis
+                .pca
+                .as_ref()
+                .map(|model| crate::project::PcaAnalysis {
+                    model: model.clone(),
+                    target: self.analysis.pca_fit.clone(),
+                    inputs: self.analysis.pca_inputs.clone(),
+                }),
+            lcf_analysis: self
+                .analysis
+                .lcf
+                .as_ref()
+                .map(|result| crate::project::LcfAnalysis {
+                    config: self.analysis.lcf_config.clone(),
+                    result: result.clone(),
+                    inputs: self.analysis.lcf_inputs.clone(),
+                }),
             assistant: crate::project::assistant::AssistantHistory {
                 conversations: self.assistant_history.conversations.clone(),
                 limit: Some(self.structure.settings.assistant_history_limit),
@@ -8539,6 +8681,41 @@ impl StudioApp {
             });
         }
         self.tools.invalidate_bindings();
+        if let Some(cancel) = self.analysis.mcr_cancel.take() {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.analysis.mcr_generation_advance();
+        self.analysis.mcr = project.mcr_analysis.clone();
+        self.analysis.lcf_series = project.lcf_series_analysis.clone();
+        self.analysis.pca = project
+            .pca_analysis
+            .as_ref()
+            .map(|saved| saved.model.clone());
+        self.analysis.pca_fit = project
+            .pca_analysis
+            .as_ref()
+            .and_then(|saved| saved.target.clone());
+        self.analysis.pca_inputs = project
+            .pca_analysis
+            .as_ref()
+            .map(|saved| saved.inputs.clone())
+            .unwrap_or_default();
+        self.analysis.lcf_config = project
+            .lcf_analysis
+            .as_ref()
+            .and_then(|saved| saved.config.clone());
+        self.analysis.lcf = project
+            .lcf_analysis
+            .as_ref()
+            .map(|saved| saved.result.clone());
+        self.analysis.lcf_inputs = project
+            .lcf_analysis
+            .as_ref()
+            .map(|saved| saved.inputs.clone())
+            .unwrap_or_default();
+        self.analysis.ranked.clear();
+        self.analysis.plot = None;
+        self.analysis.shown = None;
         self.journal = Default::default();
         self.project_path = project.origin.clone();
         self.project_storage = project

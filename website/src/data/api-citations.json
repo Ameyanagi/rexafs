@@ -135,6 +135,12 @@
     ]
   },
   {
+    "url": "https://doi.org/10.6028/jres.124.018",
+    "sources": [
+      "crates/rexafs/src/xafs/analysis/mcr.rs"
+    ]
+  },
+  {
     "url": "https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs/src/xafs/background/fixed.rs",
     "sources": [
       "crates/rexafs-wasm/src/lib.rs",
