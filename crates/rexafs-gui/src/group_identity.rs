@@ -10,7 +10,7 @@ use crate::app::DERIVED_BASE;
 use crate::params::{DerivedSpectrum, DetectionMode, PipelineParams};
 
 /// Opaque, immutable identity. Source locators can move without changing it.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct GroupId(String);
 
 impl GroupId {

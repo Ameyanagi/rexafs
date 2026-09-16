@@ -1,5 +1,31 @@
 import { validate } from "./validate.js";
 
+function scalarMeasurement(operation, coordinates, options = {}) {
+  if (!options || typeof options !== "object" || Array.isArray(options)) throw new TypeError("options must be an object");
+  for (const key of Object.keys(options)) {
+    if (!["space", "origin", "kweight", "errors"].includes(key)) throw new TypeError(`Unknown measurement option: ${key}`);
+  }
+  const operations = { point: "Point", mean: "Mean", integral: "Integral", maximum: "Maximum" };
+  if (!Object.hasOwn(operations, operation)) throw new TypeError("operation must be point, mean, integral, or maximum");
+  const values = operation === "point" ? [coordinates] : coordinates;
+  if (!Array.isArray(values) || values.length !== (operation === "point" ? 1 : 2) || values.some(v => typeof v !== "number" || !Number.isFinite(v))) {
+    throw new TypeError("point requires one finite number; regions require [start, end]");
+  }
+  const space = options.space ?? "norm";
+  const spaces = { mu: "Mu", norm: "Norm", flat: "Flat", chi: "Chi", fourier: "Fourier" };
+  if (!Object.hasOwn(spaces, space)) throw new TypeError("space must be mu, norm, flat, chi, or fourier");
+  const kweight = options.kweight ?? 0;
+  if (!Number.isInteger(kweight) || kweight < 0 || kweight > 255 || (space !== "chi" && kweight !== 0)) throw new RangeError("kweight must be an integer from 0 to 255, and applies only to chi");
+  const origin = options.origin ?? (["chi", "fourier"].includes(space) ? "absolute" : "e0");
+  if (!["absolute", "e0"].includes(origin)) throw new TypeError("origin must be e0 or absolute");
+  if (options.errors !== undefined && !(options.errors instanceof Float64Array)) throw new TypeError("errors must be a Float64Array");
+  return {
+    metric: { [operations[operation]]: operation === "point" ? { x: coordinates } : { start: coordinates[0], end: coordinates[1] } },
+    space: space === "chi" ? { Chi: { kweight } } : spaces[space],
+    origin: origin === "e0" ? "E0" : "Absolute",
+  };
+}
+
 /**
  * Create the package's Spectrum facade for one generated Wasm module instance.
  * This internal adapter owns one native spectrum per constructed object; callers
@@ -21,6 +47,10 @@ export function bindSpectrum(core, ready = () => true) {
     }
     static from_arrays(energy, mu) { return new this(energy, mu); }
     free() { this.#inner.free(); }
+    measure(operation, coordinates, options = {}) {
+      const definition = scalarMeasurement(operation, coordinates, options);
+      return JSON.parse(this.#inner.measure_json(JSON.stringify(definition), options.errors));
+    }
     set_spectrum(energy, mu) { validate(energy, mu); this.#inner.set_spectrum(energy, mu); return this; }
     set_e0(e0) {
       if (typeof e0 !== "number") throw new TypeError("e0 must be a number in eV");

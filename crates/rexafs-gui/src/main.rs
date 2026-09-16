@@ -26,6 +26,7 @@ mod params;
 mod plotting;
 mod project;
 mod publication;
+mod series_measurements;
 mod settings;
 mod source_evidence;
 mod spectrum_colors;

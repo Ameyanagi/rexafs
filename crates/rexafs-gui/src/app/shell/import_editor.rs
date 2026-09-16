@@ -679,17 +679,16 @@ impl ImportEditor {
                                     .studio
                                     .update(cx, |studio, cx| {
                                         if studio.project_generation != expected {
-                                            return false;
+                                            return Err(
+                                                "The project changed; reopen the import.".into()
+                                            );
                                         }
-                                        studio.accept_measurements(groups, batch, cx);
-                                        true
+                                        studio.accept_measurements(groups, batch, cx)
                                     })
-                                    .unwrap_or(false);
-                                if accepted {
-                                    this.close(window, cx);
-                                } else {
-                                    this.error =
-                                        Some("The project changed; reopen the import.".into());
+                                    .unwrap_or_else(|_| Err("The project closed.".into()));
+                                match accepted {
+                                    Ok(()) => this.close(window, cx),
+                                    Err(error) => this.error = Some(error),
                                 }
                             }
                             Err(error) => this.error = Some(error),

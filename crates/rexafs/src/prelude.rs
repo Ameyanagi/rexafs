@@ -58,3 +58,8 @@ pub use crate::xafs::tools::{
 };
 pub use crate::xafs::xafsutils::ConvolveForm;
 pub use crate::{Group, PrePostEdge, Spectrum};
+
+pub use crate::xafs::analysis::metrics::{
+    AxisOrigin, Measurement, MeasurementArrays, MeasurementResult, MeasurementSpace, Metric,
+    MetricError, MetricValue,
+};

@@ -6,7 +6,7 @@
 use gpui::{ClickEvent, Context, IntoElement, ParentElement, Styled, div, prelude::*, px};
 
 use super::MONO;
-use crate::app::{DERIVED_BASE, ParamKey, StudioApp};
+use crate::app::{ParamKey, StudioApp};
 use crate::group_identity::{GroupId, GroupRegistry, GroupState};
 use crate::params::{DerivedSpectrum, PipelineParams, Quantity};
 use std::collections::BTreeSet;
@@ -509,22 +509,19 @@ impl StudioApp {
             interrupted,
         );
         // A removed unsampled frame also changes sampling and cursor geometry.
-        let overview_affected = self.operando.as_ref().is_some_and(|data| {
-            self.catalog.scans.get(data.scan).is_some_and(|scan| {
-                indices
-                    .range(scan.start..scan.start.saturating_add(scan.len))
-                    .next()
-                    .is_some()
-            })
-        }) || self
-            .active_scan
-            .and_then(|i| self.catalog.scans.get(i))
-            .is_some_and(|scan| {
-                indices
-                    .range(scan.start..scan.start.saturating_add(scan.len))
-                    .next()
-                    .is_some()
-            });
+        let overview_affected = self
+            .operando
+            .as_ref()
+            .is_some_and(|data| indices.iter().any(|&ix| data.source.position(ix).is_some()))
+            || self
+                .active_scan
+                .and_then(|i| self.catalog.scans.get(i))
+                .is_some_and(|scan| {
+                    indices
+                        .range(scan.start..scan.start.saturating_add(scan.len))
+                        .next()
+                        .is_some()
+                });
         if overview_affected {
             if self.job_inputs[0].is_disjoint(ids) {
                 retire_job(
@@ -990,6 +987,7 @@ mod tests {
     }
 
     use super::*;
+    use crate::app::DERIVED_BASE;
     use crate::params::DetectionMode;
 
     #[test]

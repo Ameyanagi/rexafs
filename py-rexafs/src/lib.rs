@@ -1,6 +1,7 @@
 //! Thin Python bindings: all stage execution and defaults live in rexafs.
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::prelude::*;
+mod metrics;
 
 fn error(error: rexafs::Error) -> PyErr {
     match error {
@@ -1365,6 +1366,49 @@ struct PySpectrum {
 }
 #[pymethods]
 impl PySpectrum {
+    /// Measure a point or region, preparing missing stages on a private copy.
+    ///
+    /// Unreleased. Recommended: spectrum.measure("mean", (-20, 30)). Defaults
+    /// to normalized mu and E0-relative energy offsets in eV; select space="flat"
+    /// explicitly. point accepts a scalar; mean/integral/maximum accept two
+    /// increasing bounds. k (inverse angstroms) and R (angstroms, not phase
+    /// corrected) default to absolute coordinates. kweight defaults to zero and
+    /// applies only to chi. No extrapolation or display sampling occurs.
+    ///
+    /// Returns an owned MeasurementResult. Mean is integral divided by interval
+    /// width, not the arithmetic sample mean. Integral uses piecewise-linear
+    /// trapezoids with interpolated boundaries. Only required preparation runs;
+    /// arrays, settings and cached results on this spectrum remain unchanged.
+    /// Rust calculation releases the GIL. Invalid inputs, unavailable preparation
+    /// and missing coverage raise ValueError.
+    ///
+    /// Optional errors are independent standard deviations of the SELECTED
+    /// representation on its native grid, in its signal units. They must already
+    /// describe that processed signal: raw-count errors are not propagated through
+    /// normalization or Fourier transforms. Point/mean/integral support them;
+    /// maximum rejects them. Axis, E0 and settings are treated as exact. No
+    /// correlations, confidence intervals or errors are inferred when omitted.
+    #[pyo3(signature = (operation, coordinates, *, space="norm", origin=None, kweight=0, errors=None))]
+    fn measure(
+        &self,
+        py: Python<'_>,
+        operation: &str,
+        coordinates: &Bound<'_, PyAny>,
+        space: &str,
+        origin: Option<&str>,
+        kweight: u8,
+        errors: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<metrics::PyMeasurementResult> {
+        let definition = metrics::definition(operation, coordinates, space, origin, kweight)?;
+        let errors = errors.map(|e| metrics::errors(py, e)).transpose()?;
+        let result = py
+            .detach(|| match errors {
+                Some(errors) => self.inner.measure_with_errors(&definition, &errors),
+                None => self.inner.measure(&definition),
+            })
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(metrics::PyMeasurementResult { inner: result })
+    }
     /// Create a spectrum by copying energy and mu into float64 storage.
     ///
     /// energy contains X-ray energies in eV; mu contains the corresponding
@@ -1955,6 +1999,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyNormalizationMethod>()?;
     m.add_class::<PyBackgroundMethod>()?;
     m.add_class::<PySpectrum>()?;
+    m.add_class::<metrics::PyMeasurementResult>()?;
     m.add_class::<PyMeasurement>()?;
     m.add_function(wrap_pyfunction!(read_qas_transmission, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

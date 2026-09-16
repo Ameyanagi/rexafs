@@ -22,6 +22,32 @@ class SpectrumTests(unittest.TestCase):
     def spectrum(self):
         return rexafs.Spectrum.from_arrays(self.energy, self.mu)
 
+    def test_scalar_measurements_prepare_copies_and_propagate_errors(self):
+        s = rexafs.Spectrum([0., 1., 3.], [1., 3., 7.])
+        result = s.measure("mean", (.5, 2.), space="mu", origin="absolute", errors=[1., 2., 3.])
+        self.assertIsInstance(result, rexafs.MeasurementResult)
+        self.assertAlmostEqual(result.value, 3.5)
+        self.assertAlmostEqual(result.standard_error, 2.375 / 1.5)
+        self.assertEqual(result.range, (.5, 2.))
+        self.assertEqual(json.loads(result.to_json())["measurement"]["origin"], "Absolute")
+        self.assertIsNone(s.norm())
+        with self.assertRaises(ValueError):
+            s.measure("mean", (2., .5), space="mu", origin="absolute")
+        with self.assertRaises(ValueError):
+            s.measure("maximum", (.5, 2.), space="mu", origin="absolute", errors=[1., 2., 3.])
+        with self.assertRaises(ValueError):
+            s.measure("point", float("nan"), space="mu", origin="absolute")
+        with self.assertRaises(ValueError):
+            s.measure("point", 0., space="mu", kweight=1)
+        raw = self.spectrum()
+        value = raw.measure("mean", (-20., 30.), space="flat")
+        prepared = self.spectrum().normalize().measure("mean", (-20., 30.), space="flat")
+        self.assertAlmostEqual(value.value, prepared.value)
+        self.assertEqual(value.range, prepared.range)
+        self.assertIsNone(raw.norm())
+        self.assertIsNone(raw.e0())
+        self.assertIsNone(value.standard_error)
+
     def test_terminal_stage_matches_explicit_chain(self):
         spectrum = self.spectrum()
         self.assertIsNone(spectrum.chi())

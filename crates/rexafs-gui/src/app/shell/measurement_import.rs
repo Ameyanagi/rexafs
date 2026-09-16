@@ -529,10 +529,29 @@ impl StudioApp {
         groups: Vec<DerivedSpectrum>,
         batch: Option<usize>,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Result<(), String> {
         let count = groups.len();
         if count == 0 {
-            return;
+            return Ok(());
+        }
+        if let Some(batch) = batch {
+            let paths: Vec<PathBuf> = groups
+                .iter()
+                .filter_map(|group| {
+                    group
+                        .operation
+                        .as_ref()?
+                        .parameters
+                        .get("source_path")
+                        .and_then(|value| serde_json::from_value(value.clone()).ok())
+                })
+                .collect();
+            if paths.len() != count || !self.intake.measurement_review_is_current(batch, &paths) {
+                return Err(
+                    "The pending files changed or were skipped; reopen the remaining import."
+                        .into(),
+                );
+            }
         }
         let first = self.derived.len();
         let mut ids = std::collections::BTreeSet::new();
@@ -584,6 +603,7 @@ impl StudioApp {
         )
         .into();
         cx.notify();
+        Ok(())
     }
 }
 

@@ -17,6 +17,7 @@
 
 pub mod lcf;
 pub mod mcr;
+pub mod metrics;
 pub mod pca;
 
 use std::borrow::{Borrow, Cow};

@@ -1003,6 +1003,36 @@ export class BackgroundMethod {
  */
 export class Spectrum {
   /**
+   * Measure a point or region without changing this spectrum (unreleased).
+   * Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
+   * mu and E0-relative energy offsets in eV; choose `space: "flat"` explicitly.
+   * k is in inverse angstroms; R is in angstroms without phase correction.
+   * Missing prerequisite stages run on a private copy using this spectrum's
+   * settings; caller arrays, settings and cached results remain unchanged.
+   * No extrapolation or display sampling occurs. Mean is the piecewise-linear
+   * integral divided by interval width, not the arithmetic sample mean.
+   * Returns an owned scalar result with units and the resolved absolute range.
+   * Throws on invalid input, preparation failure, or missing range coverage.
+   * Optional independent point errors apply to point/mean/integral only; see
+   * SpectrumMeasurementOptions.errors. No uncertainty is inferred by default.
+   */
+  measure(operation: "point", coordinates: number, options?: SpectrumMeasurementOptions): MeasurementResult;
+  /**
+   * Measure a point or region without changing this spectrum (unreleased).
+   * Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
+   * mu and E0-relative energy offsets in eV; choose `space: "flat"` explicitly.
+   * k is in inverse angstroms; R is in angstroms without phase correction.
+   * Missing prerequisite stages run on a private copy using this spectrum's
+   * settings; caller arrays, settings and cached results remain unchanged.
+   * No extrapolation or display sampling occurs. Mean is the piecewise-linear
+   * integral divided by interval width, not the arithmetic sample mean.
+   * Returns an owned scalar result with units and the resolved absolute range.
+   * Throws on invalid input, preparation failure, or missing range coverage.
+   * Optional independent point errors apply to point/mean/integral only; see
+   * SpectrumMeasurementOptions.errors. No uncertainty is inferred by default.
+   */
+  measure(operation: "mean" | "integral" | "maximum", coordinates: readonly [number, number], options?: SpectrumMeasurementOptions): MeasurementResult;
+  /**
    * Copy measured photon energy in eV and absorption mu into a new, initially unprocessed
    * spectrum. Both inputs must be Float64Arrays of equal length, with at least two finite
    * samples and strictly increasing energy. Duplicate or decreasing energies are rejected.
@@ -1408,3 +1438,41 @@ export class Measurement {
  * occurs. Example: read_measurement(new Uint8Array(await file.arrayBuffer())).
  */
 export function read_measurement(data: string | Uint8Array): Measurement;
+
+/** Scalar spectrum measurement options (unreleased); defaults prepare Norm on a copy. */
+export interface SpectrumMeasurementOptions {
+  /** Selected signal. Default: norm. mu retains original units; flat is dimensionless. */
+  space?: "mu" | "norm" | "flat" | "chi" | "fourier";
+  /** Default: e0 for energy, absolute for k/R. E0 means offsets in eV. k/R require absolute. */
+  origin?: "e0" | "absolute";
+  /** Nonnegative integer exponent on k, 0–255. Default: 0. Applies only to chi. */
+  kweight?: number;
+  /** Independent standard deviations on the selected signal's native grid, in its units.
+   * Raw-count errors are NOT propagated through normalization or Fourier transforms.
+   * Requires finite nonnegative values matching that grid. Supports point, mean and
+   * integral; maximum rejects this model. Axis, E0 and settings are treated as exact;
+   * no correlations or confidence intervals are inferred. Omit for unknown errors. */
+  errors?: Float64Array;
+}
+/** Owned native scalar result. JSON serialization preserves its complete definition. */
+export interface MeasurementResult {
+  /** Finite scalar in unit. */
+  value: number;
+  /** Signal unit for mean/maximum/point; signal times axis unit for integral. */
+  unit: string;
+  /** Resolved absolute native-axis bounds: eV, inverse angstroms, or angstroms. */
+  range: [number, number];
+  /** Absolute point/maximum position, otherwise null. */
+  position: number | null;
+  /** Propagated independent standard error, or null. Not a confidence interval. */
+  standard_error: number | null;
+  /** Resolved absorption edge in eV, or null when unnecessary. */
+  e0_ev: number | null;
+  /** Core definition for reproducible storage; coordinates retain their requested origin. */
+  measurement: {
+    metric: { Point: { x: number } } | { Mean: { start: number; end: number } }
+      | { Integral: { start: number; end: number } } | { Maximum: { start: number; end: number } };
+    space: "Mu" | "Norm" | "Flat" | "Fourier" | { Chi: { kweight: number } };
+    origin: "E0" | "Absolute";
+  };
+}

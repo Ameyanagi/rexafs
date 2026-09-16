@@ -88,6 +88,8 @@ pub enum HandleKey {
     FitKmax,
     FitRmin,
     FitRmax,
+    MeasurementStart,
+    MeasurementEnd,
 }
 
 impl HandleKey {
@@ -106,7 +108,12 @@ impl HandleKey {
             HandleKey::BftRmin => ParamKey::BftRmin,
             HandleKey::BftRmax => ParamKey::BftRmax,
             HandleKey::Rbkg => ParamKey::Rbkg,
-            HandleKey::FitKmin | HandleKey::FitKmax | HandleKey::FitRmin | HandleKey::FitRmax => {
+            HandleKey::MeasurementStart
+            | HandleKey::MeasurementEnd
+            | HandleKey::FitKmin
+            | HandleKey::FitKmax
+            | HandleKey::FitRmin
+            | HandleKey::FitRmax => {
                 return None;
             }
         })
@@ -122,6 +129,7 @@ impl HandleKey {
 
     fn rounding(self) -> f64 {
         match self {
+            HandleKey::MeasurementStart | HandleKey::MeasurementEnd => 0.1,
             HandleKey::E0 => 0.1,
             HandleKey::PreStart | HandleKey::PreEnd | HandleKey::NormStart | HandleKey::NormEnd => {
                 1.0
@@ -140,6 +148,7 @@ impl HandleKey {
     /// Text shown next to the handle while it is dragged.
     fn readout(self, x: f64) -> String {
         match self {
+            HandleKey::MeasurementStart | HandleKey::MeasurementEnd => format!("{x:.2}"),
             HandleKey::E0 => format!("E₀ {x:.1} eV"),
             HandleKey::PreStart | HandleKey::PreEnd | HandleKey::NormStart | HandleKey::NormEnd => {
                 format!("{x:.0} eV")
@@ -196,6 +205,20 @@ struct HandleDecor {
 impl StudioApp {
     /// Handles the stage exposes on a given plot, with their current data x.
     fn handle_specs(&self, plot: usize) -> (Vec<(HandleKey, f64)>, Vec<Span>) {
+        if plot == super::measurements::drag::PLOT_MEASUREMENT {
+            let specs = self.measurement_handle_specs();
+            let spans = if specs.len() == 2 {
+                vec![Span {
+                    lo: Some(HandleKey::MeasurementStart),
+                    hi: Some(HandleKey::MeasurementEnd),
+                    fixed_lo: 0.,
+                    accent: true,
+                }]
+            } else {
+                vec![]
+            };
+            return (specs, spans);
+        }
         if self.stage == Stage::Fit {
             let r = self
                 .joint_plotted_dataset_id()
@@ -371,7 +394,10 @@ impl StudioApp {
 
     /// Spans + handle lines for plot `plot`, in data coordinates.
     fn handle_decor(&self, plot: usize) -> Option<HandleDecor> {
-        if !self.stage.is_processing() && self.stage != Stage::Fit {
+        if !self.stage.is_processing()
+            && self.stage != Stage::Fit
+            && plot != super::measurements::drag::PLOT_MEASUREMENT
+        {
             return None;
         }
         let (specs, spans) = self.handle_specs(plot);
@@ -413,6 +439,7 @@ impl StudioApp {
     /// The interactive plot behind a handle plot index.
     pub(crate) fn plot_entity(&self, plot: usize) -> Option<Entity<RuvizPlot>> {
         match plot {
+            super::measurements::drag::PLOT_MEASUREMENT => self.measurement_preview_entity(),
             PREVIEW_K => self.fit_preview.k.clone(),
             PREVIEW_R => self.fit_preview.r.clone(),
             PREVIEW_Q => self.fit_preview.q.clone(),
@@ -437,10 +464,16 @@ impl StudioApp {
         let label: Option<(f64, String)> = match self.handles.dragging {
             Some((p, key)) if p == plot => {
                 let (specs, _) = self.handle_specs(plot);
-                specs
-                    .iter()
-                    .find(|(k, _)| *k == key)
-                    .map(|&(k, x)| (x, k.readout(x)))
+                specs.iter().find(|(k, _)| *k == key).map(|&(k, x)| {
+                    (
+                        x,
+                        if p == super::measurements::drag::PLOT_MEASUREMENT {
+                            self.measurement_handle_readout(x)
+                        } else {
+                            k.readout(x)
+                        },
+                    )
+                })
             }
             _ => None,
         };
@@ -681,6 +714,10 @@ impl StudioApp {
     }
 
     fn apply_handle_drag(&mut self, key: HandleKey, x: f64, cx: &mut Context<Self>) {
+        if matches!(key, HandleKey::MeasurementStart | HandleKey::MeasurementEnd) {
+            self.drag_measurement_boundary(key, x, cx);
+            return;
+        }
         let e0 = self
             .ui_params()
             .e0
@@ -826,6 +863,7 @@ impl StudioApp {
         let sp = self.spectrum.as_ref()?;
         let last = |v: &nalgebra::DVector<f64>| v.iter().next_back().copied();
         match key {
+            HandleKey::MeasurementStart | HandleKey::MeasurementEnd => None,
             HandleKey::E0
             | HandleKey::PreStart
             | HandleKey::PreEnd

@@ -771,7 +771,7 @@ pub fn detect_import(
     detect_import_reader(file, path, import)
 }
 
-fn detect_import_reader(
+pub(crate) fn detect_import_reader(
     reader: impl Read,
     path: &std::path::Path,
     import: &ImportConfig,
@@ -918,6 +918,14 @@ pub fn load_mu_with_diagnostics(
     import: &ImportConfig,
 ) -> Result<RawData, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    load_mu_text(&text, path, import)
+}
+
+fn load_mu_text(
+    text: &str,
+    path: &std::path::Path,
+    import: &ImportConfig,
+) -> Result<RawData, String> {
     let mut data = parse_file_data(&text, path)?;
     let (energy, mu) = construct_mu(&mut data, path, import)?;
     Ok(RawData {
@@ -927,6 +935,51 @@ pub fn load_mu_with_diagnostics(
         mu,
         diagnostics: data.diagnostics,
     })
+}
+
+/// Interpret one immutable source snapshot, including reference alignment from
+/// the same bytes. Full-frame metrics reject skipped samples instead of bridging
+/// unknown gaps. This stricter path does not change historical import behavior.
+pub(crate) fn load_raw_snapshot(
+    bytes: &[u8],
+    path: &std::path::Path,
+    params: &PipelineParams,
+) -> Result<(Vec<f64>, Vec<f64>), String> {
+    let text = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+    let mut raw = load_mu_text(text, path, &params.import)?;
+    let valid = |raw: &RawData| -> Result<(), String> {
+        let d = &raw.diagnostics;
+        if d.malformed_rows.count
+            + d.short_rows.count
+            + d.truncated_wide_rows.count
+            + d.excluded_signal_points.count
+            > 0
+        {
+            Err(format!(
+                "Incomplete input: {}; review skipped data before measuring",
+                d.summary()
+            ))
+        } else {
+            Ok(())
+        }
+    };
+    valid(&raw)?;
+    if params.align_to_ref
+        && let Some(target) = params.align_target
+    {
+        let mut config = params.import.clone();
+        config.mode = DetectionMode::Reference;
+        let reference = load_mu_text(text, path, &config)?;
+        valid(&reference)?;
+        let mut sp = XASSpectrum::from_arrays(&reference.energy, &reference.mu)
+            .map_err(|e| e.to_string())?;
+        sp.find_e0().map_err(|e| e.to_string())?;
+        let shift = target - sp.e0().ok_or("Reference E₀ unavailable")?;
+        for energy in &mut raw.energy {
+            *energy += shift;
+        }
+    }
+    Ok((raw.energy, raw.mu))
 }
 
 /// Explicit reference-μ assignment takes precedence over named detection.
@@ -1624,6 +1677,16 @@ impl DerivedSpectrum {
     }
 
     pub fn process(&self, params: &PipelineParams) -> Result<XASSpectrum, String> {
+        self.prepare(params, RequiredStage::Inverse)
+    }
+
+    /// Prepare only the requested stage, retaining a confirmed prepared quantity.
+    /// A normalized-only request never evaluates background or transform settings.
+    pub fn prepare(
+        &self,
+        params: &PipelineParams,
+        stage: RequiredStage,
+    ) -> Result<XASSpectrum, String> {
         if let Some(reason) = self.processing_block_reason() {
             return Err(reason);
         }
@@ -1640,12 +1703,12 @@ impl DerivedSpectrum {
             let sp =
                 XASSpectrum::from_prepared(&energy, &mu, space, e0).map_err(|e| e.to_string())?;
             if params.refit_prepared {
-                normalize_and_process(sp, params)
+                normalize_to_stage(sp, params, stage)
             } else {
-                process_exafs(sp, params)
+                process_exafs_to_stage(sp, params, stage)
             }
         } else {
-            process_arrays(energy, mu, params)
+            prepare_arrays(energy, mu, params, stage)
         }
     }
 
@@ -1829,16 +1892,43 @@ pub fn process_arrays(
     mu: Vec<f64>,
     params: &PipelineParams,
 ) -> Result<XASSpectrum, String> {
-    let mut sp = XASSpectrum::new();
-    sp.set_spectrum(energy, mu);
-
-    normalize_and_process(sp, params)
+    prepare_arrays(energy, mu, params, RequiredStage::Inverse)
 }
 
-fn normalize_and_process(
+/// Minimum stage required by a consumer; partial results never enter the full
+/// display cache. Stages after this boundary are not evaluated or validated.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RequiredStage {
+    Raw,
+    Normalized,
+    Background,
+    Fourier,
+    Inverse,
+}
+
+/// Prepare owned mapped arrays with desktop settings, stopping at `stage`.
+/// Raw arrays are already aligned. No source is read or overwritten.
+pub fn prepare_arrays(
+    energy: Vec<f64>,
+    mu: Vec<f64>,
+    params: &PipelineParams,
+    stage: RequiredStage,
+) -> Result<XASSpectrum, String> {
+    let sp = XASSpectrum::from_arrays(&energy, &mu).map_err(|e| e.to_string())?;
+    normalize_to_stage(sp, params, stage)
+}
+
+fn normalize_to_stage(
     mut sp: XASSpectrum,
     params: &PipelineParams,
+    stage: RequiredStage,
 ) -> Result<XASSpectrum, String> {
+    if stage == RequiredStage::Raw {
+        if let Some(e0) = params.e0 {
+            sp.set_e0(e0);
+        }
+        return Ok(sp);
+    }
     match params.e0 {
         Some(e0) => {
             sp.set_e0(e0);
@@ -1853,9 +1943,6 @@ fn normalize_and_process(
         .is_some_and(|value| !value.is_finite() || value <= 0.0)
     {
         return Err("Edge step must be finite and greater than zero.".into());
-    }
-    if params.bkg_nclamp.is_some_and(|value| value < 0) {
-        return Err("Clamp points must be zero or greater.".into());
     }
     let mut ppe = PrePostEdge::new();
     ppe.edge_step = params.edge_step;
@@ -1880,12 +1967,19 @@ fn normalize_and_process(
         .map_err(|e| e.to_string())?;
     sp.normalize().map_err(|e| e.to_string())?;
 
-    process_exafs(sp, params)
+    process_exafs_to_stage(sp, params, stage)
 }
 
 /// Continue from the retained absorption representation. Prepared component
 /// arrays have a unit edge step and must not be normalized a second time.
-fn process_exafs(mut sp: XASSpectrum, params: &PipelineParams) -> Result<XASSpectrum, String> {
+fn process_exafs_to_stage(
+    mut sp: XASSpectrum,
+    params: &PipelineParams,
+    stage: RequiredStage,
+) -> Result<XASSpectrum, String> {
+    if stage <= RequiredStage::Normalized {
+        return Ok(sp);
+    }
     if params.bkg_nclamp.is_some_and(|value| value < 0) {
         return Err("Clamp points must be zero or greater.".into());
     }
@@ -1948,6 +2042,9 @@ fn process_exafs(mut sp: XASSpectrum, params: &PipelineParams) -> Result<XASSpec
     sp.set_background_method(Some(BackgroundMethod::AUTOBK(autobk)))
         .map_err(|e| e.to_string())?;
     sp.calc_background().map_err(|e| e.to_string())?;
+    if stage == RequiredStage::Background {
+        return Ok(sp);
+    }
 
     let mut xftf = XrayFFTF::default();
     if params.fft_kmin.is_some() {
@@ -1980,6 +2077,9 @@ fn process_exafs(mut sp: XASSpectrum, params: &PipelineParams) -> Result<XASSpec
     }
     sp.xftf = Some(xftf);
     sp.fft().map_err(|e| e.to_string())?;
+    if stage == RequiredStage::Fourier {
+        return Ok(sp);
+    }
 
     // Back transform (chi(q)); report invalid settings instead of silently dropping the result.
     let mut xftr = XrayFFTR::default();
