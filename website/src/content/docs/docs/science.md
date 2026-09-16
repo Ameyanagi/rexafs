@@ -4,7 +4,7 @@ description: "How the scientific guides fit together, and what each explains."
 audience: user
 ---
 
-Explore the calculations, assumptions and numerical conventions in rexafs 0.2.7.
+Explore the calculations, assumptions and numerical conventions in rexafs 0.2.9.
 Each guide links the theory to its implementation.
 
 Read [concepts and glossary](/docs/concepts/) first if terms such as $\chi(k)$,

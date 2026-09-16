@@ -6,7 +6,7 @@ audience: user
 
 The equations describe `Spectrum.normalize()`, `calc_background()`, `fft()` and
 `ifft()` in the default Rust backend used by desktop, Python and Wasm. These
-calculations and defaults are shared by 0.2.4 through 0.2.7; implementation links
+calculations and defaults are shared by 0.2.4 through 0.2.9; implementation links
 remain pinned to 0.2.4.
 For the historical ndarray backend, see [FFT compatibility](/docs/science/fourier-compatibility/).
 Custom Python/TypeScript inverse configuration, added in 0.2.5, is covered in the

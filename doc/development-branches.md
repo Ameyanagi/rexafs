@@ -67,6 +67,25 @@ also run for development changes, while the public website deploys only from
 `main`. Dependabot targets `dev`, so dependency updates join the same review and
 release process. The default GitHub branch remains `main`.
 
+## Main branch protection
+
+Protection verified on 16 September 2026 requires pull requests to `main` to be
+up to date and pass the GitHub Actions **Rust checks** and **Release checks**
+aggregate jobs. Review conversations must be resolved. Force pushes and branch
+deletion are blocked; these rules also apply to administrators. Merge commits
+remain available for the release workflow. No independent approval is required,
+so a sole maintainer can merge a qualified release.
+
+The two aggregate jobs always run and validate every check selected for the
+change, including an intentional documentation-only selection. Keep their names
+stable when editing CI. Path-filtered jobs must not become required checks unless
+they are changed to report a result for every pull request; otherwise an absent
+job can block unrelated changes indefinitely.
+
+If a release pull request is behind `main`, merge `main` into `dev` through the
+pull request's **Update branch** action, then wait for checks on the updated
+head. Do not bypass protection or force-push the long-lived branches.
+
 ## September 2026 transition
 
 The old `dev` branch had eight commits from the earlier xraytsubaki development

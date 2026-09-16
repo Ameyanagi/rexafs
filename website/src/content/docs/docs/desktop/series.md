@@ -4,9 +4,12 @@ description: "Browse scan frames and distinguish sampled overviews from complete
 audience: user
 ---
 
+This guide describes **rexafs 0.2.9**.
+
 Import a folder of related spectra, then open **Series → Select scan**.
 The heatmap shows the scan; adjacent plots show the selected frame and trend.
-Choose **norm μ(E)**, weighted **χ(k)** or **|χ(R)|**.
+Choose **flat μ(E)** (the initial selection), **norm μ(E)**, weighted **χ(k)**
+or **|χ(R)|**. The energy plot uses the selected representation.
 
 ## Frames and overview sampling
 
@@ -34,8 +37,8 @@ frame while the selected frame loads; wait for processing before interpreting it
 Use **Refresh overview** after changes.
 
 These display choices are rexafs-specific, implemented in the [overview and
-frame loading](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/app.rs#L4853)
-and [Series controls](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/app/shell/series.rs).
+frame loading](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs-gui/src/app.rs)
+and [Series controls](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs-gui/src/app/shell/series.rs).
 
 ## What the trends mean
 
@@ -45,13 +48,13 @@ beamline. Noise and normalization choices can move automatic estimates, as can
 sample changes.
 
 The **white-line trend** is the maximum processed absorption from $E_0$ to
-$E_0+30$ eV, inclusive. In 0.2.4, this trend and the energy overview use
-**flattened absorption when available**, falling back to normalized absorption;
-the UI labels this “norm μ(E).” The white-line height is dimensionless after
+$E_0+30$ eV, inclusive. This trend uses **flattened absorption when available**,
+falling back to normalized absorption, independently of the energy-plot selector.
+Its historical UI label is “white line (norm. μ).” The height is dimensionless after
 edge-step normalization. It is a local maximum, not an integrated peak area,
 concentration or oxidation-state calibration. A glitch can dominate it. These
-definitions come from [frame_sample](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/app.rs#L677)
-and [trend_snapshot](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/app.rs#L7844).
+definitions come from `frame_sample` and `trend_snapshot` in the
+[Series implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs-gui/src/app.rs).
 See [processing theory](/docs/science/processing/) for the meaning of normalized
 and flattened absorption.
 
@@ -62,10 +65,20 @@ standard weights. Choose **Sampled frames / All frames** for those calculations.
 192-frame limit. Missing or failed results appear as gaps, not zero-valued
 parameters.
 
-For LCF, mark at least two standards and load results for their current processing
-settings. Review the LCF range and constraints in the data tools; Series uses
-those settings. Canceling keeps completed rows, so check completion status before
-treating an exported trend as the whole scan.
+For LCF, mark at least two standards and review their processing settings, the
+LCF range and its constraints in the data tools; Series uses those settings.
+The core prepares missing selected arrays on copies. Canceling keeps completed
+rows, so check completion status and per-frame errors before treating an exported
+trend as the whole scan. Project saves retain the batch coefficients and settings;
+publication exports include `data/lcf-series.csv` and JSON.
+
+[![All 100 Cu-mixture LCF results and the selected frame 51 in rexafs 0.2.9](/screenshots/0.2.9/series-lcf.jpg)](/screenshots/0.2.9/series-lcf.jpg)
+
+Captured through computer use from the signed 0.2.9 Mac app after all 100
+synthetic mixtures completed LCF against the Cu foil, Cu₂O and CuO references.
+The plot uses flattened absorption. Selecting the heatmap and pressing Right
+changed the selected frame, spectrum and trend cursor together; the capture
+shows frame 51. See [data and capture provenance](/licenses/#documentation-screenshots).
 
 Inspect a subset before a complete calculation, then review failures and
 per-frame uncertainties. See [multiple spectra and batches](/docs/desktop/multiple-spectra/)

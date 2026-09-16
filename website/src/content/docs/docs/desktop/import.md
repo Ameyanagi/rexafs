@@ -4,6 +4,8 @@ description: "Map detector signals, confirm energy units and organize spectra."
 audience: user
 ---
 
+This guide describes **rexafs 0.2.9**.
+
 ## Import and review
 
 Choose **Import…** or drop a measurement file into the workspace. The plotted
@@ -56,10 +58,12 @@ multiple-file selections; import containers individually in these versions.
 Source files are unchanged; saved desktop projects
 retain original measurement bytes and accepted signal mappings.
 
-### Import a whole project (unreleased)
+<a id="import-a-whole-project-unreleased"></a>
+
+### Import a whole project
 
 Use **Import…** to select an Athena `.prj`, an Athena-compatible `.prj` saved by
-Larch, or a Larix `.larix` session. In this source build, every scan is initially
+Larch, or a Larix `.larix` session. Every scan is initially
 selected; a project group appears as a scan in the preview.
 
 1. Open the **Scan** menu to inspect the list. **All scans** selects the complete
@@ -70,9 +74,10 @@ selected; a project group appears as a scan in the preview.
 3. Choose **Import N spectra** to add every checked output from the selected
    scans. The number counts spectra, so one scan can contribute several signals.
 
-![Unreleased import dialog with all four Athena project groups selected](/screenshots/next/import-project-scans.jpg)
+[![rexafs 0.2.9 import dialog with all four Athena project records selected](/screenshots/0.2.9/import-project-scans.jpg)](/screenshots/0.2.9/import-project-scans.jpg)
 
-Captured from the unreleased macOS source build. This example uses Larch's
+Captured through computer use from the signed 0.2.9 Mac app. All four records
+were imported together successfully. This example uses Larch's
 MIT-distributed `json_unzipped.prj`; see the [screenshot attribution](/licenses/#documentation-screenshots).
 
 Selected scans that need mapping block import until you resolve them or explicitly
@@ -85,8 +90,8 @@ This selection also applies to XTUNES `.xtsp` projects and multi-scan SPEC or
 HDF5/NeXus files. HDF5 tables containing only detectors or images are not
 automatically absorption spectra: choose compatible one-dimensional datasets and
 their axis/signal mapping. Historical pixel-axis Athena groups require calibration.
-MDA binary files remain unsupported. Released versions through 0.2.8 import the
-selected scan's signals; the multi-scan selection described here is unreleased.
+MDA binary files remain unsupported. Versions through 0.2.8 import the selected
+scan's signals; selection across scans is introduced in 0.2.9.
 
 ### File extensions and folder discovery
 
@@ -96,7 +101,7 @@ saves, text measurements and supported HDF5/NeXus containers. KEK `.qd` files
 using the supported 9809 layout contain measurements; `.qc` condition files
 are not spectra.
 
-**Unreleased:** folder discovery now includes the following names, without
+Folder discovery includes the following names, without
 regard to letter case. Beamline formats and containers appear under **Pending
 import**; select one to review its scans and signals in the plotted preview.
 Plain text and XDI retain the recipe-based batch workflow.
@@ -150,7 +155,8 @@ Select a group to make it **current** and edit its settings in the inspector.
 **Marks** select groups for comparisons and bulk actions without changing the
 current group. Filtering or collapsing rows can hide marked groups without
 unmarking them; check the marked/hidden count before bulk actions. Comparison
-plots show at most 12 sampled traces and do not merge observations. Use
+plots offer **Preview 12**, **Plot all** and a **Gradient** color option. Sampling
+changes only the display; it does not exclude inputs from PCA or MCR. Use
 [Series](/docs/desktop/series/) to inspect individual scan frames.
 
 Right-click a group to rename it, duplicate it, add an available channel, or
@@ -163,9 +169,12 @@ input group is removed; their input notice records the missing source.
 Use **Re-map columns…** in the Data parameters to review an existing mapping.
 Inspect derived spectra after changing source interpretation or processing inputs.
 
-Derived results, such as normalized differences, are labelled by their stored
-quantity. They can be plotted and exported but cannot enter normalization/AUTOBK
-as raw absorption. Older projects ask you to confirm unlabelled arrays' quantity
+Derived results are labelled by their stored quantity. Calculated norm/flat
+spectra from MCR and LCF can continue through background subtraction, transforms
+and fitting while preserving their prepared scale by default. **Refit
+pre/post-edge** explicitly enables baseline subtraction and edge-step rescaling.
+Differences and residuals remain differences; they cannot be processed as raw
+absorption. Older projects ask you to confirm unlabelled arrays' quantity
 before processing. Choose what the values represent; a label does not convert
 the arrays.
 

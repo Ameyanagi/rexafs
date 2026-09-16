@@ -4,7 +4,7 @@ description: Automatic beamline, HDF5, Athena, Larix and XTUNES import since 0.2
 audience: user
 ---
 
-**Stable API · 0.2.7.** These examples use the published Rust, Python and
+**Stable API · 0.2.9.** These examples use the published Rust, Python and
 TypeScript packages. Existing specialized readers remain available.
 
 ## Reader corrections since 0.2.7
