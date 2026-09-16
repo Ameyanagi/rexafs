@@ -28,7 +28,7 @@ The rexafs Windows executable and installer are not publisher-signed in this rel
 
 ### ARM64 availability
 
-**ARM64 downloads are available for macOS, Windows and Linux in 0.2.7.**
+**ARM64 downloads are available for macOS, Windows and Linux in 0.2.9.**
 Select your architecture on the [download page](/download/). Windows and Linux
 remain desktop previews.
 
@@ -59,9 +59,9 @@ checksum file before opening the package. For example:
 
 ```sh
 # macOS
-shasum -a 256 rexafs-0.2.7-aarch64-apple-darwin.dmg
+shasum -a 256 rexafs-0.2.9-aarch64-apple-darwin.dmg
 # Linux
-sha256sum rexafs-0.2.7-x86_64-unknown-linux-gnu.tar.gz
+sha256sum rexafs-0.2.9-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 On Windows, use `Get-FileHash -Algorithm SHA256` in PowerShell. The hash should
@@ -74,12 +74,12 @@ match the published checksum for that exact file.
   ```sh
   uv init --python 3.12 rexafs-analysis
   cd rexafs-analysis
-  uv add rexafs==0.2.7
+  uv add rexafs==0.2.9
   uv run python -c "import rexafs; print(rexafs.__version__)"
   ```
 
-- [TypeScript / JavaScript](/docs/libraries/typescript/): `bun add rexafs@0.2.7`.
-- [Rust](/docs/libraries/rust/): `cargo add rexafs@0.2.7`.
+- [TypeScript / JavaScript](/docs/libraries/typescript/): `bun add rexafs@0.2.9`.
+- [Rust](/docs/libraries/rust/): `cargo add rexafs@0.2.9`.
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for the
 Python commands or [Bun](https://bun.sh/docs/installation) for the JavaScript

@@ -9,7 +9,7 @@ audience: user
 Add the stable crate:
 
 ```sh
-cargo add rexafs@0.2.7
+cargo add rexafs@0.2.9
 ```
 
 ```rust
@@ -34,10 +34,10 @@ after direct edits to legacy public fields, call `invalidate_derived()`.
 
 ## Full API reference
 
-The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.7 crate
+The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.9 crate
 with the default nalgebra backend and optional features. It excludes the legacy
 `ndarray-compat` backend, which replaces parts of that API and has different
-defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.7/rexafs/) is also available.
+defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.9/rexafs/) is also available.
 
 The [Next reference](/api/rust-next/rexafs/index.html) uses the checkout with the
 same features. Use it when working from source.
@@ -69,7 +69,7 @@ automatic choices, units, angle conversion and supported containers.
 | `materials-project`, `cod` | HTTP structure-source integrations |
 | `ndarray-compat` | Legacy ndarray compatibility backend |
 
-For example, `cargo add rexafs@0.2.7 --features plotting,refeff-runner` enables
+For example, `cargo add rexafs@0.2.9 --features plotting,refeff-runner` enables
 plotting and ReFEFF. Backend availability depends on the platform; see
 [WebAssembly support](/docs/libraries/webassembly/) for browser limits.
 

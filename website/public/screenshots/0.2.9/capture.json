@@ -1,0 +1,152 @@
+{
+  "captured_on": "2026-09-16",
+  "method": "Native application computer use; full unedited window JPEG bytes. No cropping, resizing, image synthesis or plot replacement.",
+  "version": "0.2.9",
+  "tag": "v0.2.9",
+  "source_commit": "97f8557f37ba8040707e61f62ef8a720e6c8ff06",
+  "build_run_id": "35043376060",
+  "signing_run_id": "35047109319",
+  "platform": "macOS 26.5.1, Apple Silicon; signed DMG-installed app",
+  "executable_sha256": "5102b78301ef69a4ddedf866d879021b0cd5689a8f37b9967c9dad2c66d78472",
+  "signed_dmg_sha256": "59e531e949df0d25bb3276fc65b9ff1054a9e71a14a8273a324f954cc64debd0",
+  "project": {
+    "name": "Cu verified 0.2.9.rxs",
+    "sha256": "fe54e848237a23dcdcec7fb4c7b9ed517977b306adf3f3de95668adb415657be",
+    "scope": "Private local QA copy; not redistributed. Saved after PCA, MCR, derived-group FFT and batch LCF, before the two additional Larch project imports. Original user project untouched."
+  },
+  "input_provenance": {
+    "synthetic_cu": "crates/rexafs/tests/fixtures/analysis/cu-mixtures/README.md",
+    "synthetic_manifest_sha256": "d3403e8dfc5eebf1daa6a8f3a1c0743147585f8612f0d55488cdb358f6725228",
+    "import_json_prj": "crates/rexafs/tests/fixtures/xas/samples/unspecified/unspecified/xraylarch/json_unzipped.prj",
+    "import_json_prj_sha256": "14a47fbcdb997ac6a6141837d60d83ad7c32ea80e339483d14c9d9374cd5310f"
+  },
+  "observed_checks": {
+    "pca": {
+      "inputs": 100,
+      "space": "Flat",
+      "center": true,
+      "relative_e0_range_ev": [
+        -29,
+        171
+      ],
+      "retained_components": 2,
+      "numerical_rank": 2,
+      "variance_percent_display": [
+        75.91,
+        24.09
+      ],
+      "target_relative_squared_residual_display": 1.16e-29,
+      "plot": "Error vs count; linear y axis"
+    },
+    "mcr": {
+      "inputs": 100,
+      "space": "Flat",
+      "absolute_energy_bounds_display_ev": [
+        8780.2,
+        9768.2
+      ],
+      "components": 3,
+      "closure": true,
+      "nonnegative_spectra": false,
+      "seed": 0,
+      "max_iterations": 2000,
+      "iterations": 870,
+      "status": "Converged",
+      "relative_squared_residual_display": 9.661e-25,
+      "derived_groups_added": 3,
+      "group_count_before": 114,
+      "group_count_after": 117
+    },
+    "component_processing": "Selected newly added MCR component 1, opened Transform and observed finite k/R plots with no processing error.",
+    "batch_lcf": {
+      "completed": 100,
+      "frames": 100,
+      "space": "Flat",
+      "standards": [
+        "cu2o_abs.xdi",
+        "cufoil_abs.xdi",
+        "cuo_abs.xdi"
+      ],
+      "frame_navigation": "Clicked heatmap then Right; frame 51, curve and trend marker changed together."
+    },
+    "project_imports": [
+      {
+        "file": "FeFoil_QXAFS_Compare.prj",
+        "selected_scans": 4,
+        "groups_before": 117,
+        "groups_after": 121
+      },
+      {
+        "file": "json_unzipped.prj",
+        "selected_scans": 4,
+        "groups_before": 121,
+        "groups_after": 125
+      }
+    ],
+    "assistant": "Opened beside Normalize parameters; inspected model and access menus. No message sent and no access setting changed."
+  },
+  "limitations": [
+    "GUI checked on ARM64 macOS only; Intel local calculation checks used Rosetta.",
+    "Windows and Linux have CI qualification but no physical interactive checks in this release session.",
+    "Blind MCR reconstruction does not establish unique chemical factors.",
+    "Centered PCA rank is not a count of chemical species."
+  ],
+  "screenshots": [
+    {
+      "file": "website/public/screenshots/0.2.9/assistant-access.jpg",
+      "sha256": "93ee89e7c68cecfa2d83aa376953d434c8508c6c74a0fe77ff8e8dc3592df60c",
+      "width": 1192,
+      "height": 768,
+      "bytes": 134249
+    },
+    {
+      "file": "website/public/screenshots/0.2.9/assistant-layout.jpg",
+      "sha256": "6c86e89c7d157fb2d245525eff1f7e222a34855f3cb142d41bf4b6fe3418c9fe",
+      "width": 1192,
+      "height": 768,
+      "bytes": 128511
+    },
+    {
+      "file": "website/public/screenshots/0.2.9/assistant-model.jpg",
+      "sha256": "d0786507b1ce1c635cf83cc828f4a015fdb682c8e660f4b6edefc0c9743995c6",
+      "width": 1192,
+      "height": 768,
+      "bytes": 131983
+    },
+    {
+      "file": "website/public/screenshots/0.2.9/import-project-scans.jpg",
+      "sha256": "ec371b50243f82fb1eb657b5631c3d3d87bc8c79983b035f178d589ffefead4e",
+      "width": 1192,
+      "height": 768,
+      "bytes": 132215
+    },
+    {
+      "file": "website/public/screenshots/0.2.9/mcr-component-fft.jpg",
+      "sha256": "e349acc835cef96d3cef36456c340ad1d6c178ed8cb91eb6904c54d6c290ab20",
+      "width": 1192,
+      "height": 768,
+      "bytes": 142512
+    },
+    {
+      "file": "website/public/screenshots/0.2.9/mcr-components.jpg",
+      "sha256": "ac36c5bf54fcc0fa67793a833e26773bf4b0c0c972b4c62c0be411b03a539b90",
+      "width": 1192,
+      "height": 768,
+      "bytes": 167670
+    },
+    {
+      "file": "website/public/screenshots/0.2.9/pca-error-linear.jpg",
+      "sha256": "76a8ffaaa0acdec21d8dc830582d41c3d711ebc5e2de115ba48d84433fe5d889",
+      "width": 1192,
+      "height": 768,
+      "bytes": 177336
+    },
+    {
+      "file": "website/public/screenshots/0.2.9/series-lcf.jpg",
+      "sha256": "6e848ec74d310d934409a2f4706d40b7c13f8fc30d432ae21ad8c56e15bca268",
+      "width": 1192,
+      "height": 768,
+      "bytes": 156358
+    }
+  ]
+}

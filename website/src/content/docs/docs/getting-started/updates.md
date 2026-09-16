@@ -4,6 +4,8 @@ description: "Keep analyses portable and install rexafs without a live connectio
 audience: user
 ---
 
+This guide describes **rexafs 0.2.9**.
+
 ## Update the desktop
 
 Save your project, then open **Help → Updates**. You can also search for
@@ -14,23 +16,20 @@ Save your project, then open **Help → Updates**. You can also search for
 use. Checks do not install software or upload spectra; the channel and startup
 preference are saved on this computer.
 
-In released versions through 0.2.7, the macOS updater downloads and verifies an archive. Quit rexafs before
-moving the updated app into Applications. Nightly has a separate app name and
-can coexist with Stable.
-
-On Windows and Linux, use the release link or [download page](/download/). Run the
-newer installer or replace the complete portable folder. Built-in verified
-downloads support [macOS only in
-0.2.4](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/updates.rs#L59).
+Desktop versions through 0.2.7 need one manual installation from the
+[download page](/download/) to acquire the new updater. On macOS, quit rexafs
+before moving the updated app into Applications; on Windows run the installer;
+on Linux replace the complete portable folder. Nightly has a separate app name
+and can coexist with Stable.
 
 Cached downloads are verified again before reuse. If a size or SHA-256 check
 fails, remove the file named in the error and retry. Failed new downloads discard
 their temporary files. After a network error, retry or check the release page;
 the error does not establish that your version is current.
 
-### Next desktop build: update and restart
+### Update and restart
 
-**Unreleased:** on macOS, Windows and Linux, choose **Update and restart** to download, verify and
+On macOS, Windows and Linux, choose **Update and restart** to download, verify and
 install a newer build of the current channel. rexafs saves an embedded recovery
 copy of the analysis, then reopens that copy after restarting. Your original
 project is unchanged. Save the reopened project to your preferred location;
@@ -46,7 +45,7 @@ Windows installations run the matching installer automatically, preserving
 shortcuts and the uninstall entry. Portable Windows and Linux copies update the
 complete extracted folder. User files inside that folder are preserved; a file
 collision stops the update before replacement. x64 and ARM64 use their matching
-packages. The first installation of 0.2.8 still uses the manual workflow.
+packages.
 
 Run the app from a writable installation folder. Source executables, macOS disk
 images, channel changes and system-managed Linux packages retain manual updates.
@@ -68,7 +67,7 @@ Python version. Replace 3.12 below with the destination version. Use pip in a
 temporary uv environment because uv has no `pip download` command:
 
 ```sh
-uv run --no-project --python 3.12 --with pip python -m pip download --only-binary=:all: rexafs==0.2.7 --dest wheelhouse
+uv run --no-project --python 3.12 --with pip python -m pip download --only-binary=:all: rexafs==0.2.9 --dest wheelhouse
 ```
 
 On the offline computer, create the project:
@@ -81,7 +80,7 @@ cd rexafs-analysis
 Copy `wheelhouse` into the project, then run:
 
 ```sh
-uv add --offline --no-index --find-links wheelhouse rexafs==0.2.7
+uv add --offline --no-index --find-links wheelhouse rexafs==0.2.9
 uv run --offline python -c "import rexafs; print(rexafs.__version__)"
 ```
 
@@ -91,14 +90,14 @@ version used for the download. See [uv's project
 workflow](https://docs.astral.sh/uv/guides/projects/).
 
 For TypeScript/JavaScript, install Bun on the destination first. Download the
-[published 0.2.7 package archive](https://registry.npmjs.org/rexafs/-/rexafs-0.2.7.tgz)
+[published 0.2.9 package archive](https://registry.npmjs.org/rexafs/-/rexafs-0.2.9.tgz)
 on the connected computer, copy it to your project on the offline computer, and run:
 
 ```sh
-bun add ./rexafs-0.2.7.tgz
+bun add ./rexafs-0.2.9.tgz
 ```
 
-The rexafs 0.2.7 archive includes its WebAssembly binaries and has no runtime
+The rexafs 0.2.9 archive includes its WebAssembly binaries and has no runtime
 package dependencies. Your application may have other dependencies that need to
 be prepared separately. Bun supports [installing local
 tarballs](https://bun.sh/docs/pm/cli/add). For Rust, use `cargo vendor` in your

@@ -81,7 +81,7 @@ forward Fourier transforms and CSV/JSON export.
 
 `/app/scattering/` runs the published ReFEFF 0.4.0 WASI engine through its browser
 Worker. It accepts a FEFF input, displays calculated EXAFS and offers generated
-files and a provenance record for download. Native rexafs 0.2.7 retains its
+files and a provenance record for download. Native rexafs 0.2.9 retains its
 ReFEFF 0.3.0 dependency; the two browser engines have separate manifests.
 
 `npm run dev` and `npm run build` first prepare both engines. Install `wasm-pack 0.15.0`
@@ -146,7 +146,7 @@ follow the vendor README and preserve the original notice bytes.
 - `src/content/docs/` owns the curated public manual. Every page requires
   `audience: user`; the collection schema rejects any other audience.
 - `doc/` retains source-checkout guides and historical records. Website guides
-  target published 0.2.7; source-checkout additions belong in Next. Keep shared
+  target published 0.2.9; source-checkout additions belong in Next. Keep shared
   scientific explanations synchronized when the underlying method changes. Do not import `doc/` recursively.
 - `src/content/docs/docs/reference/{stable,next}/` is generated. Edit Python
   stubs/native docstrings or TypeScript declarations, then regenerate. Stable
@@ -173,7 +173,9 @@ follow the vendor README and preserve the original notice bytes.
   Extraction includes the Python declarations/native help, every TypeScript
   entry-point declaration, Wasm help and the Rust core's public documentation.
 - `public/` contains only selected public assets. Application screenshots are
-  full, unedited JPEG captures made with computer use. The released guides retain
+  full, unedited captures made with computer use. The current import, Assistant,
+  collection-analysis and Series guides use eight 1192 × 768 JPEG captures from
+  the signed macOS ARM64 0.2.9 release in `screenshots/0.2.9/`. Other guides retain
   1192 × 768 captures from the official macOS ARM64 0.2.4 release; Next import
   documentation uses separate 1187 × 768 source-build captures in `screenshots/next/`.
   Keep their version, input and capture provenance in

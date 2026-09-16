@@ -9,9 +9,11 @@ signed-in account. Use **Retry** or the login controls if needed. rexafs stores
 no separate model API key. The Assistant remains experimental; review scientific
 choices and results before relying on them.
 
-[![rexafs 0.2.7 showing the Assistant composer beside the Cu spectrum and Parameters panel](/screenshots/0.2.7/assistant-layout.jpg)](/screenshots/0.2.7/assistant-layout.jpg)
+[![rexafs 0.2.9 showing the Assistant composer beside the Cu spectrum and Parameters panel](/screenshots/0.2.9/assistant-layout.jpg)](/screenshots/0.2.9/assistant-layout.jpg)
 
-Captured from the signed 0.2.7 Mac app with the bundled Cu example. The available
+Captured through computer use from the signed 0.2.9 Mac app with the prepared
+Cu foil reference. See [screenshot provenance](/licenses/#documentation-screenshots).
+No Assistant message was sent for these three captures. The available
 models and reasoning levels depend on the connected Codex installation.
 Select an image to view it at full size.
 
@@ -25,7 +27,7 @@ Write your request in the message field. The footer has three menus:
   the selected model, or select one of its supported levels.
 - **Access** selects what the Assistant may do in the analysis.
 
-[![Model menu in the rexafs 0.2.7 Assistant](/screenshots/0.2.7/assistant-models.jpg)](/screenshots/0.2.7/assistant-models.jpg)
+[![Model menu in the rexafs 0.2.9 Assistant](/screenshots/0.2.9/assistant-model.jpg)](/screenshots/0.2.9/assistant-model.jpg)
 
 Use arrow keys to browse a menu, Enter or Space to choose, and Escape to close.
 **Enter** in the message field sends; **Shift+Enter** inserts a newline. The arrow
@@ -34,7 +36,7 @@ turn; an analysis calculation already running can finish independently.
 
 ## Choose access
 
-[![Access menu in the rexafs 0.2.7 Assistant](/screenshots/0.2.7/assistant-access.jpg)](/screenshots/0.2.7/assistant-access.jpg)
+[![Access menu in the rexafs 0.2.9 Assistant](/screenshots/0.2.9/assistant-access.jpg)](/screenshots/0.2.9/assistant-access.jpg)
 
 **Review** permits inspection and navigation. **Edit analysis** also permits
 supported parameter changes and calculations. App-authored receipts describe
@@ -51,17 +53,19 @@ source paths, bounded source comments, processing settings, model inputs,
 analysis results, journal entries and enabled plots through your Codex account.
 Imported comments and previous conversations are labelled as data.
 
-## Unreleased: context retrieval and analysis
+<a id="unreleased-context-retrieval-and-analysis"></a>
 
-In source builds, new messages send a short overview of the current
+## Context retrieval and analysis in 0.2.9
+
+Version **0.2.9** adds context retrieval.
+New messages send a short overview of the current
 group and up to 50 available groups. The Assistant retrieves relevant source
 headers, import mappings, processing settings, fit models or historical results
 when needed. Headers and long group lists are paginated; plots are requested on
 demand when Plot images is enabled. Original measurement bytes, full raw tables
 and unrelated saved conversations stay out of the prompt. This prevents large
 import archives from exceeding the Assistant's input limit. Project saves and
-publication exports still retain their original data. These changes are not in
-the 0.2.7 screenshots above or the 0.2.8 release.
+publication exports still retain their original data. These changes were introduced after 0.2.8.
 
 The Assistant can select imported groups by
 identity, run independent EXAFS fits in sequence, and configure a joint fit with
@@ -100,10 +104,10 @@ on 15 September 2026. The inputs are generated mathematical signals, not measure
 Cu oxidation-state standards. See [screenshot provenance](/licenses/).
 
 Changing an input marks its earlier analysis result as stale in the Assistant's
-state; stale results are not supplied as current analysis plots. LCF/PCA outputs
-are session results: use **Publish → Analysis folder → Export** to retain the
-computed arrays and report. Saving an `.rxs` project retains the input groups and
-completed conversation, but does not restore the LCF/PCA result panels.
+state; stale results are not supplied as current analysis plots. Use
+**Publish → Analysis folder → Export** to retain computed arrays and the report.
+Version 0.2.9 also saves completed LCF, batch LCF, PCA and MCR results in `.rxs`
+projects alongside the input groups and retained conversations.
 
 ## Keep the workspace visible
 
@@ -139,8 +143,8 @@ The Assistant inspects each assigned spectrum's processing before fitting.
 Processing edits target the current spectrum and are calculated and validated
 before being applied. Review column mappings in Data; the Assistant does not
 edit import interpretation. Access requests expire after five minutes, and Stop
-invalidates unapproved requests. See the [processing tool contract](https://github.com/Ameyanagi/rexafs/blob/v0.2.7/crates/rexafs-gui/src/codex_client.rs)
-and [request handling](https://github.com/Ameyanagi/rexafs/blob/v0.2.7/crates/rexafs-gui/src/app/shell/assistant.rs).
+invalidates unapproved requests. See the [processing tool contract](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs-gui/src/codex_client.rs)
+and [request handling](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs-gui/src/app/shell/assistant.rs).
 
 ## If Codex does not connect
 
