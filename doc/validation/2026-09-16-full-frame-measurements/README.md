@@ -75,3 +75,100 @@ input duplication. Those memory/storage and platform gates remain open. Tests
 also cover short XANES without valid later EXAFS settings, changed/missing
 sources, cancellation/resume, incomplete worker inputs, malformed source rows,
 typed flattened components and project serialization.
+
+
+## Organization, presets and recovery extension
+
+A later build on this branch was exercised through computer use with the same
+513-frame synthetic project. Manual and natural ordering, per-frame temperature
+and timestamp editing, ID-keyed CSV import/export, repeated/missing coordinates,
+and temperature/elapsed-time axes were checked. Historical runs kept their
+original membership revision and values after edits. A named Flat preset was
+saved, reselected after changing the controls, revised using two plot clicks,
+and exported/imported as JSON. Its absolute plot coordinates were converted to
+the correct E₀ offsets. Importing the same name created a separate preset.
+
+The app was quit without saving a completed run. Reopening Series exposed the
+recovery copy; opening it restored all 513 committed rows in an unsaved workspace.
+Saving that workspace retained the results and removed the completed checkpoint.
+The original saved project stayed unchanged. Automated tests additionally cover
+active locks, torn final records, corrupt complete records and changed settings
+before a resumed snapshot.
+
+## 100,000 linked-file GUI workload
+
+The additional generator [`generate-series-resource-example.py`](../../../scripts/generate-series-resource-example.py)
+creates 100,000 distinct paths outside the checkout. Each has 401 energy points
+with the same axis/baseline/edge model described above. One thousand periodic
+prototype signals are reused through hard links where supported; frame 50,001
+has feature amplitude 1.02. Distinct paths have distinct frame/group identities.
+This workload checks reader/worker/provenance/UI behavior, not independent
+experimental signals or remote-storage bandwidth.
+
+```sh
+python3 scripts/generate-series-resource-example.py /tmp/rexafs-series-100k
+```
+
+On the same Apple M4, 32 GB macOS machine, a release GUI build opened all files,
+created an explicit series and calculated the normalized maximum −20…+50 eV.
+Computer use exported 100,000 successful rows. The maximum was frame 50,001,
+value 2.0199962740298623. A second run was cancelled after 16,592 successful rows
+and resumed through the GUI. Its final 100,000 values and frame IDs equaled the
+uninterrupted export exactly. Adding only a comment to one linked path using
+atomic replacement caused the automatic check to report exactly one stale input;
+retained values were unchanged. The other hard links were not modified.
+
+![Complete 100,000-frame trend, including the narrow synthetic transient](series-100k-results.png)
+
+The first buffered checkpoint's row-writing interval was 81.772 seconds (from
+creation of `rows.jsonl` to its final footer), about 1,223 frames/s. This includes
+calculation, durable chunk writes and GUI publication; it excludes initial input
+hashing, snapshot creation, import and export. It is a single observed run, not
+a repeated benchmark or a promised speed. The run's initial 163.82 MiB JSON
+metadata file took about 0.28 seconds to write after buffering was introduced.
+The earlier unbuffered prototype was much slower and is not the implementation
+being qualified. Later code uses 128-row publication chunks above 10,000 frames
+instead of the 16-row chunks used for these timings; it still checks cancellation
+before each frame. No new throughput claim is inferred from that change.
+
+One-second process RSS samples reached about 1.87 GiB during the first run and
+6.59 GiB during the subsequent two-run/cancel/resume/export session. Spectra are
+prepared one at a time, but frame settings, result history, recovery snapshots
+and export copies grow with frame count. This is a significant memory cost, not
+constant total memory. Recovery files occupied roughly 403 MiB for the first
+run and 613 MiB for the resumed run's snapshot and journal. A long history may
+reach project-size limits and needs further metadata deduplication. Full exports
+and plots were usable through computer use; this run did not capture a rigorous
+end-to-end cancellation-latency distribution.
+
+The synthetic projects, 100,000-row exports, recovery journals and per-second
+resource logs remain local outside Git. The generator and this GUI screenshot
+are the reproducible public evidence. No private experimental data was used.
+Native Windows/Linux GUI and network-share qualification remain open.
+
+
+## Final automated extension checks
+
+The expanded core suite passed 359 tests (3 ignored). The full desktop suite
+passed 532 tests (6 ignored); targeted measurement tests were repeated after the
+last UI changes. The installed Python wheel passed 15 runtime tests. The npm
+package passed 26 tests, including Node/browser parity, packed-package TypeScript
+checks and editor hover/signature checks. The installed Python package passed
+Pyright/LSP checks, including the new measurement call and result type. Website
+API generators were rerun for Next; Stable signatures remain release-derived.
+Strict core Clippy, Rust reference generation (including missing-documentation
+and link checks), the website build, all 22 website tests and Astro checks passed.
+
+
+The final release build was also checked through computer use on 12,000 linked
+synthetic frames, exercising the new 128-row publication chunks. Both retained
+runs saved with 12,000 successful rows. Cancelling during checkpoint preparation
+returned to the idle controls with **Resume unfinished** visible in an observed
+1.144 seconds (click plus accessibility read; one observation, not a latency
+percentile). It retained zero calculated rows in that attempt and resumed to
+completion. The empty trend was hidden, and completed recovery copies were
+removed after saving a separate project. Reopening the earlier 513-frame project
+restored the selected Flat preset name, representation and numerical bounds;
+Preview displayed the correct absolute interval.
+
+![Restored Flat preset and native-axis range preview in the final build](measurement-preset.png)

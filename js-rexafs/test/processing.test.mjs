@@ -242,3 +242,26 @@ test("inverse configuration invalidates only inverse results and copies settings
     assert.equal(s.chiq(), undefined);
   } finally { inverse.free(); s.free(); }
 });
+
+
+test("scalar measurements preserve inputs, validate units, and propagate supplied errors", () => {
+  const s = new Spectrum(new Float64Array([0, 1, 3]), new Float64Array([1, 3, 7]));
+  const options = { space: "mu", origin: "absolute", errors: new Float64Array([1, 2, 3]) };
+  const result = s.measure("mean", [.5, 2], options);
+  assert.equal(result.value, 3.5);
+  assert.equal(result.standard_error, 2.375 / 1.5);
+  assert.deepEqual(result.range, [.5, 2]);
+  assert.equal(result.measurement.origin, "Absolute");
+  assert.equal(s.norm(), undefined);
+  for (const [op, bounds, opts] of [["mean", [2, .5], options], ["maximum", [.5, 2], options], ["point", NaN, options], ["mean", [0, 1], {...options, origin: "typo"}], ["point", 0, {...options, kweight: 1}]]) {
+    assert.throws(() => s.measure(op, bounds, opts));
+  }
+  const raw = new Spectrum(energy, mu), explicit = new Spectrum(energy, mu).normalize();
+  const automatic = raw.measure("mean", [-20, 30], {space: "flat"});
+  assert.deepEqual(automatic, explicit.measure("mean", [-20, 30], {space: "flat"}));
+  assert.equal(raw.norm(), undefined); assert.equal(raw.e0(), undefined);
+  assert.equal(automatic.standard_error, null);
+  const browser = new BrowserSpectrum(energy, mu);
+  assert.deepEqual(browser.measure("mean", [-20, 30], {space: "flat"}), automatic);
+  for (const value of [s, raw, explicit, browser]) value.free();
+});

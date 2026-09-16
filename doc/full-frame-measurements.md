@@ -3,8 +3,8 @@
 This increment is newer than 0.2.9. It starts Phase A of the
 [complete analysis design](complete-analysis-design.md); it does not implement
 the later Live, peak-fit, MBACK, correction, wavelet, regression or confidence
-milestones. Python/TypeScript exposure is a tracked follow-up after this Rust
-contract stabilizes.
+milestones. Rust, Python and TypeScript expose the same native scalar measurement
+contract in this development checkout.
 
 ## Simple Rust API
 
@@ -62,8 +62,8 @@ mean of unevenly spaced samples. No baseline is subtracted. An integral of
 absorption therefore is not automatically a peak area or chemical concentration.
 The advanced array operator also supports a nonnegative finite-region centroid,
 integrating x·y(x) analytically and rejecting a zero area or negative samples.
-No uncertainty is inferred; `standard_error` is absent until a documented
-input-error propagation method is supplied.
+No uncertainty is inferred; `standard_error` is absent unless you supply errors
+under the independent-point model described below.
 
 Energy uses eV, k uses Å⁻¹ and R uses Å. Norm/Flat are dimensionless. For χ(k)
 weighted by kᵖ, signal units are Å⁻ᵖ. Forward-transform magnitude has units
@@ -125,8 +125,10 @@ input and the result table displays 50 rows at a time without limiting export.
 and checks input/settings revisions before calculating unfinished rows. Changed
 inputs fail with a reason; start a new run to analyze the new data. Earlier runs
 remain available. **Check input revisions** compares current sources/settings
-without changing historical values. This first increment checks linked-file
-changes explicitly; automatic filesystem-driven invalidation belongs to Live.
+without changing historical values. Opening Measurements starts background
+checks of the selected run every ten seconds, without overlapping checks.
+Source digests and processing settings are compared; changed or missing inputs
+are marked stale. This polling is separate from the future Live ingestion system.
 
 Saving a project retains series, frame/group identities, definitions, settings,
 resolved preparation, source digests, outcomes and run history. Portable replay
@@ -135,8 +137,79 @@ includes all statuses and values; **Export definition and results** writes the
 full JSON metadata. A figure alone is not a replay record. Old projects still
 open and the older **Scan overview** keeps its historical sampled definitions.
 
-## Remaining Phase A gates
+## Recovery
 
-Automatic revision checking, recovery-journal UI, independent-error propagation and
-full resource/platform qualification remain tracked work. Do not label this
-increment as the complete eight-milestone roadmap or as a released feature.
+Each run freezes its definition and input revisions before calculation. A private
+checkpoint stores the workspace, run and append-only result chunks; a chunk is
+flushed before it appears as completed in the GUI. After an interruption, open
+Series and choose **Open recovery copy**. This replaces the current workspace
+with an unsaved copy; save other work first. It does not overwrite the original
+project or automatically restart calculation. Review the retained results and
+choose **Resume unfinished**. Changed unfinished inputs fail explicitly.
+
+A torn final journal line is ignored; corruption in a complete record is an error.
+Active checkpoints are locked against recovery or deletion. Saving a completed
+run removes its recovery copy; **Discard recovery copy** is also explicit. Linked
+source files must still exist at their recorded revisions. The checkpoint is not
+a substitute for portable embedded-input project storage. An interruption before
+the initial snapshot is complete has no recoverable rows. Unpublished source
+content is never uploaded by these local recovery operations.
+
+## Python and TypeScript
+
+```python
+result = spectrum.measure("mean", (-20.0, 30.0))
+height = spectrum.measure("maximum", (0.0, 30.0), space="flat")
+point = spectrum.measure("point", 9000.0, space="mu", origin="absolute")
+print(result.value, result.unit)
+record = result.to_json()
+```
+
+```typescript
+const result = spectrum.measure("mean", [-20, 30]);
+const height = spectrum.measure("maximum", [0, 30], { space: "flat" });
+const chi = spectrum.measure("mean", [3, 10], { space: "chi", kweight: 2 });
+console.log(result.value, result.unit);
+const record = JSON.stringify(result);
+```
+
+Both bindings default to Norm and E₀-relative energy, automatically selecting
+absolute coordinates for Chi/Fourier. `kweight` defaults to zero for Chi.
+Results own their scalar, unit, absolute bounds and optional position/E₀/error.
+The original spectrum and its cached arrays are unchanged. Python releases the
+GIL during calculation. JavaScript calculation is synchronous; use a worker for
+long loops. Invalid input, uncovered ranges and failed prerequisites raise an
+exception. The desktop E₀ trend and named series/preset management remain desktop
+features, not part of these scalar binding calls.
+
+## Supplied point errors
+
+Use `spectrum.measure_with_errors(&definition, &errors)` in Rust, `errors=errors`
+in Python, or `{ errors: float64Array }` in TypeScript. The errors must be finite,
+nonnegative standard deviations of the **selected representation on its native
+grid**, in its signal units. Raw detector-count uncertainties are not automatically
+propagated through normalization, background subtraction or Fourier transforms.
+For an already processed array, `metrics::measure_with_errors` avoids preparation.
+
+Point, integral and mean are linear combinations of native samples. If the
+measurement is m = Σᵢ wᵢ yᵢ, its standard error is
+σₘ = √[Σᵢ (wᵢ σᵢ)²] for independent sample errors σᵢ. Here yᵢ is signal sample i
+and wᵢ is its interpolation/integration weight (axis units for integral,
+dimensionless for point/mean). Weights of the same native sample are combined
+before squaring, including shared segment endpoints. This is the independent
+case of the [NIST law of propagation of uncertainty](https://www.nist.gov/pml/nist-technical-note-1297/nist-tn-1297-appendix-law-propagation-uncertainty),
+implemented with rexafs's linear-interpolant weights in
+[`metrics/uncertainty.rs`](../crates/rexafs/src/xafs/analysis/metrics/uncertainty.rs).
+Axis, range boundaries, E₀ and processing settings are treated as exact. Maximum
+and centroid reject this error model; no correlations or confidence intervals
+are inferred. The GUI currently has no point-error-array input and labels its
+uncertainty unavailable.
+
+## Qualification and remaining gates
+
+Computer use verified 513-frame organization/preset/recovery workflows and a
+100,000-path synthetic linked-file run, complete export, cancellation/resume and
+automatic staleness. See the [qualification record](validation/2026-09-16-full-frame-measurements/README.md)
+for memory, timing boundaries and limitations. Native Windows/Linux GUI and
+network-share behavior remain unqualified locally; recipe replay and the later
+roadmap milestones are still future work. This is not a released feature.

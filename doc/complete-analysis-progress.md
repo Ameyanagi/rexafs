@@ -35,9 +35,20 @@ and restoring a Flat preset, updating its revision, exporting/importing it
 without replacing the original, and calculating all 513 frames. Plot clicks on
 absolute energy produced the correct E₀-relative definition in the JSON export.
 
-**Phase A is not complete.** Remaining gates include
-automatic revision checking, recovery-journal UI,
-independent-error propagation, and broader resource/platform qualification.
+Automatic source/settings checks, locked recovery journals and the recovery UI
+are implemented. Computer use recovered an unsaved 513-frame run and saved it
+without changing the original project. A 100,000-path synthetic GUI run and its
+cancel/resume/export checks passed; the qualification record reports the substantial
+metadata memory cost and does not claim native Windows/Linux validation.
+
+Independent standard-error propagation is implemented for point, integral and
+mean when users supply errors in the selected representation. No processing
+covariances are inferred. Simple Python/TypeScript scalar calls share the Rust
+contract and retain the full definition in exported results.
+
+**Phase A is not fully qualified.** Native Windows/Linux and network-share checks,
+recipe replay and further reduction of large-run metadata memory remain open.
+Later milestones B–H remain unimplemented by this branch.
 
 ## API rule for every milestone
 
@@ -60,7 +71,8 @@ F: Explicit Cauchy wavelets, maps and full-frame region measurements.
 G: Leakage-safe labeled datasets, native PLS1/LASSO and frozen predictions.
 H: Qualified profiles, bootstrap, sensitivity and prediction intervals.
 
-Python/TypeScript bindings and recipe replay follow each stabilized core contract;
-installed-package and editor-help tests are completion gates. All numerical
+Scalar measurement bindings are now available in Python and TypeScript. Bindings
+for later milestones and recipe replay follow their stabilized core contracts;
+installed-package and editor-help tests remain completion gates. All numerical
 reference artifacts need source/version/license records. Unpublished experimental
 data and private workflow reports must remain outside this checkout.

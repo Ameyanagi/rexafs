@@ -32,6 +32,60 @@ See [processing theory](https://rexafs.com/docs/science/processing/) for
 equations, interpretation and limitations. Groups and structural fitting
 are not currently exposed by this Python Spectrum API.
 
+## measure
+
+```python
+measure(self, operation: Literal['point'], coordinates: float, *, space: Literal['mu', 'norm', 'flat', 'chi', 'fourier']='norm', origin: Literal['e0', 'absolute'] | None=None, kweight: int=0, errors: NDArray[np.float64] | Sequence[float] | None=None) -> MeasurementResult
+```
+
+Measure a region on a private copy (unreleased).
+
+Recommended: spectrum.measure("mean", (-20, 30)). Defaults to normalized
+mu and E0-relative energy offsets in eV; select space="flat" explicitly.
+k is in inverse angstroms and R in angstroms, without phase correction;
+these require absolute coordinates (selected automatically when origin=None).
+kweight defaults to zero and applies only to chi. Bounds must increase.
+Mean is the piecewise-linear integral divided by interval width, not an
+arithmetic sample mean. Integral uses trapezoids and interpolated endpoints.
+Missing stages run automatically using this spectrum's settings, with the
+GIL released. Arrays, settings and cached results remain unchanged. No
+extrapolation or display sampling occurs. Invalid input, missing coverage,
+or unavailable preparation raises ValueError. Results own their values.
+
+errors supplies independent standard deviations of the SELECTED signal on
+its native grid, in its signal units, finite and nonnegative. Raw-count
+errors are not propagated through normalization or transforms. Point,
+integral and mean support this model; maximum rejects it. Axis, E0 and
+settings are exact. No correlations or confidence intervals are inferred;
+standard_error is None when errors are omitted.
+
+## measure
+
+```python
+measure(self, operation: Literal['mean', 'integral', 'maximum'], coordinates: tuple[float, float], *, space: Literal['mu', 'norm', 'flat', 'chi', 'fourier']='norm', origin: Literal['e0', 'absolute'] | None=None, kweight: int=0, errors: NDArray[np.float64] | Sequence[float] | None=None) -> MeasurementResult
+```
+
+Measure a region on a private copy (unreleased).
+
+Recommended: spectrum.measure("mean", (-20, 30)). Defaults to normalized
+mu and E0-relative energy offsets in eV; select space="flat" explicitly.
+k is in inverse angstroms and R in angstroms, without phase correction;
+these require absolute coordinates (selected automatically when origin=None).
+kweight defaults to zero and applies only to chi. Bounds must increase.
+Mean is the piecewise-linear integral divided by interval width, not an
+arithmetic sample mean. Integral uses trapezoids and interpolated endpoints.
+Missing stages run automatically using this spectrum's settings, with the
+GIL released. Arrays, settings and cached results remain unchanged. No
+extrapolation or display sampling occurs. Invalid input, missing coverage,
+or unavailable preparation raises ValueError. Results own their values.
+
+errors supplies independent standard deviations of the SELECTED signal on
+its native grid, in its signal units, finite and nonnegative. Raw-count
+errors are not propagated through normalization or transforms. Point,
+integral and mean support this model; maximum rejects it. Axis, E0 and
+settings are exact. No correlations or confidence intervals are inferred;
+standard_error is None when errors are omitted.
+
 ## Spectrum
 
 ```python

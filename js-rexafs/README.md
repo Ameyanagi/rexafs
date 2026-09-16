@@ -202,3 +202,21 @@ for transmission, `iff: "iff"` instead of `it` for fluorescence, or
 `i0: "it", it: "ir"` for the reference. Existing positional mappings remain valid.
 Duplicate names require indices. Omit `energy_unit` to preserve detected axis
 calibration, or explicitly override it with `"eV"` or `"keV"`.
+
+## Development-only scalar measurements
+
+The source checkout adds this call (newer than 0.2.9):
+
+```typescript
+const result = spectrum.measure("mean", [-20, 30], { space: "flat" });
+console.log(result.value, result.unit);
+```
+
+The default is normalized absorption with E₀-relative energy bounds in eV.
+Missing stages run on a private copy; existing arrays/settings remain unchanged.
+Choose `origin: "absolute"` for absolute energy, or `space: "chi"`/`"fourier"`
+for absolute k/R. Point, maximum, integral and mean share strict native-grid
+coverage checks. See the [measurement guide](../doc/full-frame-measurements.md)
+for units, optional independent errors and numerical assumptions. This scalar
+operation is separate from the `Measurement` input-file reader. Type declarations
+include options, result fields, completion choices and hover help.

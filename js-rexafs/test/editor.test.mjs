@@ -60,6 +60,14 @@ console.log(sessionText, imaginary);
 const invalidMapping: SpectrumMapping = {energy_column:0,energy:{kind:"bragg"},signal:{kind:"direct",column:1}};
 const energy = new Float64Array([1, 2, 3]);
 const spectrum = new Spectrum(energy, energy);
+const mean = spectrum.measure("mean", [-20, 30], { space: "flat" });
+mean.value.toFixed(3);
+mean.standard_error?.toFixed(3);
+spectrum.measure("point", 10);
+// @ts-expect-error a point takes a scalar
+spectrum.measure("point", [0, 1]);
+// @ts-expect-error invalid signal
+spectrum.measure("mean", [0, 1], { space: "unknown" });
 const options: AUTOBKOptions = { rbkg: 1, solver: "LinearDirect" };
 const background = new AUTOBK(options);
 const forward = new XrayFFTF({ grid: "Larch", window: "Hanning" });
@@ -114,6 +122,7 @@ spectrum.chi()[0];
       const hoverText = (text, offset) => ts.displayPartsToString(hover(text, offset).documentation).replace(/\s+/g, " ");
       assert.match(hoverText("background.rbkg", 12), /angstroms.*Default: 1.0/);
       assert.match(hoverText("spectrum.fft", 10), /2048/);
+      assert.match(hoverText("spectrum.measure", 10), /private copy/);
       assert.match(hoverText("forward.kstep", 8), /infers the first spacing/);
       assert.match(hoverText("forward.dk", 8), /KaiserBessel.*shape parameter/);
       assert.match(hoverText("spectrum.chir_real", 10), /kstep\/sqrt\(pi\)/);
