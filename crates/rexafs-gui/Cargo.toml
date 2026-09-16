@@ -54,7 +54,7 @@ semver = { workspace = true }
 unicode-segmentation = "1"
 # Same nalgebra as the core crate (XASSpectrum exposes DVector<f64>).
 nalgebra = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
 # Project persistence must recover every stored f64 exactly, including subnormals.
 serde_json = { workspace = true, features = ["float_roundtrip"] }
 

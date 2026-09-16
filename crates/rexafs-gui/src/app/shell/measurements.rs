@@ -18,6 +18,7 @@ use std::{
 
 mod manage;
 mod presets;
+mod recipes;
 mod reliability;
 mod view;
 
@@ -48,6 +49,7 @@ pub(crate) struct MeasurementState {
     trend_axis: TrendAxis,
     preset_name: Option<Entity<crate::widgets::text_input::TextInput>>,
     selected_preset: Option<crate::group_identity::GroupId>,
+    selected_recipe: Option<(crate::group_identity::GroupId, u64)>,
     pick_range: Option<Vec<f64>>,
     monitoring: bool,
     recovery_entries: Vec<recovery::RecoveryEntry>,
@@ -110,6 +112,9 @@ impl MeasurementState {
                 })
                 .map(|p| p.id.clone())
         });
+        let selected_recipe = selected_run
+            .and_then(|i| archive.runs[i].recipe.as_ref())
+            .map(|r| (r.id.clone(), r.revision));
         Self {
             archive,
             overview: false,
@@ -137,6 +142,7 @@ impl MeasurementState {
             trend_axis: TrendAxis::Sequence,
             preset_name: None,
             selected_preset,
+            selected_recipe,
             pick_range: None,
             monitoring: false,
             recovery_entries: vec![],
@@ -171,6 +177,7 @@ impl StudioApp {
                 path: PathBuf::new(),
                 derived: None,
                 settings: Default::default(),
+                recipe: None,
             };
         };
         let derived = (ix >= DERIVED_BASE && ix != NO_ENTRY)
@@ -188,6 +195,7 @@ impl StudioApp {
             path,
             derived,
             settings: self.effective_params(ix).clone(),
+            recipe: None,
         }
     }
 
@@ -313,12 +321,17 @@ impl StudioApp {
             },
             edge_energy: kind == 4,
         };
-        if let Some(old) = self
-            .measurements
-            .archive
-            .presets
-            .iter()
-            .find(|p| Some(&p.id) == self.measurements.selected_preset.as_ref())
+        let recipe = self.selected_analysis_recipe();
+        if let Some(old) = recipe
+            .as_ref()
+            .map(|r| &r.definition)
+            .or_else(|| {
+                self.measurements
+                    .archive
+                    .presets
+                    .iter()
+                    .find(|p| Some(&p.id) == self.measurements.selected_preset.as_ref())
+            })
             .or_else(|| {
                 self.measurements
                     .selected_run
@@ -350,7 +363,9 @@ impl StudioApp {
         ) else {
             return;
         };
-        let input = self.measurement_input(&frame.group, frame.label.clone());
+        let input = self
+            .measurement_input(&frame.group, frame.label.clone())
+            .with_recipe(self.selected_analysis_recipe());
         let definition = match self.measurement_definition(cx) {
             Ok(d) => d,
             Err(e) => {
@@ -376,7 +391,8 @@ impl StudioApp {
             return;
         };
         let mut input = self.measurement_input(&row.frame.group, row.frame.label.clone());
-        input.settings = row.settings.clone();
+        input = input.with_recipe(run.recipe.clone());
+        input.settings = (*row.settings).clone();
         let definition = run.definition.clone();
         let revision = row.input_revision.clone();
         self.queue_measurement_preview(input, definition, revision, cx);
@@ -500,10 +516,21 @@ impl StudioApp {
         else {
             return;
         };
+        let recipe = if resume {
+            self.measurements
+                .selected_run
+                .and_then(|i| self.measurements.archive.runs.get(i))
+                .and_then(|r| r.recipe.clone())
+        } else {
+            self.selected_analysis_recipe()
+        };
         let inputs: Vec<_> = series
             .frames
             .iter()
-            .map(|f| self.measurement_input(&f.group, f.label.clone()))
+            .map(|f| {
+                self.measurement_input(&f.group, f.label.clone())
+                    .with_recipe(recipe.clone())
+            })
             .collect();
         let run = if resume {
             let Some(saved) = self
@@ -518,7 +545,7 @@ impl StudioApp {
                 self.measurements.message = "Series membership changed; start a new run.".into();
                 return;
             }
-            saved
+            (*saved).clone()
         } else {
             let definition = match self.measurement_definition(cx) {
                 Ok(d) => d,
@@ -528,12 +555,20 @@ impl StudioApp {
                     return;
                 }
             };
+            if recipe.as_ref().is_some_and(|r| {
+                r.definition.measurement != definition.measurement
+                    || r.definition.edge_energy != definition.edge_energy
+            }) {
+                self.measurements.message = "Recipe choices are frozen. Save a new recipe to use the edited measurement, or choose Group settings.".into();
+                cx.notify();
+                return;
+            }
             SeriesRun::new(&series, definition, &inputs)
         };
         let index = if resume {
             self.measurements.selected_run.unwrap()
         } else {
-            self.measurements.archive.runs.push(run.clone());
+            self.measurements.archive.runs.push(Arc::new(run.clone()));
             self.measurements.archive.runs.len() - 1
         };
         self.measurements.selected_run = Some(index);
@@ -612,7 +647,7 @@ impl StudioApp {
                 Ok(value)=>value,
                 Err(error)=>{
                     this.update(cx,|app,cx|{if app.project_generation!=project||app.measurements.generation!=generation{return;}
-                        app.measurements.cancel=None; app.measurements.archive.runs[index].finish(true);
+                        app.measurements.cancel=None; Arc::make_mut(&mut app.measurements.archive.runs[index]).finish(true);
                         app.measurements.message=format!("Could not create recovery checkpoint: {error}. Free disk space and resume.");cx.notify();
                     }).ok();return;
                 }
@@ -625,7 +660,7 @@ impl StudioApp {
                     {
                         return false;
                     }
-                    app.measurements.archive.runs[index] = frozen;
+                    app.measurements.archive.runs[index] = Arc::new(frozen);
                     app.measurements.message = "Calculating every frame…".into();
                     app.measurements.progress=(0,sources.len());
                     cx.notify();
@@ -685,7 +720,7 @@ impl StudioApp {
                         {
                             return false;
                         }
-                        app.measurements.archive.runs[index].rows[begin..end]
+                        Arc::make_mut(&mut app.measurements.archive.runs[index]).rows[begin..end]
                             .clone_from_slice(&values);
                         app.measurements.progress = (end, sources.len());
                         cx.notify();
@@ -720,7 +755,7 @@ impl StudioApp {
                     if run.cancelled { " · cancelled" } else { "" }
                 );
                 if let Some(error)=checkpoint_error {app.measurements.message=format!("Checkpoint failed: {error}. Completed rows are retained; save the project before continuing.");}
-                app.measurements.archive.runs[index] = run;
+                app.measurements.archive.runs[index] = Arc::new(run);
                 app.measurements.cancel = None;
                 app.rebuild_measurement_plot(cx);
                 cx.notify();
@@ -808,7 +843,8 @@ impl StudioApp {
             .iter()
             .map(|r| {
                 (
-                    self.measurement_input(&r.frame.group, r.frame.label.clone()),
+                    self.measurement_input(&r.frame.group, r.frame.label.clone())
+                        .with_recipe(run.recipe.clone()),
                     r.input_revision.clone(),
                 )
             })
@@ -878,12 +914,23 @@ impl StudioApp {
             if let Ok(Ok(Some(path))) = picker.await {
                 let outcome = cx
                     .background_spawn(async move {
-                        let text = if json {
-                            serde_json::to_string_pretty(&run).map_err(|e| e.to_string())?
-                        } else {
-                            run.csv()
-                        };
-                        std::fs::write(&path, text).map_err(|e| e.to_string())?;
+                        use std::io::Write;
+                        let file = tempfile::NamedTempFile::new_in(
+                            path.parent().ok_or("Export directory unavailable")?,
+                        )
+                        .map_err(|e| e.to_string())?;
+                        {
+                            let mut writer = std::io::BufWriter::new(file.as_file());
+                            if json {
+                                serde_json::to_writer_pretty(&mut writer, &run)
+                                    .map_err(|e| e.to_string())?;
+                            } else {
+                                run.write_csv(&mut writer).map_err(|e| e.to_string())?;
+                            }
+                            writer.flush().map_err(|e| e.to_string())?;
+                        }
+                        file.as_file().sync_all().map_err(|e| e.to_string())?;
+                        file.persist(&path).map_err(|e| e.to_string())?;
                         Ok::<_, String>(path)
                     })
                     .await;

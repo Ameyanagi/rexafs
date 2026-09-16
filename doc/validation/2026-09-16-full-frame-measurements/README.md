@@ -172,3 +172,57 @@ restored the selected Flat preset name, representation and numerical bounds;
 Preview displayed the correct absolute interval.
 
 ![Restored Flat preset and native-axis range preview in the final build](measurement-preset.png)
+
+## Memory and recipe replay follow-up
+
+This follow-up retains the historical measurements above. It used the same
+Apple M4/32 GB machine and synthetic 100,000-path workload. The modified build
+shares immutable completed runs and identical processing settings, streams CSV
+and JSON exports, and keeps measurement history out of the generic project
+compactor's duplicate JSON object trees.
+
+Computer use completed all 100,000 rows, started and cancelled a second run
+during checkpoint preparation, resumed it, and exported CSV/JSON. Cancellation
+click plus the immediate accessibility read took 0.840 seconds; checkpoint
+completion followed asynchronously, so that number is not total cancellation
+latency. Every exported source identity, value, unit, outcome, resolved range and
+E₀ matched the earlier 100,000-row export exactly. New series/run identities
+were intentionally different. The two-run/cancel/resume/export session peaked
+at 4.49 GiB RSS, compared with 6.59 GiB in the earlier workflow. This is a workload
+comparison with other development activity present, not a controlled speed test.
+
+Saving both runs initially reached 6.21 GiB. After removing object-tree copies
+of the archive from project compaction, a separate reload/save check peaked at
+2.81 GiB. The two-run linked project was about 206 MiB. Each run stored 100,000
+rows and one shared settings entry. Reopening and saving retained identical
+records after accounting for newly added empty optional recipe fields. This
+separate save check does not establish a lower peak for every possible workflow.
+The 512 MiB project limit and naturally growing scalar metadata still apply.
+
+The local evidence is under `/tmp/rexafs-series-100k`: the `resources-compact`
+and `resources-streamed-save` JSONL logs, `compact-resumed.csv`/`.json`, and the
+separately saved compact/streamed projects. These large synthetic outputs are
+not committed. The public generators reproduce their inputs.
+
+Computer use also captured a Flat processing/measurement recipe from the
+513-frame project, applied it to a new three-frame series (three successful
+results), and verified that edited bounds could not silently run under an old
+recipe revision. Saving created version 2 while version 1 remained selectable.
+Exporting/importing the recipe created an independent named copy; its three
+results also succeeded. The project retained all versions and historical runs.
+
+Automated checks: 535 desktop tests passed before the final save refinement;
+31 project compatibility tests passed after it. The final focused suite passed
+17 measurement tests, including recipe layout/quantity rejection, compact and
+prototype row loading, locked recovery, Unicode paths and unchanged saved
+projects. These tests are included in the existing release-build matrix on
+macOS, Windows and Linux. CI outcomes are reported separately from this local
+record. There is no claim of interactive Windows/Linux or network-share
+qualification in this record.
+
+Reopening the final recipe project restored the imported recipe name, Flat
+representation and saved bounds. Replaying still succeeded on all three frames.
+Selecting the earlier version restored its earlier end bound without changing
+later versions or historical results.
+
+![Flat recipe replay after reopening, with immutable recipe versions and retained runs](recipe-replay.png)

@@ -771,7 +771,7 @@ pub fn detect_import(
     detect_import_reader(file, path, import)
 }
 
-fn detect_import_reader(
+pub(crate) fn detect_import_reader(
     reader: impl Read,
     path: &std::path::Path,
     import: &ImportConfig,

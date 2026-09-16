@@ -8,6 +8,7 @@ fn input(label: &str, height: f64) -> FrameInput {
         label: label.into(),
         path: PathBuf::new(),
         settings: PipelineParams::default(),
+        recipe: None,
         derived: Some(Arc::new(DerivedSpectrum {
             group_id: Some(group),
             label: label.into(),
@@ -180,8 +181,9 @@ fn project_roundtrip_preserves_ids_definitions_and_failed_rows() {
     assert!(run.rows[1].result.is_none());
     let archive = SeriesArchive {
         series: vec![series],
-        runs: vec![run],
+        runs: vec![Arc::new(run)],
         presets: vec![],
+        recipes: vec![],
     };
     let project = crate::project::ProjectFile {
         version: crate::project::PROJECT_VERSION,
@@ -242,7 +244,7 @@ fn hundred_thousand_frames_use_one_prepared_spectrum_at_a_time() {
         },
         source_digest: Some(source),
         input_revision: Some(revision),
-        settings: prototype.settings.clone(),
+        settings: Arc::new(prototype.settings.clone()),
         status: FrameStatus::Pending,
         result: None,
         reason: None,
@@ -367,9 +369,11 @@ fn unsaved_preset_edits_reserve_distinct_revisions_in_runs() {
     preset.measurement.metric = Metric::Point { x: 0.5 };
     preset.revision = archive.definition_revision(&preset);
     assert_eq!(preset.revision, 2);
-    archive
-        .runs
-        .push(SeriesRun::new(&series(&inputs), preset.clone(), &inputs));
+    archive.runs.push(Arc::new(SeriesRun::new(
+        &series(&inputs),
+        preset.clone(),
+        &inputs,
+    )));
     preset.measurement.metric = Metric::Point { x: 1.5 };
     assert_eq!(archive.definition_revision(&preset), 3);
     preset.measurement.metric = Metric::Point { x: 0.5 };
@@ -387,7 +391,7 @@ fn recovery_keeps_only_complete_chunks_and_never_changes_the_saved_project() {
         version: 1,
         series_measurements: SeriesArchive {
             series: vec![series],
-            runs: vec![run.clone()],
+            runs: vec![Arc::new(run.clone())],
             ..Default::default()
         },
         ..Default::default()
@@ -444,4 +448,167 @@ fn cancelled_before_snapshot_cannot_relabel_changed_settings() {
     run.freeze(&changed, || false);
     assert_eq!(run.rows[0].status, FrameStatus::Failed);
     assert!(run.rows[0].input_revision.is_none());
+}
+
+#[test]
+fn compact_runs_share_settings_and_retain_prototype_rows() {
+    let inputs: Vec<_> = (0..1000)
+        .map(|i| input(&format!("frame {i}"), 1.))
+        .collect();
+    let mut run = SeriesRun::new(&series(&inputs), definition(), &inputs);
+    assert!(Arc::ptr_eq(&run.rows[0].settings, &run.rows[999].settings));
+    Arc::make_mut(&mut run.rows[999].settings).e0 = Some(1234.);
+    assert_eq!(run.rows[0].settings.e0, None);
+    let compact = serde_json::to_value(&run).unwrap();
+    assert_eq!(compact["rows"]["schema"], 1);
+    assert_eq!(compact["rows"]["settings"].as_array().unwrap().len(), 2);
+    let mut legacy = compact.clone();
+    legacy["rows"] = serde_json::to_value(&run.rows).unwrap();
+    assert!(
+        serde_json::to_vec(&compact).unwrap().len()
+            < serde_json::to_vec(&legacy).unwrap().len() / 2
+    );
+    for value in [compact.clone(), legacy] {
+        let loaded: SeriesRun = serde_json::from_value(value).unwrap();
+        assert_eq!(serde_json::to_value(&loaded).unwrap(), compact);
+        assert!(Arc::ptr_eq(
+            &loaded.rows[0].settings,
+            &loaded.rows[998].settings
+        ));
+        assert_eq!(loaded.rows[999].settings.e0, Some(1234.));
+    }
+    let mut damaged = compact.clone();
+    damaged["rows"]["values"][0]["settings"] = 999.into();
+    assert!(serde_json::from_value::<SeriesRun>(damaged).is_err());
+    let mut future = compact;
+    future["rows"]["schema"] = 2.into();
+    assert!(serde_json::from_value::<SeriesRun>(future).is_err());
+    let archive = SeriesArchive {
+        runs: vec![Arc::new(run)],
+        ..Default::default()
+    };
+    let snapshot = archive.clone();
+    assert!(Arc::ptr_eq(&archive.runs[0], &snapshot.runs[0]));
+}
+
+#[test]
+fn recipes_replay_frozen_choices_and_reject_changed_quantities() {
+    let original = input("representative", 2.);
+    let mut archive = SeriesArchive::default();
+    let recipe = AnalysisRecipe::capture("Raw mean".into(), definition(), &original).unwrap();
+    let id = archive.save_recipe(recipe.clone());
+    assert_eq!(archive.save_recipe(recipe.clone()), id);
+    assert_eq!(archive.recipes.len(), 1);
+    let mut changed = recipe.clone();
+    changed.settings.e0 = Some(1.);
+    archive.save_recipe(changed);
+    assert_eq!(archive.recipes.len(), 2);
+    assert_eq!(archive.recipes[0].revision, 1);
+    assert_eq!(archive.recipes[1].revision, 2);
+    assert_eq!(archive.recipes[0].settings.e0, None);
+    let mut target = input("other acquisition", 5.);
+    target.settings.e0 = Some(42.);
+    let target = target.with_recipe(Some(archive.recipes[0].clone()));
+    assert_eq!(target.settings.e0, None);
+    assert_eq!(original.settings.e0, None);
+    let mut run = SeriesRun::new(
+        &series(std::slice::from_ref(&target)),
+        recipe.definition.clone(),
+        std::slice::from_ref(&target),
+    );
+    run.freeze(std::slice::from_ref(&target), || false);
+    run.rows[0] = calculate_row(&target, &run.rows[0], &run.definition);
+    assert_eq!(run.rows[0].status, FrameStatus::Succeeded);
+    assert_eq!(run.rows[0].result.as_ref().unwrap().value, 5.);
+    let saved = serde_json::to_vec(&run).unwrap();
+    let retained: SeriesRun = serde_json::from_slice(&saved).unwrap();
+    assert_eq!(retained.recipe.as_ref().unwrap().revision, 1);
+    assert!(retained.csv().contains("recipe_revision,recipe_name"));
+    let mut wrong = target.clone();
+    Arc::make_mut(wrong.derived.as_mut().unwrap()).quantity = params::Quantity::FlattenedMu;
+    assert!(wrong.revision().unwrap_err().contains("incompatible"));
+    let failed = calculate_row(&wrong, &retained.rows[0], &retained.definition);
+    assert_eq!(failed.status, FrameStatus::Failed);
+    assert!(failed.result.is_none());
+    assert_eq!(retained.rows[0].result.as_ref().unwrap().value, 5.);
+}
+
+#[test]
+fn recipe_mapping_checks_exact_snapshot_layout_and_units() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("scan 日本語.dat");
+    let bytes = b"# energy mu\n0 2\n0.2 2\n1 2\n3 2\n";
+    std::fs::write(&path, bytes).unwrap();
+    let mut source = input("table", 0.);
+    source.derived = None;
+    source.path = path.clone();
+    let recipe = AnalysisRecipe::capture("Table mean".into(), definition(), &source).unwrap();
+    let source = source.with_recipe(Some(Arc::new(recipe)));
+    source.prepare(&definition(), None).unwrap();
+    std::fs::write(&path, b"# mu energy\n0 2\n0.2 2\n1 2\n3 2\n").unwrap();
+    assert!(
+        source
+            .prepare(&definition(), None)
+            .unwrap_err()
+            .contains("incompatible")
+    );
+    std::fs::write(&path, bytes).unwrap();
+    source.prepare(&definition(), None).unwrap();
+    let mut invalid = (*source.recipe.as_ref().unwrap()).as_ref().clone();
+    invalid.settings.e0 = Some(f64::NAN);
+    assert!(invalid.validate().unwrap_err().contains("finite"));
+    invalid.settings.e0 = None;
+    invalid.schema = 99;
+    assert!(invalid.validate().unwrap_err().contains("schema"));
+}
+
+#[test]
+fn recipe_runs_survive_project_and_locked_recovery_roundtrips() {
+    let original = input("reference", 3.);
+    let recipe = Arc::new(
+        AnalysisRecipe::capture("Portable recipe".into(), definition(), &original).unwrap(),
+    );
+    let inputs = vec![original.with_recipe(Some(recipe.clone()))];
+    let series = series(&inputs);
+    let mut run = SeriesRun::new(&series, recipe.definition.clone(), &inputs);
+    run.freeze(&inputs, || false);
+    let project = crate::project::ProjectFile {
+        version: 1,
+        series_measurements: SeriesArchive {
+            series: vec![series],
+            runs: vec![Arc::new(run.clone())],
+            recipes: vec![recipe],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("replay 日本語.rxs");
+    crate::project::save(&path, &project).unwrap();
+    let loaded = crate::project::load(&path).unwrap();
+    assert_eq!(
+        serde_json::to_value(&project.series_measurements).unwrap(),
+        serde_json::to_value(&loaded.series_measurements).unwrap()
+    );
+    let root = dir.path().join("recovery");
+    let mut writer = recovery::RecoveryWriter::begin(&root, loaded, &run).unwrap();
+    assert!(recovery::discover(&root).unwrap().is_empty());
+    run.rows[0] = calculate_row(&inputs[0], &run.rows[0], &run.definition);
+    writer.rows(0, &run.rows).unwrap();
+    drop(writer);
+    let entry = recovery::discover(&root).unwrap().remove(0);
+    let (recovered, count) = recovery::recover(&entry).unwrap();
+    assert_eq!(count, 1);
+    let retained = &recovered.series_measurements.runs[0];
+    assert_eq!(retained.recipe.as_ref().unwrap().name, "Portable recipe");
+    assert_eq!(retained.rows[0].result.as_ref().unwrap().value, 3.);
+    assert_eq!(
+        crate::project::load(&path)
+            .unwrap()
+            .series_measurements
+            .runs[0]
+            .rows[0]
+            .status,
+        FrameStatus::Pending
+    );
 }

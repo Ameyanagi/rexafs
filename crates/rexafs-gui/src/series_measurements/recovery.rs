@@ -19,8 +19,14 @@ pub struct RecoveryEntry {
 
 #[derive(Serialize, Deserialize)]
 enum Record {
-    Rows { begin: usize, rows: Vec<MetricRow> },
-    Finished { cancelled: bool },
+    Rows {
+        begin: usize,
+        #[serde(with = "super::storage")]
+        rows: Vec<MetricRow>,
+    },
+    Finished {
+        cancelled: bool,
+    },
 }
 
 pub struct RecoveryWriter {
@@ -234,7 +240,7 @@ pub fn recover(entry: &RecoveryEntry) -> Result<(ProjectFile, usize), String> {
     }
     run.finish(finished.unwrap_or(true));
     project.series_measurements.runs.retain(|r| r.id != run.id);
-    project.series_measurements.runs.push(run);
+    project.series_measurements.runs.push(Arc::new(run));
     // A recovered workspace is a new save target; its original stays untouched.
     project.origin = None;
     Ok((project, committed))

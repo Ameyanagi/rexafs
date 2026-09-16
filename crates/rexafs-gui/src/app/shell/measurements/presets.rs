@@ -76,6 +76,7 @@ impl StudioApp {
                 definition: definition.clone(),
             }
             .validate()?;
+            self.measurements.selected_recipe = None;
             self.measurements.selected_preset = Some(definition.id.clone());
             if let Some(i) = old {
                 self.measurements.archive.presets[i] = definition;
@@ -94,7 +95,16 @@ impl StudioApp {
         let Some(definition) = self.measurements.archive.presets.get(index).cloned() else {
             return;
         };
+        self.measurements.selected_recipe = None;
         self.measurements.selected_preset = Some(definition.id.clone());
+        self.load_measurement_definition(definition, cx);
+    }
+
+    pub(super) fn load_measurement_definition(
+        &mut self,
+        definition: MetricDefinition,
+        cx: &mut Context<Self>,
+    ) {
         self.measurements.kind = if definition.edge_energy {
             4
         } else {
@@ -201,9 +211,10 @@ impl StudioApp {
                 .iter()
                 .find(|p| Some(&p.id) == self.measurements.selected_preset.as_ref())
                 .map(|p| p.name.clone())
+                .or_else(|| self.selected_analysis_recipe().map(|r| r.name.clone()))
                 .unwrap_or_default();
             self.measurements.preset_name =
-                Some(cx.new(|cx| TextInput::new("Measurement preset name", name, t, cx)));
+                Some(cx.new(|cx| TextInput::new("Preset or recipe name", name, t, cx)));
         }
         let mut view = div().flex().flex_col().gap_2();
         view = view.child(

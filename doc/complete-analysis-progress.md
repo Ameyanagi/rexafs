@@ -46,9 +46,18 @@ mean when users supply errors in the selected representation. No processing
 covariances are inferred. Simple Python/TypeScript scalar calls share the Rust
 contract and retain the full definition in exported results.
 
-**Phase A is not fully qualified.** Native Windows/Linux and network-share checks,
-recipe replay and further reduction of large-run metadata memory remain open.
-Later milestones B–H remain unimplemented by this branch.
+Versioned analysis recipe replay is implemented. Recipes retain processing,
+measurement and input interpretation, reject changed layouts or quantities,
+and preserve automatic per-frame values. Computer use verified replay on a
+second series, immutable revisions, portable JSON import/export and unchanged
+historical runs. Shared settings, immutable history and streamed serialization
+reduce memory; the validation record preserves both the earlier baseline and
+the new measured workloads.
+
+**Phase A is not fully qualified.** The release CI matrix must pass on native
+Windows/Linux runners. Native interactive Windows/Linux and real network-share
+checks remain open; macOS computer use and portable worker tests do not replace
+those checks. Later milestones B–H remain unimplemented by this branch.
 
 ## API rule for every milestone
 

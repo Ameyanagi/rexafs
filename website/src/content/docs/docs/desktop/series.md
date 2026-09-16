@@ -10,7 +10,9 @@ The source development branch adds a **Measurements** view for complete
 point/region calculations on imported groups or folder scans. This is unreleased;
 the screenshots and sampled-overview description below remain specific to 0.2.9.
 Development features include explicit series ordering/coordinates, named presets,
-plot-selected ranges, recovery copies and complete CSV/JSON exports. See the
+plot-selected ranges, versioned processing/measurement recipes, recovery copies
+and complete CSV/JSON exports. Recipes check source layouts and quantities before
+replay, and retain automatic per-frame processing choices. See the
 [source-checkout workflow and qualification](https://github.com/Ameyanagi/rexafs/blob/feature/complete-analysis/doc/full-frame-measurements.md)
 and the Next API reference for the new `Spectrum.measure` bindings.
 

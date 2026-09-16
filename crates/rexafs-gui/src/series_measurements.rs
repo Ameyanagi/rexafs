@@ -9,15 +9,19 @@ use sha2::{Digest, Sha256};
 use std::{path::PathBuf, sync::Arc};
 
 mod catalogue;
+mod recipe;
 pub mod recovery;
+mod storage;
 pub use catalogue::{CoordinateDefinition, TrendAxis};
+pub use recipe::AnalysisRecipe;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SeriesArchive {
     pub series: Vec<SeriesDefinition>,
-    pub runs: Vec<SeriesRun>,
+    pub runs: Vec<Arc<SeriesRun>>,
     pub presets: Vec<MetricDefinition>,
+    pub recipes: Vec<Arc<AnalysisRecipe>>,
 }
 
 impl SeriesArchive {
@@ -30,6 +34,7 @@ impl SeriesArchive {
             .presets
             .iter()
             .chain(self.runs.iter().map(|r| &r.definition))
+            .chain(self.recipes.iter().map(|r| &r.definition))
         {
             if old.id == definition.id {
                 greatest = greatest.max(old.revision);
@@ -93,7 +98,7 @@ pub struct MetricRow {
     pub frame: SeriesFrame,
     pub source_digest: Option<String>,
     pub input_revision: Option<String>,
-    pub settings: PipelineParams,
+    pub settings: Arc<PipelineParams>,
     pub status: FrameStatus,
     pub result: Option<MeasurementResult>,
     pub reason: Option<String>,
@@ -109,6 +114,9 @@ pub struct SeriesRun {
     pub definition: MetricDefinition,
     pub created: String,
     pub software: String,
+    #[serde(default)]
+    pub recipe: Option<Arc<AnalysisRecipe>>,
+    #[serde(with = "storage")]
     pub rows: Vec<MetricRow>,
     pub complete: bool,
     pub cancelled: bool,
@@ -125,6 +133,7 @@ pub struct FrameInput {
     pub path: PathBuf,
     pub derived: Option<Arc<DerivedSpectrum>>,
     pub settings: PipelineParams,
+    pub recipe: Option<Arc<AnalysisRecipe>>,
 }
 
 fn digest(bytes: &[u8]) -> String {
@@ -172,6 +181,7 @@ impl FrameInput {
 
     pub fn revision(&self) -> Result<(String, String), String> {
         let bytes = self.source_bytes()?;
+        self.validate_recipe(&bytes)?;
         Ok(self.revision_of(&bytes))
     }
 
@@ -193,6 +203,7 @@ impl FrameInput {
         expected: Option<&str>,
     ) -> Result<(XASSpectrum, String, String), String> {
         let bytes = self.source_bytes()?;
+        self.validate_recipe(&bytes)?;
         let (source, revision) = self.revision_of(&bytes);
         if expected.is_some_and(|old| old != revision) {
             return Err("Inputs changed; calculate a new run".into());
@@ -233,6 +244,7 @@ impl SeriesRun {
         definition: MetricDefinition,
         inputs: &[FrameInput],
     ) -> Self {
+        let mut settings = storage::SettingsPool::default();
         Self {
             id: GroupId::new_result(),
             series_id: series.id.clone(),
@@ -241,6 +253,7 @@ impl SeriesRun {
             definition,
             created: chrono::Utc::now().to_rfc3339(),
             software: env!("CARGO_PKG_VERSION").into(),
+            recipe: inputs.first().and_then(|input| input.recipe.clone()),
             rows: series
                 .frames
                 .iter()
@@ -249,10 +262,12 @@ impl SeriesRun {
                     frame: frame.clone(),
                     source_digest: None,
                     input_revision: None,
-                    settings: inputs
-                        .get(index)
-                        .map(|input| input.settings.clone())
-                        .unwrap_or_default(),
+                    settings: settings.intern(
+                        inputs
+                            .get(index)
+                            .map(|input| &input.settings)
+                            .unwrap_or(&PipelineParams::default()),
+                    ),
                     status: if inputs
                         .get(index)
                         .is_some_and(|input| input.group == frame.group)
@@ -298,7 +313,7 @@ impl SeriesRun {
             if row.frame.group != input.group {
                 continue;
             }
-            if row.settings != input.settings {
+            if *row.settings != input.settings {
                 row.status = FrameStatus::Failed;
                 row.reason =
                     Some("Settings changed before the input snapshot; start a new run".into());
@@ -335,11 +350,19 @@ impl SeriesRun {
 
     /// CSV includes every requested frame, including gaps. JSON export supplies
     /// the complete definition, settings and resolved preparation alongside it.
+    #[cfg(test)]
     pub fn csv(&self) -> String {
+        let mut bytes = Vec::new();
+        self.write_csv(&mut bytes).unwrap();
+        String::from_utf8(bytes).unwrap()
+    }
+
+    pub fn write_csv(&self, mut writer: impl std::io::Write) -> std::io::Result<()> {
         fn cell(value: impl ToString) -> String {
             format!("\"{}\"", value.to_string().replace('"', "\"\""))
         }
-        let mut csv="frame,frame_id,group_id,label,value,unit,status,reason,input_revision,source_digest,run_id,definition_id,definition_revision,range_start,range_end,e0_ev,uncertainty,coordinate,coordinate_name,coordinate_unit,coordinate_source,acquired_at,timestamp_meaning\n".to_string();
+        let header = "frame,frame_id,group_id,label,value,unit,status,reason,input_revision,source_digest,run_id,definition_id,definition_revision,range_start,range_end,e0_ev,uncertainty,coordinate,coordinate_name,coordinate_unit,coordinate_source,acquired_at,timestamp_meaning,recipe_id,recipe_revision,recipe_name\n";
+        writer.write_all(header.as_bytes())?;
         for row in &self.rows {
             let result = row.result.as_ref();
             let cells = vec![
@@ -372,11 +395,26 @@ impl SeriesRun {
                 self.coordinate.source.clone(),
                 row.frame.acquired_at.clone().unwrap_or_default(),
                 self.coordinate.timestamp_meaning.clone(),
+                self.recipe
+                    .as_ref()
+                    .map(|r| serde_json::to_string(&r.id).unwrap())
+                    .unwrap_or_default(),
+                self.recipe
+                    .as_ref()
+                    .map(|r| r.revision.to_string())
+                    .unwrap_or_default(),
+                self.recipe
+                    .as_ref()
+                    .map(|r| r.name.clone())
+                    .unwrap_or_default(),
             ];
-            csv.push_str(&cells.into_iter().map(cell).collect::<Vec<_>>().join(","));
-            csv.push('\n');
+            writeln!(
+                writer,
+                "{}",
+                cells.into_iter().map(cell).collect::<Vec<_>>().join(",")
+            )?;
         }
-        csv
+        Ok(())
     }
 }
 

@@ -109,6 +109,33 @@ without carrying spectra. Imports retain existing presets with the same name
 and assign a distinct name/identity to the imported copy. Presets do not copy
 normalization settings: each frame's processing settings remain explicit.
 
+Use **Save recipe from preview** when another series should use the same
+processing as well as the same measurement. Enter a name in **Preset or recipe
+name**, review a representative frame, and save. The recipe records its import
+interpretation, source quantity, processing settings and measurement. Select it
+before calculating another series. **Group settings** returns to each group's
+own processing; saving or choosing a measurement-only preset also returns to
+that mode. Recipe replay works on copies and does not edit the source groups.
+
+**Export recipe** and **Import recipe** move these choices between projects as
+versioned JSON, without spectra or executable code. File inputs must match the
+recorded column names/order, units and conversion metadata. Materialized groups
+must have the same confirmed quantity (for example raw μ or flattened μ).
+Incompatible or unavailable frames retain explicit errors; remaining compatible
+frames can finish. This is a compatibility check, not evidence that the selected
+processing is scientifically suitable for another sample or absorption edge.
+
+Automatic processing values remain automatic for each frame. Explicit values,
+including E₀ or normalization ranges, stay fixed. A same-file reference channel
+is read from the same source snapshot; reference-channel alignment cannot be
+captured from a materialized group without that channel. Each saved recipe
+revision is immutable. To change processing, select **Group settings**, edit the
+representative group's parameters, then save a recipe. To change only its
+measurement, edit the fields and save a new recipe revision before calculating.
+Earlier runs, resumed calculations and retained previews use their saved version.
+For recipe runs, source checks use frozen recipe settings rather than unrelated
+changes to the group editor.
+
 **Calculate all N frames** calculates
 every member, independently of the older sampled overview. The default maximum
 range is −20…+50 eV; a conventional white-line definition can be entered as
@@ -134,7 +161,8 @@ Saving a project retains series, frame/group identities, definitions, settings,
 resolved preparation, source digests, outcomes and run history. Portable replay
 still requires embedded inputs or unchanged linked sources. **Export CSV**
 includes all statuses and values; **Export definition and results** writes the
-full JSON metadata. A figure alone is not a replay record. Old projects still
+full JSON metadata, including the frozen recipe. Recipe identity, revision and
+name are also included in CSV. A figure alone is not a replay record. Old projects still
 open and the older **Scan overview** keeps its historical sampled definitions.
 
 ## Recovery
@@ -213,3 +241,18 @@ automatic staleness. See the [qualification record](validation/2026-09-16-full-f
 for memory, timing boundaries and limitations. Native Windows/Linux GUI and
 network-share behavior remain unqualified locally; recipe replay and the later
 roadmap milestones are still future work. This is not a released feature.
+
+## Result storage
+
+Completed runs share immutable history in memory. Identical requested processing
+settings are stored once per run. JSON `rows` uses a versioned object with
+`schema: 1`, a `settings` dictionary, and `values`; each row's numeric `settings`
+field indexes that dictionary. The earlier development array of inline rows
+remains readable and is converted to shared settings on load. The source and
+result numbers are unchanged. This is an unreleased format for new measurement
+records, not a rewrite of historical scientific data.
+
+CSV and result JSON exports stream into a temporary destination file and replace
+the requested output only after a successful write. Project saving avoids making
+generic JSON object-tree copies of the full measurement archive. Scalar metadata
+still grows with frame count; spectrum preparation remains one frame at a time.

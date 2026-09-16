@@ -142,6 +142,7 @@ impl StudioApp {
         }
         body = body.child(self.measurement_management(cx));
         body = body.child(self.measurement_presets(cx));
+        body = body.child(self.analysis_recipe_controls(cx));
         let Some(series) = self
             .measurements
             .selected_series
