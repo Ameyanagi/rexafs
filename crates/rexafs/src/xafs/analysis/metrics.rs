@@ -11,7 +11,8 @@
 //! missing outcomes instead of replacing them with zero. The composite trapezoidal
 //! convention is also described in the [SciPy reference](https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.trapezoid.html);
 //! strict coverage and increasing-axis requirements are rexafs choices. Uncertainty is not
-//! inferred from signal amplitude. Independent-error propagation is future work.
+//! inferred from signal amplitude. [`measure_with_errors`] accepts explicitly supplied
+//! independent point uncertainties for point, integral and mean measurements.
 
 use serde::{Deserialize, Serialize};
 
@@ -19,18 +20,41 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Metric {
     /// Linear interpolation at `x`; output has the signal's units.
-    Point { x: f64 },
+    Point {
+        /// Finite point coordinate in the selected axis units and origin.
+        x: f64,
+    },
     /// Largest value including interpolated boundaries; ties choose lowest x.
-    Maximum { start: f64, end: f64 },
+    Maximum {
+        /// Inclusive lower coordinate in the selected axis units and origin.
+        start: f64,
+        /// Inclusive upper coordinate; must exceed start.
+        end: f64,
+    },
     /// Integral of the selected signal, with no implicit baseline subtraction.
     /// Units are signal units multiplied by axis units.
-    Integral { start: f64, end: f64 },
+    Integral {
+        /// Inclusive lower coordinate in the selected axis units and origin.
+        start: f64,
+        /// Inclusive upper coordinate; must exceed start.
+        end: f64,
+    },
     /// Integral divided by interval width, in signal units.
-    Mean { start: f64, end: f64 },
+    Mean {
+        /// Inclusive lower coordinate in the selected axis units and origin.
+        start: f64,
+        /// Inclusive upper coordinate; must exceed start.
+        end: f64,
+    },
     /// First moment divided by integral, in axis units. Signed signals are
     /// rejected: a sign-changing difference does not define a peak centroid.
     /// A baseline must be subtracted explicitly before calling this operation.
-    Centroid { start: f64, end: f64 },
+    Centroid {
+        /// Inclusive lower coordinate in the selected axis units and origin.
+        start: f64,
+        /// Inclusive upper coordinate; must exceed start.
+        end: f64,
+    },
 }
 
 impl Metric {
@@ -73,43 +97,83 @@ impl Metric {
 /// One finite scalar and the exact interval used to obtain it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MetricValue {
+    /// Finite scalar; its units follow the operation and supplied axes/signals.
     pub value: f64,
     /// Position of a maximum or centroid; point position for interpolation.
     pub position: Option<f64>,
+    /// Actual lower axis coordinate, equal to end for a point.
     pub start: f64,
+    /// Actual upper axis coordinate.
     pub end: f64,
-    /// Independent statistical information was not supplied to this operator.
+    /// Propagated independent point standard error, or None when not supplied.
     pub standard_error: Option<f64>,
 }
 
 /// Reasons a requested measurement is unavailable. No failed result is zero.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, thiserror::Error)]
 pub enum MetricError {
+    /// Axis and signal lengths differ, or fewer than two samples are available.
     #[error("The axis and signal need equal lengths and at least two points")]
     Shape,
+    /// A prerequisite stage failed; the string retains its diagnostic.
     #[error("Preparation failed: {0}")]
     Preparation(String),
+    /// The input's scientific quantity is incompatible with the request.
     #[error("Incompatible quantity: {0}")]
     Quantity(String),
+    /// An axis sample is nonfinite or does not strictly increase.
     #[error("Axis values must be finite and strictly increasing (index {index})")]
-    Axis { index: usize },
+    Axis {
+        /// Zero-based index of the invalid sample.
+        index: usize,
+    },
+    /// A signal sample is not finite.
     #[error("Signal value is not finite (index {index})")]
-    Signal { index: usize },
+    Signal {
+        /// Zero-based index of the invalid sample.
+        index: usize,
+    },
+    /// Coordinates are nonfinite, or a region has nonpositive width.
     #[error("Choose finite coordinates and a positive region width")]
     Range,
+    /// The complete requested interval is not covered by the input axis.
     #[error("Requested interval [{start}, {end}] is outside [{available_start}, {available_end}]")]
     Coverage {
+        /// Requested lower coordinate, in native axis units.
         start: f64,
+        /// Requested upper coordinate, in native axis units.
         end: f64,
+        /// First available native coordinate.
         available_start: f64,
+        /// Last available native coordinate.
         available_end: f64,
     },
+    /// An explicitly excluded interval intersects the request.
     #[error("The interval intersects a masked gap [{start}, {end}]")]
-    Masked { start: f64, end: f64 },
+    Masked {
+        /// Lower excluded native-axis coordinate.
+        start: f64,
+        /// Upper excluded native-axis coordinate.
+        end: f64,
+    },
+    /// A negative signal or zero area makes the nonnegative centroid undefined.
     #[error("Centroid needs a nonnegative signal with a nonzero integral")]
     Centroid,
+    /// Arithmetic overflowed the finite floating-point range.
     #[error("The scalar calculation exceeded finite numeric range")]
     Nonfinite,
+    /// The error array does not match the selected signal's native grid length.
+    #[error("Point standard errors must have the same length as the selected signal")]
+    UncertaintyShape,
+    /// A supplied standard deviation is negative or nonfinite.
+    #[error("Point standard error must be finite and nonnegative (index {index})")]
+    UncertaintyValue {
+        /// Zero-based index of the invalid standard deviation.
+        index: usize,
+    },
+    /// No independent-point propagation model is defined for this operation.
+    #[error("Independent-error propagation is available for point, integral and mean, not maximum or centroid")]
+    UncertaintyModel,
 }
 
 /// Measure a native-grid curve with full interval coverage.
@@ -241,6 +305,8 @@ pub fn measure(axis: &[f64], signal: &[f64], metric: Metric) -> Result<MetricVal
     measure_masked(axis, signal, metric, &[])
 }
 
+mod uncertainty;
+pub use uncertainty::measure_with_errors;
 mod spectrum;
 pub use spectrum::{
     AxisOrigin, Measurement, MeasurementArrays, MeasurementResult, MeasurementSpace,

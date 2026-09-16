@@ -17,7 +17,10 @@ pub enum MeasurementSpace {
     /// Flattened dimensionless μ(E). Missing normalization runs on a copy.
     Flat,
     /// χ(k) multiplied by k to this nonnegative integer power; k is Å⁻¹.
-    Chi { kweight: u8 },
+    Chi {
+        /// Nonnegative integer exponent multiplying χ by k^kweight.
+        kweight: u8,
+    },
     /// Magnitude of the existing/configured forward transform. R is Å and is
     /// not phase corrected. Missing prerequisites run on a copy, without IFFT.
     Fourier,
@@ -26,12 +29,14 @@ pub enum MeasurementSpace {
 /// Interpretation of energy coordinates; k and R must use Absolute.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub enum AxisOrigin {
+    /// Native absolute coordinates: eV for energy, Å⁻¹ for k, Å for R.
     Absolute,
     /// Offsets in eV from this spectrum's resolved edge energy.
     #[default]
     E0,
     /// Offsets in eV from a frozen, named reference energy.
     Reference {
+        /// Frozen reference energy in eV, added to energy offsets.
         energy_ev: f64,
     },
 }
@@ -45,8 +50,11 @@ pub enum AxisOrigin {
 /// for those explicit alternatives; public fields allow advanced configuration.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Measurement {
+    /// Point or region operation, with coordinates interpreted by origin.
     pub metric: Metric,
+    /// Selected signal representation; constructors default to Norm.
     pub space: MeasurementSpace,
+    /// Energy-coordinate origin; k and R require Absolute.
     pub origin: AxisOrigin,
 }
 
@@ -248,6 +256,7 @@ pub struct MeasurementArrays {
 /// Scalar, resolved coordinates and quantity definition needed to interpret it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MeasurementResult {
+    /// Exact requested operation, representation and coordinate origin.
     pub measurement: Measurement,
     /// Finite scalar in `unit`.
     pub value: f64,
@@ -255,9 +264,11 @@ pub struct MeasurementResult {
     pub position: Option<f64>,
     /// Actual native-axis bounds, inclusive; a point has equal bounds.
     pub range: [f64; 2],
-    /// Absent: no independent input-error model was supplied.
+    /// Propagated independent point error when supplied; otherwise absent.
     pub standard_error: Option<f64>,
+    /// Scalar unit, including the axis factor for an integral.
     pub unit: String,
+    /// Resolved edge energy in eV, or absent when not needed/available.
     pub e0_ev: Option<f64>,
 }
 
@@ -268,12 +279,40 @@ impl XASSpectrum {
     /// explicitly with `.flat()`. Missing coverage is an error, not clipping.
     /// No files, threads or project records are created; inputs remain unchanged.
     pub fn measure(&self, measurement: &Measurement) -> Result<MeasurementResult, MetricError> {
+        self.measure_impl(measurement, None)
+    }
+
+    /// Measure with supplied independent standard deviations of the selected
+    /// signal, on its native grid and in its units. Preparation still runs on a
+    /// copy. The errors must already describe that prepared representation:
+    /// raw-count errors are not automatically normalized or Fourier transformed.
+    /// Supports point, integral and mean; rejects unsupported error models.
+    /// Axis, E₀ and processing parameters are treated as exact. This returns a
+    /// standard error, not a confidence interval; no correlations are inferred.
+    pub fn measure_with_errors(
+        &self,
+        measurement: &Measurement,
+        standard_errors: &[f64],
+    ) -> Result<MeasurementResult, MetricError> {
+        self.measure_impl(measurement, Some(standard_errors))
+    }
+
+    fn measure_impl(
+        &self,
+        measurement: &Measurement,
+        errors: Option<&[f64]>,
+    ) -> Result<MeasurementResult, MetricError> {
         let MeasurementArrays {
             axis: x,
             signal: y,
             e0_ev: e0,
         } = measurement.arrays(self)?;
-        let value = measure(&x, &y, measurement.resolved_metric(e0)?)?;
+        let metric = measurement.resolved_metric(e0)?;
+        let value = if let Some(errors) = errors {
+            super::measure_with_errors(&x, &y, errors, metric)?
+        } else {
+            measure(&x, &y, metric)?
+        };
         let weight = self
             .xftf
             .as_ref()
