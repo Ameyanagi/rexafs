@@ -34,6 +34,7 @@ pub(crate) mod joint_fit;
 pub mod journal;
 mod marked_removal;
 pub(crate) mod measurement_import;
+pub(crate) mod measurements;
 mod molecular_geometry;
 pub mod molecule_view;
 pub mod palette;

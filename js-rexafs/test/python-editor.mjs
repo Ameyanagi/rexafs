@@ -30,6 +30,9 @@ print(archived, measurement.document["metadata"].get("larix.session_text"))
 window: FTWindow = "Hanning"
 spectrum = Spectrum([1., 2.], [1., 2.])
 spectrum.set_background_method(AUTOBK(rbkg=1.2)).set_fft(XrayFFTF(window=window)).set_ifft(XrayFFTR(rmin=1.0)).ifft()
+scalar = spectrum.measure("mean", (-20., 30.), space="flat")
+print(scalar.value, scalar.standard_error, scalar.range, scalar.to_json())
+spectrum.measure("point", 10.)
 chi = spectrum.chi()
 if chi is not None:
     print(chi[0])
@@ -119,6 +122,12 @@ XrayFFTF(window="")
     assert.ok((columnKeywords.items ?? columnKeywords).some(item=>item.label.startsWith(`${name}=`)), name);
   }
   assert.match(JSON.stringify(await request("textDocument/hover",readerPosition(2,15))),/case-sensitive/);
+  const scalarText = 'from rexafs import Spectrum\ns = Spectrum([0., 1.], [1., 2.])\ns.measure\ns.measure("mean", (0., 1.), \n';
+  const scalarUri = pathToFileURL(join(directory, "scalar.py")).href;
+  send({method:"textDocument/didOpen",params:{textDocument:{uri:scalarUri,languageId:"python",version:1,text:scalarText}}});
+  const scalarPosition = (line, character) => ({textDocument:{uri:scalarUri},position:{line,character}});
+  assert.match(JSON.stringify(await request("textDocument/hover",scalarPosition(2,5))), /private copy/);
+  assert.match(JSON.stringify(await request("textDocument/signatureHelp",scalarPosition(3,27))), /space/);
   console.log("Installed Python wheel: property/method hovers, member/keyword/literal completion and signature defaults passed");
   await request("shutdown", null);
   send({ method: "exit", params: null });

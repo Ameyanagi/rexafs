@@ -32,6 +32,44 @@ finished.
 See [processing theory](https://rexafs.com/docs/science/processing/) for equations,
 assumptions and interpretation.
 
+## measure
+
+```typescript
+measure(operation: "point", coordinates: number, options?: SpectrumMeasurementOptions): MeasurementResult;
+```
+
+Measure a point or region without changing this spectrum (unreleased).
+Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
+mu and E0-relative energy offsets in eV; choose `space: "flat"` explicitly.
+k is in inverse angstroms; R is in angstroms without phase correction.
+Missing prerequisite stages run on a private copy using this spectrum's
+settings; caller arrays, settings and cached results remain unchanged.
+No extrapolation or display sampling occurs. Mean is the piecewise-linear
+integral divided by interval width, not the arithmetic sample mean.
+Returns an owned scalar result with units and the resolved absolute range.
+Throws on invalid input, preparation failure, or missing range coverage.
+Optional independent point errors apply to point/mean/integral only; see
+SpectrumMeasurementOptions.errors. No uncertainty is inferred by default.
+
+## measure
+
+```typescript
+measure(operation: "mean" | "integral" | "maximum", coordinates: readonly [number, number], options?: SpectrumMeasurementOptions): MeasurementResult;
+```
+
+Measure a point or region without changing this spectrum (unreleased).
+Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
+mu and E0-relative energy offsets in eV; choose `space: "flat"` explicitly.
+k is in inverse angstroms; R is in angstroms without phase correction.
+Missing prerequisite stages run on a private copy using this spectrum's
+settings; caller arrays, settings and cached results remain unchanged.
+No extrapolation or display sampling occurs. Mean is the piecewise-linear
+integral divided by interval width, not the arithmetic sample mean.
+Returns an owned scalar result with units and the resolved absolute range.
+Throws on invalid input, preparation failure, or missing range coverage.
+Optional independent point errors apply to point/mean/integral only; see
+SpectrumMeasurementOptions.errors. No uncertainty is inferred by default.
+
 ## constructor
 
 ```typescript

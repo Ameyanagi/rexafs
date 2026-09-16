@@ -1005,6 +1005,24 @@ pub struct WasmSpectrum {
 }
 #[wasm_bindgen(js_class = Spectrum)]
 impl WasmSpectrum {
+    /// Internal JSON bridge for the documented JavaScript Spectrum.measure facade.
+    /// Prepares only required stages on a private copy; never modifies this spectrum.
+    /// Optional errors describe the selected signal on its native grid, not raw
+    /// counts to be propagated through processing. Returns the owned core result.
+    pub fn measure_json(
+        &self,
+        definition_json: &str,
+        errors: Option<Vec<f64>>,
+    ) -> Result<String, JsValue> {
+        let definition: rexafs::prelude::Measurement = serde_json::from_str(definition_json)
+            .map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        let result = match errors {
+            Some(errors) => self.inner.measure_with_errors(&definition, &errors),
+            None => self.inner.measure(&definition),
+        }
+        .map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        serde_json::to_string(&result).map_err(|e| js_sys::Error::new(&e.to_string()).into())
+    }
     /// Copy energy in eV and absorption mu from equal-length finite slices. Requires at least
     /// two samples and strictly increasing energy; returns a JavaScript Error when validation
     /// fails. No stages run on construction.

@@ -26,6 +26,12 @@
     ]
   },
   {
+    "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.trapezoid.html",
+    "sources": [
+      "crates/rexafs/src/xafs/analysis/metrics.rs"
+    ]
+  },
+  {
     "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.BSpline.html",
     "sources": [
       "crates/rexafs/src/xafs/mathutils.rs",
@@ -326,6 +332,12 @@
     "url": "https://www.iucr.org/what-we-do/digital-standards/cif/cif1",
     "sources": [
       "crates/rexafs/src/xafs/structure/cif.rs"
+    ]
+  },
+  {
+    "url": "https://www.nist.gov/pml/nist-technical-note-1297/nist-tn-1297-appendix-law-propagation-uncertainty",
+    "sources": [
+      "crates/rexafs/src/xafs/analysis/metrics/uncertainty.rs"
     ]
   },
   {

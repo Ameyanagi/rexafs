@@ -91,6 +91,7 @@ pub struct ParamOverride {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProjectFile {
+    pub series_measurements: crate::series_measurements::SeriesArchive,
     pub lcf_series_analysis: Option<LcfSeriesAnalysis>,
     pub pca_analysis: Option<PcaAnalysis>,
     pub lcf_analysis: Option<LcfAnalysis>,
@@ -264,9 +265,23 @@ pub fn save_with_storage(
     check_version(project.version.max(1))?;
     let mut prepared = storage::prepare(project, path, mode)?;
     prepared.assistant.prune_for_save();
+    // Measurement history already has lossless dictionary encoding. Keep it
+    // out of the generic compactor's Value/validation copies: a 100k-frame run
+    // otherwise expands into several simultaneous JSON object trees.
+    let measurements = std::mem::take(&mut prepared.series_measurements);
     let mut value = serde_json::to_value(&prepared).map_err(|e| e.to_string())?;
     value["version"] = PROJECT_VERSION.into();
-    let json = compact::encode(value)?;
+    let mut json = compact::encode(value)?;
+    if !measurements.series.is_empty()
+        || !measurements.runs.is_empty()
+        || !measurements.presets.is_empty()
+        || !measurements.recipes.is_empty()
+    {
+        json.pop(); // The generic compactor always produces one JSON object.
+        json.extend_from_slice(b",\"series_measurements\":");
+        serde_json::to_writer(&mut json, &measurements).map_err(|e| e.to_string())?;
+        json.push(b'}');
+    }
     if json.len() as u64 > storage::MAX_PROJECT_BYTES {
         return Err(
             "Project exceeds the 512 MiB file limit; use paths or a smaller selection.".into(),

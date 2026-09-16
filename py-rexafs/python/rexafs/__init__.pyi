@@ -1,6 +1,7 @@
 """Typed Rust spectrum processing. Energy: eV; k/q: inverse angstroms; R: angstroms."""
 
-from typing import Literal, TypeAlias
+from typing import Literal, TypeAlias, overload
+from collections.abc import Sequence
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -774,6 +775,29 @@ class BackgroundMethod:
         and dependent stages raise RuntimeError rather than substitute AUTOBK.
         Use new_autobk() for the implemented background workflow."""
 
+class MeasurementResult:
+    """Owned result from Spectrum.measure (unreleased). No processing state is mutated."""
+    @property
+    def value(self) -> float:
+        """Finite scalar in unit."""
+    @property
+    def unit(self) -> str:
+        """Signal unit for point/mean/maximum; signal times axis unit for integral."""
+    @property
+    def range(self) -> tuple[float, float]:
+        """Resolved absolute bounds: eV, inverse angstroms, or angstroms."""
+    @property
+    def position(self) -> float | None:
+        """Absolute point/maximum position, otherwise None."""
+    @property
+    def standard_error(self) -> float | None:
+        """Independent propagated standard error when supplied; not a confidence interval."""
+    @property
+    def e0_ev(self) -> float | None:
+        """Resolved absorption edge in eV, or None when unnecessary."""
+    def to_json(self) -> str:
+        """Serialize the result and full native measurement definition without changing inputs."""
+
 class Spectrum:
     """Own a measured absorption spectrum and its calculated processing stages.
 
@@ -795,6 +819,45 @@ class Spectrum:
     See [processing theory](https://rexafs.com/docs/science/processing/) for
     equations, interpretation and limitations. Groups and structural fitting
     are not currently exposed by this Python Spectrum API."""
+    @overload
+    def measure(self, operation: Literal["point"], coordinates: float, *,
+                space: Literal["mu", "norm", "flat", "chi", "fourier"] = "norm",
+                origin: Literal["e0", "absolute"] | None = None, kweight: int = 0,
+                errors: NDArray[np.float64] | Sequence[float] | None = None) -> MeasurementResult:
+        """Measure one interpolated point on a private copy (unreleased).
+
+        Defaults to normalized mu at an E0 offset in eV. Flat is explicit. k/R
+        default to absolute inverse-angstrom/angstrom coordinates. Missing stages
+        run on a copy; inputs/settings/caches remain unchanged, and missing coverage
+        raises ValueError. Optional errors describe independent standard deviations
+        on the selected signal grid, not raw counts propagated through processing.
+        No confidence interval is inferred. See the region overload for details."""
+    @overload
+    def measure(self, operation: Literal["mean", "integral", "maximum"], coordinates: tuple[float, float], *,
+                space: Literal["mu", "norm", "flat", "chi", "fourier"] = "norm",
+                origin: Literal["e0", "absolute"] | None = None, kweight: int = 0,
+                errors: NDArray[np.float64] | Sequence[float] | None = None) -> MeasurementResult:
+        """Measure a region on a private copy (unreleased).
+
+        Recommended: spectrum.measure("mean", (-20, 30)). Defaults to normalized
+        mu and E0-relative energy offsets in eV; select space="flat" explicitly.
+        k is in inverse angstroms and R in angstroms, without phase correction;
+        these require absolute coordinates (selected automatically when origin=None).
+        kweight defaults to zero and applies only to chi. Bounds must increase.
+        Mean is the piecewise-linear integral divided by interval width, not an
+        arithmetic sample mean. Integral uses trapezoids and interpolated endpoints.
+        Missing stages run automatically using this spectrum's settings, with the
+        GIL released. Arrays, settings and cached results remain unchanged. No
+        extrapolation or display sampling occurs. Invalid input, missing coverage,
+        or unavailable preparation raises ValueError. Results own their values.
+
+        errors supplies independent standard deviations of the SELECTED signal on
+        its native grid, in its signal units, finite and nonnegative. Raw-count
+        errors are not propagated through normalization or transforms. Point,
+        integral and mean support this model; maximum rejects it. Axis, E0 and
+        settings are exact. No correlations or confidence intervals are inferred;
+        standard_error is None when errors are omitted.
+        """
     def __init__(self, energy: ArrayLike, mu: ArrayLike) -> None:
         """Create a spectrum by copying energy and mu into float64 storage.
 

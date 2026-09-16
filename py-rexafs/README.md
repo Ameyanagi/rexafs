@@ -216,3 +216,21 @@ for transmission, `iff="iff"` instead of `it` for fluorescence, or
 `i0="it", it="ir"` for the reference. The same keywords work with `.spectrum()`.
 Duplicate names require indices. Omit `energy_unit` to preserve detected axis
 calibration, or explicitly override it with `"eV"` or `"keV"`.
+
+## Development-only scalar measurements
+
+The source checkout adds a one-call measurement API (newer than 0.2.9):
+
+```python
+result = spectrum.measure("mean", (-20.0, 30.0), space="flat")
+print(result.value, result.unit)
+```
+
+Omit `space` for normalized absorption. Energy bounds are offsets from E₀;
+`origin="absolute"` selects absolute energy in eV. Missing prerequisite stages
+run on a private copy without changing the spectrum. Point, maximum, integral
+and mean are supported, with strict coverage checks. See the
+[measurement guide](../doc/full-frame-measurements.md) for k/R units, optional
+independent errors, numerical meaning and the equivalent Rust/TypeScript calls.
+This scalar operation is separate from `rexafs.io.Measurement`, the input-file
+reader. The installed wheel includes result types and editor help.

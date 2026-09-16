@@ -1089,6 +1089,7 @@ pub struct StudioApp {
     handles: HandleState,
     tools: ToolState,
     analysis: shell::tools::AnalysisState,
+    measurements: shell::measurements::MeasurementState,
     journal: shell::journal::JournalState,
     palette: Option<shell::palette::PaletteState>,
     path_route: Option<shell::path_routing::RoutingCard>,
@@ -2958,6 +2959,7 @@ impl StudioApp {
             handles: HandleState::default(),
             tools: ToolState::new(),
             analysis: shell::tools::AnalysisState::default(),
+            measurements: Default::default(),
             journal: shell::journal::JournalState::default(),
             palette: None,
             path_route: None,
@@ -8393,6 +8395,7 @@ impl StudioApp {
         let mut group_state = self.group_state.clone();
         self.capture_group_state(&mut group_state);
         ProjectFile {
+            series_measurements: self.measurements.archive.clone(),
             parser_evidence: self.parser_evidence.clone(),
             imports: self.imports.clone(),
             import_history: self.intake.history.clone(),
@@ -8486,6 +8489,13 @@ impl StudioApp {
             return;
         }
         let project = self.project_file();
+        let saved_measurement_ids: std::collections::BTreeSet<_> = project
+            .series_measurements
+            .runs
+            .iter()
+            .filter(|r| r.complete && !r.cancelled)
+            .map(|r| r.id.clone())
+            .collect();
         let history_revision = self.assistant_history_revision;
         let generation = self.project_generation;
         let mode = self.project_storage;
@@ -8517,17 +8527,22 @@ impl StudioApp {
                 })
                 .ok();
                 let save_path = path.clone();
-                let result =
-                    cx.background_executor()
-                        .spawn(async move {
-                            crate::project::save_with_storage(&save_path, &project, mode)
-                        })
-                        .await;
+                let result = cx
+                    .background_executor()
+                    .spawn(async move {
+                        let saved = crate::project::save_with_storage(&save_path, &project, mode);
+                        if saved.is_ok() {
+                            crate::series_measurements::recovery::acknowledge_saved(&project);
+                        }
+                        saved
+                    })
+                    .await;
                 this.update(cx, |app, cx| {
                     app.project_saving = false;
                     match result {
                         Ok(header) => {
                             if app.project_generation == generation {
+                                app.measurements.acknowledge_saved(&saved_measurement_ids);
                                 app.project_path = Some(path.clone());
                                 app.project_header = Some(header);
                                 app.assistant_history_saved_revision = history_revision;
@@ -8684,6 +8699,10 @@ impl StudioApp {
         if let Some(cancel) = self.analysis.mcr_cancel.take() {
             cancel.store(true, std::sync::atomic::Ordering::Relaxed);
         }
+        self.measurements.stop();
+        self.measurements = shell::measurements::MeasurementState::from_archive(
+            project.series_measurements.clone(),
+        );
         self.analysis.mcr_generation_advance();
         self.analysis.mcr = project.mcr_analysis.clone();
         self.analysis.lcf_series = project.lcf_series_analysis.clone();
