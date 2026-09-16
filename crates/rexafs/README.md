@@ -86,9 +86,11 @@ The native core has broader APIs than the Python and JavaScript bindings.
 
 The source checkout also includes an experimental reverse Monte Carlo (RMC)
 engine with ReFEFF as its primary calculator. It supports constrained atomic
-moves, finite clusters and periodic cells, and joint EXAFS datasets. See the
-[RMC guide](../../doc/rmc.md) for the runnable example, scientific assumptions
-and validation limits. This API is unreleased and has no desktop controls yet.
+moves, finite and periodic geometry, weighted structures, k/R/q/wavelet objectives,
+resumable sessions, evolutionary search and structural reports. ReFEFF offers
+exact local-input caching and optional pinned-potential path updates. See the
+[RMC guide](../../doc/rmc.md) for Rust examples, performance measurements,
+scientific assumptions and validation limits. This API is unreleased and has no desktop controls yet.
 
 Licensed under MIT OR Apache-2.0; dependency and fixture notices remain applicable.
 

@@ -1,4 +1,9 @@
-# Gaps between the native RMC API and EVAX 6.16
+# Historical gaps between the native RMC API and EVAX 6.16
+
+**Historical audit:** the findings below describe commit `00b6ade`. The subsequent
+implementation addresses the eight requested categories; see the [current guide](rmc.md)
+and [performance/validation record](rmc-performance.md) for scope and remaining limits.
+The original audit is retained without rewriting its findings.
 
 Audited on 2026-09-16. Native implementation: `feature/rmc-refeff`, commit
 `00b6ade`. Comparator: the supplied `/Users/ryuichi/Downloads/EVAX_src_6.16`

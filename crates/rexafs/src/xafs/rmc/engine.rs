@@ -6,7 +6,7 @@ use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 use std::ops::ControlFlow;
 
-fn validate_problem(problem: &RmcProblem) -> Result<(), RmcError> {
+pub(super) fn validate_problem(problem: &RmcProblem) -> Result<(), RmcError> {
     problem.configuration.validate()?;
     require(
         !problem.datasets.is_empty(),
@@ -61,7 +61,7 @@ fn validate_problem(problem: &RmcProblem) -> Result<(), RmcError> {
     Ok(())
 }
 
-fn shifted_grid(dataset: &ExafsDataset) -> Result<Vec<f64>, RmcError> {
+pub(super) fn shifted_grid(dataset: &ExafsDataset) -> Result<Vec<f64>, RmcError> {
     let grid: Vec<_> = dataset
         .k
         .iter()

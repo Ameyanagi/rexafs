@@ -3,20 +3,24 @@
 //! RMC proposes atomic displacements and compares calculated extended X-ray
 //! absorption fine structure (EXAFS) with measured, unweighted χ(k). This module
 //! uses symmetric single-atom proposals and Metropolis acceptance. It is a
-//! reference implementation: the ReFEFF backend recalculates scattering for
-//! every selected absorber after every allowed proposal. No EVAX or RMCProfile
-//! source is incorporated.
+//! Rust implementation with exact local-environment caching and an opt-in
+//! ReFEFF mode that pins reference potentials while updating geometry and paths.
+//! No EVAX or RMCProfile source is incorporated.
 //!
-//! Start with [`RmcProblem`], [`RmcSettings`] and [`refine`]. Enable Cargo feature
+//! Use [`RmcSession`] with [`EnsembleProblem`] and [`SessionSettings`] for resumable
+//! runs, weighted structures, constraints, K/R/q/wavelet objectives and analysis.
+//! [`EvolutionSession`] adds population search. The simpler [`RmcProblem`],
+//! [`RmcSettings`] and [`refine`] interface remains available. Enable Cargo feature
 //! `refeff-runner` for `RefeffCalculator`. Finite clusters and explicit periodic
 //! cells are supported; atom order is stable and there is no symmetry expansion
 //! during refinement. Results are owned and serializable. Inputs remain unchanged.
 //!
-//! For dataset d, the implemented objective is
+//! For dataset d with the default k-space objective, the spectral term is
 //! `F_d = weight_d / N_d * Σ_i [(k_i / k_ref)^w (model_i − chi_i) / sigma_i]²`,
 //! where `k_ref = 1 Å⁻¹`, `w` is the integer k weight, `N_d` is the point count,
-//! and χ and its positive noise scale σ are dimensionless. Total `F = Σ_d F_d`.
-//! Model χ is the equal average over the selected absorbers, multiplied by fixed
+//! and χ and its positive noise scale σ are dimensionless. Total F also includes
+//! configured structural energies. Model χ averages selected absorbers within
+//! each structure, then combines normalized mixture fractions and fixed
 //! S₀². The fixed energy shift samples theory at
 //! `q = sqrt(k² − ETOK * delta_e0)`, with `ETOK` in Å⁻²/eV. Negative q² is an
 //! error. No extrapolation or extra Debye–Waller damping is applied.
@@ -31,21 +35,36 @@
 //! Method background: [McGreevy and Pusztai (1988)](https://doi.org/10.1080/08927028808080958).
 //! Scattering background: [Rehr and Albers (2000)](https://doi.org/10.1103/RevModPhys.72.621).
 
+mod analysis;
+mod constraints;
 mod engine;
+mod ensemble;
+mod evolution;
 mod geometry;
+mod objective;
+mod options;
 #[cfg(feature = "refeff-runner")]
 mod refeff;
+mod session;
 
+pub use analysis::*;
+pub use constraints::*;
 pub use engine::{evaluate, refine, refine_with_progress};
+pub use ensemble::*;
+pub use evolution::*;
 pub use geometry::{Atom, Configuration};
+pub use objective::{Objective, WaveletSettings};
+pub use options::RefeffOptions;
 #[cfg(feature = "refeff-runner")]
-pub use refeff::{RefeffCalculator, RefeffOptions};
+pub use refeff::{RefeffCacheStats, RefeffCalculator};
+pub use session::*;
 
 use crate::structure::Edge;
 use serde::{Deserialize, Serialize};
 
 /// Validation or calculation failure. Calculator failures abort the run instead
 /// of being counted as rejected moves, which would bias the proposal process.
+/// Stateful sessions preserve their accepted/best states and RNG on failure.
 #[derive(Debug, thiserror::Error)]
 pub enum RmcError {
     /// A setting, geometry, dataset or calculated array is invalid.
@@ -65,7 +84,9 @@ pub(crate) fn require(condition: bool, message: impl Into<String>) -> Result<(),
 }
 
 /// Geometry-to-spectrum interface. Implementations must recompute the requested
-/// configuration without retaining trial-dependent state across calls. The
+/// configuration as a deterministic function of the request and fixed calculator
+/// settings. Geometry-keyed caches are allowed; history-dependent potentials are
+/// not. The
 /// returned dimensionless χ must have exactly `k.len()` finite values, with
 /// S₀²=1 and no added disorder damping. `k` is strictly increasing, in Å⁻¹.
 /// The engine performs absorber averaging, fixed amplitude scaling and weighting.
@@ -82,6 +103,32 @@ pub trait ExafsCalculator {
         edge: Edge,
         k: &[f64],
     ) -> Result<Vec<f64>, RmcError>;
+    /// Stable scientific identity used to reject incompatible checkpoint resumes.
+    /// Custom backends should include versions and all settings affecting χ.
+    fn identity(&self) -> String {
+        self.name().to_owned()
+    }
+
+    /// Extended calculation with per-dataset settings and optional path output.
+    /// The default supports legacy calculators when neither option is requested.
+    fn calculate_request(
+        &mut self,
+        request: CalculationRequest<'_>,
+    ) -> Result<CalculatedSpectrum, RmcError> {
+        require(
+            request.options.is_none() && !request.paths,
+            "this calculator does not support per-dataset options or path reports",
+        )?;
+        Ok(CalculatedSpectrum {
+            chi: self.calculate(
+                request.configuration,
+                request.absorber,
+                request.edge,
+                request.k,
+            )?,
+            paths: Vec::new(),
+        })
+    }
 }
 
 /// One measured EXAFS dataset. All fields are explicit to prevent silent changes
@@ -178,7 +225,8 @@ pub struct DatasetFit {
 /// Objective and calculated spectra for one geometry.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Evaluation {
-    /// Sum of dataset scores; dimensionless numerical objective.
+    /// Sum of dataset scores and, for an ensemble session, structural penalties.
+    /// A numerical objective in the chosen comparison convention.
     pub score: f64,
     /// Calculations in input dataset order.
     pub datasets: Vec<DatasetFit>,

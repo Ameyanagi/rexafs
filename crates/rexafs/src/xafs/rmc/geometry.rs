@@ -198,11 +198,11 @@ pub(crate) fn distances_allowed(
     moved: Option<usize>,
 ) -> Result<bool, RmcError> {
     let bounds = lattice.map(|l| image_bounds(l, minimum)).transpose()?;
-    for i in 0..configuration.atoms.len() {
-        for j in i..configuration.atoms.len() {
-            if moved.is_some_and(|m| i != m && j != m) {
-                continue;
-            }
+    let centers: Vec<_> =
+        moved.map_or_else(|| (0..configuration.atoms.len()).collect(), |i| vec![i]);
+    for i in centers {
+        let first = if moved.is_some() { 0 } else { i };
+        for j in first..configuration.atoms.len() {
             let a = configuration.atoms[i].position;
             let b = configuration.atoms[j].position;
             if let (Some(lattice), Some(bounds)) = (lattice, bounds) {

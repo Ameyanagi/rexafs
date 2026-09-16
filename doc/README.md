@@ -21,7 +21,8 @@ Start with the [project README](../README.md), [API guide](api.md),
 - [Fitting statistics](fitting-statistics.md): residuals, information counts,
   covariance, standard errors and interpretation limits.
 - [Experimental RMC with ReFEFF](rmc.md): unreleased atomic-coordinate refinement,
-  command-line example, objective, constraints and scientific limitations.
+  Rust examples, resumable mixtures, evolutionary search and scientific limitations;
+  [measured acceleration and validation](rmc-performance.md).
 - [Fixed-penalty AUTOBK](autobk-fixed-penalty.md): the rexafs-specific objective.
 - [Contributor documentation baseline](../CONTRIBUTING.md): requirements for
   clear English, defined symbols/units, verified citations and useful API help.
