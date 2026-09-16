@@ -60,9 +60,10 @@ Until these steps pass, no automatic intake or crash-safe publication claim is
 made. The current deterministic tests exercise spaced observations, incomplete
 writes, malformed rows, completion-marker mismatches, changed-during-read
 sources, identical-content distinct files, reused names, missing/reappearing
-sources and restoration of committed revisions.
+sources, multi-scan retention, bounded source/marker sizes, marker changes during
+capture and restoration of committed revisions.
 
-Validation on the development macOS host: all eight tests passed with
+Validation on the development macOS host: all ten tests passed with
 `cargo test --locked -p rexafs-gui live_intake`. These include a real source
 replacement during capture, not only simulated state transitions. Native
 Windows/Linux execution of this new branch has not yet been performed.

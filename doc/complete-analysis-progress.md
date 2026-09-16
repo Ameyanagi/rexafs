@@ -91,7 +91,7 @@ data and private workflow reports must remain outside this checkout.
 `feature/live-acquisition` starts B1 on top of the Phase A PR. It adds deterministic
 quiet-file and producer-digest completion checks, immutable captured bytes with
 parsed scans, and explicit acknowledgement of committed source revisions.
-Eight focused tests pass. This module is not connected to the GUI and does not
+Ten focused tests pass. This module is not connected to the GUI and does not
 yet implement automatic intake, a durable queue or restart-safe result publication.
 See [the Live progress record](live-acquisition-progress.md) for the contracts
 and next integration steps. The Phase A implementation and its PR remain isolated.

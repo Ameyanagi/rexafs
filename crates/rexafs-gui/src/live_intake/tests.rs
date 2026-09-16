@@ -261,3 +261,58 @@ fn watched_file_symlinks_are_not_silently_followed() {
         Observation::Unavailable(_)
     ));
 }
+
+#[test]
+fn one_completed_source_retains_every_scan_and_its_original_columns() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("two-scans.spec");
+    let bytes = b"#F file\n#S 1 scan\n#L energy  mu\n7100 1\n7101 2\n#S 2 scan\n#L energy  mu\n7100 3\n7101 4\n";
+    fs::write(&path, bytes).unwrap();
+    marker(&path, bytes);
+    let mut tracker = CompletionTracker::new(CompletionPolicy::DigestMarker {
+        suffix: ".ready".into(),
+    })
+    .unwrap();
+    let snapshot = ready(tracker.observe(&path, Instant::now()));
+    assert_eq!(&*snapshot.bytes, bytes);
+    assert_eq!(snapshot.measurement.scans.len(), 2);
+    assert_eq!(snapshot.measurement.scans[0].columns[1].values, [1., 2.]);
+    assert_eq!(snapshot.measurement.scans[1].columns[1].values, [3., 4.]);
+    assert_ne!(
+        snapshot.measurement.scans[0].id,
+        snapshot.measurement.scans[1].id
+    );
+}
+
+#[test]
+fn marker_changes_and_oversized_inputs_cannot_be_acknowledged() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = source(&dir, "scan.dat");
+    let marker_path = marker(&path, DATA);
+    let policy = CompletionPolicy::DigestMarker {
+        suffix: ".ready".into(),
+    };
+    let before = Fingerprint::at(&path).unwrap();
+    let result = capture(&path, &before, &policy, || {
+        fs::write(&marker_path, b"changed").unwrap();
+    });
+    assert!(result.err().unwrap().contains("marker changed"));
+    fs::write(&marker_path, vec![b' '; 4097]).unwrap();
+    assert!(
+        capture(&path, &before, &policy, || {})
+            .err()
+            .unwrap()
+            .contains("4 KiB")
+    );
+    // A sparse oversized source must fail before allocating or parsing payloads.
+    let file = fs::File::create(&path).unwrap();
+    file.set_len(MAX_BYTES + 1).unwrap();
+    drop(file);
+    let before = Fingerprint::at(&path).unwrap();
+    assert!(
+        capture(&path, &before, &CompletionPolicy::default(), || {})
+            .err()
+            .unwrap()
+            .contains("256 MiB")
+    );
+}
