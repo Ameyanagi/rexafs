@@ -10,7 +10,15 @@ The **unreleased development branch** keeps the heatmap and frame browser as
 the main Series view, including named series of project-stored spectra.
 **Add trend… → choose metric and range → Calculate all N frames** adds a saved
 trend. New desktop trends use Flat, 0–30 eV from each frame's E₀; the core API
-still defaults to Norm. A preview marks the range and updates after edits.
+still defaults to Norm. Drag the shaded preview’s boundaries to update the
+range fields and value, or type the bounds directly. **Left/Right** browses
+preview spectra; arrows in a focused field still edit text. K-space spectrum plots
+center zero with symmetric vertical limits; glitches remain visible.
+**Difference** subtracts a fixed reference frame from the heatmap and cursor
+spectrum. **Reference… / Ref: N ▾** changes it. **Colors ▾** opens a popup menu
+to select a palette or reverse it, keeping the plots and controls in place.
+Auto uses blue–red with a zero-centered scale for differences. These temporary
+view controls leave original groups and calculations unchanged.
 **Results…** contains saved runs, per-frame failures and CSV/JSON export.
 **Advanced** holds ordering, coordinates, presets, recipes and recovery.
 
@@ -26,6 +34,12 @@ for details.
 
 Development screenshot captured through computer use on 2026-09-16, using the
 project's synthetic series generator. It contains no experimental data.
+
+[![Development difference heatmap with the color popup open](/screenshots/next/series-difference-colors.jpg)](/screenshots/next/series-difference-colors.jpg)
+
+Captured through computer use on 2026-09-17 with the same synthetic source.
+Frame 258 is shown relative to frame 1. Opening the palette menu leaves the
+plot sizes and controls in place; the saved trend is unchanged.
 The remainder of this page and its versioned screenshot describe 0.2.9.
 
 Import a folder of related spectra, then open **Series → Select scan**.

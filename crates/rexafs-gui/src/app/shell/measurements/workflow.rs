@@ -3,6 +3,32 @@ use super::*;
 use crate::app::{OverviewSource, TrendDomain, TrendSnapshot, TrendSource};
 
 impl StudioApp {
+    /// Keyboard and button navigation share the same complete, ordered series.
+    pub(super) fn step_measurement_frame(&mut self, delta: isize, cx: &mut Context<Self>) {
+        if self.measurements.overview || self.measurements.results {
+            return;
+        }
+        let Some(series) = self
+            .measurements
+            .selected_series
+            .and_then(|i| self.measurements.archive.series.get(i))
+        else {
+            return;
+        };
+        if series.frames.is_empty() {
+            return;
+        }
+        let next = self
+            .measurements
+            .preview_index
+            .saturating_add_signed(delta)
+            .min(series.frames.len() - 1);
+        if next != self.measurements.preview_index {
+            self.measurements.preview_index = next;
+            self.preview_measurement(cx);
+        }
+    }
+
     pub(super) fn ensure_measurement_fields(&mut self, cx: &mut Context<Self>) {
         if !self.measurements.fields.is_empty() {
             return;
@@ -22,6 +48,8 @@ impl StudioApp {
     }
 
     pub(super) fn schedule_measurement_preview(&mut self, cx: &mut Context<Self>) {
+        self.clear_measurement_handles();
+        self.measurements.preview_data = None;
         self.measurements.preview_timer += 1;
         self.measurements.preview_generation += 1;
         self.measurements.preview = None;
@@ -77,9 +105,10 @@ impl StudioApp {
     }
 
     pub(crate) fn close_series_trend(&mut self, cx: &mut Context<Self>) {
+        self.clear_measurement_handles();
+        self.measurements.preview_data = None;
         self.measurements.preview_timer += 1;
         self.measurements.preview_generation += 1;
-        self.measurements.pick_range = None;
         self.open_series_overview(cx);
     }
 
@@ -106,7 +135,7 @@ impl StudioApp {
         self.measurements.space = MeasurementSpace::Flat;
         self.measurements.relative = true;
         self.measurements.preview_index = self.time_pos;
-        self.measurements.pick_range = None;
+        self.clear_measurement_handles();
         self.measurements.message.clear();
         self.measurements
             .scroll
@@ -146,6 +175,8 @@ impl StudioApp {
                     .iter()
                     .rposition(|r| Some(&r.series_id) == id)
             });
+        self.clear_measurement_handles();
+        self.measurements.preview_data = None;
         self.measurements.results = true;
         self.measurements.overview = false;
         self.measurements.advanced = false;

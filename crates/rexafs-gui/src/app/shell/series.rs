@@ -4,6 +4,8 @@
 //! trend on the right; the inspector carries the cursor readout, the trend
 //! table and the batch / LCF-trend cards.
 
+mod appearance;
+
 use gpui::{
     ClickEvent, Context, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, px,
     relative,
@@ -293,17 +295,30 @@ impl StudioApp {
         };
         let frames = self.operando_scan_len().unwrap_or(0);
         let frame_label: SharedString = format!("frame {} / {frames}", self.time_pos + 1).into();
-        let space_label: SharedString = match self.stage_view.series_space {
+        let mut space_label: SharedString = match self.stage_view.series_space {
             SeriesSpace::Energy => "normalized μ(E)".into(),
             SeriesSpace::Flat => "flattened μ(E)".into(),
-            SeriesSpace::K => crate::plotting::chik_label(
-                self.operando.as_ref().map(|d| d.kweight).unwrap_or(2.0),
-            )
-            .into(),
+            SeriesSpace::K => crate::plotting::chik_label(self.series_display_kweight()).into(),
             SeriesSpace::R => "|χ(R)|".into(),
         };
+        if self.series_display.difference {
+            let reference = self
+                .active_series_reference()
+                .map(|r| r.frame)
+                .or(self.series_display.pending_frame)
+                .map_or("unavailable".into(), |i| (i + 1).to_string());
+            space_label = format!("Δ {space_label} · ref {reference}").into();
+        }
         let trend_name: SharedString = self.trend_snapshot_name().into();
-        let card = |title: SharedString| {
+        let heatmap_heading = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(div().flex_1().child("Heatmap"))
+            .child(self.series_appearance_buttons(cx))
+            .into_any_element();
+        let card = |heading: gpui::AnyElement| {
             div()
                 .min_h_0()
                 .min_w_0()
@@ -320,7 +335,7 @@ impl StudioApp {
                         .pt_2()
                         .text_size(px(11.5))
                         .font_weight(gpui::FontWeight::MEDIUM)
-                        .child(title),
+                        .child(heading),
                 )
         };
         div()
@@ -373,7 +388,7 @@ impl StudioApp {
                     .pt_2()
                     .pb_3()
                     .child(
-                        card(format!("{space_label} · heatmap").into())
+                        card(heatmap_heading)
                             .flex_1()
                             .child(
                                 div()
@@ -405,21 +420,34 @@ impl StudioApp {
                             .flex_col()
                             .gap_2()
                             .child(
-                                card(format!("frame {} · {space_label}", self.time_pos + 1).into())
-                                    .flex_1()
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_h_0()
-                                            .min_w_0()
-                                            .p_1()
-                                            .relative()
-                                            .child(chik)
-                                            .child(self.measure_card(302, cx)),
-                                    ),
+                                card(
+                                    div()
+                                        .child(format!(
+                                            "frame {} · {space_label}",
+                                            self.time_pos + 1
+                                        ))
+                                        .into_any_element(),
+                                )
+                                .flex_1()
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_h_0()
+                                        .min_w_0()
+                                        .p_1()
+                                        .relative()
+                                        .child(chik)
+                                        .child(self.measure_card(302, cx)),
+                                ),
                             )
                             .child(
-                                card(format!("trend · {trend_name}").into()).flex_1().child(
+                                card(
+                                    div()
+                                        .child(format!("trend · {trend_name}"))
+                                        .into_any_element(),
+                                )
+                                .flex_1()
+                                .child(
                                     div()
                                         .flex_1()
                                         .min_h_0()
@@ -438,7 +466,7 @@ impl StudioApp {
     fn series_plot_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
         let space = self.stage_view.series_space;
-        let kw = self.operando.as_ref().map(|d| d.kweight).unwrap_or(2.0);
+        let kw = self.series_display_kweight();
         let options: [(SeriesSpace, String); 4] = [
             (SeriesSpace::Energy, "norm μ(E)".into()),
             (SeriesSpace::Flat, "flat μ(E)".into()),
@@ -496,7 +524,7 @@ impl StudioApp {
                 ).tooltip(move |_, cx| cx.new(|_| Tooltip { theme: t, label: "Calculation scope. The overview is always sampled; All frames calculates every surviving frame.".into() }).into()),
             ))
             .child(button(&t, "series-add-trend", "Add trend…", true)
-                .on_click(cx.listener(|app, _, _, cx| app.begin_series_trend(cx))))
+                .on_click(cx.listener(|app, _, window, cx| { app.begin_series_trend(cx); app.operando_focus.focus(window, cx); })))
             .child(button(&t, "series-results", "Results…", false)
                 .on_click(cx.listener(|app, _, _, cx| app.series_results(cx))))
             .child(icon_button(&t, "series-shortcuts", Icon::Help, "Click a heatmap row to jump. ←/→: frame; Shift+←/→: 1%; Home/End: first/last.", false))

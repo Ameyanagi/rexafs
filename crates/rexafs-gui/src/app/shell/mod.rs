@@ -450,6 +450,7 @@ impl StudioApp {
                     .then(|| self.journal_panel(cx).into_any_element()),
             )
             .child(self.status_bar(cx))
+            .children(self.series_appearance_overlay(cx))
             .children(self.group_menu_overlay(cx))
             .children(self.palette_overlay(cx))
             .children(self.parameter_menu_overlay(cx))

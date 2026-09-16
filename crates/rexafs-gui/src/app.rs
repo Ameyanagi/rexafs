@@ -63,6 +63,7 @@ pub(crate) mod import_review;
 pub(crate) mod import_state;
 mod importing;
 mod merge;
+pub(crate) mod series_display;
 mod series_source;
 use series_source::OverviewSource;
 mod shell;
@@ -612,6 +613,7 @@ pub(crate) struct OperandoData {
     source: OverviewSource,
     pub(crate) scan_len: usize,
     sample_frames: Vec<usize>,
+    support: Vec<series_display::SeriesSupport>,
     pub(crate) fingerprint: u64,
     /// k grid and k-weighted χ(k) rows (sampled frames × grid).
     pub(crate) grid: Vec<f64>,
@@ -656,6 +658,7 @@ pub(crate) struct SeriesLcf {
 /// One sampled frame of a scan overview, before resampling onto the
 /// shared grids.
 struct FrameSample {
+    support: series_display::SeriesSupport,
     k_row: Vec<f64>,
     e0: f64,
     whiteline: f64,
@@ -698,6 +701,7 @@ fn frame_sample(sp: &XASSpectrum, k_grid: &[f64]) -> Result<FrameSample, String>
         .map(|v| v.iter().copied().collect())
         .unwrap_or_default();
     Ok(FrameSample {
+        support: series_display::SeriesSupport::from_spectrum(sp),
         k_row,
         e0,
         whiteline,
@@ -927,6 +931,7 @@ pub(crate) struct OperandoPlots {
     source: OverviewSource,
     /// Space the heatmap / frame plot currently show.
     space: SeriesSpace,
+    difference: bool,
     pub(crate) heatmap: Entity<RuvizPlot>,
     pub(crate) chik: Entity<RuvizPlot>,
     chik_series: RetainedChikSeries,
@@ -1229,6 +1234,7 @@ pub struct StudioApp {
     active_scan: Option<usize>,
     overview_series: Option<crate::group_identity::GroupId>,
     operando: Option<OperandoData>,
+    series_display: series_display::SeriesDisplay,
     operando_plots: Option<OperandoPlots>,
     operando_gen: u64,
     operando_running: bool,
@@ -2649,7 +2655,7 @@ mod keybinding_tests {
     }
 
     #[test]
-    fn operando_extreme_keys_yield_to_nested_text_input() {
+    fn series_frame_keys_yield_to_nested_text_input() {
         let bindings = studio_keybindings();
         let studio = KeyContext::parse("Studio OperandoWorkspace").unwrap();
         let operando = KeyContext::parse("Operando").unwrap();
@@ -2658,6 +2664,10 @@ mod keybinding_tests {
         let editing_context = [studio, operando, text_input];
 
         for binding in [
+            binding::<super::FramePrev>(&bindings),
+            binding::<super::FrameNext>(&bindings),
+            binding::<super::FrameJumpBack>(&bindings),
+            binding::<super::FrameJumpFwd>(&bindings),
             binding::<FrameFirst>(&bindings),
             binding::<FrameLast>(&bindings),
         ] {
@@ -3037,6 +3047,7 @@ impl StudioApp {
             active_scan: None,
             overview_series: None,
             operando: None,
+            series_display: series_display::SeriesDisplay::default(),
             operando_plots: None,
             operando_gen: 0,
             operando_running: false,
@@ -4871,7 +4882,7 @@ impl StudioApp {
             field.update(cx, |f, cx| f.set_placeholder(format!("auto ({e0:.1})"), cx));
         }
         self.spectrum = Some(sp.clone());
-        self.refresh_operando_frame_plot(ix, fingerprint, &sp);
+        self.refresh_operando_frame_plot(ix, fingerprint, &sp, cx);
         self.invalidate_explore_plots(cx);
         // Scripted launches (screenshots): REXAFS_DEBUG_FIT_PATHS="a.dat:b.dat"
         // adds FEFF paths and fits the first loaded spectrum.
@@ -5052,6 +5063,7 @@ impl StudioApp {
                 let r_grid: Vec<f64> = (0..K_GRID_BINS)
                     .map(|i| 6.0 * i as f64 / (K_GRID_BINS - 1) as f64)
                     .collect();
+                let mut support = Vec::with_capacity(samples.len());
                 let mut matrix = Vec::with_capacity(samples.len());
                 let mut e_matrix = Vec::with_capacity(samples.len());
                 let mut flat_matrix = Vec::with_capacity(samples.len());
@@ -5061,6 +5073,7 @@ impl StudioApp {
                 for sample in samples {
                     match sample {
                         Ok(f) => {
+                            support.push(f.support);
                             matrix.push(f.k_row);
                             e_matrix.push(resample_xy(&f.energy, &f.norm, &e_grid));
                             flat_matrix.push(resample_xy(&f.energy, &f.flat, &e_grid));
@@ -5069,6 +5082,7 @@ impl StudioApp {
                             whitelines.push(f.whiteline);
                         }
                         Err(_) => {
+                            support.push(Default::default());
                             matrix.push(vec![f64::NAN; grid.len()]);
                             e_matrix.push(vec![f64::NAN; e_grid.len()]);
                             flat_matrix.push(vec![f64::NAN; e_grid.len()]);
@@ -5083,6 +5097,7 @@ impl StudioApp {
                     source: source.clone(),
                     scan_len,
                     sample_frames,
+                    support,
                     fingerprint,
                     grid,
                     matrix,
@@ -5095,6 +5110,13 @@ impl StudioApp {
                     whitelines,
                     kweight,
                 });
+                if app.series_display.difference && app.active_series_reference().is_none() {
+                    // Membership, project or processing changes invalidate the reference.
+                    app.series_display.request += 1;
+                    app.series_display.difference = false;
+                    app.series_display.reference = None;
+                    app.series_display.pending_frame = None;
+                }
                 // Parameter-only rebuilds preserve the full-scan cursor;
                 // opening a different scan starts at its first frame.
                 app.time_pos = app
@@ -5140,24 +5162,36 @@ impl StudioApp {
         let chik_series = RetainedChikSeries::new(chik_key, row);
         let space = self.stage_view.series_space;
         let (grid, matrix) = data.space(space);
-        let (xlabel, ylabel): (String, String) = match space {
+        let (xlabel, mut ylabel): (String, String) = match space {
             SeriesSpace::Energy => ("Energy (eV)".into(), "normalized μ(E)".into()),
             SeriesSpace::Flat => ("Energy (eV)".into(), "flattened μ(E)".into()),
-            SeriesSpace::K => (K_AXIS.into(), chik_label(data.kweight)),
-            SeriesSpace::R => (R_AXIS.into(), chir_label(data.kweight)),
+            SeriesSpace::K => (K_AXIS.into(), chik_label(self.series_display_kweight())),
+            SeriesSpace::R => (R_AXIS.into(), chir_label(self.series_display_kweight())),
         };
-        let heatmap_rows = source.heatmap_rows(matrix, &data.sample_frames, &self.group_registry);
-        let heatmap = build_heatmap(&heatmap_rows, grid, data.scan_len, &xlabel, &self.theme)
-            .size_px(
-                self.card_px.get(&301).map_or(700, |v| v.0),
-                self.card_px.get(&301).map_or(900, |v| v.1),
-            )
-            .major_ticks_x(self.series_tick_count(301));
-        let chik = match space {
+        if self.series_display.difference {
+            ylabel = format!("Δ {ylabel}");
+        }
+        let displayed = self.series_difference_matrix(matrix);
+        let heatmap_rows =
+            source.heatmap_rows(&displayed, &data.sample_frames, &self.group_registry);
+        let heatmap = build_heatmap(
+            &heatmap_rows,
+            grid,
+            data.scan_len,
+            &xlabel,
+            &self.theme,
+            &self.series_display,
+        )
+        .size_px(
+            self.card_px.get(&301).map_or(700, |v| v.0),
+            self.card_px.get(&301).map_or(900, |v| v.1),
+        )
+        .major_ticks_x(self.series_tick_count(301));
+        let mut chik = match space {
             SeriesSpace::K => build_frame_chik_source(
                 &data.grid,
                 chik_series.values.clone(),
-                data.kweight,
+                self.series_display_kweight(),
                 &self.theme,
             ),
             _ => crate::plotting::build_frame_row_source(
@@ -5173,6 +5207,10 @@ impl StudioApp {
             self.card_px.get(&302).map_or(420, |v| v.1),
         )
         .major_ticks_x(self.series_tick_count(302));
+        if self.series_display.difference {
+            chik = crate::plotting::centered_y(chik, chik_series.values.read().iter().copied())
+                .ylabel(&ylabel);
+        }
         let trend_snapshot = self.trend_snapshot();
         let trend = build_trend(
             &trend_snapshot.values,
@@ -5187,7 +5225,10 @@ impl StudioApp {
         .major_ticks_x(self.series_tick_count(303));
         match &mut self.operando_plots {
             Some(plots) => {
-                if plots.source == source && plots.space == space {
+                if plots.source == source
+                    && plots.space == space
+                    && plots.difference == self.series_display.difference
+                {
                     plots
                         .heatmap
                         .update(cx, |rp, cx| rp.set_plot_keep_view(heatmap, cx));
@@ -5209,6 +5250,7 @@ impl StudioApp {
                     plots.chik.update(cx, |rp, cx| rp.set_plot(chik, cx));
                     plots.trend.update(cx, |rp, cx| rp.set_plot(trend, cx));
                 }
+                plots.difference = self.series_display.difference;
                 plots.chik_series = chik_series;
                 plots.trend_domain = trend_snapshot.domain;
                 plots.heatmap_cursor = None;
@@ -5257,6 +5299,7 @@ impl StudioApp {
                 self.operando_plots = Some(OperandoPlots {
                     source,
                     space,
+                    difference: self.series_display.difference,
                     heatmap,
                     chik,
                     chik_series,
@@ -5388,7 +5431,7 @@ impl StudioApp {
         }
         self.time_pos = pos;
         if let Some((key, row)) = self.series_frame_source() {
-            self.replace_operando_chik(key, row);
+            self.replace_operando_chik(key, row, cx);
         }
         self.update_operando_cursor_annotations(cx);
         self.status = format!("frame {}/{} · {}", pos + 1, len, self.entry_label(ix)).into();
@@ -5431,15 +5474,69 @@ impl StudioApp {
         self.reveal_group_row(ix);
     }
 
-    fn replace_operando_chik(&mut self, key: ChikRowKey, row: Vec<f64>) -> bool {
-        self.operando_plots
-            .as_mut()
-            .is_some_and(|plots| plots.chik_series.replace_if_changed(key, row))
+    fn replace_operando_chik(
+        &mut self,
+        key: ChikRowKey,
+        row: Vec<f64>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let ticks = self.series_tick_count(302);
+        let kweight = self.series_display_kweight();
+        let Some(plots) = self.operando_plots.as_mut() else {
+            return false;
+        };
+        let old_limits =
+            crate::plotting::symmetric_y_limits(plots.chik_series.values.read().iter().copied());
+        let new_limits = crate::plotting::symmetric_y_limits(row.iter().copied());
+        if !plots.chik_series.replace_if_changed(key, row) {
+            return false;
+        }
+        if (plots.space == SeriesSpace::K || plots.difference)
+            && old_limits != new_limits
+            && let Some(data) = &self.operando
+        {
+            let grid = data.space(plots.space).0;
+            let (xlabel, ylabel) = match plots.space {
+                SeriesSpace::Energy => ("Energy (eV)", "normalized μ(E)".to_string()),
+                SeriesSpace::Flat => ("Energy (eV)", "flattened μ(E)".to_string()),
+                SeriesSpace::K => (K_AXIS, chik_label(kweight)),
+                SeriesSpace::R => (R_AXIS, chir_label(kweight)),
+            };
+            let label = if plots.difference {
+                format!("Δ {ylabel}")
+            } else {
+                ylabel
+            };
+            let plot = crate::plotting::build_frame_row_source(
+                grid,
+                plots.chik_series.values.clone(),
+                xlabel,
+                &label,
+                &self.theme,
+            );
+            let plot =
+                crate::plotting::centered_y(plot, plots.chik_series.values.read().iter().copied())
+                    .size_px(
+                        self.card_px.get(&302).map_or(700, |v| v.0),
+                        self.card_px.get(&302).map_or(420, |v| v.1),
+                    )
+                    .major_ticks_x(ticks);
+            plots
+                .chik
+                .update(cx, |plot_view, cx| plot_view.set_plot_keep_view(plot, cx));
+        }
+        true
     }
 
     /// Replace the sampled placeholder with the actual processed cursor
     /// frame when its generation-counted load completes.
-    fn refresh_operando_frame_plot(&mut self, ix: usize, fingerprint: u64, sp: &XASSpectrum) {
+    fn refresh_operando_frame_plot(
+        &mut self,
+        ix: usize,
+        fingerprint: u64,
+        sp: &XASSpectrum,
+        cx: &mut Context<Self>,
+    ) {
         let Some(data) = &self.operando else {
             return;
         };
@@ -5466,7 +5563,8 @@ impl StudioApp {
         ) else {
             return;
         };
-        self.replace_operando_chik(key, row);
+        let row = self.series_difference_row(row, series_display::SeriesSupport::from_spectrum(sp));
+        self.replace_operando_chik(key, row, cx);
     }
 
     fn current_group_index(&self) -> Option<usize> {
@@ -8039,10 +8137,18 @@ impl StudioApp {
                     entry: ix,
                     params_fingerprint: fingerprint,
                 },
-                row,
+                self.series_difference_row(row, series_display::SeriesSupport::from_spectrum(sp)),
             ));
         }
         let row = exact_overview_row(&data.sample_frames, matrix, frame, grid.len());
+        let support = data
+            .sample_frames
+            .iter()
+            .position(|p| *p == frame)
+            .and_then(|i| data.support.get(i))
+            .copied()
+            .unwrap_or_default();
+        let row = self.series_difference_row(row, support);
         Some((
             ChikRowKey::Sampled {
                 scan: data.source.scan_index().unwrap_or(NO_ENTRY),

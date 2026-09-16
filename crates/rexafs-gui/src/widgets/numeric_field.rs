@@ -247,6 +247,13 @@ impl NumericField {
         self.value
     }
 
+    /// Validate the visible text before a submit button removes the field.
+    /// Uses the same integer rounding and bounds as Enter, without committing
+    /// or emitting events. Invalid text is an error, never the previous value.
+    pub(crate) fn pending_value(&self, cx: &gpui::App) -> Result<Option<f64>, ()> {
+        parse_commit(self.input.read(cx).text(), self.kind)
+    }
+
     /// Programmatically set value (None = auto/empty); does not emit.
     pub fn set_value(&mut self, value: Option<f64>, cx: &mut Context<Self>) {
         self.value = value;

@@ -16,6 +16,7 @@ use std::{
     },
 };
 
+pub(super) mod drag;
 mod manage;
 mod presets;
 mod recipes;
@@ -56,7 +57,7 @@ pub(crate) struct MeasurementState {
     preset_name: Option<Entity<crate::widgets::text_input::TextInput>>,
     selected_preset: Option<crate::group_identity::GroupId>,
     selected_recipe: Option<(crate::group_identity::GroupId, u64)>,
-    pick_range: Option<Vec<f64>>,
+    preview_data: Option<drag::MeasurementPreview>,
     monitoring: bool,
     recovery_entries: Vec<recovery::RecoveryEntry>,
     recovery_busy: bool,
@@ -165,7 +166,7 @@ impl MeasurementState {
             preset_name: None,
             selected_preset,
             selected_recipe,
-            pick_range: None,
+            preview_data: None,
             monitoring: false,
             recovery_entries: vec![],
             recovery_busy: false,
@@ -390,6 +391,9 @@ impl StudioApp {
         let definition = match self.measurement_definition(cx) {
             Ok(d) => d,
             Err(e) => {
+                self.clear_measurement_handles();
+                self.measurements.preview_data = None;
+                self.measurements.preview_generation += 1;
                 self.measurements.preview = None;
                 self.measurements.preview_label = e;
                 cx.notify();
@@ -428,6 +432,8 @@ impl StudioApp {
         expected: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        self.clear_measurement_handles();
+        self.measurements.preview_data = None;
         self.measurements.preview_generation += 1;
         let request = self.measurements.preview_generation;
         let generation = self.project_generation;
@@ -490,11 +496,24 @@ impl StudioApp {
                                 plot = plot.xlim(left, right);
                             }
                         }
-                        let color = ruviz::render::Color::from_gray(170);
-                        plot = plot.vline_styled(lo, color, 1.3, ruviz::render::LineStyle::Dashed);
-                        if hi != lo {
+                        let editable = !app.measurements.results
+                            && !app.measurements.overview
+                            && app.measurements.kind != 4;
+                        if !editable {
+                            let color = ruviz::render::Color::from_gray(170);
                             plot =
-                                plot.vline_styled(hi, color, 1.3, ruviz::render::LineStyle::Dashed);
+                                plot.vline_styled(lo, color, 1.3, ruviz::render::LineStyle::Dashed);
+                            if hi != lo {
+                                plot = plot.vline_styled(
+                                    hi,
+                                    color,
+                                    1.3,
+                                    ruviz::render::LineStyle::Dashed,
+                                );
+                            }
+                        }
+                        if matches!(space, MeasurementSpace::Chi { .. }) {
+                            plot = crate::plotting::centered_y(plot, y.iter().copied());
                         }
                         plot = plot
                             .xlabel(axis_label(space))
@@ -502,48 +521,15 @@ impl StudioApp {
                             .size_px(720, 300)
                             .major_ticks_x(5);
                         let preview = plot_builder(plot).interactive().build(cx);
-                        cx.subscribe(
-                            &preview,
-                            move |app: &mut Self, _, event: &ruviz_gpui::PlotPointerEvent, cx| {
-                                if event.kind != ruviz_gpui::PlotPointerEventKind::Click
-                                    || event.mouse_button != Some(gpui::MouseButton::Left)
-                                    || app.measurements.preview_generation != request
-                                {
-                                    return;
-                                }
-                                let Some(position) = event.data_position else {
-                                    return;
-                                };
-                                let Some(picks) = &mut app.measurements.pick_range else {
-                                    return;
-                                };
-                                picks.push(position.x - origin);
-                                if app.measurements.kind == 0 || picks.len() == 2 {
-                                    let lo = picks.iter().copied().fold(f64::INFINITY, f64::min);
-                                    let hi =
-                                        picks.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-                                    if app.measurements.kind != 0 && hi <= lo {
-                                        app.measurements.message =
-                                            "Choose two distinct positions.".into();
-                                        app.measurements.pick_range = Some(vec![]);
-                                        cx.notify();
-                                        return;
-                                    }
-                                    app.measurements.fields[0]
-                                        .update(cx, |f, cx| f.set_value(Some(lo), cx));
-                                    app.measurements.fields[1]
-                                        .update(cx, |f, cx| f.set_value(Some(hi), cx));
-                                    app.measurements.pick_range = None;
-                                    app.measurements.message.clear();
-                                    app.preview_measurement(cx);
-                                } else {
-                                    app.measurements.message =
-                                        "Now click the other boundary.".into();
-                                }
-                                cx.notify();
-                            },
-                        )
-                        .detach();
+                        app.measurements.preview_data =
+                            editable.then(|| drag::MeasurementPreview {
+                                x,
+                                y,
+                                metric,
+                                origin,
+                                space,
+                                label: label.clone(),
+                            });
                         app.measurements.preview = Some(preview);
                         app.measurements.preview_label = format!("{label} · {value:.6}");
                     }

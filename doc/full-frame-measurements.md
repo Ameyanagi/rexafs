@@ -78,15 +78,46 @@ including project-stored spectra. **Use loaded groups** starts a series from an
 existing project. The selector also offers **Use marked groups** and **Use all
 groups**. Membership is explicit; later imports do not silently enter a series.
 
+**Difference** subtracts the selected frame from the heatmap and cursor spectrum.
+Choose the frame first, then turn on Difference. **Reference… / Ref: N ▾** lets you enter
+another frame number or choose **Use current**. The reference stays fixed while
+you browse. Turning Difference off restores the original view. **Colors ▾**
+offers Viridis, Plasma, Inferno, blue–red, red–blue and gray, plus **Reverse**.
+**Auto** uses Viridis for ordinary spectra and blue–red for differences.
+Both selectors open popup menus over the workspace. The controls stay in place,
+and opening or closing a menu does not resize the plots. Escape or a click outside
+closes the menu.
+
+![Difference heatmap and palette popup using synthetic spectra](../website/public/screenshots/next/series-difference-colors.jpg)
+
+Captured through computer use on 2026-09-17. Frame 258 is shown relative to frame 1;
+the heatmap uses the automatic blue–red palette. The saved trend retains its
+original values.
+
+The difference is `frame(x) − reference(x)` on the overview’s shared axis: absolute
+eV for Norm/Flat, Å⁻¹ for weighted χ(k), and Å for |χ(R)|. There is no additional
+alignment, normalization or fitting. Both spectra retain their processing settings;
+compare consistently prepared inputs. R-space shows the difference of magnitudes,
+not the magnitude of a complex difference. Missing shared coverage, failed rows
+and incompatible k weights appear as gaps. The chosen reference is loaded exactly,
+even if it was omitted from the sampled heatmap. The cursor plot uses the exact
+frame; the heatmap remains a sampled overview.
+
+Difference colors have equal positive and negative limits, with zero at the middle
+of the color scale. Palette changes do not alter values. These are temporary view
+controls: calculations, saved trends and original groups remain unchanged. Changing
+the series or processing settings clears the reference. The implementation is in
+[`series_display.rs`](../crates/rexafs-gui/src/app/series_display.rs).
+
 To calculate a trend:
 
 1. Choose **Add trend…**.
 2. Choose Maximum, Mean, Integral, Point or Edge energy. New trends start with
    **Flat**, 0–30 eV from each frame's E₀. These are desktop starting values;
    the core API still defaults to Norm.
-3. Set the range or use **Select on plot**. The preview updates after a committed
-   edit, with dashed lines marking the resolved boundaries. It zooms around the
-   selected interval; **Full spectrum** restores the complete axis.
+3. Drag either boundary on the preview, or edit **From** and **To**. The shaded
+   interval, numerical fields and preview value update together. The view stays
+   in place while dragging; **Full spectrum** shows the complete axis.
 4. Choose **Calculate all N frames**. A completed trend returns to the overview.
 
 The trend is a saved result; changing the overview's signal selector does not
@@ -100,10 +131,12 @@ overview. Changed membership/order cannot attach an old result to new frames.
 
 ![A saved 513-frame trend beside the heatmap and selected synthetic frame](../website/public/screenshots/next/series-trend-overview.jpg)
 
-These development screenshots were captured through computer use on 2026-09-16.
+The trend editor was captured through computer use on 2026-09-17; the saved-trend
+overview was captured on 2026-09-16.
 They show generated spectra from `scripts/generate-series-metric-example.py`,
 including the deliberately larger signal at frame 258. No experimental data are
-included. See [the validation record](validation/2026-09-16-series-ux.md).
+included. See the [initial workflow record](validation/2026-09-16-series-ux.md)
+and [interaction checks](validation/2026-09-17-series-interactions.md).
 
 **Advanced** contains series editing, presets, recipes and recovery copies.
 **Edit series** supports natural label ordering, acquisition-time ordering,
@@ -125,10 +158,20 @@ uses the declared value/unit. Missing coordinates produce gaps. File modificatio
 time and application arrival time are never presented as acquisition time.
 
 The preview uses the selected representation and coordinate origin. Arrow
-buttons browse frames without changing the series membership. **Select on plot** accepts one click for
-a point, or two clicks for interval boundaries. It converts the displayed
-absolute coordinates to the selected origin; review the numerical fields
-before calculating. Outside-plot clicks do not define a coordinate.
+buttons or **Left/Right** browse frames without changing the series membership.
+Click the preview to use the keys; while editing a field they move its text cursor.
+**Shift+Left/Right** moves about 1% of the series, and **Home/End** selects its
+first/last frame. The metric and range remain unchanged. Drag a boundary
+line or its tab above the plot, as in Normalize and Transform. Point measurements
+have one handle; intervals have two. The fields retain the selected origin,
+including offsets from each frame’s E₀. Handles stop at the measured endpoints
+and cannot cross. Historical result previews retain their saved ranges.
+
+K-space spectrum plots use symmetric positive and negative vertical limits,
+with zero in the middle and 5% headroom above the largest absolute amplitude.
+Glitches remain visible. This display choice does not change the signal or its
+measured values. Deliberately offset waterfall plots keep their stacked extent;
+manual pan and zoom remain available.
 
 Name a measurement and choose **Save preset** to reuse it. Selecting a preset
 restores its operation, representation, origin and bounds. Edits create a new

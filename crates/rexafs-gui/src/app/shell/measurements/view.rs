@@ -1,5 +1,7 @@
 use super::*;
-use crate::app::shell::button;
+use crate::app::{
+    FrameFirst, FrameJumpBack, FrameJumpFwd, FrameLast, FrameNext, FramePrev, shell::button,
+};
 use gpui::{IntoElement, ParentElement, Styled, div, prelude::*, px};
 
 impl StudioApp {
@@ -343,8 +345,12 @@ impl StudioApp {
             }
 
             let mut actions = div().flex().gap_2().child(
-                button(&t, "results-add-trend", "Add trend…", true)
-                    .on_click(cx.listener(|app, _, _, cx| app.begin_series_trend(cx))),
+                button(&t, "results-add-trend", "Add trend…", true).on_click(cx.listener(
+                    |app, _, window, cx| {
+                        app.begin_series_trend(cx);
+                        app.operando_focus.focus(window, cx);
+                    },
+                )),
             );
             if let Some(index) = self.measurements.selected_run {
                 if self.measurement_trend_matches(index) {
@@ -390,7 +396,7 @@ impl StudioApp {
                 )
                 .on_click(cx.listener(move |app, _, _, cx| {
                     app.measurements.kind = index;
-                    app.measurements.pick_range = None;
+                    app.clear_measurement_handles();
                     app.preview_measurement(cx);
                 })),
             );
@@ -426,7 +432,7 @@ impl StudioApp {
                             MeasurementSpace::Mu | MeasurementSpace::Norm | MeasurementSpace::Flat
                         );
                         app.measurements.space = space;
-                        app.measurements.pick_range = None;
+                        app.clear_measurement_handles();
                         app.measurements.relative = energy;
                         if was_energy != energy || !energy {
                             let (lo, hi) = match space {
@@ -485,60 +491,18 @@ impl StudioApp {
             .items_center()
             .gap_2()
             .child(
-                button(&t, "measurement-prev-frame", "←", false).on_click(cx.listener(
-                    |app, _, _, cx| {
-                        app.measurements.preview_index =
-                            app.measurements.preview_index.saturating_sub(1);
-                        app.preview_measurement(cx);
-                    },
-                )),
+                button(&t, "measurement-prev-frame", "←", false)
+                    .on_click(cx.listener(|app, _, _, cx| app.step_measurement_frame(-1, cx))),
             )
             .child(format!("{} / {count}", self.measurements.preview_index + 1))
             .child(
-                button(&t, "measurement-next-frame", "→", false).on_click(cx.listener(
-                    move |app, _, _, cx| {
-                        app.measurements.preview_index =
-                            (app.measurements.preview_index + 1).min(count.saturating_sub(1));
-                        app.preview_measurement(cx);
-                    },
-                )),
+                button(&t, "measurement-next-frame", "→", false)
+                    .on_click(cx.listener(|app, _, _, cx| app.step_measurement_frame(1, cx))),
             )
             .child(
                 button(&t, "measurement-preview", "Refresh", false)
                     .on_click(cx.listener(|app, _, _, cx| app.preview_measurement(cx))),
             );
-        if self.measurements.kind != 4 {
-            preview_controls = preview_controls.child(
-                button(
-                    &t,
-                    "measurement-pick-range",
-                    if self.measurements.pick_range.is_some() {
-                        "Cancel selection"
-                    } else {
-                        "Select on plot"
-                    },
-                    false,
-                )
-                .on_click(cx.listener(|app, _, _, cx| {
-                    if app.measurements.pick_range.is_some() {
-                        app.measurements.pick_range = None;
-                        app.measurements.message.clear();
-                    } else {
-                        app.measurements.pick_range = Some(vec![]);
-                        app.measurements.message = if app.measurements.kind == 0 {
-                            "Click a position on the preview."
-                        } else {
-                            "Click the two interval boundaries on the preview."
-                        }
-                        .into();
-                        if app.measurements.preview.is_none() {
-                            app.preview_measurement(cx);
-                        }
-                    }
-                    cx.notify();
-                })),
-            );
-        }
         preview_controls = preview_controls.child(
             button(
                 &t,
@@ -615,14 +579,46 @@ impl StudioApp {
         if let Some(plot) = &self.measurements.preview {
             body = body.child(
                 div()
+                    .id("measurement-preview-card")
                     .h(px(340.))
                     .min_h(px(340.))
                     .w_full()
-                    .child(plot.clone()),
+                    .relative()
+                    .on_mouse_move(cx.listener(|app, ev: &gpui::MouseMoveEvent, _, cx| {
+                        app.plot_pointer_move(super::drag::PLOT_MEASUREMENT, ev.position, cx);
+                    }))
+                    .capture_any_mouse_down(cx.listener(
+                        |app, ev: &gpui::MouseDownEvent, window, cx| {
+                            app.operando_focus.focus(window, cx);
+                            app.capture_handle_press(super::drag::PLOT_MEASUREMENT, ev, cx);
+                        },
+                    ))
+                    .child(plot.clone())
+                    .children(self.handle_layer(super::drag::PLOT_MEASUREMENT, cx))
+                    .children(self.handle_overlay(super::drag::PLOT_MEASUREMENT, cx)),
             );
         }
 
         div()
+            .id("series-trend-editor")
+            .key_context("Operando")
+            .track_focus(&self.operando_focus)
+            .on_action(cx.listener(|app, _: &FramePrev, _, cx| app.step_measurement_frame(-1, cx)))
+            .on_action(cx.listener(|app, _: &FrameNext, _, cx| app.step_measurement_frame(1, cx)))
+            .on_action(cx.listener(move |app, _: &FrameJumpBack, _, cx| {
+                app.step_measurement_frame(-(count.div_ceil(100).max(1) as isize), cx)
+            }))
+            .on_action(cx.listener(move |app, _: &FrameJumpFwd, _, cx| {
+                app.step_measurement_frame(count.div_ceil(100).max(1) as isize, cx)
+            }))
+            .on_action(
+                cx.listener(|app, _: &FrameFirst, _, cx| {
+                    app.step_measurement_frame(isize::MIN, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|app, _: &FrameLast, _, cx| app.step_measurement_frame(isize::MAX, cx)),
+            )
             .flex_1()
             .min_h_0()
             .flex()
