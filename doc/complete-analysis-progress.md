@@ -24,8 +24,13 @@ contract. [Computer-use qualification](validation/2026-09-16-full-frame-measurem
 records 513 synthetic spectra, their known transient, save/reopen and exports.
 Core tests passed (357); GUI tests passed (526); strict core Clippy passed.
 
-**Phase A is not complete.** Remaining gates include membership editing and
-natural/acquisition-time ordering, physical coordinates, named measurement presets,
+Series organization is also implemented: membership editing, natural and manual
+ordering, timezone-aware acquisition ordering, and ID-keyed physical-coordinate
+CSV import/export. Computer use verified 513 coordinate-aware results, repeated
+and missing coordinates, temperature/time plots and unchanged historical values
+after membership revisions. Ten focused measurement tests passed.
+
+**Phase A is not complete.** Remaining gates include named measurement presets,
 automatic revision checking, recovery-journal UI, plot-gesture authoring,
 independent-error propagation, and broader resource/platform qualification.
 

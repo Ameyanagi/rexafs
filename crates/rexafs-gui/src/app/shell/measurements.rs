@@ -16,6 +16,7 @@ use std::{
     },
 };
 
+mod manage;
 mod view;
 
 pub(crate) struct MeasurementState {
@@ -40,6 +41,8 @@ pub(crate) struct MeasurementState {
     progress: (usize, usize),
     checking: bool,
     stale: Vec<bool>,
+    editor: Option<manage::SeriesEditor>,
+    trend_axis: TrendAxis,
 }
 
 impl Default for MeasurementState {
@@ -79,6 +82,8 @@ impl MeasurementState {
             progress: (0, 0),
             checking: false,
             stale: vec![],
+            editor: None,
+            trend_axis: TrendAxis::Sequence,
         }
     }
     pub fn stop(&mut self) {
@@ -163,6 +168,8 @@ impl StudioApp {
                     group,
                     label: self.entry_label(ix),
                     sequence: 0,
+                    coordinate: None,
+                    acquired_at: None,
                 })
             })
             .enumerate()
@@ -182,6 +189,7 @@ impl StudioApp {
             revision: 1,
             name,
             ordering: "Current group order (explicit sequence)".into(),
+            coordinate: Default::default(),
             frames,
         });
         self.measurements.selected_series = Some(self.measurements.archive.series.len() - 1);
@@ -569,15 +577,22 @@ impl StudioApp {
         };
         let mut plot = Plot::new()
             .theme(self.theme.plot_theme())
-            .xlabel("Frame sequence");
+            .xlabel(run.coordinate_label(self.measurements.trend_axis));
+        let coordinates = run.plot_coordinates(self.measurements.trend_axis);
         let mut xs = Vec::new();
         let mut ys = Vec::new();
         // Separate segments preserve missing outcomes as visible gaps.
-        for row in run.rows.iter().map(Some).chain(std::iter::once(None)) {
-            if let Some(row) = row
+        for row in run
+            .rows
+            .iter()
+            .zip(coordinates)
+            .map(Some)
+            .chain(std::iter::once(None))
+        {
+            if let Some((row, Some(coordinate))) = row
                 && let Some(value) = &row.result
             {
-                xs.push(row.frame.sequence as f64);
+                xs.push(coordinate);
                 ys.push(value.value);
             } else if !xs.is_empty() {
                 plot = if xs.len() == 1 {

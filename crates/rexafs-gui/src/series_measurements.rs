@@ -8,11 +8,15 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{path::PathBuf, sync::Arc};
 
+mod catalogue;
+pub use catalogue::{CoordinateDefinition, TrendAxis};
+
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SeriesArchive {
     pub series: Vec<SeriesDefinition>,
     pub runs: Vec<SeriesRun>,
+    pub presets: Vec<MetricDefinition>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -22,6 +26,8 @@ pub struct SeriesDefinition {
     pub name: String,
     pub ordering: String,
     pub frames: Vec<SeriesFrame>,
+    #[serde(default)]
+    pub coordinate: CoordinateDefinition,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -30,6 +36,12 @@ pub struct SeriesFrame {
     pub group: GroupId,
     pub label: String,
     pub sequence: usize,
+    /// Explicit physical coordinate, in the series coordinate's declared units.
+    #[serde(default)]
+    pub coordinate: Option<f64>,
+    /// Acquisition timestamp with an explicit UTC offset, never file mtime.
+    #[serde(default)]
+    pub acquired_at: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -75,6 +87,8 @@ pub struct SeriesRun {
     pub rows: Vec<MetricRow>,
     pub complete: bool,
     pub cancelled: bool,
+    #[serde(default)]
+    pub coordinate: CoordinateDefinition,
 }
 
 /// Worker input: file sources remain lazy. Materialized groups were already
@@ -198,6 +212,7 @@ impl SeriesRun {
             id: GroupId::new_result(),
             series_id: series.id.clone(),
             series_revision: series.revision,
+            coordinate: series.coordinate.clone(),
             definition,
             created: chrono::Utc::now().to_rfc3339(),
             software: env!("CARGO_PKG_VERSION").into(),
@@ -282,7 +297,7 @@ impl SeriesRun {
         fn cell(value: impl ToString) -> String {
             format!("\"{}\"", value.to_string().replace('"', "\"\""))
         }
-        let mut csv="frame,frame_id,group_id,label,value,unit,status,reason,input_revision,source_digest,run_id,definition_id,definition_revision,range_start,range_end,e0_ev,uncertainty\n".to_string();
+        let mut csv="frame,frame_id,group_id,label,value,unit,status,reason,input_revision,source_digest,run_id,definition_id,definition_revision,range_start,range_end,e0_ev,uncertainty,coordinate,coordinate_name,coordinate_unit,coordinate_source,acquired_at,timestamp_meaning\n".to_string();
         for row in &self.rows {
             let result = row.result.as_ref();
             let cells = vec![
@@ -306,6 +321,15 @@ impl SeriesRun {
                     .map(|e| e.to_string())
                     .unwrap_or_default(),
                 "Unavailable: no input error model".into(),
+                row.frame
+                    .coordinate
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
+                self.coordinate.label.clone(),
+                self.coordinate.unit.clone(),
+                self.coordinate.source.clone(),
+                row.frame.acquired_at.clone().unwrap_or_default(),
+                self.coordinate.timestamp_meaning.clone(),
             ];
             csv.push_str(&cells.into_iter().map(cell).collect::<Vec<_>>().join(","));
             csv.push('\n');

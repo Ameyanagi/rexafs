@@ -39,6 +39,7 @@ fn series(inputs: &[FrameInput]) -> SeriesDefinition {
         revision: 1,
         name: "Synthetic series".into(),
         ordering: "explicit".into(),
+        coordinate: Default::default(),
         frames: inputs
             .iter()
             .enumerate()
@@ -47,6 +48,8 @@ fn series(inputs: &[FrameInput]) -> SeriesDefinition {
                 group: input.group.clone(),
                 label: input.label.clone(),
                 sequence: i + 1,
+                coordinate: None,
+                acquired_at: None,
             })
             .collect(),
     }
@@ -178,6 +181,7 @@ fn project_roundtrip_preserves_ids_definitions_and_failed_rows() {
     let archive = SeriesArchive {
         series: vec![series],
         runs: vec![run],
+        presets: vec![],
     };
     let project = crate::project::ProjectFile {
         version: crate::project::PROJECT_VERSION,
@@ -233,6 +237,8 @@ fn hundred_thousand_frames_use_one_prepared_spectrum_at_a_time() {
             group: prototype.group.clone(),
             label: "synthetic".into(),
             sequence: 1,
+            coordinate: None,
+            acquired_at: None,
         },
         source_digest: Some(source),
         input_revision: Some(revision),
@@ -269,5 +275,75 @@ fn missing_worker_inputs_keep_requested_rows_visible() {
     assert_eq!(
         calculate_row(&inputs[1], &run.rows[0], &run.definition).status,
         FrameStatus::Unavailable
+    );
+}
+
+#[test]
+fn membership_revisions_never_reassign_saved_results() {
+    let inputs = vec![input("scan10", 10.), input("scan2", 2.), input("scan1", 1.)];
+    let mut series = series(&inputs);
+    let mut run = SeriesRun::new(&series, definition(), &inputs);
+    run.freeze(&inputs, || false);
+    for (row, input) in run.rows.iter_mut().zip(&inputs) {
+        *row = calculate_row(input, row, &run.definition);
+    }
+    let original = serde_json::to_value(&run).unwrap();
+    series.sort_naturally();
+    assert_eq!(
+        series
+            .frames
+            .iter()
+            .map(|f| f.label.as_str())
+            .collect::<Vec<_>>(),
+        vec!["scan1", "scan2", "scan10"]
+    );
+    series.frames.remove(1);
+    series.revise();
+    series.name = "Renamed".into();
+    series.revise();
+    assert_eq!(serde_json::to_value(&run).unwrap(), original);
+    assert_eq!(run.rows[0].result.as_ref().unwrap().value, 10.);
+    assert!(series.revision > run.series_revision);
+}
+
+#[test]
+fn coordinate_sidecars_are_atomic_id_keyed_and_timezone_aware() {
+    let inputs = vec![input("a", 1.), input("b", 2.), input("c", 3.)];
+    let mut series = series(&inputs);
+    series.coordinate = CoordinateDefinition {
+        label: "Temperature".into(),
+        unit: "K".into(),
+        source: "thermocouple".into(),
+        timestamp_meaning: "start".into(),
+    };
+    series.frames[0].coordinate = Some(300.);
+    series.frames[1].coordinate = Some(300.);
+    series.frames[0].acquired_at = Some("2026-09-16T12:00:03+09:00".into());
+    series.frames[1].acquired_at = Some("2026-09-16T03:00:01Z".into());
+    let sidecar = series.coordinates_csv().unwrap();
+    let mut restored = series.clone();
+    restored.frames.reverse();
+    restored.import_coordinates(&sidecar).unwrap();
+    assert_eq!(restored.frames[0].coordinate, None);
+    restored.sort_acquisition().unwrap();
+    assert_eq!(restored.frames[0].group, inputs[1].group);
+    let run = SeriesRun::new(&restored, definition(), &inputs);
+    assert_eq!(
+        run.plot_coordinates(TrendAxis::ElapsedAcquisition),
+        vec![Some(0.), Some(2.), None]
+    );
+    assert_eq!(
+        run.plot_coordinates(TrendAxis::Coordinate),
+        vec![Some(300.), Some(300.), None]
+    );
+    let before = serde_json::to_value(&restored).unwrap();
+    let malformed = String::from_utf8(sidecar)
+        .unwrap()
+        .replace("2026-09-16T12:00:03+09:00", "2026-09-16T12:00:03");
+    assert!(restored.import_coordinates(malformed.as_bytes()).is_err());
+    assert_eq!(serde_json::to_value(restored).unwrap(), before);
+    assert!(
+        super::catalogue::natural_cmp("scan9999999999999999999999", "scan10000000000000000000000")
+            .is_lt()
     );
 }

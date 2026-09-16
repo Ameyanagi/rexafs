@@ -115,6 +115,7 @@ impl StudioApp {
                             return;
                         }
                         app.measurements.selected_series = Some(index);
+                        app.measurements.editor = None;
                         app.measurements.preview_index = 0;
                         app.measurements.page = 0;
                         let id = app.measurements.archive.series[index].id.clone();
@@ -133,6 +134,7 @@ impl StudioApp {
             }
             body = body.child(choices);
         }
+        body = body.child(self.measurement_management(cx));
         let Some(series) = self
             .measurements
             .selected_series
@@ -146,8 +148,8 @@ impl StudioApp {
                 .text_size(px(11.))
                 .text_color(t.text_muted)
                 .child(format!(
-                    "{} · membership frozen · coordinates: frame sequence",
-                    series.ordering
+                    "Series revision {} · {}",
+                    series.revision, series.ordering
                 )),
         );
         let mut kinds = div().flex().flex_wrap().gap_2();
@@ -366,6 +368,30 @@ impl StudioApp {
             );
         }
         body = body.child(history);
+        let mut axes = div().flex().flex_wrap().gap_2();
+        for (index, (axis, label)) in [
+            (TrendAxis::Sequence, "Frame sequence"),
+            (TrendAxis::Coordinate, "Physical coordinate"),
+            (TrendAxis::ElapsedAcquisition, "Acquisition time"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            axes = axes.child(
+                button(
+                    &t,
+                    ("measurement-trend-axis", index),
+                    label,
+                    self.measurements.trend_axis == axis,
+                )
+                .on_click(cx.listener(move |app, _, _, cx| {
+                    app.measurements.trend_axis = axis;
+                    app.rebuild_measurement_plot(cx);
+                    cx.notify();
+                })),
+            );
+        }
+        body = body.child(axes);
         if let Some(plot) = &self.measurements.plot {
             body = body.child(
                 div()
@@ -416,18 +442,19 @@ impl StudioApp {
                         .on_click(cx.listener(|app, _, _, cx| app.start_measurements(true, cx))),
                 );
             }
-            body =
-                body.child(export)
-                    .child(
-                        div()
-                            .text_size(px(11.))
-                            .text_color(t.text_muted)
-                            .child(format!(
-                                "Retained run · {:?} · {:?} · no inferred uncertainty",
-                                run.definition.measurement.space, run.definition.measurement.origin
-                            )),
-                    );
-            let begin = self.measurements.page * 50;
+            body = body.child(export).child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child(format!(
+                        "Retained run · series revision {} · {:?} · {:?} · no inferred uncertainty",
+                        run.series_revision,
+                        run.definition.measurement.space,
+                        run.definition.measurement.origin
+                    )),
+            );
+            let result_count = run.rows.len();
+            let begin = (self.measurements.page * 50).min(result_count.saturating_sub(1) / 50 * 50);
             let end = (begin + 50).min(run.rows.len());
             let mut table = div().flex().flex_col().gap_1();
             for (index, row) in run.rows.iter().enumerate().skip(begin).take(50) {
@@ -481,7 +508,7 @@ impl StudioApp {
                         .child(
                             button(&t, "measurement-page-next", "Next rows", false).on_click(
                                 cx.listener(move |app, _, _, cx| {
-                                    if end < count {
+                                    if end < result_count {
                                         app.measurements.page += 1;
                                     }
                                     cx.notify();

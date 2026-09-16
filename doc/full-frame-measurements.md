@@ -75,8 +75,24 @@ signal unit by axis units. R is not a phase-corrected bond length.
 Open **Series → Measurements**. Create a series from marked groups, the current
 folder scan or all groups. Membership is explicit and includes reviewed imports
 and materialized components. New imports do not silently enter that series.
-The first increment retains current group order and labels it as a sequence;
-it does not claim that filename or arrival order is elapsed acquisition time.
+**Edit series** supports natural filename/label ordering, acquisition-time
+ordering, manual moves, adding marked groups and removing individual members.
+Each edit creates a series revision. Saved runs retain their own membership,
+order and coordinates, so an old result never moves to a different spectrum.
+
+Declare a physical coordinate's name, unit and source (for example Temperature,
+K, thermocouple). Enter a frame value or export the coordinates CSV for bulk
+editing and import it again. Keep the frame/group IDs; row order in this CSV
+does not change series membership. Blank values remain missing. A repeated
+coordinate belongs to each distinct frame. Imports validate the whole file
+before applying any changes.
+
+Acquisition timestamps must use RFC 3339 with a UTC offset, for example
+`2026-09-16T12:00:00+09:00`. Record their start/midpoint/end meaning separately.
+Acquisition ordering places missing timestamps last. **Acquisition time** plots
+seconds from the earliest retained timestamp, while **Physical coordinate**
+uses the declared value/unit. Missing coordinates produce gaps. File modification
+time and application arrival time are never presented as acquisition time.
 
 Choose Point, Maximum, Integral, Mean or absolute E₀. Select the representation
 and coordinate origin, then **Preview** a named frame. Dashed lines show the
@@ -108,8 +124,7 @@ open and the older **Scan overview** keeps its historical sampled definitions.
 
 ## Remaining Phase A gates
 
-Natural/acquisition-time ordering with membership editing, physical-coordinate
-metadata, standalone named measurement presets, automatic revision checking,
+Standalone named measurement presets, automatic revision checking,
 recovery-journal UI, plot-gesture authoring, independent-error propagation and
 full resource/platform qualification remain tracked work. Do not label this
 increment as the complete eight-milestone roadmap or as a released feature.
