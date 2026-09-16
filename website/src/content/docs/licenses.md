@@ -44,6 +44,32 @@ numerical changes from the XrayLarch example collection at revision
 
 ## Documentation screenshots
 
+The current import, Assistant, collection-analysis and Series guides include
+eight full, unedited 1192 × 768 JPEG captures made through computer use on
+16 September 2026 from the signed and notarized macOS ARM64 **0.2.9** release.
+The [release qualification record](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-09-16-release-0.2.9/review.md)
+and [capture manifest](/screenshots/0.2.9/capture.json)
+record software, inputs, checksums, settings and observed results.
+
+The import capture uses Larch's unchanged
+[`json_unzipped.prj`](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/json_unzipped.prj),
+distributed under its repository's
+[MIT notice](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/LICENSE).
+All four project records were imported. The Assistant captures show its menus
+beside the prepared Cu foil reference; no message was sent and no access
+permission was changed for these captures.
+
+The analysis captures use the requested **100 synthetic, noise-free Cu mixtures**
+and prepared Cu foil, Cu₂O and CuO references. They are academic test data, not
+100 new measurements. The original user-supplied Athena project remains private.
+Its acquisition author, public source and redistribution license have not been
+established; the library's MIT/Apache license must not be inferred for those
+measurements. The repository retains the generated test fixtures with the
+user's permission and excludes them from published packages. The
+[fixture provenance](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs/tests/fixtures/analysis/cu-mixtures/README.md)
+records the available attribution and preparation. The figures illustrate
+software behavior and do not establish unique chemical recovery.
+
 The original desktop walkthroughs show full, unedited window captures from the published
 macOS ARM64 0.2.4 package, captured through computer use on 13 September 2026
 with the Cu example and built-in Cu structure. The fitting
@@ -74,7 +100,7 @@ reference signal as `ln(it / ir)` without normalization or detector corrections.
 The repository's `doc/validation/2026-09-14-named-multisignal-import-capture.json`
 records the input, executable and image checksums.
 
-The [Assistant guide](/docs/desktop/assistant/) shows three full, unedited
+The retained historical Assistant images contain three full, unedited
 1192 × 768 JPEG captures made through computer use on 15 September 2026 from
 the signed and notarized macOS ARM64 0.2.7 app. They show its compact menus beside
 the normalization parameters and bundled `cu_150k.xmu` example. No assistant
@@ -93,8 +119,8 @@ chemical standards were used in these two images. The source checkout's
 calculated results and capture hashes. These are separate from the released
 0.2.7 screenshots and do not describe the published 0.2.8 packages.
 
-The [whole-project import guide](/docs/desktop/import/#import-a-whole-project-unreleased)
-includes a full, unedited 1187 × 768 JPEG captured through computer use on
+The retained historical whole-project import image is a full, unedited
+1187 × 768 JPEG captured through computer use on
 15 September 2026 from an unreleased macOS ARM64 source build on
 `fix/import-all-scans`. It shows all four records from Larch's
 [`json_unzipped.prj`](https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/json_unzipped.prj),

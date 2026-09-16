@@ -9,7 +9,7 @@ fast X-ray absorption spectroscopy (XAS) analysis in a small package. It support
 text/XDI spectra, CIF/XYZ structures and CSV/SVG/PNG exports, with desktop tools
 for scattering calculations, joint fits and measurement series.
 
-This manual covers **stable 0.2.7** on the desktop and in Python, TypeScript and
+This manual covers **stable 0.2.9** on the desktop and in Python, TypeScript and
 Rust. The browser previews offer [spectrum processing](/app/) and
 [ReFEFF scattering](/app/scattering/), separately from the published npm API.
 

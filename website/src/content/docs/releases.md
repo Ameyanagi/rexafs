@@ -8,9 +8,39 @@ Published changes and migration notes are listed below. Back up projects before
 updating. Source-checkout APIs are documented in the [Next API
 reference](/docs/reference/).
 
-## Stable 0.2.7
+## Stable 0.2.9
 
-[Download 0.2.7](/download/) or read the
+[Download 0.2.9](/download/) or read the
+[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.9).
+
+- Native [MCR-ALS, LCF and PCA workflows](/docs/science/analysis/) prepare missing
+  processed arrays on copies, validate shared coverage and retain results.
+  Rust defaults to norm; the desktop defaults to flat and allows choosing norm.
+- PCA shows reconstruction error versus component count, numerical-rank and
+  indicator diagnostics, with linear or logarithmic axes. These are numerical
+  diagnostics, not proof of a chemical species count.
+- Recovered MCR components become ordinary calculated groups for subsequent
+  background subtraction, Fourier transformation and fitting, with provenance.
+- Collection plots offer **Plot all**, a sampled preview and color gradients.
+  [Series](/docs/desktop/series/) follows the selected frame and retains all-frame
+  LCF results. Plot presets and calculation ranges are separate.
+- [Project import](/docs/desktop/import/#import-a-whole-project) selects spectra
+  across Athena, Larch-compatible and Larix project scans. The plotted preview
+  retains each scan's mapping and signal choices.
+- The [Assistant](/docs/desktop/assistant/) receives a short overview and retrieves
+  relevant headers, settings and analysis details when needed.
+- [Update and restart](/docs/getting-started/updates/) supports macOS, Windows
+  installers and supported Linux portable installations. Versions through 0.2.7
+  need one manual upgrade to obtain this updater.
+
+Rust, Python, npm and all six desktop targets are published. Windows and Linux
+remain previews. Python and TypeScript LCF/PCA/MCR bindings remain planned.
+Version 0.2.8's registry packages were published separately; its desktop draft
+was not promoted. Version 0.2.9 includes those updater and import-discovery changes.
+
+## Previous stable 0.2.7
+
+[Download 0.2.7](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.7) or read the
 [published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.7).
 
 - The [Assistant](/docs/desktop/assistant/) has compact Model, Reasoning and
@@ -76,7 +106,7 @@ reference](/docs/reference/).
   browser Worker, with generated FEFF files and a provenance record.
 
 These follow website deployment, separately from the versioned npm API. Native
-rexafs 0.2.7 retains ReFEFF 0.3.0. See [WASM scope](/docs/libraries/webassembly/).
+rexafs 0.2.9 retains ReFEFF 0.3.0. See [WASM scope](/docs/libraries/webassembly/).
 
 ## Earlier releases
 

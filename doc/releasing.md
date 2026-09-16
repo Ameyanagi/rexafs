@@ -5,13 +5,15 @@ with a merge commit before tagging. Nightly desktop builds follow `dev`; they
 do not substitute for the qualified stable tag build below. See the
 [development branch workflow](development-branches.md).
 
-## Preparing 0.2.9
+## Published 0.2.9
 
 The [0.2.9 notes](release-notes-0.2.9.md) and
 [qualification record](validation/2026-09-16-release-0.2.9/review.md) track native
 MCR-ALS, shared collection-analysis APIs, multi-scan project import and bounded
-Assistant context. Publication requires the gates below. The website's Stable
-metadata advances only after the new artifacts are published and verified.
+Assistant context. All 37 exact-tag build jobs passed. The seven public registry
+files and 27 desktop assets matched the original build and signed Mac outputs.
+Version 0.2.9 was published on 16 September 2026. Eight unedited computer-use
+captures document the signed Mac app's import, Assistant and analysis workflows.
 
 ## Historical preparation of 0.2.8
 

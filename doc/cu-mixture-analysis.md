@@ -1,8 +1,6 @@
 # Copper mixtures: PCA, MCR-ALS and reference fitting
 
-These desktop features and the native MCR-ALS API are in the **0.2.9 release
-candidate**. Publication is pending; they are not present in published rexafs
-0.2.8.
+These desktop features and the native MCR-ALS API are available in **rexafs 0.2.9**.
 LCF, PCA and MCR-ALS are not yet exposed in the Python or TypeScript bindings.
 See the [current API guide](analysis-api.md) for Rust examples, result shapes,
 defaults and proposed simplifications.

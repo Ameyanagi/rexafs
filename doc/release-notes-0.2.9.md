@@ -1,6 +1,6 @@
 # rexafs 0.2.9
 
-Release candidate; publication is pending. The
+Published on 16 September 2026. The
 [qualification record](validation/2026-09-16-release-0.2.9/review.md) tracks the
 reviewed source, exact-tag build, signing and package publication.
 
@@ -47,7 +47,7 @@ analysis details instead of sending whole project arrays in every request.
 The release also contains the macOS, Windows and Linux updater and expanded
 measurement discovery introduced in [0.2.8](release-notes-0.2.8.md). The 0.2.8
 registry packages were published; its GitHub desktop release remained a draft
-when this candidate was prepared. Existing tags and package bytes are preserved.
+when 0.2.9 was prepared. Existing tags and package bytes are preserved.
 Desktop users on 0.2.7 or earlier need one manual installation to acquire the
 new updater; subsequent supported installations offer **Update and restart**.
 

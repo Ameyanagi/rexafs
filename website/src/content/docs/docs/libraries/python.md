@@ -12,7 +12,7 @@ analysis project. rexafs supports CPython 3.10–3.14; this example uses 3.12:
 ```sh
 uv init --python 3.12 rexafs-analysis
 cd rexafs-analysis
-uv add rexafs==0.2.7 numpy
+uv add rexafs==0.2.9 numpy
 uv run python -c "import rexafs; print(rexafs.__version__)"
 ```
 

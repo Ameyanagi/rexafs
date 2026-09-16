@@ -4,11 +4,16 @@ description: "Analyze collections while keeping preprocessing assumptions explic
 audience: user
 ---
 
-These tools are available in the desktop and Rust in 0.2.4; Python and TypeScript
-expose spectrum processing. In the desktop, use **Data → Parameters** or action search.
-The LCF/PCA descriptions below document released behavior; the
-[unreleased changes](#unreleased-collection-analysis) explain the new input
-preparation and strict coverage contract.
+This guide describes **rexafs 0.2.9**.
+LCF, PCA and native MCR-ALS are available in the desktop and Rust. Python and
+TypeScript expose spectrum processing; their collection-analysis bindings remain
+planned. In the desktop, use **Data → Parameters** or action search.
+
+Missing normalization or background arrays are prepared on temporary copies
+using each input's settings. Existing selected arrays are reused and the source
+spectra remain unchanged. The desktop starts on **flat**; **norm** remains
+selectable. Rust defaults to normalized absorption; choose
+`AnalysisSpace::Flat` explicitly for flattened absorption.
 
 ## Linear combination fitting
 
@@ -20,11 +25,10 @@ $U$ is the unknown, $S_i$ the $i$th standard, $w_i$ its dimensionless weight,
 $M$ the number of fitted samples and $S$ the number of standards. The axis $x$
 is energy in eV or k in Å⁻¹, depending on the analysis space. All spectral arrays
 must use the same units and normalization. Standards are interpolated onto the
-unknown's grid in the selected range. Outside a standard's measured coverage,
-the interpolator holds its endpoint value. Choose an interval measured for
-every spectrum so that these constant tails do not affect the fit. The Rust
-analysis functions require the relevant normalization/background arrays to
-exist; they do not run processing stages automatically or modify their inputs.
+unknown's grid in the selected range. Bounds must be finite and increasing, and
+every input must cover the entire interval. References also need coverage for
+the permitted shift margin when shifts are fitted. An incomplete interval
+produces an error rather than extending endpoint values.
 
 The default bounds are $0\le w_i\le1$ with $\sum_iw_i=1$. Energy-space ranges
 start at −20 to +30 eV relative to $E_0$; χ-space ranges start at 3–12 Å⁻¹.
@@ -43,7 +47,7 @@ When shifts are allowed, an outer nonlinear solve varies the shifts and solves
 the bounded weights again at each step. See
 [Nocedal and Wright, *Numerical Optimization*](https://doi.org/10.1007/978-0-387-40065-5)
 for active-set constrained optimization. This description is traced to
-[lcf.rs](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs/src/xafs/analysis/lcf.rs).
+[lcf.rs](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs/src/xafs/analysis/lcf.rs).
 The generated [Rust API](/api/rust/rexafs/xafs/analysis/index.html) documents
 `LcfConfig`, `lcf` and combination searches. For the general XANES use of reference
 mixtures, see [Larch's linear-analysis guide](https://xraypy.github.io/xraylarch/xafs_xanes.html).
@@ -106,8 +110,9 @@ the stored mean (zero without centering), and $\mathbf a$ contains projection
 scores in the input spectral units. The reconstructed $\widehat{\mathbf y}$
 has those same units. Scores can be negative and are not composition fractions.
 Zero retained components reconstructs the mean alone. `target_transform()`
-interpolates onto the training grid using the same endpoint-held convention as
-LCF; `reconstruct()` instead requires values already on that grid.
+interpolates within the target's measured coverage onto the training grid and
+rejects incomplete coverage; `reconstruct()` instead requires values already on
+that grid.
 
 The indicator used to suggest a retained count $c$ is
 
@@ -120,33 +125,31 @@ $$
 
 Here $n$ is the number of training spectra, $m$ the number of common grid
 points, and the eigenvalue index starts at one. This is the precise scaling
-implemented in [pca.rs](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs/src/xafs/analysis/pca.rs).
+implemented in [pca.rs](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs/src/xafs/analysis/pca.rs).
 The method is based on [Malinowski (1977)](https://doi.org/10.1021/ac50012a027);
 its minimum suggests a numerical rank rather than proving a number of chemical
-species. rexafs searches finite minima from $c=1$ and limits its suggestion to
-available components. When $n>m$, the missing tail eigenvalues count as zero
-and the resulting minima can be uninformative. Inspect the spectrum shapes,
-noise, and reconstruction error along with either rank suggestion.
+species. The recommended `component_count_suggestion()` first recognizes exact
+low-rank data using a floating-point tolerance. Otherwise it requires a finite,
+positive interior IND minimum below both boundary values. Zero data and an
+unsupported boundary minimum return no suggestion. This is a rexafs diagnostic,
+not an experimental noise threshold. When $n>m$, missing tail eigenvalues count
+as zero and can make IND uninformative. The older
+`suggested_components_ind()` helper retains its historical minimum search for
+compatibility. Inspect spectrum shapes, noise and reconstruction error along
+with any count suggestion.
 
 PCA reconstruction `chi_square` is also a raw squared residual sum; its reduced
 value divides by `max(m - c, 1)`. No experimental noise variance is supplied to
 this calculation, so this number is not a calibrated chi-square test.
 
-## Unreleased collection analysis
+<a id="unreleased-collection-analysis"></a>
 
-This section describes the **0.2.9 release candidate**. Publication is pending.
+## Collection workflow
 
-Source checkouts add native MCR-ALS in **Data → Parameters**, alongside LCF and
-PCA. These additions are not available in published 0.2.8 or its Python and
-TypeScript bindings. The desktop analysis selector starts on **flat**, with norm
-still selectable; core APIs retain their existing norm default.
-
-The unreleased Rust APIs now prepare missing normalization/background arrays on
-temporary copies using each input's settings, while reusing existing results.
-Core defaults remain Norm; select `AnalysisSpace::Flat` explicitly for flat data.
-LCF, PCA and MCR all reject nonfinite/reversed bounds and incomplete coverage
-instead of extending endpoint values. Energy bounds remain offsets from E₀;
-LCF references also need coverage for the permitted shift margin.
+LCF, PCA and MCR use the same input-preparation and coverage rules. Energy bounds
+are offsets from E₀: the target's E₀ for LCF, and the first input's E₀ for PCA
+and MCR. View presets change the plot only; calculation bounds select the data
+used by an analysis.
 
 `lcf_batch` keeps each target's result or error in input order, and
 `lcf_batch_with_progress` supports cancellation after completed rows. The desktop
@@ -170,6 +173,14 @@ uses a display-only floor of 10⁻³²; Linear preserves zeros. Cumulative
 contribution remains linear. Switching scales does not recalculate PCA or
 change exported values.
 
+[![PCA reconstruction error versus retained component count, with a linear axis in rexafs 0.2.9](/screenshots/0.2.9/pca-error-linear.jpg)](/screenshots/0.2.9/pca-error-linear.jpg)
+
+This signed-release capture uses all 100 synthetic Cu mixtures in **flat**, with
+mean subtraction enabled and a −29 to +171 eV interval relative to E₀. Two
+varying directions explain 75.91% and 24.09% of the centered squared signal.
+The mean retains the shared part of the three-standard mixture; two directions
+do not imply two chemical species. Select any screenshot to view it at full size.
+
 MCR fits the bilinear model $D = C S + R$, with spectra as rows of $D$,
 nonnegative coefficient rows in $C$, component spectra as rows of $S$, and
 residuals $R$. Closure and spectral nonnegativity are separate constraints.
@@ -178,8 +189,16 @@ settings. Every input must provide complete common measured coverage.
 Inspect convergence, per-sample residuals and component spectra; a small residual
 does not establish unique chemical factors. See the
 [NIST pyMCR paper](https://doi.org/10.6028/jres.124.018) for the model and the
-[unreleased Rust API](/api/rust-next/rexafs/xafs/analysis/mcr/index.html) for
+[Rust API](/api/rust/rexafs/xafs/analysis/mcr/index.html) for
 rexafs's independent implementation, defaults and error conditions.
+
+[![Three MCR component spectra from 100 flattened Cu mixtures in rexafs 0.2.9](/screenshots/0.2.9/mcr-components.jpg)](/screenshots/0.2.9/mcr-components.jpg)
+
+This run uses the common full interval, 8780.2–9768.2 eV, three components,
+coefficient closure, seed zero and at most 2,000 iterations. Spectral
+nonnegativity is disabled to retain small negative baselines. It converged
+after 870 iterations. These are estimated factors, not independently identified
+pure compounds; reference comparison is still necessary.
 
 After fitting, mark standards and use **Compare marked standards** for a matched
 spectral overlay without rescaling. **Add to Groups** retains each MCR component,
@@ -201,6 +220,14 @@ differences. A component only covers the retained MCR interval, so repeat MCR
 over wider measured coverage before doing broad-range EXAFS fitting. The Rust
 `McrResult::component_spectrum(index)` method provides this conversion; these
 analysis APIs are not yet exposed by the Python or TypeScript bindings.
+
+[![A recovered MCR component processed through background subtraction and Fourier transformation in rexafs 0.2.9](/screenshots/0.2.9/mcr-component-fft.jpg)](/screenshots/0.2.9/mcr-component-fft.jpg)
+
+The component was added with **Add to Groups** and opened in **Transform**.
+The plots demonstrate subsequent processing over its retained coverage; they
+do not establish a physically unique component or validate a structural model.
+All three captures were made through computer use from the signed 0.2.9 Mac app.
+See [input and screenshot provenance](/licenses/#documentation-screenshots).
 
 The Series view separately offers norm and flat absorption, with flat initially
 selected. Cursor plots follow the selected frame in energy, k and R spaces.
