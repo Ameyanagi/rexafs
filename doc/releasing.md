@@ -5,13 +5,22 @@ with a merge commit before tagging. Nightly desktop builds follow `dev`; they
 do not substitute for the qualified stable tag build below. See the
 [development branch workflow](development-branches.md).
 
-## Preparing 0.2.8
+## Preparing 0.2.9
+
+The [0.2.9 notes](release-notes-0.2.9.md) and
+[qualification record](validation/2026-09-16-release-0.2.9/review.md) track native
+MCR-ALS, shared collection-analysis APIs, multi-scan project import and bounded
+Assistant context. Publication requires the gates below. The website's Stable
+metadata advances only after the new artifacts are published and verified.
+
+## Historical preparation of 0.2.8
 
 The [0.2.8 notes](release-notes-0.2.8.md) and
 [qualification record](validation/2026-09-15-release-0.2.8/review.md) track
-one-button desktop updates and GUI measurement discovery. Publication remains
-pending until the reviewed source, immutable-tag build and signed downloads
-pass the release gates below.
+one-button desktop updates and GUI measurement discovery. On 16 September 2026,
+0.2.8 was verified present on crates.io, PyPI and npm; its GitHub desktop release
+remained a draft. The original preparation record is retained. Version 0.2.9
+includes these changes without replacing 0.2.8's tag or registry packages.
 
 ## Published 0.2.7
 

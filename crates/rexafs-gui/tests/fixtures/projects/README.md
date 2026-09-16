@@ -21,6 +21,7 @@ are not supported or retained as compatibility fixtures.
 | `rexafs-0.2.6-links.rxs`, `rexafs-0.2.6-embedded.rxs` | Saved and reopened through the 0.2.6 writer; format 1 with unchanged numerical defaults and preserved import state |
 | `rexafs-0.2.7-links.rxs`, `rexafs-0.2.7-embedded.rxs` | Saved and reopened through the 0.2.7 writer; unchanged format-1 state, numerical defaults and retained Assistant conversations |
 | `rexafs-0.2.8-links.rxs`, `rexafs-0.2.8-embedded.rxs` | Saved and reopened through the 0.2.8 writer; unchanged format-1 defaults, numerical settings, retained import mappings and Assistant conversations |
+| `rexafs-0.2.9-links.rxs`, `rexafs-0.2.9-embedded.rxs` | Saved and reopened through the 0.2.9 writer; synthetic flat LCF, batch LCF, centered PCA and native MCR results with ordered source identities, alongside retained format-1 state |
 | `future-version.rxs` | Future format: reject without modification |
 | `truncated.rxs` | Corrupt/incomplete input: reject without modification |
 | `data/*.xmu`, `feff/*.dat` | Real inputs for relocation, byte recovery and processing checks |
@@ -53,7 +54,9 @@ The 0.1.2 reference source `data/Ru_QAS.dat` is copied unchanged from the reposi
 The 0.1.4 pair adds per-path coordination number N and two synthetic saved
 Assistant conversations, including thinking, tool activity, receipts and status
 entries. It was saved through the 0.1.4 writer. The current maintainer writer loads
-the retained 0.2.0 linked project and adds the 0.2.1 settings. To generate a new pair explicitly,
+the retained 0.2.0 linked project and adds the 0.2.1 settings and the 0.2.9
+synthetic collection-analysis results. These use three mixtures of two analytic
+arctangent curves; they are persistence examples, not measured Cu spectra. To generate a new pair explicitly,
 set `REXAFS_FIXTURE_OUTPUT` and run `cargo test -p rexafs-gui
 write_release_compatibility_fixtures -- --ignored`; the maintainer test refuses
 to overwrite existing fixtures. Review and checksum the new files afterward.

@@ -1,5 +1,5 @@
 ---
-title: "LCF, PCA and data treatment"
+title: "LCF, PCA and MCR-ALS"
 description: "Analyze collections while keeping preprocessing assumptions explicit."
 audience: user
 ---
@@ -134,6 +134,8 @@ this calculation, so this number is not a calibrated chi-square test.
 
 ## Unreleased collection analysis
 
+This section describes the **0.2.9 release candidate**. Publication is pending.
+
 Source checkouts add native MCR-ALS in **Data → Parameters**, alongside LCF and
 PCA. These additions are not available in published 0.2.8 or its Python and
 TypeScript bindings. The desktop analysis selector starts on **flat**, with norm
@@ -171,7 +173,8 @@ change exported values.
 MCR fits the bilinear model $D = C S + R$, with spectra as rows of $D$,
 nonnegative coefficient rows in $C$, component spectra as rows of $S$, and
 residuals $R$. Closure and spectral nonnegativity are separate constraints.
-It requires prepared norm or flat arrays with complete common measured coverage.
+Missing norm or flat arrays are prepared on temporary copies using input
+settings. Every input must provide complete common measured coverage.
 Inspect convergence, per-sample residuals and component spectra; a small residual
 does not establish unique chemical factors. See the
 [NIST pyMCR paper](https://doi.org/10.6028/jres.124.018) for the model and the

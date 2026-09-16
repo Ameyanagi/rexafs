@@ -31,7 +31,7 @@ pub struct McrAnchor {
     pub weights: Vec<f64>,
 }
 
-/// Settings for native MCR-ALS (unreleased).
+/// Settings for native MCR-ALS, introduced in 0.2.9.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McrConfig {
     /// Normalized or flattened absorption. Default: normalized. Missing arrays
