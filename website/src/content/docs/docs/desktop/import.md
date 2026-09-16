@@ -58,6 +58,32 @@ multiple-file selections; import containers individually in these versions.
 Source files are unchanged; saved desktop projects
 retain original measurement bytes and accepted signal mappings.
 
+### Confirm matching files together (development version)
+
+Drop several `.qd` files, drop a folder, or select several files in **Import…**.
+In the measurement preview, **Apply to N matching files in this import** is
+initially checked when compatible files are available. Review the plotted
+spectrum and adjust the mapping once, then choose **Import N spectra**.
+Uncheck the option to import only the previewed file.
+
+Matching uses the content-detected format, column names and units, detector
+roles, reader warnings and energy conversion, including the monochromator
+spacing. Different point counts, acquisition timestamps and numeric values are
+allowed. Each imported spectrum retains its own original data and header.
+Files with different layouts, unreadable data, unnamed columns or multiple
+scans remain under **Pending import** for separate review. **Source details**
+lists files needing that review.
+
+This confirmation applies only to the current drop or file selection; it does
+not create a persistent recipe or approve a later drop. Every selected file is
+validated before any groups are added. If a matching file changes or its chosen
+arithmetic is invalid, no groups are added; the error identifies that file.
+Reopen the preview after correcting the source, or uncheck the batch option to
+review files individually. One undo removes the accepted batch.
+
+Implemented by the desktop's `measurement_import::batch` module. This option
+is newer than the released 0.2.9 GUI shown in the screenshots below.
+
 <a id="import-a-whole-project-unreleased"></a>
 
 ### Import a whole project

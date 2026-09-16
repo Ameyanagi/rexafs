@@ -32,6 +32,10 @@ impl ImportEditor {
             return false;
         };
         match action {
+            Action::MatchingFiles => {
+                source.apply_to_batch = !source.apply_to_batch;
+                self.error = None;
+            }
             Action::DatasetView => {
                 self.choose_datasets = true;
                 self.selector = None;
@@ -168,6 +172,26 @@ impl ImportEditor {
             );
         }
         body = body.child(selectors);
+        if source.batch_file_count() > 1 {
+            body = body.child(self.button(
+                Action::MatchingFiles,
+                format!(
+                    "{} Apply to {} matching files in this import",
+                    if source.apply_to_batch { "☑" } else { "☐" },
+                    source.batch_file_count()
+                ),
+                true,
+                cx,
+            ));
+        }
+        if let Some(batch) = &source.batch
+            && !batch.separate.is_empty()
+        {
+            body = body.child(div().text_color(t.text_muted).child(format!(
+                "{} other files need separate review.",
+                batch.separate.len()
+            )));
+        }
         if let Some(scan) = scan.filter(|_| !self.choose_datasets && source.signal.is_some()) {
             let mut outputs = div()
                 .id("measurement-output-choices")
@@ -612,6 +636,11 @@ impl ImportEditor {
             for line in source.source_details().lines() {
                 details = details.child(line.to_owned());
             }
+            if let Some(batch) = &source.batch {
+                for (path, reason) in &batch.separate {
+                    details = details.child(format!("{}: {reason}", path.display()));
+                }
+            }
             if let Some(table) = &self.table {
                 details = details.child("First source rows (unchanged):");
                 if let Some(names) = &table.names {
@@ -628,7 +657,8 @@ impl ImportEditor {
             }
             body = body.child(details);
         }
-        let ready = !self.choose_datasets
+        let ready = !self.locked
+            && !self.choose_datasets
             && source.import_ready()
             && (!source.preview_included()
                 || (self.error.is_none()
@@ -694,15 +724,19 @@ impl ImportEditor {
                     .child(self.button(Action::Cancel, "Cancel", true, cx))
                     .child(self.button(
                         Action::Apply,
-                        format!(
-                            "Import {} {}",
-                            source.import_count(),
-                            if source.import_count() == 1 {
-                                "spectrum"
-                            } else {
-                                "spectra"
-                            }
-                        ),
+                        if self.locked {
+                            "Importing…".into()
+                        } else {
+                            format!(
+                                "Import {} {}",
+                                source.total_import_count(),
+                                if source.total_import_count() == 1 {
+                                    "spectrum"
+                                } else {
+                                    "spectra"
+                                }
+                            )
+                        },
                         ready,
                         cx,
                     )),
