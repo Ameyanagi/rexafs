@@ -17,6 +17,7 @@ use std::{
 };
 
 mod manage;
+mod presets;
 mod view;
 
 pub(crate) struct MeasurementState {
@@ -25,6 +26,7 @@ pub(crate) struct MeasurementState {
     pub selected_series: Option<usize>,
     pub selected_run: Option<usize>,
     kind: usize,
+    initial_range: (f64, f64),
     space: MeasurementSpace,
     relative: bool,
     fields: Vec<Entity<NumericField>>,
@@ -43,6 +45,9 @@ pub(crate) struct MeasurementState {
     stale: Vec<bool>,
     editor: Option<manage::SeriesEditor>,
     trend_axis: TrendAxis,
+    preset_name: Option<Entity<crate::widgets::text_input::TextInput>>,
+    selected_preset: Option<crate::group_identity::GroupId>,
+    pick_range: Option<Vec<f64>>,
 }
 
 impl Default for MeasurementState {
@@ -60,14 +65,39 @@ impl MeasurementState {
                 .iter()
                 .rposition(|run| run.series_id == series.id)
         });
+        let definition = selected_run.map(|i| &archive.runs[i].definition);
+        let kind = definition
+            .map(|d| {
+                if d.edge_energy {
+                    4
+                } else {
+                    match d.measurement.metric {
+                        Metric::Point { .. } => 0,
+                        Metric::Maximum { .. } => 1,
+                        Metric::Integral { .. } => 2,
+                        _ => 3,
+                    }
+                }
+            })
+            .unwrap_or(1);
+        let space = definition
+            .map(|d| d.measurement.space)
+            .unwrap_or(MeasurementSpace::Norm);
+        let relative = definition
+            .map(|d| d.measurement.origin == AxisOrigin::E0)
+            .unwrap_or(true);
+        let initial_range = definition
+            .map(|d| d.measurement.metric.bounds())
+            .unwrap_or((-20., 50.));
         Self {
             archive,
             overview: false,
             selected_series,
             selected_run,
-            kind: 1,
-            space: MeasurementSpace::Norm,
-            relative: true,
+            kind,
+            initial_range,
+            space,
+            relative,
             fields: vec![],
             message: String::new(),
             preview_index: 0,
@@ -84,6 +114,9 @@ impl MeasurementState {
             stale: vec![],
             editor: None,
             trend_axis: TrendAxis::Sequence,
+            preset_name: None,
+            selected_preset: None,
+            pick_range: None,
         }
     }
     pub fn stop(&mut self) {
@@ -193,6 +226,7 @@ impl StudioApp {
             frames,
         });
         self.measurements.selected_series = Some(self.measurements.archive.series.len() - 1);
+        self.measurements.editor = None;
         self.measurements.selected_run = None;
         self.measurements.plot = None;
         self.measurements.page = 0;
@@ -251,15 +285,22 @@ impl StudioApp {
         };
         if let Some(old) = self
             .measurements
-            .selected_run
-            .and_then(|i| self.measurements.archive.runs.get(i))
+            .archive
+            .presets
+            .iter()
+            .find(|p| Some(&p.id) == self.measurements.selected_preset.as_ref())
+            .or_else(|| {
+                self.measurements
+                    .selected_run
+                    .and_then(|i| self.measurements.archive.runs.get(i))
+                    .map(|r| &r.definition)
+            })
         {
-            definition.id = old.definition.id.clone();
-            definition.revision = old.definition.revision
-                + u64::from(
-                    old.definition.measurement != definition.measurement
-                        || old.definition.edge_energy != definition.edge_energy,
-                );
+            definition.id = old.id.clone();
+            if self.measurements.selected_preset.as_ref() == Some(&old.id) {
+                definition.name = old.name.clone();
+            }
+            definition.revision = self.measurements.archive.definition_revision(&definition);
         }
         Ok(definition)
     }
@@ -350,6 +391,7 @@ impl StudioApp {
                             measured.value
                         },
                         config.space,
+                        metric.bounds().0 - config.metric.bounds().0,
                     ))
                 })
                 .await;
@@ -360,7 +402,7 @@ impl StudioApp {
                     return;
                 }
                 match result {
-                    Ok((label, x, y, metric, value, space)) => {
+                    Ok((label, x, y, metric, value, space, origin)) => {
                         let (lo, hi) = metric.bounds();
                         let mut plot: Plot = Plot::new()
                             .theme(app.theme.plot_theme())
@@ -377,7 +419,25 @@ impl StudioApp {
                             .ylabel(space_label(space))
                             .size_px(720, 300)
                             .major_ticks_x(5);
-                        app.measurements.preview = Some(plot_builder(plot).interactive().build(cx));
+                        let preview = plot_builder(plot).interactive().build(cx);
+                        cx.subscribe(&preview, move |app: &mut Self, _, event: &ruviz_gpui::PlotPointerEvent, cx| {
+                            if event.kind != ruviz_gpui::PlotPointerEventKind::Click || event.mouse_button != Some(gpui::MouseButton::Left) || app.measurements.preview_generation != request { return; }
+                            let Some(position)=event.data_position else {return};
+                            let Some(picks)=&mut app.measurements.pick_range else {return};
+                            picks.push(position.x-origin);
+                            if app.measurements.kind==0 || picks.len()==2 {
+                                let lo=picks.iter().copied().fold(f64::INFINITY,f64::min);
+                                let hi=picks.iter().copied().fold(f64::NEG_INFINITY,f64::max);
+                                if app.measurements.kind!=0 && hi<=lo {app.measurements.message="Choose two distinct positions.".into();app.measurements.pick_range=Some(vec![]);cx.notify();return;}
+                                app.measurements.fields[0].update(cx,|f,cx|f.set_value(Some(lo),cx));
+                                app.measurements.fields[1].update(cx,|f,cx|f.set_value(Some(hi),cx));
+                                app.measurements.pick_range=None;
+                                app.measurements.message="Range selected from the plot; review the displayed coordinates.".into();
+                                app.preview_measurement(cx);
+                            } else { app.measurements.message="Now click the other boundary.".into(); }
+                            cx.notify();
+                        }).detach();
+                        app.measurements.preview = Some(preview);
                         app.measurements.preview_label =
                             format!("{label} · {value:.6} · [{lo:.3}, {hi:.3}]");
                     }
@@ -596,9 +656,13 @@ impl StudioApp {
                 ys.push(value.value);
             } else if !xs.is_empty() {
                 plot = if xs.len() == 1 {
-                    plot.scatter(&xs, &ys).into()
+                    plot.scatter(&xs, &ys)
+                        .color(crate::plotting::trace_color(&self.theme, 0))
+                        .into()
                 } else {
-                    plot.line(&xs, &ys).into()
+                    plot.line(&xs, &ys)
+                        .color(crate::plotting::trace_color(&self.theme, 0))
+                        .into()
                 };
                 xs.clear();
                 ys.clear();

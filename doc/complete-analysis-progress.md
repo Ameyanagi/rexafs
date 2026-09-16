@@ -30,8 +30,13 @@ CSV import/export. Computer use verified 513 coordinate-aware results, repeated
 and missing coordinates, temperature/time plots and unchanged historical values
 after membership revisions. Ten focused measurement tests passed.
 
-**Phase A is not complete.** Remaining gates include named measurement presets,
-automatic revision checking, recovery-journal UI, plot-gesture authoring,
+Named presets and plot selection are implemented. Computer use verified saving
+and restoring a Flat preset, updating its revision, exporting/importing it
+without replacing the original, and calculating all 513 frames. Plot clicks on
+absolute energy produced the correct E₀-relative definition in the JSON export.
+
+**Phase A is not complete.** Remaining gates include
+automatic revision checking, recovery-journal UI,
 independent-error propagation, and broader resource/platform qualification.
 
 ## API rule for every milestone

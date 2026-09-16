@@ -96,7 +96,20 @@ time and application arrival time are never presented as acquisition time.
 
 Choose Point, Maximum, Integral, Mean or absolute E₀. Select the representation
 and coordinate origin, then **Preview** a named frame. Dashed lines show the
-resolved point/region on its spectrum. **Calculate all N frames** calculates
+resolved point/region on its spectrum. **Select on plot** accepts one click for
+a point, or two clicks for interval boundaries. It converts the displayed
+absolute coordinates to the selected origin; review the numerical fields
+before calculating. Outside-plot clicks do not define a coordinate.
+
+Name a measurement and choose **Save preset** to reuse it. Selecting a preset
+restores its operation, representation, origin and bounds. Edits create a new
+revision; existing runs keep their original definitions. **Export preset** and
+**Import preset** move the definition between projects as versioned JSON,
+without carrying spectra. Imports retain existing presets with the same name
+and assign a distinct name/identity to the imported copy. Presets do not copy
+normalization settings: each frame's processing settings remain explicit.
+
+**Calculate all N frames** calculates
 every member, independently of the older sampled overview. The default maximum
 range is −20…+50 eV; a conventional white-line definition can be entered as
 0…+30 eV in an explicitly selected Norm or Flat representation.
@@ -124,7 +137,6 @@ open and the older **Scan overview** keeps its historical sampled definitions.
 
 ## Remaining Phase A gates
 
-Standalone named measurement presets, automatic revision checking,
-recovery-journal UI, plot-gesture authoring, independent-error propagation and
+Automatic revision checking, recovery-journal UI, independent-error propagation and
 full resource/platform qualification remain tracked work. Do not label this
 increment as the complete eight-milestone roadmap or as a released feature.

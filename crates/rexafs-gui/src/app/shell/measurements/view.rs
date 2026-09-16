@@ -55,7 +55,10 @@ impl StudioApp {
     fn measurement_workspace(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let t = self.theme;
         if self.measurements.fields.is_empty() {
-            for (label, value) in [("Start / point", -20.), ("End", 50.)] {
+            for (label, value) in [
+                ("Start / point", self.measurements.initial_range.0),
+                ("End", self.measurements.initial_range.1),
+            ] {
                 let field = cx.new(|cx| {
                     NumericField::new(label, "required", Some(value), FieldKind::Float, t, cx)
                 });
@@ -135,6 +138,7 @@ impl StudioApp {
             body = body.child(choices);
         }
         body = body.child(self.measurement_management(cx));
+        body = body.child(self.measurement_presets(cx));
         let Some(series) = self
             .measurements
             .selected_series
@@ -166,6 +170,7 @@ impl StudioApp {
                 )
                 .on_click(cx.listener(move |app, _, _, cx| {
                     app.measurements.kind = index;
+                    app.measurements.pick_range = None;
                     app.measurements.preview = None;
                     app.measurements.preview_generation += 1;
                     cx.notify();
@@ -203,6 +208,7 @@ impl StudioApp {
                             MeasurementSpace::Mu | MeasurementSpace::Norm | MeasurementSpace::Flat
                         );
                         app.measurements.space = space;
+                        app.measurements.pick_range = None;
                         app.measurements.relative = energy;
                         if was_energy != energy || !energy {
                             let (lo, hi) = match space {
@@ -315,6 +321,38 @@ impl StudioApp {
                     true,
                 )
                 .on_click(cx.listener(|app, _, _, cx| app.start_measurements(false, cx))),
+            );
+        }
+        if self.measurements.kind != 4 {
+            controls = controls.child(
+                button(
+                    &t,
+                    "measurement-pick-range",
+                    if self.measurements.pick_range.is_some() {
+                        "Cancel plot selection"
+                    } else {
+                        "Select on plot"
+                    },
+                    false,
+                )
+                .on_click(cx.listener(|app, _, _, cx| {
+                    if app.measurements.pick_range.is_some() {
+                        app.measurements.pick_range = None;
+                        app.measurements.message.clear();
+                    } else {
+                        app.measurements.pick_range = Some(vec![]);
+                        app.measurements.message = if app.measurements.kind == 0 {
+                            "Click a position on the preview."
+                        } else {
+                            "Click the two interval boundaries on the preview."
+                        }
+                        .into();
+                        if app.measurements.preview.is_none() {
+                            app.preview_measurement(cx);
+                        }
+                    }
+                    cx.notify();
+                })),
             );
         }
         body = body.child(controls);
@@ -471,8 +509,22 @@ impl StudioApp {
                         .map(|s| format!(" · {s}"))
                         .unwrap_or_default()
                 };
+                let coordinate = match self.measurements.trend_axis {
+                    TrendAxis::Sequence => String::new(),
+                    TrendAxis::Coordinate => row
+                        .frame
+                        .coordinate
+                        .map(|x| format!(" · {x} {}", run.coordinate.unit))
+                        .unwrap_or_else(|| " · coordinate missing".into()),
+                    TrendAxis::ElapsedAcquisition => row
+                        .frame
+                        .acquired_at
+                        .as_ref()
+                        .map(|t| format!(" · {t}"))
+                        .unwrap_or_else(|| " · timestamp missing".into()),
+                };
                 let label = format!(
-                    "{} · {} · {value} · {:?}{reason}",
+                    "{} · {} · {value} · {:?}{coordinate}{reason}",
                     row.frame.sequence, row.frame.label, row.status
                 );
                 let group = row.frame.group.clone();

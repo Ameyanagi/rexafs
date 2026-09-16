@@ -347,3 +347,23 @@ fn coordinate_sidecars_are_atomic_id_keyed_and_timezone_aware() {
             .is_lt()
     );
 }
+
+#[test]
+fn unsaved_preset_edits_reserve_distinct_revisions_in_runs() {
+    let inputs = vec![input("one", 1.)];
+    let mut preset = definition();
+    let mut archive = SeriesArchive {
+        presets: vec![preset.clone()],
+        ..Default::default()
+    };
+    preset.measurement.metric = Metric::Point { x: 0.5 };
+    preset.revision = archive.definition_revision(&preset);
+    assert_eq!(preset.revision, 2);
+    archive
+        .runs
+        .push(SeriesRun::new(&series(&inputs), preset.clone(), &inputs));
+    preset.measurement.metric = Metric::Point { x: 1.5 };
+    assert_eq!(archive.definition_revision(&preset), 3);
+    preset.measurement.metric = Metric::Point { x: 0.5 };
+    assert_eq!(archive.definition_revision(&preset), 2);
+}

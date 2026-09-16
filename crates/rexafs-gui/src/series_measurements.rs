@@ -19,6 +19,30 @@ pub struct SeriesArchive {
     pub presets: Vec<MetricDefinition>,
 }
 
+impl SeriesArchive {
+    /// Reuse a revision only for an identical numerical definition. Unsaved
+    /// edits used in a run must also reserve a revision of their preset.
+    pub fn definition_revision(&self, definition: &MetricDefinition) -> u64 {
+        let mut greatest = 0;
+        let mut matching = None;
+        for old in self
+            .presets
+            .iter()
+            .chain(self.runs.iter().map(|r| &r.definition))
+        {
+            if old.id == definition.id {
+                greatest = greatest.max(old.revision);
+                if old.measurement == definition.measurement
+                    && old.edge_energy == definition.edge_energy
+                {
+                    matching = Some(matching.unwrap_or(0).max(old.revision));
+                }
+            }
+        }
+        matching.unwrap_or(greatest + 1)
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SeriesDefinition {
     pub id: GroupId,
