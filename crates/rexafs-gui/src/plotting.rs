@@ -214,6 +214,8 @@ pub enum SeriesKey {
     Trace(usize),
     PreEdge,
     PostEdge,
+    /// MBACK's complete fitted atomic model, converted to input mu units.
+    MbackFit,
     Bkg,
     Deriv,
     Kwin,
@@ -575,7 +577,8 @@ fn dashed(key: SeriesKey, x: Vec<f64>, y: Vec<f64>, color: Color, label: &str) -
 }
 
 /// Normalization-check overlays for the active trace on the mu(E) plot:
-/// dashed pre/post-edge trendlines, the background spline, the E0 line, and
+/// the selected method's fit (pre/post-edge trendlines or the complete MBACK model),
+/// the AUTOBK spline, the E0 line, and
 /// the fit-window lines (pre-edge range muted, norm range in a second hue;
 /// values are stored relative to E0). `shift` is the active trace's
 /// waterfall offset so the trendlines sit on the curve they belong to.
@@ -584,34 +587,42 @@ fn add_mu_diagnostics(spec: &mut QuadrantSpec, sp: &XASSpectrum, view: &ViewOpti
         Some(rexafs::NormalizationMethod::MBack(m)) => m.result.as_deref(),
         _ => None,
     };
-    for (show, key, label, conventional, atomic) in [
-        (
-            view.show_pre,
-            SeriesKey::PreEdge,
-            "pre-edge",
-            sp.pre_edge(),
-            mback.map(|r| &r.pre_curve),
-        ),
-        (
-            view.show_post,
-            SeriesKey::PostEdge,
-            "post-edge",
-            sp.post_edge(),
-            mback.map(|r| &r.post_curve),
-        ),
-    ] {
-        if !show {
-            continue;
+    if let Some(result) = mback {
+        if view.show_pre
+            && view.show_post
+            && let Some(energy) = &sp.energy
+        {
+            // MBACK fits s * mu(E) to f₂(E) + B(E). Show the complete fitted
+            // model in the input absorption units, not just its background.
+            // Keep the auxiliary MBACK baselines internal; display pre/post
+            // lines only when the polynomial method is selected.
+            spec.series.push(SeriesSpec {
+                key: SeriesKey::MbackFit,
+                x: vecs(energy),
+                y: result
+                    .f2
+                    .iter()
+                    .zip(&result.background)
+                    .map(|(f2, b)| (f2 + b) / result.scale + shift)
+                    .collect(),
+                width: 1.5,
+                color: BKG_COLOR,
+                dashed: false,
+                label: Some("MBACK fit".into()),
+            });
         }
-        if let Some(energy) = &sp.energy {
-            let y = conventional
-                .map(|v| v.iter().map(|v| v + shift).collect::<Vec<_>>())
-                .or_else(|| {
-                    atomic
-                        .zip(mback)
-                        .map(|(v, r)| v.iter().map(|v| v / r.scale + shift).collect())
-                });
-            if let Some(y) = y {
+    } else {
+        for (show, key, label, values) in [
+            (view.show_pre, SeriesKey::PreEdge, "pre-edge", sp.pre_edge()),
+            (
+                view.show_post,
+                SeriesKey::PostEdge,
+                "post-edge",
+                sp.post_edge(),
+            ),
+        ] {
+            if show && let (Some(energy), Some(values)) = (&sp.energy, values) {
+                let y = values.iter().map(|v| v + shift).collect();
                 spec.series.push(dashed(key, vecs(energy), y, TREND, label));
             }
         }
@@ -1399,6 +1410,89 @@ pub fn build_trend(values: &[f64], frames: &[f64], ylabel: &str, theme: &Theme) 
 #[cfg(test)]
 mod tests {
     use super::{chik_label, chir_label, heatmap_y_extent, middle_truncate};
+
+    #[test]
+    fn normalization_fit_overlay_follows_method_units_toggle_and_active_trace() {
+        use super::*;
+        use crate::params::{PipelineParams, process_file};
+        use std::{path::Path, sync::Arc};
+        let file =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/projects/data/cu_150k.xmu");
+        let polynomial = Arc::new(process_file(&file, &PipelineParams::default()).unwrap());
+        let mut mback = (*polynomial).clone();
+        mback
+            .set_normalization_method(rexafs::MBack::for_edge("Cu", "K"))
+            .unwrap();
+        mback.normalize().unwrap();
+        let mback = Arc::new(mback);
+        let before = serde_json::to_string(&*mback).unwrap();
+        let mut traces = vec![
+            QuadTrace {
+                color_index: 0,
+                color: None,
+                label: "Polynomial".into(),
+                sp: polynomial,
+                active: false,
+            },
+            QuadTrace {
+                color_index: 1,
+                color: None,
+                label: "MBACK".into(),
+                sp: mback.clone(),
+                active: true,
+            },
+        ];
+        let view = ViewOptions {
+            show_pre: true,
+            show_post: true,
+            layout: TraceLayout::Waterfall,
+            offset_frac: 0.2,
+            ..Default::default()
+        };
+        let specs = build_quadrant_specs(&traces, &view, &Theme::dark(), true);
+        let overlay = specs[0]
+            .series
+            .iter()
+            .find(|s| s.key == SeriesKey::MbackFit)
+            .unwrap();
+        let rexafs::NormalizationMethod::MBack(model) = mback.normalization.as_ref().unwrap()
+        else {
+            panic!()
+        };
+        let result = model.result.as_ref().unwrap();
+        let mu = traces[0].sp.mu.as_ref().unwrap();
+        let shift = (mu.max() - mu.min()) * view.offset_frac;
+        assert_eq!(overlay.label.as_deref(), Some("MBACK fit"));
+        assert_eq!(overlay.x, result.energy);
+        for ((shown, f2), background) in overlay.y.iter().zip(&result.f2).zip(&result.background) {
+            assert!((shown - ((f2 + background) / result.scale + shift)).abs() < 1e-12);
+        }
+        assert!(
+            !specs[0]
+                .series
+                .iter()
+                .any(|s| matches!(s.key, SeriesKey::PreEdge | SeriesKey::PostEdge))
+        );
+        assert_eq!(specs[0].series.len(), 3);
+        // Fits in input units never appear on the normalized/flattened axis.
+        assert!(!specs[1].series.iter().any(|s| s.key == SeriesKey::MbackFit));
+        let hidden = build_quadrant_specs(&traces, &ViewOptions::default(), &Theme::dark(), true);
+        assert_eq!(hidden[0].series.len(), 2);
+        // An inactive MBACK comparison must not annotate the polynomial trace.
+        traces[0].active = true;
+        traces[1].active = false;
+        let polynomial_active = build_quadrant_specs(&traces, &view, &Theme::dark(), true);
+        assert!(
+            !polynomial_active[0]
+                .series
+                .iter()
+                .any(|s| s.key == SeriesKey::MbackFit)
+        );
+        for key in [SeriesKey::PreEdge, SeriesKey::PostEdge] {
+            assert!(polynomial_active[0].series.iter().any(|s| s.key == key));
+        }
+        assert_eq!(serde_json::to_string(&*mback).unwrap(), before);
+    }
 
     #[test]
     fn symmetric_k_limits_retain_both_glitch_polarities_and_zero_signals() {

@@ -53,3 +53,27 @@ Native Windows/Linux interactions and this revised layout's save/reopen flow
 were not retested here. Existing automated project-history round trips pass;
 the earlier [MBACK qualification](../2026-09-17-mback/README.md) retains the
 historical separate-editor screenshots and its save/reopen observations.
+
+## Method-specific fitted-line toggle
+
+A follow-up release build was checked with the same experimental Cu project.
+The existing toolbar control now follows the applied normalization method:
+
+- In Polynomial mode, **Pre/post** shows the two dashed baselines.
+- In MBACK mode, **MBACK fit** shows one orange fitted curve,
+  [f₂(E) + B(E)]/s in the original μ(E) units. It includes the tabulated atomic
+  edge and the fitted background; MBACK's auxiliary pre/post curves are hidden.
+- Enabling the toggle from Norm selects μ(E). Disabling it hides the fit;
+  re-enabling it restores the fit. Switching methods replaces the appropriate
+  overlay without moving the following toolbar controls.
+- The range-visibility icon remains independent. It is off in the screenshot
+  below so the fitted line can be inspected clearly.
+
+![Complete MBACK fitted model over experimental absorption](mback-fit-toggle.jpg)
+
+All 12 plotting tests pass. The new regression checks the complete fitted
+model, input units, active comparison trace, waterfall offset, toggle-off
+behavior, and replacement by polynomial baselines. The optimized release build
+passes. This follow-up changes only display behavior, not the MBACK calculation.
+The subsequent complete desktop suite passes **609 tests, with 6 ignored**,
+including both Cu/Ni fitting backends.

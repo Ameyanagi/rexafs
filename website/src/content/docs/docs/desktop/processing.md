@@ -74,6 +74,11 @@ on selection; otherwise enter them and choose **Apply**. The ordinary plot and
 range handles stay visible. **Atomic match…** and **Compare methods…** open
 optional diagnostics within Normalize. See the [MBACK guide](https://github.com/Ameyanagi/rexafs/blob/feature/analysis-b-f/doc/mback-normalization.md)
 for the model, assumptions and retained results.
+The fit toggle follows the selected method: **Pre/post** shows polynomial
+baselines; **MBACK fit** shows the complete fitted atomic model over the
+measured μ(E), without auxiliary pre/post lines. Enabling the toggle selects
+μ(E), so the fitted curve shares the original absorption units. Plot/data
+exports include the fit while visible.
 
 **Unreleased source checkout:** the range icon between **Colors** and **Overview plots**
 in the plot toolbar toggles shaded

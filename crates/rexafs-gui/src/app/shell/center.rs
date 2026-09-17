@@ -736,13 +736,24 @@ impl StudioApp {
                         chip(
                             &t,
                             "common-pre-post",
-                            "Pre/post",
+                            if self.ui_params().mback.is_some() {
+                                "MBACK fit"
+                            } else {
+                                "Pre/post"
+                            },
                             self.view.show_pre && self.view.show_post,
                         )
+                        .w(px(80.))
+                        .justify_center()
                         .on_click(cx.listener(|a, _, _, c| {
                             let on = !(a.view.show_pre && a.view.show_post);
                             a.view.show_pre = on;
                             a.view.show_post = on;
+                            if on {
+                                // Both methods' fits are in input mu units,
+                                // so show their matching axis.
+                                a.stage_view.e_quantity = EQuantity::Mu;
+                            }
                             a.stage_view_changed(c);
                         })),
                     );

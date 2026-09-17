@@ -92,6 +92,17 @@ and the Victoreen exponent are hidden because MBACK does not use them.
 **Erfc background** opens the optional line and bounded-width/amplitude settings;
 no fluorescence geometry is inferred by this term.
 
+The plot's fit toggle follows the selected normalization method: **Pre/post**
+shows the polynomial method's baselines, and **MBACK fit** shows the complete
+fitted atomic model as an orange line on μ(E). Enabling either selects μ(E);
+disabling it hides the fit. For MBACK the plotted model is [f₂(E) + B(E)]/s,
+where f₂ is the tabulated atomic reference, B is the fitted polynomial plus any
+erfc contribution, and s is the positive scale converting absorption to f₂
+units. This puts the fitted line in the same units as the measured absorption.
+MBACK's auxiliary pre/post curves are not displayed. In a comparison the fit
+belongs to the active spectrum and follows its waterfall display offset.
+Plot/data exports include the fitted line while it is visible.
+
 Changing method preserves the previous successful normalization in an immutable
 local artifact before changing the pipeline. **Compare methods…** retains the
 current result and overlays it with the most recently saved other method for the

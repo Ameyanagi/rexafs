@@ -92,3 +92,10 @@ Regenerated reference pages and citations reproduce byte-for-byte, all eight
 generator tests pass, and all 37 Astro files have no diagnostics. CI must rerun
 these corrections on the supported platforms before its status is considered
 green.
+
+The subsequent method-specific fit overlay passed all 12 plotting tests and the
+complete desktop suite (609 passed, 6 ignored). Native macOS controls verified
+the full MBACK curve, on/off behavior and replacement by polynomial baselines;
+the release build and [new screenshot](../2026-09-18-mback-normalize/mback-fit-toggle.jpg)
+show this final UI. This overlay uses the existing core fit arrays and does not
+change the numerical algorithm.

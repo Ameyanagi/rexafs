@@ -13,10 +13,18 @@ implementations; none is declared fully qualified or released by this record.
 The chronological entries below retain the status and test counts at each increment.
 
 The latest [review record](validation/2026-09-18-pr-review/README.md) records
-481 core tests, the final 608-test desktop suite, installed binding/editor checks,
+481 core tests, the initial 608-test desktop suite, installed binding/editor checks,
 package exclusion checks and the fixes found during review. MBACK is now selected
 beside Polynomial in the Normalize sidebar; its controls change in that same
 panel while the regular plot remains visible. See the [new native screenshots](validation/2026-09-18-mback-normalize/README.md).
+The fit toggle follows that method: **Pre/post** shows polynomial baselines,
+whereas **MBACK fit** overlays the complete fitted atomic model in μ(E) units.
+Native checks cover method switching and toggling the fit; the new plotting
+regression checks comparison offsets and hides MBACK's auxiliary baselines.
+The subsequent complete desktop suite passes 609 tests, with 6 ignored.
+The review record also documents fixes for the first PR's cross-platform Ru
+reference tolerance and generated API-page drift; CI qualification is separate
+from the local checks.
 
 The latest alignment increment adds the simple core operations
 `Spectrum::set_energy_offset(ev)` and `Spectrum::energy_offset()`, reusing the
