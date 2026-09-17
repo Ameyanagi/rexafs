@@ -205,8 +205,19 @@ struct HandleDecor {
 impl StudioApp {
     /// Handles the stage exposes on a given plot, with their current data x.
     fn handle_specs(&self, plot: usize) -> (Vec<(HandleKey, f64)>, Vec<Span>) {
-        if plot == super::measurements::drag::PLOT_MEASUREMENT || plot == super::peaks::PLOT_PEAKS {
-            let specs = if plot == super::peaks::PLOT_PEAKS {
+        if plot == super::measurements::drag::PLOT_MEASUREMENT
+            || plot == super::peaks::PLOT_PEAKS
+            || matches!(
+                plot,
+                super::wavelet::PLOT_WAVELET_K | super::wavelet::PLOT_WAVELET_R
+            )
+        {
+            let specs = if matches!(
+                plot,
+                super::wavelet::PLOT_WAVELET_K | super::wavelet::PLOT_WAVELET_R
+            ) {
+                self.wavelet_handle_specs(plot)
+            } else if plot == super::peaks::PLOT_PEAKS {
                 self.peak_handle_specs()
             } else {
                 self.measurement_handle_specs()
@@ -433,6 +444,8 @@ impl StudioApp {
         match plot {
             super::measurements::drag::PLOT_MEASUREMENT => self.measurement_preview_entity(),
             super::peaks::PLOT_PEAKS => self.peaks.plot.clone(),
+            super::wavelet::PLOT_WAVELET_K => self.wavelet.plot_k.clone(),
+            super::wavelet::PLOT_WAVELET_R => self.wavelet.plot_r.clone(),
             PREVIEW_K => self.fit_preview.k.clone(),
             PREVIEW_R => self.fit_preview.r.clone(),
             PREVIEW_Q => self.fit_preview.q.clone(),
@@ -710,7 +723,12 @@ impl StudioApp {
 
     fn apply_handle_drag(&mut self, key: HandleKey, x: f64, cx: &mut Context<Self>) {
         if matches!(key, HandleKey::MeasurementStart | HandleKey::MeasurementEnd) {
-            if self.peaks.open && self.stage == Stage::Data {
+            if self.wavelet.open
+                && self.stage == Stage::Data
+                && let Some((plot, _)) = self.handles.dragging
+            {
+                self.drag_wavelet_boundary(plot, key, x, cx);
+            } else if self.peaks.open && self.stage == Stage::Data {
                 self.drag_peak_boundary(key, x, cx);
             } else {
                 self.drag_measurement_boundary(key, x, cx);

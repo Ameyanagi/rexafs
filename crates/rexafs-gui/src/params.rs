@@ -2009,6 +2009,41 @@ fn normalize_to_stage(
     process_exafs_to_stage(sp, params, stage)
 }
 
+/// Shared forward settings for ordinary processing and linked analysis views.
+/// This resolves only requested/default settings; it does not calculate a transform.
+pub(crate) fn forward_settings(params: &PipelineParams) -> Result<XrayFFTF, String> {
+    let mut xftf = XrayFFTF::default();
+    if params.fft_kmin.is_some() {
+        xftf.kmin = params.fft_kmin;
+    }
+    if params.fft_kmax.is_some() {
+        xftf.kmax = params.fft_kmax;
+    }
+    if params.fft_dk.is_some() {
+        xftf.dk = params.fft_dk;
+    }
+    if params.fft_kweight.is_some() {
+        xftf.kweight = params.fft_kweight;
+    }
+    if params.fft_dk2.is_some() {
+        xftf.dk2 = params.fft_dk2;
+    }
+    if params.fft_rmax.is_some() {
+        xftf.rmax_out = params.fft_rmax;
+    }
+    xftf.grid = params.fft_grid;
+    if params.fft_window.is_some() {
+        xftf.window = params.fft_window;
+    }
+    if params.fft_kstep.is_some() {
+        xftf.kstep = params.fft_kstep;
+    }
+    if let Some(nfft) = params.fft_nfft {
+        xftf.nfft = Some(usize::try_from(nfft).map_err(|_| "Forward NFFT must be at least 2")?);
+    }
+    Ok(xftf)
+}
+
 /// Continue from the retained absorption representation. Prepared component
 /// arrays have a unit edge step and must not be normalized a second time.
 fn process_exafs_to_stage(
@@ -2085,36 +2120,7 @@ fn process_exafs_to_stage(
         return Ok(sp);
     }
 
-    let mut xftf = XrayFFTF::default();
-    if params.fft_kmin.is_some() {
-        xftf.kmin = params.fft_kmin;
-    }
-    if params.fft_kmax.is_some() {
-        xftf.kmax = params.fft_kmax;
-    }
-    if params.fft_dk.is_some() {
-        xftf.dk = params.fft_dk;
-    }
-    if params.fft_kweight.is_some() {
-        xftf.kweight = params.fft_kweight;
-    }
-    if params.fft_dk2.is_some() {
-        xftf.dk2 = params.fft_dk2;
-    }
-    if params.fft_rmax.is_some() {
-        xftf.rmax_out = params.fft_rmax;
-    }
-    xftf.grid = params.fft_grid;
-    if params.fft_window.is_some() {
-        xftf.window = params.fft_window;
-    }
-    if params.fft_kstep.is_some() {
-        xftf.kstep = params.fft_kstep;
-    }
-    if let Some(nfft) = params.fft_nfft {
-        xftf.nfft = Some(usize::try_from(nfft).map_err(|_| "Forward NFFT must be at least 2")?);
-    }
-    sp.xftf = Some(xftf);
+    sp.xftf = Some(forward_settings(params)?);
     sp.fft().map_err(|e| e.to_string())?;
     if stage == RequiredStage::Fourier {
         return Ok(sp);

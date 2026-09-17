@@ -299,3 +299,38 @@ See the [wavelet guide](wavelet-analysis.md) for equations, units and qualificat
 F1 does not complete the linked desktop view, bounded series/Live map cache,
 region trends or Python/TypeScript bindings. E/F integration remains outstanding;
 no release or public merge is implied by these local core commits.
+
+
+## F2a: retained desktop maps, linked inspection and region exports
+
+The source desktop now has **Data → Analysis → Wavelet**, with automatic
+normalization/background preparation, explicit k/R controls, a magnitude map,
+real/imaginary/masked-phase views and a palette menu. Clicking the map updates
+physical cursor coordinates and both magnitude slices. Original χ and ordinary
+Fourier magnitude remain available. Their different transform/window conventions
+are labeled and retained.
+
+Shared range handles select a rectangle; its full-native-grid integral updates
+without rebuilding the texture. Saved regions retain map identity, bounds, units
+and numerical convention. A bounded physical-coordinate texture is display-only.
+Color limits can be locked across compatible settings; changed definitions reset
+that lock. New calculations reset map bounds, while color changes preserve zoom.
+
+Immutable compressed artifacts retain complete numerical results. History,
+streamed JSON export and embedded-project restore preserve the map and regions.
+A saved map is explicitly historical; recalculation rereads the current source.
+The project carries receipts and the desktop holds one map, rather than every
+historical map in GPU memory.
+
+Validation: 587 desktop tests passed, six ignored in the serial full suite;
+focused map resampling and embedded-history tests passed after later UI edits.
+The strict desktop Clippy run still reports the 52 existing findings elsewhere;
+no new wavelet finding was reported. The optimized macOS app was exercised with
+computer use on a generated EXAFS packet: map calculation, dragged k/R bounds,
+slices, phase/colors, export, history and embedded reopen without the old cache.
+The [validation record](validation/2026-09-17-wavelet/README.md) separates numerical
+checks from observed UI behavior.
+
+This increment does **not** complete F2's full-series/Live region trends, an
+explicitly qualified comparison workflow, or Python/TypeScript wavelet bindings.
+Fluorescence desktop/Series/Live/binding integration also remains outstanding.

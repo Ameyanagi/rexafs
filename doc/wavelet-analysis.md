@@ -1,8 +1,9 @@
 # Cauchy wavelet analysis
 
 Unreleased source-checkout feature. The native core implements `cauchy_v1`;
-desktop and binding integration are still being qualified. This page does not
-claim that a released GUI already provides the complete workflow.
+the source desktop now provides a single-spectrum map workspace. Series/Live
+region tracking and Python/TypeScript bindings remain pending. This page does
+not claim that a released GUI already provides the complete workflow.
 
 A wavelet map localizes EXAFS oscillations jointly in photoelectron wave number
 k (Å⁻¹) and Fourier-like distance R (Å). It helps compare contributions with
@@ -48,6 +49,61 @@ region measurements. Magnitude slices use `slice_at_k(k)` and `slice_at_r(r)`.
 Serde JSON preserves the scientific map; deserialization checks method, dimensions,
 axes, finite values and resource limits. It does not independently prove that an
 external producer's numerical values are correct.
+
+## Desktop workflow (unreleased)
+
+Select a spectrum, then **Data → Analysis → Wavelet**. Set the fully measured k
+interval and choose **Calculate**. Weight 2 and R up to 6 Å are starting values;
+**Advanced** exposes order, sampling and taper. Missing normalization/background
+processing uses the current spectrum settings on a copy. Confirmed unweighted
+χ(k) groups reuse their original arrays without normalization or AUTOBK. Unknown
+quantities must be confirmed first. A failed calculation
+leaves the previous retained result intact; its fields must not be mistaken for
+newly calculated data. The status text explains the outcome; hover to read a
+long message.
+
+The upper plot is the k–R map. **Spectra** shows the original k-weighted χ and the
+ordinary Fourier magnitude below it. The linked Fourier calculation shares the
+selected k interval and weight, and retains the current Fourier window/settings;
+its window name is shown. That window does not change the wavelet's own taper.
+**Slices**, or a click on the map, shows magnitude versus k at the selected R and
+magnitude versus R at the selected k. The readout gives physical coordinates and
+bilinearly interpolated native magnitude. R values are not phase-corrected.
+
+Drag the two boundaries in each lower plot to select a k–R rectangle. The upper
+map outlines that rectangle, and the inspector updates its full-native-grid
+integral immediately. **Save region** retains the exact bounds, value, units,
+integration convention and map identity. Saved region buttons restore the bounds.
+
+**Colors** chooses a palette and direction. Magnitude has a zero-based scale;
+real/imaginary views have symmetric scales. Phase uses radians and hides low
+amplitude (below 1% of the native maximum); an entirely masked map has empty axes.
+The display texture has at most 512 k columns and 256 R rows, interpolated in
+physical coordinates, including nonuniform retained R grids. Magnitude uses
+bilinear native magnitudes; phase uses the interpolated complex value. Neither
+that texture nor display colors enter the region integral.
+
+**Lock scale** keeps the numerical color limits across maps with identical
+processing and wavelet definitions. A change of component, processing or transform
+definition resets the lock. This is a color-limit control, not a qualified batch
+comparison workflow. Recalculating a map resets its plot bounds; changing colors
+preserves an interactive zoom. Switching between spectra and slices resets the
+lower plots because their amplitude units differ.
+
+**History** reopens retained maps for the current group and processing settings.
+A retained result is labeled as such: it records the inputs used at calculation
+time, and does not assert that a linked source file is unchanged. **Calculate**
+reads the current input again. **Export map** writes JSON with the complete complex
+map, original k/χ, preparation settings, linked Fourier result and saved regions.
+It streams serialization without constructing a duplicate JSON value tree.
+
+Project saves retain small receipts; **Include source files** embeds their
+checksum-verified compressed artifacts too. Reopening restores the numerical map
+and saved regions even if the original artifact cache is unavailable. The desktop
+keeps one scientific map resident; this does not yet implement full-series map
+retention or Live region trends. Desktop rendering requires at least two R rows.
+
+See the [computer-use validation record](validation/2026-09-17-wavelet/README.md).
 
 ## Numerical convention
 

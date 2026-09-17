@@ -41,6 +41,7 @@ mod spectrum_interest;
 mod structure;
 mod theme;
 mod updates;
+mod wavelet_history;
 mod widgets;
 
 use std::path::PathBuf;

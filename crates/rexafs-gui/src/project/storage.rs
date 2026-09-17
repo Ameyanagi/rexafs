@@ -216,6 +216,7 @@ pub(super) fn map_paths(
         Ok(())
     }
     project.normalizations.relocate(f)?;
+    project.wavelets.relocate(f)?;
     project.peak_fits.relocate(f)?;
     for session in &mut project.series_measurements.live_sessions {
         session.snapshots = std::mem::take(&mut session.snapshots)
@@ -289,6 +290,7 @@ fn analysis_artifacts(project: &ProjectFile) -> BTreeSet<PathBuf> {
         .iter()
         .flat_map(|s| s.snapshots.iter().cloned())
         .chain(project.peak_fits.artifacts().cloned())
+        .chain(project.wavelets.entries.iter().map(|r| r.path.clone()))
         .chain(
             project
                 .normalizations

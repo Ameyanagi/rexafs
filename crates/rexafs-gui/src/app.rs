@@ -1105,6 +1105,7 @@ pub struct StudioApp {
     live: shell::live::LiveState,
     peaks: shell::peaks::PeakState,
     normalization: shell::normalization::NormalizationState,
+    wavelet: shell::wavelet::WaveletState,
     journal: shell::journal::JournalState,
     palette: Option<shell::palette::PaletteState>,
     path_route: Option<shell::path_routing::RoutingCard>,
@@ -2993,6 +2994,7 @@ impl StudioApp {
             live: Default::default(),
             peaks: Default::default(),
             normalization: Default::default(),
+            wavelet: Default::default(),
             journal: shell::journal::JournalState::default(),
             palette: None,
             path_route: None,
@@ -8517,6 +8519,7 @@ impl StudioApp {
             series_measurements: self.measurements.archive.clone(),
             peak_fits: self.peaks.archive.clone(),
             normalizations: self.normalization.history.clone(),
+            wavelets: self.wavelet.archive.clone(),
             parser_evidence: self.parser_evidence.clone(),
             imports: self.imports.clone(),
             import_history: self.intake.history.clone(),
@@ -8827,6 +8830,9 @@ impl StudioApp {
         self.peaks.archive = project.peak_fits.clone();
         self.normalization = Default::default();
         self.normalization.history = project.normalizations.clone();
+        self.wavelet.cancel();
+        self.wavelet = Default::default();
+        self.wavelet.archive = project.wavelets.clone();
         self.measurements = shell::measurements::MeasurementState::from_archive(
             project.series_measurements.clone(),
         );

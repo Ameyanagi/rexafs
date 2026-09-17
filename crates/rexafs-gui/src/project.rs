@@ -92,6 +92,7 @@ pub struct ParamOverride {
 #[serde(default)]
 pub struct ProjectFile {
     pub normalizations: crate::normalization_history::NormalizationHistory,
+    pub wavelets: crate::wavelet_history::WaveletArchive,
     pub peak_fits: crate::peak_fits::PeakArchive,
     pub series_measurements: crate::series_measurements::SeriesArchive,
     pub lcf_series_analysis: Option<LcfSeriesAnalysis>,

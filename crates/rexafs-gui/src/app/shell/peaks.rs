@@ -204,6 +204,8 @@ impl StudioApp {
         self.load_peak_row(index, 0, cx);
     }
     pub(crate) fn open_peaks(&mut self, cx: &mut Context<Self>) {
+        self.wavelet.cancel();
+        self.wavelet.open = false;
         self.peaks.open = true;
         if self.peaks.focus.is_none() {
             self.peaks.focus = Some(cx.focus_handle());

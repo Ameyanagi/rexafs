@@ -54,6 +54,7 @@ pub mod structure_view;
 pub mod thumbnails;
 pub mod tools;
 pub(crate) mod updates_view;
+pub(crate) mod wavelet;
 
 use gpui::{
     ClickEvent, Context, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, px,
@@ -454,6 +455,7 @@ impl StudioApp {
             )
             .child(self.status_bar(cx))
             .children(self.series_appearance_overlay(cx))
+            .children(self.wavelet_appearance_overlay(cx))
             .children(self.live_recipe_overlay(cx))
             .children(self.peak_menu_overlay(cx))
             .children(self.group_menu_overlay(cx))

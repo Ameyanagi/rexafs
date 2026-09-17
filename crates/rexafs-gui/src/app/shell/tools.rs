@@ -1480,6 +1480,10 @@ impl StudioApp {
                 super::button(&self.theme, "open-peak-analysis", "XANES peak fit…", false)
                     .on_click(cx.listener(|app, _, _, cx| app.open_peaks(cx))),
             )
+            .child(
+                super::button(&self.theme, "open-wavelet", "Wavelet…", false)
+                    .on_click(cx.listener(|app, _, _, cx| app.open_wavelet(cx))),
+            )
             .child(self.tool_list(&Tool::ANALYSIS, cx))
     }
 

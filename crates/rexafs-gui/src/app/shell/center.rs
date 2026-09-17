@@ -27,6 +27,17 @@ fn current_label(
 
 impl StudioApp {
     pub(crate) fn stage_center(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        if self.wavelet.open && !self.wavelet_matches_current() {
+            self.wavelet.cancel();
+            self.wavelet.open = false;
+        }
+        if self.stage == Stage::Data && self.wavelet.open {
+            return div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .child(self.wavelet_center(cx));
+        }
         if self.stage == Stage::Data && self.peaks.open {
             return div().flex_1().min_w_0().flex().child(self.peak_center(cx));
         }
