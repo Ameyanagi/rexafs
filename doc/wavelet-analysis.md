@@ -1,8 +1,8 @@
 # Cauchy wavelet analysis
 
 Unreleased source-checkout feature. The native core implements `cauchy_v1`;
-the source desktop now provides a single-spectrum map workspace. Series/Live
-region tracking and Python/TypeScript bindings remain pending. This page does
+the source desktop provides a single-spectrum map workspace, and Python and
+TypeScript expose the same native calculation. Series/Live region tracking remains pending. This page does
 not claim that a released GUI already provides the complete workflow.
 
 A wavelet map localizes EXAFS oscillations jointly in photoelectron wave number
@@ -49,6 +49,67 @@ region measurements. Magnitude slices use `slice_at_k(k)` and `slice_at_r(r)`.
 Serde JSON preserves the scientific map; deserialization checks method, dimensions,
 axes, finite values and resource limits. It does not independently prove that an
 external producer's numerical values are correct.
+
+## Python and TypeScript (unreleased)
+
+The common call is `spectrum.wavelet(model)` in each language. Missing
+normalization/background stages run on a private copy; users do not need to
+prepare intermediate arrays. Specify the measured k interval in Å⁻¹, rather than
+an energy interval relative to E₀.
+
+```python
+from rexafs import Wavelet
+
+model = Wavelet((2, 12))
+wavelet_map = spectrum.wavelet(model)
+image = wavelet_map.magnitude       # NumPy matrix: R rows, k columns
+region = wavelet_map.integral((4, 10), (1, 3))
+print(region.value, region.unit)
+```
+
+Python options are named: `Wavelet((2, 12), kweight=2, rmax=4)`.
+Array properties return independent NumPy copies. The transform and spectrum
+preparation release the Python global interpreter lock. `phase()` returns a
+matrix in radians, using `NaN` for zero/low-amplitude cells; its default floor is
+1% of maximum magnitude. `wavelet_map.definition` returns independent settings,
+and `preparation` describes automatic processing or is `None` for direct arrays.
+
+```ts
+import { Wavelet } from "rexafs/node";
+
+const model = new Wavelet([2, 12]);
+const map = spectrum.wavelet(model);
+try {
+  const image = map.magnitude;      // Flat Float64Array: R rows, k columns
+  const [rows, columns] = map.shape;
+  const region = map.integral([4, 10], [1, 3]);
+  console.log(rows, columns, image[0], region.value, region.unit);
+} finally {
+  map.free();
+  model.free();
+}
+```
+
+TypeScript uses named options, for example `new Wavelet([2, 12], {rmax: 4})`.
+Cell `(row, column)` is at `row * map.shape[1] + column`. Arrays are independent
+copies and remain valid after the map is freed. Release every owned map and model
+with `free()`, including a model obtained from `map.definition`. `preparation` is
+`null` for array calculations. Browser applications import from `rexafs`, await
+`init()` first, and should run synchronous calculations in a Worker.
+
+Both bindings also provide `model.calculate(k, chi)` for original unweighted χ(k),
+`model.estimate(k)` for dimensions/storage, `map.slice_at_k(k)` and
+`map.slice_at_r(r)` for magnitude slices, and `to_json()`/`from_json()` for retained
+definitions and maps. Python accepts one-dimensional numeric sequences or NumPy
+arrays; TypeScript expects `Float64Array` inputs. Invalid coverage, settings,
+dimensions or excessive resource requests fail with an error. Display sampling
+and colors never enter a native region integral. All advanced settings have the
+same meanings and defaults as the Rust API described above.
+
+The adapters live in [`py-rexafs/src/wavelet.rs`](../py-rexafs/src/wavelet.rs),
+[`crates/rexafs-wasm/src/wavelet.rs`](../crates/rexafs-wasm/src/wavelet.rs) and
+[`js-rexafs/wavelet.js`](../js-rexafs/wavelet.js). They use the core calculation;
+no separate Python or JavaScript numerical algorithm is introduced.
 
 ## Desktop workflow (unreleased)
 

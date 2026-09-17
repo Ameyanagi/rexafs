@@ -241,3 +241,27 @@ free that model after use. Browser callers must await `init()` and should use a
 Worker for large synchronous fits. See the [MBACK guide](../doc/mback-normalization.md)
 for equations, assumptions and optional backgrounds. Atomic-data notices ship
 in the npm package's `licenses/atomic` directory.
+
+## Cauchy wavelets (unreleased)
+
+```ts
+import { Wavelet } from "rexafs/node";
+const model = new Wavelet([2, 12]);
+const map = spectrum.wavelet(model);
+try {
+  const image = map.magnitude; // Independent Float64Array: R rows, k columns
+  const region = map.integral([4, 10], [1, 3]);
+  console.log(image, region.value, region.unit);
+} finally {
+  map.free();
+  model.free();
+}
+```
+
+The k interval uses Å⁻¹; R uses Å and is not phase-corrected. Missing normalization
+and background stages run on a private copy. Defaults are weight 2, order 100,
+k spacing 0.05 Å⁻¹, R up to 6 Å and no taper. Named options override them, for
+example `new Wavelet([2, 12], {rmax: 4})`. `model.calculate(k, chi)` also accepts
+unweighted χ(k) in `Float64Array` inputs. Browser callers await `init()` first.
+See the [wavelet guide](../doc/wavelet-analysis.md) for layout, native-grid integrals,
+slices, ownership, JSON replay and scientific limitations.

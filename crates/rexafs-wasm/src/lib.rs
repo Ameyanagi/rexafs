@@ -2,6 +2,7 @@
 use wasm_bindgen::prelude::*;
 mod mback;
 mod peaks;
+mod wavelet;
 fn error(error: rexafs::Error) -> JsValue {
     js_sys::Error::new(&error.to_string()).into()
 }
@@ -1047,6 +1048,16 @@ impl WasmSpectrum {
             .map(serde_json::to_string)
             .transpose()
             .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+    /// Prepare missing normalization/background on a copy and return an owned native map.
+    /// The facade supplies versioned settings JSON; original spectrum state is untouched.
+    pub fn wavelet(&self, definition_json: &str) -> Result<wavelet::WasmWaveletMap, JsValue> {
+        let definition = wavelet::WasmWavelet::new(definition_json)?;
+        let inner = self
+            .inner
+            .wavelet(&definition.inner)
+            .map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        Ok(wavelet::WasmWaveletMap { inner })
     }
     /// Internal bridge for Spectrum.fit_peaks. The native model prepares on a copy.
     /// Optional errors must describe the selected signal on the original native grid.

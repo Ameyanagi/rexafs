@@ -32,6 +32,19 @@ See [processing theory](https://rexafs.com/docs/science/processing/) for
 equations, interpretation and limitations. Groups and structural fitting
 are not currently exposed by this Python Spectrum API.
 
+## wavelet
+
+```python
+wavelet(self, model: Wavelet) -> WaveletMap
+```
+
+Unreleased: spectrum.wavelet(Wavelet((2, 12))) prepares missing
+normalization/AUTOBK on a copy, reusing existing chi. The interval uses
+inverse angstroms. Arrays/settings/caches are unchanged; Rust releases
+the GIL. Result matrices are owned (R rows, k columns). Invalid coverage,
+grids and unqualified corrected XANES input raise ValueError. R is not
+phase-corrected; color intensity is not a concentration.
+
 ## fit_peaks
 
 ```python

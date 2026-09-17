@@ -27,3 +27,6 @@ export type { PeakOptions, PseudoVoigtOptions, VoigtOptions, StepOptions } from 
 
 export { MBack, MbackErfc } from "./types.js";
 export type { MbackOptions, MbackErfcOptions, MbackResult, AtomicReference } from "./types.js";
+
+export { Wavelet, WaveletMap } from "./types.js";
+export type { WaveletOptions, WaveletSize, WaveletPreparation, WaveletRegionValue } from "./types.js";

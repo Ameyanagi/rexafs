@@ -254,3 +254,20 @@ spectrum copies them. `spectrum.mback_result()` retrieves its full result, or
 pins the original atomic reference for replay. See the
 [MBACK guide](../doc/mback-normalization.md) for equations, assumptions and optional
 background terms. Runtime atomic-data notices are included in `rexafs/licenses/atomic`.
+
+## Cauchy wavelets (unreleased)
+
+```python
+from rexafs import Wavelet
+wavelet_map = spectrum.wavelet(Wavelet((2, 12)))
+image = wavelet_map.magnitude  # Independent NumPy matrix: R rows, k columns
+region = wavelet_map.integral((4, 10), (1, 3))
+print(region.value, region.unit)
+```
+
+The k interval uses Å⁻¹; R uses Å and is not phase-corrected. Missing normalization
+and background stages run on a private copy. Defaults are weight 2, order 100,
+k spacing 0.05 Å⁻¹, R up to 6 Å and no taper. Use named options to change them,
+for example `Wavelet((2, 12), rmax=4)`. `model.calculate(k, chi)` also accepts
+original unweighted χ(k). The [wavelet guide](../doc/wavelet-analysis.md) explains
+native-grid integrals, slices, ownership, JSON replay and scientific limitations.

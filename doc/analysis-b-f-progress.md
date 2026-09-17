@@ -334,3 +334,30 @@ checks from observed UI behavior.
 This increment does **not** complete F2's full-series/Live region trends, an
 explicitly qualified comparison workflow, or Python/TypeScript wavelet bindings.
 Fluorescence desktop/Series/Live/binding integration also remains outstanding.
+
+## F3: Python and TypeScript wavelet APIs
+
+Both installed packages expose `Wavelet` settings and
+`spectrum.wavelet(model)`, with automatic prerequisites on a private copy.
+The minimal constructor needs only the measured k interval; weight, order,
+sampling and taper retain core defaults and have named overrides. Direct
+`model.calculate(k, chi)` is available for original unweighted EXAFS arrays.
+Owned results provide physical axes, complex values, magnitude, masked phase,
+native-grid slices and rectangle integrals, original inputs, preparation metadata
+and JSON replay. Python returns NumPy matrices; TypeScript exposes row-major
+typed arrays and explicit Wasm ownership. See the
+[binding examples](wavelet-analysis.md#python-and-typescript-unreleased).
+
+Installed-wheel tests passed (35), including both pinned Larch wavelet cases,
+array independence, spectrum preparation, replay, masked zero phase and invalid
+coverage/allocation requests. All 35 npm tests passed, including Node/browser
+wavelet paths and installed-tarball TypeScript types, hover help and completion.
+The Python language-server check passed against the installed wheel. Strict
+Python/Wasm Clippy, eight reference-generator tests and the website check
+(zero errors/warnings) passed. Stable API pages keep their released signatures;
+only Next reference pages gained the new API.
+
+This completes the initial wavelet binding increment. Full-series/Live region
+trends and qualified comparison workflows remain in progress; fluorescence
+desktop/Series/Live/binding work and cross-platform milestone qualification are
+also outstanding. F2a's computer-use evidence covers the unchanged desktop code.

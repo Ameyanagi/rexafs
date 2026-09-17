@@ -1002,6 +1002,12 @@ export class BackgroundMethod {
  * assumptions and interpretation.
  */
 export class Spectrum {
+  /** Unreleased: spectrum.wavelet(new Wavelet([2, 12])) prepares missing
+   * normalization/AUTOBK on a private copy, reusing existing χ. The inclusive
+   * interval uses Å⁻¹. Source arrays/settings/caches stay unchanged. Returns an
+   * owned native map; invalid coverage/grids and corrected XANES-only input throw.
+   * R is not phase-corrected and colors do not imply concentration. */
+  wavelet(model: Wavelet): WaveletMap;
   /** Fit a composite XANES model, preparing missing normalization on a private copy (unreleased).
    * Recommended: spectrum.fit_peaks(new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 })).
    * Model defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
@@ -1825,4 +1831,109 @@ export interface MbackResult {
   weights: number[];
   /** Nonfatal boundary/conditioning diagnostics. */
   warnings: string[];
+}
+
+/** Optional Cauchy settings (unreleased). Construction copies these values. */
+export interface WaveletOptions {
+  /** Integer exponent 0–6, default 2; emphasizes high-k signal and noise. */
+  kweight?: number;
+  /** Cauchy order 1–4096, default 100. Larger order narrows frequency response and broadens localization in k. */
+  order?: number;
+  /** Uniform numerical k spacing in Å⁻¹, default 0.05; interpolation adds no experimental resolution. */
+  kstep?: number;
+  /** Maximum generated R in Å, default 6. R is not phase-corrected. */
+  rmax?: number;
+  /** Numerical R spacing in Å; default π/(FFT length*kstep). */
+  rstep?: number;
+  /** Half-cosine width inside the support endpoints in Å⁻¹. Default 0 means no taper. */
+  taper?: number;
+  /** Positive increasing R coordinates (Å), replacing the generated grid. */
+  radii?: number[] | Float64Array;
+  /** Power-of-two FFT length, at least twice the prepared k grid length; default automatic. No silent truncation. */
+  nfft?: number;
+}
+/** Checked output dimensions and approximate scientific buffer storage. */
+export interface WaveletSize {
+  /** Prepared k columns, including padding. */ k_points: number;
+  /** Positive R rows. */ r_points: number;
+  /** Internal FFT length. */ nfft: number;
+  /** Complex cell count. */ cells: number;
+  /** Estimated bytes, excluding input copies, FFT scratch and serialization. */ bytes: number;
+}
+/**
+ * Unreleased Cauchy settings. Use spectrum.wavelet(new Wavelet([2, 12])).
+ * k_range is fully measured support in Å⁻¹. Defaults: weight 2, order 100,
+ * k step 0.05 Å⁻¹, R up to 6 Å, no taper and automatic FFT/R sampling.
+ * cauchy_v1 fixes order independently of R extent; larger order narrows frequency
+ * response and broadens localization in k. R is not phase-corrected.
+ * Browser init() is required. Calculations are synchronous native Wasm operations;
+ * use a Worker for large interactive jobs. Invalid coverage/grids/budgets throw.
+ */
+export class Wavelet {
+  /** Copy an inclusive measured k interval and optional named settings. */
+  constructor(k_range: [number, number], options?: WaveletOptions);
+  /** Transform original unweighted dimensionless χ(k). Copies finite matching arrays
+   * with increasing, nonnegative k; linearly resamples without extrapolation. */
+  calculate(k: Float64Array, chi: Float64Array): WaveletMap;
+  /** Validate dimensions and estimate buffer storage before transforming. */
+  estimate(k: Float64Array): WaveletSize;
+  /** Native settings JSON with automatic choices preserved; no input arrays. */
+  to_json(): string;
+  /** Restore settings. Calculation validates scientific values and resource limits. */
+  static from_json(json: string): Wavelet;
+  /** Release this model. Independent maps and copied spectrum settings remain valid. */
+  free(): void;
+}
+/** Spectrum preparation retained with a map; original k/χ are its direct replay inputs. */
+export interface WaveletPreparation {
+  /** Rexafs version that prepared the spectrum. */ software_version: string;
+  /** Numerical backend name. */ backend: string;
+  /** Resolved E₀ (eV), if available. */ e0: number | null;
+  /** Normalization edge step in input μ units, if available. */ edge_step: number | null;
+  /** Versioned native normalization settings, without large result arrays. */ normalization: unknown;
+  /** Versioned native background settings, without large result arrays. */ background: unknown;
+}
+/**
+ * Owned Cauchy map (unreleased). All array getters return independent typed-array
+ * copies. Complex/magnitude/phase arrays are flat, row-major: index r*shape[1]+k.
+ * shape is [R rows, k columns]; W units are those of k**weight * χ, distinct from
+ * ordinary Fourier scaling. Display colors and sampling do not define a metric.
+ */
+export class WaveletMap {
+  private constructor();
+  /** Matrix dimensions in [R, k] order, including explicit k padding. */ readonly shape: [number, number];
+  /** Independent k coordinates, in Å⁻¹. */ readonly k: Float64Array;
+  /** Independent R coordinates, in Å; not phase-corrected distances. */ readonly r: Float64Array;
+  /** Original measured k before resampling. */ readonly input_k: Float64Array;
+  /** Original unweighted χ, unchanged. */ readonly input_chi: Float64Array;
+  /** Resampled unweighted χ; zero outside selected support. */ readonly prepared_chi: Float64Array;
+  /** Support/taper multipliers applied before weighting. */ readonly window: Float64Array;
+  /** One for measured support, zero for padding. */ readonly support: Uint8Array;
+  /** Flat native real values. */ readonly real: Float64Array;
+  /** Flat native imaginary values. */ readonly imaginary: Float64Array;
+  /** Flat native magnitude, without display normalization/resampling. */ readonly magnitude: Float64Array;
+  /** Radians, with NaN for zero amplitude or values below a fraction of the maximum
+   * (default 1%). Fraction must lie in [0,1]. The native map remains unchanged. */
+  phase(relative_floor?: number): Float64Array;
+  /** Native magnitude versus k at a covered R coordinate (Å). */ slice_at_r(r: number): Float64Array;
+  /** Native magnitude versus R at a covered k coordinate (Å⁻¹). */ slice_at_k(k: number): Float64Array;
+  /** Integrate native bilinear magnitude over a covered k/R rectangle. Display
+   * sampling never participates; invalid bounds throw. No uncertainty is inferred. */
+  integral(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
+  /** Fresh independent settings; release them with free() after use. */ readonly definition: Wavelet;
+  /** Original processing metadata, or null for a direct array calculation. */ readonly preparation: WaveletPreparation | null;
+  /** Interpretation and boundary diagnostics, not confidence intervals. */ readonly warnings: string[];
+  /** Full native map, original inputs and preparation provenance as JSON. */ to_json(): string;
+  /** Restore checked method, dimensions, axes, finite values and budgets. This does
+   * not independently prove an external producer's numerical correctness. */
+  static from_json(json: string): WaveletMap;
+  /** Release the native map. Previously returned array copies remain valid. */ free(): void;
+}
+/** Native covered-rectangle magnitude integral; units are those of k**weight * χ. */
+export interface WaveletRegionValue {
+  /** Full-native-grid integral; no experimental uncertainty is supplied. */ value: number;
+  /** Exact inclusive k bounds, in Å⁻¹. */ k_range: [number, number];
+  /** Exact inclusive R bounds, in Å. */ r_range: [number, number];
+  /** Integral units including k weight. */ unit: string;
+  /** Quadrature convention, currently bilinear_magnitude_v1. */ method: string;
 }

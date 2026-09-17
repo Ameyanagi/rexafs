@@ -48,7 +48,8 @@
     "measurement.js",
     "peaks.js",
     "licenses",
-    "mback.js"
+    "mback.js",
+    "wavelet.js"
   ],
   "scripts": {
     "build": "node build.mjs",

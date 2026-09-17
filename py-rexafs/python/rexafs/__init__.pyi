@@ -821,6 +821,14 @@ class Spectrum:
     See [processing theory](https://rexafs.com/docs/science/processing/) for
     equations, interpretation and limitations. Groups and structural fitting
     are not currently exposed by this Python Spectrum API."""
+    def wavelet(self, model: Wavelet) -> WaveletMap:
+        """Unreleased: spectrum.wavelet(Wavelet((2, 12))) prepares missing
+        normalization/AUTOBK on a copy, reusing existing chi. The interval uses
+        inverse angstroms. Arrays/settings/caches are unchanged; Rust releases
+        the GIL. Result matrices are owned (R rows, k columns). Invalid coverage,
+        grids and unqualified corrected XANES input raise ValueError. R is not
+        phase-corrected; color intensity is not a concentration."""
+        ...
     def fit_peaks(self, model: PeakFit, *, errors: NDArray[np.float64] | Sequence[float] | None = None) -> PeakFitResult:
         """Fit a composite XANES model, preparing missing normalization on a copy (unreleased).
 
@@ -1615,3 +1623,165 @@ class AtomicReference(TypedDict):
     """Actual loaded dataset identity."""
     table: Literal["ChantlerF2LogLogV1", "ElamTotalV1", "ElamTransitionsV1"]
     """Table and interpolation/contribution profile."""
+
+class WaveletSize(TypedDict):
+    """Checked dimensions and buffer estimate; input copies/scratch/serialization add overhead."""
+    k_points: int
+    """Number of prepared k columns, including padding."""
+    r_points: int
+    """Number of positive R rows."""
+    nfft: int
+    """Internal FFT length, in samples."""
+    cells: int
+    """Number of complex map cells."""
+    bytes: int
+    """Estimated scientific buffer bytes; input copies and scratch add overhead."""
+
+class Wavelet:
+    """Unreleased Cauchy settings. Use spectrum.wavelet(Wavelet((2, 12))).
+
+    k_range is measured support in inverse angstroms. Defaults: weight 2, order
+    100, kstep 0.05, R maximum 6 angstroms, no taper and automatic FFT/R sampling.
+    Missing normalization/AUTOBK run on a copy; existing chi is reused. Larger
+    order narrows frequency response and broadens localization in k. R is not
+    phase-corrected. Fixed order is independent of R extent (cauchy_v1).
+    Calculations release the GIL and return owned results; invalid definitions,
+    uncovered intervals and excessive allocations raise ValueError."""
+    def __init__(self, k_range: tuple[float, float], *, kweight: int = 2,
+                 order: int = 100, kstep: float = 0.05, rmax: float = 6.0,
+                 rstep: float | None = None, taper: float = 0.0,
+                 nfft: int | None = None, radii: Sequence[float] | None = None) -> None:
+        """Copy settings. taper is half-cosine width inside support (inverse angstroms);
+        zero means none. radii replaces generated positive increasing R coordinates.
+        nfft must be a power of two at least twice the prepared grid length."""
+        ...
+    def calculate(self, k: NDArray[np.float64] | Sequence[float], chi: NDArray[np.float64] | Sequence[float]) -> WaveletMap:
+        """Copy original unweighted chi(k), release the GIL and calculate a native map.
+        k is finite, nonnegative, increasing and in inverse angstroms; chi is finite
+        and dimensionless. Linear resampling never extrapolates measured support.
+        Original inputs are retained; no display sampling alters the result."""
+        ...
+    def estimate(self, k: NDArray[np.float64] | Sequence[float]) -> WaveletSize:
+        """Validate dimensions and estimate scientific buffer bytes before calculation."""
+        ...
+    def to_json(self) -> str:
+        """Native settings JSON, with automatic choices preserved and no input arrays."""
+        ...
+    @staticmethod
+    def from_json(json: str) -> Wavelet:
+        """Restore native settings; calculation validates scientific values and budgets."""
+        ...
+
+class WaveletMap:
+    """Owned native Cauchy map (unreleased), with independent NumPy array properties.
+
+    Matrices have shape (R rows, k columns), including explicit k padding. W has
+    units of k**weight * chi, distinct from ordinary Fourier scaling. No color
+    normalization changes the scientific data; to_json retains full provenance."""
+    @property
+    def shape(self) -> tuple[int, int]:
+        """Matrix dimensions: R rows, k columns."""
+        ...
+    @property
+    def k(self) -> NDArray[np.float64]:
+        """Independent inverse-angstrom coordinates, including padded columns."""
+        ...
+    @property
+    def r(self) -> NDArray[np.float64]:
+        """Independent angstrom coordinates; not phase-corrected distances."""
+        ...
+    @property
+    def input_k(self) -> NDArray[np.float64]:
+        """Original measured k before resampling."""
+        ...
+    @property
+    def input_chi(self) -> NDArray[np.float64]:
+        """Original unweighted dimensionless chi, unchanged."""
+        ...
+    @property
+    def prepared_chi(self) -> NDArray[np.float64]:
+        """Resampled unweighted chi; values outside support are padding zeros."""
+        ...
+    @property
+    def window(self) -> NDArray[np.float64]:
+        """Support/taper multipliers applied before k weighting."""
+        ...
+    @property
+    def support(self) -> NDArray[np.bool_]:
+        """True for selected measured support; False for padding."""
+        ...
+    @property
+    def real(self) -> NDArray[np.float64]:
+        """Independent real matrix, rows=R and columns=k."""
+        ...
+    @property
+    def imaginary(self) -> NDArray[np.float64]:
+        """Independent imaginary matrix, rows=R and columns=k."""
+        ...
+    @property
+    def magnitude(self) -> NDArray[np.float64]:
+        """Independent full-native-grid magnitude matrix."""
+        ...
+    def phase(self, relative_floor: float = 0.01) -> NDArray[np.float64]:
+        """Radians; NaN masks zero amplitude and values below a fraction of the map
+        maximum (default 1%). Fraction is in [0,1]. Native data stay unchanged."""
+        ...
+    def slice_at_r(self, r: float) -> NDArray[np.float64]:
+        """Native magnitude versus k at a covered R coordinate (angstroms)."""
+        ...
+    def slice_at_k(self, k: float) -> NDArray[np.float64]:
+        """Native magnitude versus R at a covered k coordinate (inverse angstroms)."""
+        ...
+    def integral(self, k_range: tuple[float, float], r_range: tuple[float, float]) -> WaveletRegionValue:
+        """Integrate native bilinear magnitude over a fully covered rectangle.
+        k_range uses inverse angstroms and r_range angstroms. Returns exact bounds,
+        value, units and method without experimental uncertainty. Releases the GIL;
+        display sampling never participates. Invalid coverage raises ValueError."""
+        ...
+    @property
+    def definition(self) -> Wavelet:
+        """Independent transform definition, retaining automatic and explicit choices."""
+        ...
+    @property
+    def preparation(self) -> dict[str, object] | None:
+        """Original spectrum preparation metadata; None for direct array calculations."""
+        ...
+    @property
+    def warnings(self) -> list[str]:
+        """Interpretation/boundary diagnostics, not confidence intervals."""
+        ...
+    def to_json(self) -> str:
+        """Complete native map, original inputs and processing provenance."""
+        ...
+    @staticmethod
+    def from_json(json: str) -> WaveletMap:
+        """Restore checked method, dimensions, axes, finite values and budgets.
+        Validation does not independently prove external numerical results."""
+        ...
+
+class WaveletRegionValue:
+    """Immutable native magnitude integral. dk times dR cancels, so units equal
+    k**weight * chi. This is a descriptive transform metric, not concentration."""
+    @property
+    def value(self) -> float:
+        """Full-native-grid integral, without an experimental uncertainty estimate."""
+        ...
+    @property
+    def k_range(self) -> tuple[float, float]:
+        """Exact inclusive k bounds in inverse angstroms."""
+        ...
+    @property
+    def r_range(self) -> tuple[float, float]:
+        """Exact inclusive R bounds in angstroms."""
+        ...
+    @property
+    def unit(self) -> str:
+        """Integral units including k weight."""
+        ...
+    @property
+    def method(self) -> str:
+        """Quadrature convention: bilinear_magnitude_v1."""
+        ...
+    def to_json(self) -> str:
+        """Value, exact bounds, units and method as JSON."""
+        ...

@@ -16,6 +16,9 @@ from ._core import (
     Spectrum,
     MeasurementResult,
     MBack,
+    Wavelet,
+    WaveletMap,
+    WaveletRegionValue,
     MbackErfc,
     MbackResult,
     PeakFit,
@@ -46,6 +49,10 @@ __all__ = [
     "Spectrum",
     "MeasurementResult",
     "MBack",
+    "Wavelet",
+    "WaveletMap",
+    "WaveletSize",
+    "WaveletRegionValue",
     "MbackErfc",
     "MbackResult",
     "AtomicDataIdentity",
@@ -71,3 +78,17 @@ class AtomicReference(TypedDict):
     """Exact atomic dataset and numerical table identity."""
     data: AtomicDataIdentity
     table: Literal["ChantlerF2LogLogV1", "ElamTotalV1", "ElamTransitionsV1"]
+
+
+class WaveletSize(TypedDict):
+    """Checked wavelet dimensions and buffer estimate, excluding copies/scratch."""
+    k_points: int
+    """Number of prepared k columns, including padding."""
+    r_points: int
+    """Number of positive R rows."""
+    nfft: int
+    """Internal FFT length, in samples."""
+    cells: int
+    """Number of complex map cells."""
+    bytes: int
+    """Estimated scientific buffer bytes; input copies and scratch add overhead."""

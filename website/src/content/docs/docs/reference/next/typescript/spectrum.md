@@ -32,6 +32,18 @@ finished.
 See [processing theory](https://rexafs.com/docs/science/processing/) for equations,
 assumptions and interpretation.
 
+## wavelet
+
+```typescript
+wavelet(model: Wavelet): WaveletMap;
+```
+
+Unreleased: spectrum.wavelet(new Wavelet([2, 12])) prepares missing
+normalization/AUTOBK on a private copy, reusing existing χ. The inclusive
+interval uses Å⁻¹. Source arrays/settings/caches stay unchanged. Returns an
+owned native map; invalid coverage/grids and corrected XANES-only input throw.
+R is not phase-corrected and colors do not imply concentration.
+
 ## fit_peaks
 
 ```typescript

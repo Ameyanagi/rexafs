@@ -1,3 +1,4 @@
+import { waveletDefinition } from "./wavelet.js";
 import { isMBack, mbackDefinition, mbackResult } from "./mback.js";
 import { validate } from "./validate.js";
 import { registerPeakSpectrum, peakDefinition, peakResult } from "./peaks.js";
@@ -39,7 +40,7 @@ function scalarMeasurement(operation, coordinates, options = {}) {
  * wrappers for direct settings/defaults and frees only those temporary wrappers.
  * Caller-owned settings and algorithm wrappers are borrowed, never consumed.
  */
-export function bindSpectrum(core, ready = () => true, MBack) {
+export function bindSpectrum(core, ready = () => true, MBack, wavelets) {
   return class Spectrum {
     #inner;
     constructor(energy, mu) {
@@ -50,6 +51,7 @@ export function bindSpectrum(core, ready = () => true, MBack) {
     }
     static from_arrays(energy, mu) { return new this(energy, mu); }
     free() { this.#inner.free(); }
+    wavelet(model) { return wavelets.wrap(this.#inner.wavelet(waveletDefinition(model))); }
     fit_peaks(model, options = {}) {
       if (!options || typeof options !== "object" || Array.isArray(options)) throw new TypeError("options must be an object");
       for (const key of Object.keys(options)) if (key !== "errors") throw new TypeError(`Unknown peak-fit option: ${key}`);

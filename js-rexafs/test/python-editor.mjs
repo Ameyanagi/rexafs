@@ -15,7 +15,7 @@ const rootUri = pathToFileURL(directory).href;
 writeFileSync(join(directory, "pyrightconfig.json"), JSON.stringify({
   typeCheckingMode: "strict", pythonVersion: "3.10",
 }));
-const valid = `from rexafs import AUTOBK, Spectrum, PeakFit, MBack, MbackErfc, XrayFFTF, XrayFFTR, FTWindow
+const valid = `from rexafs import AUTOBK, Spectrum, PeakFit, MBack, MbackErfc, Wavelet, WaveletMap, XrayFFTF, XrayFFTR, FTWindow
 from rexafs.io import parse_measurement, SpectrumMapping
 measurement = parse_measurement("energy,mu\\n7100,1\\n7101,2")
 mapping: SpectrumMapping = {"energy_column":0,"energy":{"kind":"offset_ev","offset_ev":20000},"signal":{"kind":"direct","column":1}}
@@ -33,6 +33,10 @@ spectrum.set_background_method(AUTOBK(rbkg=1.2)).set_fft(XrayFFTF(window=window)
 scalar = spectrum.measure("mean", (-20., 30.), space="flat")
 print(scalar.value, scalar.standard_error, scalar.range, scalar.to_json())
 spectrum.measure("point", 10.)
+wavelet = Wavelet((2.,12.), kweight=2)
+wavelet_map = spectrum.wavelet(wavelet)
+print(wavelet_map.real[0,0], wavelet_map.shape, wavelet_map.integral((4.,10.),(1.,3.)).value)
+print(WaveletMap.from_json(wavelet_map.to_json()).warnings)
 atomic = MBack("Cu", "K", pre_edge=(-200., -50.), post_edge=(100., 800.), erfc=MbackErfc("Ka1", width=(500.,1500.), amplitude=(0.,10.)))
 normalized = atomic.fit([1.,2.], [1.,2.])
 print(normalized.norm[0], normalized.reference["data"]["data_sha256"])
@@ -158,6 +162,21 @@ XrayFFTF(window="")
   assert.match(JSON.stringify(await request("textDocument/signatureHelp",mbackPosition(3,17))), /pre_edge/);
   const mbackKeywords=await request("textDocument/completion",mbackPosition(3,17));
   assert.ok((mbackKeywords.items ?? mbackKeywords).some(x=>x.label.startsWith("pre_edge")));
+  const waveletText = 'from rexafs import Wavelet, Spectrum\nw = Wavelet((2.,12.))\nr = Spectrum([0.,1.],[1.,2.]).wavelet(w)\nr.integral\nr.';
+  const waveletUri = pathToFileURL(join(directory,"wavelet.py")).href;
+  send({method:"textDocument/didOpen",params:{textDocument:{uri:waveletUri,languageId:"python",version:1,text:waveletText}}});
+  const waveletPosition=(line,character)=>({textDocument:{uri:waveletUri},position:{line,character}});
+  assert.match(JSON.stringify(await request("textDocument/hover",waveletPosition(3,4))),/native bilinear/);
+  const waveletMethods=await request("textDocument/completion",waveletPosition(4,2));
+  assert.ok((waveletMethods.items??waveletMethods).some(x=>x.label==="slice_at_r"));
+  // Keep constructor completion separate from the deliberately incomplete member access.
+  const waveletConstructorText = 'from rexafs import Wavelet\nWavelet((2.,12.), r';
+  const waveletConstructorUri = pathToFileURL(join(directory,"wavelet_constructor.py")).href;
+  send({method:"textDocument/didOpen",params:{textDocument:{uri:waveletConstructorUri,languageId:"python",version:1,text:waveletConstructorText}}});
+  const waveletConstructorPosition={textDocument:{uri:waveletConstructorUri},position:{line:1,character:waveletConstructorText.split("\n")[1].length}};
+  assert.match(JSON.stringify(await request("textDocument/signatureHelp",waveletConstructorPosition)),/kweight/);
+  const waveletKeywords=await request("textDocument/completion",waveletConstructorPosition);
+  assert.ok((waveletKeywords.items??waveletKeywords).some(x=>x.label.startsWith("rmax")), JSON.stringify((waveletKeywords.items??waveletKeywords).map(x=>x.label)));
   console.log("Installed Python wheel: property/method hovers, member/keyword/literal completion and signature defaults passed");
   await request("shutdown", null);
   send({ method: "exit", params: null });

@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 mod mback;
 mod metrics;
 mod peaks;
+mod wavelet;
 
 type PySpectrumArrays<'py> = (Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>);
 
@@ -1372,6 +1373,23 @@ struct PySpectrum {
 }
 #[pymethods]
 impl PySpectrum {
+    /// Calculate a Cauchy wavelet map on a private copy (unreleased).
+    /// Use spectrum.wavelet(Wavelet((2, 12))). The k interval is in inverse angstroms.
+    /// Missing normalization/AUTOBK run automatically; existing chi is reused.
+    /// Inputs, settings and cached results remain unchanged. Releases the GIL.
+    /// Returns an owned WaveletMap with copied NumPy arrays (rows=R, columns=k).
+    /// Incomplete support, invalid grids and unqualified corrected XANES inputs
+    /// raise ValueError. R is not phase-corrected; colors do not imply concentration.
+    fn wavelet(
+        &self,
+        py: Python<'_>,
+        model: &wavelet::PyWavelet,
+    ) -> PyResult<wavelet::PyWaveletMap> {
+        let inner = py
+            .detach(|| self.inner.wavelet(&model.inner))
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(wavelet::PyWaveletMap { inner })
+    }
     /// Fit a composite XANES model, preparing missing normalization on a private copy.
     ///
     /// Unreleased. Example: spectrum.fit_peaks(PeakFit((-20, 40)).gaussian("p1", 5, 2, 3)).
@@ -2050,6 +2068,9 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBackgroundMethod>()?;
     m.add_class::<PySpectrum>()?;
     m.add_class::<metrics::PyMeasurementResult>()?;
+    m.add_class::<wavelet::PyWavelet>()?;
+    m.add_class::<wavelet::PyWaveletMap>()?;
+    m.add_class::<wavelet::PyWaveletRegionValue>()?;
     m.add_class::<mback::PyMBack>()?;
     m.add_class::<mback::PyMbackErfc>()?;
     m.add_class::<mback::PyMbackResult>()?;
