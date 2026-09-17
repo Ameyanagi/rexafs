@@ -136,3 +136,11 @@ required-features = ["refeff-runner"]
 [[example]]
 name = "rmc_population_benchmark"
 required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_cu2o_calibrate"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_adaptive"
+required-features = ["refeff-runner"]

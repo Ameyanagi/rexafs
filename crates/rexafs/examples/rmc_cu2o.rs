@@ -196,8 +196,8 @@ fn prepare(project: &Path, out: &Path) -> Result<()> {
 
 // Dispatch keeps the same optimizer and output schema for both calculators.
 enum Calculator {
-    Pipeline(RefeffCalculator),
-    Prepared(PreparedRefeffCalculator),
+    Pipeline(Box<RefeffCalculator>),
+    Prepared(Box<PreparedRefeffCalculator>),
 }
 impl Calculator {
     fn stats(&self) -> serde_json::Value {
@@ -262,16 +262,16 @@ fn run(
     let mut calc = if let Some(path) = acceleration {
         let settings: AccelerationSettings = serde_json::from_slice(&std::fs::read(path)?)?;
         write(out.join("acceleration.json"), &settings)?;
-        Calculator::Prepared(PreparedRefeffCalculator::new(
+        Calculator::Prepared(Box::new(PreparedRefeffCalculator::new(
             job.refeff.clone(),
             job.frozen_references.clone(),
             settings,
-        )?)
+        )?))
     } else {
         let mut c = RefeffCalculator::new(job.refeff.clone())?
             .with_frozen_potentials(job.frozen_references.clone())?;
         c.set_cache_capacity(256 * 1024 * 1024);
-        Calculator::Pipeline(c)
+        Calculator::Pipeline(Box::new(c))
     };
     let start = Instant::now();
     let mut session = if let Some((checkpoint_path, total)) = resume {

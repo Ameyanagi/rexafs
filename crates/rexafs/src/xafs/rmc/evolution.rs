@@ -518,6 +518,17 @@ impl EvolutionSession {
         cp.stagnation = 0;
         Ok(())
     }
+    #[cfg(feature = "refeff-runner")]
+    pub(super) fn audit_context(
+        &self,
+    ) -> (&EnsembleProblem, &SessionSettings, &PreparedEnsemble, &str) {
+        (
+            &self.checkpoint.problem,
+            &self.checkpoint.session,
+            &self.prepared,
+            &self.checkpoint.calculator,
+        )
+    }
     /// Explicit calculator-stage boundaries retained in the checkpoint.
     pub fn revisions(&self) -> &[CalculatorRevision] {
         &self.checkpoint.revisions

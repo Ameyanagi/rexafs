@@ -1,11 +1,14 @@
 //! Unreleased local Cu₂O comparison of Metropolis and evolutionary search.
 //!
-//! `rmc_cu2o_search rmc|ea|hybrid SOURCE_JOB ACCELERATION SECONDS NEW_DIR SEED` retains the
+//! `rmc_cu2o_search rmc|ea|hybrid SOURCE_JOB ACCELERATION SECONDS NEW_DIR SEED [R_MIN]` retains the
 //! source data/model/constraints and starts from its original configuration.
 //! Both searches minimize the experimental-normalized complex R residual over
-//! 0.8–4 Å, with the existing REXAFS fitter's real/imaginary transform convention.
+//! R_MIN–4 Å (default R_MIN=1.15 Å), with the existing REXAFS fitter's real/imaginary transform convention.
 //! The k² Hanning window tapers over 1 Å⁻¹ within the measured support. No new
 //! uncertainty estimate is introduced: this example requires sigma=1 throughout.
+//! The default lower bound excludes the source AUTOBK region (Rbkg=1 Å).
+//! An explicit lower bound permits reproducing historical fits; use the actual
+//! background radius and inspect window leakage when choosing another dataset.
 //! A constant dataset weight normalizes the objective by experimental R power;
 //! the Metropolis tolerance is rescaled from the source k objective to retain
 //! its experimental-normalized value. EA does not use that tolerance.
@@ -87,16 +90,20 @@ fn main() -> Result<()> {
         let state: EnsembleState = serde_json::from_slice(&std::fs::read(&args[2])?)?;
         return write(&args[3], &fitter_view(&job, &state)?);
     }
-    if args.len() != 6 || !matches!(args[0].as_str(), "rmc" | "ea" | "hybrid") {
+    if !(6..=7).contains(&args.len()) || !matches!(args[0].as_str(), "rmc" | "ea" | "hybrid") {
         return Err(
-            "usage: rmc_cu2o_search rmc|ea|hybrid SOURCE_JOB ACCELERATION SECONDS NEW_DIR SEED"
+            "usage: rmc_cu2o_search rmc|ea|hybrid SOURCE_JOB ACCELERATION SECONDS NEW_DIR SEED [R_MIN]"
                 .into(),
         );
     }
     let mode = &args[0];
     let budget: f64 = args[3].parse()?;
-    // The final argument is an explicit seed, allowing repetitions without editing data.
+    // An explicit seed permits repetitions without editing the experimental data.
     let seed: u64 = args[5].parse()?;
+    let rmin: f64 = args.get(6).map(|s| s.parse()).transpose()?.unwrap_or(1.15);
+    if !rmin.is_finite() || !(0. ..4.).contains(&rmin) {
+        return Err("R_MIN must be finite and in [0, 4) Å".into());
+    }
     if !budget.is_finite() || !(1. ..=86400.).contains(&budget) {
         return Err("invalid budget".into());
     }
@@ -125,7 +132,7 @@ fn main() -> Result<()> {
         dk: 1.,
         dk2: Some(1.),
         window: FTWindow::Hanning,
-        rmin: 0.8,
+        rmin,
         rmax: 4.,
         dr: 0.,
         dr2: Some(0.),
@@ -151,7 +158,7 @@ fn main() -> Result<()> {
     }
     job.provenance = json!({"source_job":args[1],"source_provenance":job.provenance,
         "objective":"normalized sum of squared real and imaginary R residuals",
-        "r_range_A":[0.8,4.0],"k_power":k_power,"r_power":r_power,
+        "r_range_A":[rmin,4.0],"k_power":k_power,"r_power":r_power,
         "temperature_policy":"source temperature / source experimental k power",
         "search":mode,"budget_seconds":budget,"seed":seed});
     std::fs::create_dir(out)?;

@@ -13,7 +13,9 @@
 //! [`RmcSettings`] and [`refine`] interface remains available. Enable Cargo feature
 //! `refeff-runner` for `RefeffCalculator`. Finite clusters and explicit periodic
 //! cells are supported. `PreparedRefeffCalculator` adds an immutable path catalogue,
-//! bounded batches and an optional validated representative basis. Atom order is
+//! bounded batches and an optional validated representative basis. The unreleased
+//! `AdaptiveBasisController` schedules exact audits and transactional stage changes.
+//! Atom order is
 //! stable and there is no symmetry expansion
 //! during refinement. Results are owned and serializable. Inputs remain unchanged.
 //!

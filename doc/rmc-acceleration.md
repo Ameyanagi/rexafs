@@ -230,3 +230,12 @@ Plots now label the attempted-move count instead of claiming a “final fit.”
 See [hybrid search, adaptive stages and population caching](rmc-search-upgrade.md)
 for acceptance feedback, immutable trained basis stages, explicit rescoring,
 first-shell fitter integration and the measured population-cache comparison.
+
+## Automatic adaptive audits (unreleased)
+
+[`AdaptiveBasisController`](../crates/rexafs/src/xafs/rmc/adaptive_control.rs)
+adds periodic exact checks in the actual dataset objectives, error-triggered
+retraining, transactional optimizer rescoring and exact fallback. Prepared
+electronic contexts and catalogues are shared across stages. See the
+[audit guide](rmc-adaptive-audits.md) for numerical tolerances, checkpoint
+semantics, costs, limitations and a runnable Rust example.

@@ -246,3 +246,42 @@ Moment preparation took 0.000043 s; one 191-point direct sum
 took 0.002420 s and the prepared expansion took 0.000006 s.
 
 All 12 repository tooling test suites also passed (`scripts/check-tooling.py`).
+
+## Automatic audit controller and dev merge, 2026-09-17
+
+The feature branch now includes dev head `bb83016` through merge commit `765869b`.
+The preceding validated RMC implementation was committed as `ccf31f0`.
+The [automatic audit guide](rmc-adaptive-audits.md) documents periodic native-
+objective checks, error-triggered retraining, exact fallback, transactional
+rescoring and combined checkpoints. Already prepared electronic contexts and
+catalogues are shared across stages; geometry spectra and trained tables remain
+specific to their scientific calculator identity.
+
+The merged tree passed 253 release checks: 208 library, 9 basic RMC, 19 session,
+8 path, 4 transform and 5 native Larch fit-space parity tests. The default-feature
+session suite separately passed 19 checks. Six new controller tests cover both
+optimizer types, cold resume, scheduling, measured errors, weight normalization,
+shared electronic preparation, cancellation and training failures.
+
+The release `rmc_adaptive` example completed 30 synthetic dimer attempts with a
+cold midpoint resume. It refreshed at attempts 0, 5, 10 and 20, passed unchanged
+at 15 and 25, and switched to exact paths on the final audit at 30. The final
+stage reused one electronic context and performed zero fresh electronic
+preparations. Its final score was 3.2288741453e-8; this is an API fixture, not an
+experimental material fit or structural convergence evidence.
+
+The `rmc_cu2o_calibrate` example retains ordinary ReFEFF path output and native
+four-parameter first-shell fits for three ranges/two initial guesses. The Cu₂O
+search example accepts an explicit R_MIN and defaults to 1.15 Å, above its saved
+AUTOBK radius of 1 Å. Archived 0.8–4 Å jobs remain unchanged and reproducible with
+an explicit R_MIN=0.8. New matched three-seed exact-path comparisons and raw
+residual vectors live in the research workspace under
+`output/cu2o-above-rbkg-comparison-2026-09-17`; the scientific report is
+`CU2O_ABOVE_RBKG_COMPARISON.md` there. Their residuals are not directly comparable
+to the old range/calibration.
+
+Clippy with warnings denied and all targets, workspace formatting/whitespace,
+and Rust reference generation (including strict Next documentation/link checks)
+passed. The generated references remain local; no site was published. These
+checks do not yet qualify approximate-basis Cu₂O performance, optional weak-path
+screening, higher scattering orders or previously deferred workflows.

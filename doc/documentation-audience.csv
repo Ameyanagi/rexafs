@@ -235,3 +235,4 @@ doc/rmc-performance.md,developer,exclude,,Unreleased RMC extension validation an
 doc/rmc-acceleration.md,developer,exclude,,Unreleased prepared ReFEFF API and numerical conventions; not stable release behavior.
 doc/rmc-implementation-progress.md,developer,exclude,,Unreleased implementation and dated local validation evidence.
 doc/rmc-search-upgrade.md,developer,exclude,,Unreleased hybrid search and adaptive basis APIs; cache benchmark and scientific limits.
+doc/rmc-adaptive-audits.md,developer,exclude,,Unreleased automatic basis audit and checkpoint APIs; numerical limits and synthetic validation.

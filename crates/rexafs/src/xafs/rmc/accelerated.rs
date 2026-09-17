@@ -1,11 +1,14 @@
 #[path = "adaptive_basis.rs"]
 mod adaptive_basis;
+#[path = "adaptive_control.rs"]
+mod adaptive_control;
 use super::geometry::distance;
 use super::prepared::PathTable;
 use super::*;
 use ::refeff::CancellationToken;
 use adaptive_basis::AdaptiveContext;
 pub use adaptive_basis::{AdaptiveBasisReport, AdaptiveBasisSettings};
+pub use adaptive_control::*;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
@@ -89,6 +92,12 @@ impl Default for AccelerationSettings {
 pub struct PreparedRefeffStats {
     /// Electronic contexts prepared, each containing fixed POT/XSPH results.
     pub contexts: usize,
+    /// Fresh electronic preparations in this calculator (unreleased).
+    #[serde(default)]
+    pub electronic_preparations: usize,
+    /// Contexts reused from an immutable stage or exact audit (unreleased).
+    #[serde(default)]
+    pub shared_electronic_contexts: usize,
     /// Directed concrete paths, including paths reserved by the displacement envelope.
     pub catalogue_paths: usize,
     /// Distinct frozen representative tables computed (within each context).
@@ -167,8 +176,8 @@ pub struct PreparedPathReport {
 }
 
 struct PreparedAbsorber {
-    catalogue: PathCatalogue,
-    context: PreparedRefeffContext,
+    catalogue: Arc<PathCatalogue>,
+    context: Arc<PreparedRefeffContext>,
     bases: Vec<Option<Arc<PathTable>>>,
     basis_groups: Vec<usize>,
     reference_shape: Vec<Vec<f64>>,
@@ -223,6 +232,7 @@ pub struct PreparedRefeffCalculator {
     identity: String,
     pool: rayon::ThreadPool,
     contexts: HashMap<String, PreparedAbsorber>,
+    shared_contexts: HashMap<String, (Arc<PathCatalogue>, Arc<PreparedRefeffContext>)>,
     snapshots: HashMap<String, Vec<Snapshot>>,
     stats: PreparedRefeffStats,
     tick: u64,
@@ -320,6 +330,7 @@ impl PreparedRefeffCalculator {
             identity,
             pool,
             contexts: HashMap::new(),
+            shared_contexts: HashMap::new(),
             snapshots: HashMap::new(),
             stats: Default::default(),
             tick: 0,
@@ -377,12 +388,34 @@ impl PreparedRefeffCalculator {
         let deadline = start
             + Duration::from_secs_f64(request.options.unwrap_or(&self.options).timeout_seconds);
         check_control(Some((&self.cancellation, deadline)))?;
-        let reference = self.references[request.structure].clone();
-        let catalogue = PathCatalogue::new(
-            reference.clone(),
-            request.absorber,
-            self.settings.catalogue.clone(),
-        )?;
+        let options = request.options.unwrap_or(&self.options).clone();
+        let shared = self.shared_contexts.get(key).cloned();
+        let (catalogue, context) = if let Some(shared) = shared {
+            shared
+        } else {
+            let reference = self.references[request.structure].clone();
+            let catalogue = Arc::new(PathCatalogue::new(
+                reference.clone(),
+                request.absorber,
+                self.settings.catalogue.clone(),
+            )?);
+            catalogue.validate(request.configuration)?;
+            require(
+                self.stats
+                    .catalogue_paths
+                    .saturating_add(catalogue.paths().len())
+                    <= self.settings.max_total_paths,
+                "prepared calculator exceeds max_total_paths",
+            )?;
+            let context = Arc::new(PreparedRefeffContext::prepare_controlled(
+                reference,
+                request.absorber,
+                request.edge,
+                options.clone(),
+                self.cancellation.clone(),
+            )?);
+            (catalogue, context)
+        };
         catalogue.validate(request.configuration)?;
         require(
             self.stats
@@ -390,14 +423,6 @@ impl PreparedRefeffCalculator {
                 .saturating_add(catalogue.paths().len())
                 <= self.settings.max_total_paths,
             "prepared calculator exceeds max_total_paths",
-        )?;
-        let options = request.options.unwrap_or(&self.options).clone();
-        let context = PreparedRefeffContext::prepare_controlled(
-            reference,
-            request.absorber,
-            request.edge,
-            options.clone(),
-            self.cancellation.clone(),
         )?;
         let mut bases = Vec::new();
         let mut basis_groups = Vec::new();
@@ -444,6 +469,11 @@ impl PreparedRefeffCalculator {
             None
         };
         self.stats.contexts += 1;
+        if self.shared_contexts.contains_key(key) {
+            self.stats.shared_electronic_contexts += 1;
+        } else {
+            self.stats.electronic_preparations += 1;
+        }
         self.stats.catalogue_paths += catalogue.paths().len();
         self.stats.representatives += adaptive
             .as_ref()
@@ -491,7 +521,9 @@ impl PreparedRefeffCalculator {
         reports
     }
     /// Construct a new immutable basis stage with the same electronic references
-    /// and options. Preparation is lazy. Use an increased epoch and retained
+    /// and options. Prepared electronic contexts/catalogues are shared immutably;
+    /// basis training is lazy and spectra start with empty caches. Both stages share
+    /// cancellation. Use an increased epoch and retained
     /// training geometries; then explicitly rebase an optimizer before stepping.
     /// Existing calculator/caches remain available if preparation or rebasing fails.
     pub fn refreshed_basis(&self, adaptive: AdaptiveBasisSettings) -> Result<Self, RmcError> {
@@ -504,7 +536,35 @@ impl PreparedRefeffCalculator {
         )?;
         let mut settings = self.settings.clone();
         settings.adaptive = Some(adaptive);
-        Self::new(self.options.clone(), self.references.clone(), settings)
+        self.with_shared_contexts(settings)
+    }
+    fn with_shared_contexts(&self, settings: AccelerationSettings) -> Result<Self, RmcError> {
+        let mut next = Self::new(self.options.clone(), self.references.clone(), settings)?;
+        next.shared_contexts = self.shared_contexts.clone();
+        for (key, prepared) in &self.contexts {
+            next.shared_contexts.insert(
+                key.clone(),
+                (
+                    Arc::clone(&prepared.catalogue),
+                    Arc::clone(&prepared.context),
+                ),
+            );
+        }
+        next.cancellation = self.cancellation.clone();
+        Ok(next)
+    }
+    /// Unreleased: construct an exact typed-path calculator with the same pinned
+    /// electronic references. Already prepared electronic contexts/catalogues are
+    /// shared immutably; approximate spectra and tables are never reused. Fresh
+    /// contexts remain lazy. This does not recompute self-consistent potentials
+    /// and is not a test of electronic or path-order convergence. Both calculators
+    /// share cancellation. Its identity matches a cold exact calculator.
+    pub fn exact_reference(&self) -> Result<Self, RmcError> {
+        let mut settings = self.settings.clone();
+        settings.basis = ScatteringBasis::Exact;
+        settings.adaptive = None;
+        settings.moments = None;
+        self.with_shared_contexts(settings)
     }
     /// Shared cancellation handle, checked between explicit paths, including cache
     /// hits, and during electronic setup. A single typed path kernel is not

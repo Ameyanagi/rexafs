@@ -160,8 +160,9 @@ the native fitting objective. A new basis remains opt-in until it is qualified o
 the actual system. No faster approximate Cu₂O final fit is claimed here.
 
 `refreshed_basis(new_manifest)` constructs a new calculator with a larger epoch.
-Electronic preparation/training runs lazily again, so include that cost when
-choosing refresh frequency. No hidden refresh occurs mid-trial. Call
+Already prepared electronic contexts and catalogues are shared immutably.
+Basis training is repeated lazily, while geometry caches start empty; include
+training/audit cost when choosing refresh frequency. No hidden refresh occurs mid-trial. Call
 `RmcSession::rebase` or `EvolutionSession::rebase` explicitly to rescore the retained
 initial/current/best states or the entire population. Rescoring is transactional;
 RNG and original displacement bounds remain unchanged. Histories from the old
@@ -196,8 +197,12 @@ parameters to 1e−5 absolute tolerance and a native R factor below 1e−10.
 cargo run --release --locked -p rexafs --features refeff-runner \
   --example rmc_population_benchmark -- NEW_OUTPUT_JSON
 cargo run --release --locked -p rexafs --features refeff-runner \
-  --example rmc_cu2o_search -- hybrid SOURCE_K_JOB ACCELERATION SECONDS NEW_DIR SEED
+  --example rmc_cu2o_search -- hybrid SOURCE_K_JOB ACCELERATION SECONDS NEW_DIR SEED [R_MIN]
 ```
+
+The Cu₂O search example now defaults to R=1.15–4 Å, above the source
+background radius of 1 Å. Pass R_MIN=0.8 explicitly to reproduce the historical
+range; archived results retain their original objectives.
 
 The hybrid example uses exact scattering unless its input acceleration manifest
 explicitly selects an approximation. It saves settings, checkpoint, population,
@@ -207,8 +212,9 @@ budgets before claiming hybrid EA improves the experimental fit.
 
 Optional validated family screening, higher-order qualification beyond six legs,
 EVAX-specific family competition/norm conventions and the previously deferred
-force-field/one-dimensional workflows are not added in this update. No automatic
-basis refresh interval or universal error bound for unseen geometries is claimed.
+force-field/one-dimensional workflows are not added in this update. The opt-in automatic controller is described in
+[the audit guide](rmc-adaptive-audits.md). Its defaults do not establish a universal
+error bound for unseen geometries.
 
 ## Retained checks from this update
 
