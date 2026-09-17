@@ -5,19 +5,21 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '../..');
 const target = resolve(root, 'website/public/wasm');
+const { version, files } = JSON.parse(readFileSync(resolve(root, 'js-rexafs/package.json'), 'utf8'));
 const build = spawnSync(process.execPath, ['js-rexafs/build.mjs'], { cwd: root, stdio: 'inherit' });
 if (build.error) throw build.error;
 if (build.status !== 0) process.exit(build.status ?? 1);
 // Do not retain a module or helper from an older binding build.
 rmSync(target, { recursive: true, force: true });
 mkdirSync(resolve(target, 'dist/web'), { recursive: true });
-for (const file of ['browser.js', 'measurement.js', 'configuration.js', 'spectrum.js', 'validate.js']) {
+// Use the package's runtime file list so new binding helpers are staged with
+// their browser entry point. The Node entry point has a separate Wasm loader.
+for (const file of files.filter(file => file.endsWith('.js') && file !== 'node.js')) {
   copyFileSync(resolve(root, 'js-rexafs', file), resolve(target, file));
 }
 for (const file of ['rexafs_wasm.js', 'rexafs_wasm_bg.wasm']) {
   copyFileSync(resolve(root, 'js-rexafs/dist/web', file), resolve(target, 'dist/web', file));
 }
-const { version } = JSON.parse(readFileSync(resolve(root, 'js-rexafs/package.json'), 'utf8'));
 const manifest = {
   version,
   channel: 'source-preview',

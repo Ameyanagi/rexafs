@@ -129,3 +129,22 @@ pages were regenerated from those declarations. A fresh website build at the
 deployment base (`https://rexafs.com/`) and all 22 website tests pass, including
 the API-member and internal-link checks. All eight generator tests, Rust
 formatting and patch whitespace checks also pass locally.
+
+## Follow-up from browser engine staging
+
+The next website run passed generation, build and content checks but failed
+eight browser workspace tests. The same eight failures reproduced locally;
+the other 17 browser tests passed. The staged browser entry point imported four
+new helpers (`peaks.js`, `mback.js`, `fluorescence.js` and `wavelet.js`) that
+the website's old copy list omitted, preventing engine initialization for every
+import format. The earlier local website result did not include this browser
+suite.
+
+Staging now takes its JavaScript runtime modules from the npm package file
+list, excluding the Node entry point. A new test imports the actual built
+website engine, initializes its Wasm binary and verifies every original energy
+and absorption value in the experimental Cu example. It failed with the missing
+`wavelet.js` filename before the staging correction and passes afterward. The
+fresh build, all 23 website tests and Astro checks (38 files, no diagnostics)
+pass locally. The complete Chromium suite also passes all 25 tests, including
+imports, numerical export comparisons, cancellation/recovery and accessibility.
