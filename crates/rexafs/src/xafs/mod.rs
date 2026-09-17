@@ -60,6 +60,7 @@ pub mod rmc;
 pub(crate) mod spline;
 pub mod structure;
 pub mod tools;
+pub mod transform;
 #[cfg(feature = "ndarray-compat")]
 #[path = "xafsutils_ndarray.rs"]
 /// Wave-number conversion, windows, smoothing and edge-location helpers.

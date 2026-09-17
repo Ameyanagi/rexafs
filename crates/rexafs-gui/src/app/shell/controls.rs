@@ -23,6 +23,7 @@ pub(crate) struct Presentation {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Menu {
+    FitMode,
     Project,
     Save,
     Plot,

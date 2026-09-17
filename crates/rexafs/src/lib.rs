@@ -77,4 +77,6 @@ pub use xafs::normalization::{NormalizationMethod, PrePostEdge};
 pub use xafs::xasgroup::XASGroup as Group;
 pub use xafs::xasspectrum::XASSpectrum as Spectrum;
 pub use xafs::xrayfft::{FFTGrid, XrayFFTF, XrayFFTR};
-pub use xafs::{analysis, fitting, io, rmc, structure, tools, Result, XAFSError as Error};
+pub use xafs::{
+    analysis, fitting, io, rmc, structure, tools, transform, Result, XAFSError as Error,
+};

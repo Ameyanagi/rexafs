@@ -77,6 +77,9 @@ impl StudioApp {
             Stage::Data => self.data_inspector(cx).into_any_element(),
             Stage::Normalize => self.normalize_inspector(cx).into_any_element(),
             Stage::Background => self.background_inspector(cx).into_any_element(),
+            Stage::Transform if self.stage_view.tf_view == super::TfView::Wavelet => {
+                self.wavelet_controls(cx).into_any_element()
+            }
             Stage::Transform => self.transform_inspector(cx).into_any_element(),
             Stage::Series => self.series_inspector(cx).into_any_element(),
             Stage::Fit | Stage::Publish => div().into_any_element(),

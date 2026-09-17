@@ -26,6 +26,7 @@ mod params;
 mod plotting;
 mod project;
 mod publication;
+mod rmc_fitting;
 mod series_measurements;
 mod settings;
 mod source_evidence;
@@ -34,6 +35,7 @@ mod spectrum_interest;
 mod structure;
 mod theme;
 mod updates;
+mod wavelet;
 mod widgets;
 
 use std::path::PathBuf;

@@ -27,6 +27,9 @@ fn current_label(
 
 impl StudioApp {
     pub(crate) fn stage_center(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        if self.stage == Stage::Transform && self.stage_view.tf_view == TfView::Wavelet {
+            return self.wavelet_center(cx);
+        }
         let t = self.theme;
         let ready = self.quadrants.len() > PLOT_CHIQ;
         if !ready && self.current_path.as_os_str().is_empty() && !self.catalog.scanning {
@@ -407,7 +410,7 @@ impl StudioApp {
         }
     }
 
-    fn plot_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    pub(super) fn plot_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         use super::controls::{Menu, icon_button};
         use crate::icons::Icon;
         let t = self.theme;
@@ -543,6 +546,7 @@ impl StudioApp {
                     (TfView::R, "R"),
                     (TfView::Both, "k + R"),
                     (TfView::Q, "q"),
+                    (TfView::Wavelet, "Wavelet"),
                 ]
                 .into_iter()
                 .enumerate()
@@ -1019,6 +1023,7 @@ pub(crate) fn stage_plot_selection(
             BkgView::K => vec![(PLOT_CHIK, chik), (PLOT_CHIR, chir)],
         },
         Stage::Transform => match v.tf_view {
+            TfView::Wavelet => Vec::new(),
             TfView::K => vec![(PLOT_CHIK, chik)],
             TfView::R => vec![(PLOT_CHIR, chir)],
             TfView::Q => vec![(PLOT_CHIQ, "χ(q) back-transform".into())],

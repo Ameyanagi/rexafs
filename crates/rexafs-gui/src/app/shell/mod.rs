@@ -43,6 +43,7 @@ mod path_diagnostics;
 pub mod path_picker;
 pub(crate) mod path_routing;
 pub(crate) mod publish;
+pub(crate) mod rmc;
 pub mod series;
 mod spectrum_colors;
 pub mod stage_strip;
@@ -51,6 +52,7 @@ pub mod structure_view;
 pub mod thumbnails;
 pub mod tools;
 pub(crate) mod updates_view;
+pub(crate) mod wavelet;
 
 use gpui::{
     ClickEvent, Context, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, px,
@@ -143,6 +145,7 @@ pub enum BkgView {
 /// Transform stage main view.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TfView {
+    Wavelet,
     K,
     R,
     Q,

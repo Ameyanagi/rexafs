@@ -99,3 +99,13 @@ The filtered signal retains the weighting/window applied before the forward
 transform; it is not generally the original unweighted $\chi(k)$.
 [Processing theory](/docs/science/processing/) defines the normalization and
 Fourier signs, scales, units and limitations.
+
+
+## Development preview: Wavelet
+
+The unreleased **Transform → Wavelet** view displays magnitude, real or imaginary
+Morlet coefficients from processed χ(k). It uses the Transform k range and
+applies its k weight once; it does not repeat background removal or change a
+fitting objective. R is Fourier distance, not a phase-corrected bond length.
+The Morlet width and map grid are adjustable. This development view is not
+available in the released 0.2.9 desktop.

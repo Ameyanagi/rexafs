@@ -89,6 +89,9 @@ impl StudioApp {
     }
 
     pub(crate) fn fit_blocker(&self) -> Option<&'static str> {
+        if self.rmc.control.is_some() {
+            return Some("Stop and save the active RMC run before starting a path fit.");
+        }
         if self.joint.config.enabled {
             return self.joint_blocker();
         }
@@ -137,6 +140,9 @@ impl StudioApp {
     }
 
     pub(crate) fn batch_blocker(&self) -> Option<&'static str> {
+        if self.rmc.control.is_some() {
+            return Some("Stop and save the active RMC run before starting a batch fit.");
+        }
         if self.joint.config.enabled {
             return Some(
                 "Batch fits spectra independently. Select Single spectrum in Model & fit to run a batch.",
@@ -167,6 +173,9 @@ impl StudioApp {
     }
 
     pub(crate) fn fit_workspace(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        if self.fit_mode == crate::rmc_fitting::FitMode::Rmc {
+            return self.rmc_workspace(cx);
+        }
         let t = self.theme;
         let step = self.stage_view.fit_step;
         let selected = self.fit_paths.iter().filter(|p| p.spec.enabled).count();
@@ -215,6 +224,7 @@ impl StudioApp {
                     .on_click(cx.listener(move |this, _, _, cx| this.set_fit_step(dest, cx))),
             );
         }
+        nav = nav.child(div().flex_1()).child(self.fit_mode_picker(cx));
         let (_title, description, action, enabled) = match step {
             FitStep::Structure => (
                 "Start with a structure",
@@ -595,6 +605,7 @@ impl StudioApp {
             .flex_col()
             .child(nav)
             .child(header)
+            .child(self.rmc_job_bar(cx))
             .when(step == FitStep::Model, |d| d.child(self.joint_mode_bar(cx)))
             .when(step == FitStep::Model && self.fit_error.is_some(), |d| {
                 d.child(

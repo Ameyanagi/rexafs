@@ -24,22 +24,6 @@ pub enum Objective {
     LocalSpectrum(LocalSpectrumSettings),
 }
 
-/// Morlet analysis settings. This explicitly normalized project convention is
-/// not an assertion of EVAX wavelet equivalence. It resolves a local oscillation
-/// exp(2 i R k); R is Fourier distance, not a phase-corrected bond length.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct WaveletSettings {
-    /// Window centers in Å⁻¹, finite, increasing and inside measured k support.
-    pub k_centers: Vec<f64>,
-    /// Positive increasing Fourier distances in Å.
-    pub r: Vec<f64>,
-    /// Dimensionless Morlet carrier frequency, typically 6. The Gaussian width
-    /// at Fourier distance R is omega0/(2R) in Å⁻¹. Larger values improve
-    /// relative R resolution while reducing k localization.
-    pub omega0: f64,
-}
-
 pub(super) enum PreparedObjective {
     K,
     Fourier {

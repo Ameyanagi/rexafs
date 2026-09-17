@@ -41,8 +41,13 @@ impl StudioApp {
             let field = cx.new(|cx| {
                 NumericField::new(label, "required", Some(value), FieldKind::Float, t, cx)
             });
-            cx.subscribe(&field, |app, _, _, cx| app.schedule_measurement_preview(cx))
-                .detach();
+            cx.subscribe(
+                &field,
+                |app, _, _: &crate::widgets::numeric_field::FieldEvent, cx| {
+                    app.schedule_measurement_preview(cx)
+                },
+            )
+            .detach();
             self.measurements.fields.push(field);
         }
     }

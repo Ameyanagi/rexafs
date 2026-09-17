@@ -1211,6 +1211,11 @@ impl StudioApp {
     }
 
     pub(crate) fn structure_generate_paths(&mut self, cx: &mut Context<Self>) {
+        if self.rmc.control.is_some() {
+            self.status = "Stop and save the active RMC run before calculating paths.".into();
+            cx.notify();
+            return;
+        }
         if self.feff_running {
             return;
         }

@@ -179,3 +179,30 @@ fn reported_path_fourier_and_local_maps_add_as_complex_contributions() {
         assert!((*a + *b - *s).norm() < 1e-10);
     }
 }
+
+#[test]
+fn shared_transform_preserves_legacy_api_values_and_errors() {
+    let k: Vec<_> = (0..80).map(|i| 2. + i as f64 * 0.1).collect();
+    let values: Vec<_> = k.iter().map(|q| (4. * q).sin()).collect();
+    let settings =
+        rexafs::transform::LocalSpectrumSettings::morlet(rexafs::transform::WaveletSettings {
+            k_centers: k.clone(),
+            r: vec![1., 2., 3.],
+            omega0: 6.,
+        });
+    let shared = rexafs::transform::LocalSpectrumTransform::new(&k, &settings).unwrap();
+    let legacy = LocalSpectrumTransform::new(&k, &settings).unwrap();
+    assert_eq!(
+        shared.transform(&values).unwrap(),
+        legacy.transform(&values).unwrap()
+    );
+    assert_eq!(shared.uses_fft(), legacy.uses_fft());
+    assert!(matches!(
+        shared.transform(&[]),
+        Err(rexafs::transform::TransformError::Invalid(_))
+    ));
+    assert!(matches!(legacy.transform(&[]), Err(RmcError::Invalid(_))));
+    let encoded = serde_json::to_vec(&settings).unwrap();
+    let legacy_settings: LocalSpectrumSettings = serde_json::from_slice(&encoded).unwrap();
+    assert_eq!(legacy_settings, settings);
+}
