@@ -67,3 +67,5 @@ pub use crate::xafs::analysis::peakfit::{
     PeakComponent, PeakContribution, PeakFit, PeakFitError, PeakFitResult, PeakRole, PeakShape,
     PeakTermination,
 };
+
+pub use crate::xafs::mback::{MBack, MbackErfc, MbackOptions, MbackResult};

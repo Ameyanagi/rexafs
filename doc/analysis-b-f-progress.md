@@ -170,3 +170,24 @@ Three core tests and a pinned Python-XrayDB comparison pass, covering four edge
 regions and four compounds at relative tolerance 2×10⁻¹⁰. Strict core Clippy
 passes. This establishes a reference-data layer, not completed MBACK or
 fluorescence correction; their implementations and GUI qualification follow.
+
+## D2: full MBACK core
+
+`MBack::for_edge("Cu", "K").fit(energy, mu)` now evaluates the named full-MBACK
+Chantler objective. The same settings work through the ordinary spectrum setter.
+It offers strict or recorded automatic intervals, degree 0–5, positive atomic
+scale, optional bounded erfc background, rank/conditioning diagnostics, matched
+fpp and separate norm/flat outputs. Historical empty placeholders remain readable;
+recalculation needs an explicit absorber/edge. Successful spectrum settings pin
+the actual atomic reference for future replay.
+
+Seven synthetic checks cover known scale/background, input-unit invariance,
+irregular grids, independently balanced regions, excluded structure, active erfc
+bounds, neighboring edges, invalid/unidentifiable fits and failed-cache clearing.
+The full default core suite passes 219 tests, plus an independent integration
+comparison with pinned Larch match_f2 and preedge functions in both erfc modes.
+The seven focused checks also pass on ndarray-compat; strict core Clippy passes.
+The [guide](mback-normalization.md) records the objective, auxiliary normalization,
+automatic range policy, solver differences and data attribution. Desktop method
+comparison/history, series/Live, bindings and experimental qualification remain
+open; E–F are not yet implemented.

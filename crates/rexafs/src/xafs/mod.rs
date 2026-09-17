@@ -48,6 +48,7 @@ pub mod lmutils;
 pub mod mathutils;
 #[cfg(not(feature = "ndarray-compat"))]
 pub mod mathutils;
+pub mod mback;
 #[cfg(feature = "ndarray-compat")]
 #[path = "normalization_ndarray.rs"]
 /// Pre/post-edge normalization and algorithm selection.

@@ -459,9 +459,11 @@ impl XASSpectrum {
     }
 
     /// Take ownership of normalization settings and clear dependent results.
-    /// Pass [`crate::PrePostEdge`] directly, a method enum, or an optional enum.
+    /// Pass [`crate::PrePostEdge`] or [`crate::MBack`] directly, a method enum,
+    /// or an optional enum.
     /// `None` selects default pre/post-edge normalization. A configured edge energy
-    /// takes precedence over the existing E0; an explicit edge step remains an override.
+    /// takes precedence over the existing E0; a polynomial edge step remains an override.
+    /// MBACK instead determines its step from the atomic match.
     /// No normalization is performed by this setter.
     /// For prepared input this explicitly enables fitting new pre/post-edge
     /// curves, replacing the default unit-step identity mapping. The original
@@ -788,6 +790,7 @@ impl XASSpectrum {
                 }
                 m.norm = None;
                 m.flat = None;
+                m.result = None;
             }
             None => {}
         }
