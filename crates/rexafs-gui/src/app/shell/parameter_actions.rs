@@ -22,6 +22,7 @@ settings![
     (import, "Import", "Import"),
     (align_to_ref, "Reference alignment", "Import"),
     (align_target, "Alignment energy (eV)", "Import"),
+    (mback, "MBACK model and atomic reference", "Normalization"),
     (e0, "E₀ (eV)", "Edge"),
     (edge_step, "Edge step", "Edge"),
     (refit_prepared, "Refit prepared absorption", "Normalization"),
@@ -855,6 +856,7 @@ mod tests {
     fn populated_params(mode: crate::params::DetectionMode) -> PipelineParams {
         use rexafs::prelude::{AUTOBKClampScalePolicy, AUTOBKSolver, FTWindow};
         PipelineParams {
+            mback: Some(rexafs::MBack::for_edge("Cu", "K").options),
             import: crate::params::ImportConfig {
                 axis: crate::import_mapping::AxisConversion::EnergyKev,
                 reference_mu_col: Some(8),
@@ -961,6 +963,7 @@ mod tests {
             (
                 Stage::Normalize,
                 &[
+                    "mback",
                     "e0",
                     "edge_step",
                     "refit_prepared",

@@ -432,3 +432,68 @@ fn live_kek_qd_uses_observed_angles_and_preserves_original_counts() {
         bytes
     );
 }
+
+#[test]
+fn mback_live_and_series_use_identical_pinned_preparation() {
+    let tmp = tempfile::tempdir().unwrap();
+    let folder = tmp.path().join("input");
+    std::fs::create_dir(&folder).unwrap();
+    let (energy, mu, settings) = crate::normalization_history::tests::synthetic();
+    let expected = crate::params::prepare_arrays(
+        energy.clone(),
+        mu.clone(),
+        &settings,
+        crate::params::RequiredStage::Normalized,
+    )
+    .unwrap();
+    let measurement = MetricMeasurement::mean(-20.0..=40.0).flat();
+    let expected_value = expected.measure(&measurement).unwrap().value;
+    let mut text =
+        "# XDI/1.0 synthetic\n# Column.1: energy eV\n# Column.2: mu\n# ///\n# ----\n# energy mu\n"
+            .to_owned();
+    for (e, m) in energy.iter().zip(&mu) {
+        text.push_str(&format!("{e:.15} {m:.15}\n"));
+    }
+    let path = folder.join("synthetic-cu.xdi");
+    std::fs::write(&path, text).unwrap();
+    let mut config = config(&folder);
+    config.settings = settings.clone();
+    config.definition.measurement = measurement;
+    let definition = config.definition.clone();
+    let input = crate::series_measurements::FrameInput {
+        group: GroupId::new_result(),
+        label: "Synthetic Cu".into(),
+        path,
+        derived: None,
+        settings,
+        recipe: None,
+    };
+    let (series, _, _) = input.prepare(&definition, None).unwrap();
+    assert!(
+        (series.measure(&definition.measurement).unwrap().value - expected_value).abs() < 1e-10
+    );
+    let mut engine = LiveEngine::open(
+        LiveStore::create(&tmp.path().join("cache"), config, BTreeMap::new()).unwrap(),
+    )
+    .unwrap();
+    let records = tick(&mut engine, Instant::now());
+    assert_eq!(records.len(), 1);
+    let row = &records[0].frames[0].row;
+    assert_eq!(row.status, FrameStatus::Succeeded, "{:?}", row.reason);
+    assert!((row.result.as_ref().unwrap().value - expected_value).abs() < 1e-10);
+    assert_eq!(
+        row.preparation,
+        crate::series_measurements::resolved_preparation(&series)
+    );
+    assert_eq!(
+        row.preparation["normalization"]["resolved"]["reference"],
+        serde_json::to_value(&input.settings.mback.as_ref().unwrap().reference).unwrap()
+    );
+    let directory = engine.store.directory.clone();
+    drop(engine);
+    let store = LiveStore::open(&directory).unwrap();
+    assert_eq!(
+        store.records().unwrap()[0].frames[0].row.preparation,
+        row.preparation
+    );
+}

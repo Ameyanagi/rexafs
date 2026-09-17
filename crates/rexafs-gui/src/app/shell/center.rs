@@ -30,6 +30,16 @@ impl StudioApp {
         if self.stage == Stage::Data && self.peaks.open {
             return div().flex_1().min_w_0().flex().child(self.peak_center(cx));
         }
+        if self.normalization.open && !self.normalization_matches_current() {
+            self.normalization.open = false;
+        }
+        if self.stage == Stage::Normalize && self.normalization.open {
+            return div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .child(self.normalization_center(cx));
+        }
         let t = self.theme;
         let ready = self.quadrants.len() > PLOT_CHIQ;
         if !ready && self.current_path.as_os_str().is_empty() && !self.catalog.scanning {

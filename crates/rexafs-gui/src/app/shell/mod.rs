@@ -38,6 +38,7 @@ pub(crate) mod measurement_import;
 pub(crate) mod measurements;
 mod molecular_geometry;
 pub mod molecule_view;
+pub(crate) mod normalization;
 pub mod palette;
 pub(crate) mod parameter_actions;
 mod path_diagnostics;

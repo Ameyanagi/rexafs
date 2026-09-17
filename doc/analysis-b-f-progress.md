@@ -210,3 +210,34 @@ check all pass. Next reference pages include the new APIs; stable signatures
 remain those of the release, with the historical no-argument selector documented.
 Computer use inspected the current Normalize layout before the forthcoming
 method-selector/range/preview integration. No GUI MBACK completion is claimed yet.
+
+## D4: desktop MBACK, independent comparisons and retained history
+
+Normalize now offers Polynomial, MBACK and Compare methods. Explicit source-header
+identity supplies an editable suggestion. Preview and application run off the UI
+thread; changing the selected group invalidates the comparison. The existing
+range fields and draggable boundaries use resolved MBACK intervals, with 0.1 eV
+display precision. Switching methods after editing one endpoint preserves the
+opposite visible bound. Polynomial remains the default.
+
+Atomic match and residual views show the fitting intervals. Independent results
+retain original inputs, settings, complete normalization outputs and atomic data
+identities in bounded immutable artifacts. Embedded projects restore that history;
+JSON export includes it. Common preparation supplies identical values and resolved
+provenance to desktop, Series and Live. A missing historical atomic version blocks
+recomputation without replacing the archived result.
+
+The release executable builds. The full serial GUI suite passes 585 tests with
+6 intentionally ignored (391.15 seconds). A preceding parallel run passed 583,
+failed one unrelated updater lock-reacquisition test, and ignored 6; the isolated
+lock test passes. The final serial run also includes the new range-switch test.
+The parallel test interference is not claimed to be diagnosed or fixed. Strict
+GUI Clippy still reports pre-existing lint findings; no blanket suppression was
+added. Core and binding qualification is recorded in D2/D3.
+
+Computer use verified synthetic and attributed Cu inputs, source suggestions,
+range editing, Norm/Flat comparison, JSON export and embedded save/reopen after
+moving the original cache aside. Only synthetic screenshots are retained in the
+[desktop validation record](validation/2026-09-17-mback/README.md). Native
+Windows/Linux GUI and broader experimental qualification remain outstanding.
+E and F remain in progress, not completed by this increment.

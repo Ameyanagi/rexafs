@@ -478,6 +478,17 @@ pub(crate) fn resolved_preparation(sp: &XASSpectrum) -> serde_json::Value {
         Some(NormalizationMethod::PrePostEdge(n)) => {
             serde_json::json!({"method":"PrePostEdge","e0_ev":n.e0,"edge_step":n.edge_step,"pre_start_ev":n.pre_edge_start,"pre_end_ev":n.pre_edge_end,"post_start_ev":n.norm_start,"post_end_ev":n.norm_end,"polynomial_order":n.norm_polyorder,"victoreen":n.n_victoreen})
         }
+        Some(NormalizationMethod::MBack(n)) => {
+            serde_json::json!({"method":"mback_chantler_v1", "options":n.options,
+            "e0_ev":n.e0, "edge_step":n.edge_step,
+            "resolved":n.result.as_ref().map(|r| serde_json::json!({
+                "reference":r.reference,"pre_edge":r.pre_edge,"post_edge":r.post_edge,
+                "scale":r.scale,"coefficients":r.coefficients,"energy_scale":r.energy_scale,
+                "erfc_width":r.erfc_width,"erfc_amplitude":r.erfc_amplitude,
+                "emission":r.emission,"auxiliary_method":r.auxiliary_method,
+                "objective":r.objective,"rank":r.rank,"condition":r.condition,"warnings":r.warnings
+            }))})
+        }
         _ => serde_json::Value::Null,
     };
     let mut fft = sp.xftf.clone();

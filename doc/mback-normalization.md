@@ -64,6 +64,48 @@ absorber edge. A family can be requested through `MbackErfc.emission`; it remain
 distinct from an individual line and retains its contributing records. This term
 models a smooth background; it does not correct fluorescence over-absorption.
 
+## Desktop workflow (unreleased)
+
+In **Normalize**, choose **MBACK…**, enter the absorber and edge, then select
+**Preview**. A declared absorber/edge in the source header is shown as an editable
+suggestion; otherwise enter it explicitly. The desktop does not infer a compound
+formula from the absorber. **Norm**, **Flat**, **Atomic match** and
+**Residual** show the calculated representation, reference/background agreement
+and the unweighted residual. Shaded intervals in the atomic views identify points
+used in the fit; the intervening near-edge structure is excluded from the objective.
+
+Choose **Use MBACK** to apply the settings. The atomic-data identity and resolved
+starting intervals become part of the pipeline settings. In the regular Normalize
+plot, drag the same blue/yellow range handles used by polynomial normalization.
+All four numeric bounds remain offsets from E₀ and display automatic values to
+one decimal place. The polynomial-order control sets the MBACK background degree.
+Edge-step overrides and the Victoreen exponent are hidden because MBACK does not
+use them. **Erfc background** opens the optional line and bounded-width/amplitude
+settings; no fluorescence geometry is inferred by this term.
+
+Changing method preserves the previous successful normalization in an immutable
+local artifact before changing the pipeline. **Compare methods** retains the
+current result and overlays it with the most recently saved other method for the
+same group and identical input arrays. This compares independently calculated
+results; it does not rerun the earlier method using the new settings. **Export
+JSON…** saves the displayed results, their original arrays, requested settings,
+resolved normalization and atomic provenance. Embedded `.rxs` projects include
+all retained normalization artifacts; reopening does not import them as spectra.
+Older results remain in the project archive when another comparison is selected.
+
+Use the existing Normalize settings action to apply the configuration to marked
+spectra. Series measurements, peak fits and Live recipes consume the same pipeline
+method. A captured Live recipe remains immutable; change the recipe to change
+normalization. Per-frame preparation records retain resolved intervals, coefficients,
+scale and atomic identity. A missing requested atomic version prevents exact
+recomputation while the saved curves remain readable. Recovered normalized/flat
+components keep their original arrays unless **Refit pre/post-edge** is enabled.
+
+The desktop implementation is in
+[`normalization.rs`](../crates/rexafs-gui/src/app/shell/normalization.rs), with
+shared preparation in [`params.rs`](../crates/rexafs-gui/src/params.rs) and retained
+results in [`normalization_history.rs`](../crates/rexafs-gui/src/normalization_history.rs).
+
 ## Objective and outputs
 
 The implementation is [`mback/solver.rs`](../crates/rexafs/src/xafs/mback/solver.rs).

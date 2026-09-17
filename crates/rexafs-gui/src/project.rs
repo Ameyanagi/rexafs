@@ -91,6 +91,7 @@ pub struct ParamOverride {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProjectFile {
+    pub normalizations: crate::normalization_history::NormalizationHistory,
     pub peak_fits: crate::peak_fits::PeakArchive,
     pub series_measurements: crate::series_measurements::SeriesArchive,
     pub lcf_series_analysis: Option<LcfSeriesAnalysis>,

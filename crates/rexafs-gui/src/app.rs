@@ -270,6 +270,7 @@ fn copy_section(dst: &mut PipelineParams, src: &PipelineParams, section: ParamSe
             dst.align_target = src.align_target;
         }
         ParamSection::Norm => {
+            dst.mback = src.mback.clone();
             dst.e0 = src.e0;
             dst.edge_step = src.edge_step;
             dst.pre_edge_start = src.pre_edge_start;
@@ -1103,6 +1104,7 @@ pub struct StudioApp {
     measurements: shell::measurements::MeasurementState,
     live: shell::live::LiveState,
     peaks: shell::peaks::PeakState,
+    normalization: shell::normalization::NormalizationState,
     journal: shell::journal::JournalState,
     palette: Option<shell::palette::PaletteState>,
     path_route: Option<shell::path_routing::RoutingCard>,
@@ -2990,6 +2992,7 @@ impl StudioApp {
             measurements: Default::default(),
             live: Default::default(),
             peaks: Default::default(),
+            normalization: Default::default(),
             journal: shell::journal::JournalState::default(),
             palette: None,
             path_route: None,
@@ -4913,6 +4916,36 @@ impl StudioApp {
                 .find(|(key, _)| *key == ParamKey::E0)
         {
             field.update(cx, |f, cx| f.set_placeholder(format!("auto ({e0:.1})"), cx));
+        }
+        if self.effective_params(ix).mback.is_some() {
+            if let Some(ranges) = crate::params::normalization_ranges(&sp) {
+                for (key, resolved) in [
+                    ParamKey::PreEdgeStart,
+                    ParamKey::PreEdgeEnd,
+                    ParamKey::NormStart,
+                    ParamKey::NormEnd,
+                ]
+                .into_iter()
+                .zip(ranges)
+                {
+                    if let Some((_, field)) = self.param_fields.iter().find(|(k, _)| *k == key) {
+                        field.update(cx, |f, cx| {
+                            f.set_placeholder(format!("auto ({resolved:.1})"), cx)
+                        });
+                    }
+                }
+            }
+        } else {
+            for (key, value) in [
+                (ParamKey::PreEdgeStart, "auto (-200)"),
+                (ParamKey::PreEdgeEnd, "auto (-30)"),
+                (ParamKey::NormStart, "auto (150)"),
+                (ParamKey::NormEnd, "auto (spectrum end)"),
+            ] {
+                if let Some((_, field)) = self.param_fields.iter().find(|(k, _)| *k == key) {
+                    field.update(cx, |f, cx| f.set_placeholder(value, cx));
+                }
+            }
         }
         self.spectrum = Some(sp.clone());
         self.refresh_operando_frame_plot(ix, fingerprint, &sp, cx);
@@ -8483,6 +8516,7 @@ impl StudioApp {
         ProjectFile {
             series_measurements: self.measurements.archive.clone(),
             peak_fits: self.peaks.archive.clone(),
+            normalizations: self.normalization.history.clone(),
             parser_evidence: self.parser_evidence.clone(),
             imports: self.imports.clone(),
             import_history: self.intake.history.clone(),
@@ -8791,6 +8825,8 @@ impl StudioApp {
         self.peaks.stop();
         self.peaks = Default::default();
         self.peaks.archive = project.peak_fits.clone();
+        self.normalization = Default::default();
+        self.normalization.history = project.normalizations.clone();
         self.measurements = shell::measurements::MeasurementState::from_archive(
             project.series_measurements.clone(),
         );

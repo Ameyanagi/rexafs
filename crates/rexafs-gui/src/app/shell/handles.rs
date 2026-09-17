@@ -13,7 +13,7 @@ use gpui::{
     Bounds, Context, Corners, Hsla, IntoElement, ParentElement, Pixels, Point, Rgba, Styled,
     canvas, div, fill, point, prelude::*, px, quad, size,
 };
-use rexafs::prelude::{BackgroundMethod, NormalizationMethod};
+use rexafs::prelude::BackgroundMethod;
 
 use gpui::Entity;
 use ruviz::core::plot::ViewportPoint;
@@ -268,31 +268,19 @@ impl StudioApp {
                     // energy origin is editable; baseline ranges do not apply.
                     return (vec![(HandleKey::E0, e0)], Vec::new());
                 }
-                let ppe = match sp.normalization.as_ref() {
-                    Some(NormalizationMethod::PrePostEdge(ppe)) => Some(ppe),
-                    _ => None,
-                };
+                let ranges = crate::params::normalization_ranges(sp);
                 let rel = |param: Option<f64>, from_sp: Option<f64>, default: f64| {
                     param.or(from_sp).unwrap_or(default)
                 };
-                let pre1 = rel(
-                    p.pre_edge_start,
-                    ppe.and_then(|x| x.get_pre_edge_start()),
-                    -200.0,
-                );
-                let pre2 = rel(
-                    p.pre_edge_end,
-                    ppe.and_then(|x| x.get_pre_edge_end()),
-                    -30.0,
-                );
-                let nor1 = rel(p.norm_start, ppe.and_then(|x| x.get_norm_start()), 150.0);
+                let pre1 = rel(p.pre_edge_start, ranges.map(|r| r[0]), -200.0);
+                let pre2 = rel(p.pre_edge_end, ranges.map(|r| r[1]), -30.0);
+                let nor1 = rel(p.norm_start, ranges.map(|r| r[2]), 150.0);
                 let emax = sp
                     .energy
                     .as_ref()
                     .and_then(|e| e.iter().next_back().copied())
                     .unwrap_or(e0 + 2000.0);
-                let nor2 =
-                    rel(p.norm_end, ppe.and_then(|x| x.get_norm_end()), 2000.0).min(emax - e0);
+                let nor2 = rel(p.norm_end, ranges.map(|r| r[3]), 2000.0).min(emax - e0);
                 (
                     vec![
                         (HandleKey::PreStart, e0 + pre1),

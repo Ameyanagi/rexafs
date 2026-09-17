@@ -6,7 +6,6 @@
 //! a workaround for broken vertical text.
 
 use rexafs::prelude::BackgroundMethod;
-use rexafs::prelude::NormalizationMethod;
 use rexafs::prelude::XASSpectrum;
 use ruviz::core::LegendPosition;
 use ruviz::data::{BatchUpdate, Observable};
@@ -551,21 +550,41 @@ fn dashed(key: SeriesKey, x: Vec<f64>, y: Vec<f64>, color: Color, label: &str) -
 /// values are stored relative to E0). `shift` is the active trace's
 /// waterfall offset so the trendlines sit on the curve they belong to.
 fn add_mu_diagnostics(spec: &mut QuadrantSpec, sp: &XASSpectrum, view: &ViewOptions, shift: f64) {
-    if view.show_pre
-        && let (Some(energy), Some(pre)) = (sp.energy.as_ref(), sp.pre_edge())
-    {
-        let x = vecs(energy);
-        let y: Vec<f64> = pre.iter().map(|v| v + shift).collect();
-        spec.series
-            .push(dashed(SeriesKey::PreEdge, x, y, TREND, "pre-edge"));
-    }
-    if view.show_post
-        && let (Some(energy), Some(post)) = (sp.energy.as_ref(), sp.post_edge())
-    {
-        let x = vecs(energy);
-        let y: Vec<f64> = post.iter().map(|v| v + shift).collect();
-        spec.series
-            .push(dashed(SeriesKey::PostEdge, x, y, TREND, "post-edge"));
+    let mback = match sp.normalization.as_ref() {
+        Some(rexafs::NormalizationMethod::MBack(m)) => m.result.as_deref(),
+        _ => None,
+    };
+    for (show, key, label, conventional, atomic) in [
+        (
+            view.show_pre,
+            SeriesKey::PreEdge,
+            "pre-edge",
+            sp.pre_edge(),
+            mback.map(|r| &r.pre_curve),
+        ),
+        (
+            view.show_post,
+            SeriesKey::PostEdge,
+            "post-edge",
+            sp.post_edge(),
+            mback.map(|r| &r.post_curve),
+        ),
+    ] {
+        if !show {
+            continue;
+        }
+        if let Some(energy) = &sp.energy {
+            let y = conventional
+                .map(|v| v.iter().map(|v| v + shift).collect::<Vec<_>>())
+                .or_else(|| {
+                    atomic
+                        .zip(mback)
+                        .map(|(v, r)| v.iter().map(|v| v / r.scale + shift).collect())
+                });
+            if let Some(y) = y {
+                spec.series.push(dashed(key, vecs(energy), y, TREND, label));
+            }
+        }
     }
     if view.show_bkg
         && let (Some(energy), Some(BackgroundMethod::AUTOBK(autobk))) =
@@ -592,18 +611,15 @@ fn add_mu_diagnostics(spec: &mut QuadrantSpec, sp: &XASSpectrum, view: &ViewOpti
         spec.vlines.push((e0, E0_COLOR, 1.2, true));
     }
     if view.show_ranges
-        && let (Some(e0), Some(NormalizationMethod::PrePostEdge(ppe))) =
-            (e0, sp.normalization.as_ref())
+        && let (Some(e0), Some(r)) = (e0, crate::params::normalization_ranges(sp))
     {
-        for (value, color) in [
-            (ppe.get_pre_edge_start(), PRE_COLOR),
-            (ppe.get_pre_edge_end(), PRE_COLOR),
-            (ppe.get_norm_start(), NORM_COLOR),
-            (ppe.get_norm_end(), NORM_COLOR),
+        for (rel, color) in [
+            (r[0], PRE_COLOR),
+            (r[1], PRE_COLOR),
+            (r[2], NORM_COLOR),
+            (r[3], NORM_COLOR),
         ] {
-            if let Some(rel) = value {
-                spec.vlines.push((e0 + rel, color, 1.0, true));
-            }
+            spec.vlines.push((e0 + rel, color, 1.0, true));
         }
     }
 }

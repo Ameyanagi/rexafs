@@ -1177,7 +1177,11 @@ pub struct PipelineParams {
     pub align_to_ref: bool,
     /// Desired reference-channel E₀ in eV. None applies no reference alignment.
     pub align_target: Option<f64>,
-    // Normalization (pre/post-edge); energies relative to E0.
+    /// None keeps polynomial normalization. MBACK records explicit absorber,
+    /// edge and atomic-data identity. Shared numeric fields override its saved
+    /// ranges/degree; its saved ranges supply each unspecified bound.
+    pub mback: Option<MbackOptions>,
+    // Normalization; energies relative to E0.
     /// Normalization edge energy in eV. None estimates the maximum-derivative edge.
     pub e0: Option<f64>,
     /// Positive measured edge-step override; None derives it from the fits.
@@ -1402,6 +1406,13 @@ impl PipelineParams {
         self.hash_raw_fields(&mut hasher);
         if self.refit_prepared {
             "refit_prepared".hash(&mut hasher);
+        }
+        if let Some(options) = &self.mback {
+            // Settings are finite after validation. Invalid nonfinite values
+            // cannot successfully populate the processed-spectrum cache.
+            serde_json::to_string(options)
+                .unwrap_or_default()
+                .hash(&mut hasher);
         }
         self.bkg_kweight_linked.hash(&mut hasher);
         self.fft_grid.hash(&mut hasher);
@@ -1938,32 +1949,60 @@ fn normalize_to_stage(
         }
     }
 
-    if params
-        .edge_step
-        .is_some_and(|value| !value.is_finite() || value <= 0.0)
-    {
-        return Err("Edge step must be finite and greater than zero.".into());
-    }
-    let mut ppe = PrePostEdge::new();
-    ppe.edge_step = params.edge_step;
-    let defaults = PrePostEdge::default();
-    ppe.pre_edge_start = params.pre_edge_start.or(defaults.pre_edge_start);
-    ppe.pre_edge_end = params.pre_edge_end.or(defaults.pre_edge_end);
-    ppe.norm_start = params.norm_start.or(defaults.norm_start);
-    // Auto follows this spectrum's measured endpoint (relative to E0), rather
-    // than inheriting the library's fixed 2000 eV constructor default.
-    ppe.norm_end = params.norm_end.or_else(|| {
-        sp.energy
-            .as_ref()?
-            .iter()
-            .copied()
-            .reduce(f64::max)
-            .zip(sp.e0())
-            .map(|(end, e0)| end - e0)
-    });
-    ppe.norm_polyorder = params.norm_polyorder.or(defaults.norm_polyorder);
-    ppe.n_victoreen = params.n_victoreen.or(defaults.n_victoreen);
-    sp.set_normalization_method(Some(NormalizationMethod::PrePostEdge(ppe)))
+    let method = if let Some(saved) = &params.mback {
+        let mut options = saved.clone();
+        fn range(
+            lo: Option<f64>,
+            hi: Option<f64>,
+            fallback: Option<[f64; 2]>,
+        ) -> Result<Option<[f64; 2]>, String> {
+            let lo = lo.or(fallback.map(|r| r[0]));
+            let hi = hi.or(fallback.map(|r| r[1]));
+            match (lo, hi) {
+                (None, None) => Ok(None),
+                (Some(lo), Some(hi)) => Ok(Some([lo, hi])),
+                _ => Err("Set both bounds of the MBACK interval, or leave both automatic".into()),
+            }
+        }
+        options.pre_edge = range(params.pre_edge_start, params.pre_edge_end, options.pre_edge)?;
+        options.post_edge = range(params.norm_start, params.norm_end, options.post_edge)?;
+        if let Some(degree) = params.norm_polyorder {
+            options.degree = usize::try_from(degree).map_err(|_| "MBACK degree must be 0–5")?;
+        }
+        NormalizationMethod::MBack(MBack {
+            e0: params.e0,
+            options,
+            ..Default::default()
+        })
+    } else {
+        if params
+            .edge_step
+            .is_some_and(|value| !value.is_finite() || value <= 0.0)
+        {
+            return Err("Edge step must be finite and greater than zero.".into());
+        }
+        let mut ppe = PrePostEdge::new();
+        ppe.edge_step = params.edge_step;
+        let defaults = PrePostEdge::default();
+        ppe.pre_edge_start = params.pre_edge_start.or(defaults.pre_edge_start);
+        ppe.pre_edge_end = params.pre_edge_end.or(defaults.pre_edge_end);
+        ppe.norm_start = params.norm_start.or(defaults.norm_start);
+        // Auto follows this spectrum's measured endpoint (relative to E0), rather
+        // than inheriting the library's fixed 2000 eV constructor default.
+        ppe.norm_end = params.norm_end.or_else(|| {
+            sp.energy
+                .as_ref()?
+                .iter()
+                .copied()
+                .reduce(f64::max)
+                .zip(sp.e0())
+                .map(|(end, e0)| end - e0)
+        });
+        ppe.norm_polyorder = params.norm_polyorder.or(defaults.norm_polyorder);
+        ppe.n_victoreen = params.n_victoreen.or(defaults.n_victoreen);
+        NormalizationMethod::PrePostEdge(ppe)
+    };
+    sp.set_normalization_method(Some(method))
         .map_err(|e| e.to_string())?;
     sp.normalize().map_err(|e| e.to_string())?;
 
@@ -2131,6 +2170,22 @@ pub fn resample_chik(sp: &XASSpectrum, grid: &[f64]) -> Option<Vec<f64>> {
         out.push(chi[j] + t * (chi[j + 1] - chi[j]));
     }
     Some(out)
+}
+
+/// Resolved E₀-relative fitting intervals, shared by plot handles and overlays.
+pub fn normalization_ranges(sp: &XASSpectrum) -> Option<[f64; 4]> {
+    match sp.normalization.as_ref()? {
+        NormalizationMethod::PrePostEdge(n) => Some([
+            n.pre_edge_start?,
+            n.pre_edge_end?,
+            n.norm_start?,
+            n.norm_end?,
+        ]),
+        NormalizationMethod::MBack(n) => {
+            let r = n.result.as_ref()?;
+            Some([r.pre_edge[0], r.pre_edge[1], r.post_edge[0], r.post_edge[1]])
+        }
+    }
 }
 
 #[cfg(test)]

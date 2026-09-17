@@ -697,6 +697,7 @@ impl StudioApp {
                     cx,
                 ));
         }
+        let mback = self.ui_params().mback.is_some();
         let sp = self.spectrum.as_deref();
         let e0 = sp.and_then(|s| s.e0());
         let step = self.edge_step();
@@ -710,13 +711,16 @@ impl StudioApp {
             .flex()
             .flex_col()
             .children(prepared_controls)
+            .child(self.normalization_controls(cx))
             .child(
                 self.section(
                     "Edge",
                     Some(ParamSection::Norm),
                     [
                         self.field(ParamKey::E0, cx),
-                        self.field(ParamKey::EdgeStep, cx),
+                        (!mback)
+                            .then(|| self.field(ParamKey::EdgeStep, cx))
+                            .flatten(),
                     ]
                     .into_iter()
                     .flatten()
@@ -731,7 +735,9 @@ impl StudioApp {
                     [
                         self.field(ParamKey::PreEdgeStart, cx),
                         self.field(ParamKey::PreEdgeEnd, cx),
-                        self.field(ParamKey::NVictoreen, cx),
+                        (!mback)
+                            .then(|| self.field(ParamKey::NVictoreen, cx))
+                            .flatten(),
                         None,
                     ]
                     .into_iter()
@@ -761,7 +767,7 @@ impl StudioApp {
                 None,
                 vec![
                     self.result_card(vec![
-                        ("E₀ (max. derivative)".into(), fmt(e0, 1, " eV")),
+                        ("E₀".into(), fmt(e0, 1, " eV")),
                         ("Edge step".into(), fmt(step, 4, "")),
                         ("White line".into(), fmt(whiteline, 3, "")),
                     ])
