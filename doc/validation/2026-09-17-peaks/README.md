@@ -1,3 +1,25 @@
+# Live peak-model qualification
+
+The subsequent Live increment used the same synthetic files and saved model.
+The preview converged; Start accepted and fitted all 14 existing scans. A new
+partially written frame 15 was admitted after the configured quiet checks. Its
+peak area appeared in the open trend without changing the selected frame 1.
+This exposed a stale fit counter; the final build updates the counter too.
+
+After Pause, an embedded project was saved and the isolated application restarted.
+The session reopened paused with 15 completed sources and 15 successful peak fits.
+The catalog stayed at 43 groups (28 deliberately retained from the two earlier
+test sessions, plus this session's 15); fit artifacts were not imported as spectra.
+The screenshot below contains only generated test signals.
+
+![Live peak session recovered paused](live-recovery.jpg)
+
+The final GUI unit run passed **579 tests, 6 ignored**. The Live-filtered run
+passed 27 selected tests, including immutable model revision, independent failed
+fit rows, full retained arrays and recovery after producer-file removal. The
+optimized desktop build passed. Native Windows/Linux, real network-share timing
+and long-running beamline qualification remain outstanding.
+
 # Peak fitting development check — 2026-09-17
 
 This macOS computer-use check used the isolated `rexafs Live QA.app` and synthetic
@@ -57,3 +79,5 @@ Automated validation:
 Live peak recipes, public bindings, native Windows/Linux checks, long-running
 batch qualification and a documented public experimental example remain work.
 This record does not claim the whole milestone or a release is complete.
+The final build was also resumed: frame 16 updated the counter to 16 / 16
+while the inspected frame remained 1. The watcher was then paused.

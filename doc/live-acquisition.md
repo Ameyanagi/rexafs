@@ -36,6 +36,28 @@ extra detector channels remain available in the retained original source.
 
 ## During acquisition
 
+To fit XANES peaks as scans arrive, first save a model in
+[Data → XANES peak fit](xanes-peak-fitting.md#desktop-workflow). Before starting
+Live, choose that revision in **Peak fit** and run **Preview**. The preview fits
+the representative scan in the model's recorded representation and interval;
+nonconvergence prevents starting with that preview. A converged fit with a bound
+warning still needs scientific inspection. The scalar recipe remains active too;
+its preview value describes that scalar measurement, not the peak-fit objective.
+
+The Live configuration captures a copy of the named model revision. Each arriving
+scan uses the same initial values, native mask and processing choices. A fit
+failure remains a row and does not remove the imported spectrum. Full fit arrays
+are retained on disk before the acquisition ledger publishes the frame. Pausing
+during an unfinished source leaves it eligible for processing on Resume.
+
+**Inspect peak fits** opens the retained fit/correlation/trend workspace. Acquisition
+can continue while inspecting it; Follow latest changes the selected spectrum
+only inside the Live workspace. An open peak trend updates as rows arrive.
+Return to **Series** for acquisition controls. **Stop** retains results; restarting
+the application restores the session paused. Recovery reconstructs peak rows from
+the committed ledger without refitting or duplicating existing frames. Choose
+**New recipe** to change the peak model for subsequent work.
+
 **Pause** stops scheduling new work; already committed results remain available.
 An in-progress file finishes or observes cancellation at a scan boundary.
 **Resume** reconciles the folder, including files that arrived while paused.

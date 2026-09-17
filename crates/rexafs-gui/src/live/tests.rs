@@ -31,6 +31,7 @@ fn config(folder: &Path) -> LiveConfig {
             edge_energy: false,
         },
         recipe: None,
+        peak_model: None,
         layouts: vec![
             ScanLayout::capture(
                 &document,
@@ -74,6 +75,80 @@ fn live_commits_before_publication_and_restart_is_idempotent() {
     assert_eq!(
         group.raw(group.params.as_ref().unwrap()).unwrap().1,
         vec![1., 2., 3.]
+    );
+}
+
+#[test]
+fn live_peak_recipe_keeps_initial_values_failures_and_durable_results() {
+    use crate::peak_fits::{self, PeakSavedModel};
+    use rexafs::prelude::PeakFit;
+    let tmp = tempfile::tempdir().unwrap();
+    let folder = tmp.path().join("input");
+    std::fs::create_dir(&folder).unwrap();
+    let mut config = config(&folder);
+    let model = PeakFit::new(7100.0..=7102.0)
+        .raw_mu()
+        .absolute()
+        .constant_baseline(0.);
+    config.peak_model = Some(PeakSavedModel {
+        id: GroupId::new_result(),
+        revision: 3,
+        name: "Synthetic constant".into(),
+        model,
+    });
+    std::fs::write(folder.join("a.xdi"), spectrum(1.)).unwrap();
+    let mut engine = LiveEngine::open(
+        LiveStore::create(&tmp.path().join("cache"), config, BTreeMap::new()).unwrap(),
+    )
+    .unwrap();
+    let directory = engine.store.directory.clone();
+    let first = tick(&mut engine, Instant::now());
+    let row = first[0].frames[0].peak.as_ref().unwrap();
+    assert_eq!(row.status, FrameStatus::Succeeded);
+    let record = peak_fits::read(row).unwrap();
+    assert_eq!(
+        record.result.definition.parameters.vars["baseline_offset"].value,
+        0.
+    );
+    assert!((record.result.parameters.vars["baseline_offset"].value - 2.).abs() < 1e-8);
+    assert_eq!(record.result.data, vec![1., 2., 3.]);
+    assert!(record.settings.is_some());
+    // A compatible but shorter source has a retained failure, not a missing frame.
+    std::fs::write(folder.join("b.xdi"), spectrum(4.).replace("7102 6\n", "")).unwrap();
+    let second = tick(&mut engine, Instant::now() + Duration::from_secs(1));
+    assert_eq!(second.len(), 1);
+    assert_eq!(
+        second[0].frames[0].peak.as_ref().unwrap().status,
+        FrameStatus::Failed
+    );
+    drop(engine);
+    std::fs::remove_dir_all(folder).unwrap();
+    let store = LiveStore::open(&directory).unwrap();
+    assert_eq!(store.config.peak_model.as_ref().unwrap().revision, 3);
+    assert_eq!(
+        store
+            .config
+            .peak_model
+            .as_ref()
+            .unwrap()
+            .model
+            .parameters
+            .vars["baseline_offset"]
+            .value,
+        0.
+    );
+    let records = store.records().unwrap();
+    assert_eq!(records.len(), 2);
+    assert_eq!(
+        peak_fits::read(records[0].frames[0].peak.as_ref().unwrap())
+            .unwrap()
+            .result
+            .model,
+        record.result.model
+    );
+    assert_eq!(
+        records[1].frames[0].peak.as_ref().unwrap().status,
+        FrameStatus::Failed
     );
 }
 

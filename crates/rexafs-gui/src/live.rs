@@ -39,6 +39,9 @@ pub struct LiveConfig {
     pub layouts: Vec<ScanLayout>,
     #[serde(default)]
     pub recipe: Option<Arc<crate::series_measurements::AnalysisRecipe>>,
+    /// Optional immutable peak-model revision, evaluated independently per frame.
+    #[serde(default)]
+    pub peak_model: Option<crate::peak_fits::PeakSavedModel>,
     pub created: String,
 }
 
@@ -157,6 +160,9 @@ impl LiveConfig {
             return Err("Use a filename filter such as *.qd or *.xdi".into());
         }
         self.policy.validate()?;
+        if let Some(peak) = &self.peak_model {
+            peak.model.validate().map_err(|e| e.to_string())?;
+        }
         if self.layouts.is_empty() {
             return Err("Preview a representative completed file before Start".into());
         }
@@ -171,6 +177,8 @@ impl LiveConfig {
 pub struct LiveFrame {
     pub group: DerivedSpectrum,
     pub row: MetricRow,
+    #[serde(default)]
+    pub peak: Option<crate::peak_fits::PeakRow>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LiveRecord {
@@ -194,6 +202,14 @@ pub struct LiveSession {
     /// Current locators of retained original bytes; embedded projects relocate these.
     #[serde(default)]
     pub snapshots: BTreeSet<PathBuf>,
+}
+impl LiveSession {
+    pub fn peak_run_id(&self) -> GroupId {
+        GroupId::source(
+            &self.directory.join("peak-run"),
+            crate::params::DetectionMode::Auto,
+        )
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -540,7 +556,23 @@ impl LiveEngine {
                 preparation: serde_json::Value::Null,
             };
             let row = calculate_row(&input, &row, &config.definition);
-            frames.push(LiveFrame { group, row });
+            let peak = config.peak_model.as_ref().map(|saved| {
+                let inputs = std::slice::from_ref(&input);
+                let mut run =
+                    crate::peak_fits::PeakRun::new(saved.name.clone(), saved.model.clone(), inputs);
+                run.freeze(inputs, || cancel.load(Ordering::Relaxed));
+                crate::peak_fits::calculate(
+                    &saved.model,
+                    &run.rows[0],
+                    &input,
+                    &self.store.directory.join("peaks"),
+                    || cancel.load(Ordering::Relaxed),
+                )
+            });
+            if cancel.load(Ordering::Relaxed) {
+                return Ok(None);
+            }
+            frames.push(LiveFrame { group, row, peak });
         }
         Ok(Some(LiveRecord {
             key,

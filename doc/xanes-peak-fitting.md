@@ -3,7 +3,7 @@
 The development core fits a sum of named peaks, absorption steps and baseline
 terms on the original energy grid. It does not choose a peak count or identify
 chemical species. The development desktop supports current, marked and Series
-fits. Live peak recipes and Python/TypeScript bindings remain under
+fits, and optional saved peak models in Live acquisition. Python/TypeScript bindings remain under
 [milestone C](analysis-b-f-progress.md); they are not implied by this core API.
 
 ```rust
@@ -184,6 +184,6 @@ errors. [Fixture provenance and tolerances](../crates/rexafs/tests/fixtures/anal
 are retained with the generated data. The fixtures are repository-only.
 
 These tests establish the checked numerical cases, not physical validity for an
-arbitrary experimental decomposition. Live peak recipes, public Python/TypeScript
+arbitrary experimental decomposition. Public Python/TypeScript
 APIs, native Windows/Linux checks and a
 documented public experimental example remain milestone-C work.

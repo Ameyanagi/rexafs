@@ -112,3 +112,19 @@ adjustments, followed by six peak-filtered tests and release-build computer use.
 Strict core Clippy passed. Live peak recipes, Python/TypeScript bindings, native
 platform qualification and the remaining milestone acceptance checks are still
 in progress. D–F have not been implemented by this increment.
+
+## C3: Live peak-model recipes
+
+Live now accepts an immutable saved peak-model revision alongside its scalar
+measurement recipe. Preview fits a representative completed source before Start.
+Every committed frame retains its peak outcome, including failures, independently
+of the scalar outcome. The session ledger refers to checksum-verified fit artifacts;
+recovery does not need to refit a source whose producer file has disappeared.
+
+The macOS computer-use check fitted 14 synthetic scans, then added frame 15 while
+viewing the peak-area trend. The chart updated without changing the selected
+frame. This check caught a stale result counter, which was corrected. Acquisition
+was paused before saving the embedded QA project. See the
+[peak validation record](validation/2026-09-17-peaks/README.md) for the final
+recovery check and test counts. Python/TypeScript peak APIs and the remaining
+milestone-C acceptance checks are still in progress.

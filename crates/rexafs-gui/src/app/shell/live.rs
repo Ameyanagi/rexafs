@@ -25,6 +25,8 @@ pub(crate) struct LiveState {
     include_existing: bool,
     recursive: bool,
     recipe: Option<usize>,
+    peak_model: Option<usize>,
+    peak_menu: bool,
     preview: Option<PreparedLive>,
     plot: Option<Entity<RuvizPlot>>,
     trend: Option<Entity<RuvizPlot>>,
@@ -51,6 +53,8 @@ impl Default for LiveState {
             include_existing: false,
             recursive: false,
             recipe: None,
+            peak_model: None,
+            peak_menu: false,
             preview: None,
             plot: None,
             trend: None,
@@ -130,7 +134,7 @@ impl StudioApp {
     }
     fn live_signature(&self, cx: &Context<Self>) -> String {
         format!(
-            "{:?}|{}|{}|{:?}|{}|{:?}",
+            "{:?}|{}|{}|{:?}|{}|{:?}|{:?}",
             self.live
                 .fields
                 .iter()
@@ -143,7 +147,8 @@ impl StudioApp {
                 .map(|i| self.effective_params(i))
                 .unwrap_or(&self.params)
                 .fingerprint(),
-            self.selected
+            self.selected,
+            self.live.peak_model
         )
     }
     fn live_config(&self, cx: &Context<Self>) -> Result<LiveConfig, String> {
@@ -192,6 +197,11 @@ impl StudioApp {
             definition,
             layouts: Vec::new(),
             recipe: recipe.cloned(),
+            peak_model: self
+                .live
+                .peak_model
+                .and_then(|i| self.peaks.archive.models.get(i))
+                .cloned(),
             created: chrono::Utc::now().to_rfc3339(),
         })
     }
@@ -282,6 +292,15 @@ impl StudioApp {
                 let sp = crate::params::prepare_arrays(x.clone(), y.clone(), &config.settings, crate::series_measurements::required_stage(&config.definition))?;
                 let value = if config.definition.edge_energy { sp.e0().ok_or("Edge energy unavailable")? }
                     else { sp.measure(&config.definition.measurement).map_err(|e| e.to_string())?.value };
+                let peak = if let Some(saved) = &config.peak_model {
+                    let definition = crate::peak_fits::preparation_definition(&saved.model);
+                    let spectrum = crate::params::prepare_arrays(x, y, &config.settings, crate::series_measurements::required_stage(&definition))?;
+                    let result = saved.model.fit_with_progress(&spectrum, |_, _| !cancel.load(Ordering::Relaxed)).map_err(|e| e.to_string())?;
+                    if !matches!(result.termination, rexafs::prelude::PeakTermination::Converged | rexafs::prelude::PeakTermination::FixedModel) {
+                        return Err(format!("Peak preview: {}", result.termination_detail));
+                    }
+                    Some(result)
+                } else { None };
                 let mut baseline = BTreeMap::new();
                 if !include { for path in &files {
                     if cancel.load(Ordering::Relaxed) { return Err("Preview cancelled".into()); }
@@ -292,18 +311,28 @@ impl StudioApp {
                     baseline.insert(path.clone(), Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect());
                 }}
                 let arrays = config.definition.measurement.arrays(&sp).map_err(|e| e.to_string())?;
-                Ok::<_, String>((PreparedLive { config, baseline, signature, count: files.len() }, arrays.axis, arrays.signal, value))
+                Ok::<_, String>((PreparedLive { config, baseline, signature, count: files.len() }, arrays.axis, arrays.signal, value, peak))
             }).await;
             this.update(cx, |app, cx| {
                 if app.project_generation != generation || app.live.generation != request { return; }
                 app.live.busy = false;
                 match result {
-                    Ok((preview, x, y, value)) => {
+                    Ok((preview, x, y, value, peak)) => {
                         let (axis, signal) = live_axes(&preview.config.definition.measurement);
-                        let plot: ruviz::prelude::Plot = ruviz::prelude::Plot::new().size(11., 3.3).theme(app.theme.plot_theme()).line(&x, &y).xlabel(axis).ylabel(signal).into();
+                        let base = ruviz::prelude::Plot::new().size(11., 3.3).theme(app.theme.plot_theme());
+                        let plot: ruviz::prelude::Plot = if let Some(r) = &peak {
+                            let data = super::peaks::peak_curve(base, &r.energy, &r.data, &r.source_indices, "Data", crate::plotting::trace_color(&app.theme, 0));
+                            super::peaks::peak_curve(data, &r.energy, &r.model, &r.source_indices, "Peak model", crate::plotting::trace_color(&app.theme, 1))
+                                .xlabel("Energy (eV)").ylabel(format!("{:?} μ(E)", r.definition.space))
+                                .legend_position(ruviz::prelude::LegendPosition::UpperRight)
+                        } else { base.line(&x, &y).xlabel(axis).ylabel(signal).into() };
                         app.live.plot = Some(plot_builder(plot).interactive().build(cx));
-                        app.live.message = format!("{} existing files · {} · preview {value:.5}", preview.count,
+                        app.live.message = format!("{} existing files · {} · scalar preview {value:.5}", preview.count,
                             if app.live.include_existing { "included" } else { "new or changed files only" });
+                        if let Some(r) = peak {
+                            app.live.message.push_str(&format!(" · peak fit {:?}{}", r.termination,
+                                if r.warnings.is_empty() { String::new() } else { format!(" · {}", r.warnings.join("; ")) }));
+                        }
                         app.live.preview = Some(preview);
                     }
                     Err(e) => { app.live.message = e; app.live.plot = None; }
@@ -403,6 +432,26 @@ impl StudioApp {
                 coordinate: Default::default(),
             }));
         }
+        if let Some(model) = &session.config.peak_model {
+            let id = session.peak_run_id();
+            if !self.peaks.archive.runs.iter().any(|r| r.id == id) {
+                let mut run = crate::peak_fits::PeakRun::new(
+                    format!("Live · {} · v{}", model.name, model.revision),
+                    model.model.clone(),
+                    &[],
+                );
+                run.id = id;
+                run.created = session.config.created.clone();
+                run.series = self
+                    .measurements
+                    .archive
+                    .series
+                    .iter()
+                    .find(|s| s.id == session.series)
+                    .cloned();
+                self.peaks.archive.runs.push(Arc::new(run));
+            }
+        }
         self.live.plot = None;
         self.live.trend = None;
         self.live.plotted_group = None;
@@ -413,6 +462,19 @@ impl StudioApp {
         cx.notify();
     }
     fn complete_live_run(&mut self) {
+        if let Some(session) = self
+            .live
+            .session
+            .and_then(|i| self.measurements.archive.live_sessions.get(i))
+            && let Some(run) = self
+                .peaks
+                .archive
+                .runs
+                .iter_mut()
+                .find(|r| r.id == session.peak_run_id())
+        {
+            Arc::make_mut(run).complete = true;
+        }
         if let Some(session) = self
             .live
             .session
@@ -448,25 +510,48 @@ impl StudioApp {
             .border_color(self.theme.border)
             .shadow_lg()
             .on_any_mouse_down(|_, _, cx| cx.stop_propagation());
-        let options =
-            std::iter::once((None, "Current processing · Flat mean −20…30 eV".to_owned())).chain(
-                self.measurements
-                    .archive
-                    .recipes
-                    .iter()
-                    .enumerate()
-                    .map(|(i, r)| (Some(i), format!("{} · v{}", r.name, r.revision))),
-            );
-        for (index, (choice, label)) in options.enumerate() {
+        let peak = self.live.peak_menu;
+        let options: Vec<_> = if peak {
+            std::iter::once((None, "No peak fitting".to_owned()))
+                .chain(
+                    self.peaks
+                        .archive
+                        .models
+                        .iter()
+                        .enumerate()
+                        .map(|(i, m)| (Some(i), format!("{} · v{}", m.name, m.revision))),
+                )
+                .collect()
+        } else {
+            std::iter::once((None, "Current processing · Flat mean −20…30 eV".to_owned()))
+                .chain(
+                    self.measurements
+                        .archive
+                        .recipes
+                        .iter()
+                        .enumerate()
+                        .map(|(i, r)| (Some(i), format!("{} · v{}", r.name, r.revision))),
+                )
+                .collect()
+        };
+        for (index, (choice, label)) in options.into_iter().enumerate() {
             menu = menu.child(
                 button(
                     &self.theme,
                     ("live-recipe-choice", index),
                     label,
-                    self.live.recipe == choice,
+                    if peak {
+                        self.live.peak_model == choice
+                    } else {
+                        self.live.recipe == choice
+                    },
                 )
                 .on_click(cx.listener(move |app, _, window, cx| {
-                    app.live.recipe = choice;
+                    if peak {
+                        app.live.peak_model = choice;
+                    } else {
+                        app.live.recipe = choice;
+                    }
                     app.live.preview = None;
                     app.live.menu_open = false;
                     app.operando_focus.focus(window, cx);
@@ -514,6 +599,10 @@ impl StudioApp {
         self.live.running = true;
         if let Some(i) = self.live.session {
             self.measurements.archive.live_sessions[i].stopped = false;
+            let peak_id = self.measurements.archive.live_sessions[i].peak_run_id();
+            if let Some(run) = self.peaks.archive.runs.iter_mut().find(|r| r.id == peak_id) {
+                Arc::make_mut(run).complete = false;
+            }
             let run_id = &self.measurements.archive.live_sessions[i].run;
             if let Some(run) = self
                 .measurements
@@ -632,6 +721,22 @@ impl StudioApp {
                 frame.group.id = self.next_group_id();
                 frame.row.frame.sequence =
                     self.measurements.archive.series[series_index].frames.len() + 1;
+                if let Some(mut peak) = frame.peak
+                    && let Some(run) = self
+                        .peaks
+                        .archive
+                        .runs
+                        .iter_mut()
+                        .find(|r| r.id == session.peak_run_id())
+                {
+                    peak.sequence = frame.row.frame.sequence;
+                    let run = Arc::make_mut(run);
+                    run.complete = false;
+                    run.rows.push(peak);
+                    if let Some(series) = &mut run.series {
+                        series.frames.push(frame.row.frame.clone());
+                    }
+                }
                 self.measurements.archive.series[series_index]
                     .frames
                     .push(frame.row.frame.clone());
@@ -643,9 +748,14 @@ impl StudioApp {
             }
         }
         if changed {
+            self.refresh_live_peak_trend(&session.peak_run_id(), cx);
             self.record("Live acquisition: committed frames added", None);
             self.rekey_after_catalog_change();
-            if self.live.follow && !self.derived.is_empty() {
+            if self.live.follow
+                && self.live.open
+                && self.stage == Stage::Series
+                && !self.derived.is_empty()
+            {
                 self.select_entry(crate::app::DERIVED_BASE + self.derived.len() - 1, cx);
             }
         }
@@ -872,6 +982,7 @@ impl StudioApp {
                 .child(
                     button(&t, "live-recipe", format!("{recipe_label} ▾"), false).on_click(
                         cx.listener(|app, event: &gpui::ClickEvent, window, cx| {
+                            app.live.peak_menu = false;
                             app.live.menu_open = true;
                             app.live.menu_position = event.position();
                             app.live
@@ -881,6 +992,33 @@ impl StudioApp {
                             cx.notify();
                         }),
                     ),
+                )
+                .child(
+                    button(
+                        &t,
+                        "live-peak-model",
+                        format!(
+                            "Peak fit: {} ▾",
+                            self.live
+                                .peak_model
+                                .and_then(|i| self.peaks.archive.models.get(i))
+                                .map(|m| format!("{} · v{}", m.name, m.revision))
+                                .unwrap_or_else(|| "Off".into())
+                        ),
+                        false,
+                    )
+                    .on_click(cx.listener(
+                        |app, event: &gpui::ClickEvent, window, cx| {
+                            app.live.peak_menu = true;
+                            app.live.menu_open = true;
+                            app.live.menu_position = event.position();
+                            app.live
+                                .menu_focus
+                                .get_or_insert_with(|| cx.focus_handle())
+                                .focus(window, cx);
+                            cx.notify();
+                        },
+                    )),
                 )
                 .child(
                     div()
@@ -977,6 +1115,53 @@ impl StudioApp {
                 p.review.len(),
                 p.failed.len()
             ));
+            if let Some(session) = self
+                .live
+                .session
+                .and_then(|i| self.measurements.archive.live_sessions.get(i))
+                && let Some((index, run)) = self
+                    .peaks
+                    .archive
+                    .runs
+                    .iter()
+                    .enumerate()
+                    .find(|(_, r)| r.id == session.peak_run_id())
+            {
+                let succeeded = run
+                    .rows
+                    .iter()
+                    .filter(|r| r.status == crate::series_measurements::FrameStatus::Succeeded)
+                    .count();
+                view = view.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(format!(
+                            "Peak fits: {succeeded} / {} succeeded",
+                            run.rows.len()
+                        ))
+                        .child(
+                            button(&t, "live-peak-results", "Inspect peak fits…", false)
+                                .disabled(run.rows.is_empty())
+                                .on_click(
+                                    cx.listener(move |app, _, _, cx| app.open_peak_run(index, cx)),
+                                ),
+                        ),
+                );
+                for row in run
+                    .rows
+                    .iter()
+                    .filter(|r| r.status != crate::series_measurements::FrameStatus::Succeeded)
+                    .take(5)
+                {
+                    view = view.child(div().text_color(t.warn).child(format!(
+                        "{} · {}",
+                        row.label,
+                        row.reason.as_deref().unwrap_or("Peak fit unavailable")
+                    )));
+                }
+            }
         }
         view = view.child(
             div()

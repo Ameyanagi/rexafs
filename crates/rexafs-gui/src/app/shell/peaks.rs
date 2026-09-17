@@ -48,7 +48,7 @@ struct Preview {
 }
 
 /// Each included native segment is drawn separately, so masked gaps remain gaps.
-fn peak_curve(
+pub(super) fn peak_curve(
     mut plot: ruviz::prelude::Plot,
     energy: &[f64],
     y: &[f64],
@@ -165,6 +165,44 @@ impl Drop for PeakState {
 }
 
 impl StudioApp {
+    pub(super) fn refresh_live_peak_trend(
+        &mut self,
+        id: &crate::group_identity::GroupId,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(run) = self.peaks.run.and_then(|i| self.peaks.archive.runs.get(i)) else {
+            return;
+        };
+        if !self.peaks.open || &run.id != id {
+            return;
+        }
+        if self.peaks.record.is_some() {
+            let succeeded = run
+                .rows
+                .iter()
+                .filter(|r| r.status == FrameStatus::Succeeded)
+                .count();
+            self.peaks.message = format!("Saved fit · {succeeded} / {} fitted", run.rows.len());
+        }
+        if self.peaks.view == View::Trend {
+            self.rebuild_peak_plot(cx);
+        }
+    }
+    pub(super) fn open_peak_run(&mut self, index: usize, cx: &mut Context<Self>) {
+        if self.peaks.busy {
+            return;
+        }
+        let Some(run) = self.peaks.archive.runs.get(index).cloned() else {
+            return;
+        };
+        self.peaks.model = (*run.model).clone();
+        self.open_peaks(cx);
+        if let Some(name) = &self.peaks.name {
+            name.update(cx, |field, cx| field.set_text(run.name.clone(), cx));
+        }
+        self.peaks.view = View::Fit;
+        self.load_peak_row(index, 0, cx);
+    }
     pub(crate) fn open_peaks(&mut self, cx: &mut Context<Self>) {
         self.peaks.open = true;
         if self.peaks.focus.is_none() {

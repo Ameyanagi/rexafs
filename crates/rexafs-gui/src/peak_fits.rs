@@ -176,6 +176,10 @@ fn retain(root: &Path, record: &PeakRecord) -> Result<(PathBuf, String), String>
         }
         Err(error) => return Err(error.to_string()),
     }
+    #[cfg(unix)]
+    std::fs::File::open(root)
+        .and_then(|dir| dir.sync_all())
+        .map_err(|e| e.to_string())?;
     Ok((path, hash))
 }
 
