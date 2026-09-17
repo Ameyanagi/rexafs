@@ -154,3 +154,19 @@ eight documentation-generator tests, and the website type/content check.
 
 This increment does not complete native platform or experimental qualification,
 and D–F remain pending. It does not add the separately tracked LCF/PCA/MCR bindings.
+
+## D1: identified offline atomic reference provider
+
+The core now uses pinned xraydb 0.4.1 and its embedded XrayDB 9.2 resource, with
+explicit provider/table identities and an actual decoded-data SHA-256. Chantler
+f₂, Elam total attenuation, explicit edge/line selections and stoichiometric
+compound mass fractions share checked energy coverage. Formula errors retain
+byte positions. No runtime network or Python is involved.
+
+The [data record](../crates/rexafs/data/atomic/README.md) retains the exact size,
+checksums, source licenses and the upstream qualification about original-source
+copyright statements. Desktop, Python and npm packaging retain the notices.
+Three core tests and a pinned Python-XrayDB comparison pass, covering four edge
+regions and four compounds at relative tolerance 2×10⁻¹⁰. Strict core Clippy
+passes. This establishes a reference-data layer, not completed MBACK or
+fluorescence correction; their implementations and GUI qualification follow.

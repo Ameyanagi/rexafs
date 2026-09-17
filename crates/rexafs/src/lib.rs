@@ -65,6 +65,7 @@
 //! and [Rehr and Albers, XAFS theory (2000)](https://doi.org/10.1103/RevModPhys.72.621).
 //! The fixed endpoint penalty is a rexafs-specific choice; Fourier peaks are not automatically phase corrected.
 
+pub mod atomic;
 pub mod parser;
 #[cfg(feature = "plotting")]
 pub mod plot;

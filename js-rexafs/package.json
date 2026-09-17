@@ -46,7 +46,8 @@
     "spectrum.js",
     "configuration.js",
     "measurement.js",
-    "peaks.js"
+    "peaks.js",
+    "licenses"
   ],
   "scripts": {
     "build": "node build.mjs",
