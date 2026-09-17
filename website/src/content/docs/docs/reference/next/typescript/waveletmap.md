@@ -138,6 +138,26 @@ integral(k_range: [number, number], r_range: [number, number]): WaveletRegionVal
 Integrate native bilinear magnitude over a covered k/R rectangle. Display
 sampling never participates; invalid bounds throw. No uncertainty is inferred.
 
+## mean
+
+```typescript
+mean(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
+```
+
+Area-weighted mean of native bilinear magnitude (unreleased), not an average
+of cells. k is Å⁻¹ and R is Å. Increasing, fully covered ranges are required;
+invalid bounds throw. Returns units/method without inferred uncertainty.
+
+## maximum
+
+```typescript
+maximum(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
+```
+
+Maximum native bilinear magnitude, including rectangle boundaries
+(unreleased). k is Å⁻¹ and R is Å; increasing, fully covered ranges are
+required. Returns units/method without inferred uncertainty.
+
 ## definition
 
 ```typescript

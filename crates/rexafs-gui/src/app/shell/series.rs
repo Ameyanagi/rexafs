@@ -321,6 +321,11 @@ impl StudioApp {
             .gap_2()
             .child(div().flex_1().child("Heatmap"))
             .child(self.series_appearance_buttons(cx))
+            .child(self.plot_export_button(
+                "series-map-export",
+                super::plot_export::Target::SeriesMap,
+                cx,
+            ))
             .into_any_element();
         let card = |heading: gpui::AnyElement| {
             div()
@@ -426,9 +431,17 @@ impl StudioApp {
                             .child(
                                 card(
                                     div()
-                                        .child(format!(
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(div().flex_1().child(format!(
                                             "frame {} · {space_label}",
                                             self.time_pos + 1
+                                        )))
+                                        .child(self.plot_export_button(
+                                            "series-frame-export",
+                                            super::plot_export::Target::SeriesFrame,
+                                            cx,
                                         ))
                                         .into_any_element(),
                                 )
@@ -447,7 +460,17 @@ impl StudioApp {
                             .child(
                                 card(
                                     div()
-                                        .child(format!("trend · {trend_name}"))
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(
+                                            div().flex_1().child(format!("trend · {trend_name}")),
+                                        )
+                                        .child(self.plot_export_button(
+                                            "series-trend-export",
+                                            super::plot_export::Target::SeriesTrend,
+                                            cx,
+                                        ))
                                         .into_any_element(),
                                 )
                                 .flex_1()

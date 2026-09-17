@@ -75,6 +75,8 @@ export function bindWavelet(core, ready = () => true) {
     slice_at_k(k) {return this.#inner.slice_at_k(finite(k,"k"));}
     slice_at_r(r) {return this.#inner.slice_at_r(finite(r,"r"));}
     integral(k_range,r_range) {const [ka,kb]=range(k_range,"k_range"),[ra,rb]=range(r_range,"r_range");return JSON.parse(this.#inner.integral_json(ka,kb,ra,rb));}
+    mean(k_range,r_range) {const [ka,kb]=range(k_range,"k_range"),[ra,rb]=range(r_range,"r_range");return JSON.parse(this.#inner.mean_json(ka,kb,ra,rb));}
+    maximum(k_range,r_range) {const [ka,kb]=range(k_range,"k_range"),[ra,rb]=range(r_range,"r_range");return JSON.parse(this.#inner.maximum_json(ka,kb,ra,rb));}
     get definition() {return Wavelet.from_json(this.#inner.definition_json());}
     get preparation() {return JSON.parse(this.#inner.preparation_json());}
     get warnings() {return JSON.parse(this.#inner.warnings_json());}

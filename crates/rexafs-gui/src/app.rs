@@ -98,6 +98,7 @@ pub(crate) enum ParamKey {
     ImpItCol,
     ImpIrCol,
     AlignTarget,
+    EnergyOffset,
     E0,
     EdgeStep,
     PreEdgeStart,
@@ -237,6 +238,7 @@ fn finish_import_preview(
 fn param_step(key: ParamKey) -> f64 {
     match key {
         ParamKey::E0 | ParamKey::BkgEk0 => 0.5,
+        ParamKey::EnergyOffset => 0.1,
         ParamKey::EdgeStep => 0.01,
         ParamKey::PreEdgeStart
         | ParamKey::PreEdgeEnd
@@ -268,6 +270,9 @@ fn copy_section(dst: &mut PipelineParams, src: &PipelineParams, section: ParamSe
             dst.import = src.import.clone();
             dst.align_to_ref = src.align_to_ref;
             dst.align_target = src.align_target;
+            dst.set_energy_offset(src.energy_offset_ev)
+                .expect("validated energy offset");
+            dst.alignment_record = src.alignment_record.clone();
         }
         ParamSection::Norm => {
             dst.mback = src.mback.clone();
@@ -370,6 +375,7 @@ fn param_field_value(key: ParamKey, p: &PipelineParams) -> Option<f64> {
         ParamKey::ImpItCol => p.import.it_col.map(|column| column as f64),
         ParamKey::ImpIrCol => p.import.ir_col.map(|column| column as f64),
         ParamKey::AlignTarget => p.align_target,
+        ParamKey::EnergyOffset => Some(p.energy_offset_ev),
         ParamKey::E0 => p.e0,
         ParamKey::EdgeStep => p.edge_step,
         ParamKey::PreEdgeStart => p.pre_edge_start,
@@ -1226,6 +1232,7 @@ pub struct StudioApp {
     /// A refresh with an unchanged structure only `set`s the observables
     /// (no session rebuild); see `rebuild_explore_plots`.
     quad_bindings: Vec<(u64, Vec<SeriesSource>)>,
+    quad_export_labels: Vec<shell::plot_export::Labels>,
     /// Explore-only plot work is deferred while Operando or Fit is visible.
     explore_plots_dirty: bool,
     /// Shared Explore legend strip entries (truncated label, stable color),
@@ -3078,6 +3085,7 @@ impl StudioApp {
             stale_plots: None,
             quadrants: Vec::new(),
             quad_bindings: Vec::new(),
+            quad_export_labels: Vec::new(),
             explore_plots_dirty: false,
             legend_entries: Vec::new(),
             mixed_overlay_weight: None,
@@ -3953,6 +3961,7 @@ impl StudioApp {
         self.import_preview_gen += 1;
         self.quadrants.clear();
         self.quad_bindings.clear();
+        self.quad_export_labels.clear();
         self.maximized = None;
         self.file_scroll = UniformListScrollHandle::new();
         self.expanded_sources.clear();
@@ -4040,6 +4049,7 @@ impl StudioApp {
             (ParamKey::ImpItCol, "It col", "2", COL),
             (ParamKey::ImpIrCol, "Ir col", "3", COL),
             (ParamKey::AlignTarget, "ref E0 target", "e.g. 22117", FLOAT),
+            (ParamKey::EnergyOffset, "offset (eV)", "0", FLOAT),
             (ParamKey::E0, "E0 (eV)", "auto", FLOAT),
             (ParamKey::EdgeStep, "edge step", "auto", FLOAT),
             // These four are eV *relative to E0* — the thing newcomers get
@@ -4128,7 +4138,13 @@ impl StudioApp {
             .map(|(key, label, placeholder, kind)| {
                 let step = param_step(key);
                 let field = cx.new(|cx| {
-                    NumericField::new(label, placeholder, None, kind, theme, cx).with_step(step)
+                    let field = NumericField::new(label, placeholder, None, kind, theme, cx)
+                        .with_step(step);
+                    if key == ParamKey::EnergyOffset {
+                        field.with_display_decimals(2, cx)
+                    } else {
+                        field
+                    }
                 });
                 cx.subscribe(
                     &field,
@@ -4236,6 +4252,14 @@ impl StudioApp {
                 unreachable!("mapping fields use edit_parameters above")
             }
             ParamKey::AlignTarget => p.align_target = value,
+            ParamKey::EnergyOffset => {
+                if let Err(error) = p.set_energy_offset(value.unwrap_or(0.0)) {
+                    self.status = error.into();
+                    self.restore_param_field_text(cx);
+                    cx.notify();
+                    return;
+                }
+            }
             ParamKey::E0 => p.e0 = value,
             ParamKey::EdgeStep => p.edge_step = value,
             ParamKey::PreEdgeStart => p.pre_edge_start = value,
@@ -4294,6 +4318,9 @@ impl StudioApp {
             format!("{key:?} = {shown} · {scope}"),
         );
         self.schedule_recompute(cx);
+        if key == ParamKey::EnergyOffset {
+            self.sync_param_fields(cx);
+        }
         if matches!(
             key,
             ParamKey::ImpEnergyCol | ParamKey::ImpI0Col | ParamKey::ImpItCol | ParamKey::ImpIrCol
@@ -5966,6 +5993,7 @@ impl StudioApp {
             }
         }
         if self.stage == Stage::Data
+            && !self.handles.hidden
             && let Some((lo, hi)) = self.analysis_energy_interval(cx)
         {
             for spec in specs.iter_mut().take(2) {
@@ -5995,6 +6023,34 @@ impl StudioApp {
         let stacked = self.stage_plots().len() > 1 || analysis_card;
         let fallback = if stacked { (820, 280) } else { (820, 580) };
         let dark = self.theme.mode == crate::theme::ThemeMode::Dark;
+        self.quad_export_labels = specs
+            .iter()
+            .map(|spec| shell::plot_export::Labels {
+                template: spec.export_template(),
+                x: spec.xlabel.clone(),
+                y: spec.ylabel.clone(),
+                series: spec
+                    .series
+                    .iter()
+                    .map(|series| match series.key {
+                        crate::plotting::SeriesKey::Trace(i) => traces
+                            .get(i)
+                            .map(|t| {
+                                if spec.xlabel.starts_with("R ") || spec.xlabel.starts_with("q ") {
+                                    crate::plotting::ft_trace_label(t)
+                                } else {
+                                    t.label.clone()
+                                }
+                            })
+                            .unwrap_or_else(|| format!("Spectrum {}", i + 1)),
+                        _ => series
+                            .label
+                            .clone()
+                            .unwrap_or_else(|| format!("{:?}", series.key)),
+                    })
+                    .collect(),
+            })
+            .collect();
         for (index, spec) in specs.into_iter().enumerate() {
             let (fig_w, fig_h) = self.card_px.get(&index).copied().unwrap_or(fallback);
             let salt = ((fig_w as u64) << 33) ^ ((fig_h as u64) << 1) ^ (dark as u64);

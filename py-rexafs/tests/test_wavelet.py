@@ -29,6 +29,15 @@ class WaveletTests(unittest.TestCase):
                 self.assertGreater(region.value, 0)
                 self.assertEqual(region.k_range, (1., 3.))
                 self.assertEqual(region.method, 'bilinear_magnitude_v1')
+                mean = result.mean((1., 3.), (.2, 1.))
+                maximum = result.maximum((1., 3.), (.2, 1.))
+                self.assertAlmostEqual(mean.value, region.value / 1.6)
+                self.assertGreaterEqual(maximum.value, mean.value)
+                self.assertEqual(mean.method, 'bilinear_magnitude_mean_v1')
+                self.assertEqual(maximum.method, 'bilinear_magnitude_maximum_v1')
+                for operation in [result.mean, result.maximum]:
+                    with self.assertRaises(ValueError):
+                        operation((0., 100.), (.2, 1.))
                 saved = result.to_json()
                 modified = result.real; modified[:] = 999
                 chi[:] = 999

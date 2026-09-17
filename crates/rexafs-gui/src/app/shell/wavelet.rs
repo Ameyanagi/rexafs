@@ -1,23 +1,22 @@
 //! Wavelet workspace: immutable scientific maps, bounded current residency and
 //! independent display controls. Original groups and pipeline settings stay intact.
 use super::*;
+use crate::wavelet_history::WaveletSavedRegion;
 use crate::{
     group_identity::GroupId,
     params::{PipelineParams, RequiredStage},
-    wavelet_history::{
-        self as history, WaveletArchive, WaveletReceipt, WaveletRecord, WaveletSavedRegion,
-    },
-    widgets::text_input::{InputEvent, TextInput},
+    wavelet_history::{self as history, WaveletArchive, WaveletReceipt, WaveletRecord},
 };
 use gpui::{AppContext, Entity};
-use rexafs::{Wavelet, WaveletRegionValue};
+use rexafs::Wavelet;
 use ruviz_gpui::{PlotPointerEvent, PlotPointerEventKind, RuvizPlot};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
 mod controls;
-mod plots;
+mod layout;
+pub(crate) mod plots;
 pub(crate) const PLOT_WAVELET_K: usize = 500;
 pub(crate) const PLOT_WAVELET_R: usize = 501;
 
@@ -27,28 +26,27 @@ pub(crate) struct WaveletState {
     pub archive: WaveletArchive,
     group: Option<GroupId>,
     source_settings: Option<PipelineParams>,
-    fields: Vec<Entity<TextInput>>,
-    region_fields: Vec<Entity<TextInput>>,
-    record: Option<Arc<WaveletRecord>>,
+    fields: Vec<Entity<crate::widgets::numeric_field::NumericField>>,
+    pub(super) record: Option<Arc<WaveletRecord>>,
     receipt: Option<WaveletReceipt>,
     pub plot_k: Option<Entity<RuvizPlot>>,
     pub plot_r: Option<Entity<RuvizPlot>>,
-    plot_map: Option<Entity<RuvizPlot>>,
+    pub(super) plot_map: Option<Entity<RuvizPlot>>,
     subscription: Option<gpui::Subscription>,
+    view_links: Vec<ruviz::core::InteractiveChangeSubscription>,
+    layout_size: Option<(u32, u32)>,
     stop: Option<Arc<AtomicBool>>,
     generation: u64,
     busy: bool,
     message: String,
-    region_message: String,
-    region: [f64; 4],
-    region_value: Option<WaveletRegionValue>,
     cursor: [f64; 2],
     slices: bool,
     view: usize,
     palette: Option<crate::app::series_display::HeatmapPalette>,
     reversed: bool,
     colors_open: bool,
-    history_open: bool,
+    dirty: bool,
+    automatic_receipts: std::collections::HashMap<GroupId, String>,
     menu_position: gpui::Point<gpui::Pixels>,
     menu_focus: Option<gpui::FocusHandle>,
     lock_scale: Option<(f64, f64)>,
@@ -56,6 +54,12 @@ pub(crate) struct WaveletState {
     advanced: bool,
 }
 impl WaveletState {
+    /// Hide this view without discarding its map, region or running calculation.
+    pub fn hide(&mut self) {
+        self.open = false;
+        self.colors_open = false;
+    }
+
     pub fn cancel(&mut self) {
         if let Some(stop) = self.stop.take() {
             stop.store(true, Ordering::Relaxed);
@@ -85,21 +89,31 @@ impl StudioApp {
             && self.wavelet.source_settings.as_ref() == Some(self.ui_params())
     }
     pub(crate) fn open_wavelet(&mut self, cx: &mut Context<Self>) {
+        self.ui.sections.insert("Wavelet settings");
+        self.set_stage(super::Stage::Transform, cx);
         self.fluorescence.close();
+        self.peaks.open = false;
+        if self.wavelet_matches_current() && self.wavelet.fields.len() == 8 {
+            self.wavelet.open = true;
+            if self.wavelet.dirty || self.wavelet.record.is_none() {
+                self.schedule_wavelet(cx);
+            }
+            cx.notify();
+            return;
+        }
+        let previous_definition = self.wavelet_definition(cx).ok();
         self.wavelet.cancel();
         self.wavelet.open = true;
         self.wavelet.colors_open = false;
-        self.wavelet.history_open = false;
-        self.peaks.open = false;
         self.wavelet.group = self.current_group_index().and_then(|i| self.group_id(i));
         self.wavelet.source_settings = Some(self.ui_params().clone());
         self.wavelet.record = None;
         self.wavelet.receipt = None;
+        self.wavelet.view_links.clear();
         self.wavelet.plot_map = None;
         self.wavelet.plot_k = None;
         self.wavelet.plot_r = None;
-        self.wavelet.region_value = None;
-        self.wavelet.message = "Choose the measured k range, then Calculate.".into();
+        self.wavelet.message = "Updating wavelet…".into();
         let recent = self
             .wavelet
             .archive
@@ -117,72 +131,94 @@ impl StudioApp {
             .and_then(|k| k.last())
             .copied()
             .unwrap_or(12.);
-        let definition = recent
-            .as_ref()
-            .map(|r| r.definition.clone())
+        let definition = previous_definition
+            .or_else(|| recent.as_ref().map(|r| r.definition.clone()))
             .unwrap_or_else(|| Wavelet::new(2. ..=(available.min(12.) * 100.).floor() / 100.));
         self.set_wavelet_fields(&definition, cx);
-        if let Some(receipt) = recent {
+        if let Some(receipt) = recent.filter(|r| r.definition == definition) {
+            self.wavelet.dirty = false;
             self.load_wavelet(receipt, cx);
+        } else {
+            self.schedule_wavelet(cx);
         }
         cx.notify();
     }
-    fn set_wavelet_fields(&mut self, definition: &Wavelet, cx: &mut Context<Self>) {
+    pub(crate) fn ensure_wavelet_fields(&mut self, cx: &mut Context<Self>) {
+        if self.wavelet.fields.is_empty() {
+            self.set_wavelet_fields(&Wavelet::new(2. ..=12.), cx);
+        }
+    }
+    pub(crate) fn set_wavelet_fields(&mut self, definition: &Wavelet, cx: &mut Context<Self>) {
         self.wavelet.fields.clear();
         let taper = match definition.window {
             rexafs::WaveletWindow::None => 0.,
             rexafs::WaveletWindow::Cosine { width } => width,
         };
+        use crate::widgets::numeric_field::{FieldEvent, FieldKind, NumericField};
         let values = [
-            format!("{:.2}", definition.k_range[0]),
-            format!("{:.2}", definition.k_range[1]),
-            definition.kweight.to_string(),
-            format!("{:.2}", definition.rmax),
-            definition.order.to_string(),
-            definition.kstep.to_string(),
-            definition.rstep.map(|v| v.to_string()).unwrap_or_default(),
-            taper.to_string(),
+            Some(definition.k_range[0]),
+            Some(definition.k_range[1]),
+            Some(definition.kweight as f64),
+            Some(definition.rmax),
+            Some(definition.order as f64),
+            Some(definition.kstep),
+            definition.rstep,
+            Some(taper),
         ];
-        for (label, value) in [
-            "Wavelet k from (Å⁻¹)",
-            "Wavelet k to (Å⁻¹)",
-            "Wavelet k weight",
-            "Wavelet R maximum (Å)",
+        for (i, (label, value)) in [
+            "Wavelet k min (Å⁻¹)",
+            "Wavelet k max (Å⁻¹)",
+            "k-weight",
+            "R max (Å)",
             "Cauchy order",
-            "Wavelet k step (Å⁻¹)",
-            "Wavelet R step (Å)",
-            "Cosine taper width (Å⁻¹)",
+            "k step (Å⁻¹)",
+            "R step (Å)",
+            "Taper (Å⁻¹)",
         ]
         .into_iter()
         .zip(values)
+        .enumerate()
         {
+            let kind = if i == 2 || i == 4 {
+                FieldKind::Integer {
+                    min: Some(if i == 4 { 1 } else { 0 }),
+                }
+            } else {
+                FieldKind::Float
+            };
             let field = cx.new(|cx| {
-                let mut f = TextInput::new("auto", value, self.theme, cx);
-                f.set_accessible_name(label);
-                f
+                NumericField::new(
+                    label,
+                    if i == 6 { "auto" } else { "required" },
+                    value,
+                    kind,
+                    self.theme,
+                    cx,
+                )
+                .with_step(match i {
+                    0 | 1 | 3 | 7 => 0.1,
+                    5 | 6 => 0.01,
+                    _ => 1.,
+                })
             });
             cx.subscribe(&field, |app, _, event, cx| {
-                if matches!(event, InputEvent::Edited(_)) {
-                    app.wavelet.cancel();
-                    app.wavelet.message = "Settings changed · Calculate to update the map".into();
-                    cx.notify();
+                if matches!(event, FieldEvent::Changed(_)) {
+                    app.schedule_wavelet(cx);
                 }
             })
             .detach();
             self.wavelet.fields.push(field);
         }
     }
-    fn wavelet_definition(&self, cx: &Context<Self>) -> Result<Wavelet, String> {
+    pub(crate) fn wavelet_definition(&self, cx: &Context<Self>) -> Result<Wavelet, String> {
         if self.wavelet.fields.len() != 8 {
-            return Err("Open Wavelet for a selected spectrum".into());
+            return Err("Set the wavelet parameters in Transform first".into());
         }
-        let value = |i: usize| self.wavelet.fields[i].read(cx).text().trim().to_owned();
         let number = |i: usize| {
-            value(i)
-                .parse::<f64>()
-                .ok()
-                .filter(|v| v.is_finite())
-                .ok_or("Enter finite wavelet settings".to_owned())
+            self.wavelet.fields[i]
+                .read(cx)
+                .value()
+                .ok_or_else(|| "Enter wavelet settings".to_owned())
         };
         let weight = number(2)?;
         let order = number(4)?;
@@ -198,17 +234,53 @@ impl StudioApp {
             .rmax(number(3)?)
             .order(order as usize)
             .kstep(number(5)?);
-        if !value(6).is_empty() {
-            definition = definition.rstep(number(6)?);
+        if let Some(step) = self.wavelet.fields[6].read(cx).value() {
+            definition = definition.rstep(step);
         }
         let taper = number(7)?;
         if taper < 0. {
-            return Err("Taper width must be zero (none) or positive".into());
+            return Err("Taper must be zero or positive".into());
         }
         if taper > 0. {
             definition = definition.taper(taper);
         }
+        definition
+            .estimate(&definition.k_range)
+            .map_err(|e| e.to_string())?;
         Ok(definition)
+    }
+    /// Coalesce committed edits and steppers; stale jobs cannot replace newer maps.
+    fn schedule_wavelet(&mut self, cx: &mut Context<Self>) {
+        self.wavelet.cancel();
+        self.wavelet.dirty = true;
+        if let Err(error) = self.wavelet_definition(cx) {
+            self.wavelet.message = format!("{error} · previous map unchanged");
+            cx.notify();
+            return;
+        }
+        self.wavelet.message = "Updating wavelet…".into();
+        if self.wavelet.open {
+            let generation = self.wavelet.generation;
+            let project = self.project_generation;
+            let timer = cx
+                .background_executor()
+                .timer(std::time::Duration::from_millis(200));
+            cx.spawn(async move |this, cx| {
+                timer.await;
+                this.update(cx, |app, cx| {
+                    if app.project_generation == project
+                        && app.wavelet.generation == generation
+                        && app.wavelet.open
+                        && app.stage == Stage::Transform
+                    {
+                        app.calculate_wavelet(cx);
+                    }
+                })
+                .ok();
+            })
+            .detach();
+        }
+        cx.notify();
     }
     fn calculate_wavelet(&mut self, cx: &mut Context<Self>) {
         if self.wavelet.busy {
@@ -222,6 +294,8 @@ impl StudioApp {
                 return;
             }
         };
+        self.wavelet.group = self.current_group_index().and_then(|i| self.group_id(i));
+        self.wavelet.source_settings = Some(self.ui_params().clone());
         let Some(ix) = self.current_group_index() else {
             return;
         };
@@ -288,15 +362,15 @@ impl StudioApp {
                     != Some(&group)
                     || app.ui_params() != &before
                 {
-                    app.wavelet.message = "Spectrum or processing changed; calculate again".into();
+                    app.schedule_wavelet(cx);
                     cx.notify();
                     return;
                 }
                 match result {
-                    Err(e) => app.wavelet.message = e,
+                    Err(e) => app.wavelet.message = format!("{e} · previous map unchanged"),
                     Ok((record, receipt)) => {
-                        app.wavelet.archive.insert(receipt.clone());
-                        app.record("Retained full wavelet map", None);
+                        app.wavelet.archive.insert_preview(receipt.clone(), &mut app.wavelet.automatic_receipts);
+                        app.wavelet.dirty = false;
                         app.show_wavelet(record, receipt, cx);
                     }
                 }
@@ -357,108 +431,18 @@ impl StudioApp {
         let map = &record.map;
         let k = map.settings().k_range;
         let r = [map.r()[0], *map.r().last().unwrap()];
-        self.wavelet.region = [
-            k[0] + 0.2 * (k[1] - k[0]),
-            k[1] - 0.2 * (k[1] - k[0]),
-            r[0] + 0.2 * (r[1] - r[0]),
-            r[1] - 0.2 * (r[1] - r[0]),
-        ];
         self.wavelet.cursor = [0.5 * (k[0] + k[1]), 0.5 * (r[0] + r[1])];
-        self.wavelet.message = format!(
-            "Retained map · {} · {} k × {} R · order {}",
-            record.label,
-            map.k().len(),
-            map.r().len(),
-            map.settings().order
-        );
+        self.wavelet.message.clear();
+        self.wavelet.view_links.clear();
         self.wavelet.plot_map = None;
         self.wavelet.plot_k = None;
         self.wavelet.plot_r = None;
         self.wavelet.subscription = None;
         self.wavelet.record = Some(Arc::new(record));
         self.wavelet.receipt = Some(receipt);
-        self.wavelet.region_fields.clear();
-        for (label, value) in [
-            "Region k from (Å⁻¹)",
-            "Region k to (Å⁻¹)",
-            "Region R from (Å)",
-            "Region R to (Å)",
-        ]
-        .into_iter()
-        .zip(self.wavelet.region)
-        {
-            let field = cx.new(|cx| {
-                let mut f = TextInput::new("", format!("{value:.2}"), self.theme, cx);
-                f.set_accessible_name(label);
-                f
-            });
-            cx.subscribe(&field, |app, _, event, cx| {
-                if matches!(event, InputEvent::Edited(_)) {
-                    app.read_wavelet_region(cx);
-                }
-            })
-            .detach();
-            self.wavelet.region_fields.push(field);
-        }
-        // Use the exact visible rounded bounds, so field text and the scalar agree.
-        self.read_wavelet_region(cx);
         self.rebuild_wavelet_plots(cx);
     }
-    fn read_wavelet_region(&mut self, cx: &mut Context<Self>) {
-        if self.wavelet.region_fields.len() != 4 {
-            return;
-        }
-        let values: Result<Vec<_>, _> = self
-            .wavelet
-            .region_fields
-            .iter()
-            .map(|f| f.read(cx).text().trim().parse::<f64>())
-            .collect();
-        match values {
-            Ok(v) if v.iter().all(|x| x.is_finite()) => {
-                self.wavelet.region.copy_from_slice(&v);
-                self.update_wavelet_region();
-            }
-            _ => {
-                self.wavelet.region_value = None;
-                self.wavelet.region_message = "Enter finite region bounds".into();
-            }
-        }
-        cx.notify();
-    }
-    fn update_wavelet_region(&mut self) {
-        let Some(record) = &self.wavelet.record else {
-            return;
-        };
-        let [ka, kb, ra, rb] = self.wavelet.region;
-        match record.map.integral(ka..=kb, ra..=rb) {
-            Ok(value) => {
-                self.wavelet.region_message =
-                    format!("∫ |W| dk dR = {:.5} {}", value.value, value.unit);
-                self.wavelet.region_value = Some(value);
-            }
-            Err(e) => {
-                self.wavelet.region_message = e.to_string();
-                self.wavelet.region_value = None;
-            }
-        }
-    }
-    fn save_wavelet_region(&mut self, cx: &mut Context<Self>) {
-        if let (Some(receipt), Some(measurement)) =
-            (&self.wavelet.receipt, &self.wavelet.region_value)
-        {
-            self.wavelet.archive.regions.push(WaveletSavedRegion {
-                map_digest: receipt.digest.clone(),
-                label: receipt.label.clone(),
-                measurement: measurement.clone(),
-            });
-            self.record("Retained wavelet region measurement", None);
-            self.wavelet.message =
-                "Region saved with its full map and processing provenance".into();
-            cx.notify();
-        }
-    }
-    fn export_wavelet(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn export_wavelet(&mut self, cx: &mut Context<Self>) {
         let Some(record) = self.wavelet.record.clone() else {
             return;
         };
@@ -507,9 +491,9 @@ impl StudioApp {
                 .await;
             this.update(cx, |app, cx| {
                 if app.project_generation == project {
-                    app.wavelet.message = match result {
+                    app.status = match result {
                         Ok(()) => "Exported full map, original χ and provenance".into(),
-                        Err(e) => e,
+                        Err(e) => e.into(),
                     };
                     cx.notify();
                 }
@@ -523,6 +507,26 @@ impl StudioApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cancelled_wavelet_jobs_cannot_publish_a_previous_generation() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let mut state = WaveletState {
+            busy: true,
+            stop: Some(stop.clone()),
+            generation: 7,
+            ..Default::default()
+        };
+        let running_generation = state.generation;
+        state.cancel();
+        assert!(stop.load(Ordering::Relaxed));
+        assert!(!state.busy);
+        assert!(state.stop.is_none());
+        assert_ne!(state.generation, running_generation);
+        let pending_generation = state.generation;
+        state.cancel();
+        assert_ne!(state.generation, pending_generation);
+    }
+
     #[test]
     fn typed_chi_reuses_original_arrays_and_unknown_quantities_still_fail() {
         let k = (0..101).map(|i| i as f64 * 0.1).collect::<Vec<_>>();

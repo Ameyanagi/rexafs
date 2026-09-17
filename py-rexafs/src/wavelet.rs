@@ -228,6 +228,42 @@ impl PyWaveletMap {
             .map_err(invalid)?;
         Ok(PyWaveletRegionValue { inner })
     }
+    /// Area-weighted mean of native bilinear magnitude (unreleased), not a mean
+    /// of grid cells. k_range is inverse angstroms; r_range is angstroms. Fully
+    /// covered, finite, increasing bounds are required. Returns units and method;
+    /// no uncertainty is inferred. Releases the Python GIL.
+    fn mean(
+        &self,
+        py: Python<'_>,
+        k_range: (f64, f64),
+        r_range: (f64, f64),
+    ) -> PyResult<PyWaveletRegionValue> {
+        let inner = py
+            .detach(|| {
+                self.inner
+                    .mean(k_range.0..=k_range.1, r_range.0..=r_range.1)
+            })
+            .map_err(invalid)?;
+        Ok(PyWaveletRegionValue { inner })
+    }
+    /// Maximum of the native bilinear magnitude surface, including interpolated
+    /// rectangle boundaries (unreleased). k_range is inverse angstroms; r_range
+    /// is angstroms. Invalid or uncovered bounds raise ValueError. Returns units
+    /// and method without an inferred error bar; releases the Python GIL.
+    fn maximum(
+        &self,
+        py: Python<'_>,
+        k_range: (f64, f64),
+        r_range: (f64, f64),
+    ) -> PyResult<PyWaveletRegionValue> {
+        let inner = py
+            .detach(|| {
+                self.inner
+                    .maximum(k_range.0..=k_range.1, r_range.0..=r_range.1)
+            })
+            .map_err(invalid)?;
+        Ok(PyWaveletRegionValue { inner })
+    }
     /// Independent definition; automatic grid choices and explicit coordinates retained.
     #[getter]
     fn definition(&self) -> PyWavelet {
@@ -261,7 +297,7 @@ impl PyWaveletMap {
         })
     }
 }
-/// Immutable native wavelet integral, with exact bounds and numerical convention.
+/// Immutable native wavelet region statistic, with exact bounds and convention.
 /// Units equal k**weight * chi because dk (inverse angstroms) times dR (angstroms)
 /// cancel. This is a descriptive transform metric, not a chemical concentration.
 #[pyclass(
@@ -276,7 +312,7 @@ pub struct PyWaveletRegionValue {
 }
 #[pymethods]
 impl PyWaveletRegionValue {
-    /// Full-native-grid integral; no experimental uncertainty is supplied.
+    /// Native region statistic; no experimental uncertainty is supplied.
     #[getter]
     fn value(&self) -> f64 {
         self.inner.value
@@ -296,7 +332,8 @@ impl PyWaveletRegionValue {
     fn unit(&self) -> String {
         self.inner.unit.clone()
     }
-    /// Named quadrature convention, currently bilinear_magnitude_v1.
+    /// Numerical convention: bilinear_magnitude_v1 (integral),
+    /// bilinear_magnitude_mean_v1 or bilinear_magnitude_maximum_v1.
     #[getter]
     fn method(&self) -> String {
         self.inner.method.clone()

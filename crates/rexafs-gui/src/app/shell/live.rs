@@ -184,6 +184,7 @@ impl StudioApp {
                 name: "Flat mean −20…30 eV".into(),
                 measurement: Measurement::mean(-20.0..=30.0).flat(),
                 edge_energy: false,
+                wavelet: None,
             });
         Ok(LiveConfig {
             schema: 1,

@@ -184,6 +184,8 @@ struct Span {
 
 #[derive(Default)]
 pub struct HandleState {
+    /// Display preference only; hiding ranges does not change any parameter.
+    pub hidden: bool,
     /// (plot index, handle) under the pointer.
     pub armed: Option<(usize, HandleKey)>,
     pub dragging: Option<(usize, HandleKey)>,
@@ -203,21 +205,47 @@ struct HandleDecor {
 }
 
 impl StudioApp {
+    pub(crate) fn plot_ranges_button(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        super::controls::icon_button(
+            &self.theme,
+            "toggle-plot-ranges",
+            crate::icons::Icon::Range,
+            if self.handles.hidden {
+                "Show plot ranges"
+            } else {
+                "Hide plot ranges"
+            },
+            !self.handles.hidden,
+        )
+        .on_click(cx.listener(|app, _, _, cx| app.toggle_plot_ranges(cx)))
+    }
+    pub(crate) fn toggle_plot_ranges(&mut self, cx: &mut Context<Self>) {
+        self.end_handle_drag(cx);
+        self.handles.armed = None;
+        self.measurements.wavelet_drag = None;
+        self.measurements.wavelet_armed = None;
+        self.handles.hidden = !self.handles.hidden;
+        if self.stage == Stage::Normalize && self.normalization.open {
+            self.rebuild_normalization_plot(true, cx);
+        }
+        if self.stage == Stage::Data && self.peaks.open {
+            self.rebuild_peak_plot(true, cx);
+        }
+        // Analysis boundaries are part of the plot specification. Ordinary
+        // processing handles only need repainting, not a scientific recompute.
+        if self.stage == Stage::Data && self.analysis_energy_interval(cx).is_some() {
+            self.invalidate_explore_plots(cx);
+        }
+        cx.notify();
+    }
+
     /// Handles the stage exposes on a given plot, with their current data x.
     fn handle_specs(&self, plot: usize) -> (Vec<(HandleKey, f64)>, Vec<Span>) {
-        if plot == super::measurements::drag::PLOT_MEASUREMENT
-            || plot == super::peaks::PLOT_PEAKS
-            || matches!(
-                plot,
-                super::wavelet::PLOT_WAVELET_K | super::wavelet::PLOT_WAVELET_R
-            )
-        {
-            let specs = if matches!(
-                plot,
-                super::wavelet::PLOT_WAVELET_K | super::wavelet::PLOT_WAVELET_R
-            ) {
-                self.wavelet_handle_specs(plot)
-            } else if plot == super::peaks::PLOT_PEAKS {
+        if self.handles.hidden {
+            return (Vec::new(), Vec::new());
+        }
+        if plot == super::measurements::drag::PLOT_MEASUREMENT || plot == super::peaks::PLOT_PEAKS {
+            let specs = if plot == super::peaks::PLOT_PEAKS {
                 self.peak_handle_specs()
             } else {
                 self.measurement_handle_specs()
@@ -647,6 +675,12 @@ impl StudioApp {
         let Some(entity) = self.plot_entity(plot) else {
             return;
         };
+        if self.handles.hidden || entity.read(cx).is_context_menu_open() {
+            if self.handles.armed.take().is_some() {
+                cx.notify();
+            }
+            return;
+        }
         if let Some((drag_plot, key)) = self.handles.dragging {
             if drag_plot != plot {
                 return;
@@ -709,6 +743,11 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) {
         if event.button != gpui::MouseButton::Left {
+            // A context-menu press may start directly on a range boundary.
+            // Remove its capture layer before the plot opens the menu.
+            if self.handles.armed.take().is_some() {
+                cx.notify();
+            }
             return;
         }
         self.plot_pointer_move(plot, event.position, cx);
@@ -723,12 +762,7 @@ impl StudioApp {
 
     fn apply_handle_drag(&mut self, key: HandleKey, x: f64, cx: &mut Context<Self>) {
         if matches!(key, HandleKey::MeasurementStart | HandleKey::MeasurementEnd) {
-            if self.wavelet.open
-                && self.stage == Stage::Data
-                && let Some((plot, _)) = self.handles.dragging
-            {
-                self.drag_wavelet_boundary(plot, key, x, cx);
-            } else if self.peaks.open && self.stage == Stage::Data {
+            if self.peaks.open && self.stage == Stage::Data {
                 self.drag_peak_boundary(key, x, cx);
             } else {
                 self.drag_measurement_boundary(key, x, cx);
@@ -948,7 +982,12 @@ impl StudioApp {
     ) -> Option<impl IntoElement + use<>> {
         let active = matches!(self.handles.armed, Some((p, _)) if p == plot)
             || matches!(self.handles.dragging, Some((p, _)) if p == plot);
-        if !active {
+        if !active
+            || self.handles.hidden
+            || self
+                .plot_entity(plot)
+                .is_some_and(|p| p.read(cx).is_context_menu_open())
+        {
             return None;
         }
         Some(

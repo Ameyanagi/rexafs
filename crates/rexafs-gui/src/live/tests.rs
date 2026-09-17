@@ -29,6 +29,7 @@ fn config(folder: &Path) -> LiveConfig {
             name: "Mean".into(),
             measurement: MetricMeasurement::mean(7100.0..=7102.0).raw_mu().absolute(),
             edge_energy: false,
+            wavelet: None,
         },
         recipe: None,
         peak_model: None,

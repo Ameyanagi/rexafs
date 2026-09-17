@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "kind": "experimental",
+  "generator": "scripts/generate-experimental-analysis-reference.py",
+  "larch_commit": "e3c93284fed358c2c8979cba4c139430527433c6",
+  "sources": {
+    "math/utils.py": {
+      "url": "https://raw.githubusercontent.com/xraypy/xraylarch/e3c93284fed358c2c8979cba4c139430527433c6/larch/math/utils.py",
+      "sha256": "9f7f776459925b66974205328698ef271be3bda5be3a25d9d38d1f37dbc54467",
+      "functions": [
+        "index_of",
+        "index_nearest",
+        "remove_dups",
+        "remove_nans",
+        "remove_nans2",
+        "polyfit",
+        "realimag"
+      ]
+    },
+    "xafs/pre_edge.py": {
+      "url": "https://raw.githubusercontent.com/xraypy/xraylarch/e3c93284fed358c2c8979cba4c139430527433c6/larch/xafs/pre_edge.py",
+      "sha256": "0a49d5cfb4b465580cb3ba17079df97e36d40c994d7e4b02cf2b8ec9a437e02d",
+      "functions": [
+        "preedge"
+      ]
+    },
+    "xafs/mback.py": {
+      "url": "https://raw.githubusercontent.com/xraypy/xraylarch/e3c93284fed358c2c8979cba4c139430527433c6/larch/xafs/mback.py",
+      "sha256": "97449e89c5ecc5fcaeb845208bfa81b9eebcd3d9c9d7495f02650b2e7d778b78",
+      "functions": [
+        "match_f2"
+      ]
+    },
+    "xafs/xafsft.py": {
+      "url": "https://raw.githubusercontent.com/xraypy/xraylarch/e3c93284fed358c2c8979cba4c139430527433c6/larch/xafs/xafsft.py",
+      "sha256": "ae397cdc5c6b83699ee5b12ada4508773c727fcb8ee952303b1d08003ce79f8b",
+      "functions": [
+        "ftwindow",
+        "xftf_fast"
+      ]
+    },
+    "xafs/autobk.py": {
+      "url": "https://raw.githubusercontent.com/xraypy/xraylarch/e3c93284fed358c2c8979cba4c139430527433c6/larch/xafs/autobk.py",
+      "sha256": "b1677ab45e12a756d2c2601e6195f5fcb6c9c6937d46624a8a0dfc3b7c7aa4aa",
+      "functions": [
+        "spline_eval",
+        "_resid",
+        "autobk"
+      ]
+    },
+    "xafs/cauchy_wavelet.py": {
+      "url": "https://raw.githubusercontent.com/xraypy/xraylarch/e3c93284fed358c2c8979cba4c139430527433c6/larch/xafs/cauchy_wavelet.py",
+      "sha256": "629d9a2564356be63fdf0c5c4861088eeee94340064bc0f177c15e1db12af82c",
+      "functions": [
+        "cauchy_wavelet"
+      ]
+    }
+  },
+  "python": "3.12.12",
+  "numpy": "2.3.2",
+  "scipy": "1.16.1",
+  "lmfit": "1.3.4",
+  "xraydb": "4.5.8",
+  "database": "XrayDB Version: 9.2, Python Version: 4.5.8",
+  "tolerances": {
+    "mback_curve_absolute": 1e-06,
+    "mback_scale_absolute": 1e-07,
+    "mback_objective_absolute": 1e-09,
+    "wavelet_absolute": 2e-10
+  },
+  "cases": [
+    {
+      "id": "cu-rt",
+      "fixture": "cu-rt.json.gz",
+      "sha256": "3d677ac7db4fb147cfdad6a013fab268cb90fa16896d0f2556ec4cb9e2a67ab4",
+      "sample": {
+        "id": "aps-13-id-c-xasdatalibrary-cu-metal-rt-xdi",
+        "path": "samples/aps/13-id-c/xasdatalibrary/cu_metal_rt.xdi",
+        "facility": "APS",
+        "beamline": "13-ID-C",
+        "beamline_confirmed": true,
+        "format": "XDI",
+        "modes": [
+          "transmission"
+        ],
+        "data_level": "repository-export",
+        "source": "XraySpectroscopy/XASDataLibrary",
+        "source_url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi",
+        "download_url": "https://raw.githubusercontent.com/XraySpectroscopy/XASDataLibrary/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi",
+        "upstream_path": "data/Cu/cu_metal_rt.xdi",
+        "upstream_commit": "284edcc1752ede0dd41c7e66eb2dbf6cf9589980",
+        "upstream_git_blob_sha1": "47d6bb58271d49d3be5503d9c5707f7099c57e05",
+        "sha256": "17b7076f1c3b5eccfa76dc6a7b3d26ea1fd388fa27f621a058779f70b71351d6",
+        "bytes": 19766,
+        "license": "CC0-1.0",
+        "license_file": "LICENSES/XraySpectroscopy--XASDataLibrary--license.rst",
+        "license_evidence_url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst",
+        "license_scope": "explicit data license",
+        "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+        "beamline_evidence": "XDI Beamline.name and Facility.name (where present)",
+        "notes": "XDI redistribution; raw beamline header is not preserved in this export.",
+        "modified": false,
+        "license_basis": "explicit-data-license",
+        "test_eligibility": "documented-license",
+        "mode_evidence": "Mode tags summarize explicit source metadata or available detector channels. They do not assert every channel contains a usable spectrum.",
+        "facility_confirmed": true,
+        "original_filename": "cu_metal_rt.xdi",
+        "acquisition_file_claim": false,
+        "sidecar_text": "SPDX-License-Identifier: CC0-1.0\nLicense-File: LICENSES/XraySpectroscopy--XASDataLibrary--license.rst\nLicense-Basis: explicit-data-license\nLicense-Scope: explicit data license\nLicense-Evidence: https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst\nTest-Eligibility: documented-license\nSource: https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi\nDownload: https://raw.githubusercontent.com/XraySpectroscopy/XASDataLibrary/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi\nCitation: International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/\nSHA256: 17b7076f1c3b5eccfa76dc6a7b3d26ea1fd388fa27f621a058779f70b71351d6\nModifications: None; original downloaded measurement bytes retained.\n"
+      },
+      "conversion": "xdi-rt",
+      "points": 408
+    },
+    {
+      "id": "cu-10k",
+      "fixture": "cu-10k.json.gz",
+      "sha256": "484725aa55a62e501715e1290d56bdbb8b6cc4b7405abfd1d4587a20fc6ae633",
+      "sample": {
+        "id": "nsls-x11a-xasdatalibrary-cu-metal-10k-xdi",
+        "path": "samples/nsls/x11a/xasdatalibrary/cu_metal_10K.xdi",
+        "facility": "NSLS",
+        "beamline": "X11A",
+        "beamline_confirmed": true,
+        "format": "XDI",
+        "modes": [
+          "transmission"
+        ],
+        "data_level": "repository-export",
+        "source": "XraySpectroscopy/XASDataLibrary",
+        "source_url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_10K.xdi",
+        "download_url": "https://raw.githubusercontent.com/XraySpectroscopy/XASDataLibrary/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_10K.xdi",
+        "upstream_path": "data/Cu/cu_metal_10K.xdi",
+        "upstream_commit": "284edcc1752ede0dd41c7e66eb2dbf6cf9589980",
+        "upstream_git_blob_sha1": "96c4375dbb5754d23293b36ed35a150293521956",
+        "sha256": "6fd3823892d218e576b27674f3faff998ffdf4de261e9ac92ea40a42e6f1ba88",
+        "bytes": 20429,
+        "license": "CC0-1.0",
+        "license_file": "LICENSES/XraySpectroscopy--XASDataLibrary--license.rst",
+        "license_evidence_url": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst",
+        "license_scope": "explicit data license",
+        "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+        "beamline_evidence": "XDI Beamline.name and Facility.name (where present)",
+        "notes": "XDI redistribution; raw beamline header is not preserved in this export.",
+        "modified": false,
+        "license_basis": "explicit-data-license",
+        "test_eligibility": "documented-license",
+        "mode_evidence": "Mode tags summarize explicit source metadata or available detector channels. They do not assert every channel contains a usable spectrum.",
+        "facility_confirmed": true,
+        "original_filename": "cu_metal_10K.xdi",
+        "acquisition_file_claim": false,
+        "sidecar_text": "SPDX-License-Identifier: CC0-1.0\nLicense-File: LICENSES/XraySpectroscopy--XASDataLibrary--license.rst\nLicense-Basis: explicit-data-license\nLicense-Scope: explicit data license\nLicense-Evidence: https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst\nTest-Eligibility: documented-license\nSource: https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_10K.xdi\nDownload: https://raw.githubusercontent.com/XraySpectroscopy/XASDataLibrary/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_10K.xdi\nCitation: International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/\nSHA256: 6fd3823892d218e576b27674f3faff998ffdf4de261e9ac92ea40a42e6f1ba88\nModifications: None; original downloaded measurement bytes retained.\n"
+      },
+      "conversion": "xdi-10k",
+      "points": 612
+    },
+    {
+      "id": "ruo2",
+      "fixture": "ruo2.json.gz",
+      "sha256": "4c4286922ea93eeefa1c14a1daa0ead44f70ecf0b58f13bea9c583be33c2dd1f",
+      "sample": {
+        "id": "mdr-b8ade3fa-ruo2-f-aichisr-bl11s-20200903-dat",
+        "path": "samples/aichi-sr/bl11s2/mdr-b8ade3fa/RuO2-f-AichiSR-BL11S-20200903.dat",
+        "facility": "Aichi SR",
+        "beamline": "BL11S2",
+        "beamline_confirmed": true,
+        "format": "PF/SPring-8 9809",
+        "modes": [
+          "transmission"
+        ],
+        "data_level": "raw",
+        "source": "MDR XAFS DB",
+        "source_url": "https://mdr.nims.go.jp/datasets/b8ade3fa-b3da-4090-9b54-ed2baf307f7e",
+        "download_url": "https://mdr.nims.go.jp/filesets/81017522-f6ec-4fe4-b45d-c77f9dcd7ec7/download",
+        "doi": "https://doi.org/10.48505/nims.3886",
+        "sha256": "8132bd57c013ec58fcdb09909d19d8507ed16a318e22baaf6504103a7b82d370",
+        "bytes": 267240,
+        "license": "CC-BY-NC-SA-4.0",
+        "license_file": "LICENSES/CC-BY-NC-SA-4.0.txt",
+        "license_evidence_url": "https://mdr.nims.go.jp/datasets/b8ade3fa-b3da-4090-9b54-ed2baf307f7e",
+        "license_evidence_file": "provenance/mdr/b8ade3fa-b3da-4090-9b54-ed2baf307f7e/record.json",
+        "license_scope": "individual dataset license",
+        "citation": "Masashi Ishii; Aichi SR. XAFS spectrum of Ruthenium(IV) oxide. https://doi.org/10.48505/nims.3886",
+        "beamline_evidence": "This dataset consists of X-ray absorption fine structure (XAFS) spectra at Ru K-edge of Ruthenium(IV) oxide measured at Aichi SR BL11S2, and is a part of XAFS database (MDR XAFS DB,\u00a0https://doi.org/10.48505/nims.1447) as a collection of MDR",
+        "metadata_files": [
+          "provenance/mdr/b8ade3fa-b3da-4090-9b54-ed2baf307f7e/metadata.json",
+          "provenance/mdr/b8ade3fa-b3da-4090-9b54-ed2baf307f7e/RuO2-f-AichiSR-BL11S-20200903.info"
+        ],
+        "notes": "Original repository bytes retained, including any pre-existing processing. Consult supplied measurement metadata for channel definitions. Raw denotes the acquisition-format file; some source channels may already be offset-subtracted.",
+        "modified": false,
+        "license_basis": "explicit-data-license",
+        "test_eligibility": "documented-license",
+        "mode_evidence": "Native file Transmission (2) header and metadata files[].columns identify I0/I1/I2 ion chambers. Filename -f does not establish fluorescence.",
+        "facility_confirmed": true,
+        "original_filename": "RuO2-f-AichiSR-BL11S-20200903.dat",
+        "acquisition_file_claim": true,
+        "sidecar_text": "SPDX-License-Identifier: CC-BY-NC-SA-4.0\nLicense-File: LICENSES/CC-BY-NC-SA-4.0.txt\nLicense-Basis: explicit-data-license\nLicense-Scope: individual dataset license\nLicense-Evidence: https://mdr.nims.go.jp/datasets/b8ade3fa-b3da-4090-9b54-ed2baf307f7e\nTest-Eligibility: documented-license\nSource: https://mdr.nims.go.jp/datasets/b8ade3fa-b3da-4090-9b54-ed2baf307f7e\nDownload: https://mdr.nims.go.jp/filesets/81017522-f6ec-4fe4-b45d-c77f9dcd7ec7/download\nCitation: Masashi Ishii; Aichi SR. XAFS spectrum of Ruthenium(IV) oxide. https://doi.org/10.48505/nims.3886\nSHA256: 8132bd57c013ec58fcdb09909d19d8507ed16a318e22baaf6504103a7b82d370\nModifications: None; original downloaded measurement bytes retained.\nLocal-License-Evidence: provenance/mdr/b8ade3fa-b3da-4090-9b54-ed2baf307f7e/record.json\n"
+      },
+      "conversion": "9809",
+      "points": 4369
+    }
+  ]
+}

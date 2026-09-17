@@ -95,15 +95,17 @@ impl StudioApp {
                 .flex()
                 .child(self.fluorescence_center(cx));
         }
-        if self.wavelet.open && !self.wavelet_matches_current() {
-            self.wavelet.cancel();
-            self.wavelet.open = false;
+        if self.stage == Stage::Transform && self.wavelet.open && !self.wavelet_matches_current() {
+            self.open_wavelet(cx);
         }
-        if self.stage == Stage::Data && self.wavelet.open {
+        if self.stage == Stage::Transform && self.wavelet.open {
             return div()
                 .flex_1()
                 .min_w_0()
+                .min_h_0()
                 .flex()
+                .flex_col()
+                .child(self.plot_bar(cx))
                 .child(self.wavelet_center(cx));
         }
         if self.stage == Stage::Data && self.peaks.open {
@@ -149,6 +151,7 @@ impl StudioApp {
         let tool_preview = (self.stage == Stage::Data && self.tool_preview_current(cx))
             .then(|| self.tools.preview_plot.clone())
             .flatten();
+        let has_tool_preview = tool_preview.is_some();
         let plots: Vec<(usize, SharedString)> = if tool_preview.is_some()
             || (self.stage == Stage::Data && self.analysis.plot.is_some())
         {
@@ -174,12 +177,17 @@ impl StudioApp {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(
-                        div()
-                            .text_size(px(11.5))
-                            .text_color(t.text_muted)
-                            .child("Preview · original / result / standard"),
-                    )
+                    .child(div().text_size(px(11.5)).text_color(t.text_muted).child(
+                        if self.tools.open == Some(super::tools::Tool::Align) {
+                            if self.tools.preview_running {
+                                "Updating alignment…"
+                            } else {
+                                "XANES · derivative peaks scaled to 1"
+                            }
+                        } else {
+                            "Preview · original / result / standard"
+                        },
+                    ))
                     .child(div().flex_1().min_h_0().min_w_0().child(plot)),
             );
         }
@@ -230,7 +238,15 @@ impl StudioApp {
                             .pt_2()
                             .text_size(px(11.5))
                             .font_weight(gpui::FontWeight::MEDIUM)
-                            .child(title),
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(div().flex_1().child(title))
+                            .child(self.plot_export_button(
+                                "analysis-export",
+                                super::plot_export::Target::Analysis,
+                                cx,
+                            )),
                     )
                     .child(views)
                     .child(
@@ -246,6 +262,7 @@ impl StudioApp {
             );
         }
         if self.stage == Stage::Data
+            && !self.handles.hidden
             && self.analysis.plot.is_none()
             && let Some((lo, hi)) = self.analysis_energy_interval(cx)
         {
@@ -253,7 +270,11 @@ impl StudioApp {
                 .child(format!("Analysis interval: {lo:.1}–{hi:.1} eV · dashed boundaries on the spectrum plot. Viewing presets change only the zoom.")));
         }
         column = column.child(area);
-        if self.analysis.plot.is_none() && self.view.legend && !self.legend_entries.is_empty() {
+        if !has_tool_preview
+            && self.analysis.plot.is_none()
+            && self.view.legend
+            && !self.legend_entries.is_empty()
+        {
             column = column.child(self.legend_strip());
         }
         column.when(self.ui.overview, |d| d.child(self.thumbnail_strip(cx)))
@@ -499,6 +520,48 @@ impl StudioApp {
         }
     }
 
+    fn transform_view_selector(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let t = self.theme;
+        let mut choices = segmented(&t).flex_none();
+        for (index, (view, label)) in [
+            (TfView::K, "k"),
+            (TfView::R, "R"),
+            (TfView::Both, "k + R"),
+            (TfView::Q, "q"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            choices = choices.child(
+                segment(
+                    &t,
+                    ("transform-view", index),
+                    label,
+                    !self.wavelet.open && self.stage_view.tf_view == view,
+                    index == 0,
+                )
+                .on_click(cx.listener(move |app, _, _, cx| {
+                    app.wavelet.hide();
+                    app.stage_view.tf_view = view;
+                    if view == TfView::Q {
+                        app.ui.sections.insert("back-transform");
+                    }
+                    app.stage_view_changed(cx);
+                })),
+            );
+        }
+        choices.child(
+            segment(
+                &t,
+                ("transform-view", 4_usize),
+                "Wavelet",
+                self.wavelet.open,
+                false,
+            )
+            .on_click(cx.listener(|app, _, _, cx| app.open_wavelet(cx))),
+        )
+    }
+
     fn plot_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         use super::controls::{Menu, icon_button};
         use crate::icons::Icon;
@@ -517,32 +580,49 @@ impl StudioApp {
             .py_1()
             .bg(t.surface)
             .border_b_1()
-            .border_color(t.border)
-            .child(
-                icon_button(
-                    &t,
-                    "plot-compare",
-                    Icon::Layers,
-                    format!(
-                        "Compare current + {} marked · {} spectra",
-                        self.selection.len(),
-                        self.compare_count()
-                    ),
-                    v.scope == PlotScope::Marked,
-                )
-                .w_auto()
-                .px_2()
-                .gap_1()
-                .child(format!("Compare {}", self.compare_count()))
-                .on_click(cx.listener(|app, _, _, cx| {
-                    app.stage_view.scope = if app.stage_view.scope == PlotScope::Current {
-                        PlotScope::Marked
-                    } else {
-                        PlotScope::Current
-                    };
-                    app.stage_view_changed(cx);
-                })),
-            );
+            .border_color(t.border);
+        if self.stage == Stage::Data
+            && self.tools.open == Some(super::tools::Tool::Align)
+            && self.tool_preview_current(cx)
+        {
+            return bar
+                .child(div().text_color(t.text).child("Alignment · dμ/dE"))
+                .child(div().text_color(t.text_muted).child("XANES"));
+        }
+        if self.stage == Stage::Transform {
+            bar = bar.child(self.transform_view_selector(cx));
+            if self.wavelet.open {
+                return bar
+                    .child(self.wavelet_view_selector(cx))
+                    .child(div().flex_1())
+                    .child(self.wavelet_toolbar_actions(cx));
+            }
+        }
+        bar = bar.child(
+            icon_button(
+                &t,
+                "plot-compare",
+                Icon::Layers,
+                format!(
+                    "Compare current + {} marked · {} spectra",
+                    self.selection.len(),
+                    self.compare_count()
+                ),
+                v.scope == PlotScope::Marked,
+            )
+            .w_auto()
+            .px_2()
+            .gap_1()
+            .child(format!("Compare {}", self.compare_count()))
+            .on_click(cx.listener(|app, _, _, cx| {
+                app.stage_view.scope = if app.stage_view.scope == PlotScope::Current {
+                    PlotScope::Marked
+                } else {
+                    PlotScope::Current
+                };
+                app.stage_view_changed(cx);
+            })),
+        );
         if v.scope == PlotScope::Marked {
             bar = bar
                 .child(
@@ -629,37 +709,11 @@ impl StudioApp {
                     );
                 }
             }
-            Stage::Transform => {
-                for (index, (view, label)) in [
-                    (TfView::K, "k"),
-                    (TfView::R, "R"),
-                    (TfView::Both, "k + R"),
-                    (TfView::Q, "q"),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    choices = choices.child(
-                        segment(
-                            &t,
-                            ("transform-view", index),
-                            label,
-                            v.tf_view == view,
-                            index == 0,
-                        )
-                        .on_click(cx.listener(move |app, _, _, cx| {
-                            app.stage_view.tf_view = view;
-                            if view == TfView::Q {
-                                app.ui.sections.insert("back-transform");
-                            }
-                            app.stage_view_changed(cx);
-                        })),
-                    );
-                }
-            }
             _ => {}
         }
-        bar = bar.child(choices);
+        if self.stage != Stage::Transform {
+            bar = bar.child(choices);
+        }
         match self.stage {
             Stage::Data | Stage::Normalize => {
                 bar =
@@ -764,6 +818,7 @@ impl StudioApp {
                     app.open_chrome_menu(Menu::Colors, event, window, cx);
                 })),
             )
+            .child(self.plot_ranges_button(cx))
             .child(
                 icon_button(
                     &t,
@@ -935,7 +990,20 @@ impl StudioApp {
                     .gap_2()
                     .text_size(px(11.5))
                     .child(div().font_weight(gpui::FontWeight::MEDIUM).child(title))
-                    .child(div().text_color(t.text_muted).child(label)),
+                    .child(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .text_color(t.text_muted)
+                            .child(label),
+                    )
+                    .child(div().flex_1())
+                    .child(self.plot_export_button(
+                        format!("plot-export-{index}"),
+                        super::plot_export::Target::Quadrant(index),
+                        cx,
+                    )),
             )
             .when(
                 self.stage_view.scope == PlotScope::Marked && self.stage != Stage::Fit,

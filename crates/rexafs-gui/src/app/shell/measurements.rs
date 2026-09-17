@@ -22,6 +22,7 @@ mod presets;
 mod recipes;
 mod reliability;
 mod view;
+mod wavelet;
 mod workflow;
 
 pub(crate) struct MeasurementState {
@@ -58,6 +59,11 @@ pub(crate) struct MeasurementState {
     selected_preset: Option<crate::group_identity::GroupId>,
     selected_recipe: Option<(crate::group_identity::GroupId, u64)>,
     preview_data: Option<drag::MeasurementPreview>,
+    wavelet: Option<WaveletTrend>,
+    wavelet_fields: Vec<Entity<NumericField>>,
+    wavelet_preview: Option<wavelet::WaveletPreview>,
+    pub(super) wavelet_drag: Option<usize>,
+    pub(super) wavelet_armed: Option<usize>,
     monitoring: bool,
     recovery_entries: Vec<recovery::RecoveryEntry>,
     recovery_busy: bool,
@@ -100,7 +106,13 @@ impl MeasurementState {
         let definition = selected_run.map(|i| &archive.runs[i].definition);
         let kind = definition
             .map(|d| {
-                if d.edge_energy {
+                if let Some(w) = &d.wavelet {
+                    match w.statistic {
+                        WaveletStatistic::Maximum => 1,
+                        WaveletStatistic::Integral => 2,
+                        WaveletStatistic::Mean => 3,
+                    }
+                } else if d.edge_energy {
                     4
                 } else {
                     match d.measurement.metric {
@@ -126,13 +138,17 @@ impl MeasurementState {
                 .presets
                 .iter()
                 .find(|p| {
-                    p.id == d.id && p.measurement == d.measurement && p.edge_energy == d.edge_energy
+                    p.id == d.id
+                        && p.measurement == d.measurement
+                        && p.edge_energy == d.edge_energy
+                        && p.wavelet == d.wavelet
                 })
                 .map(|p| p.id.clone())
         });
         let selected_recipe = selected_run
             .and_then(|i| archive.runs[i].recipe.as_ref())
             .map(|r| (r.id.clone(), r.revision));
+        let wavelet = definition.and_then(|d| d.wavelet.clone());
         Self {
             archive,
             overview: true,
@@ -167,6 +183,11 @@ impl MeasurementState {
             selected_preset,
             selected_recipe,
             preview_data: None,
+            wavelet,
+            wavelet_fields: Vec::new(),
+            wavelet_preview: None,
+            wavelet_drag: None,
+            wavelet_armed: None,
             monitoring: false,
             recovery_entries: vec![],
             recovery_busy: false,
@@ -300,7 +321,10 @@ impl StudioApp {
 
     fn measurement_definition(&self, cx: &Context<Self>) -> Result<MetricDefinition, String> {
         let kind = self.measurements.kind;
-        let start = if kind == 4 {
+        let wavelet = self.wavelet_trend_definition(cx)?;
+        let start = if let Some(w) = &wavelet {
+            w.k_range[0]
+        } else if kind == 4 {
             0.
         } else {
             self.measurements
@@ -309,7 +333,9 @@ impl StudioApp {
                 .and_then(|f| f.read(cx).value())
                 .ok_or("Enter a point or range start")?
         };
-        let end = if kind == 0 || kind == 4 {
+        let end = if let Some(w) = &wavelet {
+            w.k_range[1]
+        } else if kind == 0 || kind == 4 {
             start + 1.
         } else {
             self.measurements
@@ -342,7 +368,17 @@ impl StudioApp {
                 },
             },
             edge_energy: kind == 4,
+            wavelet: None,
         };
+        if let Some(w) = wavelet {
+            definition.name = format!("Wavelet {}", w.statistic.label().to_lowercase());
+            definition.measurement.space = MeasurementSpace::Chi {
+                kweight: w.transform.kweight,
+            };
+            definition.measurement.origin = AxisOrigin::Absolute;
+            definition.edge_energy = false;
+            definition.wavelet = Some(w);
+        }
         let recipe = self.selected_analysis_recipe();
         if let Some(old) = recipe
             .as_ref()
@@ -432,6 +468,11 @@ impl StudioApp {
         expected: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        if definition.wavelet.is_some() {
+            self.queue_wavelet_trend_preview(input, definition, expected, cx);
+            return;
+        }
+        self.measurements.wavelet_preview = None;
         self.clear_measurement_handles();
         self.measurements.preview_data = None;
         self.measurements.preview_generation += 1;
@@ -604,6 +645,7 @@ impl StudioApp {
             if recipe.as_ref().is_some_and(|r| {
                 r.definition.measurement != definition.measurement
                     || r.definition.edge_energy != definition.edge_energy
+                    || r.definition.wavelet != definition.wavelet
             }) {
                 self.measurements.message = "Recipe choices are frozen. Save a new recipe to use the edited measurement, or choose Group settings.".into();
                 cx.notify();

@@ -1936,6 +1936,14 @@ export class WaveletMap {
   /** Integrate native bilinear magnitude over a covered k/R rectangle. Display
    * sampling never participates; invalid bounds throw. No uncertainty is inferred. */
   integral(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
+  /** Area-weighted mean of native bilinear magnitude (unreleased), not an average
+   * of cells. k is Å⁻¹ and R is Å. Increasing, fully covered ranges are required;
+   * invalid bounds throw. Returns units/method without inferred uncertainty. */
+  mean(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
+  /** Maximum native bilinear magnitude, including rectangle boundaries
+   * (unreleased). k is Å⁻¹ and R is Å; increasing, fully covered ranges are
+   * required. Returns units/method without inferred uncertainty. */
+  maximum(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
   /** Fresh independent settings; release them with free() after use. */ readonly definition: Wavelet;
   /** Original processing metadata, or null for a direct array calculation. */ readonly preparation: WaveletPreparation | null;
   /** Interpretation and boundary diagnostics, not confidence intervals. */ readonly warnings: string[];
@@ -1945,13 +1953,13 @@ export class WaveletMap {
   static from_json(json: string): WaveletMap;
   /** Release the native map. Previously returned array copies remain valid. */ free(): void;
 }
-/** Native covered-rectangle magnitude integral; units are those of k**weight * χ. */
+/** Native covered-rectangle magnitude statistic; method identifies integral, mean or maximum. Units are those of k**weight * χ. */
 export interface WaveletRegionValue {
-  /** Full-native-grid integral; no experimental uncertainty is supplied. */ value: number;
+  /** Native region statistic; no experimental uncertainty is supplied. */ value: number;
   /** Exact inclusive k bounds, in Å⁻¹. */ k_range: [number, number];
   /** Exact inclusive R bounds, in Å. */ r_range: [number, number];
   /** Integral units including k weight. */ unit: string;
-  /** Quadrature convention, currently bilinear_magnitude_v1. */ method: string;
+  /** Numerical convention: bilinear_magnitude_v1 (integral), bilinear_magnitude_mean_v1 or bilinear_magnitude_maximum_v1. */ method: string;
 }
 
 /** Acquisition interpretation (unreleased). Unknown means missing evidence, not

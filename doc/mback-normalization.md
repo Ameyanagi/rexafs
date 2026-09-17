@@ -66,25 +66,34 @@ models a smooth background; it does not correct fluorescence over-absorption.
 
 ## Desktop workflow (unreleased)
 
-In **Normalize**, choose **MBACK…**, enter the absorber and edge, then select
-**Preview**. A declared absorber/edge in the source header is shown as an editable
-suggestion; otherwise enter it explicitly. The desktop does not infer a compound
-formula from the absorber. **Norm**, **Flat**, **Atomic match** and
-**Residual** show the calculated representation, reference/background agreement
-and the unweighted residual. Shaded intervals in the atomic views identify points
-used in the fit; the intervening near-edge structure is excluded from the objective.
+In **Normalize**, choose **Polynomial** or **MBACK** at the top of the parameter
+sidebar. Selecting MBACK replaces the method-specific controls in that same
+sidebar; it keeps the ordinary normalization plot and range handles visible.
+A declared absorber and edge in the source header supply editable starting
+values and allow MBACK to run immediately. Without them, enter the absorber and
+edge explicitly, then choose **Apply**. The desktop does not infer a compound
+formula from the absorber. Changed identity or erfc settings also use **Apply**;
+a failed calculation leaves the active pipeline unchanged. Switching spectra,
+undoing a method change or resetting settings refreshes the method controls.
 
-Choose **Use MBACK** to apply the settings. The atomic-data identity and resolved
-starting intervals become part of the pipeline settings. In the regular Normalize
-plot, drag the same blue/yellow range handles used by polynomial normalization.
-All four numeric bounds remain offsets from E₀ and display automatic values to
-one decimal place. The polynomial-order control sets the MBACK background degree.
-Edge-step overrides and the Victoreen exponent are hidden because MBACK does not
-use them. **Erfc background** opens the optional line and bounded-width/amplitude
-settings; no fluorescence geometry is inferred by this term.
+**Atomic match…** opens an optional diagnostic view within Normalize. **Norm**,
+**Flat**, **Atomic match** and **Residual** show the calculated representation,
+reference/background agreement and the unweighted residual. Shaded intervals
+in the atomic views identify points used in the fit; the intervening near-edge
+structure is excluded from the objective. **← Normalize** returns to the ordinary
+plot. Editing and applying the method does not require this diagnostic view.
+
+The atomic-data identity and resolved starting intervals become part of the
+pipeline settings. In the ordinary Normalize plot, drag the same blue/yellow
+range handles used by polynomial normalization. All four numeric bounds remain
+offsets from E₀ and display automatic values to one decimal place. The
+polynomial-order control sets the MBACK background degree. Edge-step overrides
+and the Victoreen exponent are hidden because MBACK does not use them.
+**Erfc background** opens the optional line and bounded-width/amplitude settings;
+no fluorescence geometry is inferred by this term.
 
 Changing method preserves the previous successful normalization in an immutable
-local artifact before changing the pipeline. **Compare methods** retains the
+local artifact before changing the pipeline. **Compare methods…** retains the
 current result and overlays it with the most recently saved other method for the
 same group and identical input arrays. This compares independently calculated
 results; it does not rerun the earlier method using the new settings. **Export
@@ -173,6 +182,13 @@ selection before they can calculate new output. A failed standalone normalizatio
 clears its cached arrays instead of leaving a stale successful result visible.
 
 ## Reference data and validation
+
+The [experimental comparison set](../crates/rexafs/tests/fixtures/analysis/experimental-larch/README.md)
+adds two measured Cu foils and an Aichi RuO₂ scan from the existing attributed
+corpus. Six tests check MBACK and wavelet separately; MBACK compares full curves,
+fit sample indices, coefficients, scale, edge step and objective under explicit
+matched settings. The record gives measured differences, licenses and limits.
+These are experimental inputs, distinct from the earlier synthetic coverage below.
 
 The [offline data record](../crates/rexafs/data/atomic/README.md) documents XrayDB,
 licenses, checksums, interpolation and coverage. Neither runtime tests nor fitting

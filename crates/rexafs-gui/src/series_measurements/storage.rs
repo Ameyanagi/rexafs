@@ -31,7 +31,7 @@ struct StoredRow<'a> {
     input_revision: &'a Option<String>,
     settings: usize,
     status: FrameStatus,
-    result: &'a Option<MeasurementResult>,
+    result: &'a Option<MetricValue>,
     reason: &'a Option<String>,
     preparation: &'a serde_json::Value,
 }
@@ -98,7 +98,7 @@ struct OwnedRow {
     input_revision: Option<String>,
     settings: usize,
     status: FrameStatus,
-    result: Option<MeasurementResult>,
+    result: Option<MetricValue>,
     reason: Option<String>,
     preparation: serde_json::Value,
 }

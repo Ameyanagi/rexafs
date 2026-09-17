@@ -132,6 +132,19 @@ fn wavelet_region_integral_uses_the_bilinear_scientific_surface() {
         + 0.05 * (kb * kb - ka * ka) * (rb * rb - ra * ra);
     let metric = map.integral(ka..=kb, ra..=rb).unwrap();
     assert!((metric.value - expected).abs() < 1e-10);
+    let mean = map.mean(ka..=kb, ra..=rb).unwrap();
+    assert!((mean.value - expected / ((kb - ka) * (rb - ra))).abs() < 1e-10);
+    assert_eq!(mean.method, "bilinear_magnitude_mean_v1");
+    let maximum = map.maximum(ka..=kb, ra..=rb).unwrap();
+    assert!((maximum.value - (2. + kb + 3. * rb + 0.2 * kb * rb)).abs() < 1e-10);
+    assert_eq!(maximum.k_range, [ka, kb]);
+    assert_eq!(maximum.r_range, [ra, rb]);
+    assert_eq!(maximum.method, "bilinear_magnitude_maximum_v1");
+    assert!(map.mean(kb..=ka, ra..=rb).is_err());
+    assert!(map.maximum(ka..=kb, rb..=ra).is_err());
+    assert!(map.mean(ka..=kb, 0. ..=rb).is_err());
+    assert!(map.maximum(0. ..=kb, ra..=rb).is_err());
+    assert!(map.maximum(f64::NAN..=kb, ra..=rb).is_err());
     for (i, &k) in map.k().iter().enumerate() {
         assert!((map.slice_at_r(ra).unwrap()[i] - (2. + k + 3. * ra + 0.2 * k * ra)).abs() < 1e-10);
     }

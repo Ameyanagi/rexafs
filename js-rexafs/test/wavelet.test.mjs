@@ -18,6 +18,11 @@ test("native wavelet reference, row-major arrays, ownership and saved replay",()
     assert.equal(model.estimate(k).cells,map.real.length);
     const region=map.integral([1,3],[.2,1]),saved=map.to_json();assert.ok(region.value>0);
     assert.equal(region.method,"bilinear_magnitude_v1");
+    const mean=map.mean([1,3],[.2,1]),maximum=map.maximum([1,3],[.2,1]);
+    close(mean.value,region.value/1.6,1e-12);assert.ok(maximum.value>=mean.value);
+    assert.equal(mean.method,"bilinear_magnitude_mean_v1");
+    assert.equal(maximum.method,"bilinear_magnitude_maximum_v1");
+    for(const method of ["mean","maximum"]) assert.throws(()=>map[method]([0,100],[.2,1]));
     const copied=map.real;copied.fill(999);chi.fill(999);
     assert.deepEqual(Array.from(map.input_chi),c.chi);assert.equal(map.to_json(),saved);
     const restored=WaveletMap.from_json(saved),definition=map.definition,replay=definition.calculate(map.input_k,map.input_chi);
@@ -47,6 +52,7 @@ test("browser initialization, phase mask, invalid coverage and malformed maps",a
   await init(await readFile(new URL("../dist/web/rexafs_wasm_bg.wasm",import.meta.url)));
   const k=Float64Array.from({length:101},(_,i)=>i*.1),model=new BrowserWavelet([1,9]),map=model.calculate(k,new Float64Array(k.length));
   assert.ok(map.phase().every(Number.isNaN));assert.equal(map.integral([2,8],[1,3]).value,0);
+  assert.equal(map.mean([2,8],[1,3]).value,0);assert.equal(map.maximum([2,8],[1,3]).value,0);
   assert.throws(()=>map.phase(2));assert.throws(()=>map.integral([0,3],[1,3]));
   assert.throws(()=>new BrowserWavelet([1,9],{typo:2}),/Unknown/);
   assert.throws(()=>new BrowserWavelet([1,9],{rmax:NaN}),/finite/);

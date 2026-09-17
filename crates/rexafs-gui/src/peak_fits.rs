@@ -159,6 +159,7 @@ pub fn preparation_definition(model: &PeakFit) -> MetricDefinition {
         name: "Peak fit".into(),
         measurement,
         edge_energy: false,
+        wavelet: None,
     }
 }
 

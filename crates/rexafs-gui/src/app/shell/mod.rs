@@ -46,6 +46,7 @@ mod path_diagnostics;
 pub mod path_picker;
 pub(crate) mod path_routing;
 pub(crate) mod peaks;
+pub(crate) mod plot_export;
 pub(crate) mod publish;
 pub mod series;
 mod spectrum_colors;

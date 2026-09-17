@@ -115,7 +115,7 @@ impl Tool {
 
     fn fields(self) -> &'static [ToolField] {
         match self {
-            Tool::Align => &[ToolField::WinLo, ToolField::WinHi],
+            Tool::Align => &[ToolField::WinLo, ToolField::WinHi, ToolField::ManualShift],
             Tool::Calibrate => &[ToolField::Target],
             Tool::Deglitch => &[ToolField::ELo, ToolField::EHi],
             Tool::Truncate => &[ToolField::Before, ToolField::After],
@@ -140,6 +140,7 @@ impl Tool {
 
     fn apply_label(self) -> &'static str {
         match self {
+            Tool::Align => "Apply offset",
             Tool::Lcf => "Fit",
             Tool::Pca => "Train + target transform",
             Tool::Mcr => "Resolve components",
@@ -152,6 +153,7 @@ impl Tool {
 pub enum ToolField {
     WinLo,
     WinHi,
+    ManualShift,
     Target,
     ELo,
     EHi,
@@ -207,9 +209,10 @@ mod analysis_range_tests {
 }
 
 impl ToolField {
-    const ALL: [ToolField; 17] = [
+    const ALL: [ToolField; 18] = [
         ToolField::WinLo,
         ToolField::WinHi,
+        ToolField::ManualShift,
         ToolField::Target,
         ToolField::ELo,
         ToolField::EHi,
@@ -231,6 +234,7 @@ impl ToolField {
         match self {
             ToolField::WinLo => ("window start (eV rel. E₀)", "-50", Some(-50.0)),
             ToolField::WinHi => ("window end (eV rel. E₀)", "100", Some(100.0)),
+            ToolField::ManualShift => ("manual shift (eV)", "0", Some(0.0)),
             ToolField::Target => ("target E₀ (eV)", "e.g. 22117", None),
             ToolField::ELo => ("from (eV)", "energy", None),
             ToolField::EHi => ("to (eV)", "energy", None),
@@ -288,7 +292,7 @@ pub struct ToolState {
     preview_key: Option<ToolPreviewKey>,
     pub(super) preview_plot: Option<Entity<ruviz_gpui::RuvizPlot>>,
     pub(super) preview_message: String,
-    preview_running: bool,
+    pub(super) preview_running: bool,
     preview_error: Option<String>,
 
     target: Option<ToolTarget>,
@@ -341,10 +345,23 @@ fn process_tool(
                 let (ref_name, reference) = standard.ok_or("Choose a standard")?;
                 let lo = value(ToolField::WinLo).unwrap_or(-50.0);
                 let hi = value(ToolField::WinHi).unwrap_or(100.0);
-                let shift = sp
+                let manual = value(ToolField::ManualShift).unwrap_or(0.0);
+                if !lo.is_finite() || !hi.is_finite() || lo >= hi {
+                    return Err("Enter an increasing, finite alignment window".into());
+                }
+                if !manual.is_finite() {
+                    return Err("Manual shift must be finite".into());
+                }
+                let automatic = sp
                     .align_to(reference, (lo, hi))
                     .map_err(|e| e.to_string())?;
-                operation.parameters = serde_json::json!({"window_relative_e0_ev": [lo, hi]});
+                sp.shift_energy(manual);
+                let shift = automatic + manual;
+                operation.parameters = serde_json::json!({
+                    "window_relative_e0_ev": [lo, hi],
+                    "automatic_shift_ev": automatic,
+                    "manual_shift_ev": manual
+                });
                 operation.applied_energy_shift_ev = shift;
                 format!("align: {name} → {ref_name} ({shift:+.2} eV)")
             }
@@ -628,6 +645,30 @@ fn materialize_tool_output(
     })
 }
 
+fn aligned_parameters(
+    params: &PipelineParams,
+    operation: &Operation,
+) -> Result<PipelineParams, String> {
+    let mut after = params.clone();
+    after.set_energy_offset(params.energy_offset_ev + operation.applied_energy_shift_ev)?;
+    let number = |key| {
+        operation.parameters[key]
+            .as_f64()
+            .ok_or_else(|| format!("Missing alignment {key}"))
+    };
+    let window = serde_json::from_value(operation.parameters["window_relative_e0_ev"].clone())
+        .map_err(|e| format!("Invalid alignment window: {e}"))?;
+    after.alignment_record = Some(crate::params::AlignmentRecord {
+        inputs: operation.inputs.clone(),
+        window_relative_e0_ev: window,
+        automatic_shift_ev: number("automatic_shift_ev")?,
+        manual_shift_ev: number("manual_shift_ev")?,
+        offset_before_ev: params.energy_offset_ev,
+        offset_after_ev: after.energy_offset_ev,
+    });
+    Ok(after)
+}
+
 fn calibrate_from_standard(
     target: &mut XASSpectrum,
     standard: &XASSpectrum,
@@ -785,6 +826,11 @@ impl StudioApp {
                     let (label, placeholder, default) = f.spec();
                     let field = cx.new(|cx| {
                         NumericField::new(label, placeholder, default, FieldKind::Float, theme, cx)
+                            .with_step(if f == ToolField::ManualShift {
+                                0.1
+                            } else {
+                                1.0
+                            })
                     });
                     cx.subscribe(&field, |this: &mut Self, _f, event, cx| match event {
                         FieldEvent::Invalid(message) => {
@@ -1300,8 +1346,19 @@ impl StudioApp {
         }
         self.tools.preview_request += 1;
         let request = self.tools.preview_request;
+        let retain_alignment = key
+            .as_ref()
+            .zip(self.tools.preview_key.as_ref())
+            .is_some_and(|(new, old)| {
+                new.tool == Tool::Align
+                    && old.tool == Tool::Align
+                    && new.target == old.target
+                    && new.standard == old.standard
+            });
         self.tools.preview_key = key.clone();
-        self.tools.preview_plot = None;
+        if !retain_alignment {
+            self.tools.preview_plot = None;
+        }
         self.tools.preview_error = None;
         self.tools.preview_message.clear();
         self.tools.preview_running = key.is_some();
@@ -1314,6 +1371,7 @@ impl StudioApp {
             _ => None,
         };
         let theme = self.theme;
+        let current_offset = self.ui_params().energy_offset_ev;
         let job_key = key.clone();
         let job = cx.background_executor().spawn(async move {
             let standard_name = job_key
@@ -1322,7 +1380,7 @@ impl StudioApp {
                 .map(|t| t.label.as_str())
                 .unwrap_or("");
             let standard = standard.as_deref().map(|s| (standard_name, s));
-            let (after, _, label) = process_tool(
+            let (after, operation, label) = process_tool(
                 job_key.tool,
                 &source,
                 standard,
@@ -1335,8 +1393,33 @@ impl StudioApp {
                 &after,
                 standard,
                 job_key.tool == Tool::Difference,
+                (job_key.tool == Tool::Align).then(|| {
+                    let value = |field, default| {
+                        job_key
+                            .values
+                            .iter()
+                            .find(|(f, _)| *f == field)
+                            .and_then(|(_, v)| *v)
+                            .unwrap_or(default)
+                    };
+                    (value(ToolField::WinLo, -50.), value(ToolField::WinHi, 100.))
+                }),
                 &theme,
             )?;
+            let label = if job_key.tool == Tool::Align {
+                format!(
+                    "Auto {:+.2} + manual {:+.1} → offset {:+.2} eV",
+                    operation.parameters["automatic_shift_ev"]
+                        .as_f64()
+                        .unwrap_or(0.),
+                    operation.parameters["manual_shift_ev"]
+                        .as_f64()
+                        .unwrap_or(0.),
+                    current_offset + operation.applied_energy_shift_ev
+                )
+            } else {
+                label
+            };
             Ok::<_, String>((plot, label))
         });
         cx.spawn(async move |this, cx| {
@@ -1409,6 +1492,34 @@ impl StudioApp {
         let result = process_tool(tool, &source, standard, &name, &values, inputs);
         match result {
             Ok((sp, operation, label)) => {
+                if tool == Tool::Align {
+                    if self.refuse_frozen_edit(cx) {
+                        return;
+                    }
+                    let Some(target) = self.current_group_index() else {
+                        return;
+                    };
+                    let before = self.ui_params().clone();
+                    let after = match aligned_parameters(&before, &operation) {
+                        Ok(after) => after,
+                        Err(error) => {
+                            self.tools.message = error.into();
+                            cx.notify();
+                            return;
+                        }
+                    };
+                    let offset = after.energy_offset_ev;
+                    self.apply_params_to(Some(target), after.clone());
+                    self.record_param_edit(Some(target), None, before, after, label);
+                    self.tools.open = None;
+                    self.tools.preview_plot = None;
+                    self.ui.sections.remove("source-details-closed");
+                    self.sync_param_fields(cx);
+                    self.status = format!("Energy offset {offset:+.2} eV").into();
+                    self.schedule_recompute(cx);
+                    cx.notify();
+                    return;
+                }
                 let derived = match materialize_tool_output(
                     tool,
                     label.clone(),
@@ -1513,10 +1624,6 @@ impl StudioApp {
                 super::button(&self.theme, "open-peak-analysis", "XANES peak fit…", false)
                     .on_click(cx.listener(|app, _, _, cx| app.open_peaks(cx))),
             )
-            .child(
-                super::button(&self.theme, "open-wavelet", "Wavelet…", false)
-                    .on_click(cx.listener(|app, _, _, cx| app.open_wavelet(cx))),
-            )
             .child(self.tool_list(&Tool::ANALYSIS, cx))
     }
 
@@ -1587,7 +1694,11 @@ impl StudioApp {
                             .py_1()
                             .text_size(px(11.))
                             .text_color(t.text_muted)
-                            .child("1 target → 1 new group"),
+                            .child(if tool == Tool::Align {
+                                "Adjust current spectrum · original data retained"
+                            } else {
+                                "1 target → 1 new group"
+                            }),
                     );
                 }
                 for field in tool.fields() {
@@ -2943,6 +3054,104 @@ mod tool_readiness_tests {
         let mut sp = XASSpectrum::new();
         sp.set_spectrum(energy, mu);
         sp
+    }
+
+    #[test]
+    fn alignment_manual_shift_is_additive_and_records_provenance() {
+        let source = edge(110.0);
+        let reference = edge(100.0);
+        let before = (
+            source.energy.clone(),
+            source.mu.clone(),
+            reference.energy.clone(),
+        );
+        let values = [
+            (ToolField::WinLo, Some(-5.0)),
+            (ToolField::WinHi, Some(5.0)),
+        ];
+        let (automatic, auto_operation, _) = process_tool(
+            Tool::Align,
+            &source,
+            Some(("reference", &reference)),
+            "source",
+            &values,
+            vec![],
+        )
+        .unwrap();
+        for manual in [-0.4, 0.3] {
+            let mut values = values.to_vec();
+            values.push((ToolField::ManualShift, Some(manual)));
+            let (result, operation, _) = process_tool(
+                Tool::Align,
+                &source,
+                Some(("reference", &reference)),
+                "source",
+                &values,
+                vec![],
+            )
+            .unwrap();
+            assert!(
+                (operation.applied_energy_shift_ev
+                    - auto_operation.applied_energy_shift_ev
+                    - manual)
+                    .abs()
+                    < 1e-12
+            );
+            assert_eq!(operation.parameters["manual_shift_ev"], manual);
+            assert_eq!(
+                operation.parameters["automatic_shift_ev"],
+                auto_operation.applied_energy_shift_ev
+            );
+            for (a, b) in automatic
+                .energy
+                .as_ref()
+                .unwrap()
+                .iter()
+                .zip(result.energy.as_ref().unwrap().iter())
+            {
+                assert!((b - a - manual).abs() < 1e-12);
+            }
+            assert_eq!(result.mu, source.mu);
+            let initial = PipelineParams {
+                energy_offset_ev: 1.0,
+                ..Default::default()
+            };
+            let mut settings = aligned_parameters(&initial, &operation).unwrap();
+            assert!(
+                (settings.energy_offset_ev - 1.0 - operation.applied_energy_shift_ev).abs() < 1e-12
+            );
+            let receipt = settings.alignment_record.clone();
+            assert_eq!(receipt.as_ref().unwrap().manual_shift_ev, manual);
+            settings.set_energy_offset(0.0).unwrap();
+            assert_eq!(settings.alignment_record, receipt);
+        }
+        assert_eq!(
+            (
+                source.energy.clone(),
+                source.mu.clone(),
+                reference.energy.clone()
+            ),
+            before
+        );
+        for (field, bad) in [(ToolField::ManualShift, f64::NAN), (ToolField::WinHi, -6.0)] {
+            let values: Vec<_> = values
+                .iter()
+                .copied()
+                .filter(|(f, _)| *f != field)
+                .chain([(field, Some(bad))])
+                .collect();
+            assert!(
+                process_tool(
+                    Tool::Align,
+                    &source,
+                    Some(("reference", &reference)),
+                    "source",
+                    &values,
+                    vec![]
+                )
+                .is_err()
+            );
+        }
     }
 
     #[test]

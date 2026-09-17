@@ -52,6 +52,66 @@ fn specimen(dir: &Path) -> ProjectFile {
 }
 
 #[test]
+fn energy_offset_and_alignment_history_survive_project_roundtrip_and_zero() {
+    use crate::params::{AlignmentRecord, DerivedSpectrum, OperationInput};
+    let temp = Temp::new();
+    let mut params = PipelineParams::default();
+    params.set_energy_offset(3.4).unwrap();
+    params.alignment_record = Some(AlignmentRecord {
+        inputs: vec![OperationInput {
+            label: "Cu reference".into(),
+            group_id: None,
+            path: PathBuf::new(),
+            derived_id: Some(2),
+            fingerprint: 0,
+            size: None,
+        }],
+        window_relative_e0_ev: [-50.0, 100.0],
+        automatic_shift_ev: 3.0,
+        manual_shift_ev: 0.4,
+        offset_before_ev: 0.0,
+        offset_after_ev: 3.4,
+    });
+    let group = DerivedSpectrum {
+        id: 1,
+        label: "Cu test".into(),
+        energy: vec![8970.0, 8980.0, 8990.0],
+        mu: vec![0.0, 0.5, 1.0],
+        params: Some(params.clone()),
+        ..Default::default()
+    };
+    let project = ProjectFile {
+        derived: vec![group.clone()],
+        ..Default::default()
+    };
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let file = temp.join("energy-offset.rxs");
+        save_with_storage(&file, &project, mode).unwrap();
+        let mut loaded = load(&file).unwrap();
+        let restored = &mut loaded.derived[0];
+        assert_eq!(restored.energy, group.energy);
+        assert_eq!(restored.mu, group.mu);
+        assert!(restored.params.as_ref().unwrap() == &params);
+        assert_eq!(
+            restored.raw(&params).unwrap().0,
+            vec![8973.4, 8983.4, 8993.4]
+        );
+        restored
+            .params
+            .as_mut()
+            .unwrap()
+            .set_energy_offset(0.0)
+            .unwrap();
+        save_with_storage(&file, &loaded, mode).unwrap();
+        let reset = load(&file).unwrap();
+        let reset_group = &reset.derived[0];
+        let reset_params = reset_group.params.as_ref().unwrap();
+        assert_eq!(reset_group.raw(reset_params).unwrap().0, group.energy);
+        assert_eq!(reset_params.alignment_record, params.alignment_record);
+    }
+}
+
+#[test]
 fn joint_materialized_groups_keep_empty_locators_on_save_and_reopen() {
     let temp = Temp::new();
     let mut project = specimen(&temp.join("source"));

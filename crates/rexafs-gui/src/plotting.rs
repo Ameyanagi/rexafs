@@ -15,6 +15,7 @@ use ruviz::render::{Color, LineStyle};
 
 use crate::theme::Theme;
 
+mod alignment;
 pub(crate) mod analysis;
 
 fn vecs(v: &nalgebra::DVector<f64>) -> Vec<f64> {
@@ -223,6 +224,7 @@ pub enum SeriesKey {
 }
 
 /// One series: identity + style (structure) and its current values.
+#[derive(Clone)]
 pub struct SeriesSpec {
     pub key: SeriesKey,
     pub x: Vec<f64>,
@@ -242,6 +244,7 @@ pub struct SeriesSource {
 
 /// Everything a quadrant shows, split into structure (labels, series
 /// identities and styles, guide lines) and reactive values.
+#[derive(Clone)]
 pub struct QuadrantSpec {
     pub title: String,
     pub xlabel: String,
@@ -294,6 +297,33 @@ impl PlotCoverage {
 }
 
 impl QuadrantSpec {
+    /// Keep only appearance metadata; live arrays remain in their existing observables.
+    pub(crate) fn export_template(&self) -> Self {
+        Self {
+            title: self.title.clone(),
+            xlabel: self.xlabel.clone(),
+            ylabel: self.ylabel.clone(),
+            series: self
+                .series
+                .iter()
+                .map(|s| SeriesSpec {
+                    key: s.key,
+                    x: Vec::new(),
+                    y: Vec::new(),
+                    width: s.width,
+                    color: s.color,
+                    dashed: s.dashed,
+                    label: s.label.clone(),
+                })
+                .collect(),
+            vlines: self.vlines.clone(),
+            legend_columns: self.legend_columns,
+            grid: self.grid,
+            xlim: self.xlim,
+            ylim: self.ylim,
+        }
+    }
+
     pub(crate) fn coverage(&self, total: usize, sampled: usize, loaded: usize) -> PlotCoverage {
         let plotted = self
             .series
@@ -1623,8 +1653,18 @@ pub(crate) fn build_tool_preview(
     after: &XASSpectrum,
     standard: Option<(&str, &XASSpectrum)>,
     difference: bool,
+    alignment_window: Option<(f64, f64)>,
     theme: &Theme,
 ) -> Result<Plot, String> {
+    if let Some(window) = alignment_window {
+        return alignment::build(
+            before,
+            after,
+            standard.ok_or("Choose a standard")?,
+            window,
+            theme,
+        );
+    }
     let bx = before.energy.as_ref().ok_or("Target has no energy grid")?;
     let by = if difference {
         before.norm()

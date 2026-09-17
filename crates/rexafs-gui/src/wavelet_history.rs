@@ -75,6 +75,34 @@ impl WaveletArchive {
             self.entries.push(receipt);
         }
     }
+    /// Coalesce this session's previews without removing loaded historical maps
+    /// or maps referenced by historical region measurements.
+    pub fn insert_preview(
+        &mut self,
+        receipt: WaveletReceipt,
+        previews: &mut std::collections::HashMap<GroupId, String>,
+    ) {
+        let existed = self
+            .entries
+            .iter()
+            .any(|r| r.group == receipt.group && r.digest == receipt.digest);
+        let previous = previews.remove(&receipt.group);
+        if let Some(digest) = &previous {
+            self.entries.retain(|r| {
+                r.group != receipt.group
+                    || r.digest != *digest
+                    || self
+                        .regions
+                        .iter()
+                        .any(|region| region.map_digest == r.digest)
+            });
+        }
+        if !existed || previous.as_deref() == Some(&receipt.digest) {
+            previews.insert(receipt.group.clone(), receipt.digest.clone());
+        }
+        self.insert(receipt);
+    }
+
     pub fn relocate(
         &mut self,
         f: &mut impl FnMut(&Path) -> Result<PathBuf, String>,
@@ -89,6 +117,44 @@ impl WaveletArchive {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn automatic_previews_keep_one_per_group_and_preserve_loaded_history() {
+        let group = GroupId::new_result();
+        let receipt = |digest: &str| WaveletReceipt {
+            group: group.clone(),
+            label: "Cu".into(),
+            settings: Default::default(),
+            definition: rexafs::Wavelet::new(2. ..=12.),
+            path: PathBuf::from(digest),
+            digest: digest.into(),
+        };
+        let mut archive = WaveletArchive::default();
+        archive.insert(receipt("historical"));
+        let mut previews = std::collections::HashMap::new();
+        // A recalculation identical to a loaded map must not take ownership of it.
+        archive.insert_preview(receipt("historical"), &mut previews);
+        archive.insert_preview(receipt("first-preview"), &mut previews);
+        archive.insert_preview(receipt("last-preview"), &mut previews);
+        assert_eq!(
+            archive
+                .entries
+                .iter()
+                .map(|r| r.digest.as_str())
+                .collect::<Vec<_>>(),
+            ["historical", "last-preview"]
+        );
+        archive.insert_preview(receipt("historical"), &mut previews);
+        archive.insert_preview(receipt("new-preview"), &mut previews);
+        assert_eq!(
+            archive
+                .entries
+                .iter()
+                .map(|r| r.digest.as_str())
+                .collect::<Vec<_>>(),
+            ["historical", "new-preview"]
+        );
+    }
+
     #[test]
     fn embedded_maps_and_regions_survive_missing_cache_and_verify_identity() {
         let dir = tempfile::tempdir().unwrap();

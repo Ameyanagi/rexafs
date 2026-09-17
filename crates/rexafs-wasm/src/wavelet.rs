@@ -123,6 +123,16 @@ impl WasmWaveletMap {
     pub fn slice_at_k(&self, k: f64) -> Result<Vec<f64>, JsValue> {
         self.inner.slice_at_k(k).map_err(error)
     }
+    /// Area-weighted native magnitude mean over a fully covered rectangle.
+    /// k is inverse angstroms and R is angstroms; invalid bounds fail.
+    pub fn mean_json(&self, k0: f64, k1: f64, r0: f64, r1: f64) -> Result<String, JsValue> {
+        serde_json::to_string(&self.inner.mean(k0..=k1, r0..=r1).map_err(error)?).map_err(error)
+    }
+    /// Native bilinear magnitude maximum, including clipped cell boundaries.
+    /// k is inverse angstroms and R is angstroms; invalid bounds fail.
+    pub fn maximum_json(&self, k0: f64, k1: f64, r0: f64, r1: f64) -> Result<String, JsValue> {
+        serde_json::to_string(&self.inner.maximum(k0..=k1, r0..=r1).map_err(error)?).map_err(error)
+    }
     /// Exact covered-rectangle integral of native bilinear magnitude, with units/provenance.
     pub fn integral_json(&self, k0: f64, k1: f64, r0: f64, r1: f64) -> Result<String, JsValue> {
         serde_json::to_string(&self.inner.integral(k0..=k1, r0..=r1).map_err(error)?).map_err(error)

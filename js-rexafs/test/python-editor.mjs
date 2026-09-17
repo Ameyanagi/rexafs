@@ -42,6 +42,7 @@ spectrum.measure("point", 10.)
 wavelet = Wavelet((2.,12.), kweight=2)
 wavelet_map = spectrum.wavelet(wavelet)
 print(wavelet_map.real[0,0], wavelet_map.shape, wavelet_map.integral((4.,10.),(1.,3.)).value)
+print(wavelet_map.mean((4.,10.),(1.,3.)).value, wavelet_map.maximum((4.,10.),(1.,3.)).value)
 print(WaveletMap.from_json(wavelet_map.to_json()).warnings)
 atomic = MBack("Cu", "K", pre_edge=(-200., -50.), post_edge=(100., 800.), erfc=MbackErfc("Ka1", width=(500.,1500.), amplitude=(0.,10.)))
 normalized = atomic.fit([1.,2.], [1.,2.])
@@ -174,7 +175,8 @@ XrayFFTF(window="")
   const waveletPosition=(line,character)=>({textDocument:{uri:waveletUri},position:{line,character}});
   assert.match(JSON.stringify(await request("textDocument/hover",waveletPosition(3,4))),/native bilinear/);
   const waveletMethods=await request("textDocument/completion",waveletPosition(4,2));
-  assert.ok((waveletMethods.items??waveletMethods).some(x=>x.label==="slice_at_r"));
+  for (const name of ["slice_at_r", "mean", "maximum"])
+    assert.ok((waveletMethods.items??waveletMethods).some(x=>x.label===name));
   // Keep constructor completion separate from the deliberately incomplete member access.
   const waveletConstructorText = 'from rexafs import Wavelet\nWavelet((2.,12.), r';
   const waveletConstructorUri = pathToFileURL(join(directory,"wavelet_constructor.py")).href;

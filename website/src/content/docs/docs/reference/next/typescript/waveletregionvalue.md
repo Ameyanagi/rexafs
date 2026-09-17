@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Native covered-rectangle magnitude integral; units are those of k**weight * χ.
+Native covered-rectangle magnitude statistic; method identifies integral, mean or maximum. Units are those of k**weight * χ.
 
 ## value
 
@@ -19,7 +19,7 @@ Native covered-rectangle magnitude integral; units are those of k**weight * χ.
 value: number;
 ```
 
-Full-native-grid integral; no experimental uncertainty is supplied.
+Native region statistic; no experimental uncertainty is supplied.
 
 ## k_range
 
@@ -51,4 +51,4 @@ Integral units including k weight.
 method: string;
 ```
 
-Quadrature convention, currently bilinear_magnitude_v1.
+Numerical convention: bilinear_magnitude_v1 (integral), bilinear_magnitude_mean_v1 or bilinear_magnitude_maximum_v1.

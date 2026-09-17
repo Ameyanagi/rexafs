@@ -123,12 +123,12 @@ impl TryFrom<MapData> for WaveletMap {
     }
 }
 
-/// Integral of the bilinear surface through native magnitude samples.
+/// Region statistic of the bilinear surface through native magnitude samples.
 /// k units (Å⁻¹) times R units (Å) cancel; result units equal those of k^weight χ.
 /// No display texture, phase integral or error estimate participates.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WaveletRegionValue {
-    /// Complete-rectangle integral of |W| dk dR, finite and nonnegative.
+    /// Finite, nonnegative magnitude statistic; `method` identifies the operation.
     pub value: f64,
     /// Exact requested k bounds (Å⁻¹).
     pub k_range: [f64; 2],
@@ -136,7 +136,8 @@ pub struct WaveletRegionValue {
     pub r_range: [f64; 2],
     /// Explicit units, including selected k weight.
     pub unit: String,
-    /// Numerical convention, currently `bilinear_magnitude_v1`.
+    /// Numerical convention: `bilinear_magnitude_v1` for an integral, or
+    /// `bilinear_magnitude_mean_v1` / `bilinear_magnitude_maximum_v1`.
     pub method: String,
 }
 impl WaveletMap {
@@ -298,6 +299,65 @@ impl WaveletMap {
                 format!("Å^-{}", self.settings().kweight)
             },
             method: "bilinear_magnitude_v1".into(),
+        })
+    }
+
+    /// Area-weighted mean of native |W| in a k–R rectangle (unreleased).
+    /// Divides [`Self::integral`] by Δk ΔR, rather than averaging grid cells;
+    /// therefore nonuniform R sampling does not bias the mean. k is Å⁻¹ and R
+    /// is Å. Both ranges must be finite, increasing and completely covered.
+    /// Units are those of k^weight χ; display sampling and colors have no effect.
+    pub fn mean(
+        &self,
+        k: RangeInclusive<f64>,
+        r: RangeInclusive<f64>,
+    ) -> Result<WaveletRegionValue> {
+        let area = (k.end() - k.start()) * (r.end() - r.start());
+        let mut result = self.integral(k, r)?;
+        result.value /= area;
+        if !result.value.is_finite() {
+            return Err(invalid("wavelet mean overflowed"));
+        }
+        result.method = "bilinear_magnitude_mean_v1".into();
+        Ok(result)
+    }
+
+    /// Maximum of the bilinear native |W| surface in a k–R rectangle (unreleased).
+    /// Includes interpolated rectangle edges and corners, not just enclosed grid
+    /// samples. A bilinear cell reaches its maximum at a corner. k is Å⁻¹ and R
+    /// is Å; ranges must be finite, increasing and fully covered, including the
+    /// selected measured k support. Units are those of k^weight χ. No peak
+    /// interpolation beyond the bilinear surface or uncertainty is inferred.
+    pub fn maximum(
+        &self,
+        k: RangeInclusive<f64>,
+        r: RangeInclusive<f64>,
+    ) -> Result<WaveletRegionValue> {
+        let kr = [*k.start(), *k.end()];
+        let rr = [*r.start(), *r.end()];
+        if kr[0] < self.settings().k_range[0] || kr[1] > self.settings().k_range[1] {
+            return Err(invalid(
+                "wavelet region must lie inside selected measured k support",
+            ));
+        }
+        let ks = integration_grid(self.k(), kr)?;
+        let rs = integration_grid(self.r(), rr)?;
+        let mut value: f64 = 0.;
+        for r in rs {
+            for &k in &ks {
+                value = value.max(self.sample(k, r)?);
+            }
+        }
+        Ok(WaveletRegionValue {
+            value,
+            k_range: kr,
+            r_range: rr,
+            unit: if self.settings().kweight == 0 {
+                "dimensionless".into()
+            } else {
+                format!("Å^-{}", self.settings().kweight)
+            },
+            method: "bilinear_magnitude_maximum_v1".into(),
         })
     }
 }

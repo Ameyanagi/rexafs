@@ -185,7 +185,7 @@ impl StudioApp {
             self.peaks.message = format!("Saved fit · {succeeded} / {} fitted", run.rows.len());
         }
         if self.peaks.view == View::Trend {
-            self.rebuild_peak_plot(cx);
+            self.rebuild_peak_plot(false, cx);
         }
     }
     pub(super) fn open_peak_run(&mut self, index: usize, cx: &mut Context<Self>) {
@@ -552,7 +552,7 @@ impl StudioApp {
                     Ok(preview) => {
                         app.peaks.preview = Some(preview);
                         app.peaks.message = "Starting model · drag the fit boundaries".into();
-                        app.rebuild_peak_plot(cx);
+                        app.rebuild_peak_plot(false, cx);
                     }
                     Err(e) => {
                         app.peaks.message = e;
@@ -752,7 +752,7 @@ impl StudioApp {
                 match result {
                     Ok(record) => {
                         app.peaks.record = Some(record);
-                        app.rebuild_peak_plot(cx);
+                        app.rebuild_peak_plot(false, cx);
                     }
                     Err(e) => app.peaks.message = e,
                 }
@@ -763,7 +763,7 @@ impl StudioApp {
         .detach();
         cx.notify();
     }
-    fn rebuild_peak_plot(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn rebuild_peak_plot(&mut self, preserve_view: bool, cx: &mut Context<Self>) {
         use ruviz::prelude::*;
         let base = || Plot::new().size(9., 4.).theme(self.theme.plot_theme());
         let mut residual = None;
@@ -910,7 +910,7 @@ impl StudioApp {
         } else {
             return;
         }
-        if self.peaks.view == View::Fit {
+        if self.peaks.view == View::Fit && !self.handles.hidden {
             let definition = self
                 .peaks
                 .record
@@ -929,8 +929,19 @@ impl StudioApp {
                 }
             }
         }
-        self.peaks.plot = Some(plot_builder(plot).interactive().build(cx));
-        self.peaks.residual = residual.map(|p| plot_builder(p).interactive().build(cx));
+        if preserve_view && let Some(entity) = &self.peaks.plot {
+            entity.update(cx, |view, cx| view.set_plot_keep_view(plot, cx));
+        } else {
+            self.peaks.plot = Some(plot_builder(plot).interactive().build(cx));
+        }
+        self.peaks.residual = residual.map(|plot| {
+            if preserve_view && let Some(entity) = &self.peaks.residual {
+                entity.update(cx, |view, cx| view.set_plot_keep_view(plot, cx));
+                entity.clone()
+            } else {
+                plot_builder(plot).interactive().build(cx)
+            }
+        });
     }
     fn add_peak_component(&mut self, shape: PeakShape, cx: &mut Context<Self>) {
         while self
@@ -1152,7 +1163,7 @@ impl StudioApp {
                                     }
                                 }
                                 app.peaks.view = View::Trend;
-                                app.rebuild_peak_plot(cx);
+                                app.rebuild_peak_plot(false, cx);
                             }
                             Menu::Export => app.export_peaks(index, cx),
                         }
@@ -1215,6 +1226,7 @@ impl StudioApp {
                 })),
             )
             .child(div().flex_1().text_size(px(16.)).child("XANES peaks"))
+            .child(self.plot_ranges_button(cx))
             .child(
                 button(&t, "peaks-export", "Export ▾", false).on_click(
                     cx.listener(|app, e, w, cx| app.open_peak_menu(Menu::Export, e, w, cx)),
@@ -1324,7 +1336,7 @@ impl StudioApp {
                     )
                     .on_click(cx.listener(move |app, _, _, cx| {
                         app.peaks.view = view;
-                        app.rebuild_peak_plot(cx);
+                        app.rebuild_peak_plot(false, cx);
                         cx.notify();
                     })),
                 );

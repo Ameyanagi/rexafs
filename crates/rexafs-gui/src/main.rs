@@ -23,6 +23,7 @@ mod import_recipes;
 mod joint_fitting;
 mod licenses;
 mod params;
+mod plot_export;
 mod plotting;
 mod project;
 mod publication;

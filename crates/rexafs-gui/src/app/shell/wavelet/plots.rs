@@ -1,14 +1,43 @@
 //! Display resampling is bounded and independent of native-grid region integrals.
 use super::*;
 use crate::app::series_display::HeatmapPalette;
-use crate::app::shell::handles::HandleKey;
 use ruviz::{
     plots::heatmap::{HeatmapConfig, HeatmapOrigin},
     prelude::*,
 };
 use ruviz_gpui::plot_builder;
 
-pub(super) fn scale(map: &rexafs::WaveletMap, view: usize) -> (f64, f64) {
+/// Fixed physical margins align data rectangles, not just the outer widgets.
+/// Reserve the same right margin below the map as its colorbar occupies above.
+pub(super) fn panel_plot(theme: &crate::theme::Theme, size: (u32, u32), rotated: bool) -> Plot {
+    let plot = Plot::new()
+        .theme(theme.plot_theme())
+        .size_px(size.0, size.1)
+        .font_size(8.5);
+    let mut config = plot.get_config().clone();
+    config.margins = ruviz::core::config::MarginConfig::fixed(
+        0.48,
+        if rotated { 0.12 } else { 0.70 },
+        0.12,
+        0.42,
+    );
+    plot.plot_config(config)
+}
+
+/// These panels have static, resolved data bounds. Restore their viewport now,
+/// before wiring the shared axes; waiting for an asynchronous first render can
+/// let a fresh marginal reset a peer's zoom in the meantime.
+fn replace_panel(plot_view: &mut RuvizPlot, plot: Plot, cx: &mut Context<RuvizPlot>) {
+    let old = plot_view.interactive_session().view_bounds_snapshot();
+    plot_view.set_plot_keep_view(plot, cx);
+    if old.visible_bounds != old.base_bounds {
+        plot_view
+            .interactive_session()
+            .restore_visible_bounds(old.visible_bounds);
+    }
+}
+
+pub(crate) fn scale(map: &rexafs::WaveletMap, view: usize) -> (f64, f64) {
     if view == 3 {
         return (-std::f64::consts::PI, std::f64::consts::PI);
     }
@@ -34,7 +63,7 @@ fn bracket(axis: &[f64], x: f64) -> (usize, f64) {
 }
 /// Uniform physical centers, with bilinear interpolation on the scientific grid.
 /// This also respects maps with deliberately nonuniform reference R coordinates.
-pub(super) fn texture(map: &rexafs::WaveletMap, view: usize) -> (Vec<Vec<f64>>, [f64; 4]) {
+pub(crate) fn texture(map: &rexafs::WaveletMap, view: usize) -> (Vec<Vec<f64>>, [f64; 4]) {
     let nx = map.k().len().clamp(2, 512);
     let ny = map.r().len().clamp(2, 256);
     let [ka, kb] = map.settings().k_range;
@@ -93,6 +122,8 @@ impl StudioApp {
         let Some(record) = self.wavelet.record.clone() else {
             return;
         };
+        self.wavelet.view_links.clear();
+        let layout = layout::JointLayout::new(self.wavelet.layout_size.unwrap_or((680, 500)));
         let map = &record.map;
         let (matrix, extent) = texture(map, self.wavelet.view);
         let (lo, hi) = self
@@ -112,10 +143,8 @@ impl StudioApp {
             .vmin(lo)
             .vmax(hi);
         let plot: Plot = if matrix.iter().flatten().any(|v| v.is_finite()) {
-            Plot::new()
-                .theme(self.theme.plot_theme())
-                .xlabel("k (Å⁻¹)")
-                .ylabel("R (Å)")
+            panel_plot(&self.theme, layout.map, false)
+                .ticks(false)
                 .heatmap_with(&matrix, config)
                 .xlim(map.settings().k_range[0], map.settings().k_range[1])
                 .ylim(map.r()[0], *map.r().last().unwrap())
@@ -123,10 +152,8 @@ impl StudioApp {
         } else {
             // All phase samples can be masked. Draw empty physical axes,
             // never fabricate a phase value just to satisfy heatmap bounds.
-            Plot::new()
-                .theme(self.theme.plot_theme())
-                .xlabel("k (Å⁻¹)")
-                .ylabel("R (Å)")
+            panel_plot(&self.theme, layout.map, false)
+                .ticks(false)
                 .line(
                     &map.settings().k_range,
                     &[map.r()[0], *map.r().last().unwrap()],
@@ -137,7 +164,7 @@ impl StudioApp {
                 .into()
         };
         if let Some(entity) = &self.wavelet.plot_map {
-            entity.update(cx, |p, cx| p.set_plot_keep_view(plot, cx));
+            entity.update(cx, |p, cx| replace_panel(p, plot, cx));
         } else {
             let entity = plot_builder(plot)
                 .interactive()
@@ -183,69 +210,28 @@ impl StudioApp {
         let (i, a) = bracket(record.map.k(), self.wavelet.cursor[0]);
         Some(values[i] * (1. - a) + values[i + 1] * a)
     }
-    /// Lightweight overlay follows view transforms; changing a region never
-    /// reconstructs the texture or changes its numerical color scale.
+    /// Slice cursor follows the physical viewport; region measurements live in Series.
     pub(super) fn wavelet_map_overlay(&self) -> Option<gpui::AnyElement> {
+        if !self.wavelet.slices {
+            return None;
+        }
         let entity = self.wavelet.plot_map.clone()?;
-        let region = self
-            .wavelet
-            .region_value
-            .as_ref()
-            .map(|_| self.wavelet.region);
         let cursor = self.wavelet.cursor;
-        let slices = self.wavelet.slices;
-        let color: gpui::Hsla = self.theme.accent.into();
         Some(
             gpui::canvas(
                 move |_, _, cx| {
-                    use ruviz::core::plot::ViewportPoint;
-                    let p = entity.read(cx);
-                    let bounds = p
-                        .interactive_session()
-                        .viewport_snapshot()
-                        .ok()?
-                        .visible_bounds;
-                    let xmin = bounds.min.x.min(bounds.max.x) + 1e-8;
-                    let xmax = bounds.min.x.max(bounds.max.x) - 1e-8;
-                    let ymin = bounds.min.y.min(bounds.max.y) + 1e-8;
-                    let ymax = bounds.min.y.max(bounds.max.y) - 1e-8;
-                    let screen = |x, y| p.screen_at(ViewportPoint { x, y }).ok().flatten();
-                    let rect = region.and_then(|[ka, kb, ra, rb]| {
-                        if kb < xmin || ka > xmax || rb < ymin || ra > ymax {
-                            return None;
-                        }
-                        Some((
-                            screen(ka.clamp(xmin, xmax), ra.clamp(ymin, ymax))?,
-                            screen(kb.clamp(xmin, xmax), rb.clamp(ymin, ymax))?,
-                        ))
-                    });
-                    let point = if slices {
-                        screen(cursor[0], cursor[1])
-                    } else {
-                        None
-                    };
-                    Some((rect, point))
+                    entity
+                        .read(cx)
+                        .screen_at(ruviz::core::ViewportPoint {
+                            x: cursor[0],
+                            y: cursor[1],
+                        })
+                        .ok()
+                        .flatten()
                 },
-                move |_, geometry, window, _| {
-                    use gpui::{Bounds, fill, point, size};
-                    let Some((rect, cursor)) = geometry else {
-                        return;
-                    };
-                    if let Some((a, b)) = rect {
-                        let left = a.x.min(b.x);
-                        let top = a.y.min(b.y);
-                        let width = (b.x - a.x).abs();
-                        let height = (b.y - a.y).abs();
-                        for bounds in [
-                            Bounds::new(point(left, top), size(width, px(1.2))),
-                            Bounds::new(point(left, top + height), size(width, px(1.2))),
-                            Bounds::new(point(left, top), size(px(1.2), height)),
-                            Bounds::new(point(left + width, top), size(px(1.2), height)),
-                        ] {
-                            window.paint_quad(fill(bounds, color));
-                        }
-                    }
-                    if let Some(p) = cursor {
+                move |_, p, window, _| {
+                    if let Some(p) = p {
+                        use gpui::{Bounds, fill, point, size};
                         for bounds in [
                             Bounds::new(point(p.x - px(5.), p.y - px(0.7)), size(px(10.), px(1.4))),
                             Bounds::new(point(p.x - px(0.7), p.y - px(5.)), size(px(1.4), px(10.))),
@@ -261,9 +247,11 @@ impl StudioApp {
         )
     }
     pub(super) fn rebuild_wavelet_slices(&mut self, cx: &mut Context<Self>) {
+        self.wavelet.view_links.clear();
         let Some(record) = &self.wavelet.record else {
             return;
         };
+        let layout = layout::JointLayout::new(self.wavelet.layout_size.unwrap_or((680, 500)));
         let map = &record.map;
         let (kx, ky, rx, ry) = if self.wavelet.slices {
             (
@@ -290,8 +278,7 @@ impl StudioApp {
                 y,
             )
         };
-        let mut kp: Plot = Plot::new()
-            .theme(self.theme.plot_theme())
+        let mut kp: Plot = panel_plot(&self.theme, (layout.map.0, layout.bottom), false)
             .line(&kx, &ky)
             .color(crate::plotting::trace_color(&self.theme, 0))
             .xlabel("k (Å⁻¹)")
@@ -306,87 +293,45 @@ impl StudioApp {
             let (lo, hi) = crate::plotting::symmetric_y_limits(ky.iter().copied());
             kp = kp.ylim(lo, hi);
         }
-        let rp: Plot = Plot::new()
-            .theme(self.theme.plot_theme())
-            .line(&rx, &ry)
+        let amplitude = ry
+            .iter()
+            .copied()
+            .filter(|v| v.is_finite())
+            .fold(0., f64::max)
+            .max(1e-12);
+        let rp: Plot = panel_plot(&self.theme, (layout.left, layout.map.1), true)
+            .line(&ry, &rx)
             .color(crate::plotting::trace_color(&self.theme, 0))
-            .xlabel("R (Å)")
-            .ylabel(if self.wavelet.slices {
+            .ylabel("R (Å)")
+            .xlabel(if self.wavelet.slices {
                 "|W|"
             } else {
                 "|χ(R)|"
             })
-            .xlim(map.r()[0], *map.r().last().unwrap())
+            .xlim(amplitude * 1.05, 0.)
+            .ylim(map.r()[0], *map.r().last().unwrap())
             .into();
         for (slot, plot) in [
             (&mut self.wavelet.plot_k, kp),
             (&mut self.wavelet.plot_r, rp),
         ] {
             if let Some(entity) = slot {
-                entity.update(cx, |p, cx| p.set_plot_keep_view(plot, cx));
+                entity.update(cx, |p, cx| replace_panel(p, plot, cx));
             } else {
                 *slot = Some(plot_builder(plot).interactive().build(cx));
             }
         }
-        cx.notify();
-    }
-    pub(crate) fn wavelet_handle_specs(&self, plot: usize) -> Vec<(HandleKey, f64)> {
-        if !self.wavelet.open || self.stage != Stage::Data || self.wavelet.record.is_none() {
-            return vec![];
+        if let (Some(map), Some(k), Some(r)) = (
+            &self.wavelet.plot_map,
+            &self.wavelet.plot_k,
+            &self.wavelet.plot_r,
+        ) {
+            self.wavelet.view_links = layout::link_views(
+                map.read(cx).interactive_session().clone(),
+                k.read(cx).interactive_session().clone(),
+                r.read(cx).interactive_session().clone(),
+            );
         }
-        let start = if plot == PLOT_WAVELET_K { 0 } else { 2 };
-        vec![
-            (HandleKey::MeasurementStart, self.wavelet.region[start]),
-            (HandleKey::MeasurementEnd, self.wavelet.region[start + 1]),
-        ]
-    }
-    pub(crate) fn drag_wavelet_boundary(
-        &mut self,
-        plot: usize,
-        key: HandleKey,
-        x: f64,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(record) = &self.wavelet.record else {
-            return;
-        };
-        if !x.is_finite() {
-            return;
-        }
-        let start = if plot == PLOT_WAVELET_K { 0 } else { 2 };
-        let end = key == HandleKey::MeasurementEnd;
-        let bounds = if start == 0 {
-            record.map.settings().k_range
-        } else {
-            [record.map.r()[0], *record.map.r().last().unwrap()]
-        };
-        // Round inward at coverage limits; text and numerical bounds stay identical.
-        let (lo, hi) = (
-            (bounds[0] * 100.).ceil() / 100.,
-            (bounds[1] * 100.).floor() / 100.,
-        );
-        let x = if lo < hi {
-            ((x * 100.).round() / 100.).clamp(lo, hi)
-        } else {
-            x.clamp(bounds[0], bounds[1])
-        };
-        if (end && x <= self.wavelet.region[start]) || (!end && x >= self.wavelet.region[start + 1])
-        {
-            return;
-        }
-        let i = start + usize::from(end);
-        self.wavelet.region[i] = x;
-        self.wavelet.region_fields[i].update(cx, |f, cx| {
-            f.set_text(
-                if lo < hi {
-                    format!("{x:.2}")
-                } else {
-                    x.to_string()
-                },
-                cx,
-            )
-        });
-        self.update_wavelet_region();
         cx.notify();
     }
 }

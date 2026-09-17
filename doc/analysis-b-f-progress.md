@@ -5,6 +5,81 @@ work at `8958681`. The [complete design](complete-analysis-design.md) remains
 the scientific and workflow contract. No milestone below is released or complete
 merely because its first module exists.
 
+## Current snapshot — 18 September 2026
+
+The implementation baseline is `87cbbf3`, followed by the local experimental
+reference and plot-range improvements described below. All five milestones have development
+implementations; none is declared fully qualified or released by this record.
+The chronological entries below retain the status and test counts at each increment.
+
+The latest [review record](validation/2026-09-18-pr-review/README.md) records
+481 core tests, the final 608-test desktop suite, installed binding/editor checks,
+package exclusion checks and the fixes found during review. MBACK is now selected
+beside Polynomial in the Normalize sidebar; its controls change in that same
+panel while the regular plot remains visible. See the [new native screenshots](validation/2026-09-18-mback-normalize/README.md).
+
+The latest alignment increment adds the simple core operations
+`Spectrum::set_energy_offset(ev)` and `Spectrum::energy_offset()`, reusing the
+existing correction state. The desktop uses the checked core setter for its
+axis adjustment and retains source/reference provenance separately. XANES
+alignment previews show derivatives and permit an additional manual eV shift;
+zeroing the active offset and undo were checked in the desktop. COD Cu search
+uses bounded metadata requests instead of one oversized JSON response. See the
+[alignment and COD validation](validation/2026-09-18-cod-alignment/README.md).
+
+The new [experimental comparisons](../crates/rexafs/tests/fixtures/analysis/experimental-larch/README.md)
+cover measured Cu foils at room temperature and 10 K, plus Aichi RuO₂. All six
+new MBACK/wavelet comparisons pass, alongside the two existing reference tests.
+Every complex wavelet cell is checked with matched input χ arrays and conventions;
+this is not a claim of end-to-end AUTOBK equivalence. The full references and
+original attribution are retained for offline tests and excluded from crates.io.
+
+The desktop now places Wavelet in the shared Transform selector:
+**k · R · k + R · q · Wavelet**. The selector stays visible in all five views,
+and switching views retains the current map and region. A fixed-position
+range icon hides or restores selection overlays without changing scientific
+settings. The [native GUI record](validation/2026-09-17-plot-ranges/README.md)
+includes measured Cu screenshots and the ruviz menu-layering check.
+The menu fix is now available in released ruviz and ruviz-gpui 0.14.2; the
+workspace and lockfile use those crates.io packages instead of local overrides.
+The optimized desktop build and all 591 desktop tests passed with the released
+dependencies (6 tests ignored). Native computer use reconfirmed menu layering,
+Reset View and range visibility in normalization and Wavelet.
+
+The wavelet workspace now places k below the map and a rotated R spectrum to
+its left, with aligned plotting areas and bidirectional shared physical axes.
+Zoom survives display changes and workspace resizing. Native computer use with
+experimental Cu verified navigation, horizontal R-region dragging and reset;
+all 199 desktop shell tests passed after this change. See the
+[aligned-layout validation and screenshot](validation/2026-09-18-wavelet-layout/README.md).
+
+The latest increment moves Wavelet settings into the standard Transform accordion
+between Forward FT and Back FT. Region integral, maximum and area-weighted mean
+now use **Series → Add trend → Wavelet**, with a draggable k–R preview and frozen
+Transform settings. Rust, Python and TypeScript expose the same region methods.
+Historical saved regions remain in their map artifacts. See the
+[workflow validation](validation/2026-09-18-wavelet-trends/README.md).
+
+| Milestone | Available in development | Remaining work |
+| --- | --- | --- |
+| B — Live acquisition | Quiet-file intake, frozen scalar/peak recipes, pause/resume and retained recovery. | Native Windows/Linux, network shares, sustained runs and crash qualification. |
+| C — XANES peak fitting | Core, Python/TypeScript, desktop, batch/Series and Live workflows. | Broader experimental examples and native platform checks. |
+| D — MBACK | Identified offline atomic data, core/bindings, desktop comparison/history and shared preparation. | Broader experimental and native platform qualification. |
+| E — Fluorescence correction | Core/bindings, desktop preview, independent corrected groups and portable ancestry. | Frozen Series/Live correction recipes, experimental comparisons and uncertainty propagation. |
+| F — Wavelets | Core/bindings, linked complex maps, Series integral/maximum/mean trends, frozen settings and portable results. | Live region qualification, matched-map comparisons and platform qualification. |
+
+**Next:** qualify wavelet region recipes during Live acquisition and on native
+Windows/Linux, including cancellation, restart and file replacement.
+LCF/PCA/MCR public Python/TypeScript bindings remain a separate tracked task.
+
+The [follow-up GUI check](validation/2026-09-17-gui-followup/README.md) records
+the tested controls and three fresh synthetic wavelet screenshots. The private
+[visual progress page](https://rexafs-analysis-progress.ameyanagi.chatgpt.site)
+also presents five earlier synthetic validation captures. It is a development
+snapshot, separate from the public release website.
+
+## Implementation sequence
+
 1. **B — Live acquisition:** integrate the earlier readiness/snapshot commits
    into a bounded folder coordinator, frozen processing, durable publication,
    paused recovery, and Series controls. Test synthetic incremental writers,
@@ -442,3 +517,16 @@ and LCF result materialization retaining the domain limit. The full GUI suite
 passed 591 tests (6 ignored); final focused correction tests passed again.
 Strict core Clippy, eight website generator tests and the website check passed.
 See the [synthetic screenshots and validation limits](validation/2026-09-17-fluorescence/README.md).
+
+### Plot workflow follow-up — 18 September 2026
+
+Wavelet maps now update automatically after committed parameter changes and when
+switching spectra. Colors moved to the top-right toolbar, and the History menu
+was removed while preserving existing saved results. Structure database sources
+use a menu so COD remains accessible in narrow panels.
+
+Processing/comparison, collection-analysis and Series plots have a shared
+CSV/PNG/SVG Export menu. Comparison CSVs retain each displayed spectrum's full
+label and independent grid; comparison images include spectrum legends. Wavelet
+also exports its native complex grid and full-provenance JSON. See the
+[computer-use checks and screenshots](validation/2026-09-18-plot-workflows/README.md).

@@ -80,7 +80,8 @@ pub struct XASSpectrum {
     pub xftf: Option<xrayfft::XrayFFTF>,
     /// Inverse-transform settings and outputs; `None` selects [`xrayfft::XrayFFTR::default`].
     pub xftr: Option<xrayfft::XrayFFTR>,
-    /// Accumulated energy shift (eV) applied by `shift_energy`/`calibrate`/`align_to`.
+    /// Accumulated energy correction in eV. Prefer [`Self::energy_offset`] and
+    /// [`Self::set_energy_offset`]; assigning this legacy field does not move arrays.
     pub energy_shift: f64,
     /// Per-point spread stored by merge/rebin, in input absorption units.
     /// Other data edits do not consistently propagate, resize or clear this field;
@@ -398,7 +399,8 @@ impl XASSpectrum {
     /// Energy is in eV. This legacy setter takes ownership after conversion and clones
     /// the baseline into working arrays. It does not check lengths or finite values;
     /// prefer [`Self::from_arrays`] for checked input. Clears E0 and derived results
-    /// while retaining other stage settings.
+    /// while retaining other stage settings. Replacing the arrays resets the
+    /// recorded energy offset to zero; the supplied axis becomes the new baseline.
     ///
     /// # Panics
     /// May panic when sorting mismatched arrays. Supply paired finite arrays.
@@ -433,6 +435,7 @@ impl XASSpectrum {
         }
         self.energy = self.raw_energy.clone();
         self.mu = self.raw_mu.clone();
+        self.energy_shift = 0.0;
         self.e0 = None;
         if let Some(method) = self.normalization.as_mut() {
             method.set_e0(None);
@@ -965,6 +968,91 @@ impl XASSpectrum {
             (Some(raw), Some(energy)) => raw == energy,
             _ => false,
         }
+    }
+
+    /// Read the total constant energy correction in eV. Starts at zero and
+    /// includes corrections from [`Self::align_to`], [`Self::calibrate`] and
+    /// [`Self::shift_energy`]. Reading it does not run processing.
+    pub fn energy_offset(&self) -> f64 {
+        self.energy_shift
+    }
+
+    /// Set the total energy offset in eV (unreleased; after 0.2.9).
+    ///
+    /// Positive values move features to higher energy. Repeated assignments do
+    /// not accumulate: setting 3.5 twice keeps +3.5 eV; zero removes the recorded
+    /// correction. Both working and baseline grids and existing E₀ settings move
+    /// by the difference from the previous offset. Absorption values stay unchanged.
+    /// Normalization, background and transform results are invalidated only when
+    /// the offset changes; the next processing call recomputes them normally.
+    ///
+    /// This reverses constant shifts to floating-point precision, not other data
+    /// edits such as truncation or rebinning. It does not retain an immutable
+    /// copy of the imported file. Replacing arrays with [`Self::set_spectrum`]
+    /// establishes a new baseline and resets the offset. Do not directly edit
+    /// the legacy `energy_shift` field: it describes shifts already in the arrays.
+    /// Existing repeated energy points are retained. Nonfinite offsets/settings,
+    /// decreasing grids, overflow or newly collapsed spacing between distinct
+    /// points return an error before any mutation. Empty spectra may store an offset, but loading
+    /// new arrays resets it; normally call this after constructing the spectrum.
+    ///
+    /// ```
+    /// use rexafs::Spectrum;
+    /// let mut spectrum = Spectrum::from_arrays(&[8970., 8980., 8990.], &[0., 0.5, 1.])?;
+    /// spectrum.set_energy_offset(3.5)?;
+    /// spectrum.set_energy_offset(3.5)?;
+    /// assert_eq!(spectrum.energy_offset(), 3.5);
+    /// spectrum.set_energy_offset(0.0)?;
+    /// assert_eq!(spectrum.energy.as_ref().unwrap()[0], 8970.);
+    /// # Ok::<(), rexafs::Error>(())
+    /// ```
+    pub fn set_energy_offset(&mut self, offset_ev: f64) -> Result<&mut Self, XAFSError> {
+        let delta = offset_ev - self.energy_shift;
+        let invalid = |reason: &str| DataError::InvalidEnergyOffset {
+            offset_ev,
+            reason: reason.into(),
+        };
+        if !offset_ev.is_finite() || !delta.is_finite() {
+            return Err(invalid("offset and previous correction must be finite").into());
+        }
+        let norm_e0 = self.normalization.as_ref().and_then(|m| m.get_e0());
+        let bkg_e0 = match &self.background {
+            Some(background::BackgroundMethod::AUTOBK(a)) => a.ek0,
+            _ => None,
+        };
+        if [self.e0, norm_e0, bkg_e0]
+            .into_iter()
+            .flatten()
+            .any(|e| !(e + delta).is_finite())
+        {
+            return Err(invalid("shifted E₀ must be finite").into());
+        }
+        for axis in [self.energy.as_ref(), self.raw_energy.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            let mut previous = None;
+            for &energy in axis.iter() {
+                let shifted = energy + delta;
+                if !shifted.is_finite() {
+                    return Err(invalid("shifted energy must be finite").into());
+                }
+                if previous.is_some_and(|(original, moved)| {
+                    energy < original || shifted < moved || (energy > original && shifted == moved)
+                }) {
+                    return Err(invalid(
+                        "shift must preserve energy order and distinct sample positions",
+                    )
+                    .into());
+                }
+                previous = Some((energy, shifted));
+            }
+        }
+        if delta != 0.0 {
+            self.shift_energy(delta);
+        }
+        self.energy_shift = offset_ev;
+        Ok(self)
     }
 
     /// Shift the energy axis (working and raw) by `delta_ev`, moving `e0` and

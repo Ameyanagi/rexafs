@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-Immutable native magnitude integral. dk times dR cancels, so units equal
+Immutable native magnitude statistic. dk times dR cancels for integrals; units equal
 k**weight * chi. This is a descriptive transform metric, not concentration.
 
 ## value
@@ -20,7 +20,7 @@ k**weight * chi. This is a descriptive transform metric, not concentration.
 value(self) -> float
 ```
 
-Full-native-grid integral, without an experimental uncertainty estimate.
+Native region statistic, without an experimental uncertainty estimate.
 
 ## k_range
 
@@ -44,7 +44,7 @@ Exact inclusive R bounds in angstroms.
 unit(self) -> str
 ```
 
-Integral units including k weight.
+Units of k**weight * chi for all three region statistics.
 
 ## method
 
@@ -52,7 +52,8 @@ Integral units including k weight.
 method(self) -> str
 ```
 
-Quadrature convention: bilinear_magnitude_v1.
+Method: bilinear_magnitude_v1 (integral), bilinear_magnitude_mean_v1
+or bilinear_magnitude_maximum_v1.
 
 ## to_json
 

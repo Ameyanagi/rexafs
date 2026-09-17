@@ -1892,6 +1892,16 @@ class WaveletMap:
         value, units and method without experimental uncertainty. Releases the GIL;
         display sampling never participates. Invalid coverage raises ValueError."""
         ...
+    def mean(self, k_range: tuple[float, float], r_range: tuple[float, float]) -> WaveletRegionValue:
+        """Area-weighted mean of native bilinear magnitude (unreleased).
+        k is inverse angstroms; R is angstroms. Requires increasing, fully covered
+        ranges. Returns units and method without uncertainty; releases the GIL."""
+        ...
+    def maximum(self, k_range: tuple[float, float], r_range: tuple[float, float]) -> WaveletRegionValue:
+        """Maximum native bilinear magnitude, including rectangle boundaries
+        (unreleased). k is inverse angstroms; R is angstroms. Invalid coverage
+        raises ValueError. Returns units/method without uncertainty; releases the GIL."""
+        ...
     @property
     def definition(self) -> Wavelet:
         """Independent transform definition, retaining automatic and explicit choices."""
@@ -1914,11 +1924,11 @@ class WaveletMap:
         ...
 
 class WaveletRegionValue:
-    """Immutable native magnitude integral. dk times dR cancels, so units equal
+    """Immutable native magnitude statistic. dk times dR cancels for integrals; units equal
     k**weight * chi. This is a descriptive transform metric, not concentration."""
     @property
     def value(self) -> float:
-        """Full-native-grid integral, without an experimental uncertainty estimate."""
+        """Native region statistic, without an experimental uncertainty estimate."""
         ...
     @property
     def k_range(self) -> tuple[float, float]:
@@ -1930,11 +1940,12 @@ class WaveletRegionValue:
         ...
     @property
     def unit(self) -> str:
-        """Integral units including k weight."""
+        """Units of k**weight * chi for all three region statistics."""
         ...
     @property
     def method(self) -> str:
-        """Quadrature convention: bilinear_magnitude_v1."""
+        """Method: bilinear_magnitude_v1 (integral), bilinear_magnitude_mean_v1
+        or bilinear_magnitude_maximum_v1."""
         ...
     def to_json(self) -> str:
         """Value, exact bounds, units and method as JSON."""

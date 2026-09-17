@@ -141,6 +141,26 @@ k_range uses inverse angstroms and r_range angstroms. Returns exact bounds,
 value, units and method without experimental uncertainty. Releases the GIL;
 display sampling never participates. Invalid coverage raises ValueError.
 
+## mean
+
+```python
+mean(self, k_range: tuple[float, float], r_range: tuple[float, float]) -> WaveletRegionValue
+```
+
+Area-weighted mean of native bilinear magnitude (unreleased).
+k is inverse angstroms; R is angstroms. Requires increasing, fully covered
+ranges. Returns units and method without uncertainty; releases the GIL.
+
+## maximum
+
+```python
+maximum(self, k_range: tuple[float, float], r_range: tuple[float, float]) -> WaveletRegionValue
+```
+
+Maximum native bilinear magnitude, including rectangle boundaries
+(unreleased). k is inverse angstroms; R is angstroms. Invalid coverage
+raises ValueError. Returns units/method without uncertainty; releases the GIL.
+
 ## definition
 
 ```python

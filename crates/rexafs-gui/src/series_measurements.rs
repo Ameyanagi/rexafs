@@ -9,6 +9,8 @@ use sha2::{Digest, Sha256};
 use std::{path::PathBuf, sync::Arc};
 
 mod catalogue;
+mod wavelet;
+pub use wavelet::{MetricValue, WaveletStatistic, WaveletTrend};
 mod recipe;
 pub mod recovery;
 mod storage;
@@ -41,6 +43,7 @@ impl SeriesArchive {
                 greatest = greatest.max(old.revision);
                 if old.measurement == definition.measurement
                     && old.edge_energy == definition.edge_energy
+                    && old.wavelet == definition.wavelet
                 {
                     matching = Some(matching.unwrap_or(0).max(old.revision));
                 }
@@ -83,6 +86,9 @@ pub struct MetricDefinition {
     pub measurement: Measurement,
     /// Absolute edge energy determined by the recorded preparation; not a shift.
     pub edge_energy: bool,
+    /// When present, the authoritative two-dimensional measurement definition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wavelet: Option<WaveletTrend>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -101,7 +107,7 @@ pub struct MetricRow {
     pub input_revision: Option<String>,
     pub settings: Arc<PipelineParams>,
     pub status: FrameStatus,
-    pub result: Option<MeasurementResult>,
+    pub result: Option<MetricValue>,
     pub reason: Option<String>,
     /// Exact resolved preparation settings, excluding large processed arrays.
     pub preparation: serde_json::Value,
@@ -219,7 +225,14 @@ impl FrameInput {
         let sp = if let Some(group) = &self.derived
             && group.source.is_none()
         {
-            group.prepare(&self.settings, stage)?
+            if definition.wavelet.is_some()
+                && group.quantity == params::Quantity::ChiK
+                && !group.quantity_unconfirmed
+            {
+                group.for_display(&self.settings)?
+            } else {
+                group.prepare(&self.settings, stage)?
+            }
         } else {
             let path = self
                 .derived
@@ -234,6 +247,9 @@ impl FrameInput {
 }
 
 pub fn required_stage(definition: &MetricDefinition) -> RequiredStage {
+    if definition.wavelet.is_some() {
+        return RequiredStage::Background;
+    }
     if definition.edge_energy {
         return RequiredStage::Normalized;
     }
@@ -368,7 +384,7 @@ impl SeriesRun {
         fn cell(value: impl ToString) -> String {
             format!("\"{}\"", value.to_string().replace('"', "\"\""))
         }
-        let header = "frame,frame_id,group_id,label,value,unit,status,reason,input_revision,source_digest,run_id,definition_id,definition_revision,range_start,range_end,e0_ev,uncertainty,coordinate,coordinate_name,coordinate_unit,coordinate_source,acquired_at,timestamp_meaning,recipe_id,recipe_revision,recipe_name\n";
+        let header = "frame,frame_id,group_id,label,value,unit,status,reason,input_revision,source_digest,run_id,definition_id,definition_revision,range_start,range_end,e0_ev,uncertainty,coordinate,coordinate_name,coordinate_unit,coordinate_source,acquired_at,timestamp_meaning,recipe_id,recipe_revision,recipe_name,wavelet_statistic,wavelet_r_start,wavelet_r_end,wavelet_method,wavelet_transform_json\n";
         writer.write_all(header.as_bytes())?;
         for row in &self.rows {
             let result = row.result.as_ref();
@@ -415,6 +431,20 @@ impl SeriesRun {
                     .map(|r| r.name.clone())
                     .unwrap_or_default(),
             ];
+            let mut cells = cells;
+            let wt = self.definition.wavelet.as_ref();
+            cells.extend([
+                wt.map(|w| w.statistic.label().to_owned())
+                    .unwrap_or_default(),
+                wt.map(|w| w.r_range[0].to_string()).unwrap_or_default(),
+                wt.map(|w| w.r_range[1].to_string()).unwrap_or_default(),
+                result
+                    .and_then(|r| r.wavelet.as_ref())
+                    .map(|w| w.method.clone())
+                    .unwrap_or_default(),
+                wt.map(|w| serde_json::to_string(&w.transform).unwrap())
+                    .unwrap_or_default(),
+            ]);
             writeln!(
                 writer,
                 "{}",
@@ -445,7 +475,12 @@ pub fn calculate_row(
     }
     let result = (|| {
         let (sp, _, _) = input.prepare(definition, row.input_revision.as_deref())?;
-        let result = if definition.edge_energy {
+        let result: MetricValue = if let Some(wavelet) = &definition.wavelet {
+            let map = sp.wavelet(&wavelet.transform).map_err(|e| e.to_string())?;
+            let value = wavelet.measure(&map)?;
+            output.preparation = serde_json::json!({"spectrum":resolved_preparation(&sp), "wavelet":map.preparation(), "transform":map.settings(), "method":map.method(), "warnings":map.warnings()});
+            value.into()
+        } else if definition.edge_energy {
             let e0 = sp.e0().ok_or("Edge energy unavailable")?;
             MeasurementResult {
                 measurement: definition.measurement.clone(),
@@ -456,11 +491,15 @@ pub fn calculate_row(
                 unit: "eV".into(),
                 e0_ev: Some(e0),
             }
+            .into()
         } else {
             sp.measure(&definition.measurement)
                 .map_err(|e| e.to_string())?
+                .into()
         };
-        output.preparation = resolved_preparation(&sp);
+        if definition.wavelet.is_none() {
+            output.preparation = resolved_preparation(&sp);
+        }
         Ok::<_, String>(result)
     })();
     match result {

@@ -77,6 +77,8 @@ const waveletMap = spectrum.wavelet(wavelet);
 waveletMap.real[0].toFixed();
 waveletMap.shape[1].toFixed();
 waveletMap.integral([4,10],[1,3]).value.toFixed();
+waveletMap.mean([4,10],[1,3]).value.toFixed();
+waveletMap.maximum([4,10],[1,3]).value.toFixed();
 waveletMap.definition.free();
 WaveletMap.from_json(waveletMap.to_json()).free();
 // @ts-expect-error wavelet intervals require two numbers
@@ -170,6 +172,8 @@ spectrum.chi()[0];
       assert.match(hoverText("spectrum.correct_fluorescence", 12), /XANES-only/);
       assert.match(hoverText("correctionResult.corrected_mu", 19), /Final normalization|final normalization/);
       assert.match(hoverText("waveletMap.integral", 13), /native bilinear/);
+      assert.match(hoverText("waveletMap.mean", 13), /area/i);
+      assert.match(hoverText("waveletMap.maximum", 13), /bilinear/);
       assert.match(hoverText("spectrum.fit_peaks", 10), /E0-relative.*conditional/s);
       assert.match(hoverText("peak.fit_batch", 7), /one outcome per input/);
       assert.match(hoverText("forward.kstep", 8), /infers the first spacing/);

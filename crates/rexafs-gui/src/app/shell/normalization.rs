@@ -26,6 +26,9 @@ pub(crate) struct NormalizationState {
     pub history: NormalizationHistory,
     pub open: bool,
     group: Option<crate::group_identity::GroupId>,
+    editor_group: Option<crate::group_identity::GroupId>,
+    editor_model: Option<MbackOptions>,
+    pub(crate) show_mback: bool,
     fields: Vec<Entity<TextInput>>,
     erfc: bool,
     busy: bool,
@@ -35,6 +38,29 @@ pub(crate) struct NormalizationState {
     plot: Option<Entity<RuvizPlot>>,
     message: String,
     identity_hint: String,
+}
+impl NormalizationState {
+    fn sync_editor(
+        &mut self,
+        group: Option<crate::group_identity::GroupId>,
+        model: Option<MbackOptions>,
+    ) -> bool {
+        if self.editor_group == group && self.editor_model == model {
+            return false;
+        }
+        self.open = false;
+        self.generation += 1;
+        self.busy = false;
+        self.group = group.clone();
+        self.editor_group = group;
+        self.show_mback = model.is_some();
+        self.editor_model = model;
+        self.records.clear();
+        self.plot = None;
+        self.view = 0;
+        self.message.clear();
+        true
+    }
 }
 impl StudioApp {
     pub(crate) fn normalization_matches_current(&self) -> bool {
@@ -58,15 +84,16 @@ impl StudioApp {
             self.spectrum.as_ref().ok_or("Select a spectrum")?,
         )
     }
-    pub(crate) fn open_normalization(&mut self, cx: &mut Context<Self>) {
-        self.normalization.open = true;
-        self.normalization.group = self.current_group_index().and_then(|i| self.group_id(i));
-        self.normalization.records.clear();
-        self.normalization.plot = None;
-        self.normalization.view = 0;
-        self.normalization.message.clear();
+    /// Reload the editor after group changes, undo, reset or settings replacement.
+    /// Unapplied edits remain local to their original group.
+    pub(crate) fn ensure_normalization_editor(&mut self, cx: &mut Context<Self>) {
+        let group = self.current_group_index().and_then(|i| self.group_id(i));
+        let model = self.ui_params().mback.clone();
+        if !self.normalization.sync_editor(group, model) {
+            return;
+        }
         let mut model = self.ui_params().mback.clone().unwrap_or_default();
-        self.normalization.identity_hint = "Manual absorber and edge".into();
+        self.normalization.identity_hint = "Chantler f₂".into();
         if model.element.is_empty() {
             let declared = self.current_group_index().and_then(|ix| {
                 self.raw_cache
@@ -159,21 +186,33 @@ impl StudioApp {
             });
             cx.subscribe(&field, |app, _, event, cx| {
                 if matches!(event, InputEvent::Edited(_)) {
-                    app.normalization.identity_hint = "Manual absorber and edge".into();
+                    app.normalization.identity_hint = "Chantler f₂ · edited settings".into();
                     app.normalization.generation += 1;
                     app.normalization.busy = false;
                     app.normalization.records.clear();
                     app.normalization.plot = None;
-                    app.normalization.message = "Preview the updated model".into();
+                    app.normalization.message = "Settings changed · Apply to update".into();
                     cx.notify();
                 }
             })
             .detach();
             self.normalization.fields.push(field);
         }
-        if let Ok(record) = self.current_normalization_record() {
-            self.normalization.records.push(record);
-            self.rebuild_normalization_plot(cx);
+    }
+    fn select_normalization_method(&mut self, mback: bool, cx: &mut Context<Self>) {
+        if self.refuse_frozen_edit(cx) {
+            return;
+        }
+        self.ensure_normalization_editor(cx);
+        self.normalization.generation += 1;
+        self.normalization.busy = false;
+        self.normalization.open = false;
+        self.normalization.show_mback = mback;
+        self.normalization.message.clear();
+        if mback != self.ui_params().mback.is_some() {
+            // A declared absorber lets method selection behave like the other
+            // normalization settings. Missing metadata stays an explicit choice.
+            self.calculate_normalization(mback, true, cx);
         }
         cx.notify();
     }
@@ -315,15 +354,27 @@ impl StudioApp {
                             )).unwrap_or_default(),
                             _ => "Polynomial normalization".into(),
                         };
-                        app.normalization.message = format!("{} · {details}", if apply { "Applied; earlier result retained" } else { "Preview" });
+                        app.normalization.message = if apply {
+                            let mut message = format!("{} applied", record.method());
+                            if let NormalizationMethod::MBack(n) = &record.normalization
+                                && let Some(r) = &n.result
+                                && !r.warnings.is_empty()
+                            {
+                                message.push_str(&format!(" · {}", r.warnings.join("; ")));
+                            }
+                            message
+                        } else { format!("Preview · {details}") };
                         app.normalization.records = vec![record];
                         if !mback { app.normalization.view = 0; }
                         if apply {
                             for receipt in receipts { app.normalization.history.insert(receipt); }
                             app.record("Retained independent normalization results", None);
+                            app.normalization.editor_model = settings.mback.clone();
+                            app.normalization.show_mback = mback;
+                            app.normalization.open = false;
                             app.edit_parameters("Change normalization method; preserve independent results".into(), cx, |p| { *p = settings; Ok(()) });
                         }
-                        app.rebuild_normalization_plot(cx);
+                        app.rebuild_normalization_plot(false, cx);
                     }
                 }
                 cx.notify();
@@ -358,9 +409,6 @@ impl StudioApp {
             .collect();
         self.normalization.open = true;
         self.normalization.group = self.current_group_index().and_then(|i| self.group_id(i));
-        self.normalization.fields.clear();
-        self.normalization.erfc = false;
-        self.normalization.identity_hint.clear();
         self.normalization.view = 0;
         self.normalization.busy = true;
         self.normalization.generation += 1;
@@ -404,7 +452,7 @@ impl StudioApp {
                             "Independent saved results · identical input arrays".into()
                         };
                         app.normalization.records = records;
-                        app.rebuild_normalization_plot(cx);
+                        app.rebuild_normalization_plot(false, cx);
                     }
                     Err(e) => app.normalization.message = e,
                 }
@@ -450,7 +498,11 @@ impl StudioApp {
         })
         .detach();
     }
-    fn rebuild_normalization_plot(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn rebuild_normalization_plot(
+        &mut self,
+        preserve_view: bool,
+        cx: &mut Context<Self>,
+    ) {
         let view = self.normalization.view;
         let mut plot = Plot::new().size(9., 5.).theme(self.theme.plot_theme());
         let mut count = 0;
@@ -487,69 +539,138 @@ impl StudioApp {
                         .label("f₂ + background − scaled μ")
                         .into();
                 }
-                for range in [r.pre_edge, r.post_edge] {
-                    plot = plot.axvspan(r.e0 + range[0], r.e0 + range[1]);
+                if !self.handles.hidden {
+                    for range in [r.pre_edge, r.post_edge] {
+                        plot = plot.axvspan(r.e0 + range[0], r.e0 + range[1]);
+                    }
                 }
                 count += 1;
             }
         }
         self.normalization.plot = (count > 0).then(|| {
-            plot_builder(
-                plot.xlabel("Energy (eV)")
-                    .ylabel(match view {
-                        0 => "Normalized μ(E)",
-                        1 => "Flattened μ(E)",
-                        2 => "f₂ units",
-                        _ => "Residual (f₂ units)",
-                    })
-                    .legend_position(LegendPosition::UpperRight),
-            )
-            .interactive()
-            .build(cx)
+            let plot = plot
+                .xlabel("Energy (eV)")
+                .ylabel(match view {
+                    0 => "Normalized μ(E)",
+                    1 => "Flattened μ(E)",
+                    2 => "f₂ units",
+                    _ => "Residual (f₂ units)",
+                })
+                .legend_position(LegendPosition::UpperRight);
+            if preserve_view && let Some(entity) = &self.normalization.plot {
+                entity.update(cx, |view, cx| view.set_plot_keep_view(plot, cx));
+                entity.clone()
+            } else {
+                plot_builder(plot).interactive().build(cx)
+            }
         });
     }
     pub(crate) fn normalization_controls(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
-        let mback = self.ui_params().mback.is_some();
-        div()
-            .p_3()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(
+        let t = self.theme;
+        let mback = self.normalization.show_mback;
+        let mut controls = div().p_3().flex().flex_col().gap_2().child(
+            div()
+                .flex()
+                .gap_1()
+                .child(
+                    button(&t, "normalization-polynomial", "Polynomial", !mback).on_click(
+                        cx.listener(|app, _, _, cx| app.select_normalization_method(false, cx)),
+                    ),
+                )
+                .child(button(&t, "normalization-mback", "MBACK", mback).on_click(
+                    cx.listener(|app, _, _, cx| app.select_normalization_method(true, cx)),
+                )),
+        );
+        if mback {
+            let mut identity = div().flex().gap_2();
+            for (i, label) in ["Absorber", "Edge"].into_iter().enumerate() {
+                if let Some(field) = self.normalization.fields.get(i) {
+                    identity = identity.child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(label)
+                            .child(field.clone()),
+                    );
+                }
+            }
+            controls = controls
+                .child(identity)
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(t.text_muted)
+                        .child(self.normalization.identity_hint.clone()),
+                )
+                .child(
+                    button(&t, "mback-erfc", "Erfc background", self.normalization.erfc).on_click(
+                        cx.listener(|app, _, _, cx| {
+                            app.normalization.erfc = !app.normalization.erfc;
+                            app.normalization.generation += 1;
+                            app.normalization.busy = false;
+                            app.normalization.records.clear();
+                            app.normalization.plot = None;
+                            app.normalization.message = "Settings changed · Apply to update".into();
+                            cx.notify();
+                        }),
+                    ),
+                );
+            if self.normalization.erfc {
+                for (i, label) in [
+                    "Emission line",
+                    "Width min (eV)",
+                    "Width max (eV)",
+                    "Amplitude min (f₂)",
+                    "Amplitude max (f₂)",
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    if let Some(field) = self.normalization.fields.get(i + 2) {
+                        controls = controls.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(div().flex_1().child(label))
+                                .child(div().w(px(115.)).child(field.clone())),
+                        );
+                    }
+                }
+            }
+            controls = controls.child(
                 div()
                     .flex()
-                    .gap_1()
+                    .gap_2()
+                    .child(button(&t, "mback-apply", "Apply", true).on_click(
+                        cx.listener(|app, _, _, cx| app.calculate_normalization(true, true, cx)),
+                    ))
                     .child(
-                        button(
-                            &self.theme,
-                            "normalization-polynomial",
-                            "Polynomial",
-                            !mback,
-                        )
-                        .on_click(cx.listener(|app, _, _, cx| {
-                            if app.ui_params().mback.is_some() {
-                                app.calculate_normalization(false, true, cx);
-                            }
-                        })),
-                    )
-                    .child(
-                        button(&self.theme, "normalization-mback", "MBACK…", mback)
-                            .on_click(cx.listener(|app, _, _, cx| app.open_normalization(cx))),
+                        button(&t, "mback-preview", "Atomic match…", false).on_click(cx.listener(
+                            |app, _, _, cx| {
+                                app.normalization.open = true;
+                                app.normalization.view = 2;
+                                app.calculate_normalization(true, false, cx);
+                            },
+                        )),
                     ),
-            )
-            .children(self.ui_params().mback.as_ref().map(|o| {
+            );
+        }
+        if !self.normalization.open && !self.normalization.message.is_empty() {
+            controls = controls.child(
                 div()
                     .text_size(px(12.))
-                    .child(format!("{} {} · Chantler f₂", o.element, o.edge))
-            }))
+                    .text_color(t.text_muted)
+                    .child(self.normalization.message.clone()),
+            );
+        }
+        controls
             .child(
-                button(
-                    &self.theme,
-                    "normalization-compare",
-                    "Compare methods",
-                    false,
-                )
-                .on_click(cx.listener(|app, _, _, cx| app.compare_normalizations(cx))),
+                button(&t, "normalization-compare", "Compare methods…", false)
+                    .on_click(cx.listener(|app, _, _, cx| app.compare_normalizations(cx))),
             )
             .into_any_element()
     }
@@ -557,6 +678,7 @@ impl StudioApp {
         let t = self.theme;
         let mut header = div()
             .flex()
+            .flex_wrap()
             .gap_2()
             .items_center()
             .child(
@@ -581,76 +703,15 @@ impl StudioApp {
                 )
                 .on_click(cx.listener(move |app, _, _, cx| {
                     app.normalization.view = i;
-                    app.rebuild_normalization_plot(cx);
+                    app.rebuild_normalization_plot(false, cx);
                     cx.notify();
                 })),
             );
         }
-        header = header.child(
+        header = header.child(self.plot_ranges_button(cx)).child(
             button(&t, "normalization-export", "Export JSON…", false)
                 .on_click(cx.listener(|app, _, _, cx| app.export_normalizations(cx))),
         );
-        let mut form = div().flex().gap_3().items_center();
-        for (i, label) in ["Absorber", "Edge"].into_iter().enumerate() {
-            if let Some(field) = self.normalization.fields.get(i) {
-                form = form.child(
-                    div()
-                        .w(px(150.))
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .child(label)
-                        .child(field.clone()),
-                );
-            }
-        }
-        if !self.normalization.fields.is_empty() {
-            form = form
-                .child(
-                    button(&t, "mback-erfc", "Erfc background", self.normalization.erfc).on_click(
-                        cx.listener(|app, _, _, cx| {
-                            app.normalization.erfc = !app.normalization.erfc;
-                            app.normalization.generation += 1;
-                            app.normalization.busy = false;
-                            app.normalization.records.clear();
-                            app.normalization.plot = None;
-                            cx.notify();
-                        }),
-                    ),
-                )
-                .child(button(&t, "mback-preview", "Preview", false).on_click(
-                    cx.listener(|app, _, _, cx| app.calculate_normalization(true, false, cx)),
-                ))
-                .child(button(&t, "mback-apply", "Use MBACK", true).on_click(
-                    cx.listener(|app, _, _, cx| app.calculate_normalization(true, true, cx)),
-                ));
-        }
-        let mut advanced = div().flex().gap_2();
-        if self.normalization.erfc {
-            for (i, label) in [
-                "Line",
-                "Width min (eV)",
-                "Width max (eV)",
-                "Amplitude min",
-                "Amplitude max",
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                if let Some(field) = self.normalization.fields.get(i + 2) {
-                    advanced = advanced.child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(label)
-                            .child(field.clone()),
-                    );
-                }
-            }
-        }
         div()
             .flex_1()
             .min_w_0()
@@ -660,14 +721,6 @@ impl StudioApp {
             .flex_col()
             .gap_3()
             .child(header)
-            .child(form)
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(t.text_muted)
-                    .child(self.normalization.identity_hint.clone()),
-            )
-            .child(advanced)
             .child(
                 div()
                     .text_size(px(12.))
@@ -688,6 +741,35 @@ impl StudioApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn method_editor_keeps_drafts_local_and_invalidates_work_after_undo_or_group_change() {
+        let first = Some(crate::group_identity::GroupId::new_result());
+        let second = Some(crate::group_identity::GroupId::new_result());
+        let model = Some(rexafs::MBack::for_edge("Cu", "K").options);
+        let mut state = NormalizationState::default();
+        assert!(state.sync_editor(first.clone(), None));
+        // Ordinary redraws keep a not-yet-applied MBACK draft and its worker.
+        state.show_mback = true;
+        state.busy = true;
+        let generation = state.generation;
+        assert!(!state.sync_editor(first.clone(), None));
+        assert!(state.show_mback && state.busy);
+        assert_eq!(state.generation, generation);
+        // A different spectrum must not inherit the draft or accept its result.
+        state.open = true;
+        assert!(state.sync_editor(second, None));
+        assert!(!state.show_mback && !state.busy && !state.open);
+        assert!(state.generation > generation);
+        assert!(state.sync_editor(first.clone(), model.clone()));
+        assert!(state.show_mback);
+        // Undo and redo synchronize both the selected method and its controls.
+        let generation = state.generation;
+        assert!(state.sync_editor(first.clone(), None));
+        assert!(!state.show_mback);
+        assert!(state.generation > generation);
+        assert!(state.sync_editor(first, model));
+        assert!(state.show_mback);
+    }
     #[test]
     fn method_switch_keeps_the_other_visible_bound_after_a_partial_edit() {
         let mut options = MbackOptions::default();

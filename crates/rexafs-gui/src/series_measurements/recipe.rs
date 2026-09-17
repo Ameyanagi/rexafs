@@ -42,7 +42,10 @@ impl AnalysisRecipe {
         // Capture only a definition that can actually run on the representative input.
         let (_, revision) = input.revision_of(&bytes);
         let (spectrum, _, _) = input.prepare(&recipe.definition, Some(&revision))?;
-        if recipe.definition.edge_energy {
+        if let Some(w) = &recipe.definition.wavelet {
+            let map = spectrum.wavelet(&w.transform).map_err(|e| e.to_string())?;
+            w.measure(&map)?;
+        } else if recipe.definition.edge_energy {
             spectrum.e0().ok_or("Edge energy unavailable")?;
         } else {
             spectrum
@@ -58,6 +61,9 @@ impl AnalysisRecipe {
         }
         if self.name.trim().is_empty() || self.name.chars().count() > 200 {
             return Err("Recipe names need 1–200 characters".into());
+        }
+        if let Some(w) = &self.definition.wavelet {
+            w.validate()?;
         }
         let bytes = serde_json::to_vec(&self.settings).map_err(|e| e.to_string())?;
         let restored: PipelineParams = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
@@ -77,6 +83,7 @@ impl AnalysisRecipe {
             && self.input == other.input
             && self.definition.measurement == other.definition.measurement
             && self.definition.edge_energy == other.definition.edge_energy
+            && self.definition.wavelet == other.definition.wavelet
     }
 }
 

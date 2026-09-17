@@ -979,6 +979,7 @@ pub(crate) fn load_raw_snapshot(
             *energy += shift;
         }
     }
+    params.offset_energy_axis(&mut raw.energy)?;
     Ok((raw.energy, raw.mu))
 }
 
@@ -1177,6 +1178,13 @@ pub struct PipelineParams {
     pub align_to_ref: bool,
     /// Desired reference-channel E₀ in eV. None applies no reference alignment.
     pub align_target: Option<f64>,
+    /// Add this constant offset in eV to the source energy axis at read time.
+    /// Zero preserves the source axis. Original arrays are never rewritten.
+    /// Use `set_energy_offset` to move explicit E₀ overrides with the offset.
+    pub energy_offset_ev: f64,
+    /// Historical calculation that selected an offset. Editing the active
+    /// offset preserves this record; loading never replays its calculation.
+    pub alignment_record: Option<AlignmentRecord>,
     /// None keeps polynomial normalization. MBACK records explicit absorber,
     /// edge and atomic-data identity. Shared numeric fields override its saved
     /// ranges/degree; its saved ranges supply each unspecified bound.
@@ -1350,6 +1358,45 @@ fn legacy_bkg_clamp_policy() -> AUTOBKClampScalePolicy {
 }
 
 impl PipelineParams {
+    /// Set the active source-axis offset in eV, without accumulating repeated
+    /// assignments. Positive values move all energy points higher. Zero restores
+    /// the source axis before this offset; historical materialized corrections
+    /// and optional reference-channel calibration remain separate.
+    /// Explicit normalization and background E₀ overrides move by the change
+    /// in offset. The last alignment record is preserved as history.
+    pub fn set_energy_offset(&mut self, offset_ev: f64) -> Result<(), String> {
+        let delta = offset_ev - self.energy_offset_ev;
+        if !offset_ev.is_finite()
+            || !delta.is_finite()
+            || self.e0.is_some_and(|e| !(e + delta).is_finite())
+            || self.bkg_ek0.is_some_and(|e| !(e + delta).is_finite())
+        {
+            return Err("Energy offset must be finite".into());
+        }
+        self.e0 = self.e0.map(|e| e + delta);
+        self.bkg_ek0 = self.bkg_ek0.map(|e| e + delta);
+        self.energy_offset_ev = offset_ev;
+        Ok(())
+    }
+
+    fn offset_energy_axis(&self, energy: &mut Vec<f64>) -> Result<(), String> {
+        // Move the buffer through the core setter without copying it. The source
+        // array is already an owned read; project/source bytes remain untouched.
+        let mut spectrum = XASSpectrum::new();
+        spectrum.energy = Some(std::mem::take(energy).into());
+        let result = spectrum
+            .set_energy_offset(self.energy_offset_ev)
+            .map(|_| ())
+            .map_err(|e| e.to_string());
+        *energy = spectrum
+            .energy
+            .take()
+            .expect("offset retains the axis")
+            .data
+            .into();
+        result
+    }
+
     pub fn effective_bkg_kweight(&self) -> i32 {
         if self.bkg_kweight_linked {
             // XrayFFTF::fill_parameter uses the same nonnegative integer weight.
@@ -1368,6 +1415,7 @@ impl PipelineParams {
         params.bkg_ek0 = params.bkg_ek0.map(|e| e + applied_shift_ev);
         params.align_to_ref = false;
         params.align_target = None;
+        params.energy_offset_ev = 0.0;
         params
     }
 
@@ -1392,6 +1440,9 @@ impl PipelineParams {
         self.import.axis.fingerprint().hash(hasher);
         self.align_to_ref.hash(hasher);
         self.align_target.map(f64::to_bits).hash(hasher);
+        if self.energy_offset_ev != 0.0 {
+            self.energy_offset_ev.to_bits().hash(hasher);
+        }
         self.import.energy_col.hash(hasher);
         self.import.i0_col.hash(hasher);
         self.import.it_col.hash(hasher);
@@ -1522,6 +1573,7 @@ pub fn load_raw_with_diagnostics(
             *e += shift;
         }
     }
+    params.offset_energy_axis(&mut raw.energy)?;
     Ok(raw)
 }
 
@@ -1537,7 +1589,7 @@ pub(crate) fn load_group_raw_with_diagnostics(
             None => Ok(RawData {
                 channel: params.import.mode,
                 declared_edge: group.declared_edge.clone(),
-                energy: group.energy.clone(),
+                energy: group.raw(params)?.0,
                 mu: group.mu.clone(),
                 diagnostics: ParserDiagnostics {
                     valid_points: group.energy.len(),
@@ -1636,6 +1688,26 @@ pub struct OperationInput {
     pub derived_id: Option<u64>,
     pub fingerprint: u64,
     pub size: Option<u64>,
+}
+
+/// Historical alignment calculation; the active offset is stored separately.
+/// Copied settings retain the originating input identities, not a claim that
+/// the alignment was recalculated for another spectrum.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AlignmentRecord {
+    /// Spectrum first, then reference, with the identities used in the fit.
+    pub inputs: Vec<OperationInput>,
+    /// Derivative comparison interval in eV relative to the reference E₀.
+    pub window_relative_e0_ev: [f64; 2],
+    /// Fitted correction in eV, relative to the spectrum's then-current axis.
+    pub automatic_shift_ev: f64,
+    /// User adjustment added to the fitted correction, in eV.
+    pub manual_shift_ev: f64,
+    /// Active source-axis offset before applying the alignment, in eV.
+    pub offset_before_ev: f64,
+    /// Active source-axis offset immediately after alignment, in eV.
+    /// The current setting may differ after subsequent manual edits.
+    pub offset_after_ev: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1815,7 +1887,14 @@ impl DerivedSpectrum {
     pub fn raw(&self, params: &PipelineParams) -> Result<(Vec<f64>, Vec<f64>), String> {
         match &self.source {
             Some(source) => load_raw(source, params),
-            None => Ok((self.energy.clone(), self.mu.clone())),
+            None => {
+                if self.quantity == Quantity::ChiK && params.energy_offset_ev != 0.0 {
+                    return Err("An energy offset cannot be applied to a k-axis spectrum".into());
+                }
+                let mut energy = self.energy.clone();
+                params.offset_energy_axis(&mut energy)?;
+                Ok((energy, self.mu.clone()))
+            }
         }
     }
 }
@@ -2246,6 +2325,97 @@ pub fn normalization_ranges(sp: &XASSpectrum) -> Option<[f64; 4]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn energy_offset_is_absolute_reversible_and_invalidates_raw_cache() {
+        let group = DerivedSpectrum {
+            energy: vec![7000.0, 7001.0, 7003.0],
+            mu: vec![0.1, 0.3, 1.0],
+            ..Default::default()
+        };
+        let mut params = PipelineParams {
+            e0: Some(7001.0),
+            bkg_ek0: Some(7001.5),
+            ..Default::default()
+        };
+        let initial_hash = params.raw_fingerprint();
+        let original = group.raw(&params).unwrap();
+        for _ in 0..2 {
+            params.set_energy_offset(2.5).unwrap();
+            assert_eq!(
+                group.raw(&params).unwrap(),
+                (vec![7002.5, 7003.5, 7005.5], original.1.clone())
+            );
+            assert_eq!(params.e0, Some(7003.5));
+            assert_eq!(params.bkg_ek0, Some(7004.0));
+            assert_ne!(params.raw_fingerprint(), initial_hash);
+            assert_eq!(
+                group
+                    .prepare(&params, RequiredStage::Raw)
+                    .unwrap()
+                    .energy
+                    .unwrap()
+                    .as_slice(),
+                &[7002.5, 7003.5, 7005.5]
+            );
+        }
+        let saved = serde_json::to_string(&params).unwrap();
+        let restored: PipelineParams = serde_json::from_str(&saved).unwrap();
+        assert_eq!(group.raw(&restored).unwrap(), group.raw(&params).unwrap());
+        let materialized = params.for_materialized(0.3);
+        assert_eq!(materialized.energy_offset_ev, 0.0);
+        params.set_energy_offset(0.0).unwrap();
+        assert_eq!(group.raw(&params).unwrap(), original);
+        assert_eq!(group.energy, original.0);
+        assert_eq!(params.e0, Some(7001.0));
+        assert_eq!(params.raw_fingerprint(), initial_hash);
+        assert!(params.set_energy_offset(f64::INFINITY).is_err());
+        assert_eq!(params.energy_offset_ev, 0.0);
+        assert_eq!(
+            serde_json::from_str::<PipelineParams>("{}")
+                .unwrap()
+                .energy_offset_ev,
+            0.0
+        );
+    }
+
+    #[test]
+    fn energy_offset_matches_file_snapshot_and_diagnostic_readers() {
+        let text = b"# energy mu\n7000 0.1\n7001 0.3\n7003 1.0\n";
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("offset.dat");
+        std::fs::write(&path, text).unwrap();
+        let mut params = PipelineParams::default();
+        params.import.mode = DetectionMode::MuColumn;
+        params.import.energy_col = Some(0);
+        params.import.mu_col = Some(1);
+        let original = load_raw(&path, &params).unwrap();
+        params.set_energy_offset(-0.5).unwrap();
+        let shifted = load_raw(&path, &params).unwrap();
+        assert_eq!(shifted.0, vec![6999.5, 7000.5, 7002.5]);
+        assert_eq!(load_raw_snapshot(text, &path, &params).unwrap(), shifted);
+        let channel = DerivedSpectrum {
+            source: Some(path.clone()),
+            ..Default::default()
+        };
+        assert_eq!(channel.raw(&params).unwrap(), shifted);
+        let memory = DerivedSpectrum {
+            energy: original.0.clone(),
+            mu: original.1.clone(),
+            ..Default::default()
+        };
+        let diagnostics = load_group_raw_with_diagnostics(&path, &params, Some(&memory)).unwrap();
+        assert_eq!((diagnostics.energy, diagnostics.mu), shifted);
+        params.set_energy_offset(0.0).unwrap();
+        assert_eq!(load_raw(&path, &params).unwrap(), original);
+        assert_eq!(std::fs::read(&path).unwrap(), text);
+        let chi = DerivedSpectrum {
+            quantity: Quantity::ChiK,
+            ..memory
+        };
+        params.set_energy_offset(1.0).unwrap();
+        assert!(chi.raw(&params).is_err());
+    }
 
     #[test]
     fn fft_grid_survives_roundtrip_and_invalidates_processing_cache() {

@@ -73,9 +73,14 @@ impl StudioApp {
     }
     pub(crate) fn inspector(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
+        if self.stage == Stage::Transform {
+            self.ensure_wavelet_fields(cx);
+        }
+        if self.stage == Stage::Normalize {
+            self.ensure_normalization_editor(cx);
+        }
         let body = match self.stage {
             Stage::Data if self.fluorescence.open => self.fluorescence_inspector(cx),
-            Stage::Data if self.wavelet.open => self.wavelet_inspector(cx),
             Stage::Data if self.peaks.open => self.peak_inspector(cx),
             Stage::Data => self.data_inspector(cx).into_any_element(),
             Stage::Normalize => self.normalize_inspector(cx).into_any_element(),
@@ -412,6 +417,7 @@ impl StudioApp {
             "Clamps & window"
                 | "Solver"
                 | "Advanced"
+                | "Wavelet settings"
                 | "Back FT  R → q"
                 | "Background options"
                 | "Result"
@@ -703,7 +709,7 @@ impl StudioApp {
                     cx,
                 ));
         }
-        let mback = self.ui_params().mback.is_some();
+        let mback = self.normalization.show_mback;
         let sp = self.spectrum.as_deref();
         let e0 = sp.and_then(|s| s.e0());
         let step = self.edge_step();
@@ -944,6 +950,12 @@ impl StudioApp {
                     cx,
                 ),
             )
+            .child(self.section(
+                "Wavelet settings",
+                None,
+                vec![self.wavelet_inspector(cx)],
+                cx,
+            ))
             .child(
                 self.section(
                     "Back FT  R → q",
