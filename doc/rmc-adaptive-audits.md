@@ -1,10 +1,18 @@
-# Automatic adaptive-basis audits
+# Experimental adaptive-basis audits
 
 Unreleased Rust API, source checkout after 0.2.9. Implemented in
 [`adaptive_control.rs`](../crates/rexafs/src/xafs/rmc/adaptive_control.rs), with
 context sharing in
 [`accelerated.rs`](../crates/rexafs/src/xafs/rmc/accelerated.rs).
 This is a REXAFS optimization policy, not a reproduction of EVAX's policy.
+
+**Experimental, opt-in mode.** Exact affected-path caching is the recommended
+default (`AccelerationSettings::default()`). Adaptive training is disabled unless
+explicitly supplied. In the [Cu₂O qualification](rmc-cu2o-adaptive-qualification.md),
+the initial basis failed all six held-out spectral checks and all three guarded
+searches ultimately used exact fallback; a sustained speedup was not established.
+These audit APIs support research into the approximation. They do not make it
+qualified for routine refinement or validate every proposal between audits.
 
 An immutable adaptive basis can approximate a new geometry inside its feature
 radius without guaranteeing its spectral error. `AdaptiveBasisController`

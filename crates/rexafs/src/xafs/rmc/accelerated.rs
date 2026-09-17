@@ -19,11 +19,13 @@ use std::time::{Duration, Instant};
 /// fixed reference electronic potentials and an explicit geometric catalogue.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub enum ScatteringBasis {
-    /// Reevaluate changed paths with typed ReFEFF GENFMT. Recommended reference.
+    /// Recommended default: reuse unchanged cached paths and reevaluate changed
+    /// paths with typed ReFEFF GENFMT. Electronic potentials remain fixed.
     #[default]
     Exact,
-    /// Freeze representative amplitude/phase tables from the reference geometry,
-    /// changing the `2*k*R` propagation phase for each actual path. This adds an
+    /// Experimental, explicit opt-in: freeze representative amplitude/phase tables
+    /// from the reference geometry, changing the `2*k*R` propagation phase for each
+    /// actual path. This adds an
     /// approximation beyond pinned potentials: angular scattering and amplitude
     /// changes are neglected inside the declared limits. Beyond either limit,
     /// use exact typed paths. Limits are geometric guards, not error guarantees;
@@ -36,8 +38,11 @@ pub enum ScatteringBasis {
     },
 }
 
-/// Fixed scientific and resource limits for prepared calculations. Unreleased.
-/// Training manifests can define explicit immutable adaptive stages. No basis
+/// Fixed scientific and resource limits for prepared calculations (unreleased).
+/// [`Self::default`] and omitted JSON settings select exact affected-path caching:
+/// [`ScatteringBasis::Exact`], a 256 MiB cache, no moments and no adaptive basis.
+/// This is the recommended mode. It still uses fixed reference potentials.
+/// Experimental training manifests can define immutable adaptive stages. No basis
 /// adapts to accepted/rejected trials; cold and warm calls evaluate the
 /// same function. This preserves exact session resume for the chosen model.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -45,7 +50,8 @@ pub enum ScatteringBasis {
 pub struct AccelerationSettings {
     /// Fixed catalogue; radius/order must match every requested ReFEFF option.
     pub catalogue: PathCatalogueSettings,
-    /// Exact typed paths by default; frozen representatives require opt-in.
+    /// Exact affected-path caching by default. Frozen representatives are an
+    /// experimental approximation and require explicit opt-in.
     pub basis: ScatteringBasis,
     /// Bounded Rayon worker pool; default 1, accepted range 1..=64.
     pub workers: usize,
@@ -65,16 +71,20 @@ pub struct AccelerationSettings {
     /// Optional controlled moment summation for frozen-basis groups. Defaults to
     /// None (direct sums). Individual path reporting always uses direct sums.
     pub moments: Option<MomentSettings>,
-    /// Optional error-driven training stage for shared frozen tables. Requires
-    /// Frozen basis and no moment approximation. Its feature radius replaces the
-    /// legacy leg/angle guards. Default None retains legacy behavior.
+    /// Experimental, opt-in error-driven training for shared frozen tables.
+    /// Default None disables adaptive training; it is never enabled automatically.
+    /// Requires Frozen basis and no moment approximation. Its feature radius
+    /// replaces the legacy leg/angle guards. Independent accuracy and overall
+    /// speed are not guaranteed; use [`AdaptiveBasisController`] for periodic
+    /// exact audits and check final spectra against exact paths. Prefer the
+    /// default exact caching for routine refinement.
     pub adaptive: Option<AdaptiveBasisSettings>,
 }
 impl Default for AccelerationSettings {
     fn default() -> Self {
         Self {
             catalogue: Default::default(),
-            basis: Default::default(),
+            basis: ScatteringBasis::Exact,
             workers: 1,
             max_contexts: 128,
             max_total_paths: 1_000_000,
@@ -225,6 +235,9 @@ struct Work {
 /// criteria are rejected to avoid implying equivalent path selection.
 /// The calculator retains immutable references and never learns from MC history.
 /// Cache eviction/rejected trials therefore cannot alter scientific results.
+/// Pass [`AccelerationSettings::default`] for the recommended exact caching.
+/// Frozen/adaptive representatives are experimental approximations, disabled by
+/// default, and need independent accuracy and end-to-end timing checks.
 pub struct PreparedRefeffCalculator {
     options: RefeffOptions,
     references: Vec<Configuration>,
@@ -520,8 +533,9 @@ impl PreparedRefeffCalculator {
         reports.sort_by(|a, b| a.context.cmp(&b.context));
         reports
     }
-    /// Construct a new immutable basis stage with the same electronic references
-    /// and options. Prepared electronic contexts/catalogues are shared immutably;
+    /// Experimental: construct a new immutable adaptive basis stage with the same
+    /// electronic references and options. Prepared electronic contexts/catalogues
+    /// are shared immutably;
     /// basis training is lazy and spectra start with empty caches. Both stages share
     /// cancellation. Use an increased epoch and retained
     /// training geometries; then explicitly rebase an optimizer before stepping.

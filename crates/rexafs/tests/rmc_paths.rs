@@ -244,6 +244,12 @@ fn typed_refeff_single_path_matches_pipeline_for_disorder_and_polarization() {
 #[test]
 fn prepared_multiple_scattering_matches_pipeline_and_rejected_trial_cache_is_safe() {
     use rexafs::structure::Edge;
+    let defaults = AccelerationSettings::default();
+    let omitted: AccelerationSettings = serde_json::from_str("{}").unwrap();
+    assert_eq!(omitted, defaults);
+    assert_eq!(omitted.basis, ScatteringBasis::Exact);
+    assert!(omitted.adaptive.is_none() && omitted.moments.is_none());
+    assert!(omitted.cache_bytes > 0);
     let c = Configuration {
         atoms: vec![
             Atom {
@@ -282,7 +288,7 @@ fn prepared_multiple_scattering_matches_pipeline_and_rejected_trial_cache_is_saf
         },
         workers: 2,
         snapshots_per_context: 3,
-        ..Default::default()
+        ..omitted
     };
     let mut prepared =
         PreparedRefeffCalculator::new(options.clone(), vec![c.clone()], settings.clone()).unwrap();
@@ -317,6 +323,9 @@ fn prepared_multiple_scattering_matches_pipeline_and_rejected_trial_cache_is_saf
         "retained parent avoids rescattering"
     );
     let stats = prepared.stats();
+    assert!(stats.exact_paths > 0);
+    assert_eq!(stats.basis_paths, 0);
+    assert_eq!(stats.representatives, 0);
     assert_eq!(
         stats.visited_paths,
         stats.exact_paths + stats.basis_paths + stats.reused_paths + stats.outside_radius_paths

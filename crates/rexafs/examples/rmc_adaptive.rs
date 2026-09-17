@@ -1,7 +1,9 @@
-//! Unreleased automatic adaptive-basis audit and checkpoint example.
+//! Experimental, opt-in adaptive-basis audit and checkpoint example (unreleased).
 //! `cargo run --release -p rexafs --features refeff-runner --example rmc_adaptive -- NEW_DIR`
 //! Synthetic Cu dimer only: this checks the API, not a material fit or convergence.
 //! Audits use the ordinary complex-R objective and exact paths at fixed potentials.
+//! Exact caching is the recommended default; this example deliberately enables
+//! the approximation to demonstrate auditing, not a qualified speedup.
 use rexafs::{fitting::FeffFitTransform, rmc::*, structure::Edge};
 use serde_json::json;
 use std::path::PathBuf;
@@ -11,6 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .nth(1)
             .ok_or("usage: rmc_adaptive NEW_DIR")?,
     );
+    eprintln!("Experimental adaptive mode; exact caching is recommended for routine refinement.");
     std::fs::create_dir(&out)?;
     let reference = Configuration {
         atoms: vec![
@@ -134,7 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     control
         .checkpoint_rmc(&session, &calc)?
         .save(out.join("final.json"))?;
-    let report = json!({"note":"Synthetic API demonstration; no physical convergence claim",
+    let report = json!({"experimental":true,"note":"Experimental adaptive API demonstration; exact caching is recommended. No physical convergence or speedup claim.",
         "initial_score_before_audit":initial,"best_score":session.best().evaluation.score,
         "attempts":session.completed(),"exact_fallback":control.uses_exact_paths(),
         "audits":control.reports(),"revisions":session.revisions(),"stage_stats":calc.stats()});

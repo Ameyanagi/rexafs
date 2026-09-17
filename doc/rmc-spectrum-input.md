@@ -22,7 +22,7 @@ input.k_range = Some([2.5, 12.0]); // Measured support, including window tapers.
 let dataset = RmcDataset::from_spectrum(&spectrum, input)?;
 let problem = EnsembleProblem::single(configuration.clone(), dataset);
 
-// Exact path updates with fixed reference electronic potentials.
+// Recommended default: exact cached path updates at fixed reference potentials.
 let mut calculator = PreparedRefeffCalculator::new(
     RefeffOptions { path_criteria: [0.0; 2], ..Default::default() },
     vec![configuration],
@@ -56,6 +56,12 @@ sample. ReFEFF remains the primary calculator (`refeff-runner` feature). Exact
 prepared path updates still pin the electronic potentials; the input adapter
 does not change that approximation. `EvolutionSession` accepts the same problem
 and retains the same snapshot. See [the session guide](rmc.md) for controls.
+
+`AccelerationSettings::default()` already selects exact caching with a 256 MiB
+cache and no adaptive or moment approximation. This is the recommended path for
+Spectrum input. Adaptive scattering is an **experimental, explicit opt-in**;
+see the [Cu₂O qualification](rmc-cu2o-adaptive-qualification.md) before enabling
+it. Creating a dataset from a Spectrum does not select or change the calculator.
 
 ## What is retained and calculated
 

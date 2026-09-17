@@ -41,14 +41,18 @@ Requests outside the declared displacement bound fail explicitly. Limits on
 vertices, extensions, paths and contexts prevent unbounded enumeration. The
 atom-to-path map identifies which contributions require updating after a move.
 
-## Exact paths and the optional representative basis
+## Default exact caching and experimental representatives
 
-`ScatteringBasis::Exact` recalculates affected paths using the typed kernels.
+`AccelerationSettings::default()` selects **exact caching**: `ScatteringBasis::Exact`,
+a 256 MiB snapshot cache, `adaptive: None` and `moments: None`. Omitted JSON
+settings select the same mode. This is the recommended default.
+`ScatteringBasis::Exact` reuses unchanged paths and recalculates affected paths
+using the typed kernels.
 “Exact” refers to these path evaluations at **fixed reference potentials**; it
 does not mean exact electronic physics, infinite scattering order or equality
 with the rounded file pipeline.
 
-`ScatteringBasis::Frozen` computes immutable representative amplitude/phase
+The **experimental, opt-in** `ScatteringBasis::Frozen` computes immutable representative amplitude/phase
 tables from the reference. Equivalent reference geometries share a table, within
 one electronic context. Every actual path retains its current half-length in the
 `2 k R` phase. This approximation neglects changes in scattering amplitude and
@@ -231,7 +235,12 @@ See [hybrid search, adaptive stages and population caching](rmc-search-upgrade.m
 for acceptance feedback, immutable trained basis stages, explicit rescoring,
 first-shell fitter integration and the measured population-cache comparison.
 
-## Automatic adaptive audits (unreleased)
+## Experimental adaptive audits (unreleased)
+
+Adaptive training is disabled by default. It is a research option, with no
+established overall speedup in the [Cu₂O qualification](rmc-cu2o-adaptive-qualification.md).
+Keep exact caching for routine refinement; audit and verify exact final spectra
+when explicitly evaluating adaptive mode.
 
 [`AdaptiveBasisController`](../crates/rexafs/src/xafs/rmc/adaptive_control.rs)
 adds periodic exact checks in the actual dataset objectives, error-triggered

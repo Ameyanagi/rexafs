@@ -117,7 +117,12 @@ The [runnable benchmark](../crates/rexafs/examples/rmc_population_benchmark.rs)
 records seeds, settings, counts, timings and equality checks. The local raw record
 is `/Users/ryuichi/dev/evax-analysis/output/cu2o-population-cache-2026-09-17.json`.
 
-## Adaptive representative training with explicit stage boundaries
+## Experimental adaptive training with explicit stage boundaries
+
+Exact affected-path caching is the recommended default. Adaptive training is an
+experimental opt-in; the [Cu₂O qualification](rmc-cu2o-adaptive-qualification.md)
+did not establish sustained acceleration within the declared error limits.
+Periodic audits and exact final checks remain necessary when researching it.
 
 `AccelerationSettings::adaptive = Some(AdaptiveBasisSettings { ... })` enables
 error-driven training under `ScatteringBasis::Frozen`; moment approximation must

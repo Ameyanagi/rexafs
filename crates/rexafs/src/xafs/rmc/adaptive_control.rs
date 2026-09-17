@@ -1,9 +1,9 @@
-//! Periodic exact audits around immutable adaptive stages. Unreleased.
+//! Exact audits for experimental, opt-in adaptive stages. Unreleased.
 use super::*;
 use crate::rmc::session::{evaluate_candidates, PreparedEnsemble};
 
-/// Automatic audit policy (unreleased). These are conservative numerical defaults,
-/// not experimental uncertainties. Explicitly enable an adaptive basis first.
+/// Audit policy for experimental adaptive mode (unreleased). Numerical defaults
+/// are not experimental uncertainties. Explicitly enable an adaptive basis first.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct AdaptiveAuditSettings {
@@ -83,11 +83,14 @@ pub struct AdaptiveAuditReport {
     /// Identity after this audit (unchanged for Passed).
     pub next: String,
 }
-/// Unreleased: periodically audit an adaptive calculator against exact typed
-/// paths, retrain on retained geometries and atomically rebase the optimizer.
+/// Experimental and unreleased: periodically audit an adaptive calculator
+/// against exact typed paths, retrain on retained geometries and atomically
+/// rebase the optimizer.
 /// Use `step_rmc` or `step_evolution` for automatic scheduling, and explicitly
 /// audit once more before publishing a time-limited result. This is a staged
 /// optimizer, not a stationary Monte Carlo sampler or EVAX-identical policy.
+/// Exact caching is the recommended default and needs no adaptive controller.
+/// Audits do not qualify all intervening proposals or guarantee a speedup.
 ///
 /// Audits reuse the native objective, including complex R real/imaginary terms.
 /// Electronic contexts are shared, and every population member is rescored on a

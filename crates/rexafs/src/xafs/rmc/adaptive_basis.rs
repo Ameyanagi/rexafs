@@ -1,12 +1,18 @@
-//! Explicit, immutable training stages for shared scattering representatives.
+//! Experimental, opt-in training stages for shared scattering representatives.
 use super::*;
 
-/// Unreleased: measured-error training for a shared path basis. Training happens
-/// during context preparation, never in response to accepted/rejected moves.
+/// Experimental and unreleased: measured-error training for a shared path basis.
+/// Disabled by default; explicitly set [`AccelerationSettings::adaptive`] to opt
+/// in. Exact affected-path caching is recommended for routine refinement.
+/// Training happens during context preparation, never in response to
+/// accepted/rejected moves.
 /// Serialize this manifest with acceleration settings for reproducible resume.
 /// The result is an approximation away from the training geometries: a geometric
 /// radius is not a spectral error bound. Check independent configurations with
 /// `compare_reference`, then create a new stage and rescore the optimizer.
+/// Use [`AdaptiveBasisController`] for periodic audits and verify final spectra
+/// with exact paths. A training check does not establish an accuracy bound for
+/// unseen geometries or an overall speed advantage.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct AdaptiveBasisSettings {

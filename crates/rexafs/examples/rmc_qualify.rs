@@ -8,6 +8,8 @@
 //! checkpoint I/O. Final audit/verification are measured separately. Approximate
 //! histories are segmented at model changes; final ranking uses exact scores.
 //! These are fixed-potential checks, not fresh-electronic-potential validation.
+//! Exact caching is recommended. Adaptive mode is an experimental opt-in;
+//! this harness measures its accuracy and total cost, not an assumed speedup.
 //! This bounded research harness requires one R-space dataset and one structure;
 //! the general library supports multiple datasets and weighted structures.
 use rexafs::{rmc::*, Spectrum};
@@ -51,6 +53,7 @@ fn calculator(job: &Job, settings: AccelerationSettings) -> Result<PreparedRefef
     )?)
 }
 fn adaptive(job: &Job, mut settings: AccelerationSettings) -> Result<AccelerationSettings> {
+    eprintln!("Experimental adaptive mode; exact caching is the recommended default.");
     settings.basis = ScatteringBasis::Frozen {
         max_leg_change: 0.02,
         max_angle_change: 0.02,

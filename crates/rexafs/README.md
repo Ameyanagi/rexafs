@@ -88,7 +88,10 @@ The source checkout also includes an experimental reverse Monte Carlo (RMC)
 engine with ReFEFF as its primary calculator. It supports constrained atomic
 moves, finite and periodic geometry, weighted structures, k/R/q/wavelet objectives,
 resumable sessions, evolutionary search and structural reports. ReFEFF offers
-exact local-input caching and optional pinned-potential path updates. See the
+exact local-input caching and prepared path updates at fixed potentials.
+`PreparedRefeffCalculator` with `AccelerationSettings::default()` is the recommended
+exact caching path. Adaptive scattering is experimental, disabled by default,
+and requires explicit opt-in with exact accuracy audits. See the
 [RMC guide](../../doc/rmc.md) for Rust examples, performance measurements,
 scientific assumptions and validation limits. This API is unreleased and has no desktop controls yet.
 

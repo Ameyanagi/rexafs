@@ -14,6 +14,23 @@ implementation; the [new validation and performance record](rmc-performance.md)
 describes this extension. These capabilities do not establish EVAX numerical
 parity or experimental accuracy.
 
+## Default calculator and experimental adaptive mode
+
+Use `PreparedRefeffCalculator` with `AccelerationSettings::default()` for the
+recommended **exact caching** mode. Unchanged paths are reused and changed paths
+are recalculated with typed ReFEFF kernels at fixed reference electronic
+potentials. The default cache budget is 256 MiB; adaptive training and moment
+approximations are disabled. Omitted JSON settings use these same defaults.
+
+**Adaptive mode is experimental and opt-in.** It requires an explicit frozen
+basis and `adaptive: Some(AdaptiveBasisSettings { ... })`. The
+[Cu₂O qualification](rmc-cu2o-adaptive-qualification.md) found that the initial
+basis failed the spectral-error gate on all six held-out structures and every
+adaptive-start search fell back to exact evaluation. No sustained speedup was
+established. Use [periodic exact audits](rmc-adaptive-audits.md) and verify final
+spectra with exact paths when researching this mode. Existing explicitly
+configured jobs and checkpoints retain their chosen mode.
+
 ## Start with a processed Spectrum
 
 The recommended **unreleased** input is `RmcDataset::from_spectrum(&spectrum,
