@@ -118,6 +118,23 @@ fn weighted_linear_fit_and_covariance_match_closed_form() {
 }
 
 #[test]
+fn exactly_zero_residual_does_not_invent_correlations() {
+    let x: Vec<_> = (0..11).map(|i| i as f64).collect();
+    let result = PeakFit::new(0.0..=10.0)
+        .absolute()
+        .constant_baseline(3.)
+        .fit_prepared(&x, &[3.; 11], None, None)
+        .unwrap();
+    assert_eq!(result.objective, 0.);
+    assert_eq!(result.covariance, Some(vec![vec![0.]]));
+    assert!(result.correlation.is_none());
+    assert!(result
+        .warnings
+        .iter()
+        .any(|w| w.contains("variance is zero")));
+}
+
+#[test]
 fn bound_optimum_is_retained_without_false_covariance() {
     let x: Vec<_> = (0..101).map(|i| i as f64 / 10.).collect();
     let y: Vec<_> = x.iter().map(|x| 3. + 0.2 * x).collect();

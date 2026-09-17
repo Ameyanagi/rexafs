@@ -543,7 +543,9 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
         KeyBinding::new("enter", LeaveFilter, Some("GroupFilter > TextInput")),
         KeyBinding::new("escape", EscapeFilter, Some("GroupFilter > TextInput")),
         KeyBinding::new("left", FramePrev, Some("Operando && !TextInput")),
+        KeyBinding::new("left", FramePrev, Some("PeakFits && !TextInput")),
         KeyBinding::new("right", FrameNext, Some("Operando && !TextInput")),
+        KeyBinding::new("right", FrameNext, Some("PeakFits && !TextInput")),
         KeyBinding::new("shift-left", FrameJumpBack, Some("Operando && !TextInput")),
         KeyBinding::new("shift-right", FrameJumpFwd, Some("Operando && !TextInput")),
         KeyBinding::new("home", FrameFirst, Some("Operando && !TextInput")),
@@ -1100,6 +1102,7 @@ pub struct StudioApp {
     analysis: shell::tools::AnalysisState,
     measurements: shell::measurements::MeasurementState,
     live: shell::live::LiveState,
+    peaks: shell::peaks::PeakState,
     journal: shell::journal::JournalState,
     palette: Option<shell::palette::PaletteState>,
     path_route: Option<shell::path_routing::RoutingCard>,
@@ -2677,6 +2680,33 @@ mod keybinding_tests {
             assert!(predicate.depth_of(&editing_context).is_none());
         }
     }
+
+    #[test]
+    fn peak_frame_keys_only_navigate_focused_results_not_parameter_editors() {
+        let studio = KeyContext::parse("Studio Explore").unwrap();
+        let peak = KeyContext::parse("PeakFits").unwrap();
+        let editing = [
+            studio.clone(),
+            peak.clone(),
+            KeyContext::parse("TextInput").unwrap(),
+        ];
+        let browsing = [studio.clone(), peak];
+        let unrelated = [studio];
+        let bindings = studio_keybindings();
+        let navigators: Vec<_> = bindings
+            .iter()
+            .filter(|b| {
+                (b.action().as_any().is::<super::FramePrev>()
+                    || b.action().as_any().is::<super::FrameNext>())
+                    && b.predicate().unwrap().depth_of(&browsing).is_some()
+            })
+            .collect();
+        assert_eq!(navigators.len(), 2);
+        for b in navigators {
+            assert!(b.predicate().unwrap().depth_of(&editing).is_none());
+            assert!(b.predicate().unwrap().depth_of(&unrelated).is_none());
+        }
+    }
 }
 
 pub(crate) fn packaged_data_file() -> Option<PathBuf> {
@@ -2959,6 +2989,7 @@ impl StudioApp {
             analysis: shell::tools::AnalysisState::default(),
             measurements: Default::default(),
             live: Default::default(),
+            peaks: Default::default(),
             journal: shell::journal::JournalState::default(),
             palette: None,
             path_route: None,
@@ -8451,6 +8482,7 @@ impl StudioApp {
         self.capture_group_state(&mut group_state);
         ProjectFile {
             series_measurements: self.measurements.archive.clone(),
+            peak_fits: self.peaks.archive.clone(),
             parser_evidence: self.parser_evidence.clone(),
             imports: self.imports.clone(),
             import_history: self.intake.history.clone(),
@@ -8756,6 +8788,9 @@ impl StudioApp {
         self.measurements.stop();
         self.live.stop();
         self.live = Default::default();
+        self.peaks.stop();
+        self.peaks = Default::default();
+        self.peaks.archive = project.peak_fits.clone();
         self.measurements = shell::measurements::MeasurementState::from_archive(
             project.series_measurements.clone(),
         );

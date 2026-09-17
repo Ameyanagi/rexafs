@@ -215,6 +215,7 @@ pub(super) fn map_paths(
         }
         Ok(())
     }
+    project.peak_fits.relocate(f)?;
     for session in &mut project.series_measurements.live_sessions {
         session.snapshots = std::mem::take(&mut session.snapshots)
             .into_iter()
@@ -280,12 +281,13 @@ pub(super) fn map_paths(
 }
 
 /// Recovery inputs retain bytes without becoming newly imported spectra.
-fn live_artifacts(project: &ProjectFile) -> BTreeSet<PathBuf> {
+fn analysis_artifacts(project: &ProjectFile) -> BTreeSet<PathBuf> {
     project
         .series_measurements
         .live_sessions
         .iter()
         .flat_map(|s| s.snapshots.iter().cloned())
+        .chain(project.peak_fits.artifacts().cloned())
         .chain(
             project
                 .derived
@@ -404,7 +406,7 @@ fn inputs(
             }
         }
     }
-    for artifact in live_artifacts(project) {
+    for artifact in analysis_artifacts(project) {
         files.insert(artifact, SourceKind::AnalysisArtifact);
     }
     Ok(files)
@@ -623,7 +625,7 @@ pub(super) fn restore(
         .filter(|f| f.kind == SourceKind::Spectrum)
         .map(|f| absolute(&folder.join(&f.path)))
         .collect::<Result<_, _>>()?;
-    let artifacts = live_artifacts(&project);
+    let artifacts = analysis_artifacts(&project);
     project.raw_files.retain(|path| !artifacts.contains(path));
     if project
         .spectrum_file

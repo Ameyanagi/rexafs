@@ -31,6 +31,7 @@ mod series_measurements;
 mod live;
 #[allow(dead_code)]
 mod live_intake;
+mod peak_fits;
 mod settings;
 mod source_evidence;
 mod spectrum_colors;

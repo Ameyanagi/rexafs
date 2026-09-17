@@ -301,6 +301,17 @@ impl PeakFit {
         spectrum: &XASSpectrum,
         peak_intervals: &[RangeInclusive<f64>],
     ) -> Result<Self, PeakFitError> {
+        self.initialize_baseline_with_progress(spectrum, peak_intervals, |_, _| true)
+    }
+    /// Baseline initialization with cancellation between optimizer iterations.
+    /// The callback receives iteration and squared residual objective; returning
+    /// false rejects the incomplete initialization and leaves this model unchanged.
+    pub fn initialize_baseline_with_progress(
+        &self,
+        spectrum: &XASSpectrum,
+        peak_intervals: &[RangeInclusive<f64>],
+        progress: impl FnMut(usize, f64) -> bool,
+    ) -> Result<Self, PeakFitError> {
         self.validate()?;
         let mut baseline = self.clone();
         baseline.components.retain(|c| c.role == PeakRole::Baseline);
@@ -317,7 +328,7 @@ impl PeakFit {
         baseline
             .exclude
             .extend(peak_intervals.iter().map(|r| [*r.start(), *r.end()]));
-        let fit = baseline.fit(spectrum)?;
+        let fit = baseline.fit_with_progress(spectrum, progress)?;
         if !matches!(
             fit.termination,
             PeakTermination::Converged | PeakTermination::FixedModel

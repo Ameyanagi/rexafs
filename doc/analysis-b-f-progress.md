@@ -90,3 +90,25 @@ their integration test are excluded from the crate archive.
 GUI parameter editing, retained current/series diagnostics, Live peak recipes,
 Python/TypeScript bindings and full milestone-C qualification remain in progress.
 No GUI peak-fitting completion is claimed by this core increment.
+
+## C2: retained desktop peak fits
+
+Data analysis now has a peak-model workspace with initial components/residuals,
+dragged fit limits, optional baseline initialization, final masks, constraints,
+and current/marked/Series fitting. Curves and full diagnostics are retained in
+checksum-verified disk artifacts, while batch summaries remain resident. Embedded
+projects carry those artifacts without importing them as extra spectra.
+
+The result workspace offers fit/residual, correlation and unit-bearing trends;
+left/right navigation preserves text editing. Saved models are immutable revisions.
+Exports retain failed frames, input digests, masks, origins and captured series
+coordinates. The [computer-use record](validation/2026-09-17-peaks/README.md)
+shows synthetic masked fits, all 14 batch outcomes, project recovery and exports.
+The [guide](xanes-peak-fitting.md#desktop-workflow) describes the workflow.
+
+Core tests now pass 209 unit tests and two reference integrations. The desktop
+suite passed 577 tests with six ignored before final presentation/navigation
+adjustments, followed by six peak-filtered tests and release-build computer use.
+Strict core Clippy passed. Live peak recipes, Python/TypeScript bindings, native
+platform qualification and the remaining milestone acceptance checks are still
+in progress. D–F have not been implemented by this increment.

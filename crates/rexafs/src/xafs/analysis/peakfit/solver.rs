@@ -89,7 +89,8 @@ pub struct PeakFitResult {
     /// Local covariance; absolute-error scaling when standard deviations were given,
     /// otherwise multiplied by objective/degrees_of_freedom.
     pub covariance: Option<Vec<Vec<f64>>>,
-    /// Dimensionless correlations corresponding to covariance_names.
+    /// Dimensionless correlations corresponding to covariance_names. Absent when
+    /// any conditional variance is zero; the warning explains that case.
     pub correlation: Option<Vec<Vec<f64>>>,
     /// Why covariance/standard errors were withheld, rather than replaced by zero.
     pub uncertainty_unavailable: Option<String>,
@@ -508,17 +509,21 @@ pub(super) fn fit(
     let center_error = covariance
         .as_ref()
         .and_then(|cov| solved.propagated(cov, Problem::peak_center));
-    let correlation = covariance.as_ref().map(|cov| {
-        DMatrix::from_fn(cov.nrows(), cov.ncols(), |i, j| {
-            let denominator = (cov[(i, i)] * cov[(j, j)]).sqrt();
-            if denominator > 0. {
-                cov[(i, j)] / denominator
-            } else if i == j {
-                1.
-            } else {
-                0.
-            }
-        })
+    let correlation = covariance.as_ref().and_then(|cov| {
+        if (0..cov.nrows()).any(|i| cov[(i, i)] <= 0.) {
+            warnings.push("Correlation unavailable: a conditional variance is zero".into());
+            return None;
+        }
+        // Separate roots avoid underflow in a product of very small variances.
+        let matrix = DMatrix::from_fn(cov.nrows(), cov.ncols(), |i, j| {
+            cov[(i, j)] / cov[(i, i)].sqrt() / cov[(j, j)].sqrt()
+        });
+        if matrix.iter().all(|v| v.is_finite()) {
+            Some(matrix)
+        } else {
+            warnings.push("Correlation unavailable: numerical scaling overflow".into());
+            None
+        }
     });
     let nested = |matrix: DMatrix<f64>| {
         (0..matrix.nrows())

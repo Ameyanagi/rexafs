@@ -205,8 +205,12 @@ struct HandleDecor {
 impl StudioApp {
     /// Handles the stage exposes on a given plot, with their current data x.
     fn handle_specs(&self, plot: usize) -> (Vec<(HandleKey, f64)>, Vec<Span>) {
-        if plot == super::measurements::drag::PLOT_MEASUREMENT {
-            let specs = self.measurement_handle_specs();
+        if plot == super::measurements::drag::PLOT_MEASUREMENT || plot == super::peaks::PLOT_PEAKS {
+            let specs = if plot == super::peaks::PLOT_PEAKS {
+                self.peak_handle_specs()
+            } else {
+                self.measurement_handle_specs()
+            };
             let spans = if specs.len() == 2 {
                 vec![Span {
                     lo: Some(HandleKey::MeasurementStart),
@@ -440,6 +444,7 @@ impl StudioApp {
     pub(crate) fn plot_entity(&self, plot: usize) -> Option<Entity<RuvizPlot>> {
         match plot {
             super::measurements::drag::PLOT_MEASUREMENT => self.measurement_preview_entity(),
+            super::peaks::PLOT_PEAKS => self.peaks.plot.clone(),
             PREVIEW_K => self.fit_preview.k.clone(),
             PREVIEW_R => self.fit_preview.r.clone(),
             PREVIEW_Q => self.fit_preview.q.clone(),
@@ -469,6 +474,8 @@ impl StudioApp {
                         x,
                         if p == super::measurements::drag::PLOT_MEASUREMENT {
                             self.measurement_handle_readout(x)
+                        } else if p == super::peaks::PLOT_PEAKS {
+                            self.peak_handle_readout(x)
                         } else {
                             k.readout(x)
                         },
@@ -715,7 +722,11 @@ impl StudioApp {
 
     fn apply_handle_drag(&mut self, key: HandleKey, x: f64, cx: &mut Context<Self>) {
         if matches!(key, HandleKey::MeasurementStart | HandleKey::MeasurementEnd) {
-            self.drag_measurement_boundary(key, x, cx);
+            if self.peaks.open && self.stage == Stage::Data {
+                self.drag_peak_boundary(key, x, cx);
+            } else {
+                self.drag_measurement_boundary(key, x, cx);
+            }
             return;
         }
         let e0 = self

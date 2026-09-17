@@ -111,23 +111,26 @@ pub(crate) fn fwhm(shape: PeakShape, p: &[f64]) -> Option<f64> {
     if p[3] == 0. {
         return Some(p[2]);
     }
-    let target = voigt(0., p[2], p[3]) / 2.;
-    let (mut low, mut high) = (0., p[2] + p[3]);
+    let scale = p[2].max(p[3]);
+    let (gaussian, lorentzian) = (p[2] / scale, p[3] / scale);
+    let target = voigt(0., gaussian, lorentzian) / 2.;
+    let (mut low, mut high) = (0., gaussian + lorentzian);
     for _ in 0..64 {
-        if voigt(high, p[2], p[3]) <= target {
+        if voigt(high, gaussian, lorentzian) <= target {
             break;
         }
         high *= 2.;
     }
     for _ in 0..80 {
         let mid = low + (high - low) / 2.;
-        if voigt(mid, p[2], p[3]) > target {
+        if voigt(mid, gaussian, lorentzian) > target {
             low = mid;
         } else {
             high = mid;
         }
     }
-    Some(low + high)
+    let width = (low + high) * scale;
+    width.is_finite().then_some(width)
 }
 
 #[cfg(test)]
@@ -170,5 +173,11 @@ mod tests {
             assert_eq!(voigt(x, width, 0.), gaussian(x, width));
             assert_eq!(voigt(x, 0., 2. * gamma), lorentzian(x, 2. * gamma));
         }
+        let reference = fwhm(PeakShape::Voigt, &[0., 1., 1., 0.5]).unwrap();
+        for scale in [1e-200, 1e200] {
+            let width = fwhm(PeakShape::Voigt, &[0., 1., scale, scale * 0.5]).unwrap();
+            assert!((width / scale - reference).abs() < 1e-14);
+        }
+        assert_eq!(fwhm(PeakShape::Voigt, &[0., 1., f64::MAX, f64::MAX]), None);
     }
 }

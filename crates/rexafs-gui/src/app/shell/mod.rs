@@ -43,6 +43,7 @@ pub(crate) mod parameter_actions;
 mod path_diagnostics;
 pub mod path_picker;
 pub(crate) mod path_routing;
+pub(crate) mod peaks;
 pub(crate) mod publish;
 pub mod series;
 mod spectrum_colors;
@@ -453,6 +454,7 @@ impl StudioApp {
             .child(self.status_bar(cx))
             .children(self.series_appearance_overlay(cx))
             .children(self.live_recipe_overlay(cx))
+            .children(self.peak_menu_overlay(cx))
             .children(self.group_menu_overlay(cx))
             .children(self.palette_overlay(cx))
             .children(self.parameter_menu_overlay(cx))

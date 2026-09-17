@@ -1472,7 +1472,15 @@ impl StudioApp {
         &self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        self.tool_list(&Tool::ANALYSIS, cx)
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                super::button(&self.theme, "open-peak-analysis", "XANES peak fit…", false)
+                    .on_click(cx.listener(|app, _, _, cx| app.open_peaks(cx))),
+            )
+            .child(self.tool_list(&Tool::ANALYSIS, cx))
     }
 
     fn tool_list(&self, tools: &[Tool], cx: &mut Context<Self>) -> impl IntoElement + use<> {

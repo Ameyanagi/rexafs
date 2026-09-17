@@ -74,6 +74,7 @@ impl StudioApp {
     pub(crate) fn inspector(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
         let body = match self.stage {
+            Stage::Data if self.peaks.open => self.peak_inspector(cx),
             Stage::Data => self.data_inspector(cx).into_any_element(),
             Stage::Normalize => self.normalize_inspector(cx).into_any_element(),
             Stage::Background => self.background_inspector(cx).into_any_element(),

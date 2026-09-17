@@ -182,7 +182,7 @@ impl MeasurementState {
 }
 
 impl StudioApp {
-    fn measurement_input(
+    pub(crate) fn measurement_input(
         &self,
         group: &crate::group_identity::GroupId,
         label: String,

@@ -472,7 +472,7 @@ pub fn calculate_row(
     output
 }
 
-fn resolved_preparation(sp: &XASSpectrum) -> serde_json::Value {
+pub(crate) fn resolved_preparation(sp: &XASSpectrum) -> serde_json::Value {
     use rexafs::prelude::NormalizationMethod;
     let normalization = match &sp.normalization {
         Some(NormalizationMethod::PrePostEdge(n)) => {
