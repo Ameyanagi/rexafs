@@ -103,9 +103,94 @@ pub struct XASSpectrum {
     /// Explicit pre/post-edge fitting of prepared input. False preserves its
     /// values and unit step; true is selected by `set_normalization_method`.
     refit_prepared: bool,
+    /// Acquisition interpretation, populated for explicit transmission imports.
+    /// Unknown remains distinct from fluorescence and electron-yield detector ratios.
+    #[serde(skip_serializing_if = "super::fluorescence::AbsorptionMode::is_unknown")]
+    absorption_mode: super::fluorescence::AbsorptionMode,
+    /// Immutable history of a thick-sample XANES correction; survives normalization
+    /// and data edits, blocks repeated correction and unqualified EXAFS processing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fluorescence_correction: Option<Box<super::fluorescence::FluorescenceCorrectionResult>>,
 }
 
 impl XASSpectrum {
+    /// Acquisition interpretation attached to these arrays. Unknown means missing
+    /// evidence, not an automatically selected fluorescence mode.
+    pub fn absorption_mode(&self) -> super::fluorescence::AbsorptionMode {
+        self.absorption_mode
+    }
+
+    /// Explicitly attach or revise the acquisition interpretation. Does not change
+    /// arrays or processing caches. A correction record remains attached; changing
+    /// this declaration cannot enable repeated correction or unqualified EXAFS.
+    pub fn set_absorption_mode(&mut self, mode: super::fluorescence::AbsorptionMode) -> &mut Self {
+        self.absorption_mode = mode;
+        self
+    }
+
+    /// Correct fluorescence over-absorption into an independent, unnormalized spectrum.
+    ///
+    /// Internal conventional normalization runs automatically; the original spectrum
+    /// stays unchanged. Calling this method on Unknown input explicitly interprets it
+    /// as fluorescence and records that assumption. Known transmission, prepared
+    /// norm/flat input and already corrected spectra are rejected. Select measured
+    /// geometry and emission in `settings`; no angle or sample formula is inferred.
+    /// The output retains original arrays and atomic/internal-fit provenance through
+    /// [`Self::fluorescence_correction`]. Call `normalize()` to run the independent
+    /// final normalization (polynomial by default; MBACK can be selected normally).
+    /// Corrected-array uncertainties are unavailable. This XANES-only branch cannot
+    /// run AUTOBK, EXAFS transforms or wavelets; use the retained original instead.
+    pub fn correct_fluorescence(
+        &self,
+        settings: &super::fluorescence::FluorescenceCorrection,
+    ) -> Result<Self, super::fluorescence::FluorescenceError> {
+        use super::fluorescence::{AbsorptionMode, FluorescenceError};
+        let fail = |message: &str| FluorescenceError(message.into());
+        if self.absorption_mode == AbsorptionMode::Transmission {
+            return Err(fail("transmission data cannot use fluorescence correction"));
+        }
+        if self.fluorescence_correction.is_some() {
+            return Err(fail(
+                "this lineage is already corrected; start from its original uncorrected spectrum",
+            ));
+        }
+        if self.prepared_space.is_some() {
+            return Err(fail(
+                "provide uncorrected fluorescence mu, not normalized or flattened input",
+            ));
+        }
+        let energy = self.energy.as_ref().ok_or_else(|| fail("missing energy"))?;
+        let mu = self.mu.as_ref().ok_or_else(|| fail("missing absorption"))?;
+        let mut settings = settings.clone();
+        if settings.e0.is_none() {
+            settings.e0 = self.e0;
+        }
+        let mut result = settings.apply(energy.as_slice(), mu.as_slice())?;
+        result.input_mode = self.absorption_mode;
+        if self.absorption_mode == AbsorptionMode::Unknown {
+            result.warnings.push(
+                "The caller explicitly interpreted unknown acquisition provenance as fluorescence."
+                    .into(),
+            );
+        }
+        let mut output = Self::from_arrays(&result.energy, &result.corrected_mu)
+            .map_err(|e| FluorescenceError(e.to_string()))?;
+        output.name = self.name.clone();
+        output.e0 = Some(result.internal.e0);
+        output.energy_shift = self.energy_shift;
+        output.absorption_mode = AbsorptionMode::Fluorescence;
+        output.fluorescence_correction = Some(Box::new(result));
+        Ok(output)
+    }
+
+    /// Original correction record. Later data edits do not rewrite this historical
+    /// result; its own energy grid identifies its arrays. None means no native correction.
+    pub fn fluorescence_correction(
+        &self,
+    ) -> Option<&super::fluorescence::FluorescenceCorrectionResult> {
+        self.fluorescence_correction.as_deref()
+    }
+
     fn validate_energy_mu_inputs(
         energy: &DVector<f64>,
         mu: &DVector<f64>,
@@ -595,13 +680,23 @@ impl XASSpectrum {
         Ok(self)
     }
 
+    pub(crate) fn ensure_exafs_allowed(&self) -> Result<(), XAFSError> {
+        if self.fluorescence_correction.is_some() {
+            return Err(super::errors::BackgroundError::Other { message: "The corrected branch is qualified for XANES only; use the uncorrected spectrum for EXAFS".into() }.into());
+        }
+        Ok(())
+    }
+
     /// Remove the smooth background using the selected method; normalize if needed.
     /// Default nalgebra AUTOBK minimizes low-R content with a fixed endpoint penalty;
     /// the optional `ndarray-compat` backend retains its historical clamp model.
     /// Successful results are dimensionless unweighted [`Self::chi`] on [`Self::k`].
     /// Recomputes this stage and clears Fourier results on every call. Missing data,
     /// insufficient coverage, invalid settings or solver failure return a typed error.
+    /// The native fluorescence-corrected XANES branch is rejected; retain the
+    /// original spectrum for EXAFS because this correction is not qualified there.
     pub fn calc_background(&mut self) -> Result<&mut Self, XAFSError> {
+        self.ensure_exafs_allowed()?;
         self.invalidate_background();
         if self
             .normalization
@@ -653,6 +748,7 @@ impl XASSpectrum {
     /// Successful calls retain resolved settings: an inferred `kstep` is reused
     /// after later background-grid changes unless reset through [`Self::set_fft`].
     pub fn fft(&mut self) -> Result<&mut Self, XAFSError> {
+        self.ensure_exafs_allowed()?;
         self.invalidate_fft();
         if self.k().is_none() || self.chi().is_none() {
             self.calc_background()?;
@@ -708,6 +804,7 @@ impl XASSpectrum {
     /// Resolved inverse grid settings persist across calls; after changing forward
     /// `nfft` or spacing, reset them with [`Self::set_ifft`] to request inference.
     pub fn ifft(&mut self) -> Result<&mut Self, XAFSError> {
+        self.ensure_exafs_allowed()?;
         if self.chir().is_none() {
             self.fft()?;
         }

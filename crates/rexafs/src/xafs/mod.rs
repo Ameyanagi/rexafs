@@ -39,6 +39,7 @@ pub mod bessel_i0;
 pub mod errors;
 mod fft_grid;
 pub mod fitting;
+pub mod fluorescence;
 mod inverse_fft;
 pub mod io;
 /// Historical Levenberg–Marquardt solver settings.

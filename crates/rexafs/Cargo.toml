@@ -21,6 +21,7 @@ exclude = [
     "/tests/peak_fitting.rs",
     "/tests/atomic_reference.rs",
     "/tests/mback_reference.rs",
+    "/tests/fluorescence_reference.rs",
     "/tests/beamline_formats.rs",
     "/tests/measurement_fixtures.rs",
     "/tests/measurement_fixtures/",

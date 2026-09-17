@@ -241,3 +241,31 @@ moving the original cache aside. Only synthetic screenshots are retained in the
 [desktop validation record](validation/2026-09-17-mback/README.md). Native
 Windows/Linux GUI and broader experimental qualification remain outstanding.
 E and F remain in progress, not completed by this increment.
+
+## E1: native fluorescence correction and explicit assumptions
+
+`FluorescenceCorrection::new(formula, absorber, edge).line(line).angles(in, out)`
+and `spectrum.correct_fluorescence(&settings)` provide the common path. Internal
+conventional normalization runs automatically; the call returns a new spectrum,
+preserving the original. Measured geometry is mandatory. Original arrays, formula
+mass fractions, line/edge/attenuation tables, internal fit, denominator, factor
+and diagnostics remain attached. Final polynomial or MBACK normalization is a
+separate ordinary stage. Unknown-mode input is explicitly interpreted by the call;
+native transmission imports, prepared norm/flat data and already corrected
+lineages are rejected. The corrected branch cannot run unqualified EXAFS stages.
+
+The named `fluo_elam_v1` calculation matches three synthetic cases from pinned
+Larch (CuO, dilute Cu/SiO₂, Fe₂O₃), including explicit line/family choices,
+geometry and internal intervals. The comparison passes on both array backends.
+Five focused tests pass on each backend: model recovery, unit scaling, the valid
+weak-correction limit, near-singularity diagnostics, invalid science, replay,
+source immutability, acquisition interpretation and final normalization. The full
+core suite passed 223 tests before the final acquisition-interpretation check was
+added; the final focused run includes that additional check. Strict core Clippy
+passes. No physical accuracy claim follows from reference agreement.
+
+The [guide](fluorescence-correction.md) explains the numerical profile, explicit
+defaults and its limitation for extremely dilute inputs whose ±10 eV net
+attenuation jump is nonpositive. Fixtures are synthetic, retain attribution and
+are excluded from the crate archive. Desktop, Series/Live and binding integration
+are not completed by E1; they need to retain the same correction lineage.

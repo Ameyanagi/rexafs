@@ -68,4 +68,7 @@ pub use crate::xafs::analysis::peakfit::{
     PeakTermination,
 };
 
+pub use crate::xafs::fluorescence::{
+    AbsorptionMode, FluorescenceCorrection, FluorescenceCorrectionResult, FluorescenceError,
+};
 pub use crate::xafs::mback::{MBack, MbackErfc, MbackOptions, MbackResult};
