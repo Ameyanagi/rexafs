@@ -146,6 +146,7 @@ impl StudioApp {
             )?;
             standards.push(spectrum.clone());
             inputs.push(crate::project::AnalysisInput {
+                corrections: self.correction_sources(source.ix),
                 group_id: source.group_id,
                 label: source.label,
                 fingerprint: source.fingerprint,

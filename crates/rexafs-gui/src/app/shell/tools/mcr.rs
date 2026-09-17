@@ -114,6 +114,7 @@ mod tests {
             result: result.clone(),
             inputs: (0..100)
                 .map(|i| crate::project::AnalysisInput {
+                    corrections: Vec::new(),
                     group_id: Some(crate::group_identity::GroupId::new_result()),
                     label: format!("mix_{:03}", i + 1),
                     fingerprint: params.fingerprint(),
@@ -154,6 +155,7 @@ mod tests {
             standards: ["cufoil_abs", "cu2o_abs", "cuo_abs"]
                 .into_iter()
                 .map(|label| crate::project::AnalysisInput {
+                    corrections: Vec::new(),
                     group_id: None,
                     label: label.into(),
                     fingerprint: params.fingerprint(),
@@ -380,6 +382,7 @@ impl StudioApp {
                             inputs: sources
                                 .iter()
                                 .map(|s| crate::project::AnalysisInput {
+                                    corrections: app.correction_sources(s.ix),
                                     group_id: s.group_id.clone(),
                                     label: s.label.clone(),
                                     fingerprint: s.fingerprint,

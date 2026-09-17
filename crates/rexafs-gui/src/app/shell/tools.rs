@@ -24,7 +24,7 @@ mod analysis_range;
 mod collection;
 mod mcr;
 mod mcr_reference;
-mod result_groups;
+pub(super) mod result_groups;
 
 /// Match the group panel's stable order: additional groups, then files.
 pub(crate) fn marked_group_indices(marks: &BTreeSet<usize>) -> impl Iterator<Item = usize> + '_ {
@@ -973,6 +973,7 @@ impl StudioApp {
                         self.analysis.lcf_inputs = sources
                             .iter()
                             .map(|s| crate::project::AnalysisInput {
+                                corrections: self.correction_sources(s.ix),
                                 group_id: s.group_id.clone(),
                                 label: s.label.clone(),
                                 fingerprint: s.fingerprint,
@@ -984,6 +985,7 @@ impl StudioApp {
                         self.analysis.pca_inputs = sources
                             .iter()
                             .map(|s| crate::project::AnalysisInput {
+                                corrections: self.correction_sources(s.ix),
                                 group_id: s.group_id.clone(),
                                 label: s.label.clone(),
                                 fingerprint: s.fingerprint,
@@ -1429,6 +1431,25 @@ impl StudioApp {
                         {
                             params.import.mode = record.channel;
                         }
+                        let receipts = derived
+                            .operation
+                            .as_ref()
+                            .map(|op| {
+                                op.inputs
+                                    .iter()
+                                    .filter_map(|i| {
+                                        i.group_id
+                                            .as_ref()
+                                            .and_then(|id| self.group_registry.index(id))
+                                    })
+                                    .map(|ix| self.correction_sources(ix))
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default();
+                        derived.corrections = crate::fluorescence_history::combine(
+                            receipts.iter().map(Vec::as_slice),
+                        );
+                        derived.absorption_mode = sp.absorption_mode();
                         derived.id = self.next_group_id();
                         derived.group_id = Some(crate::group_identity::GroupId::new_result());
                         derived
@@ -1464,7 +1485,19 @@ impl StudioApp {
 
     /// Processing tool list plus the open tool's inline form.
     pub(crate) fn tools_section(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        self.tool_list(&Tool::PROCESSING, cx)
+        div()
+            .flex()
+            .flex_col()
+            .child(
+                super::button(
+                    &self.theme,
+                    "open-fluorescence",
+                    "Fluorescence correction…",
+                    false,
+                )
+                .on_click(cx.listener(|app, _, _, cx| app.open_fluorescence(cx))),
+            )
+            .child(self.tool_list(&Tool::PROCESSING, cx))
     }
 
     /// Analysis tool list (LCF / PCA) plus form and results.

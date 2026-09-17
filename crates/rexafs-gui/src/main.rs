@@ -29,6 +29,7 @@ mod publication;
 mod series_measurements;
 // Live intake is not connected to the desktop until queue/recovery qualification.
 mod analysis_store;
+mod fluorescence_history;
 mod live;
 #[allow(dead_code)]
 mod live_intake;

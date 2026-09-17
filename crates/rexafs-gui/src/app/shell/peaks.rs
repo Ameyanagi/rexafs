@@ -204,6 +204,7 @@ impl StudioApp {
         self.load_peak_row(index, 0, cx);
     }
     pub(crate) fn open_peaks(&mut self, cx: &mut Context<Self>) {
+        self.fluorescence.close();
         self.wavelet.cancel();
         self.wavelet.open = false;
         self.peaks.open = true;

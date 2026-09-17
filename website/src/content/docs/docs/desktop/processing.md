@@ -99,3 +99,33 @@ The filtered signal retains the weighting/window applied before the forward
 transform; it is not generally the original unweighted $\chi(k)$.
 [Processing theory](/docs/science/processing/) defines the normalization and
 Fourier signs, scales, units and limitations.
+
+## Fluorescence correction (development preview)
+
+This workflow is **unreleased** and available in the development source checkout.
+Select uncorrected μ(E), then **Data → Fluorescence correction…**. Enter the full
+sample composition, absorber, edge, emission line and measured incident/exit
+angles in degrees from the sample surface. For example, `Ka1` selects one line;
+`family:Ka` explicitly selects an unresolved family. Geometry has no defaults.
+
+Confirm the fluorescence input and select **Preview** to compare original and
+corrected μ(E). **Factor** shows the amplification. **Internal normalization**
+exposes optional E₀ and pre/post intervals in eV from E₀; **Calculation notes**
+contains the applicability and numerical diagnostics. The default internal
+post-edge polynomial is linear. It is separate from final normalization.
+
+**Add corrected spectrum →** retains the original and creates a new group, then
+opens **Normalize** for independent polynomial or MBACK processing. Reopen the
+correction tool on that group to inspect or export its historical calculation.
+Choose **Include source files** when saving a portable project to include the
+correction history and original arrays.
+
+This homogeneous, optically thick model is limited to XANES, following the
+[Larch applicability guidance](https://xraypy.github.io/xraylarch/xafs_preedge.html#over-absorption-corrections).
+Known transmission imports and repeated correction are rejected. Corrected groups
+and their calculated descendants retain this limit: use the original spectrum
+for EXAFS background removal, transforms, fitting or wavelets. Energy-space
+LCF/PCA/MCR remain available. See the development
+[Python](/docs/reference/next/python/fluorescencecorrection/) and
+[TypeScript](/docs/reference/next/typescript/fluorescencecorrection/) references
+for the same native calculation outside the desktop.

@@ -121,8 +121,7 @@ fn corrected_xanes_input_is_rejected_even_with_legacy_exafs_buffers() {
     corrected.background = processed.background.clone();
     let before = serde_json::to_value(&corrected).unwrap();
     let error = RmcDataset::from_spectrum(&corrected, options())
-        .err()
-        .expect("RMC must reject the corrected XANES-only branch");
+        .expect_err("RMC must reject the corrected XANES-only branch");
     assert!(error.to_string().contains("XANES only"), "{error}");
     assert_eq!(serde_json::to_value(&corrected).unwrap(), before);
 }

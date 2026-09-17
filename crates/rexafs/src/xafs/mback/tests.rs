@@ -123,7 +123,7 @@ fn ranges_identity_and_nonidentifiable_requests_fail() {
         .collect::<Vec<_>>();
     assert!(MBack::for_edge("Cu", "K")
         .e0(low[4])
-        .fit(&low, &vec![1.; 10])
+        .fit(&low, &[1.; 10])
         .is_err());
 }
 #[test]

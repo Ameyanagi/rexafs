@@ -2,8 +2,9 @@
 
 Unreleased source-checkout feature. The native core implements the named
 `fluo_elam_v1` profile, with Python and TypeScript APIs using that same calculation.
-Desktop/Series/Live integration is still in progress. This page does not describe
-an already released GUI workflow.
+The source-checkout desktop includes the preview and corrected-group workflow below.
+Series/Live correction recipes and native Windows/Linux interaction checks remain
+unfinished. These additions are not part of an already released GUI.
 
 Fluorescence intensity is not always proportional to the absorber's absorption.
 Attenuation of both the incident and emitted beams can reduce spectral features.
@@ -166,6 +167,51 @@ not confidence intervals or physically universal acceptance criteria. Noise and
 uncertain angles/composition can be strongly amplified. Corrected-array uncertainty
 is unavailable until dependence on the internal normalization is propagated.
 
+## Desktop workflow (unreleased)
+
+Select uncorrected μ(E), then **Data → Fluorescence correction…** in the
+processing tools. Enter the full sample composition (including its matrix),
+absorber, edge, detected emission and measured incident/exit angles. Angles are
+measured from the sample surface: normal incidence is 90°. No geometry or
+composition is guessed. For emission, enter an individual line such as `Ka1`,
+or explicitly select an unresolved family with `family:Ka`.
+
+Confirm **Uncorrected fluorescence μ(E)** and select **Preview**. The main plot
+compares the original and corrected arrays; **Factor** shows their multiplicative
+correction. Known transmission imports remain rejected even after confirmation.
+**Internal normalization** exposes optional measured E₀, pre/post intervals in eV
+from E₀ and polynomial degree. Blank intervals use the core defaults above; the
+resolved intervals and numerical warnings appear beside the preview.
+
+**Add corrected spectrum →** retains the calculation before adding an independent
+group and opens **Normalize** for final polynomial or MBACK processing. The input
+group remains available. Normalization, energy-space LCF/PCA/MCR and peak fitting
+can use the corrected group. Background, EXAFS transforms, wavelets and RMC must
+use the uncorrected input. This restriction follows calculated LCF/MCR outputs,
+merged groups, processing-tool results and duplicates.
+
+Open **Fluorescence correction…** on a corrected descendant to inspect its ancestor
+calculation, open the original group when available, or export the numerical
+history as JSON. Multiple ancestor records can be browsed individually. The
+history contains original and corrected arrays, internal normalization, geometry,
+composition, atomic-data identity and source/processing identities. It is not a
+claim that later edited arrays are identical to that historical result. Embedded
+projects retain compressed, checksum-checked history even when its local cache
+is removed. Keep original measurements for independent scientific validation.
+
+The [computer-use validation record](validation/2026-09-17-fluorescence/README.md)
+includes synthetic screenshots and explicit test limits.
+
+The implementation is in the [desktop correction controller](../crates/rexafs-gui/src/app/shell/fluorescence.rs),
+[history storage](../crates/rexafs-gui/src/fluorescence_history.rs) and
+[typed group preparation](../crates/rexafs-gui/src/params.rs).
+The advanced Rust `Spectrum::restrict_to_xanes()` marker lets a frontend carry
+this domain limit onto a calculated descendant without inventing a direct
+correction record. `is_xanes_only()` reports either an inherited limit or a direct
+native correction. The marker survives serialization and data edits, clears
+EXAFS caches, and does not change arrays or normalization. Ordinary callers of
+`correct_fluorescence()` receive the restriction automatically.
+
 ## Qualification
 
 The [synthetic reference fixture](../crates/rexafs/tests/fixtures/analysis/fluorescence/larch-reference.json)
@@ -177,5 +223,7 @@ emission energies and attenuation. This is software agreement, not proof of
 physical accuracy. Independent tests cover forward/inverse model recovery,
 input-unit scaling, the valid weak-correction limit, near-singularity diagnostics,
 invalid science, source immutability, repeat-correction rejection, project-style
-serialization and separate polynomial/MBACK final normalization. Native GUI,
-Series/Live recipe integration and matched experimental validation follow.
+serialization and separate polynomial/MBACK final normalization. Desktop regression
+tests also cover embedded history recovery, transmission evidence in historical
+imports and inherited LCF domain limits. Series/Live correction recipes and
+matched experimental validation remain future work.

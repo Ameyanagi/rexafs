@@ -74,6 +74,7 @@ impl StudioApp {
     pub(crate) fn inspector(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
         let body = match self.stage {
+            Stage::Data if self.fluorescence.open => self.fluorescence_inspector(cx),
             Stage::Data if self.wavelet.open => self.wavelet_inspector(cx),
             Stage::Data if self.peaks.open => self.peak_inspector(cx),
             Stage::Data => self.data_inspector(cx).into_any_element(),
@@ -92,7 +93,11 @@ impl StudioApp {
             // Only legacy groups whose stored quantity is unknown get the
             // confirmation prompt; a blocked quantity (Δμnorm) gets the plain
             // notice; every other derived group renders the normal body.
-            let blocked = group.processing_block_reason();
+            let blocked = group.processing_block_reason().or_else(|| {
+                (!group.corrections.is_empty()
+                    && matches!(self.stage, Stage::Background | Stage::Transform))
+                .then(|| crate::fluorescence_history::XANES_ONLY.into())
+            });
             if !group.quantity_unconfirmed && (blocked.is_none() || self.stage == Stage::Data) {
                 body
             } else {

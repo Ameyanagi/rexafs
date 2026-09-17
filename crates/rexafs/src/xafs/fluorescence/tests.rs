@@ -183,3 +183,22 @@ fn fluorescence_import_does_not_reinterpret_transmission_or_generic_yield() {
         AbsorptionMode::Unknown
     );
 }
+
+#[test]
+fn fluorescence_inherited_xanes_restriction_survives_edits_and_roundtrip() {
+    let (e, m, model) = input();
+    let mut sp = Spectrum::from_arrays(&e, &m).unwrap();
+    sp.normalize().unwrap();
+    sp.restrict_to_xanes();
+    assert!(sp.is_xanes_only());
+    assert!(sp.fluorescence_correction().is_none());
+    sp.set_spectrum(e, m);
+    sp.set_absorption_mode(AbsorptionMode::Fluorescence);
+    let mut restored: Spectrum =
+        serde_json::from_str(&serde_json::to_string(&sp).unwrap()).unwrap();
+    restored.normalize().unwrap();
+    assert!(restored.is_xanes_only());
+    assert!(restored.calc_background().is_err());
+    assert!(restored.fft().is_err());
+    assert!(restored.correct_fluorescence(&model).is_err());
+}

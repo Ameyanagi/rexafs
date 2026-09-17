@@ -414,3 +414,31 @@ The complete `cargo test --locked -p rexafs --features refeff-runner` run also
 passes: 469 core, integration and documentation tests, with three existing ignored
 tests. This includes the 100-spectrum LCF/PCA/MCR cases and the RMC/scattering
 regression suites. No GUI layout or existing analysis defaults change in this merge.
+
+
+## E3: desktop fluorescence correction (unreleased)
+
+The Data processing tools now open a compact composition/emission/angle form,
+original-versus-corrected plot and amplification view. Explicit input confirmation
+is required; measured geometry has no invented defaults. Advanced fields control
+the internal conventional fit. Adding a corrected group retains a compressed,
+checksum-checked record first, then opens independent final normalization.
+
+Corrected arrays stay separate from their original. The XANES-only restriction
+survives group preparation, cache dispatch, duplicates, processing operations,
+merge and retained LCF/MCR output materialization. Analysis input snapshots retain
+ancestor receipts even if source groups are later removed. Embedded projects
+relocate these artifacts without importing them as additional spectra. Historical
+logarithmic measurement mappings retain their transmission interpretation.
+
+See the [fluorescence guide](fluorescence-correction.md) for geometry, applicability,
+record contents and the simple existing Rust/Python/TypeScript correction APIs.
+Series/Live frozen correction recipes, matched experimental qualification and
+native Windows/Linux interaction checks remain open.
+
+Computer use verified the original/corrected preview, invalid-angle rejection,
+separate polynomial/MBACK normalization, recovery without the original caches,
+and LCF result materialization retaining the domain limit. The full GUI suite
+passed 591 tests (6 ignored); final focused correction tests passed again.
+Strict core Clippy, eight website generator tests and the website check passed.
+See the [synthetic screenshots and validation limits](validation/2026-09-17-fluorescence/README.md).

@@ -1106,6 +1106,7 @@ pub struct StudioApp {
     peaks: shell::peaks::PeakState,
     normalization: shell::normalization::NormalizationState,
     wavelet: shell::wavelet::WaveletState,
+    fluorescence: shell::fluorescence::FluorescenceState,
     journal: shell::journal::JournalState,
     palette: Option<shell::palette::PaletteState>,
     path_route: Option<shell::path_routing::RoutingCard>,
@@ -2851,7 +2852,9 @@ impl CompareLoad {
             let (path, derived) = match &self.source {
                 Ok(path) => (path.as_path(), None),
                 Err(group) => {
-                    if group.processing_block_reason().is_some()
+                    if group.acquisition_mode() != rexafs::AbsorptionMode::Unknown
+                        || !group.corrections.is_empty()
+                        || group.processing_block_reason().is_some()
                         || group.quantity.prepared_space().is_some()
                     {
                         return group.for_display(&self.params).map(|sp| (sp, None));
@@ -2995,6 +2998,7 @@ impl StudioApp {
             peaks: Default::default(),
             normalization: Default::default(),
             wavelet: Default::default(),
+            fluorescence: Default::default(),
             journal: shell::journal::JournalState::default(),
             palette: None,
             path_route: None,
@@ -4852,7 +4856,9 @@ impl StudioApp {
             // Dispatch typed results before consulting the raw cache: cached
             // arrays must never bypass the quantity guard on later edits.
             if let Some(group) = &derived
-                && (group.processing_block_reason().is_some()
+                && (group.acquisition_mode() != rexafs::AbsorptionMode::Unknown
+                    || !group.corrections.is_empty()
+                    || group.processing_block_reason().is_some()
                     || group.quantity.prepared_space().is_some())
             {
                 return group.for_display(&params).map(|sp| (sp, None));
@@ -7874,6 +7880,7 @@ impl StudioApp {
                     (
                         *frame,
                         crate::project::AnalysisInput {
+                            corrections: self.correction_sources(*ix),
                             group_id: self.group_id(*ix),
                             label: label.clone(),
                             fingerprint: self.effective_fingerprint(*ix),
@@ -7885,6 +7892,7 @@ impl StudioApp {
                 self.effective_fingerprint(ix)
             })
             .map(|ix| crate::project::AnalysisInput {
+                corrections: self.correction_sources(ix),
                 group_id: self.group_id(ix),
                 label: self.entry_label(ix),
                 fingerprint: self.effective_fingerprint(ix),
@@ -8830,6 +8838,7 @@ impl StudioApp {
         self.peaks.archive = project.peak_fits.clone();
         self.normalization = Default::default();
         self.normalization.history = project.normalizations.clone();
+        self.fluorescence = Default::default();
         self.wavelet.cancel();
         self.wavelet = Default::default();
         self.wavelet.archive = project.wavelets.clone();

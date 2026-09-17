@@ -1554,6 +1554,11 @@ pub(crate) fn load_group_raw_with_diagnostics(
 /// be retained until the group is viewed or analyzed.
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct DerivedSpectrum {
+    /// Immutable ancestor corrections. These remain history after later data edits.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub corrections: Vec<crate::fluorescence_history::CorrectionReceipt>,
+    #[serde(default)]
+    pub absorption_mode: rexafs::AbsorptionMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub declared_edge: Option<crate::source_evidence::DeclaredEdge>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1645,10 +1650,34 @@ pub struct Operation {
 }
 
 impl DerivedSpectrum {
+    /// Preserve explicit logarithmic import evidence in older project files too.
+    pub fn acquisition_mode(&self) -> rexafs::AbsorptionMode {
+        let transmission = self
+            .operation
+            .as_ref()
+            .filter(|o| o.tool == "Measurement import")
+            .and_then(|o| {
+                serde_json::from_value::<rexafs::io::SpectrumMapping>(
+                    o.parameters["mapping"].clone(),
+                )
+                .ok()
+            })
+            .is_some_and(|m| matches!(m.signal, rexafs::io::SignalConversion::Transmission { .. }));
+        if transmission {
+            rexafs::AbsorptionMode::Transmission
+        } else {
+            self.absorption_mode
+        }
+    }
+
     pub fn fingerprint(&self, params: &PipelineParams) -> u64 {
         let mut hasher = std::hash::DefaultHasher::new();
         params.fingerprint().hash(&mut hasher);
         self.quantity.hash(&mut hasher);
+        for correction in &self.corrections {
+            correction.digest.hash(&mut hasher);
+        }
+        format!("{:?}", self.absorption_mode).hash(&mut hasher);
         self.declared_edge.hash(&mut hasher);
         self.quantity_unconfirmed.hash(&mut hasher);
         hasher.finish()
@@ -1701,6 +1730,9 @@ impl DerivedSpectrum {
         if let Some(reason) = self.processing_block_reason() {
             return Err(reason);
         }
+        if stage > RequiredStage::Normalized && !self.corrections.is_empty() {
+            return Err(crate::fluorescence_history::XANES_ONLY.into());
+        }
         let (energy, mu) = self.raw(params)?;
         if let Some(space) = self.quantity.prepared_space() {
             let e0 = if let Some(e0) = params.e0 {
@@ -1711,15 +1743,24 @@ impl DerivedSpectrum {
                 estimate.find_e0().map_err(|e| e.to_string())?;
                 estimate.e0().ok_or("Could not determine component E0")?
             };
-            let sp =
+            let mut sp =
                 XASSpectrum::from_prepared(&energy, &mu, space, e0).map_err(|e| e.to_string())?;
+            if !self.corrections.is_empty() {
+                sp.restrict_to_xanes();
+            }
+            sp.set_absorption_mode(self.acquisition_mode());
             if params.refit_prepared {
                 normalize_to_stage(sp, params, stage)
             } else {
                 process_exafs_to_stage(sp, params, stage)
             }
         } else {
-            prepare_arrays(energy, mu, params, stage)
+            let mut sp = XASSpectrum::from_arrays(&energy, &mu).map_err(|e| e.to_string())?;
+            sp.set_absorption_mode(self.acquisition_mode());
+            if !self.corrections.is_empty() {
+                sp.restrict_to_xanes();
+            }
+            normalize_to_stage(sp, params, stage)
         }
     }
 
@@ -1727,10 +1768,18 @@ impl DerivedSpectrum {
     /// No normalization/background objects are manufactured for differences.
     pub fn for_display(&self, params: &PipelineParams) -> Result<XASSpectrum, String> {
         if self.processing_block_reason().is_none() {
-            return self.process(params);
+            return if self.corrections.is_empty() {
+                self.process(params)
+            } else {
+                self.prepare(params, RequiredStage::Normalized)
+            };
         }
         let (energy, mu) = self.raw(params)?;
         let mut sp = XASSpectrum::new();
+        if !self.corrections.is_empty() {
+            sp.restrict_to_xanes();
+        }
+        sp.set_absorption_mode(self.acquisition_mode());
         sp.set_name(self.display_label());
         if self.quantity == Quantity::ChiK {
             sp.k = Some(energy.into());

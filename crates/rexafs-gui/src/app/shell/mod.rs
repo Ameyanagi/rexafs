@@ -20,6 +20,7 @@ mod depth_controls;
 pub mod fit;
 pub(crate) mod fit_preview;
 pub mod fit_workspace;
+pub(crate) mod fluorescence;
 pub(crate) mod group_menu;
 pub mod groups_panel;
 pub mod handles;

@@ -650,6 +650,7 @@ fn materialize(
             path.file_name().unwrap_or_default().to_string_lossy(),
             scan.label
         ),
+        absorption_mode: spectrum.absorption_mode(),
         energy: spectrum.energy.unwrap().as_slice().to_vec(),
         mu: spectrum.mu.unwrap().as_slice().to_vec(),
         group_id: Some(crate::group_identity::GroupId::new_result()),

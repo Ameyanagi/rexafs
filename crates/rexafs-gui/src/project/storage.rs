@@ -215,6 +215,7 @@ pub(super) fn map_paths(
         }
         Ok(())
     }
+    project.relocate_corrections(f)?;
     project.normalizations.relocate(f)?;
     project.wavelets.relocate(f)?;
     project.peak_fits.relocate(f)?;
@@ -291,6 +292,12 @@ fn analysis_artifacts(project: &ProjectFile) -> BTreeSet<PathBuf> {
         .flat_map(|s| s.snapshots.iter().cloned())
         .chain(project.peak_fits.artifacts().cloned())
         .chain(project.wavelets.entries.iter().map(|r| r.path.clone()))
+        .chain(
+            project
+                .correction_receipts()
+                .into_iter()
+                .map(|r| r.path.clone()),
+        )
         .chain(
             project
                 .normalizations

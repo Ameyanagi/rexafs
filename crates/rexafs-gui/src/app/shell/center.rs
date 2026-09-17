@@ -27,6 +27,74 @@ fn current_label(
 
 impl StudioApp {
     pub(crate) fn stage_center(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        if matches!(self.stage, Stage::Background | Stage::Transform)
+            && self
+                .current_group_index()
+                .is_some_and(|i| !self.correction_sources(i).is_empty())
+        {
+            return div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .p_4()
+                        .child("Use the original spectrum for EXAFS")
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(self.theme.text_muted)
+                                .child("This fluorescence correction is qualified for XANES."),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .gap_2()
+                                .child(
+                                    super::button(
+                                        &self.theme,
+                                        "fluo-normalize-return",
+                                        "Normalize",
+                                        true,
+                                    )
+                                    .on_click(
+                                        cx.listener(|a, _, _, cx| {
+                                            a.set_stage(Stage::Normalize, cx)
+                                        }),
+                                    ),
+                                )
+                                .child(
+                                    super::button(
+                                        &self.theme,
+                                        "fluo-history-return",
+                                        "Correction history",
+                                        false,
+                                    )
+                                    .on_click(cx.listener(
+                                        |a, _, _, cx| {
+                                            a.set_stage(Stage::Data, cx);
+                                            a.open_fluorescence(cx);
+                                        },
+                                    )),
+                                ),
+                        ),
+                );
+        }
+        if self.fluorescence.open && !self.fluorescence_matches_current() {
+            self.fluorescence.close();
+        }
+        if self.stage == Stage::Data && self.fluorescence.open {
+            return div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .child(self.fluorescence_center(cx));
+        }
         if self.wavelet.open && !self.wavelet_matches_current() {
             self.wavelet.cancel();
             self.wavelet.open = false;

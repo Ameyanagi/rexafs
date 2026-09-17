@@ -111,6 +111,9 @@ pub struct XASSpectrum {
     /// and data edits, blocks repeated correction and unqualified EXAFS processing.
     #[serde(skip_serializing_if = "Option::is_none")]
     fluorescence_correction: Option<Box<super::fluorescence::FluorescenceCorrectionResult>>,
+    /// Inherited scientific domain restriction, independent of direct correction history.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    xanes_only: bool,
 }
 
 impl XASSpectrum {
@@ -149,7 +152,7 @@ impl XASSpectrum {
         if self.absorption_mode == AbsorptionMode::Transmission {
             return Err(fail("transmission data cannot use fluorescence correction"));
         }
-        if self.fluorescence_correction.is_some() {
+        if self.is_xanes_only() {
             return Err(fail(
                 "this lineage is already corrected; start from its original uncorrected spectrum",
             ));
@@ -680,8 +683,27 @@ impl XASSpectrum {
         Ok(self)
     }
 
+    /// Restrict this spectrum and its clones to XANES processing (unreleased).
+    /// Use for calculated descendants of fluorescence-corrected spectra. This
+    /// irreversible marker preserves arrays and normalization, clears EXAFS caches,
+    /// and survives serialization and data edits. It does not invent a correction
+    /// record: retain the actual ancestor records separately. Normalization, LCF,
+    /// PCA and MCR in energy space remain available; background, Fourier, wavelet
+    /// and RMC processing are rejected. No calculation is performed.
+    pub fn restrict_to_xanes(&mut self) -> &mut Self {
+        self.xanes_only = true;
+        self.invalidate_background();
+        self
+    }
+
+    /// Whether a direct correction or an inherited restriction limits processing
+    /// to XANES. This does not imply a direct correction record exists.
+    pub fn is_xanes_only(&self) -> bool {
+        self.xanes_only || self.fluorescence_correction.is_some()
+    }
+
     pub(crate) fn ensure_exafs_allowed(&self) -> Result<(), XAFSError> {
-        if self.fluorescence_correction.is_some() {
+        if self.is_xanes_only() {
             return Err(super::errors::BackgroundError::Other { message: "The corrected branch is qualified for XANES only; use the uncorrected spectrum for EXAFS".into() }.into());
         }
         Ok(())

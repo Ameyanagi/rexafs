@@ -495,6 +495,7 @@ fn add_synthetic_collection_results(project: &mut ProjectFile) {
         .collect();
     let inputs: Vec<_> = (0..spectra.len())
         .map(|index| AnalysisInput {
+            corrections: Vec::new(),
             group_id: None,
             label: format!("Synthetic persistence sample {}", index + 1),
             fingerprint: 0,

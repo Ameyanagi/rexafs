@@ -85,6 +85,7 @@ impl StudioApp {
             && self.wavelet.source_settings.as_ref() == Some(self.ui_params())
     }
     pub(crate) fn open_wavelet(&mut self, cx: &mut Context<Self>) {
+        self.fluorescence.close();
         self.wavelet.cancel();
         self.wavelet.open = true;
         self.wavelet.colors_open = false;

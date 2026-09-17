@@ -183,6 +183,12 @@ fn run_merge(inputs: Vec<MergeInput>, cancel: &AtomicBool) -> Result<DerivedSpec
         inputs: inputs.iter().map(|i| i.target.operation_input()).collect(),
         applied_energy_shift_ev: 0.0,
     };
+    let corrections = crate::fluorescence_history::combine(
+        inputs
+            .iter()
+            .filter_map(|i| i.derived.as_ref())
+            .map(|d| d.corrections.as_slice()),
+    );
     let mut seen = Vec::new();
     let mut acc: Option<StreamingAverage> = None;
     // Keep only the accumulator, one raw input, and scalar compatibility data.
@@ -223,6 +229,7 @@ fn run_merge(inputs: Vec<MergeInput>, cancel: &AtomicBool) -> Result<DerivedSpec
         .finish()
         .map_err(|e| format!("merge refused ({label}): {e}"))?;
     Ok(DerivedSpectrum {
+        corrections,
         declared_edge: seen.first().and_then(|info| info.declared_edge.clone()),
         label,
         energy,

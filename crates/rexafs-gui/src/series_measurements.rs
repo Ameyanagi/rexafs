@@ -157,6 +157,12 @@ impl FrameInput {
                 group.quantity_unconfirmed,
                 &group.operation,
                 &group.declared_edge,
+                group
+                    .corrections
+                    .iter()
+                    .map(|r| &r.digest)
+                    .collect::<Vec<_>>(),
+                &group.absorption_mode,
             ))
             .map_err(|e| e.to_string());
         }
