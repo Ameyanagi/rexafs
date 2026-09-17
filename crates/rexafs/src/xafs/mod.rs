@@ -61,6 +61,7 @@ pub mod nshare;
 pub(crate) mod spline;
 pub mod structure;
 pub mod tools;
+pub mod wavelet;
 #[cfg(feature = "ndarray-compat")]
 #[path = "xafsutils_ndarray.rs"]
 /// Wave-number conversion, windows, smoothing and edge-location helpers.

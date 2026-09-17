@@ -82,3 +82,9 @@ pub use xafs::xasgroup::XASGroup as Group;
 pub use xafs::xasspectrum::XASSpectrum as Spectrum;
 pub use xafs::xrayfft::{FFTGrid, XrayFFTF, XrayFFTR};
 pub use xafs::{analysis, fitting, io, structure, tools, Result, XAFSError as Error};
+
+// Unreleased, native Cauchy wavelet analysis.
+pub use crate::xafs::wavelet::{
+    Wavelet, WaveletError, WaveletMap, WaveletPreparation, WaveletRegionValue, WaveletSize,
+    WaveletWindow,
+};

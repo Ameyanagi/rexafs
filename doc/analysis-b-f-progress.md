@@ -269,3 +269,33 @@ defaults and its limitation for extremely dilute inputs whose ±10 eV net
 attenuation jump is nonpositive. Fixtures are synthetic, retain attribution and
 are excluded from the crate archive. Desktop, Series/Live and binding integration
 are not completed by E1; they need to retain the same correction lineage.
+
+## F1: native Cauchy wavelets and exact region measurements
+
+`spectrum.wavelet(&Wavelet::new(2.0..=12.0))` prepares missing normalization and
+AUTOBK on a copy. Direct `settings.calculate(k, chi)` accepts the same scientific
+definition. Defaults are fixed order 100, weight 2, k step 0.05 Å⁻¹, R extent
+6 Å and no taper. The result retains original/prepared arrays, support/window,
+exact axes, immutable complex values, settings and optional spectrum preparation
+metadata. Magnitude, phase masks and linked slices are calculated independently
+of display choices. `map.integral(k_range, r_range)` uses the complete bilinear
+magnitude surface, not a sampled image.
+
+The named `cauchy_v1` convention fixes order independently of R extent, explicitly
+uses inverse-FFT scaling 1/L and disallows silent truncation/extrapolation. Grid,
+map-size and FFT-work budgets are checked before large allocation. Cancellation
+between R rows discards partial output. Prepared inputs and exact settings allow
+later map recomputation while series workflows retain only scalar measurements.
+
+Six focused tests pass on both backends, covering a direct-DFT oracle, synthetic
+k/R localization, unchanged values under R extension, irregular resampling,
+support/taper, cancellation, analytic region integration, validated save/reload,
+memory limits and automatic spectrum preparation. Two pinned-Larch cases match
+when order, exact R coordinates and actual FFT length are supplied explicitly;
+this is not default-for-default identity. Strict core Clippy passes. The public
+wavelet and fluorescence examples both compile as Rust documentation tests.
+See the [wavelet guide](wavelet-analysis.md) for equations, units and qualification.
+
+F1 does not complete the linked desktop view, bounded series/Live map cache,
+region trends or Python/TypeScript bindings. E/F integration remains outstanding;
+no release or public merge is implied by these local core commits.
