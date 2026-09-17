@@ -24,7 +24,10 @@ Start with the [project README](../README.md), [API guide](api.md),
   Rust examples, resumable mixtures, evolutionary search and scientific limitations;
   [measured acceleration and validation](rmc-performance.md),
   [prepared paths and current Rust additions](rmc-acceleration.md),
-  [hybrid search and adaptive basis stages](rmc-search-upgrade.md), and an
+  [hybrid search and adaptive basis stages](rmc-search-upgrade.md),
+  [auditing and exact fallback](rmc-adaptive-audits.md),
+  [Spectrum input and preprocessing snapshots](rmc-spectrum-input.md),
+  [Cu₂O adaptive qualification](rmc-cu2o-adaptive-qualification.md), and an
   [experimental Cu₂O example with k/R plots](rmc-cu2o-demo.md).
 - [Fixed-penalty AUTOBK](autobk-fixed-penalty.md): the rexafs-specific objective.
 - [Contributor documentation baseline](../CONTRIBUTING.md): requirements for

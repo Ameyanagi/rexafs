@@ -115,7 +115,15 @@ cargo run --release --locked -p rexafs --features refeff-runner \
 synthetic Cu dimer, native complex-R scoring, periodic auditing, a saved/cold
 midpoint resume, final audit and combined checkpoint. It is an API fixture, not
 a physical Cu₂O result. With nonzero ΔE₀, the adaptive training k grid must be the
-shifted **theoretical** grid; requests on other grids fall back to exact paths.
+shifted **theoretical** grid. Use `dataset.exafs.theoretical_k()?` to obtain
+exactly the grid requested by the optimizer, including its fixed ΔE₀. Requests
+on other grids fall back to exact paths. The helper copies the grid and rejects
+invalid or imaginary support without running preprocessing or scattering.
+
+The [Cu₂O qualification](rmc-cu2o-adaptive-qualification.md) records a separate
+experimental check through `rmc_qualify`, including saved-fit reproduction and
+matched wall-time searches. Keep the exact basis as the default unless measured
+accuracy and total run costs justify the approximation for the intended problem.
 
 Tests cover measured-error refresh, electronic-context reuse, cold checkpoint
 continuation with the same random stream, full-population exact rescoring,

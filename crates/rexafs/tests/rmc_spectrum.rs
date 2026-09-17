@@ -205,6 +205,61 @@ fn normalization_is_explicit_and_zero_power_errors_are_transactional() {
 }
 
 #[test]
+fn public_theory_grid_matches_requests_and_rejects_invalid_support() {
+    struct Recording {
+        expected: Vec<f64>,
+        calls: usize,
+    }
+    impl ExafsCalculator for Recording {
+        fn name(&self) -> &str {
+            "theoretical grid contract"
+        }
+        fn calculate(
+            &mut self,
+            _: &Configuration,
+            _: usize,
+            _: Edge,
+            k: &[f64],
+        ) -> Result<Vec<f64>, RmcError> {
+            assert_eq!(k, self.expected);
+            self.calls += 1;
+            Ok(vec![0.; k.len()])
+        }
+    }
+    let data = RmcDataset::from_spectrum(&spectrum(), options()).unwrap();
+    let grid = data.exafs.theoretical_k().unwrap();
+    assert!(grid.iter().zip(&data.exafs.k).all(|(q, k)| q < k));
+    let mut calc = Recording {
+        expected: grid,
+        calls: 0,
+    };
+    let problem = EnsembleProblem::single(configuration(), data.clone());
+    let settings = SessionSettings {
+        moves: RmcSettings {
+            steps: 3,
+            movable_atoms: vec![1],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    RmcSession::new(&problem, &settings, &mut calc)
+        .unwrap()
+        .run(&mut calc)
+        .unwrap();
+    assert_eq!(calc.calls, 4);
+    let mut exafs = data.exafs;
+    exafs.delta_e0 = 0.;
+    assert_eq!(exafs.theoretical_k().unwrap(), exafs.k);
+    exafs.delta_e0 = 1e6;
+    assert!(exafs.theoretical_k().is_err());
+    exafs.delta_e0 = f64::NAN;
+    assert!(exafs.theoretical_k().is_err());
+    exafs.delta_e0 = 0.;
+    exafs.k[0] = -1.;
+    assert!(exafs.theoretical_k().is_err());
+}
+
+#[test]
 fn rbkg_override_is_explicit_and_guard_is_rechecked_before_scattering() {
     let spectrum = spectrum();
     let mut low = options();

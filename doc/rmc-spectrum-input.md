@@ -96,7 +96,10 @@ a nonzero lower measured k bound to keep theoretical k real. The constructor doe
 not silently remove these samples. `k_range=None` copies all available samples;
 an explicit range selects existing points without resampling. Include window
 tapers in that support. Fourier interpolation is performed by the existing RMC
-objective, exactly as for array-only input.
+objective, exactly as for array-only input. For adaptive-basis training, use
+`dataset.exafs.theoretical_k()?`: it returns the fixed-ΔE₀ shifted calculator
+grid without preprocessing or scattering. Training on the measured grid instead
+can silently select exact fallback when the requested grid does not match.
 
 Normalization becomes a fixed dataset weight. If you later change the transform,
 k weight or noise scales, call `normalize_experimental_power()` explicitly to
@@ -164,3 +167,7 @@ attempts and three consecutive stable comparisons of 500-attempt windows.
 Regression coverage is in [rmc_spectrum.rs](../crates/rexafs/tests/rmc_spectrum.rs):
 native-fitter residual agreement, preprocessing immutability, input rejection,
 Rbkg overrides, calculator failure, exact RMC/EA resume and legacy checkpoints.
+
+The [Cu₂O qualification](rmc-cu2o-adaptive-qualification.md) reproduces the
+accepted fit through this input API and compares guarded adaptive and exact
+prepared calculators with all setup and audit costs included.

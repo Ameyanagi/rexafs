@@ -148,3 +148,7 @@ required-features = ["refeff-runner"]
 [[example]]
 name = "rmc_spectrum"
 required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_qualify"
+required-features = ["refeff-runner"]

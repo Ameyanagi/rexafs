@@ -209,6 +209,26 @@ pub struct ExafsDataset {
     pub delta_e0: f64,
 }
 
+impl ExafsDataset {
+    /// Copy the theoretical k grid in Å⁻¹ after applying this dataset's fixed
+    /// fitting ΔE₀ (unreleased). Uses the same conversion as the optimizer;
+    /// use this for `AdaptiveBasisSettings::k` to avoid an accidental exact-path
+    /// fallback caused by training on the unshifted experimental grid.
+    /// Requires at least two increasing finite nonnegative k values and finite
+    /// ΔE₀. Imaginary or numerically unresolved shifted values are errors.
+    /// No scattering, interpolation or preprocessing runs; inputs are unchanged.
+    pub fn theoretical_k(&self) -> Result<Vec<f64>, RmcError> {
+        require(
+            self.k.len() >= 2
+                && self.k.iter().all(|k| k.is_finite() && *k >= 0.)
+                && self.k.windows(2).all(|w| w[1] > w[0])
+                && self.delta_e0.is_finite(),
+            "theoretical k needs increasing nonnegative samples and finite delta_e0",
+        )?;
+        engine::shifted_grid(self)
+    }
+}
+
 /// Geometry and all datasets to refine together. No experimental data are
 /// downloaded or preprocessed automatically.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

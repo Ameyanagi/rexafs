@@ -1,0 +1,683 @@
+{
+  "analyzed_utc": "2026-09-17T03:24:16.198202+00:00",
+  "completed_utc": "2026-09-17T03:22:53.658618+00:00",
+  "hardware": "Apple M4, 32 GiB RAM, Mac16,12",
+  "timing_environment": "Six concurrent one-worker searches; development tests/builds shared the host. Not isolated throughput.",
+  "objective": "Normalized native real-plus-imaginary R residual; 1.15\u20134 Angstrom; fixed potentials",
+  "input_manifest": {
+    "note": "Checksums identify retained local inputs; original measurement arrays are not redistributed in the repository.",
+    "files": {
+      "processed_spectrum": {
+        "sha256": "8803120150096d502f74cb0397eec16832169635ed0317e7fe92fcec8044796c",
+        "bytes": 147239
+      },
+      "spectrum_job": {
+        "sha256": "d3c35e7cd4fc9fc7ec16203ef81d5da4071301427b0e876c5c1c194cf0dff84d",
+        "bytes": 394516
+      },
+      "acceleration": {
+        "sha256": "914e8c49cbd59d993f0884669f771fcc310df29d29bf5e54d98227dc1cee8bf7",
+        "bytes": 330
+      },
+      "protocol": {
+        "sha256": "0144abb42c9838a16ea6b9a3382a4eb0a97ea5df3e315678c7570210f0c962e3",
+        "bytes": 2149
+      },
+      "heldout_rmc-20260918": {
+        "sha256": "40c3d5c965d4b2b6fe201ea853b187030c9964e0d4995fec639af678074fde95",
+        "bytes": 22294
+      },
+      "heldout_rmc-20260919": {
+        "sha256": "2f28cc1bd17f4e87c17186201b10581ada1bc3a83f02dba21efddcb6b0140539",
+        "bytes": 22330
+      },
+      "heldout_rmc-20260920": {
+        "sha256": "2df6c3e573b5936a2f969752c150108e047f66499f21f9d1415dec10491b8285",
+        "bytes": 22319
+      },
+      "heldout_hybrid-20260918": {
+        "sha256": "8fd85230567e9c16287b6c4cf2e8b659c5fa699f713ff13e0c52827c0e7abdec",
+        "bytes": 22301
+      },
+      "heldout_hybrid-20260919": {
+        "sha256": "80497e3f8a67c3324bf1f40fc4903bc7c2e54a155212604812861c6ab724bd3c",
+        "bytes": 22278
+      },
+      "heldout_hybrid-20260920": {
+        "sha256": "7b6b5cc8b3fbb1c44c1662760268b548b879bb54d5ac734a1a107bd3908298ce",
+        "bytes": 22301
+      }
+    }
+  },
+  "build": {
+    "created_utc": "2026-09-17T02:52:02.102978+00:00",
+    "source_base_commit": "6f8f81d1375b39972f5a271335f0e9f9584af360",
+    "source_note": "Base plus retained rmc_qualify.rs and theoretical_k helper in mod.rs; tests and formatting edits do not change the running executable.",
+    "binary_sha256": "03c2ecd55bc289c5f893a70871c1f114a264d12e2285cb2619bb5f1d8df9a6c5",
+    "source_sha256": "6a9a72ac722b3e6ea00a255b21cfadf88dd0b867c219167a60d4fb20030f7cec"
+  },
+  "rust_toolchain": "rustc 1.98.1 aarch64-apple-darwin",
+  "refeff": "0.4.0 facade; locked 0.3 component crates",
+  "accepted_api_residual": 0.022605971322439,
+  "counter_scope": "Proposal-only path/request counters; wall time includes setup, audits, refreshes, monitoring and checkpoint I/O. Terminal validation is separate.",
+  "medians": {
+    "exact": {
+      "attempts": 5205,
+      "best_exact_score": 0.026680917953627876,
+      "seconds_per_attempt_inclusive": 0.34584275173717577,
+      "seconds_per_attempt_proposals": 0.30985545578147444,
+      "active_path_reuse_fraction": 0.9422654443741437,
+      "basis_share_of_new_paths": 0.0
+    },
+    "adaptive": {
+      "attempts": 5100,
+      "best_exact_score": 0.02732552779342774,
+      "seconds_per_attempt_inclusive": 0.3538289117319608,
+      "seconds_per_attempt_proposals": 0.30393425071803165,
+      "active_path_reuse_fraction": 0.9421472435347056,
+      "basis_share_of_new_paths": 0.0017237970980113074
+    }
+  },
+  "runs": [
+    {
+      "name": "exact-20260921",
+      "mode": "exact",
+      "seed": 20260921,
+      "attempts": 5200,
+      "initial_score": 32.81894469508907,
+      "best_exact_score": 0.022538894258054797,
+      "budget_seconds": 1800.0,
+      "budget_used_seconds": 1806.3398415,
+      "total_seconds": 1817.85498,
+      "setup_seconds": 40.293903041,
+      "terminal_audit_seconds": 0.0,
+      "final_verification_seconds": 3.733728208,
+      "work": {
+        "audit_seconds": 0.0,
+        "basis_paths": 0,
+        "exact_paths": 1155941,
+        "monitoring_seconds": 81.83079516800001,
+        "proposal_seconds": 1609.7936338470051,
+        "requests": 162912,
+        "reused_active_paths": 18867482
+      },
+      "seconds_per_attempt_inclusive": 0.34737304644230765,
+      "seconds_per_attempt_proposals": 0.30957569881673175,
+      "residual_improvement_per_budget_minute": 1.0893765961646487,
+      "active_path_reuse_fraction": 0.9422705598338506,
+      "basis_share_of_new_paths": 0.0,
+      "basis_share_of_active_work": 0.0,
+      "exact_fallback": false,
+      "refreshes": 0,
+      "fallback_at_attempt": null,
+      "unique_audits": 0,
+      "convergence": {
+        "completed": 5200,
+        "settings": {
+          "absolute_tolerance": 1e-05,
+          "minimum_attempts": 3000,
+          "relative_best_tolerance": 0.005,
+          "relative_mean_tolerance": 0.01,
+          "stable_windows": 3,
+          "window": 500
+        },
+        "status": "StillChanging",
+        "windows": [
+          {
+            "best_improvement": 0.004048209070711083,
+            "best_score": 0.022538894258054797,
+            "first_step": 3201,
+            "flat": null,
+            "last_step": 3700,
+            "mean_change": null,
+            "mean_score": 0.041074360204340736,
+            "previous_best": 0.02658710332876588,
+            "previous_mean": null,
+            "relative_best_improvement": 0.15226213328516797,
+            "relative_mean_change": null
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.022538894258054797,
+            "first_step": 3701,
+            "flat": false,
+            "last_step": 4200,
+            "mean_change": -0.008626449599628189,
+            "mean_score": 0.03244791060471255,
+            "previous_best": 0.022538894258054797,
+            "previous_mean": 0.041074360204340736,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": -0.2100203035838534
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.022538894258054797,
+            "first_step": 4201,
+            "flat": false,
+            "last_step": 4700,
+            "mean_change": 0.0024945226185974015,
+            "mean_score": 0.03494243322330995,
+            "previous_best": 0.022538894258054797,
+            "previous_mean": 0.03244791060471255,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": 0.07687775798528955
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.022538894258054797,
+            "first_step": 4701,
+            "flat": true,
+            "last_step": 5200,
+            "mean_change": -4.7619547165617115e-05,
+            "mean_score": 0.03489481367614433,
+            "previous_best": 0.022538894258054797,
+            "previous_mean": 0.03494243322330995,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": -0.001362799976214888
+          }
+        ]
+      },
+      "terminal_max_spectral_error": 0.0
+    },
+    {
+      "name": "adaptive-20260921",
+      "mode": "adaptive",
+      "seed": 20260921,
+      "attempts": 4992,
+      "initial_score": 32.81894469508907,
+      "best_exact_score": 0.028322030776709316,
+      "budget_seconds": 1800.0,
+      "budget_used_seconds": 1800.132352042,
+      "total_seconds": 1813.729207375,
+      "setup_seconds": 41.111390042,
+      "terminal_audit_seconds": 9.58e-07,
+      "final_verification_seconds": 3.983912208,
+      "work": {
+        "audit_seconds": 142.69066191300004,
+        "basis_paths": 24925,
+        "exact_paths": 1075605,
+        "monitoring_seconds": 71.834419624,
+        "proposal_seconds": 1494.555379004996,
+        "requests": 152928,
+        "reused_active_paths": 17931407
+      },
+      "seconds_per_attempt_inclusive": 0.36060343590584937,
+      "seconds_per_attempt_proposals": 0.2993900999609367,
+      "residual_improvement_per_budget_minute": 1.0929403927588754,
+      "active_path_reuse_fraction": 0.9421745668872276,
+      "basis_share_of_new_paths": 0.022648178604854026,
+      "basis_share_of_active_work": 0.0013096407370411115,
+      "exact_fallback": true,
+      "refreshes": 4,
+      "fallback_at_attempt": 500,
+      "unique_audits": 6,
+      "convergence": {
+        "completed": 4992,
+        "settings": {
+          "absolute_tolerance": 1e-05,
+          "minimum_attempts": 3000,
+          "relative_best_tolerance": 0.005,
+          "relative_mean_tolerance": 0.01,
+          "stable_windows": 3,
+          "window": 500
+        },
+        "status": "StillChanging",
+        "windows": [
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.028535095585236644,
+            "first_step": 2993,
+            "flat": null,
+            "last_step": 3492,
+            "mean_change": null,
+            "mean_score": 0.04033648666747156,
+            "previous_best": 0.028535095585236644,
+            "previous_mean": null,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": null
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.028535095585236644,
+            "first_step": 3493,
+            "flat": false,
+            "last_step": 3992,
+            "mean_change": -0.0032178180514272833,
+            "mean_score": 0.03711866861604428,
+            "previous_best": 0.028535095585236644,
+            "previous_mean": 0.04033648666747156,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": -0.07977437593795741
+          },
+          {
+            "best_improvement": 0.00021306480852732734,
+            "best_score": 0.028322030776709316,
+            "first_step": 3993,
+            "flat": false,
+            "last_step": 4492,
+            "mean_change": -0.0003251298819269277,
+            "mean_score": 0.03679353873411735,
+            "previous_best": 0.028535095585236644,
+            "previous_mean": 0.03711866861604428,
+            "relative_best_improvement": 0.007466763441912626,
+            "relative_mean_change": -0.008759201071839971
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.028322030776709316,
+            "first_step": 4493,
+            "flat": false,
+            "last_step": 4992,
+            "mean_change": 0.00921234238083446,
+            "mean_score": 0.04600588111495181,
+            "previous_best": 0.028322030776709316,
+            "previous_mean": 0.03679353873411735,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": 0.2503793518586506
+          }
+        ]
+      },
+      "terminal_max_spectral_error": 0.0
+    },
+    {
+      "name": "exact-20260922",
+      "mode": "exact",
+      "seed": 20260922,
+      "attempts": 5205,
+      "initial_score": 32.81894469508907,
+      "best_exact_score": 0.02917704035557405,
+      "budget_seconds": 1800.0,
+      "budget_used_seconds": 1800.111522792,
+      "total_seconds": 1817.109534917,
+      "setup_seconds": 40.192943375,
+      "terminal_audit_seconds": 0.0,
+      "final_verification_seconds": 4.156142708,
+      "work": {
+        "audit_seconds": 0.0,
+        "basis_paths": 0,
+        "exact_paths": 1155941,
+        "monitoring_seconds": 60.53260095999999,
+        "proposal_seconds": 1616.700955357999,
+        "requests": 161088,
+        "reused_active_paths": 18861712
+      },
+      "seconds_per_attempt_inclusive": 0.34584275173717577,
+      "seconds_per_attempt_proposals": 0.3106053708660901,
+      "residual_improvement_per_budget_minute": 1.0929245407154353,
+      "active_path_reuse_fraction": 0.9422539195778846,
+      "basis_share_of_new_paths": 0.0,
+      "basis_share_of_active_work": 0.0,
+      "exact_fallback": false,
+      "refreshes": 0,
+      "fallback_at_attempt": null,
+      "unique_audits": 0,
+      "convergence": {
+        "completed": 5205,
+        "settings": {
+          "absolute_tolerance": 1e-05,
+          "minimum_attempts": 3000,
+          "relative_best_tolerance": 0.005,
+          "relative_mean_tolerance": 0.01,
+          "stable_windows": 3,
+          "window": 500
+        },
+        "status": "StillChanging",
+        "windows": [
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.029288027092118075,
+            "first_step": 3206,
+            "flat": null,
+            "last_step": 3705,
+            "mean_change": null,
+            "mean_score": 0.04118644323838463,
+            "previous_best": 0.029288027092118075,
+            "previous_mean": null,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": null
+          },
+          {
+            "best_improvement": 0.0001109867365440241,
+            "best_score": 0.02917704035557405,
+            "first_step": 3706,
+            "flat": false,
+            "last_step": 4205,
+            "mean_change": 0.001667824992119274,
+            "mean_score": 0.0428542682305039,
+            "previous_best": 0.029288027092118075,
+            "previous_mean": 0.04118644323838463,
+            "relative_best_improvement": 0.0037894917330874977,
+            "relative_mean_change": 0.040494513752158796
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.02917704035557405,
+            "first_step": 4206,
+            "flat": false,
+            "last_step": 4705,
+            "mean_change": -0.0012085593899116079,
+            "mean_score": 0.041645708840592294,
+            "previous_best": 0.02917704035557405,
+            "previous_mean": 0.0428542682305039,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": -0.028201610710303734
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.02917704035557405,
+            "first_step": 4706,
+            "flat": false,
+            "last_step": 5205,
+            "mean_change": 0.0009110475356246747,
+            "mean_score": 0.04255675637621697,
+            "previous_best": 0.02917704035557405,
+            "previous_mean": 0.041645708840592294,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": 0.0218761442892448
+          }
+        ]
+      },
+      "terminal_max_spectral_error": 0.0
+    },
+    {
+      "name": "adaptive-20260922",
+      "mode": "adaptive",
+      "seed": 20260922,
+      "attempts": 5224,
+      "initial_score": 32.81894469508907,
+      "best_exact_score": 0.02732552779342774,
+      "budget_seconds": 1800.0,
+      "budget_used_seconds": 1800.140189583,
+      "total_seconds": 1816.741314125,
+      "setup_seconds": 40.771945167,
+      "terminal_audit_seconds": 1.292e-06,
+      "final_verification_seconds": 4.005985792,
+      "work": {
+        "audit_seconds": 37.091600454999956,
+        "basis_paths": 1945,
+        "exact_paths": 1149863,
+        "monitoring_seconds": 58.91745324899998,
+        "proposal_seconds": 1587.7525257509974,
+        "requests": 162368,
+        "reused_active_paths": 18757494
+      },
+      "seconds_per_attempt_inclusive": 0.34459038851129403,
+      "seconds_per_attempt_proposals": 0.30393425071803165,
+      "residual_improvement_per_budget_minute": 1.0929688484392466,
+      "active_path_reuse_fraction": 0.9421472435347056,
+      "basis_share_of_new_paths": 0.001688649497138412,
+      "basis_share_of_active_work": 9.76930281131905e-05,
+      "exact_fallback": true,
+      "refreshes": 0,
+      "fallback_at_attempt": 100,
+      "unique_audits": 2,
+      "convergence": {
+        "completed": 5224,
+        "settings": {
+          "absolute_tolerance": 1e-05,
+          "minimum_attempts": 3000,
+          "relative_best_tolerance": 0.005,
+          "relative_mean_tolerance": 0.01,
+          "stable_windows": 3,
+          "window": 500
+        },
+        "status": "StillChanging",
+        "windows": [
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.02732552779342774,
+            "first_step": 3225,
+            "flat": null,
+            "last_step": 3724,
+            "mean_change": null,
+            "mean_score": 0.042531468586472145,
+            "previous_best": 0.02732552779342774,
+            "previous_mean": null,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": null
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.02732552779342774,
+            "first_step": 3725,
+            "flat": false,
+            "last_step": 4224,
+            "mean_change": 0.005269348306777118,
+            "mean_score": 0.04780081689324926,
+            "previous_best": 0.02732552779342774,
+            "previous_mean": 0.042531468586472145,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": 0.12389293109086581
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.02732552779342774,
+            "first_step": 4225,
+            "flat": false,
+            "last_step": 4724,
+            "mean_change": -0.008946782039495643,
+            "mean_score": 0.03885403485375362,
+            "previous_best": 0.02732552779342774,
+            "previous_mean": 0.04780081689324926,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": -0.18716797370797997
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.02732552779342774,
+            "first_step": 4725,
+            "flat": false,
+            "last_step": 5224,
+            "mean_change": -0.0023536268958437717,
+            "mean_score": 0.03650040795790985,
+            "previous_best": 0.02732552779342774,
+            "previous_mean": 0.03885403485375362,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": -0.06057612561225136
+          }
+        ]
+      },
+      "terminal_max_spectral_error": 0.0
+    },
+    {
+      "name": "exact-20260923",
+      "mode": "exact",
+      "seed": 20260923,
+      "attempts": 5258,
+      "initial_score": 32.81894469508907,
+      "best_exact_score": 0.026680917953627876,
+      "budget_seconds": 1800.0,
+      "budget_used_seconds": 1800.1793565,
+      "total_seconds": 1817.148122417,
+      "setup_seconds": 40.174856292,
+      "terminal_audit_seconds": 0.0,
+      "final_verification_seconds": 4.069966625,
+      "work": {
+        "audit_seconds": 0.0,
+        "basis_paths": 0,
+        "exact_paths": 1167546,
+        "monitoring_seconds": 58.952639,
+        "proposal_seconds": 1629.2199864989925,
+        "requests": 163936,
+        "reused_active_paths": 19055109
+      },
+      "seconds_per_attempt_inclusive": 0.3423695999429441,
+      "seconds_per_attempt_proposals": 0.30985545578147444,
+      "residual_improvement_per_budget_minute": 1.0929665533180593,
+      "active_path_reuse_fraction": 0.9422654443741437,
+      "basis_share_of_new_paths": 0.0,
+      "basis_share_of_active_work": 0.0,
+      "exact_fallback": false,
+      "refreshes": 0,
+      "fallback_at_attempt": null,
+      "unique_audits": 0,
+      "convergence": {
+        "completed": 5258,
+        "settings": {
+          "absolute_tolerance": 1e-05,
+          "minimum_attempts": 3000,
+          "relative_best_tolerance": 0.005,
+          "relative_mean_tolerance": 0.01,
+          "stable_windows": 3,
+          "window": 500
+        },
+        "status": "StillChanging",
+        "windows": [
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.026680917953627876,
+            "first_step": 3259,
+            "flat": null,
+            "last_step": 3758,
+            "mean_change": null,
+            "mean_score": 0.04733917833912516,
+            "previous_best": 0.026680917953627876,
+            "previous_mean": null,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": null
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.026680917953627876,
+            "first_step": 3759,
+            "flat": false,
+            "last_step": 4258,
+            "mean_change": 0.0034579972525953934,
+            "mean_score": 0.050797175591720554,
+            "previous_best": 0.026680917953627876,
+            "previous_mean": 0.04733917833912516,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": 0.07304725966773715
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.026680917953627876,
+            "first_step": 4259,
+            "flat": false,
+            "last_step": 4758,
+            "mean_change": -0.0018456862908925453,
+            "mean_score": 0.04895148930082801,
+            "previous_best": 0.026680917953627876,
+            "previous_mean": 0.050797175591720554,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": -0.036334427443902494
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.026680917953627876,
+            "first_step": 4759,
+            "flat": false,
+            "last_step": 5258,
+            "mean_change": -0.007015834721988155,
+            "mean_score": 0.041935654578839854,
+            "previous_best": 0.026680917953627876,
+            "previous_mean": 0.04895148930082801,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": -0.14332219146332456
+          }
+        ]
+      },
+      "terminal_max_spectral_error": 0.0
+    },
+    {
+      "name": "adaptive-20260923",
+      "mode": "adaptive",
+      "seed": 20260923,
+      "attempts": 5100,
+      "initial_score": 32.81894469508907,
+      "best_exact_score": 0.02367083219184907,
+      "budget_seconds": 1800.0,
+      "budget_used_seconds": 1804.527449833,
+      "total_seconds": 1817.731476625,
+      "setup_seconds": 40.928687417,
+      "terminal_audit_seconds": 1.583e-06,
+      "final_verification_seconds": 3.814984167,
+      "work": {
+        "audit_seconds": 37.32476296400003,
+        "basis_paths": 1962,
+        "exact_paths": 1136223,
+        "monitoring_seconds": 66.34544862300001,
+        "proposal_seconds": 1573.6015008390007,
+        "requests": 160128,
+        "reused_active_paths": 18534330
+      },
+      "seconds_per_attempt_inclusive": 0.3538289117319608,
+      "seconds_per_attempt_proposals": 0.3085493138900001,
+      "residual_improvement_per_budget_minute": 1.0904330837172556,
+      "active_path_reuse_fraction": 0.9421433914270748,
+      "basis_share_of_new_paths": 0.0017237970980113074,
+      "basis_share_of_active_work": 9.973305395878463e-05,
+      "exact_fallback": true,
+      "refreshes": 0,
+      "fallback_at_attempt": 100,
+      "unique_audits": 2,
+      "convergence": {
+        "completed": 5100,
+        "settings": {
+          "absolute_tolerance": 1e-05,
+          "minimum_attempts": 3000,
+          "relative_best_tolerance": 0.005,
+          "relative_mean_tolerance": 0.01,
+          "stable_windows": 3,
+          "window": 500
+        },
+        "status": "StillChanging",
+        "windows": [
+          {
+            "best_improvement": 0.0039271220835503835,
+            "best_score": 0.024660101853686205,
+            "first_step": 3101,
+            "flat": null,
+            "last_step": 3600,
+            "mean_change": null,
+            "mean_score": 0.03766259771741178,
+            "previous_best": 0.02858722393723659,
+            "previous_mean": null,
+            "relative_best_improvement": 0.13737332775551772,
+            "relative_mean_change": null
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.024660101853686205,
+            "first_step": 3601,
+            "flat": false,
+            "last_step": 4100,
+            "mean_change": -0.0029332241946905466,
+            "mean_score": 0.034729373522721235,
+            "previous_best": 0.024660101853686205,
+            "previous_mean": 0.03766259771741178,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": -0.07788162188649268
+          },
+          {
+            "best_improvement": 0.0,
+            "best_score": 0.024660101853686205,
+            "first_step": 4101,
+            "flat": false,
+            "last_step": 4600,
+            "mean_change": 0.00542418821504255,
+            "mean_score": 0.040153561737763785,
+            "previous_best": 0.024660101853686205,
+            "previous_mean": 0.034729373522721235,
+            "relative_best_improvement": 0.0,
+            "relative_mean_change": 0.15618445324082353
+          },
+          {
+            "best_improvement": 0.0009892696618371347,
+            "best_score": 0.02367083219184907,
+            "first_step": 4601,
+            "flat": false,
+            "last_step": 5100,
+            "mean_change": -0.005490237505526983,
+            "mean_score": 0.0346633242322368,
+            "previous_best": 0.024660101853686205,
+            "previous_mean": 0.040153561737763785,
+            "relative_best_improvement": 0.04011620340040315,
+            "relative_mean_change": -0.13673102130722073
+          }
+        ]
+      },
+      "terminal_max_spectral_error": 0.0
+    }
+  ]
+}
