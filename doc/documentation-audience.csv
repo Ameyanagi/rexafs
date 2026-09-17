@@ -1,4 +1,5 @@
 path,audience,website_action,proposed_route,notes
+doc/rmc-cu2o-demo.md,developer,exclude,,Unreleased experimental Cu2O RMC run recipe and interpretation limits; local user measurement is not redistributed.
 .github/pull_request_template.md,developer,exclude,,Contribution review template.
 AGENTS.md,developer,exclude,,Repository assistant instructions.
 CHANGELOG.md,mixed,split,/releases/,Publish released user-visible changes; omit Unreleased and withheld 0.2.2 download claims from stable documentation.
@@ -50,6 +51,9 @@ doc/plots/feff10_card_comparison_2026-03-03/report.md,developer,exclude,,Histori
 doc/plots/feff_vs_larch_index.md,developer,exclude,,Historical FEFF comparisons and raw plots; not a user workflow guide.
 doc/processing-theory.md,user,adapt,/docs/science/processing/,"Retain equations, units, assumptions, citations and version-pinned implementation links."
 doc/profiling.md,developer,exclude,,Historical performance investigation.
+doc/rmc.md,mixed,exclude,,Unreleased ReFEFF-backed RMC guide; keep out of stable documentation until qualification.
+doc/rmc-validation.md,developer,exclude,,Dated synthetic RMC validation record; not experimental evidence.
+doc/rmc-evax-gap-analysis.md,developer,exclude,,Source-based EVAX comparison and prioritized native RMC gaps.
 doc/project-compatibility.md,mixed,split,/docs/desktop/projects/,"Keep sharing, recovery and compatibility guarantees; move schema internals and Every-release regression record to developer docs."
 doc/publication-export.md,user,adapt,/docs/desktop/publication/,"Retain export contents, units, portability and incomplete-result behavior."
 doc/publication.md,user,adapt,/docs/desktop/publication/,Merge with export guide into one task-oriented publication guide.
@@ -227,3 +231,10 @@ doc/development-branches.md,developer,exclude,,Development integration and night
 doc/validation/2026-09-14-release-0.2.6/import-capture.md,developer,exclude,,Signed release screenshot provenance and original measurement attribution.
 doc/release-notes-0.2.7.md,developer,exclude,,Coordinated 0.2.7 release notes; publication status is explicit.
 doc/validation/2026-09-15-release-0.2.7/review.md,developer,exclude,,Versioned release preparation and exact-build publication evidence.
+doc/rmc-performance.md,developer,exclude,,Unreleased RMC extension validation and measured full/cache/pinned-potential performance.
+doc/rmc-acceleration.md,developer,exclude,,Unreleased prepared ReFEFF API and numerical conventions; not stable release behavior.
+doc/rmc-implementation-progress.md,developer,exclude,,Unreleased implementation and dated local validation evidence.
+doc/rmc-search-upgrade.md,developer,exclude,,Unreleased hybrid search and adaptive basis APIs; cache benchmark and scientific limits.
+doc/rmc-adaptive-audits.md,developer,exclude,,Unreleased automatic basis audit and checkpoint APIs; numerical limits and synthetic validation.
+doc/rmc-spectrum-input.md,developer,exclude,,Unreleased Spectrum input and preprocessing snapshots; Rust API usage and resume validation.
+doc/rmc-cu2o-adaptive-qualification.md,developer,exclude,,Dated experimental Cu2O adaptive qualification; fixed-potential accuracy and matched wall-time measurements.

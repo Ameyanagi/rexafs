@@ -60,13 +60,16 @@ base64 = "0.23.1"
 hdf5-pure = "0.45.0"
 encoding_rs = "0.8"
 regex = "1"
+rand = { version = "0.9", default-features = false, features = ["std"] }
+rand_chacha = { version = "0.9", features = ["serde"] }
+sha2 = "0.11"
 
 [features]
 default = ["trust-region"]
 trust-region = ["dep:apex-solver", "dep:nalgebra-apex", "dep:faer"]
-ndarray-compat = ["ndarray"]
+ndarray-compat = ["dep:ndarray"]
 plotting = ["ruviz"]
-refeff-runner = ["dep:refeff"]
+refeff-runner = ["dep:refeff", "dep:ndarray"]
 feff10-runner = ["dep:feff10"]
 amcsd = ["dep:rusqlite"]
 # HTTP client shared by the online structure sources.
@@ -84,7 +87,6 @@ feff10 = { workspace = true, optional = true }
 pprof = { version = "0.15", features = ["flamegraph"] }
 
 [dev-dependencies]
-sha2 = "0.11"
 criterion = { version = "0.8.2", features = ["html_reports"] }
 
 [[bench]]
@@ -99,6 +101,54 @@ harness = false
 name = "autobk_stage_benchmark"
 harness = false
 
+[[example]]
+name = "rmc_refeff"
+required-features = ["refeff-runner"]
+
 [[bench]]
 name = "feff_fitting_batch_benchmark"
 harness = false
+
+[[example]]
+name = "rmc_session"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_benchmark"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_cu2o"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_path_benchmark"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_prepared"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_cu2o_search"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_population_benchmark"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_cu2o_calibrate"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_adaptive"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_spectrum"
+required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_qualify"
+required-features = ["refeff-runner"]

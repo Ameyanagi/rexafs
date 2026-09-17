@@ -41,6 +41,7 @@
 //! | [`io`] | QAS/XDI data and Athena project interchange. |
 //! | [`structure`] | Structures, clusters, scattering paths and FEFF inputs. |
 //! | [`fitting`] | FEFF path models and single, joint or independent fits. |
+//! | [`rmc`] | Experimental reverse Monte Carlo refinement of atomic coordinates. |
 //!
 //! Rust setters take ownership of settings. Call `.clone()` before passing a
 //! configuration if you need to retain it. Setters invalidate dependent results;
@@ -76,4 +77,4 @@ pub use xafs::normalization::{NormalizationMethod, PrePostEdge};
 pub use xafs::xasgroup::XASGroup as Group;
 pub use xafs::xasspectrum::XASSpectrum as Spectrum;
 pub use xafs::xrayfft::{FFTGrid, XrayFFTF, XrayFFTR};
-pub use xafs::{analysis, fitting, io, structure, tools, Result, XAFSError as Error};
+pub use xafs::{analysis, fitting, io, rmc, structure, tools, Result, XAFSError as Error};

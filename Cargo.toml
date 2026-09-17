@@ -66,7 +66,7 @@ ruviz = { version = "0.14.1", default-features = false }
 # gpui_platform also resolves to, so the whole workspace shares exactly one gpui.
 gpui = "0.2.2"
 ruviz-gpui = { version = "0.14.1", features = ["gpu", "3d"] }
-refeff = { version = "0.3.0", default-features = false, features = ["exafs"] }
+refeff = { version = "0.4.0", default-features = false, features = ["exafs"] }
 feff10 = { version = "0.2.3", features = ["prebuilt"] }
 
 rexafs = { version = "0.2.9", path = "crates/rexafs" }
