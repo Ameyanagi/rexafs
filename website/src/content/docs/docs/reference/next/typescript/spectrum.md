@@ -32,6 +32,24 @@ finished.
 See [processing theory](https://rexafs.com/docs/science/processing/) for equations,
 assumptions and interpretation.
 
+## fit_peaks
+
+```typescript
+fit_peaks(model: PeakFit, options?: { errors?: Float64Array }): PeakFitResult;
+```
+
+Fit a composite XANES model, preparing missing normalization on a private copy (unreleased).
+Recommended: spectrum.fit_peaks(new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 })).
+Model defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
+caches and model remain unchanged. Results use retained native points; no smoothing
+or interpolation occurs. Invalid models, coverage or preparation throw Error.
+Inspect termination and warnings: a numerical result can be nonconverged.
+Optional errors are positive independent standard deviations of the SELECTED signal
+on the original native grid, including excluded points. Raw errors are not propagated.
+Without errors, covariance uses residual-based variance. Active bounds, deficient rank
+and nonconvergence withhold local errors. These are conditional, not model confidence.
+Synchronous; use a Web Worker for large browser fits.
+
 ## measure
 
 ```typescript

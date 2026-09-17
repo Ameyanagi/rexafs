@@ -1,5 +1,6 @@
 //! Thin Wasm bindings: stage execution and defaults live in rexafs.
 use wasm_bindgen::prelude::*;
+mod peaks;
 fn error(error: rexafs::Error) -> JsValue {
     js_sys::Error::new(&error.to_string()).into()
 }
@@ -21,6 +22,11 @@ fn error(error: rexafs::Error) -> JsValue {
 #[wasm_bindgen(js_name = PrePostEdge)]
 pub struct WasmPrePostEdge {
     inner: rexafs::PrePostEdge,
+}
+impl Default for WasmPrePostEdge {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 #[wasm_bindgen(js_class = PrePostEdge)]
 impl WasmPrePostEdge {
@@ -166,6 +172,11 @@ impl WasmPrePostEdge {
 #[wasm_bindgen(js_name = AUTOBK)]
 pub struct WasmAUTOBK {
     inner: rexafs::AUTOBK,
+}
+impl Default for WasmAUTOBK {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 #[wasm_bindgen(js_class = AUTOBK)]
 impl WasmAUTOBK {
@@ -569,6 +580,11 @@ impl WasmAUTOBK {
 pub struct WasmXrayFFTF {
     inner: rexafs::XrayFFTF,
 }
+impl Default for WasmXrayFFTF {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 #[wasm_bindgen(js_class = XrayFFTF)]
 impl WasmXrayFFTF {
     /// Create owned settings with the recommended Rust defaults. Automatic fields are resolved
@@ -764,6 +780,11 @@ impl WasmXrayFFTF {
 #[wasm_bindgen(js_name = XrayFFTR)]
 pub struct WasmXrayFFTR {
     inner: rexafs::XrayFFTR,
+}
+impl Default for WasmXrayFFTR {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 #[wasm_bindgen(js_class = XrayFFTR)]
 impl WasmXrayFFTR {
@@ -1005,6 +1026,40 @@ pub struct WasmSpectrum {
 }
 #[wasm_bindgen(js_class = Spectrum)]
 impl WasmSpectrum {
+    /// Internal bridge for Spectrum.fit_peaks. The native model prepares on a copy.
+    /// Optional errors must describe the selected signal on the original native grid.
+    pub fn fit_peaks_json(
+        &self,
+        definition: &str,
+        errors: Option<Vec<f64>>,
+    ) -> Result<String, JsValue> {
+        let model: rexafs::prelude::PeakFit =
+            serde_json::from_str(definition).map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        let result = model
+            .fit_with_errors(&self.inner, errors.as_deref())
+            .map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        serde_json::to_string(&result).map_err(|e| js_sys::Error::new(&e.to_string()).into())
+    }
+    /// Internal bridge for baseline-only initialization outside peak intervals.
+    /// Returns a new definition; source, initial model and final masks are unchanged.
+    pub fn initialize_peaks_json(
+        &self,
+        definition: &str,
+        intervals: &str,
+    ) -> Result<String, JsValue> {
+        let model: rexafs::prelude::PeakFit =
+            serde_json::from_str(definition).map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        let intervals: Vec<[f64; 2]> =
+            serde_json::from_str(intervals).map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        let ranges = intervals
+            .into_iter()
+            .map(|r| r[0]..=r[1])
+            .collect::<Vec<_>>();
+        let result = model
+            .initialize_baseline(&self.inner, &ranges)
+            .map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        serde_json::to_string(&result).map_err(|e| js_sys::Error::new(&e.to_string()).into())
+    }
     /// Internal JSON bridge for the documented JavaScript Spectrum.measure facade.
     /// Prepares only required stages on a private copy; never modifies this spectrum.
     /// Optional errors describe the selected signal on its native grid, not raw
@@ -1150,7 +1205,7 @@ impl WasmSpectrum {
     /// Returns undefined before background removal or after invalidation; this getter never
     /// runs a stage.
     pub fn k(&self) -> Option<js_sys::Float64Array> {
-        self.inner.k().map(|v| js_sys::Float64Array::from(v))
+        self.inner.k().map(js_sys::Float64Array::from)
     }
     /// Return an independent copy of unweighted EXAFS chi(k) = (mu - smooth background) /
     /// edge_step, dimensionless and paired with k(). The measured absorption and smooth
@@ -1158,7 +1213,7 @@ impl WasmSpectrum {
     /// before background removal or after invalidation. Forward kweight and window settings do
     /// not change this array.
     pub fn chi(&self) -> Option<js_sys::Float64Array> {
-        self.inner.chi().map(|v| js_sys::Float64Array::from(v))
+        self.inner.chi().map(js_sys::Float64Array::from)
     }
     /// Return an independent copy of dimensionless normalized absorption, (mu - pre_edge) /
     /// edge_step, on the original input energy grid. Here pre_edge is the fitted baseline and

@@ -15,7 +15,7 @@ const rootUri = pathToFileURL(directory).href;
 writeFileSync(join(directory, "pyrightconfig.json"), JSON.stringify({
   typeCheckingMode: "strict", pythonVersion: "3.10",
 }));
-const valid = `from rexafs import AUTOBK, Spectrum, XrayFFTF, XrayFFTR, FTWindow
+const valid = `from rexafs import AUTOBK, Spectrum, PeakFit, XrayFFTF, XrayFFTR, FTWindow
 from rexafs.io import parse_measurement, SpectrumMapping
 measurement = parse_measurement("energy,mu\\n7100,1\\n7101,2")
 mapping: SpectrumMapping = {"energy_column":0,"energy":{"kind":"offset_ev","offset_ev":20000},"signal":{"kind":"direct","column":1}}
@@ -33,6 +33,12 @@ spectrum.set_background_method(AUTOBK(rbkg=1.2)).set_fft(XrayFFTF(window=window)
 scalar = spectrum.measure("mean", (-20., 30.), space="flat")
 print(scalar.value, scalar.standard_error, scalar.range, scalar.to_json())
 spectrum.measure("point", 10.)
+peak = PeakFit((-20., 40.)).gaussian("p1", center=5, area=2, fwhm=3).linear_baseline()
+fit = spectrum.fit_peaks(peak)
+print(fit.parameters["p1_center"], fit.components[0].area, fit.to_json())
+for row in peak.fit_batch([spectrum]):
+    if row.result is not None:
+        print(row.result.objective)
 chi = spectrum.chi()
 if chi is not None:
     print(chi[0])
@@ -128,6 +134,15 @@ XrayFFTF(window="")
   const scalarPosition = (line, character) => ({textDocument:{uri:scalarUri},position:{line,character}});
   assert.match(JSON.stringify(await request("textDocument/hover",scalarPosition(2,5))), /private copy/);
   assert.match(JSON.stringify(await request("textDocument/signatureHelp",scalarPosition(3,27))), /space/);
+  const peakText = 'from rexafs import Spectrum, PeakFit\ns = Spectrum([0., 1.], [1., 2.])\np = PeakFit((-20., 40.))\ns.fit_peaks\np.fit_batch\np.gaussian("p", \n';
+  const peakUri = pathToFileURL(join(directory, "peaks.py")).href;
+  send({ method: "textDocument/didOpen", params: { textDocument: { uri: peakUri, languageId: "python", version: 1, text: peakText } } });
+  const peakPosition = (line, character) => ({ textDocument: { uri: peakUri }, position: { line, character } });
+  assert.match(JSON.stringify(await request("textDocument/hover", peakPosition(3, 7))), /E0-relative/);
+  assert.match(JSON.stringify(await request("textDocument/hover", peakPosition(4, 7))), /one outcome per input/);
+  assert.match(JSON.stringify(await request("textDocument/signatureHelp", peakPosition(5, 16))), /fwhm/);
+  const peakKeywords = await request("textDocument/completion", peakPosition(5, 16));
+  assert.ok((peakKeywords.items ?? peakKeywords).some(x => x.label.startsWith("fwhm")));
   console.log("Installed Python wheel: property/method hovers, member/keyword/literal completion and signature defaults passed");
   await request("shutdown", null);
   send({ method: "exit", params: null });

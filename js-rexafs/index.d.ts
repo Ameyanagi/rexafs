@@ -20,3 +20,7 @@ export { Measurement, read_measurement } from "./types.js";
 export type { MeasurementDocument, MeasurementScan, MeasurementColumn, MeasurementDataset, SpectrumMapping, ColumnSelector, MeasurementOptions, EnergyConversion, SignalConversion, SignalCandidate } from "./types.js";
 
 export type { SpectrumMeasurementOptions, MeasurementResult } from "./types.js";
+export { PeakFit } from "./types.js";
+export type { PeakFitResult, PeakContribution, PeakFitOutcome, PeakParameterOptions } from "./types.js";
+
+export type { PeakOptions, PseudoVoigtOptions, VoigtOptions, StepOptions } from "./types.js";

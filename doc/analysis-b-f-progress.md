@@ -128,3 +128,29 @@ was paused before saving the embedded QA project. See the
 [peak validation record](validation/2026-09-17-peaks/README.md) for the final
 recovery check and test counts. Python/TypeScript peak APIs and the remaining
 milestone-C acceptance checks are still in progress.
+
+## C4: simple Python and TypeScript peak APIs
+
+Both bindings expose an immutable `PeakFit` builder and the single-call
+`spectrum.fit_peaks(model)` operation. Python accepts named keyword arguments;
+TypeScript peak shapes take named options for center, area and width. Baselines
+can start from zero without additional arguments. Missing normalization runs on
+a copy, and `model.fit_batch(spectra)` preserves one outcome per input, including
+failures. Constraints, error weighting, baseline initialization, serialization
+and fitted-model reuse remain explicit options.
+
+Installed Python/Node/browser packages compare all four peak profiles with the
+same pinned lmfit fixture, including masks and conditional parameter errors.
+Automatic Norm/Flat preparation, unchanged inputs, initialization, constraints,
+batch failure rows and owned result arrays are covered. Generated Next API pages
+and installed-package completion/hover/signature checks cover both languages;
+stable reference signatures remain unchanged. See the
+[binding guide](xanes-peak-fitting.md#python-and-typescript) for short examples.
+
+The final installed-wheel run passed 29 tests and 34 subtests; npm passed all
+30 tests, including installed root/Node/browser TypeScript contracts. The Python
+language-server check passed, as did strict Clippy for both binding crates,
+eight documentation-generator tests, and the website type/content check.
+
+This increment does not complete native platform or experimental qualification,
+and D–F remain pending. It does not add the separately tracked LCF/PCA/MCR bindings.

@@ -32,6 +32,27 @@ See [processing theory](https://rexafs.com/docs/science/processing/) for
 equations, interpretation and limitations. Groups and structural fitting
 are not currently exposed by this Python Spectrum API.
 
+## fit_peaks
+
+```python
+fit_peaks(self, model: PeakFit, *, errors: NDArray[np.float64] | Sequence[float] | None=None) -> PeakFitResult
+```
+
+Fit a composite XANES model, preparing missing normalization on a copy (unreleased).
+
+Example: spectrum.fit_peaks(PeakFit((-20, 40)).gaussian("p1", 5, 2, 3)).
+Defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
+caches and initial model remain unchanged; Rust releases the GIL. Results
+contain data/model/residual arrays on the retained native points. No smoothing
+or interpolation occurs. Invalid models, coverage or preparation raise ValueError.
+A result can be nonconverged: inspect termination, warnings and uncertainty_unavailable.
+
+Optional errors are positive independent standard deviations in the SELECTED
+signal representation on the original native grid, including excluded points.
+Raw detector errors are not propagated through normalization. Without errors,
+covariance uses residual-based variance. Active bounds, deficient rank and
+nonconvergence withhold conditional local uncertainty; this is not model confidence.
+
 ## measure
 
 ```python

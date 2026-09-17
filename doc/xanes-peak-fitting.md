@@ -3,8 +3,9 @@
 The development core fits a sum of named peaks, absorption steps and baseline
 terms on the original energy grid. It does not choose a peak count or identify
 chemical species. The development desktop supports current, marked and Series
-fits, and optional saved peak models in Live acquisition. Python/TypeScript bindings remain under
-[milestone C](analysis-b-f-progress.md); they are not implied by this core API.
+fits, and optional saved peak models in Live acquisition. The Python and
+TypeScript bindings below use the same native calculation. All of these APIs
+remain unreleased; see the [milestone C progress record](analysis-b-f-progress.md).
 
 ```rust
 use rexafs::{PeakFit, Spectrum};
@@ -114,6 +115,76 @@ arrays already in the selected representation, with absolute energy in eV.
 `result.fitted_model().evaluate(&energy, e0)` evaluates a copied fitted model on
 another grid for display; it does not alter the historical result.
 
+## Python and TypeScript
+
+These APIs are **unreleased**. They use the same Rust calculation as the desktop.
+Missing normalization is prepared on a copy; neither the source spectrum nor
+the starting model is changed. Norm and E₀-relative eV remain the defaults.
+
+```python
+from rexafs import PeakFit
+
+model = (
+    PeakFit((-20, 40))
+    .gaussian("white_line", center=5, area=2, fwhm=3)
+    .linear_baseline()
+)
+result = spectrum.fit_peaks(model)
+print(result.components[0].center_ev, result.components[0].area)
+outcomes = model.fit_batch(spectra)
+```
+
+```typescript
+import { PeakFit } from "rexafs/node";
+
+const model = new PeakFit([-20, 40])
+  .gaussian("white_line", { center: 5, area: 2, fwhm: 3 })
+  .linear_baseline();
+const result = spectrum.fit_peaks(model);
+console.log(result.components[0].center_ev, result.components[0].area);
+const outcomes = model.fit_batch(spectra);
+model.free();
+```
+
+Use the browser entry point after `await init()` for the same TypeScript API.
+JavaScript calculations are synchronous; a Web Worker keeps a large batch off
+the browser's UI thread. Python releases the global interpreter lock while Rust
+calculates. The JavaScript model owns native memory; call `free()` when finished,
+as for `Spectrum`. Builder methods return independent models. Keep a returned
+model when editing: calling `model.flat()` alone does not change `model`.
+
+Each batch outcome has its zero-based `index` and either a `result` or an `error`
+(`None` in Python, `null` in JavaScript for the absent field). One failed input
+does not remove a row or stop later fits. All frames start from the same model;
+there is no implicit warm start. A returned numerical result can be
+`NotConverged`, so inspect `termination`, `warnings` and
+`uncertainty_unavailable` before interpreting it.
+
+Both languages expose `result.parameters` as named numerical values,
+`parameter_errors` as named conditional errors, and `components` as ordered
+curves and summaries. Component centers are absolute eV; named center parameters
+retain the model's coordinate origin. Python arrays are independent NumPy copies;
+JavaScript result arrays are ordinary arrays. `result.to_json()` preserves the
+complete original result, constraints, masks and diagnostics, even if a returned
+array is edited. `result.fitted_model()` explicitly copies fitted values for reuse.
+In JavaScript, each access to `result.definition` also creates a model copy;
+release that copy when finished.
+
+Optional `errors` must describe independent standard deviations of the selected
+signal on the **original** native grid, including points later excluded. Python
+accepts `spectrum.fit_peaks(model, errors=sigma)`; TypeScript uses
+`spectrum.fit_peaks(model, { errors: sigma })` with a `Float64Array`. The bindings
+do not convert raw detector uncertainty into normalized-signal uncertainty.
+
+Advanced edits use the generated parameter names, such as `white_line_center`,
+`white_line_area` and `white_line_width`. Python accepts
+`model.parameter("white_line_center", 5, bounds=(0, 10))`; TypeScript accepts
+`model.parameter("white_line_center", 5, { bounds: [0, 10] })`. A replacement is
+unbounded unless bounds are supplied; `vary=False`/`vary: false` fixes it, and
+`expression` applies a restricted mathematical tie. Unknown names fail immediately.
+An explicit `.flat()` selects flattened input. Baseline initialization, masks,
+all four peak profiles and both step profiles are available in both bindings.
+
 ## Desktop workflow
 
 In **Data → Analysis → XANES peak fit**, choose Norm, Flat or μ(E). The desktop
@@ -184,6 +255,5 @@ errors. [Fixture provenance and tolerances](../crates/rexafs/tests/fixtures/anal
 are retained with the generated data. The fixtures are repository-only.
 
 These tests establish the checked numerical cases, not physical validity for an
-arbitrary experimental decomposition. Public Python/TypeScript
-APIs, native Windows/Linux checks and a
+arbitrary experimental decomposition. Native Windows/Linux checks and a
 documented public experimental example remain milestone-C work.

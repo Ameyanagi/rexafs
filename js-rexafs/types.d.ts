@@ -1002,6 +1002,19 @@ export class BackgroundMethod {
  * assumptions and interpretation.
  */
 export class Spectrum {
+  /** Fit a composite XANES model, preparing missing normalization on a private copy (unreleased).
+   * Recommended: spectrum.fit_peaks(new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 })).
+   * Model defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
+   * caches and model remain unchanged. Results use retained native points; no smoothing
+   * or interpolation occurs. Invalid models, coverage or preparation throw Error.
+   * Inspect termination and warnings: a numerical result can be nonconverged.
+   * Optional errors are positive independent standard deviations of the SELECTED signal
+   * on the original native grid, including excluded points. Raw errors are not propagated.
+   * Without errors, covariance uses residual-based variance. Active bounds, deficient rank
+   * and nonconvergence withhold local errors. These are conditional, not model confidence.
+   * Synchronous; use a Web Worker for large browser fits.
+   */
+  fit_peaks(model: PeakFit, options?: { errors?: Float64Array }): PeakFitResult;
   /**
    * Measure a point or region without changing this spectrum (unreleased).
    * Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
@@ -1475,4 +1488,213 @@ export interface MeasurementResult {
     space: "Mu" | "Norm" | "Flat" | "Fourier" | { Chi: { kweight: number } };
     origin: "E0" | "Absolute";
   };
+}
+
+/** Immutable composite XANES peak definition (unreleased).
+ * Start with new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 }).linear_baseline().
+ * Defaults are Norm and E0-relative eV. Builders return NEW definitions; inputs
+ * remain unchanged. Missing normalization runs on a copy. No smoothing or
+ * chemical/component-count assignment is performed. Default bounds keep centers
+ * in the interval, areas nonnegative and widths positive. Inspect termination
+ * and warnings: local covariance is conditional on the selected model.
+ */
+export class PeakFit {
+  /** Create an empty Norm model over inclusive E0-relative eV; add components before fitting. */
+  constructor(range: readonly [number, number]);
+  /** Release this definition's native memory. Do not use it afterwards. Other copies remain valid. */
+  free(): void;
+  /** Use dimensionless flattened mu; prerequisites run on a copy. Returns a new model. */
+  flat(): PeakFit;
+  /** Use the original mapped absorption signal and its units. Returns a new model. */
+  raw_mu(): PeakFit;
+  /** Interpret ranges, centers and baseline references as absolute eV. Returns a new model. */
+  absolute(): PeakFit;
+  /** Use offsets from this fixed reference energy in eV. Returns a new model. */
+  reference(energy_ev: number): PeakFit;
+  /** Add a Gaussian: center/FWHM in eV, whole-axis area in signal units times eV. Returns a new model. */
+  gaussian(name: string, options: PeakOptions): PeakFit;
+  /** Add a Lorentzian with whole-axis area and FWHM in eV. Returns a new model. */
+  lorentzian(name: string, options: PeakOptions): PeakFit;
+  /** Add a common-FWHM mixture; fraction is the Lorentzian share from zero to one. Returns a new model. */
+  pseudo_voigt(name: string, options: PseudoVoigtOptions): PeakFit;
+  /** Add a true Voigt with independent Gaussian/Lorentzian FWHM in eV. Returns a new model. */
+  voigt(name: string, options: VoigtOptions): PeakFit;
+  /** Add height*(1+erf((E-center)/scale))/2; scale is positive eV. Returns a new model. */
+  erf_step(name: string, options: StepOptions): PeakFit;
+  /** Add height*(1/2+atan((E-center)/scale)/pi); scale is positive eV. Returns a new model. */
+  arctan_step(name: string, options: StepOptions): PeakFit;
+  /** Add a fitted constant named baseline, in signal units. Returns a new model. */
+  constant_baseline(offset?: number): PeakFit;
+  /** Add baseline = offset+slope*E_offset; slope is signal units/eV. Returns a new model. */
+  linear_baseline(options?: { offset?: number; slope?: number }): PeakFit;
+  /** Exclude an inclusive interval in model coordinates; masked gaps are not integrated. */
+  exclude(range: readonly [number, number]): PeakFit;
+  /** Replace an EXISTING parameter (e.g. p1_center or p1_width); returns a new model.
+   * Bounds default to unbounded: supply them explicitly to retain restrictions.
+   * An expression is a restricted tie, not executable code, and overrides vary.
+   * Unknown names fail immediately; domains/dependencies are checked when fitting.
+   */
+  parameter(name: string, value: number, options?: PeakParameterOptions): PeakFit;
+  /** Make a named peak part of the baseline, excluding it from the weighted center; steps cannot change role. */
+  as_baseline(name: string): PeakFit;
+  /** Positive optimizer limits, default 200 iterations and 1e-10 tolerance; returns a new model. */
+  solver(options?: { max_iterations?: number; tolerance?: number }): PeakFit;
+  /** Evaluate at absolute energy in eV without fitting/masking. Relative models require e0; returns an owned array. */
+  evaluate(energy: Float64Array, options?: { e0?: number }): Float64Array;
+  /** Initialize baseline-role variables outside peak intervals in model coordinates.
+   * Returns a new starting model. Source, final masks and this definition stay unchanged.
+   */
+  initialize_baseline(spectrum: Spectrum, peak_intervals: ReadonlyArray<readonly [number, number]>): PeakFit;
+  /** Independent unweighted fits from this starting model, one outcome per input.
+   * A bad frame keeps an error row and does not stop later frames. Inputs are unchanged.
+   * Runs synchronously; use a Web Worker for large browser batches.
+   */
+  fit_batch(spectra: readonly Spectrum[]): PeakFitOutcome[];
+  /** Serialize the complete initial definition, including constraints and masks. */
+  to_json(): string;
+  /** Restore and validate a complete definition. Browser init must have completed. */
+  static from_json(json: string): PeakFit;
+}
+/** Optional fixed values, bounds and restricted ties for an existing model parameter. */
+export interface PeakParameterOptions {
+  /** Independently vary this parameter, default true; a tie overrides this. */
+  vary?: boolean;
+  /** Inclusive minimum/maximum in parameter units; null means unbounded, the default. */
+  bounds?: readonly [number | null, number | null];
+  /** Restricted expression in other parameter names; never external code. */
+  expression?: string;
+}
+/** One batch outcome, including failures. A nonconverged numerical result remains a result. */
+export type PeakFitOutcome =
+  | { index: number; result: PeakFitResult; error: null }
+  | { index: number; result: null; error: string };
+/** Owned numerical result (unreleased). Arrays are ordinary JavaScript copies.
+ * Editing the displayed values never changes the retained JSON or the input spectrum.
+ * Local errors are conditional, not model-selection confidence intervals.
+ */
+export interface PeakFitResult {
+  /** Initial model; each access returns a new native copy. Release it with free() when finished. */
+  readonly definition: PeakFit;
+  /** Copy fitted values for explicit reuse; caller owns the returned model. */
+  fitted_model(): PeakFit;
+  /** Named final values; parameter centers retain the model's coordinate origin. */
+  parameters: Record<string, number>;
+  /** Conditional local errors, null when unavailable or not independently estimated. */
+  parameter_errors: Record<string, number | null>;
+  /** Component curves/summaries in model order. */
+  components: PeakContribution[];
+  /** Full native snapshot with initial/final constraints, masks and diagnostics. */
+  to_json(): string;
+  /** Resolved energy origin in eV, added to parameter centers/reference energies. */
+  origin_ev: number;
+  /** Absolute energy in eV, only the native points used by this fit. */
+  energy: number[];
+  /** Original zero-based point indices; preserves masks and sampling provenance. */
+  source_indices: number[];
+  /** Selected representation's measured values, in its signal units. */
+  data: number[];
+  /** Joint baseline + peaks + steps, in the same signal units. */
+  model: number[];
+  /** Unweighted data minus model, in signal units (also for weighted fits). */
+  residual: number[];
+  /** Supplied selected-space standard deviations on the fitted points, if any. */
+  standard_deviation: number[] | null;
+  /** Sum of squared residuals, divided by supplied standard deviations if present. */
+  objective: number;
+  /** Number of fitted native data points (not EXAFS independent-point estimates). */
+  points: number;
+  /** Number of independent varying parameters; expression ties are excluded. */
+  free_parameters: number;
+  /** points − free_parameters. Fits with fewer points than variables are rejected. */
+  degrees_of_freedom: number;
+  /** Weighted numerical Jacobian rank under a 1e-10 relative singular-value cutoff. */
+  jacobian_rank: number;
+  /** Sorted independent parameter names defining covariance/correlation axes. */
+  covariance_names: string[];
+  /** Local covariance; absolute-error scaling when standard deviations were given,
+   * otherwise multiplied by objective/degrees_of_freedom. */
+  covariance: number[][] | null;
+  /** Dimensionless correlations corresponding to covariance_names. Absent when
+   * any conditional variance is zero; the warning explains that case. */
+  correlation: number[][] | null;
+  /** Why covariance/standard errors were withheld, rather than replaced by zero. */
+  uncertainty_unavailable: string | null;
+  /** Model peak-area-weighted center in absolute eV, excluding baseline/steps. */
+  peak_center_ev: number | null;
+  /** Conditional error in that center, using full parameter covariance. */
+  peak_center_standard_error_ev: number | null;
+  /** Explicit numerical termination category. */
+  termination: "FixedModel" | "Converged" | "NotConverged" | "Cancelled";
+  /** Solver-specific termination detail, retained verbatim for diagnosis. */
+  termination_detail: string;
+  /** Number of residual-vector evaluations during optimization, including numerical derivatives. */
+  evaluations: number;
+  /** Active bounds and other model/uncertainty limitations. */
+  warnings: string[];
+}
+/** One peak, step or baseline contribution on retained native points. */
+export interface PeakContribution {
+  /** Stable component identity from the initial definition. */
+  name: string;
+  /** Scientific role, independent of mathematical shape. */
+  role: "Peak" | "Baseline" | "Edge";
+  /** Mathematical shape used for evaluation. */
+  shape: "Gaussian" | "Lorentzian" | "PseudoVoigt" | "Voigt" | "ErfStep" | "ArctanStep" | "Constant" | "Linear";
+  /** Component values at the result's absolute-energy points, in signal units. */
+  curve: number[];
+  /** Peak/step center in absolute eV; None for polynomial baselines. */
+  center_ev: number | null;
+  /** Whole-axis model area in signal units × eV; None for steps/polynomials. */
+  area: number | null;
+  /** Peak contribution at its center, excluding all other components. */
+  height: number | null;
+  /** Peak FWHM in eV; true Voigt uses a numerical half-height root. */
+  fwhm_ev: number | null;
+  /** Conditional errors propagated with the full joint covariance; absent when
+   * local uncertainty is unavailable or the quantity does not apply. */
+  center_standard_error_ev: number | null;
+  /** Conditional whole-axis area error, in signal units × eV. */
+  area_standard_error: number | null;
+  /** Conditional peak-height error, in signal units. */
+  height_standard_error: number | null;
+  /** Conditional FWHM error, in eV, including both true-Voigt width parameters. */
+  fwhm_standard_error_ev: number | null;
+  /** Trapezoidal component integral over included native-grid segments only.
+   * Masked gaps are not bridged; this is not its whole-axis analytic area. */
+  sampled_integral: number;
+}
+
+/** Initial Gaussian/Lorentzian values; units follow the selected representation. */
+export interface PeakOptions {
+  /** Initial center in eV under the chosen origin: E0 offsets by default. */
+  center: number;
+  /** Whole-axis analytic area, signal units times eV; nonnegative by default. */
+  area: number;
+  /** Full width at half maximum in eV; strictly positive. */
+  fwhm: number;
+}
+/** Common-width Gaussian/Lorentzian mixture. */
+export interface PseudoVoigtOptions extends PeakOptions {
+  /** Lorentzian share from zero to one; zero is Gaussian and one Lorentzian. */
+  fraction: number;
+}
+/** True convolution with separate Gaussian/Lorentzian widths. */
+export interface VoigtOptions {
+  /** Center in eV under the selected origin, E0 offsets by default. */
+  center: number;
+  /** Whole-axis analytic area in signal units times eV, nonnegative by default. */
+  area: number;
+  /** Gaussian FWHM in eV. One width may be fixed to zero, not both. */
+  gaussian_fwhm: number;
+  /** Lorentzian FWHM in eV. Combined FWHM is computed in the result. */
+  lorentzian_fwhm: number;
+}
+/** Initial values for an absorption-edge step; a step has no finite peak area. */
+export interface StepOptions {
+  /** Center in eV under the selected origin, E0 offsets by default. */
+  center: number;
+  /** Change between asymptotes in the selected signal units. */
+  height: number;
+  /** Positive eV scale in erf((E-center)/scale) or atan((E-center)/scale); not a peak FWHM. */
+  scale: number;
 }

@@ -819,6 +819,22 @@ class Spectrum:
     See [processing theory](https://rexafs.com/docs/science/processing/) for
     equations, interpretation and limitations. Groups and structural fitting
     are not currently exposed by this Python Spectrum API."""
+    def fit_peaks(self, model: PeakFit, *, errors: NDArray[np.float64] | Sequence[float] | None = None) -> PeakFitResult:
+        """Fit a composite XANES model, preparing missing normalization on a copy (unreleased).
+
+        Example: spectrum.fit_peaks(PeakFit((-20, 40)).gaussian("p1", 5, 2, 3)).
+        Defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
+        caches and initial model remain unchanged; Rust releases the GIL. Results
+        contain data/model/residual arrays on the retained native points. No smoothing
+        or interpolation occurs. Invalid models, coverage or preparation raise ValueError.
+        A result can be nonconverged: inspect termination, warnings and uncertainty_unavailable.
+
+        Optional errors are positive independent standard deviations in the SELECTED
+        signal representation on the original native grid, including excluded points.
+        Raw detector errors are not propagated through normalization. Without errors,
+        covariance uses residual-based variance. Active bounds, deficient rank and
+        nonconvergence withhold conditional local uncertainty; this is not model confidence.
+        """
     @overload
     def measure(self, operation: Literal["point"], coordinates: float, *,
                 space: Literal["mu", "norm", "flat", "chi", "fourier"] = "norm",
@@ -1188,3 +1204,222 @@ class Spectrum:
         ifft() (or a dependent stage) succeeds or after invalidation.
         Reading this result does not run processing; editing the copy does
         not change the spectrum."""
+
+class PeakFit:
+    """Immutable composite XANES peak definition (unreleased).
+
+    PeakFit((-20, 40)).gaussian("p1", 5, 2, 3).linear_baseline(0, 0)
+    starts with Norm and E0-relative eV. Each builder returns a NEW model.
+    Peak arguments are center, whole-axis area (signal units times eV), and
+    FWHM (eV). Default bounds keep centers in the fit range, areas nonnegative,
+    and widths positive. Missing normalization runs on a copy; inputs stay intact.
+    No smoothing or automatic chemical/component-count assignment is performed.
+    Inspect termination and warnings; covariance is conditional on the chosen model.
+    """
+    def __init__(self, range: tuple[float, float]) -> None:
+        """Create an empty Norm model over inclusive E0-relative eV. Add components before fitting."""
+    def flat(self) -> PeakFit:
+        """Use dimensionless flattened mu; prerequisites run on a copy. Returns a new model."""
+    def raw_mu(self) -> PeakFit:
+        """Use the original mapped absorption signal and its units. Returns a new model."""
+    def absolute(self) -> PeakFit:
+        """Interpret ranges, centers and baseline references as absolute eV. Returns a new model."""
+    def reference(self, energy_ev: float) -> PeakFit:
+        """Use offsets from this fixed reference energy in eV. Returns a new model."""
+    def gaussian(self, name: str, center: float, area: float, fwhm: float) -> PeakFit:
+        """Add a Gaussian: center/FWHM in eV, whole-axis area in signal units times eV. Returns a new model."""
+    def lorentzian(self, name: str, center: float, area: float, fwhm: float) -> PeakFit:
+        """Add a Lorentzian with whole-axis area and FWHM in eV. Returns a new model."""
+    def pseudo_voigt(self, name: str, center: float, area: float, fwhm: float, fraction: float) -> PeakFit:
+        """Add a common-FWHM mixture; fraction is the Lorentzian share from zero to one. Returns a new model."""
+    def voigt(self, name: str, center: float, area: float, gaussian_fwhm: float, lorentzian_fwhm: float) -> PeakFit:
+        """Add a true Voigt with independent Gaussian/Lorentzian FWHM in eV. Returns a new model."""
+    def erf_step(self, name: str, center: float, height: float, scale: float) -> PeakFit:
+        """Add height*(1+erf((E-center)/scale))/2; scale is positive eV. Returns a new model."""
+    def arctan_step(self, name: str, center: float, height: float, scale: float) -> PeakFit:
+        """Add height*(1/2+atan((E-center)/scale)/pi); scale is positive eV. Returns a new model."""
+    def constant_baseline(self, offset: float = 0) -> PeakFit:
+        """Add a fitted constant named baseline, in signal units. Returns a new model."""
+    def linear_baseline(self, offset: float = 0, slope: float = 0) -> PeakFit:
+        """Add baseline = offset+slope*E_offset; slope is signal units/eV. Returns a new model."""
+    def exclude(self, range: tuple[float, float]) -> PeakFit:
+        """Exclude an inclusive interval in model coordinates. Masked gaps are not integrated."""
+    def parameter(self, name: str, value: float, *, vary: bool = True,
+                  bounds: tuple[float | None, float | None] = (None, None),
+                  expression: str | None = None) -> PeakFit:
+        """Replace an EXISTING parameter, returning a new model.
+
+        Names use component_parameter, for example p1_center, p1_area, p1_width.
+        Bounds default to unbounded; pass them explicitly to retain restrictions.
+        An expression is a restricted tie, not executable code; it overrides vary.
+        Dependencies, physical domains and finite values are checked at fit/evaluation.
+        Unknown names raise ValueError immediately. Use vary=False to fix a value.
+        """
+    def as_baseline(self, name: str) -> PeakFit:
+        """Make a named peak part of the baseline, excluding it from the area-weighted center.
+        Shapes are unchanged; steps must remain edges. Returns a new model."""
+    def solver(self, *, max_iterations: int = 200, tolerance: float = 1e-10) -> PeakFit:
+        """Set positive iteration/tolerance limits on a new model; validated when fitting."""
+    def evaluate(self, energy: NDArray[np.float64] | Sequence[float], *, e0: float | None = None) -> NDArray[np.float64]:
+        """Evaluate without fitting or masking at absolute energy in eV.
+        E0-relative models require e0 in eV. Returns a new NumPy array;
+        invalid definitions and nonfinite arrays raise ValueError."""
+    def initialize_baseline(self, spectrum: Spectrum, peak_intervals: Sequence[tuple[float, float]]) -> PeakFit:
+        """Initialize only baseline-role variables outside the given peak intervals.
+        Intervals use model coordinates; final masks and input spectra stay unchanged.
+        Returns a new starting model for a joint final fit. Rust releases the GIL."""
+    def fit_batch(self, spectra: Sequence[Spectrum]) -> list[PeakFitOutcome]:
+        """Independent unweighted fits from this frozen start, one outcome per input.
+        Bad frames keep an error row and do not stop later frames. Inputs are unchanged.
+        Rust releases the GIL. Use spectrum.fit_peaks for supplied point errors."""
+    def to_json(self) -> str:
+        """Serialize the complete initial definition, constraints and masks."""
+    @staticmethod
+    def from_json(json: str) -> PeakFit:
+        """Restore and validate a complete definition; invalid input raises ValueError."""
+
+class PeakFitOutcome:
+    """One independent batch outcome in input order (unreleased).
+    Exactly one of result/error is present. Nonconvergence is retained as a result."""
+    @property
+    def index(self) -> int:
+        """Zero-based input index, also retained on failure."""
+    @property
+    def result(self) -> PeakFitResult | None:
+        """Owned numerical result; inspect its termination and warnings."""
+    @property
+    def error(self) -> str | None:
+        """Failure reason, otherwise None."""
+
+class PeakFitResult:
+    """Owned native fit (unreleased). Array getters return independent copies.
+    Result energies/centers are absolute eV; parameter values retain model coordinates.
+    Covariance/errors are conditional on the model/noise, not model-selection confidence."""
+    @property
+    def definition(self) -> PeakFit:
+        """Independent copy of the initial definition."""
+    def fitted_model(self) -> PeakFit:
+        """Copy fitted values for explicit reuse without changing the initial definition."""
+    @property
+    def parameters(self) -> dict[str, float]:
+        """Named final values; parameter centers use the chosen model coordinates."""
+    @property
+    def parameter_errors(self) -> dict[str, float | None]:
+        """Named conditional local errors; None means unavailable or not independently estimated."""
+    @property
+    def components(self) -> list[PeakContribution]:
+        """Component curves and summaries in model order; independent copies."""
+    def to_json(self) -> str:
+        """Full native result with initial/final constraints, masks and diagnostics."""
+    @property
+    def origin_ev(self) -> float:
+        """Resolved energy origin in eV, added to parameter centers/reference energies."""
+    @property
+    def energy(self) -> NDArray[np.float64]:
+        """Absolute energy in eV, only the native points used by this fit."""
+    @property
+    def source_indices(self) -> list[int]:
+        """Original zero-based point indices; preserves masks and sampling provenance."""
+    @property
+    def data(self) -> NDArray[np.float64]:
+        """Selected representation's measured values, in its signal units."""
+    @property
+    def model(self) -> NDArray[np.float64]:
+        """Joint baseline + peaks + steps, in the same signal units."""
+    @property
+    def residual(self) -> NDArray[np.float64]:
+        """Unweighted data minus model, in signal units (also for weighted fits)."""
+    @property
+    def standard_deviation(self) -> list[float] | None:
+        """Supplied selected-space standard deviations on the fitted points, if any."""
+    @property
+    def objective(self) -> float:
+        """Sum of squared residuals, divided by supplied standard deviations if present."""
+    @property
+    def points(self) -> int:
+        """Number of fitted native data points (not EXAFS independent-point estimates)."""
+    @property
+    def free_parameters(self) -> int:
+        """Number of independent varying parameters; expression ties are excluded."""
+    @property
+    def degrees_of_freedom(self) -> int:
+        """points − free_parameters. Fits with fewer points than variables are rejected."""
+    @property
+    def jacobian_rank(self) -> int:
+        """Weighted numerical Jacobian rank under a 1e-10 relative singular-value cutoff."""
+    @property
+    def covariance_names(self) -> list[str]:
+        """Sorted independent parameter names defining covariance/correlation axes."""
+    @property
+    def covariance(self) -> list[list[float]] | None:
+        """Local covariance; absolute-error scaling when standard deviations were given,
+        otherwise multiplied by objective/degrees_of_freedom."""
+    @property
+    def correlation(self) -> list[list[float]] | None:
+        """Dimensionless correlations corresponding to covariance_names. Absent when
+        any conditional variance is zero; the warning explains that case."""
+    @property
+    def uncertainty_unavailable(self) -> str | None:
+        """Why covariance/standard errors were withheld, rather than replaced by zero."""
+    @property
+    def peak_center_ev(self) -> float | None:
+        """Model peak-area-weighted center in absolute eV, excluding baseline/steps."""
+    @property
+    def peak_center_standard_error_ev(self) -> float | None:
+        """Conditional error in that center, using full parameter covariance."""
+    @property
+    def termination(self) -> Literal["FixedModel", "Converged", "NotConverged", "Cancelled"]:
+        """Explicit numerical termination category."""
+    @property
+    def termination_detail(self) -> str:
+        """Solver-specific termination detail, retained verbatim for diagnosis."""
+    @property
+    def evaluations(self) -> int:
+        """Number of residual-vector evaluations during optimization, including numerical derivatives."""
+    @property
+    def warnings(self) -> list[str]:
+        """Active bounds and other model/uncertainty limitations."""
+
+class PeakContribution:
+    """One component curve and derived metrics (unreleased). Curve getters return copies."""
+    @property
+    def name(self) -> str:
+        """Stable component identity from the initial definition."""
+    @property
+    def role(self) -> Literal["Peak", "Baseline", "Edge"]:
+        """Scientific role, independent of mathematical shape."""
+    @property
+    def shape(self) -> Literal["Gaussian", "Lorentzian", "PseudoVoigt", "Voigt", "ErfStep", "ArctanStep", "Constant", "Linear"]:
+        """Mathematical shape used for evaluation."""
+    @property
+    def curve(self) -> NDArray[np.float64]:
+        """Component values at the result's absolute-energy points, in signal units."""
+    @property
+    def center_ev(self) -> float | None:
+        """Peak/step center in absolute eV; None for polynomial baselines."""
+    @property
+    def area(self) -> float | None:
+        """Whole-axis model area in signal units × eV; None for steps/polynomials."""
+    @property
+    def height(self) -> float | None:
+        """Peak contribution at its center, excluding all other components."""
+    @property
+    def fwhm_ev(self) -> float | None:
+        """Peak FWHM in eV; true Voigt uses a numerical half-height root."""
+    @property
+    def center_standard_error_ev(self) -> float | None:
+        """Conditional errors propagated with the full joint covariance; absent when
+        local uncertainty is unavailable or the quantity does not apply."""
+    @property
+    def area_standard_error(self) -> float | None:
+        """Conditional whole-axis area error, in signal units × eV."""
+    @property
+    def height_standard_error(self) -> float | None:
+        """Conditional peak-height error, in signal units."""
+    @property
+    def fwhm_standard_error_ev(self) -> float | None:
+        """Conditional FWHM error, in eV, including both true-Voigt width parameters."""
+    @property
+    def sampled_integral(self) -> float:
+        """Trapezoidal component integral over included native-grid segments only.
+        Masked gaps are not bridged; this is not its whole-axis analytic area."""

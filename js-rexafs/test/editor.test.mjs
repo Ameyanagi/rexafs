@@ -35,7 +35,7 @@ test("default TypeScript commands select native and compatibility compilers", ()
 for (const [entry, resolution] of [["rexafs", "NodeNext"], ["rexafs/node", "NodeNext"], ["rexafs/browser", "Bundler"]]) {
   test(`installed ${entry}: TypeScript 7 checking and editor completion, signatures and hover (${resolution})`, () => {
     const filename = join(directory, `example-${entry.replaceAll("/", "-")}.ts`);
-    let source = `import init, { Spectrum, AUTOBK, PrePostEdge, XrayFFTF, XrayFFTR,
+    let source = `import init, { Spectrum, PeakFit, AUTOBK, PrePostEdge, XrayFFTF, XrayFFTR,
       read_measurement, type SpectrumMapping, type FTWindow, type FFTGrid, type AUTOBKSolver, type AUTOBKClampScalePolicy,
       type AUTOBKOptions, type PrePostEdgeOptions, type XrayFFTFOptions, type XrayFFTROptions } from "${entry}";
 await init();
@@ -60,6 +60,16 @@ console.log(sessionText, imaginary);
 const invalidMapping: SpectrumMapping = {energy_column:0,energy:{kind:"bragg"},signal:{kind:"direct",column:1}};
 const energy = new Float64Array([1, 2, 3]);
 const spectrum = new Spectrum(energy, energy);
+const peak = new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 }).linear_baseline();
+const fit = spectrum.fit_peaks(peak);
+fit.parameters.p1_center.toFixed(3);
+fit.components[0].area?.toFixed(3);
+const batch = peak.fit_batch([spectrum]);
+for (const row of batch) { if (row.result !== null) row.result.objective.toFixed(3); }
+// @ts-expect-error peak parameters use named options
+peak.gaussian("p", 5, 2, 3);
+// @ts-expect-error typo in physical width
+peak.gaussian("p", { center: 5, area: 2, width: 3 });
 const mean = spectrum.measure("mean", [-20, 30], { space: "flat" });
 mean.value.toFixed(3);
 mean.standard_error?.toFixed(3);
@@ -123,6 +133,8 @@ spectrum.chi()[0];
       assert.match(hoverText("background.rbkg", 12), /angstroms.*Default: 1.0/);
       assert.match(hoverText("spectrum.fft", 10), /2048/);
       assert.match(hoverText("spectrum.measure", 10), /private copy/);
+      assert.match(hoverText("spectrum.fit_peaks", 10), /E0-relative.*conditional/s);
+      assert.match(hoverText("peak.fit_batch", 7), /one outcome per input/);
       assert.match(hoverText("forward.kstep", 8), /infers the first spacing/);
       assert.match(hoverText("forward.dk", 8), /KaiserBessel.*shape parameter/);
       assert.match(hoverText("spectrum.chir_real", 10), /kstep\/sqrt\(pi\)/);
@@ -139,6 +151,8 @@ spectrum.chi()[0];
         return result.entries.map(e => e.name);
       };
       assert.ok(completion("\nspectrum.").includes("set_ifft"));
+      assert.ok(completion("\nspectrum.").includes("fit_peaks"));
+      assert.ok(completion('\npeak.gaussian("p", { ').includes("fwhm"));
       assert.ok(completion("\nnew AUTOBK({ ").includes("clamp_lambda"));
       assert.ok(completion('\nnew XrayFFTF({ window: "').includes("KaiserBessel"));
       assert.ok(completion("\nmeasurement.").includes("select_datasets"));

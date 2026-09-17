@@ -1,4 +1,5 @@
 import { validate } from "./validate.js";
+import { registerPeakSpectrum, peakDefinition, peakResult } from "./peaks.js";
 
 function scalarMeasurement(operation, coordinates, options = {}) {
   if (!options || typeof options !== "object" || Array.isArray(options)) throw new TypeError("options must be an object");
@@ -44,9 +45,16 @@ export function bindSpectrum(core, ready = () => true) {
       if (!ready()) throw new Error("Call await init() before creating a spectrum");
       validate(energy, mu);
       this.#inner = core.Spectrum.from_arrays(energy, mu);
+      registerPeakSpectrum(this, this.#inner);
     }
     static from_arrays(energy, mu) { return new this(energy, mu); }
     free() { this.#inner.free(); }
+    fit_peaks(model, options = {}) {
+      if (!options || typeof options !== "object" || Array.isArray(options)) throw new TypeError("options must be an object");
+      for (const key of Object.keys(options)) if (key !== "errors") throw new TypeError(`Unknown peak-fit option: ${key}`);
+      if (options.errors !== undefined && !(options.errors instanceof Float64Array)) throw new TypeError("errors must be a Float64Array");
+      return peakResult(this.#inner.fit_peaks_json(peakDefinition(model), options.errors), model);
+    }
     measure(operation, coordinates, options = {}) {
       const definition = scalarMeasurement(operation, coordinates, options);
       return JSON.parse(this.#inner.measure_json(JSON.stringify(definition), options.errors));

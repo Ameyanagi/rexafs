@@ -2,6 +2,9 @@
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::prelude::*;
 mod metrics;
+mod peaks;
+
+type PySpectrumArrays<'py> = (Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>);
 
 fn error(error: rexafs::Error) -> PyErr {
     match error {
@@ -1366,6 +1369,34 @@ struct PySpectrum {
 }
 #[pymethods]
 impl PySpectrum {
+    /// Fit a composite XANES model, preparing missing normalization on a private copy.
+    ///
+    /// Unreleased. Example: spectrum.fit_peaks(PeakFit((-20, 40)).gaussian("p1", 5, 2, 3)).
+    /// Defaults come from the model: Norm, E0-relative eV, 200 iterations. The source
+    /// arrays, settings, caches and initial model remain unchanged. Returns an owned
+    /// PeakFitResult with data/model/residual arrays on retained native points.
+    /// Inspect termination and warnings; a returned result can be nonconverged.
+    /// Invalid definitions, insufficient coverage or failed preparation raise ValueError.
+    /// Rust calculation releases the GIL. No smoothing or interpolation occurs.
+    ///
+    /// Optional errors contain positive independent standard deviations in the selected
+    /// signal representation, one per ORIGINAL native point, including excluded points.
+    /// Raw detector errors are not propagated through normalization. Without errors,
+    /// covariance uses residual-based variance; it is withheld at active bounds,
+    /// deficient rank or nonconvergence. These are conditional local uncertainties.
+    #[pyo3(signature=(model, *, errors=None))]
+    fn fit_peaks(
+        &self,
+        py: Python<'_>,
+        model: &peaks::PyPeakFit,
+        errors: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<peaks::PyPeakFitResult> {
+        let errors = errors.map(|e| metrics::errors(py, e)).transpose()?;
+        let inner = py
+            .detach(|| model.inner.fit_with_errors(&self.inner, errors.as_deref()))
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(peaks::PyPeakFitResult { inner })
+    }
     /// Measure a point or region, preparing missing stages on a private copy.
     ///
     /// Unreleased. Recommended: spectrum.measure("mean", (-20, 30)). Defaults
@@ -1389,6 +1420,8 @@ impl PySpectrum {
     /// maximum rejects them. Axis, E0 and settings are treated as exact. No
     /// correlations, confidence intervals or errors are inferred when omitted.
     #[pyo3(signature = (operation, coordinates, *, space="norm", origin=None, kweight=0, errors=None))]
+    // Keep the public keyword-only scientific options directly visible to Python editors.
+    #[allow(clippy::too_many_arguments)]
     fn measure(
         &self,
         py: Python<'_>,
@@ -1948,7 +1981,7 @@ impl PyMeasurement {
         py: Python<'py>,
         scan: usize,
         mapping_json: Option<&str>,
-    ) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>)> {
+    ) -> PyResult<PySpectrumArrays<'py>> {
         let mapping = mapping_json
             .map(serde_json::from_str::<rexafs::io::SpectrumSelection>)
             .transpose()
@@ -2000,6 +2033,10 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBackgroundMethod>()?;
     m.add_class::<PySpectrum>()?;
     m.add_class::<metrics::PyMeasurementResult>()?;
+    m.add_class::<peaks::PyPeakFit>()?;
+    m.add_class::<peaks::PyPeakFitResult>()?;
+    m.add_class::<peaks::PyPeakContribution>()?;
+    m.add_class::<peaks::PyPeakOutcome>()?;
     m.add_class::<PyMeasurement>()?;
     m.add_function(wrap_pyfunction!(read_qas_transmission, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

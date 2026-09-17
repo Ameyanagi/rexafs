@@ -1,0 +1,38 @@
+---
+title: "TypeScript · PeakParameterOptions"
+description: "PeakParameterOptions declarations, defaults and API explanations."
+audience: user
+pagefind: false
+---
+
+**Next API · unreleased.** This reference describes the source checkout. Compare with stable npm rexafs@0.2.9 before using it with an installed package.
+
+[Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
+
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
+
+Optional fixed values, bounds and restricted ties for an existing model parameter.
+
+## vary
+
+```typescript
+vary?: boolean;
+```
+
+Independently vary this parameter, default true; a tie overrides this.
+
+## bounds
+
+```typescript
+bounds?: readonly [number | null, number | null];
+```
+
+Inclusive minimum/maximum in parameter units; null means unbounded, the default.
+
+## expression
+
+```typescript
+expression?: string;
+```
+
+Restricted expression in other parameter names; never external code.
