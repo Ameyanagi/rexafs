@@ -184,6 +184,11 @@ fn tournament(population: &[EnsembleState], count: usize, rng: &mut ChaCha8Rng) 
     best
 }
 impl EvolutionSession {
+    /// Borrow the validated input and its captured spectrum processing state
+    /// (unreleased). This does not clone the population or run any processing.
+    pub fn problem(&self) -> &EnsembleProblem {
+        &self.checkpoint.problem
+    }
     /// Evaluate the input mixture and initialize the population with constrained
     /// independent mutations around it. Uses the session seed; no GUI or files.
     pub fn new<C: ExafsCalculator + ?Sized>(

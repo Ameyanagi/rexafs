@@ -7,6 +7,11 @@
 //! ReFEFF mode that pins reference potentials while updating geometry and paths.
 //! No EVAX or RMCProfile source is incorporated.
 //!
+//! Start from processed [`crate::Spectrum`] with [`RmcDataset::from_spectrum`],
+//! [`RmcSpectrumOptions`] and [`EnsembleProblem::single`]. This retains preprocessing
+//! state and checks the R fit range against AUTOBK Rbkg. The input is never
+//! reprocessed during refinement; fitting settings remain explicit.
+//!
 //! Use [`RmcSession`] with [`EnsembleProblem`] and [`SessionSettings`] for resumable
 //! runs, weighted structures, constraints, K/R/q/wavelet objectives and analysis.
 //! [`EvolutionSession`] adds population search. The simpler [`RmcProblem`],
@@ -61,6 +66,7 @@ mod proposals;
 #[cfg(feature = "refeff-runner")]
 mod refeff;
 mod session;
+mod spectrum;
 mod structural;
 mod workflows;
 
@@ -86,6 +92,7 @@ pub use proposals::*;
 #[cfg(feature = "refeff-runner")]
 pub use refeff::{RefeffCacheStats, RefeffCalculator, RefeffStageTiming};
 pub use session::*;
+pub use spectrum::*;
 pub use structural::*;
 pub use workflows::*;
 

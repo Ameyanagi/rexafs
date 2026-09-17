@@ -255,6 +255,7 @@ pub(super) fn prepare(
     let mut grids = Vec::new();
     let mut absorbers = Vec::new();
     for d in &problem.datasets {
+        d.validate_spectrum_source()?;
         require(names.insert(&d.exafs.name), "dataset names must be unique")?;
         require(
             d.absorbers_by_structure.is_empty()
@@ -520,6 +521,12 @@ pub fn evaluate_ensemble<C: ExafsCalculator + ?Sized>(
 }
 
 impl RmcSession {
+    /// Borrow the validated input, including any spectrum processing snapshots
+    /// (unreleased). Mixture weights are normalized; the original displacement
+    /// reference and experimental arrays remain fixed throughout the run.
+    pub fn problem(&self) -> &EnsembleProblem {
+        &self.checkpoint.problem
+    }
     /// Validate inputs, normalize mixture fractions once, and calculate the initial
     /// state. Copies all inputs; no mutation is made to the caller's structures.
     pub fn new<C: ExafsCalculator + ?Sized>(

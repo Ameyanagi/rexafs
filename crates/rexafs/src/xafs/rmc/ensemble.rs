@@ -24,6 +24,11 @@ pub struct RmcDataset {
     pub refeff: Option<RefeffOptions>,
     /// One absorber list per structure. Empty uses `exafs.absorbers` for every structure.
     pub absorbers_by_structure: Vec<Vec<usize>>,
+    /// Captured processing state when built by [`Self::from_spectrum`]. Older
+    /// array-only jobs deserialize as None. Stored once in the problem/checkpoint,
+    /// never in individual trial states; no preprocessing runs during refinement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<Box<RmcSpectrumSource>>,
 }
 
 impl From<ExafsDataset> for RmcDataset {
@@ -33,6 +38,7 @@ impl From<ExafsDataset> for RmcDataset {
             objective: Objective::K,
             refeff: None,
             absorbers_by_structure: Vec::new(),
+            source: None,
         }
     }
 }
@@ -46,6 +52,23 @@ pub struct EnsembleProblem {
     pub structures: Vec<WeightedStructure>,
     /// Nonempty datasets with unique names.
     pub datasets: Vec<RmcDataset>,
+}
+
+impl EnsembleProblem {
+    /// Create a one-structure, one-dataset problem without changing its objective
+    /// or processing snapshot (unreleased). Takes ownership, assigns unit mixture
+    /// weight, and uses the session's movable atoms. Validation runs at session
+    /// creation. Add further datasets/components through the public fields.
+    pub fn single(configuration: Configuration, dataset: RmcDataset) -> Self {
+        Self {
+            structures: vec![WeightedStructure {
+                configuration,
+                weight: 1.,
+                movable_atoms: None,
+            }],
+            datasets: vec![dataset],
+        }
+    }
 }
 
 impl From<RmcProblem> for EnsembleProblem {

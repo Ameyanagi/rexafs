@@ -14,7 +14,35 @@ implementation; the [new validation and performance record](rmc-performance.md)
 describes this extension. These capabilities do not establish EVAX numerical
 parity or experimental accuracy.
 
-## Start with the session API
+## Start with a processed Spectrum
+
+The recommended **unreleased** input is `RmcDataset::from_spectrum(&spectrum,
+options)`. `Spectrum` is the public alias of `XASSpectrum`. This constructor
+captures the processing state and reads the authoritative `k()` and `chi()`
+getters, so users do not need to extract arrays or assemble provenance manually.
+See the [spectrum-input guide](rmc-spectrum-input.md) for a complete example,
+defaults, the Rbkg guard and checkpoint behavior.
+
+```rust,ignore
+use rexafs::{rmc::*, structure::Edge};
+
+// `spectrum` already has AUTOBK results; `transform` is an explicit FeffFitTransform.
+let mut input = RmcSpectrumOptions::new(absorbers, Edge::K, transform);
+input.k_range = Some([2.5, 12.0]); // Include the chosen k-window tapers.
+input.s02 = 0.98402;              // Example calibration, not a universal default.
+input.delta_e0 = 8.76239;         // Fitting shift in eV, not spectrum.e0().
+let dataset = RmcDataset::from_spectrum(&spectrum, input)?;
+let problem = EnsembleProblem::single(configuration, dataset);
+let mut session = RmcSession::new(&problem, &settings, &mut calculator)?;
+session.run(&mut calculator)?;
+let trend = residual_trend(session.history(), &ResidualTrendSettings::default())?;
+```
+
+This path uses an experimental-power-normalized real-plus-imaginary R objective
+by default. The array-only APIs below retain their original defaults, including
+k-space scoring. No previously saved job or published result is changed.
+
+## Session controls and array-only input
 
 Enable `refeff-runner` for the ReFEFF backend. The session, objectives, constraints,
 and analysis types are available without that feature for custom calculators.
