@@ -388,3 +388,29 @@ Strict Python/Wasm Clippy, eight reference-generator tests and the website check
 Desktop/Series/Live correction workflow integration and experimental/platform
 qualification remain outstanding. No private measurements were added, and no
 remote publication is implied by this local increment.
+
+## Integration with dev PR #87
+
+The feature branch incorporates dev revision `01e64d0` (PR #87), including native
+RMC refinement and ReFEFF 0.4.0. The merge retains both the atomic-data dependency
+and the new random-number dependencies, and exports RMC alongside the B–F APIs.
+Existing feature commits remain in the branch history.
+
+The new `RmcDataset::from_spectrum` entry point now shares the core EXAFS domain
+check. A regression test first demonstrated that a corrected XANES-only spectrum
+with legacy EXAFS buffers was accepted; it is now rejected without changing its
+arrays or history. The same check protects retained-source validation. RMC
+algorithms, defaults and its explicit prerequisite-processing contract are unchanged.
+See [the input guide](rmc-spectrum-input.md) and
+[`rmc_spectrum.rs`](../crates/rexafs/tests/rmc_spectrum.rs).
+
+Fresh Python and Node/browser packages pass all 38 runtime tests in each suite and
+their installed editor checks. The full desktop suite passes 588 tests, with six
+existing ignored tests. Ten targeted alternate-backend tests pass for RMC input,
+fluorescence and wavelet references. Strict core/Python/Wasm Clippy, formatting,
+eight documentation-generator tests and the website check pass. Validation uses
+local builds and synthetic or already retained attributed fixtures.
+The complete `cargo test --locked -p rexafs --features refeff-runner` run also
+passes: 469 core, integration and documentation tests, with three existing ignored
+tests. This includes the 100-spectrum LCF/PCA/MCR cases and the RMC/scattering
+regression suites. No GUI layout or existing analysis defaults change in this merge.

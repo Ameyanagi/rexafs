@@ -7142,6 +7142,7 @@ checksum = "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb"
 dependencies = [
  "ppv-lite86",
  "rand_core 0.9.5",
+ "serde",
 ]
 
 [[package]]
@@ -7386,9 +7387,9 @@ dependencies = [
 
 [[package]]
 name = "refeff"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f73b1a672dc79c05a4ad08c260e9db7f525e64617024aaeb43cc6fb94191ceb"
+checksum = "8fffc0b4b5dd4973a76a1441b9ae44423ae3da697bb0fe273fafaf834aa523bb"
 dependencies = [
  "refeff-core",
  "refeff-engine",
@@ -7399,9 +7400,9 @@ dependencies = [
 
 [[package]]
 name = "refeff-core"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "436aa3a1cfafef276eb88c97e906a5346c7bf4b1886f4c8f6ec6d46f65769b11"
+checksum = "d01f9b2c4cde247d58951d44e875db9bf0a96c63bfbaeff9cb3d60005ff2700b"
 dependencies = [
  "ndarray",
  "num-complex",
@@ -7413,9 +7414,9 @@ dependencies = [
 
 [[package]]
 name = "refeff-engine"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a2b452b8cb887bd542ec2e32a9149fa4f007abce3c1078b417226bc597ff08b"
+checksum = "1c9a363cc3d035f9021be6be50a03049b20be869a5432b42507c616420ee4208"
 dependencies = [
  "anyhow",
  "ndarray",
@@ -7427,14 +7428,15 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tempfile",
  "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "refeff-io"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7004b0c8f6c92b4008c490b659cc19c73272b71026a0efcae47c0d64e45602f7"
+checksum = "c8cdb7336c8589ecd6048ec1671f82bad97965a4f9e8df5b0e5b67409635cda4"
 dependencies = [
  "ndarray",
  "num-complex",
@@ -7445,9 +7447,9 @@ dependencies = [
 
 [[package]]
 name = "refeff-linalg"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1c457f404a29550d23d187ee2c9413763c2c2c7301025246695219007fb9699"
+checksum = "6161e5158f925d0b22a222618df43faf4852a05fdc2bb0a3dc3eb2a22f7a7209"
 dependencies = [
  "faer",
  "ndarray",
@@ -7561,6 +7563,8 @@ dependencies = [
  "pest_derive",
  "polyfit-rs",
  "pprof",
+ "rand 0.9.5",
+ "rand_chacha 0.9.0",
  "rayon",
  "refeff",
  "regex",

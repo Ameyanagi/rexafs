@@ -71,7 +71,8 @@ when interpreting structural fits and uncertainties.
 ## Features and scope
 
 - Default `trust-region`: optional fitting solver support.
-- `refeff-runner`: ReFEFF's Rust EXAFS engine, with path outputs for fitting.
+- `refeff-runner`: ReFEFF's Rust EXAFS engine, with path outputs for fitting and
+  the unreleased experimental `rexafs::rmc` coordinate-refinement backend.
 - `feff10-runner`: the FEFF10 backend through the `feff10` dependency.
 - `plotting`: core plot builders through ruviz.
 - `amcsd`, `materials-project`, `cod`: optional structure sources.
@@ -82,6 +83,17 @@ Existing FEFF path files can be fitted without compiling a calculation backend.
 batches and k/R/q fit spaces. `FeffFlavor::Feff10` parsing is still separate from
 FEFF10 execution; see the historical compatibility notes in the repository.
 The native core has broader APIs than the Python and JavaScript bindings.
+
+The source checkout also includes an experimental reverse Monte Carlo (RMC)
+engine with ReFEFF as its primary calculator. It supports constrained atomic
+moves, finite and periodic geometry, weighted structures, k/R/q/wavelet objectives,
+resumable sessions, evolutionary search and structural reports. ReFEFF offers
+exact local-input caching and prepared path updates at fixed potentials.
+`PreparedRefeffCalculator` with `AccelerationSettings::default()` is the recommended
+exact caching path. Adaptive scattering is experimental, disabled by default,
+and requires explicit opt-in with exact accuracy audits. See the
+[RMC guide](../../doc/rmc.md) for Rust examples, performance measurements,
+scientific assumptions and validation limits. This API is unreleased and has no desktop controls yet.
 
 Licensed under MIT OR Apache-2.0; dependency and fixture notices remain applicable.
 
