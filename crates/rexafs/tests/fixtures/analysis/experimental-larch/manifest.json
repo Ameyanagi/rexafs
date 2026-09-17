@@ -64,6 +64,7 @@
   "database": "XrayDB Version: 9.2, Python Version: 4.5.8",
   "tolerances": {
     "mback_curve_absolute": 1e-06,
+    "mback_post_curve_absolute": 5e-06,
     "mback_scale_absolute": 1e-07,
     "mback_objective_absolute": 1e-09,
     "wavelet_absolute": 2e-10

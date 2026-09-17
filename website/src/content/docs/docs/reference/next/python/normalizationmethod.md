@@ -17,7 +17,7 @@ Use NormalizationMethod.PrePostEdge(parameters) for configured pre/post-edge
 normalization or new_prepostedge() for automatic settings, then pass the
 result to Spectrum.set_normalization_method(). Creating a method does not
 process data. The no-argument MBack selector has no absorber/edge and cannot
-normalize. Unreleased: pass configured MBack settings directly to Spectrum.
+normalize. The MBACK algorithm was unimplemented through version 0.2.9.
 
 ## PrePostEdge
 
@@ -53,5 +53,6 @@ Create the historical empty MBack normalization selector.
 
 Selecting it preserves the requested algorithm, but normalize() and
 dependent stages raise ValueError rather than substitute another method.
-Unreleased: use MBack(element, edge) for full MBACK. Through 0.2.9 the
-MBACK algorithm was unimplemented. This no-argument selector still lacks identity.
+Use new_prepostedge() for automatic polynomial normalization. Through
+version 0.2.9 the MBACK algorithm was unimplemented; this historical
+no-argument selector remains unusable for normalization.

@@ -71,3 +71,24 @@ Live acquisition on network storage, or release installers. CI and platform
 qualification remain separate. LCF/PCA/MCR bindings and the new energy-offset
 bindings remain tracked follow-up work. The PR does not change the release
 version or publish packages.
+
+## Follow-up from the first PR checks
+
+The local results above did not predict two failures on PR #88. The core CI
+matrix rejected the Ru auxiliary post-edge polynomial: its maximum absolute
+reference difference was 1.783×10⁻⁶ on Linux and 3.517×10⁻⁶ on Windows, while
+the atomic-matching background remained within 6.78×10⁻¹⁰. Only that auxiliary
+curve now uses a separate 5×10⁻⁶ absolute tolerance in f₂ units. The
+[reference record](../../../crates/rexafs/tests/fixtures/analysis/experimental-larch/README.md#cross-platform-tolerance-revision--18-september-2026)
+retains the initial measurements and the rationale. No numerical implementation
+or oracle array was changed. All six experimental reference tests pass locally.
+
+The website check also exposed that manually restoring Stable pages was not
+sufficient: the generators intentionally use maintained source help for shared
+members. Shared Python/TypeScript help now describes the historical empty MBACK
+selector consistently with both versions and explicitly records that MBACK was
+unimplemented through 0.2.9. Configured MBACK remains documented in Next.
+Regenerated reference pages and citations reproduce byte-for-byte, all eight
+generator tests pass, and all 37 Astro files have no diagnostics. CI must rerun
+these corrections on the supported platforms before its status is considered
+green.

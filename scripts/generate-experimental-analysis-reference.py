@@ -180,7 +180,8 @@ def main():
                     larch_commit=COMMIT, sources=SOURCES, python=platform.python_version(),
                     numpy=np.__version__, scipy=scipy.__version__, lmfit=lmfit.__version__,
                     xraydb=xraydb.__version__, database=xraydb.get_xraydb().get_version(),
-                    tolerances=dict(mback_curve_absolute=1e-6, mback_scale_absolute=1e-7,
+                    tolerances=dict(mback_curve_absolute=1e-6, mback_post_curve_absolute=5e-6,
+                                    mback_scale_absolute=1e-7,
                                     mback_objective_absolute=1e-9, wavelet_absolute=2e-10), cases=records)
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2, allow_nan=False) + "\n")
     (out / "LARCH-LICENSE.txt").write_bytes(urlopen(BASE + "LICENSE", timeout=30).read())

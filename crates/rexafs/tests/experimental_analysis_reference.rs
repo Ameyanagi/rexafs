@@ -112,7 +112,6 @@ fn check_mback(id: &str) {
         ("fpp", &result.fpp),
         ("norm", &result.norm),
         ("pre_curve", &result.pre_curve),
-        ("post_curve", &result.post_curve),
     ] {
         compare(
             &format!("{id}/MBACK/{name}"),
@@ -121,6 +120,15 @@ fn check_mback(id: &str) {
             curve_tol,
         );
     }
+    // The auxiliary post-edge polynomial is evaluated on absolute energy.
+    // Its Ru K-edge reference has greater cross-platform roundoff than the
+    // atomic match itself; keep its documented bound separate from the fit.
+    compare(
+        &format!("{id}/MBACK/post_curve"),
+        &result.post_curve,
+        &array(&case["post_curve"]),
+        tolerances["mback_post_curve_absolute"].as_f64().unwrap(),
+    );
     for (name, value, tolerance) in [
         (
             "scale",

@@ -914,9 +914,9 @@ export class XrayFFTR {
  * Select the normalization algorithm and hold an owned copy of its settings.
  *
  * Use PrePostEdge(settings) for customized pre/post-edge fits or new_prepostedge() for
- * automatic defaults. The no-argument MBack factory lacks the absorber/edge needed for that
- * algorithm. Copy this method into Spectrum.set_normalization_method(), then free() the wrapper
- * when no longer needed.
+ * automatic defaults. The no-argument MBack factory is a historical empty selector and cannot
+ * normalize data. MBACK was unimplemented through version 0.2.9. Copy this method into
+ * Spectrum.set_normalization_method(), then free() the wrapper when no longer needed.
  */
 export class NormalizationMethod {
   private constructor();
@@ -938,9 +938,10 @@ export class NormalizationMethod {
    */
   static new_prepostedge(): NormalizationMethod;
   /**
-   * Create the historical empty MBack selector. It lacks absorber/edge identity, so
-   * normalize() throws. Unreleased: use new MBack(element, edge) for full MBACK.
-   * Through 0.2.9 MBACK was unimplemented. Free this wrapper when finished.
+   * Create the historical empty MBack selector. Selecting it makes normalize() throw.
+   * Use new_prepostedge() for automatic polynomial normalization. MBACK was unimplemented
+   * through version 0.2.9; this no-argument selector remains unusable for normalization.
+   * Free this wrapper when finished.
    */
   static new_mback(): NormalizationMethod;
 }

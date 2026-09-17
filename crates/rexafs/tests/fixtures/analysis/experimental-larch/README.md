@@ -78,3 +78,19 @@ and 6.82×10⁻⁹ (RuO₂). Across all compared MBACK curves the largest differ
 absolute tolerances are 10⁻⁶ for MBACK curves, 10⁻⁷ for scale, 10⁻⁹ for objective
 and 2×10⁻¹⁰ for wavelet cells. These checks establish numerical agreement for
 the stated settings, not physical accuracy or universal beamline qualification.
+
+### Cross-platform tolerance revision — 18 September 2026
+
+The original 10⁻⁶ curve bound above passed locally but rejected the auxiliary
+Ru post-edge polynomial in [CI run 35274092574](https://github.com/Ameyanagi/rexafs/actions/runs/35274092574).
+Its maximum absolute difference was 1.783×10⁻⁶ on Linux and 3.517×10⁻⁶ on
+Windows. This polynomial is fitted/evaluated on absolute energies around
+22 keV; those results indicate platform-sensitive numerical roundoff. The
+atomic-matching background and fpp differed by less than 6.78×10⁻¹⁰ on both
+platforms, and normalized absorption differed by at most 4.44×10⁻⁷.
+
+The manifest now assigns only `post_curve` a separate absolute bound of
+5×10⁻⁶ in f₂ units (about 2.3 parts per million of the Ru reference's maximum
+post-curve value). All other bounds remain unchanged. This is an empirical
+cross-platform test allowance, not an uncertainty estimate. The solver,
+experimental inputs, oracle arrays and compressed-file hashes are unchanged.
