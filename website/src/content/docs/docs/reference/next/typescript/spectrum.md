@@ -32,6 +32,46 @@ finished.
 See [processing theory](https://rexafs.com/docs/science/processing/) for equations,
 assumptions and interpretation.
 
+## correct_fluorescence
+
+```typescript
+correct_fluorescence(model: FluorescenceCorrection): Spectrum;
+```
+
+Correct into an independent unnormalized Spectrum (unreleased). Internal
+conventional normalization runs automatically; the source stays unchanged.
+Unknown provenance is explicitly interpreted as fluorescence. Known transmission,
+prepared norm/flat and repeated correction throw. Supply line and measured
+surface angles in the model. Call normalize() for separate final polynomial/MBACK
+normalization. History survives edits; this XANES-only branch rejects background,
+FFT and wavelets. Array uncertainties are unavailable. Free the new Spectrum.
+
+## fluorescence_correction
+
+```typescript
+fluorescence_correction(): FluorescenceCorrectionResult | undefined;
+```
+
+Independent historical correction record, or undefined. Edits/normalization
+never rewrite original correction inputs or remove the XANES-only restriction.
+
+## absorption_mode
+
+```typescript
+absorption_mode(): AbsorptionMode;
+```
+
+Acquisition interpretation; unknown means missing evidence.
+
+## set_absorption_mode
+
+```typescript
+set_absorption_mode(mode: AbsorptionMode): this;
+```
+
+Explicitly revise interpretation without changing arrays/caches. Correction
+history and restrictions survive. Returns this Spectrum; invalid names throw.
+
 ## wavelet
 
 ```typescript

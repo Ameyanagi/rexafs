@@ -361,3 +361,30 @@ This completes the initial wavelet binding increment. Full-series/Live region
 trends and qualified comparison workflows remain in progress; fluorescence
 desktop/Series/Live/binding work and cross-platform milestone qualification are
 also outstanding. F2a's computer-use evidence covers the unchanged desktop code.
+
+## E2: Python and TypeScript fluorescence correction
+
+Both packages now expose `FluorescenceCorrection` with required composition,
+emission and measured surface angles, plus `spectrum.correct_fluorescence(model)`.
+The latter returns an independent unnormalized spectrum. Internal conventional
+normalization is automatic; final polynomial/MBACK normalization remains a separate
+ordinary `normalize()` call. Original arrays, internal fit, atomic data, numerical
+diagnostics and exact-replay settings remain available in the correction record.
+The native spectrum carries that record through edits and prevents accidental
+repeated correction or unqualified EXAFS/wavelet processing. Both APIs also expose
+explicit acquisition interpretation. The Python reader preserves known transmission
+evidence when creating a spectrum. See the
+[short examples](fluorescence-correction.md#python-and-typescript-unreleased).
+
+Installed-wheel tests passed (38) and all npm tests passed (38). New cases cover
+all three pinned Larch synthetic corrections, array/result independence, replay,
+geometry/coverage/singularity failures, source immutability, polynomial and MBACK
+final normalization, retained history after edits, EXAFS/repeat-correction rejection,
+and native object lifetimes in Node and browser adapters. Python and installed
+TypeScript editor checks passed, including named angles and acquisition choices.
+Strict Python/Wasm Clippy, eight reference-generator tests and the website check
+(zero errors/warnings) passed. Only Next API references gained new signatures.
+
+Desktop/Series/Live correction workflow integration and experimental/platform
+qualification remain outstanding. No private measurements were added, and no
+remote publication is implied by this local increment.

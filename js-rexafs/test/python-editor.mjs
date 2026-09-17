@@ -15,7 +15,7 @@ const rootUri = pathToFileURL(directory).href;
 writeFileSync(join(directory, "pyrightconfig.json"), JSON.stringify({
   typeCheckingMode: "strict", pythonVersion: "3.10",
 }));
-const valid = `from rexafs import AUTOBK, Spectrum, PeakFit, MBack, MbackErfc, Wavelet, WaveletMap, XrayFFTF, XrayFFTR, FTWindow
+const valid = `from rexafs import AUTOBK, Spectrum, PeakFit, MBack, MbackErfc, Wavelet, WaveletMap, FluorescenceCorrection, XrayFFTF, XrayFFTR, FTWindow
 from rexafs.io import parse_measurement, SpectrumMapping
 measurement = parse_measurement("energy,mu\\n7100,1\\n7101,2")
 mapping: SpectrumMapping = {"energy_column":0,"energy":{"kind":"offset_ev","offset_ev":20000},"signal":{"kind":"direct","column":1}}
@@ -29,6 +29,12 @@ archived: list[float | None] | None = measurement.document["datasets"][0]["imagi
 print(archived, measurement.document["metadata"].get("larix.session_text"))
 window: FTWindow = "Hanning"
 spectrum = Spectrum([1., 2.], [1., 2.])
+correction = FluorescenceCorrection("CuO", "Cu", "K", line="Ka1", angles=(45,45))
+corrected = spectrum.correct_fluorescence(correction).normalize()
+corrected.set_absorption_mode("fluorescence")
+record = corrected.fluorescence_correction()
+if record is not None:
+    print(record.corrected_mu[0], record.definition, record.internal["norm"][0], record.atomic)
 spectrum.set_background_method(AUTOBK(rbkg=1.2)).set_fft(XrayFFTF(window=window)).set_ifft(XrayFFTR(rmin=1.0)).ifft()
 scalar = spectrum.measure("mean", (-20., 30.), space="flat")
 print(scalar.value, scalar.standard_error, scalar.range, scalar.to_json())
@@ -177,6 +183,13 @@ XrayFFTF(window="")
   assert.match(JSON.stringify(await request("textDocument/signatureHelp",waveletConstructorPosition)),/kweight/);
   const waveletKeywords=await request("textDocument/completion",waveletConstructorPosition);
   assert.ok((waveletKeywords.items??waveletKeywords).some(x=>x.label.startsWith("rmax")), JSON.stringify((waveletKeywords.items??waveletKeywords).map(x=>x.label)));
+  const fluorescenceText = 'from rexafs import Spectrum, FluorescenceCorrection\ns = Spectrum([1.,2.],[1.,2.])\ns.correct_fluorescence\nFluorescenceCorrection("CuO","Cu","K", a';
+  const fluorescenceUri = pathToFileURL(join(directory,"fluorescence.py")).href;
+  send({method:"textDocument/didOpen",params:{textDocument:{uri:fluorescenceUri,languageId:"python",version:1,text:fluorescenceText}}});
+  const fluorescencePosition=(line,character)=>({textDocument:{uri:fluorescenceUri},position:{line,character}});
+  assert.match(JSON.stringify(await request("textDocument/hover",fluorescencePosition(2,7))),/XANES-only/);
+  const fluorescenceKeywords=await request("textDocument/completion",fluorescencePosition(3,fluorescenceText.split("\n")[3].length));
+  assert.ok((fluorescenceKeywords.items??fluorescenceKeywords).some(x=>x.label.startsWith("angles")));
   console.log("Installed Python wheel: property/method hovers, member/keyword/literal completion and signature defaults passed");
   await request("shutdown", null);
   send({ method: "exit", params: null });

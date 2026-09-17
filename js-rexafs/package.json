@@ -44,6 +44,7 @@
     "node.d.ts",
     "types.d.ts",
     "spectrum.js",
+    "fluorescence.js",
     "configuration.js",
     "measurement.js",
     "peaks.js",

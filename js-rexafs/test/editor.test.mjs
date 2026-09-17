@@ -35,7 +35,7 @@ test("default TypeScript commands select native and compatibility compilers", ()
 for (const [entry, resolution] of [["rexafs", "NodeNext"], ["rexafs/node", "NodeNext"], ["rexafs/browser", "Bundler"]]) {
   test(`installed ${entry}: TypeScript 7 checking and editor completion, signatures and hover (${resolution})`, () => {
     const filename = join(directory, `example-${entry.replaceAll("/", "-")}.ts`);
-    let source = `import init, { Spectrum, PeakFit, MBack, MbackErfc, Wavelet, WaveletMap, AUTOBK, PrePostEdge, XrayFFTF, XrayFFTR,
+    let source = `import init, { Spectrum, PeakFit, MBack, MbackErfc, Wavelet, WaveletMap, FluorescenceCorrection, AUTOBK, PrePostEdge, XrayFFTF, XrayFFTR,
       read_measurement, type SpectrumMapping, type FTWindow, type FFTGrid, type AUTOBKSolver, type AUTOBKClampScalePolicy,
       type AUTOBKOptions, type PrePostEdgeOptions, type XrayFFTFOptions, type XrayFFTROptions } from "${entry}";
 await init();
@@ -60,6 +60,18 @@ console.log(sessionText, imaginary);
 const invalidMapping: SpectrumMapping = {energy_column:0,energy:{kind:"bragg"},signal:{kind:"direct",column:1}};
 const energy = new Float64Array([1, 2, 3]);
 const spectrum = new Spectrum(energy, energy);
+const correction = new FluorescenceCorrection("CuO","Cu","K",{line:"Ka1",angles:[45,45]});
+const corrected = spectrum.correct_fluorescence(correction).normalize();
+corrected.set_absorption_mode("fluorescence");
+corrected.fluorescence_correction()?.internal.norm[0].toFixed();
+const correctionResult = correction.apply(energy, energy);
+correctionResult.definition.free();
+correctionResult.corrected_mu[0].toFixed();
+corrected.free(); correction.free();
+// @ts-expect-error emission and measured geometry are required
+new FluorescenceCorrection("CuO","Cu","K",{});
+// @ts-expect-error mode choices have exact spellings
+spectrum.set_absorption_mode("guess");
 const wavelet = new Wavelet([2,12],{kweight:2,rmax:6});
 const waveletMap = spectrum.wavelet(wavelet);
 waveletMap.real[0].toFixed();
@@ -155,6 +167,8 @@ spectrum.chi()[0];
       assert.match(hoverText("spectrum.fft", 10), /2048/);
       assert.match(hoverText("spectrum.measure", 10), /private copy/);
       assert.match(hoverText("spectrum.wavelet", 10), /private copy/);
+      assert.match(hoverText("spectrum.correct_fluorescence", 12), /XANES-only/);
+      assert.match(hoverText("correctionResult.corrected_mu", 19), /Final normalization|final normalization/);
       assert.match(hoverText("waveletMap.integral", 13), /native bilinear/);
       assert.match(hoverText("spectrum.fit_peaks", 10), /E0-relative.*conditional/s);
       assert.match(hoverText("peak.fit_batch", 7), /one outcome per input/);
@@ -174,6 +188,7 @@ spectrum.chi()[0];
         return result.entries.map(e => e.name);
       };
       assert.ok(completion('\nnew Wavelet([2,12], { ').includes("kweight"));
+      assert.ok(completion('\nnew FluorescenceCorrection("CuO","Cu","K", { ').includes("angles"));
       assert.ok(completion("\nspectrum.").includes("set_ifft"));
       assert.ok(completion("\nspectrum.").includes("fit_peaks"));
       assert.ok(completion("\nspectrum.").includes("mback_result"));

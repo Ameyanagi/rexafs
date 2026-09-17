@@ -1,8 +1,9 @@
 # Fluorescence over-absorption correction
 
 Unreleased source-checkout feature. The native core implements the named
-`fluo_elam_v1` profile; desktop and language-binding integration are still being
-qualified. This page does not describe an already released GUI workflow.
+`fluo_elam_v1` profile, with Python and TypeScript APIs using that same calculation.
+Desktop/Series/Live integration is still in progress. This page does not describe
+an already released GUI workflow.
 
 Fluorescence intensity is not always proportional to the absorber's absorption.
 Attenuation of both the incident and emitted beams can reduce spectral features.
@@ -55,6 +56,68 @@ historical record on its own recorded energy grid; they do not rewrite it.
 `record.definition()` returns resolved, version-pinned settings for exact replay.
 `correction.apply(energy, mu)` is the equivalent array API for explicitly
 interpreted fluorescence input.
+
+## Python and TypeScript (unreleased)
+
+Use the same two-stage workflow: make a corrected spectrum, then normalize it.
+The examples use illustrative 45° surface angles; replace them with the measured
+geometry and the complete sample formula.
+
+```python
+from rexafs import FluorescenceCorrection
+
+model = FluorescenceCorrection("CuO", "Cu", "K", line="Ka1", angles=(45, 45))
+corrected = spectrum.correct_fluorescence(model)
+corrected.normalize()
+record = corrected.fluorescence_correction()
+print(record.maximum_amplification, record.warnings)
+```
+
+Python copies settings and arrays, releases the global interpreter lock during
+calculation, and returns a separate `Spectrum`. Result array properties are
+independent NumPy copies. `record.internal` gives the internal conventional fit,
+with copied lists; `record.atomic` gives the edge, emission and compound attenuation
+evidence. `record.definition` returns settings pinned to resolved intervals/E₀ and
+the atomic dataset. `record.to_json()` preserves the full native history.
+
+```ts
+import { FluorescenceCorrection } from "rexafs/node";
+
+const model = new FluorescenceCorrection("CuO", "Cu", "K", {
+  line: "Ka1", angles: [45, 45],
+});
+const corrected = spectrum.correct_fluorescence(model);
+try {
+  corrected.normalize();
+  const record = corrected.fluorescence_correction();
+  console.log(record?.maximum_amplification, record?.warnings);
+} finally {
+  corrected.free();
+  model.free();
+}
+```
+
+The TypeScript result owns ordinary JavaScript data and copied `Float64Array`
+values; it needs no `free()`. Editing those copies never changes the retained
+native spectrum, JSON history or replay definition. `record.definition` creates
+an owned model; free it after use. Browser callers await `init()` first and should
+run large synchronous calculations in a Worker.
+
+Both languages expose `model.apply(energy, mu)` for direct arrays and
+`spectrum.set_absorption_mode("transmission")` (or `"fluorescence"`/`"unknown"`)
+for explicit acquisition interpretation. Python measurement-to-spectrum import
+preserves known native transmission evidence. Reconstructing a new spectrum from
+bare arrays has unknown provenance; prefer `correct_fluorescence` to retain the
+correction record and processing restrictions. Changing the mode or editing an
+already corrected spectrum does not erase that record or enable EXAFS processing.
+
+The options `family`, `e0`, `pre_edge`, `post_edge` and `degree` have the same meanings
+as the core settings below. Python requires keyword arguments for line/angles;
+TypeScript requires them in its options object. Neither infers geometry. Inputs
+and reference availability are validated by the native core. The adapters are
+[`py-rexafs/src/fluorescence.rs`](../py-rexafs/src/fluorescence.rs),
+[`crates/rexafs-wasm/src/fluorescence.rs`](../crates/rexafs-wasm/src/fluorescence.rs)
+and [`js-rexafs/fluorescence.js`](../js-rexafs/fluorescence.js).
 
 ## Internal normalization and calculation
 

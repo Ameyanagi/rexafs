@@ -1,4 +1,5 @@
 import { waveletDefinition } from "./wavelet.js";
+import { fluorescenceDefinition, fluorescenceResult } from "./fluorescence.js";
 import { isMBack, mbackDefinition, mbackResult } from "./mback.js";
 import { validate } from "./validate.js";
 import { registerPeakSpectrum, peakDefinition, peakResult } from "./peaks.js";
@@ -40,17 +41,30 @@ function scalarMeasurement(operation, coordinates, options = {}) {
  * wrappers for direct settings/defaults and frees only those temporary wrappers.
  * Caller-owned settings and algorithm wrappers are borrowed, never consumed.
  */
-export function bindSpectrum(core, ready = () => true, MBack, wavelets) {
+export function bindSpectrum(core, ready = () => true, MBack, wavelets, FluorescenceCorrection) {
+  const token = Symbol("owned native spectrum");
   return class Spectrum {
     #inner;
-    constructor(energy, mu) {
+    constructor(energy, mu, owned, key) {
       if (!ready()) throw new Error("Call await init() before creating a spectrum");
-      validate(energy, mu);
-      this.#inner = core.Spectrum.from_arrays(energy, mu);
+      if (key === token) this.#inner = owned;
+      else {
+        validate(energy, mu);
+        this.#inner = core.Spectrum.from_arrays(energy, mu);
+      }
       registerPeakSpectrum(this, this.#inner);
     }
     static from_arrays(energy, mu) { return new this(energy, mu); }
     free() { this.#inner.free(); }
+    correct_fluorescence(model) {
+      return new Spectrum(undefined, undefined, this.#inner.correct_fluorescence(fluorescenceDefinition(model)), token);
+    }
+    fluorescence_correction() { return fluorescenceResult(this.#inner.fluorescence_correction_json(), FluorescenceCorrection); }
+    absorption_mode() { return this.#inner.absorption_mode(); }
+    set_absorption_mode(mode) {
+      if (!["unknown","transmission","fluorescence"].includes(mode)) throw new TypeError("mode must be unknown, transmission or fluorescence");
+      this.#inner.set_absorption_mode(mode); return this;
+    }
     wavelet(model) { return wavelets.wrap(this.#inner.wavelet(waveletDefinition(model))); }
     fit_peaks(model, options = {}) {
       if (!options || typeof options !== "object" || Array.isArray(options)) throw new TypeError("options must be an object");

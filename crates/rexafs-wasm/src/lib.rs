@@ -1,5 +1,6 @@
 //! Thin Wasm bindings: stage execution and defaults live in rexafs.
 use wasm_bindgen::prelude::*;
+mod fluorescence;
 mod mback;
 mod peaks;
 mod wavelet;
@@ -1028,6 +1029,32 @@ pub struct WasmSpectrum {
 }
 #[wasm_bindgen(js_class = Spectrum)]
 impl WasmSpectrum {
+    /// Correct into an independently owned native spectrum; retain XANES-only history.
+    pub fn correct_fluorescence(&self, definition: &str) -> Result<Self, JsValue> {
+        let model = fluorescence::WasmFluorescenceCorrection::new(definition)?;
+        Ok(Self {
+            inner: self
+                .inner
+                .correct_fluorescence(&model.inner)
+                .map_err(fluorescence::error)?,
+        })
+    }
+    /// Historical result plus native replay definition, or None for uncorrected data.
+    pub fn fluorescence_correction_json(&self) -> Result<Option<String>, JsValue> {
+        self.inner
+            .fluorescence_correction()
+            .map(fluorescence::result_json)
+            .transpose()
+    }
+    /// Original or explicitly revised acquisition interpretation.
+    pub fn absorption_mode(&self) -> String {
+        fluorescence::mode_name(self.inner.absorption_mode()).into()
+    }
+    /// Revise evidence without altering arrays/caches or clearing correction history.
+    pub fn set_absorption_mode(&mut self, mode: &str) -> Result<(), JsValue> {
+        self.inner.set_absorption_mode(fluorescence::mode(mode)?);
+        Ok(())
+    }
     /// Copy MBACK settings into this spectrum, invalidating dependent results.
     pub fn set_mback_json(&mut self, json: &str) -> Result<(), JsValue> {
         let model = mback::WasmMBack::from_json(json)?;

@@ -1,6 +1,7 @@
 //! Thin Python bindings: all stage execution and defaults live in rexafs.
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::prelude::*;
+mod fluorescence;
 mod mback;
 mod metrics;
 mod peaks;
@@ -1373,6 +1374,45 @@ struct PySpectrum {
 }
 #[pymethods]
 impl PySpectrum {
+    /// Correct into an independent unnormalized Spectrum (unreleased). Internal
+    /// conventional normalization runs automatically; the source stays unchanged.
+    /// Unknown acquisition provenance is explicitly interpreted as fluorescence.
+    /// Known transmission, prepared norm/flat and repeated correction raise ValueError.
+    /// Select a line and measured surface angles in FluorescenceCorrection. Releases
+    /// the GIL. Call normalize() for separate final polynomial/MBACK normalization.
+    /// History survives edits; this XANES-only branch rejects background/FFT/wavelets.
+    fn correct_fluorescence(
+        &self,
+        py: Python<'_>,
+        model: &fluorescence::PyFluorescenceCorrection,
+    ) -> PyResult<Self> {
+        let inner = py
+            .detach(|| self.inner.correct_fluorescence(&model.inner))
+            .map_err(fluorescence::invalid)?;
+        Ok(Self { inner })
+    }
+    /// Owned historical correction record, or None. Later edits/normalization do
+    /// not change its original inputs or remove its XANES-only processing restriction.
+    fn fluorescence_correction(&self) -> Option<fluorescence::PyFluorescenceCorrectionResult> {
+        self.inner
+            .fluorescence_correction()
+            .cloned()
+            .map(|inner| fluorescence::PyFluorescenceCorrectionResult { inner })
+    }
+    /// Acquisition interpretation: unknown, transmission or fluorescence. Unknown
+    /// means missing evidence, not an automatically recognized fluorescence signal.
+    fn absorption_mode(&self) -> &'static str {
+        fluorescence::mode_name(self.inner.absorption_mode())
+    }
+    /// Explicitly revise acquisition interpretation and return this Spectrum.
+    /// Arrays/caches are unchanged. A correction record and its restrictions survive.
+    fn set_absorption_mode<'py>(
+        mut slf: PyRefMut<'py, Self>,
+        mode: &str,
+    ) -> PyResult<PyRefMut<'py, Self>> {
+        slf.inner.set_absorption_mode(fluorescence::mode(mode)?);
+        Ok(slf)
+    }
     /// Calculate a Cauchy wavelet map on a private copy (unreleased).
     /// Use spectrum.wavelet(Wavelet((2, 12))). The k interval is in inverse angstroms.
     /// Missing normalization/AUTOBK run automatically; existing chi is reused.
@@ -2069,6 +2109,8 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySpectrum>()?;
     m.add_class::<metrics::PyMeasurementResult>()?;
     m.add_class::<wavelet::PyWavelet>()?;
+    m.add_class::<fluorescence::PyFluorescenceCorrection>()?;
+    m.add_class::<fluorescence::PyFluorescenceCorrectionResult>()?;
     m.add_class::<wavelet::PyWaveletMap>()?;
     m.add_class::<wavelet::PyWaveletRegionValue>()?;
     m.add_class::<mback::PyMBack>()?;

@@ -32,6 +32,47 @@ See [processing theory](https://rexafs.com/docs/science/processing/) for
 equations, interpretation and limitations. Groups and structural fitting
 are not currently exposed by this Python Spectrum API.
 
+## correct_fluorescence
+
+```python
+correct_fluorescence(self, model: FluorescenceCorrection) -> Spectrum
+```
+
+Correct into an independent unnormalized Spectrum (unreleased).
+Internal conventional normalization runs automatically; the source stays
+unchanged. Unknown acquisition provenance is explicitly interpreted as
+fluorescence. Known transmission, prepared norm/flat and repeated correction
+raise ValueError. Supply line and measured surface angles in the model.
+Releases the GIL. Call normalize() for separate final polynomial/MBACK
+normalization. History survives edits; this XANES-only branch rejects
+background/FFT/wavelets. Corrected-array uncertainty is unavailable.
+
+## fluorescence_correction
+
+```python
+fluorescence_correction(self) -> FluorescenceCorrectionResult | None
+```
+
+Owned historical correction record, or None. Later edits/normalization
+never rewrite its original inputs or remove the XANES-only restriction.
+
+## absorption_mode
+
+```python
+absorption_mode(self) -> AbsorptionMode
+```
+
+Acquisition interpretation: unknown, transmission or fluorescence.
+
+## set_absorption_mode
+
+```python
+set_absorption_mode(self, mode: AbsorptionMode) -> Spectrum
+```
+
+Explicitly revise acquisition interpretation and return this Spectrum.
+Arrays/caches stay unchanged. Correction history and restrictions survive.
+
 ## wavelet
 
 ```python

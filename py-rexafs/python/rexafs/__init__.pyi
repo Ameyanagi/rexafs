@@ -11,6 +11,10 @@ from . import io as io
 __version__: str
 """Version of the installed Python package, for example "0.2.4". Include this value when reporting results or requesting help; a source build can contain changes beyond the published package with the same version."""
 
+AbsorptionMode: TypeAlias = Literal["unknown", "transmission", "fluorescence"]
+"""Acquisition interpretation (unreleased). Unknown means missing evidence;
+it does not establish fluorescence. Changing it never removes correction history."""
+
 FFTGrid: TypeAlias = Literal["Input", "Larch"]
 """Sampling conventions for the forward transform: "Input" or "Larch".
 
@@ -821,6 +825,27 @@ class Spectrum:
     See [processing theory](https://rexafs.com/docs/science/processing/) for
     equations, interpretation and limitations. Groups and structural fitting
     are not currently exposed by this Python Spectrum API."""
+    def correct_fluorescence(self, model: FluorescenceCorrection) -> Spectrum:
+        """Correct into an independent unnormalized Spectrum (unreleased).
+        Internal conventional normalization runs automatically; the source stays
+        unchanged. Unknown acquisition provenance is explicitly interpreted as
+        fluorescence. Known transmission, prepared norm/flat and repeated correction
+        raise ValueError. Supply line and measured surface angles in the model.
+        Releases the GIL. Call normalize() for separate final polynomial/MBACK
+        normalization. History survives edits; this XANES-only branch rejects
+        background/FFT/wavelets. Corrected-array uncertainty is unavailable."""
+        ...
+    def fluorescence_correction(self) -> FluorescenceCorrectionResult | None:
+        """Owned historical correction record, or None. Later edits/normalization
+        never rewrite its original inputs or remove the XANES-only restriction."""
+        ...
+    def absorption_mode(self) -> AbsorptionMode:
+        """Acquisition interpretation: unknown, transmission or fluorescence."""
+        ...
+    def set_absorption_mode(self, mode: AbsorptionMode) -> Spectrum:
+        """Explicitly revise acquisition interpretation and return this Spectrum.
+        Arrays/caches stay unchanged. Correction history and restrictions survive."""
+        ...
     def wavelet(self, model: Wavelet) -> WaveletMap:
         """Unreleased: spectrum.wavelet(Wavelet((2, 12))) prepares missing
         normalization/AUTOBK on a copy, reusing existing chi. The interval uses
@@ -1623,6 +1648,135 @@ class AtomicReference(TypedDict):
     """Actual loaded dataset identity."""
     table: Literal["ChantlerF2LogLogV1", "ElamTotalV1", "ElamTransitionsV1"]
     """Table and interpolation/contribution profile."""
+
+class FluorescenceInternalNormalization(TypedDict):
+    """Internal fit of original mu, distinct from final normalization (unreleased).
+    All arrays are independent Python lists on the original energy grid."""
+    e0: float
+    """Measured edge energy in eV."""
+    pre_edge: list[float]
+    """Resolved pre-edge eV offsets from E0, [start, end]."""
+    post_edge: list[float]
+    """Resolved post-edge eV offsets from E0, [start, end]."""
+    degree: int
+    """Internal post-edge polynomial degree; pre-edge is linear."""
+    edge_step: float
+    """Positive fitted jump in original absorption units, before numerical flooring."""
+    pre_curve: list[float]
+    """Pre-edge line in original absorption units."""
+    post_curve: list[float]
+    """Pre-edge line plus post-edge polynomial, in original absorption units."""
+    norm: list[float]
+    """Dimensionless internal n0 used in alpha+1-n0."""
+
+class FluorescenceCorrection:
+    """Optically thick, homogeneous-sample XANES correction (unreleased).
+
+    FluorescenceCorrection("CuO", "Cu", "K", line="Ka1", angles=(45,45))
+    requires the complete sample formula, absorber, edge, detected emission and
+    measured incident/exit angles. Angles are degrees FROM THE SAMPLE SURFACE,
+    each in (0,90]; geometry is never inferred. family=True selects an unresolved
+    within-shell family such as Ka. Internal conventional normalization runs
+    automatically (degree 1, no Victoreen term). Final normalization is separate.
+    The fluo_elam_v1 model is not qualified for EXAFS or finite-thickness samples.
+    See https://xraypy.github.io/xraylarch/xafs_preedge.html#over-absorption-corrections."""
+    def __init__(self, formula: str, element: str, edge: str, *, line: str,
+                 angles: tuple[float, float], family: bool = False, e0: float | None = None,
+                 pre_edge: tuple[float, float] | None = None,
+                 post_edge: tuple[float, float] | None = None, degree: int = 1) -> None:
+        """Copy settings. e0=None detects the edge. Internal pre/post ranges are
+        inclusive eV offsets from E0; None uses available low endpoint to -30 eV
+        and +100 eV to available high endpoint. Complete coverage is required.
+        degree=1 is the internal post-edge degree (0–5). No final normalization runs."""
+        ...
+    def apply(self, energy: NDArray[np.float64] | Sequence[float], mu: NDArray[np.float64] | Sequence[float]) -> FluorescenceCorrectionResult:
+        """Copy original unnormalized fluorescence arrays and release the GIL.
+        Energy must be positive, strictly increasing eV; arrays are matching finite
+        one-dimensional values. Output keeps original grid/units. Invalid geometry,
+        composition, coverage, fitted step or singular denominator raise ValueError;
+        nothing is clipped. Array uncertainty is unavailable. Prefer
+        Spectrum.correct_fluorescence to preserve restrictions in further processing."""
+        ...
+    def to_json(self) -> str:
+        """Native settings JSON, including any pinned atomic identity."""
+        ...
+    @staticmethod
+    def from_json(json: str) -> FluorescenceCorrection:
+        """Restore settings; calculation checks scientific values and data availability."""
+        ...
+
+class FluorescenceCorrectionResult:
+    """Historical correction (unreleased), with independent arrays and dictionaries.
+    Later spectrum edits do not rewrite this record. Inspect amplification/warnings;
+    a finite result does not prove physical validity. No uncertainty is claimed."""
+    @property
+    def energy(self) -> NDArray[np.float64]:
+        """Original measured energy in eV, without resampling."""
+        ...
+    @property
+    def original_mu(self) -> NDArray[np.float64]:
+        """Original uncorrected absorption, in supplied units."""
+        ...
+    @property
+    def corrected_mu(self) -> NDArray[np.float64]:
+        """Corrected absorption, same grid/units; final normalization is separate."""
+        ...
+    @property
+    def factor(self) -> NDArray[np.float64]:
+        """Dimensionless alpha/denominator, without clipping."""
+        ...
+    @property
+    def denominator(self) -> NDArray[np.float64]:
+        """Dimensionless alpha+1-internal_norm, without clipping."""
+        ...
+    @property
+    def method(self) -> str:
+        """Named convention, fluo_elam_v1."""
+        ...
+    @property
+    def input_mode(self) -> AbsorptionMode:
+        """Original acquisition interpretation; unknown records a caller assumption."""
+        ...
+    @property
+    def alpha(self) -> float:
+        """Dimensionless attenuation/geometry constant."""
+        ...
+    @property
+    def geometry_ratio(self) -> float:
+        """sin(incidence)/sin(exit) using measured surface angles; dimensionless."""
+        ...
+    @property
+    def minimum_denominator(self) -> float:
+        """Smallest dimensionless denominator on the whole input grid."""
+        ...
+    @property
+    def maximum_amplification(self) -> float:
+        """Largest dimensionless factor; high values amplify noise."""
+        ...
+    @property
+    def singularity_threshold(self) -> float:
+        """Numerical rejection limit, 64*epsilon*max(1, alpha+1)."""
+        ...
+    @property
+    def warnings(self) -> list[str]:
+        """Domain, interpretation and numerical diagnostics; not confidence intervals."""
+        ...
+    @property
+    def definition(self) -> FluorescenceCorrection:
+        """Independent settings pinned to resolved ranges/E0 and atomic data."""
+        ...
+    @property
+    def internal(self) -> FluorescenceInternalNormalization:
+        """Internal conventional fit of original mu, with independent Python lists."""
+        ...
+    @property
+    def atomic(self) -> dict[str, object]:
+        """Edge, emission and compound attenuation records: energies (eV), mass
+        fractions, cm²/g values, table identities and checksums."""
+        ...
+    def to_json(self) -> str:
+        """Full native record with original inputs, assumptions and atomic evidence."""
+        ...
 
 class WaveletSize(TypedDict):
     """Checked dimensions and buffer estimate; input copies/scratch/serialization add overhead."""

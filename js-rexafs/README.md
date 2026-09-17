@@ -265,3 +265,21 @@ example `new Wavelet([2, 12], {rmax: 4})`. `model.calculate(k, chi)` also accept
 unweighted χ(k) in `Float64Array` inputs. Browser callers await `init()` first.
 See the [wavelet guide](../doc/wavelet-analysis.md) for layout, native-grid integrals,
 slices, ownership, JSON replay and scientific limitations.
+
+## Fluorescence over-absorption (unreleased)
+
+```ts
+import { FluorescenceCorrection } from "rexafs/node";
+const model = new FluorescenceCorrection("CuO", "Cu", "K", {line:"Ka1", angles:[45,45]});
+const corrected = spectrum.correct_fluorescence(model);
+try { corrected.normalize(); }
+finally { corrected.free(); model.free(); }
+```
+
+Supply the complete sample composition, detected emission and measured
+incident/exit angles **from the sample surface**, in degrees. The angles above
+are examples. Internal normalization is automatic; final normalization is separate.
+The original stays unchanged. The new native spectrum preserves correction history
+and its XANES-only restriction through edits; known transmission and repeated
+correction fail. See the [correction guide](../doc/fluorescence-correction.md)
+for the homogeneous thick-sample assumptions, diagnostics, replay and array API.

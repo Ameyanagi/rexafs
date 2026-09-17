@@ -1002,6 +1002,22 @@ export class BackgroundMethod {
  * assumptions and interpretation.
  */
 export class Spectrum {
+  /** Correct into an independent unnormalized Spectrum (unreleased). Internal
+   * conventional normalization runs automatically; the source stays unchanged.
+   * Unknown provenance is explicitly interpreted as fluorescence. Known transmission,
+   * prepared norm/flat and repeated correction throw. Supply line and measured
+   * surface angles in the model. Call normalize() for separate final polynomial/MBACK
+   * normalization. History survives edits; this XANES-only branch rejects background,
+   * FFT and wavelets. Array uncertainties are unavailable. Free the new Spectrum. */
+  correct_fluorescence(model: FluorescenceCorrection): Spectrum;
+  /** Independent historical correction record, or undefined. Edits/normalization
+   * never rewrite original correction inputs or remove the XANES-only restriction. */
+  fluorescence_correction(): FluorescenceCorrectionResult | undefined;
+  /** Acquisition interpretation; unknown means missing evidence. */
+  absorption_mode(): AbsorptionMode;
+  /** Explicitly revise interpretation without changing arrays/caches. Correction
+   * history and restrictions survive. Returns this Spectrum; invalid names throw. */
+  set_absorption_mode(mode: AbsorptionMode): this;
   /** Unreleased: spectrum.wavelet(new Wavelet([2, 12])) prepares missing
    * normalization/AUTOBK on a private copy, reusing existing χ. The inclusive
    * interval uses Å⁻¹. Source arrays/settings/caches stay unchanged. Returns an
@@ -1936,4 +1952,82 @@ export interface WaveletRegionValue {
   /** Exact inclusive R bounds, in Å. */ r_range: [number, number];
   /** Integral units including k weight. */ unit: string;
   /** Quadrature convention, currently bilinear_magnitude_v1. */ method: string;
+}
+
+/** Acquisition interpretation (unreleased). Unknown means missing evidence, not
+ * established fluorescence. Changing it never removes correction history. */
+export type AbsorptionMode = "unknown" | "transmission" | "fluorescence";
+
+/** Explicit sample geometry/emission plus optional internal-fit settings (unreleased). */
+export interface FluorescenceCorrectionOptions {
+  /** Detected emission, for example Ka1; no line is inferred. */ line: string;
+  /** Measured [incidence, exit] angles in degrees FROM THE SAMPLE SURFACE, each in (0,90]. */ angles: [number, number];
+  /** Default false selects one line; true selects an unresolved within-shell family, e.g. Ka. */ family?: boolean;
+  /** Measured E0 in eV; omitted detects the edge. Does not shift the atomic table. */ e0?: number;
+  /** Internal pre-edge eV offsets from E0; omitted uses available low endpoint to -30 eV. */ pre_edge?: [number, number];
+  /** Internal post-edge eV offsets from E0; omitted uses +100 eV to available high endpoint. */ post_edge?: [number, number];
+  /** Internal post-edge polynomial degree 0–5, default 1. Pre-edge is linear; no Victoreen term. */ degree?: number;
+}
+/**
+ * Optically thick, homogeneous-sample XANES correction (unreleased).
+ * new FluorescenceCorrection("CuO", "Cu", "K", {line:"Ka1", angles:[45,45]})
+ * requires the complete sample formula, absorber, edge, detected emission and
+ * measured geometry. Angles use the sample surface convention, not the normal.
+ * Internal conventional normalization runs automatically; final normalization
+ * of corrected mu is a separate operation. The fluo_elam_v1 model is not qualified
+ * for EXAFS or finite-thickness samples. Offline atomic data load automatically.
+ * See https://xraypy.github.io/xraylarch/xafs_preedge.html#over-absorption-corrections.
+ */
+export class FluorescenceCorrection {
+  /** Copy explicit settings. Invalid types/options throw; scientific checks run
+   * on calculation. Browser callers must await init() before construction. */
+  constructor(formula: string, element: string, edge: string, options: FluorescenceCorrectionOptions);
+  /** Correct original unnormalized fluorescence arrays on their energy grid (eV).
+   * Copies matching finite Float64Arrays; energy must be positive and increasing.
+   * Returns original/corrected mu in the same units. Invalid composition, geometry,
+   * coverage, fitted step or singular denominator throw; nothing is clipped.
+   * Uncertainty is unavailable. Prefer Spectrum.correct_fluorescence to retain
+   * domain restrictions in later processing. This synchronous calculation should
+   * run in a Worker for large browser workloads. Result needs no free(). */
+  apply(energy: Float64Array, mu: Float64Array): FluorescenceCorrectionResult;
+  /** Native settings JSON, including any pinned atomic identity. */ to_json(): string;
+  /** Restore settings; calculation checks scientific values and reference availability. */
+  static from_json(json: string): FluorescenceCorrection;
+  /** Release this model's Wasm allocation. Do not access it again; copied results remain valid. */ free(): void;
+}
+/** Internal conventional fit of original mu (unreleased), distinct from final
+ * normalization. Lists are independent copies on the original energy grid. */
+export interface FluorescenceInternalNormalization {
+  /** Measured E0 in eV. */ e0: number;
+  /** Resolved pre-edge eV offsets from E0. */ pre_edge: [number, number];
+  /** Resolved post-edge eV offsets from E0. */ post_edge: [number, number];
+  /** Internal post-edge polynomial degree; pre-edge is linear. */ degree: number;
+  /** Positive fitted jump in original mu units, before numerical flooring. */ edge_step: number;
+  /** Pre-edge line in original mu units. */ pre_curve: number[];
+  /** Pre-edge line plus post-edge polynomial, in original mu units. */ post_curve: number[];
+  /** Dimensionless internal n0 in alpha+1-n0. */ norm: number[];
+}
+/** Independent historical correction (unreleased), with copied arrays/dictionaries.
+ * Editing these values never alters the spectrum, to_json() record or replay
+ * definition. No free() is required for this JavaScript result. Inspect warnings
+ * and amplification; numerical success does not establish physical validity. */
+export interface FluorescenceCorrectionResult {
+  /** Original measured energy in eV, without resampling. */ readonly energy: Float64Array;
+  /** Original uncorrected absorption, in supplied units. */ readonly original_mu: Float64Array;
+  /** Corrected absorption, same grid/units; final normalization is separate. */ readonly corrected_mu: Float64Array;
+  /** Dimensionless alpha/denominator, without clipping. */ readonly factor: Float64Array;
+  /** Dimensionless alpha+1-internal_norm, without clipping. */ readonly denominator: Float64Array;
+  /** Named numerical convention, fluo_elam_v1. */ readonly method: string;
+  /** Original acquisition interpretation; unknown records a caller assumption. */ readonly input_mode: AbsorptionMode;
+  /** Dimensionless attenuation/geometry constant. */ readonly alpha: number;
+  /** sin(incidence)/sin(exit) with surface angles; dimensionless. */ readonly geometry_ratio: number;
+  /** Smallest dimensionless denominator on the whole input grid. */ readonly minimum_denominator: number;
+  /** Largest dimensionless factor; high values amplify noise. */ readonly maximum_amplification: number;
+  /** Numerical rejection limit, 64*epsilon*max(1, alpha+1). */ readonly singularity_threshold: number;
+  /** Domain, interpretation and numerical diagnostics; not confidence intervals. */ readonly warnings: string[];
+  /** Fresh independent settings pinned to resolved ranges/E0 and atomic data; call free() after use. */ readonly definition: FluorescenceCorrection;
+  /** Internal conventional fit of original mu, with independent lists. */ readonly internal: FluorescenceInternalNormalization;
+  /** Edge, emission and compound attenuation records: eV energies, mass fractions,
+   * cm²/g values, table identities and checksums. */ readonly atomic: Record<string, unknown>;
+  /** Original native record with full inputs/assumptions/atomic evidence. */ to_json(): string;
 }

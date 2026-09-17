@@ -271,3 +271,20 @@ k spacing 0.05 Å⁻¹, R up to 6 Å and no taper. Use named options to change t
 for example `Wavelet((2, 12), rmax=4)`. `model.calculate(k, chi)` also accepts
 original unweighted χ(k). The [wavelet guide](../doc/wavelet-analysis.md) explains
 native-grid integrals, slices, ownership, JSON replay and scientific limitations.
+
+## Fluorescence over-absorption (unreleased)
+
+```python
+from rexafs import FluorescenceCorrection
+model = FluorescenceCorrection("CuO", "Cu", "K", line="Ka1", angles=(45, 45))
+corrected = spectrum.correct_fluorescence(model)
+corrected.normalize()
+```
+
+Supply the complete sample composition, detected emission and measured
+incident/exit angles **from the sample surface**, in degrees. The angles above
+are examples. Internal normalization is automatic; final normalization is separate.
+The original spectrum stays unchanged. The corrected spectrum retains its history
+and XANES-only restriction through edits. Known transmission and repeated correction
+fail. See the [correction guide](../doc/fluorescence-correction.md) for the
+homogeneous thick-sample assumptions, diagnostics, replay and array API.

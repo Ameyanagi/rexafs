@@ -16,6 +16,8 @@ from ._core import (
     Spectrum,
     MeasurementResult,
     MBack,
+    FluorescenceCorrection,
+    FluorescenceCorrectionResult,
     Wavelet,
     WaveletMap,
     WaveletRegionValue,
@@ -36,6 +38,7 @@ FTWindow = Literal[
 ]
 AUTOBKSolver = Literal["TrustRegionDogLeg", "LegacyLm", "LinearDirect"]
 AUTOBKClampScalePolicy = Literal["FixedPenalty", "Fixed", "TwoPass"]
+AbsorptionMode = Literal["unknown", "transmission", "fluorescence"]
 
 __all__ = [
     "AUTOBK",
@@ -49,6 +52,10 @@ __all__ = [
     "Spectrum",
     "MeasurementResult",
     "MBack",
+    "FluorescenceCorrection",
+    "FluorescenceCorrectionResult",
+    "FluorescenceInternalNormalization",
+    "AbsorptionMode",
     "Wavelet",
     "WaveletMap",
     "WaveletSize",
@@ -92,3 +99,24 @@ class WaveletSize(TypedDict):
     """Number of complex map cells."""
     bytes: int
     """Estimated scientific buffer bytes; input copies and scratch add overhead."""
+
+
+class FluorescenceInternalNormalization(TypedDict):
+    """Internal fit of original mu, distinct from final normalization (unreleased).
+    All arrays are independent Python lists on the original energy grid."""
+    e0: float
+    """Measured edge energy in eV."""
+    pre_edge: list[float]
+    """Resolved pre-edge eV offsets from E0, [start, end]."""
+    post_edge: list[float]
+    """Resolved post-edge eV offsets from E0, [start, end]."""
+    degree: int
+    """Internal post-edge polynomial degree; pre-edge is linear."""
+    edge_step: float
+    """Positive fitted jump in original absorption units, before numerical flooring."""
+    pre_curve: list[float]
+    """Pre-edge line in original absorption units."""
+    post_curve: list[float]
+    """Pre-edge line plus post-edge polynomial, in original absorption units."""
+    norm: list[float]
+    """Dimensionless internal n0 used in alpha+1-n0."""
