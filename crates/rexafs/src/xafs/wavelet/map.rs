@@ -207,7 +207,7 @@ impl WaveletMap {
             .collect()
     }
     /// Phase in radians, masked below `relative_floor` times the map's maximum
-    /// magnitude. Fraction must lie in [0,1]. Zero-amplitude cells are always None.
+    /// magnitude. Fraction must lie in `[0, 1]`. Zero-amplitude cells are always None.
     /// This display mask does not modify data and does not create a phase metric.
     pub fn phase(&self, relative_floor: f64) -> Result<Vec<Option<f64>>> {
         if !relative_floor.is_finite() || !(0. ..=1.).contains(&relative_floor) {

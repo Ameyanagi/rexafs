@@ -41,7 +41,10 @@ pub enum WaveletWindow {
     /// Half-cosine ramps inside both support boundaries, with this width in Å⁻¹.
     /// The two ramps may not overlap. This is an explicit cosine taper, not the
     /// historical XAFS FFT window's half-width/shape convention.
-    Cosine { width: f64 },
+    Cosine {
+        /// Width of each half-cosine ramp in Å⁻¹; the two ramps must not overlap.
+        width: f64,
+    },
 }
 
 /// A Cauchy transform definition. Defaults: weight 2, order 100, R up to 6 Å,

@@ -1,7 +1,7 @@
 //! Unit-area profiles with explicit FWHM parameters. These functions evaluate
 //! the mathematical definitions in lmfit's line-shape reference, with rexafs
 //! converting FWHM to Gaussian standard deviation and Lorentzian half-width.
-//! See https://lmfit.github.io/lmfit-py/builtin_models.html .
+//! See <https://lmfit.github.io/lmfit-py/builtin_models.html>.
 use errorfunctions::{ComplexErrorFunctions, RealErrorFunctions};
 use num_complex::Complex64;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ pub enum PeakShape {
     Gaussian,
     /// Unit-area Cauchy distribution. `width` is FWHM, in eV.
     Lorentzian,
-    /// Unit-area mixture with common FWHM and Lorentzian `fraction` in [0,1].
+    /// Unit-area mixture with common FWHM and Lorentzian `fraction` in `[0, 1]`.
     PseudoVoigt,
     /// Gaussian/Lorentzian convolution with separate `width` and `lorentz_width`
     /// FWHM contributions. Either contribution can be zero, but not both.

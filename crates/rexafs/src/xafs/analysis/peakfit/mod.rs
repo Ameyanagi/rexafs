@@ -62,7 +62,7 @@ pub struct PeakComponent {
 /// .gaussian("p1", 5.0, 2.0, 3.0).linear_baseline(0.0, 0.0).fit(&spectrum)`.
 /// Gaussian arguments are name, center, area and FWHM. Use `.flat()` explicitly
 /// for flattened absorption. Default bounds keep peak centers inside the fit
-/// range, areas nonnegative, widths positive, and mixture fractions in [0,1].
+/// range, areas nonnegative, widths positive, and mixture fractions in `[0, 1]`.
 /// Validation happens when evaluating/fitting; malformed names, ties, bounds,
 /// nonfinite arrays and insufficient coverage return [`PeakFitError`]. Public
 /// fields support advanced editing and serialization. Inputs are never modified.
@@ -159,7 +159,7 @@ impl PeakFit {
             &[center, area, fwhm],
         )
     }
-    /// Add a common-FWHM mixture. `fraction` is the Lorentzian share [0,1].
+    /// Add a common-FWHM mixture. `fraction` is the Lorentzian share `[0, 1]`.
     pub fn pseudo_voigt(
         self,
         name: impl Into<String>,

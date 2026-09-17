@@ -99,3 +99,11 @@ the full MBACK curve, on/off behavior and replacement by polynomial baselines;
 the release build and [new screenshot](../2026-09-18-mback-normalize/mback-fit-toggle.jpg)
 show this final UI. This overlay uses the existing core fit arrays and does not
 change the numerical algorithm.
+
+After the API-page drift was corrected, the website job reached strict Rust
+documentation generation and exposed four bracketed `[0,1]` ranges being
+interpreted as unresolved links, plus an undocumented cosine-window width
+field. The ranges now use code formatting; the width has field-level unit and
+constraint documentation. The strict `cargo doc` build passes with the website's
+core feature set, `-D missing-docs` and `-D rustdoc::broken-intra-doc-links`.
+These are documentation-only corrections.
