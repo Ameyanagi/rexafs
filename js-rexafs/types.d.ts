@@ -914,7 +914,7 @@ export class XrayFFTR {
  * Select the normalization algorithm and hold an owned copy of its settings.
  *
  * Use PrePostEdge(settings) for customized pre/post-edge fits or new_prepostedge() for
- * automatic defaults. The MBack factory is only a placeholder; it does not implement that
+ * automatic defaults. The no-argument MBack factory lacks the absorber/edge needed for that
  * algorithm. Copy this method into Spectrum.set_normalization_method(), then free() the wrapper
  * when no longer needed.
  */
@@ -938,9 +938,9 @@ export class NormalizationMethod {
    */
   static new_prepostedge(): NormalizationMethod;
   /**
-   * Create an owned MBack placeholder for API compatibility. MBack processing is not
-   * implemented and normalize() throws if this method is selected. Use new_prepostedge() for
-   * supported normalization, and free() any placeholder you create.
+   * Create the historical empty MBack selector. It lacks absorber/edge identity, so
+   * normalize() throws. Unreleased: use new MBack(element, edge) for full MBACK.
+   * Through 0.2.9 MBACK was unimplemented. Free this wrapper when finished.
    */
   static new_mback(): NormalizationMethod;
 }
@@ -1091,7 +1091,9 @@ export class Spectrum {
    * settings, 0.2.4 accepts a NormalizationMethod wrapper; direct PrePostEdge settings
    * were added in 0.2.5.
    */
-  set_normalization_method(method?: PrePostEdge | NormalizationMethod | null): this;
+  set_normalization_method(method?: PrePostEdge | MBack | NormalizationMethod | null): this;
+  /** Copy the latest full MBACK result, or undefined when absent/invalidated. */
+  mback_result(): MbackResult | undefined;
   /**
    * Copy the selected background method and clear background, forward and inverse results while
    * retaining normalization. The caller keeps ownership of the settings and wrapper and may
@@ -1697,4 +1699,130 @@ export interface StepOptions {
   height: number;
   /** Positive eV scale in erf((E-center)/scale) or atan((E-center)/scale); not a peak FWHM. */
   scale: number;
+}
+
+/** Exact offline provider/table identity. Retain it for reproducible processing. */
+export interface AtomicReference {
+  /** Provider/profile version and actual decoded-data SHA-256. */
+  data: { provider: string; data_version: string; data_sha256: string };
+  /** Numerical table and interpolation/contribution profile. */
+  table: "ChantlerF2LogLogV1" | "ElamTotalV1" | "ElamTransitionsV1";
+}
+/** Explicit bounds for the optional MBACK erfc background, not a sample correction. */
+export interface MbackErfcOptions {
+  /** Positive increasing width bounds in eV. */
+  width: [number, number];
+  /** Increasing finite amplitude bounds in f2 units; signed values are allowed. */
+  amplitude: [number, number];
+  /** False selects an exact line such as Ka1; true selects a within-shell family such as Ka. */
+  family?: boolean;
+}
+/** Immutable optional smooth-background term (unreleased). It does not correct over-absorption. */
+export class MbackErfc {
+  /** Select an emission originating at the absorber edge, with explicit scientific bounds. */
+  constructor(line: string, options: MbackErfcOptions);
+}
+/** Optional MBACK settings (unreleased); energy and ranges use eV. */
+export interface MbackOptions {
+  /** Fixed measured edge origin in eV; omitted uses derivative detection. Does not shift the table. */
+  e0?: number;
+  /** Inclusive offsets from E0. Omitted suggests the outer 80% of the pre-edge span. */
+  pre_edge?: [number, number];
+  /** Inclusive offsets from E0. Omitted suggests the outer 80% of the post-edge span. */
+  post_edge?: [number, number];
+  /** Smooth-background polynomial degree 0–5, default 2. More flexibility can absorb real structure. */
+  degree?: number;
+  /** Optional bounded fluorescence-background term; omitted disables erfc. */
+  erfc?: MbackErfc;
+}
+/**
+ * Full Chantler MBACK normalization (unreleased). Example:
+ * new MBack("Cu", "K", {pre_edge: [-200,-50], post_edge: [100,800]}).
+ *
+ * Default degree 2 and erfc off. Automatic ranges respect neighboring edges;
+ * inspect the returned intervals. Offline data are loaded automatically and
+ * never shifted. fit() copies inputs and leaves them/model unchanged. Assign to
+ * spectrum.set_normalization_method(model).normalize() for ordinary processing.
+ * Invalid coverage, unsupported tables, unidentifiable fits and nonpositive
+ * scale/step throw. Use a Worker for large browser fits; fit() is synchronous.
+ * Call free() when finished. Settings copied into a spectrum remain independent.
+ */
+export class MBack {
+  /** Select absorber/edge and optional named settings; browser init() is required first. */
+  constructor(element: string, edge: string, options?: MbackOptions);
+  /** Fit matching finite raw absorption arrays, with strictly increasing energy in eV. */
+  fit(energy: Float64Array, mu: Float64Array): MbackResult;
+  /** Versioned model JSON; no input arrays are added. Throws after free(). */
+  to_json(): string;
+  /** Restore a native definition. fit() checks scientific values and archived table identity. */
+  static from_json(json: string): MBack;
+  /** Release this native model. Spectrum settings and owned results remain valid. */
+  free(): void;
+}
+/**
+ * Owned full-MBACK result (unreleased). Arrays are independent JavaScript copies.
+ * norm and fpp are different quantities. Region balancing is not inverse-variance
+ * weighting; objective/convergence alone do not establish experimental uncertainty.
+ */
+export interface MbackResult {
+  /** Named profile, currently mback_chantler_v1. */
+  method: string;
+  /** A fresh native replay model pinned to the original table; free() it after use. */
+  readonly definition: MBack;
+  /** Original result snapshot including all settings/provenance. Editing copied arrays does not alter it. */
+  to_json(): string;
+  /** Exact offline reference and interpolation identity. */
+  reference: AtomicReference;
+  /** Fixed resolved edge origin in eV. */
+  e0: number;
+  /** Tabulated edge in eV; not shifted to measured E0. */
+  tabulated_edge_ev: number;
+  /** Resolved inclusive pre-edge offsets in eV. */
+  pre_edge: [number, number];
+  /** Resolved inclusive post-edge offsets in eV. */
+  post_edge: [number, number];
+  /** Positive atomic conversion scale from input mu units. */
+  scale: number;
+  /** Positive fitted absorption step in input mu units. */
+  edge_step: number;
+  /** Sum of squared balanced residuals, in squared f2 units. */
+  objective: number;
+  /** Column-scaled Jacobian condition number. */
+  condition: number;
+  /** Final Jacobian rank, including erfc width when enabled. */
+  rank: number;
+  /** Number of linear solves during fitting. */
+  evaluations: number;
+  /** Width in eV, or null when erfc is disabled. */
+  erfc_width: number | null;
+  /** Amplitude in f2 units; zero when disabled. */
+  erfc_amplitude: number;
+  /** Polynomial coordinate scale in eV. */
+  energy_scale: number;
+  /** Original energy grid, in eV. */
+  energy: number[];
+  /** Atomic scattering factor in electron units. */
+  f2: number[];
+  /** Matched scale*mu-background in electron units; distinct from norm. */
+  fpp: number[];
+  /** Dimensionless normalized absorption (scale*mu-pre_curve)/Delta. */
+  norm: number[];
+  /** Dimensionless flattened absorption using the auxiliary post-edge trend. */
+  flat: number[];
+  /** Smooth background in f2 units. */
+  background: number[];
+  /** Auxiliary pre-edge line on f2+background, in f2 units. */
+  pre_curve: number[];
+  /** Auxiliary quadratic post-edge curve, in f2 units. */
+  post_curve: number[];
+  /** Unweighted f2+background-scale*mu on every input point. */
+  residual: number[];
+  /** Increasing polynomial powers of (energy-e0)/energy_scale, in f2 units. */
+  coefficients: number[];
+  /** Original zero-based indices included in the objective. */
+  fit_indices: number[];
+  /** 1/sqrt(region count), in fit_indices order. */
+  weights: number[];
+  /** Nonfatal boundary/conditioning diagnostics. */
+  warnings: string[];
 }

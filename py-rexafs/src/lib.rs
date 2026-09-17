@@ -1,6 +1,7 @@
 //! Thin Python bindings: all stage execution and defaults live in rexafs.
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::prelude::*;
+mod mback;
 mod metrics;
 mod peaks;
 
@@ -1250,7 +1251,8 @@ impl PyXrayFFTR {
 /// Use NormalizationMethod.PrePostEdge(parameters) for configured pre/post-edge
 /// normalization or new_prepostedge() for automatic settings, then pass the
 /// result to Spectrum.set_normalization_method(). Creating a method does not
-/// process data. MBack is a named placeholder and is not implemented.
+/// process data. The no-argument MBack selector has no absorber/edge and cannot
+/// normalize. Unreleased: pass configured MBack settings directly to Spectrum.
 #[pyclass(name = "NormalizationMethod", module = "rexafs", skip_from_py_object)]
 #[derive(Clone)]
 struct PyNormalizationMethod {
@@ -1281,11 +1283,12 @@ impl PyNormalizationMethod {
             inner: rexafs::NormalizationMethod::new_prepostedge(),
         }
     }
-    /// Create the unimplemented MBack normalization placeholder.
+    /// Create the historical empty MBack normalization selector.
     ///
     /// Selecting it preserves the requested algorithm, but normalize() and
     /// dependent stages raise ValueError rather than substitute another method.
-    /// Use new_prepostedge() for the implemented normalization workflow.
+    /// Unreleased: use MBack(element, edge) for full MBACK. Through 0.2.9 the
+    /// MBACK algorithm was unimplemented. This no-argument selector still lacks identity.
     #[staticmethod]
     fn new_mback() -> Self {
         Self {
@@ -1582,6 +1585,8 @@ impl PySpectrum {
                     Some(rexafs::NormalizationMethod::PrePostEdge(
                         parameters.inner.clone(),
                     ))
+                } else if let Ok(parameters) = value.extract::<PyRef<'_, mback::PyMBack>>() {
+                    Some(rexafs::NormalizationMethod::MBack(parameters.inner.clone()))
                 } else {
                     Some(
                         value
@@ -1655,7 +1660,7 @@ impl PySpectrum {
     /// automatic parameters are resolved from the data. Call norm(), flat(),
     /// pre_edge() and post_edge() to retrieve independent result arrays.
     /// This recomputes normalization, clears background/Fourier results and
-    /// returns this spectrum. Invalid ranges, failed fits and MBack raise ValueError.
+    /// returns this spectrum. Invalid ranges, missing absorber identity and failed fits raise ValueError.
     fn normalize(mut slf: PyRefMut<'_, Self>) -> PyResult<PyRefMut<'_, Self>> {
         let py = slf.py();
         let inner = &mut slf.inner;
@@ -1676,6 +1681,18 @@ impl PySpectrum {
         py.detach(|| inner.calc_background().map(|_| ()))
             .map_err(error)?;
         Ok(slf)
+    }
+    /// Copy the latest full MBACK result, or None if absent/invalidated. Its arrays
+    /// and diagnostics remain independent after further spectrum processing.
+    fn mback_result(&self) -> Option<mback::PyMbackResult> {
+        match self.inner.normalization.as_ref()? {
+            rexafs::NormalizationMethod::MBack(m) => {
+                m.result.as_ref().map(|r| mback::PyMbackResult {
+                    inner: (**r).clone(),
+                })
+            }
+            _ => None,
+        }
     }
     /// Compute the weighted k-to-R Fourier transform, running missing prerequisites.
     ///
@@ -2033,6 +2050,9 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBackgroundMethod>()?;
     m.add_class::<PySpectrum>()?;
     m.add_class::<metrics::PyMeasurementResult>()?;
+    m.add_class::<mback::PyMBack>()?;
+    m.add_class::<mback::PyMbackErfc>()?;
+    m.add_class::<mback::PyMbackResult>()?;
     m.add_class::<peaks::PyPeakFit>()?;
     m.add_class::<peaks::PyPeakFitResult>()?;
     m.add_class::<peaks::PyPeakContribution>()?;

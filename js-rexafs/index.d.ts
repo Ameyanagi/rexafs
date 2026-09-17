@@ -24,3 +24,6 @@ export { PeakFit } from "./types.js";
 export type { PeakFitResult, PeakContribution, PeakFitOutcome, PeakParameterOptions } from "./types.js";
 
 export type { PeakOptions, PseudoVoigtOptions, VoigtOptions, StepOptions } from "./types.js";
+
+export { MBack, MbackErfc } from "./types.js";
+export type { MbackOptions, MbackErfcOptions, MbackResult, AtomicReference } from "./types.js";

@@ -1,5 +1,6 @@
 //! Thin Wasm bindings: stage execution and defaults live in rexafs.
 use wasm_bindgen::prelude::*;
+mod mback;
 mod peaks;
 fn error(error: rexafs::Error) -> JsValue {
     js_sys::Error::new(&error.to_string()).into()
@@ -939,7 +940,7 @@ impl WasmXrayFFTR {
 /// Select the normalization algorithm and hold an owned copy of its settings.
 ///
 /// Use PrePostEdge(settings) for customized pre/post-edge fits or new_prepostedge() for
-/// automatic defaults. The MBack factory is only a placeholder; it does not implement that
+/// automatic defaults. The no-argument MBack factory lacks the absorber/edge needed for that
 /// algorithm. Copy this method into Spectrum.set_normalization_method(), then free() the
 /// wrapper when no longer needed.
 #[wasm_bindgen(js_name = NormalizationMethod)]
@@ -966,9 +967,9 @@ impl WasmNormalizationMethod {
             inner: rexafs::NormalizationMethod::new_prepostedge(),
         }
     }
-    /// Create an owned MBack placeholder for API compatibility. MBack processing is not
-    /// implemented and normalize() throws if this method is selected. Use new_prepostedge() for
-    /// supported normalization, and free() any placeholder you create.
+    /// Create the historical empty MBack selector. It lacks absorber/edge identity, so
+    /// normalize() throws. Unreleased: use new MBack(element, edge) for full MBACK.
+    /// Through 0.2.9 MBACK was unimplemented. Free this wrapper when finished.
     pub fn new_mback() -> Self {
         Self {
             inner: rexafs::NormalizationMethod::new_mback(),
@@ -1026,6 +1027,27 @@ pub struct WasmSpectrum {
 }
 #[wasm_bindgen(js_class = Spectrum)]
 impl WasmSpectrum {
+    /// Copy MBACK settings into this spectrum, invalidating dependent results.
+    pub fn set_mback_json(&mut self, json: &str) -> Result<(), JsValue> {
+        let model = mback::WasmMBack::from_json(json)?;
+        self.inner
+            .set_normalization_method(model.inner)
+            .map_err(error)?;
+        Ok(())
+    }
+    /// Latest owned full MBACK result JSON, or None after invalidation/non-MBACK processing.
+    pub fn mback_result_json(&self) -> Result<Option<String>, JsValue> {
+        let Some(rexafs::NormalizationMethod::MBack(model)) = self.inner.normalization.as_ref()
+        else {
+            return Ok(None);
+        };
+        model
+            .result
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
     /// Internal bridge for Spectrum.fit_peaks. The native model prepares on a copy.
     /// Optional errors must describe the selected signal on the original native grid.
     pub fn fit_peaks_json(

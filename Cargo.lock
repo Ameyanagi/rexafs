@@ -7622,6 +7622,7 @@ version = "0.2.9"
 dependencies = [
  "js-sys",
  "rexafs",
+ "serde",
  "serde_json",
  "wasm-bindgen",
 ]

@@ -14,7 +14,7 @@ pagefind: false
 Select the normalization algorithm and hold an owned copy of its settings.
 
 Use PrePostEdge(settings) for customized pre/post-edge fits or new_prepostedge() for
-automatic defaults. The MBack factory is only a placeholder; it does not implement that
+automatic defaults. The no-argument MBack factory lacks the absorber/edge needed for that
 algorithm. Copy this method into Spectrum.set_normalization_method(), then free() the wrapper
 when no longer needed.
 
@@ -53,6 +53,6 @@ Spectrum.set_normalization_method() and free() the wrapper when finished.
 static new_mback(): NormalizationMethod;
 ```
 
-Create an owned MBack placeholder for API compatibility. MBack processing is not
-implemented and normalize() throws if this method is selected. Use new_prepostedge() for
-supported normalization, and free() any placeholder you create.
+Create the historical empty MBack selector. It lacks absorber/edge identity, so
+normalize() throws. Unreleased: use new MBack(element, edge) for full MBACK.
+Through 0.2.9 MBACK was unimplemented. Free this wrapper when finished.

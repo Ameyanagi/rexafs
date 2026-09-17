@@ -190,8 +190,9 @@ uv run --no-project python py-rexafs/tests/test_api.py
 ```
 
 Fitting, groups, structures, plotting and direct ReFEFF calculation remain
-Rust/desktop APIs. MBack and ILPBkg selectors are unimplemented placeholders and
-raise errors when processed. See [AUTOBK defaults](../doc/autobk-fixed-penalty.md)
+Rust/desktop APIs. ILPBkg remains an unimplemented selector. The historical empty
+MBACK selector lacks absorber/edge identity; the unreleased configured `MBack` API
+below implements the full atomic match. See [AUTOBK defaults](../doc/autobk-fixed-penalty.md)
 and [FFT grid compatibility](../doc/fft-grid-compatibility.md).
 Licensed under MIT OR Apache-2.0.
 
@@ -234,3 +235,22 @@ and mean are supported, with strict coverage checks. See the
 independent errors, numerical meaning and the equivalent Rust/TypeScript calls.
 This scalar operation is separate from `rexafs.io.Measurement`, the input-file
 reader. The installed wheel includes result types and editor help.
+
+## Full MBACK normalization (unreleased)
+
+```python
+from rexafs import MBack
+model = MBack("Cu", "K", pre_edge=(-200, -50), post_edge=(100, 800))
+result = model.fit(energy, mu)
+norm, flat = result.norm, result.flat
+spectrum.set_normalization_method(model).normalize()
+```
+
+Energy and E₀-relative ranges use eV; `norm` and `flat` are separate dimensionless
+outputs. Degree 2 and no erfc are the defaults. Offline atomic data load
+automatically. Inputs and model are unchanged by `fit`; assigning settings to a
+spectrum copies them. `spectrum.mback_result()` retrieves its full result, or
+`None` after invalidation. Inspect resolved ranges and warnings. `result.definition`
+pins the original atomic reference for replay. See the
+[MBACK guide](../doc/mback-normalization.md) for equations, assumptions and optional
+background terms. Runtime atomic-data notices are included in `rexafs/licenses/atomic`.

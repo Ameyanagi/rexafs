@@ -143,9 +143,34 @@ numerical comparison with Larch's full objective and auxiliary convention, not
 Larch's interactive default initialization. All generated reference data stay in
 the Git repository and are excluded from crates.io.
 
-GUI method comparison, retained normalization history, series/Live workflow and
-public Python/TypeScript MBACK constructors are still being integrated. This core
-increment does not claim completion of those workflows or physical qualification
-on an experimental sample.
+The Python and TypeScript constructors now share the native implementation:
+
+```python
+from rexafs import MBack
+model = MBack("Cu", "K", pre_edge=(-200, -50), post_edge=(100, 800))
+result = model.fit(energy, mu)
+spectrum.set_normalization_method(model).normalize()
+```
+
+```ts
+import { MBack } from "rexafs/node";
+const model = new MBack("Cu", "K", {pre_edge: [-200,-50], post_edge: [100,800]});
+const result = model.fit(energy, mu); // Float64Array inputs
+spectrum.set_normalization_method(model).normalize();
+model.free();
+```
+
+Both return `result.norm`, `result.flat` and diagnostics. Python arrays are copied
+on property access; JavaScript arrays are owned copies. `spectrum.mback_result()`
+returns the latest independent full result, or None/undefined after invalidation.
+`result.definition` creates a replay model pinned to the original atomic table;
+JavaScript callers must free that model when finished. Browser construction needs
+`await init()` and large synchronous fits should run in a Worker. `MbackErfc`
+takes named `width` and `amplitude` bounds in both languages. The installed-package
+checks compare both erfc modes with the same Larch fixture and exercise editor help.
+
+GUI method comparison, retained normalization history and series/Live workflow
+are still being integrated. These increments do not establish those workflows or
+physical qualification on an experimental sample.
 
 [larch]: https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/larch/xafs/mback.py

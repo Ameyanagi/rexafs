@@ -15,7 +15,7 @@ const rootUri = pathToFileURL(directory).href;
 writeFileSync(join(directory, "pyrightconfig.json"), JSON.stringify({
   typeCheckingMode: "strict", pythonVersion: "3.10",
 }));
-const valid = `from rexafs import AUTOBK, Spectrum, PeakFit, XrayFFTF, XrayFFTR, FTWindow
+const valid = `from rexafs import AUTOBK, Spectrum, PeakFit, MBack, MbackErfc, XrayFFTF, XrayFFTR, FTWindow
 from rexafs.io import parse_measurement, SpectrumMapping
 measurement = parse_measurement("energy,mu\\n7100,1\\n7101,2")
 mapping: SpectrumMapping = {"energy_column":0,"energy":{"kind":"offset_ev","offset_ev":20000},"signal":{"kind":"direct","column":1}}
@@ -33,6 +33,13 @@ spectrum.set_background_method(AUTOBK(rbkg=1.2)).set_fft(XrayFFTF(window=window)
 scalar = spectrum.measure("mean", (-20., 30.), space="flat")
 print(scalar.value, scalar.standard_error, scalar.range, scalar.to_json())
 spectrum.measure("point", 10.)
+atomic = MBack("Cu", "K", pre_edge=(-200., -50.), post_edge=(100., 800.), erfc=MbackErfc("Ka1", width=(500.,1500.), amplitude=(0.,10.)))
+normalized = atomic.fit([1.,2.], [1.,2.])
+print(normalized.norm[0], normalized.reference["data"]["data_sha256"])
+spectrum.set_normalization_method(atomic).normalize()
+saved = spectrum.mback_result()
+if saved is not None:
+    print(saved.objective, saved.definition)
 peak = PeakFit((-20., 40.)).gaussian("p1", center=5, area=2, fwhm=3).linear_baseline()
 fit = spectrum.fit_peaks(peak)
 print(fit.parameters["p1_center"], fit.components[0].area, fit.to_json())
@@ -143,6 +150,14 @@ XrayFFTF(window="")
   assert.match(JSON.stringify(await request("textDocument/signatureHelp", peakPosition(5, 16))), /fwhm/);
   const peakKeywords = await request("textDocument/completion", peakPosition(5, 16));
   assert.ok((peakKeywords.items ?? peakKeywords).some(x => x.label.startsWith("fwhm")));
+  const mbackText = 'from rexafs import MBack\nm = MBack("Cu", "K")\nm.fit\nMBack("Cu", "K", ';
+  const mbackUri = pathToFileURL(join(directory, "mback.py")).href;
+  send({method:"textDocument/didOpen",params:{textDocument:{uri:mbackUri,languageId:"python",version:1,text:mbackText}}});
+  const mbackPosition = (line,character) => ({textDocument:{uri:mbackUri},position:{line,character}});
+  assert.match(JSON.stringify(await request("textDocument/hover",mbackPosition(2,3))), /energy eV/);
+  assert.match(JSON.stringify(await request("textDocument/signatureHelp",mbackPosition(3,17))), /pre_edge/);
+  const mbackKeywords=await request("textDocument/completion",mbackPosition(3,17));
+  assert.ok((mbackKeywords.items ?? mbackKeywords).some(x=>x.label.startsWith("pre_edge")));
   console.log("Installed Python wheel: property/method hovers, member/keyword/literal completion and signature defaults passed");
   await request("shutdown", null);
   send({ method: "exit", params: null });

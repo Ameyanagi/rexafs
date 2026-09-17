@@ -5,7 +5,7 @@ PrePostEdge, AUTOBK, XrayFFTF and XrayFFTR settings. See member docstrings
 for units, defaults and invalidation behavior.
 """
 
-from typing import Literal
+from typing import Literal, TypedDict
 
 from . import io
 from ._core import (
@@ -15,6 +15,9 @@ from ._core import (
     PrePostEdge,
     Spectrum,
     MeasurementResult,
+    MBack,
+    MbackErfc,
+    MbackResult,
     PeakFit,
     PeakFitResult,
     PeakContribution,
@@ -42,6 +45,11 @@ __all__ = [
     "PrePostEdge",
     "Spectrum",
     "MeasurementResult",
+    "MBack",
+    "MbackErfc",
+    "MbackResult",
+    "AtomicDataIdentity",
+    "AtomicReference",
     "PeakFit",
     "PeakFitResult",
     "PeakContribution",
@@ -51,3 +59,15 @@ __all__ = [
     "__version__",
     "io",
 ]
+
+
+class AtomicDataIdentity(TypedDict):
+    """Exact offline provider, database version and decoded-data checksum."""
+    provider: str
+    data_version: str
+    data_sha256: str
+
+class AtomicReference(TypedDict):
+    """Exact atomic dataset and numerical table identity."""
+    data: AtomicDataIdentity
+    table: Literal["ChantlerF2LogLogV1", "ElamTotalV1", "ElamTransitionsV1"]

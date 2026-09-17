@@ -1,6 +1,6 @@
 """Typed Rust spectrum processing. Energy: eV; k/q: inverse angstroms; R: angstroms."""
 
-from typing import Literal, TypeAlias, overload
+from typing import Literal, TypeAlias, TypedDict, overload
 from collections.abc import Sequence
 
 import numpy as np
@@ -723,7 +723,8 @@ class NormalizationMethod:
     Use NormalizationMethod.PrePostEdge(parameters) for configured pre/post-edge
     normalization or new_prepostedge() for automatic settings, then pass the
     result to Spectrum.set_normalization_method(). Creating a method does not
-    process data. MBack is a named placeholder and is not implemented."""
+    process data. The no-argument MBack selector has no absorber/edge and cannot
+    normalize. Unreleased: pass configured MBack settings directly to Spectrum."""
     @staticmethod
     def PrePostEdge(parameters: PrePostEdge) -> NormalizationMethod:
         """Copy PrePostEdge parameters into a normalization method.
@@ -740,11 +741,12 @@ class NormalizationMethod:
         assign the method to a spectrum to use it. No data are processed here."""
     @staticmethod
     def new_mback() -> NormalizationMethod:
-        """Create the unimplemented MBack normalization placeholder.
+        """Create the historical empty MBack normalization selector.
 
         Selecting it preserves the requested algorithm, but normalize() and
         dependent stages raise ValueError rather than substitute another method.
-        Use new_prepostedge() for the implemented normalization workflow."""
+        Unreleased: use MBack(element, edge) for full MBACK. Through 0.2.9 the
+        MBACK algorithm was unimplemented. This no-argument selector still lacks identity."""
 
 class BackgroundMethod:
     """Select a background algorithm and own a copy of its settings.
@@ -922,7 +924,7 @@ class Spectrum:
         processing runs, not at this setter. Returns this spectrum without
         performing normalization or recalibrating the input energy axis."""
     def set_normalization_method(
-        self, method: PrePostEdge | NormalizationMethod | None = None
+        self, method: PrePostEdge | MBack | NormalizationMethod | None = None
     ) -> Spectrum:
         """Copy the selected normalization method and clear normalization and later results.
 
@@ -993,7 +995,13 @@ class Spectrum:
         automatic parameters are resolved from the data. Call norm(), flat(),
         pre_edge() and post_edge() to retrieve independent result arrays.
         This recomputes normalization, clears background/Fourier results and
-        returns this spectrum. Invalid ranges, failed fits and MBack raise ValueError."""
+        returns this spectrum. Invalid ranges, missing absorber identity and failed fits raise ValueError."""
+    def mback_result(self) -> MbackResult | None:
+        """Copy the latest full MBACK result, or None when absent/invalidated.
+
+        Arrays and diagnostics remain independent after further processing."""
+        ...
+
     def calc_background(self) -> Spectrum:
         """Fit the selected smooth background and calculate dimensionless chi(k).
 
@@ -1423,3 +1431,187 @@ class PeakContribution:
     def sampled_integral(self) -> float:
         """Trapezoidal component integral over included native-grid segments only.
         Masked gaps are not bridged; this is not its whole-axis analytic area."""
+
+
+class MbackErfc:
+    """Optional smooth fluorescence background for MBACK (unreleased).
+
+    The line must originate at the selected absorber edge. width=(low, high)
+    gives positive eV bounds; amplitude=(low, high) gives finite f2-unit bounds.
+    family=False selects one exact line such as Ka1; True selects a within-shell
+    family such as Ka. This is not an over-absorption correction. Settings are copied."""
+    def __init__(self, line: str, *, width: tuple[float, float], amplitude: tuple[float, float], family: bool = False) -> None:
+        """Select an emission and explicit increasing width/amplitude bounds."""
+        ...
+
+class MBack:
+    """Full Chantler MBACK normalization (unreleased). Example:
+    MBack("Cu", "K", pre_edge=(-200, -50), post_edge=(100, 800)).
+
+    Ranges are eV offsets from E0. Degree defaults to 2; erfc is disabled. E0=None
+    uses the derivative detector. Automatic ranges use the outer 80% of measured
+    pre/post spans with neighboring-edge limits; inspect resolved result ranges.
+    The offline atomic table is loaded automatically and never energy shifted.
+    fit(energy, mu) leaves both inputs/model unchanged and returns owned norm/flat
+    arrays and full diagnostics. set_normalization_method(model) copies settings
+    into a Spectrum; normalize() invalidates its dependent background/FFT results.
+    Invalid ranges, unsupported data, nonidentifiability and nonpositive scale/step
+    raise ValueError. No experimental uncertainty is inferred from fit weights."""
+    def __init__(self, element: str, edge: str, *, e0: float | None = None, pre_edge: tuple[float, float] | None = None, post_edge: tuple[float, float] | None = None, degree: int = 2, erfc: MbackErfc | None = None) -> None:
+        """Create immutable settings; erfc requires an explicit MbackErfc object."""
+        ...
+    def fit(self, energy: NDArray[np.float64] | Sequence[float], mu: NDArray[np.float64] | Sequence[float]) -> MbackResult:
+        """Fit finite 1D arrays (energy eV, raw absorption), leaving inputs unchanged.
+
+        Copies input buffers and releases the GIL. Returns separate dimensionless
+        norm/flat and matched fpp in electron units. Invalid scientific inputs raise ValueError."""
+        ...
+    def to_json(self) -> str:
+        """Serialize native settings without adding input arrays."""
+        ...
+    @staticmethod
+    def from_json(json: str) -> MBack:
+        """Restore native settings; fit validates scientific values and reference identity."""
+        ...
+
+class MbackResult:
+    """Owned full-MBACK output (unreleased). Arrays are returned as independent copies.
+
+    norm=(scale*mu-pre_curve)/Delta is dimensionless; fpp=scale*mu-background
+    remains in f2 units. flat separately removes the auxiliary post-edge trend.
+    objective uses balanced pre/post sample counts, not inverse measurement
+    variances. Inspect warnings/condition and resolved ranges. No covariance or
+    experimental confidence interval is implied. to_json retains all provenance."""
+    def to_json(self) -> str:
+        """Complete result JSON, including reference identity, settings, weights and curves."""
+        ...
+    @property
+    def definition(self) -> MBack:
+        """Immutable replay definition pinned to the original table.
+
+        Requested automatic E0/ranges remain automatic; explicit settings remain explicit."""
+        ...
+    @property
+    def reference(self) -> AtomicReference:
+        """Independent dictionary with provider, data checksum and table identity."""
+        ...
+    @property
+    def reference_json(self) -> str:
+        """Reference identity JSON, including the actual data checksum."""
+        ...
+    @property
+    def pre_edge(self) -> tuple[float, float]:
+        """Resolved inclusive pre-edge offsets in eV from E0."""
+        ...
+    @property
+    def post_edge(self) -> tuple[float, float]:
+        """Resolved inclusive post-edge offsets in eV from E0."""
+        ...
+    @property
+    def fit_indices(self) -> list[int]:
+        """Original zero-based indices included in the objective."""
+        ...
+    @property
+    def warnings(self) -> list[str]:
+        """Nonfatal boundary/conditioning diagnostics. Empty does not establish physical validity."""
+        ...
+    @property
+    def erfc_width(self) -> float | None:
+        """Positive erfc width in eV, or None when disabled."""
+        ...
+    @property
+    def e0(self) -> float:
+        """Resolved fixed energy origin in eV."""
+        ...
+    @property
+    def edge_step(self) -> float:
+        """Positive fitted absorption step in input mu units."""
+        ...
+    @property
+    def scale(self) -> float:
+        """Positive conversion from input absorption to f2."""
+        ...
+    @property
+    def objective(self) -> float:
+        """Sum of squared region-balanced residuals, in squared f2 units."""
+        ...
+    @property
+    def condition(self) -> float:
+        """Condition number of the column-scaled final Jacobian."""
+        ...
+    @property
+    def rank(self) -> int:
+        """Rank of the final Jacobian, including erfc width when enabled."""
+        ...
+    @property
+    def evaluations(self) -> int:
+        """Number of linear solves used by the fit."""
+        ...
+    @property
+    def erfc_amplitude(self) -> float:
+        """Fitted erfc amplitude in f2 units; zero when disabled."""
+        ...
+    @property
+    def energy_scale(self) -> float:
+        """Polynomial coordinate scale in eV."""
+        ...
+    @property
+    def energy(self) -> NDArray[np.float64]:
+        """Original energy grid in eV. Returns a copy."""
+        ...
+    @property
+    def f2(self) -> NDArray[np.float64]:
+        """Unshifted atomic scattering factor, in electron units. Returns a copy."""
+        ...
+    @property
+    def fpp(self) -> NDArray[np.float64]:
+        """Matched scale*mu-background, in electron units; distinct from norm. Returns a copy."""
+        ...
+    @property
+    def norm(self) -> NDArray[np.float64]:
+        """Dimensionless normalized absorption. Returns a copy."""
+        ...
+    @property
+    def flat(self) -> NDArray[np.float64]:
+        """Dimensionless flattened absorption using the auxiliary post-edge trend. Returns a copy."""
+        ...
+    @property
+    def background(self) -> NDArray[np.float64]:
+        """Fitted smooth background in f2 units. Returns a copy."""
+        ...
+    @property
+    def pre_curve(self) -> NDArray[np.float64]:
+        """Auxiliary pre-edge line on f2+background, in f2 units. Returns a copy."""
+        ...
+    @property
+    def post_curve(self) -> NDArray[np.float64]:
+        """Auxiliary post-edge curve on f2+background, in f2 units. Returns a copy."""
+        ...
+    @property
+    def residual(self) -> NDArray[np.float64]:
+        """Unweighted f2+background-scale*mu on every energy point. Returns a copy."""
+        ...
+    @property
+    def coefficients(self) -> NDArray[np.float64]:
+        """Increasing polynomial powers of (energy-e0)/energy_scale, in f2 units. Returns a copy."""
+        ...
+    @property
+    def weights(self) -> NDArray[np.float64]:
+        """1/sqrt(region sample count), in fit_indices order. Returns a copy."""
+        ...
+
+class AtomicDataIdentity(TypedDict):
+    """Exact offline provider, database version and decoded-data checksum."""
+    provider: str
+    """Named provider/interpolation implementation version."""
+    data_version: str
+    """Upstream database version."""
+    data_sha256: str
+    """SHA-256 of the actual decoded data."""
+
+class AtomicReference(TypedDict):
+    """Exact atomic dataset and numerical table identity."""
+    data: AtomicDataIdentity
+    """Actual loaded dataset identity."""
+    table: Literal["ChantlerF2LogLogV1", "ElamTotalV1", "ElamTransitionsV1"]
+    """Table and interpolation/contribution profile."""

@@ -146,7 +146,7 @@ RangeError for a nonfinite value. Returns this spectrum.
 ## set_normalization_method
 
 ```typescript
-set_normalization_method(method?: PrePostEdge | NormalizationMethod | null): this;
+set_normalization_method(method?: PrePostEdge | MBack | NormalizationMethod | null): this;
 ```
 
 Copy the selected normalization method and clear normalization, background, forward and
@@ -158,6 +158,14 @@ Omitting the argument, undefined or null restores automatic pre/post-edge settin
 retaining the selected E0. These reset forms work in 0.2.4 and later. For custom
 settings, 0.2.4 accepts a NormalizationMethod wrapper; direct PrePostEdge settings
 were added in 0.2.5.
+
+## mback_result
+
+```typescript
+mback_result(): MbackResult | undefined;
+```
+
+Copy the latest full MBACK result, or undefined when absent/invalidated.
 
 ## set_background_method
 

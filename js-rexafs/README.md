@@ -176,7 +176,8 @@ npm pack
 
 The package includes Node/browser Wasm and declarations. Filesystem reading,
 fitting, groups, structure downloads and FEFF execution remain Rust/desktop
-APIs. MBack and ILPBkg are unimplemented placeholders; TrustRegionDogLeg requires
+APIs. ILPBkg remains unimplemented. The unreleased `MBack` API below adds full
+atomic-reference normalization. TrustRegionDogLeg requires
 a native Rust feature absent from Wasm. The recommended LinearDirect/FixedPenalty
 path works in both bindings. See [FFT compatibility](../doc/fft-grid-compatibility.md).
 Licensed under MIT OR Apache-2.0.
@@ -220,3 +221,23 @@ coverage checks. See the [measurement guide](../doc/full-frame-measurements.md)
 for units, optional independent errors and numerical assumptions. This scalar
 operation is separate from the `Measurement` input-file reader. Type declarations
 include options, result fields, completion choices and hover help.
+
+## Full MBACK normalization (unreleased)
+
+```ts
+import { MBack } from "rexafs/node";
+const model = new MBack("Cu", "K", {pre_edge: [-200,-50], post_edge: [100,800]});
+const result = model.fit(energy, mu); // Float64Array inputs: eV and raw absorption
+spectrum.set_normalization_method(model).normalize();
+console.log(result.norm, result.flat);
+model.free();
+```
+
+Ranges are E₀-relative eV. Degree 2 and no erfc are the defaults. Offline atomic
+data load automatically. Results own their arrays; spectrum settings copy the
+model. `spectrum.mback_result()` retrieves its saved result or `undefined` after
+invalidation. `result.definition` creates a model pinned to the original reference;
+free that model after use. Browser callers must await `init()` and should use a
+Worker for large synchronous fits. See the [MBACK guide](../doc/mback-normalization.md)
+for equations, assumptions and optional backgrounds. Atomic-data notices ship
+in the npm package's `licenses/atomic` directory.

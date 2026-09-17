@@ -191,3 +191,22 @@ The [guide](mback-normalization.md) records the objective, auxiliary normalizati
 automatic range policy, solver differences and data attribution. Desktop method
 comparison/history, series/Live, bindings and experimental qualification remain
 open; E–F are not yet implemented.
+
+## D3: simple Python and TypeScript MBACK APIs
+
+Both bindings now expose `MBack("Cu", "K", …)` with named range/settings options,
+`model.fit(energy, mu)` and direct assignment to spectrum normalization. Results
+expose norm/flat/fpp, diagnostics, copied arrays and an immutable replay definition
+pinned to the original atomic identity. Optional `MbackErfc` settings require
+explicit width/amplitude bounds. Missing/invalid identity and ranges fail through
+the same native core. Spectrum recalculation invalidates its cached MBACK result.
+
+Installed Python passes 32 tests and 36 subtests, including atomic-data notice
+packaging. npm passes 32 tests with Node/browser native reference comparisons
+and installed root/Node/browser type/editor checks. Python's installed-wheel
+language-server test verifies constructor options, completion and hover help.
+Strict binding Clippy, eight documentation-generator tests and the website
+check all pass. Next reference pages include the new APIs; stable signatures
+remain those of the release, with the historical no-argument selector documented.
+Computer use inspected the current Normalize layout before the forthcoming
+method-selector/range/preview integration. No GUI MBACK completion is claimed yet.

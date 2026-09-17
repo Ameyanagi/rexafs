@@ -47,7 +47,8 @@
     "configuration.js",
     "measurement.js",
     "peaks.js",
-    "licenses"
+    "licenses",
+    "mback.js"
   ],
   "scripts": {
     "build": "node build.mjs",

@@ -35,7 +35,7 @@ test("default TypeScript commands select native and compatibility compilers", ()
 for (const [entry, resolution] of [["rexafs", "NodeNext"], ["rexafs/node", "NodeNext"], ["rexafs/browser", "Bundler"]]) {
   test(`installed ${entry}: TypeScript 7 checking and editor completion, signatures and hover (${resolution})`, () => {
     const filename = join(directory, `example-${entry.replaceAll("/", "-")}.ts`);
-    let source = `import init, { Spectrum, PeakFit, AUTOBK, PrePostEdge, XrayFFTF, XrayFFTR,
+    let source = `import init, { Spectrum, PeakFit, MBack, MbackErfc, AUTOBK, PrePostEdge, XrayFFTF, XrayFFTR,
       read_measurement, type SpectrumMapping, type FTWindow, type FFTGrid, type AUTOBKSolver, type AUTOBKClampScalePolicy,
       type AUTOBKOptions, type PrePostEdgeOptions, type XrayFFTFOptions, type XrayFFTROptions } from "${entry}";
 await init();
@@ -60,6 +60,16 @@ console.log(sessionText, imaginary);
 const invalidMapping: SpectrumMapping = {energy_column:0,energy:{kind:"bragg"},signal:{kind:"direct",column:1}};
 const energy = new Float64Array([1, 2, 3]);
 const spectrum = new Spectrum(energy, energy);
+const atomic = new MBack("Cu", "K", {pre_edge:[-200,-50], post_edge:[100,800], erfc:new MbackErfc("Ka1", {width:[500,1500],amplitude:[0,10]})});
+const normalized = atomic.fit(new Float64Array([1,2]), new Float64Array([1,2]));
+normalized.norm[0].toFixed();
+normalized.reference.data.data_sha256.toUpperCase();
+normalized.definition.free();
+spectrum.set_normalization_method(atomic).normalize();
+spectrum.mback_result()?.objective.toFixed();
+atomic.free();
+// @ts-expect-error a range needs two numbers
+new MBack("Cu", "K", {pre_edge:5});
 const peak = new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 }).linear_baseline();
 const fit = spectrum.fit_peaks(peak);
 fit.parameters.p1_center.toFixed(3);
@@ -152,6 +162,9 @@ spectrum.chi()[0];
       };
       assert.ok(completion("\nspectrum.").includes("set_ifft"));
       assert.ok(completion("\nspectrum.").includes("fit_peaks"));
+      assert.ok(completion("\nspectrum.").includes("mback_result"));
+      assert.ok(completion('\nnew MBack("Cu", "K", { ').includes("pre_edge"));
+      assert.ok(completion("\nnormalized.").includes("reference"));
       assert.ok(completion('\npeak.gaussian("p", { ').includes("fwhm"));
       assert.ok(completion("\nnew AUTOBK({ ").includes("clamp_lambda"));
       assert.ok(completion('\nnew XrayFFTF({ window: "').includes("KaiserBessel"));

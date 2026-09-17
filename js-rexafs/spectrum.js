@@ -1,3 +1,4 @@
+import { isMBack, mbackDefinition, mbackResult } from "./mback.js";
 import { validate } from "./validate.js";
 import { registerPeakSpectrum, peakDefinition, peakResult } from "./peaks.js";
 
@@ -38,7 +39,7 @@ function scalarMeasurement(operation, coordinates, options = {}) {
  * wrappers for direct settings/defaults and frees only those temporary wrappers.
  * Caller-owned settings and algorithm wrappers are borrowed, never consumed.
  */
-export function bindSpectrum(core, ready = () => true) {
+export function bindSpectrum(core, ready = () => true, MBack) {
   return class Spectrum {
     #inner;
     constructor(energy, mu) {
@@ -66,7 +67,9 @@ export function bindSpectrum(core, ready = () => true) {
       this.#inner.set_e0(e0);
       return this;
     }
+    mback_result() { return mbackResult(this.#inner.mback_result_json(), MBack); }
     set_normalization_method(method) {
+      if (isMBack(method)) { this.#inner.set_mback_json(mbackDefinition(method)); return this; }
       const parameters = method instanceof core.PrePostEdge;
       const selected = parameters ? core.NormalizationMethod.PrePostEdge(method) : method ?? core.NormalizationMethod.new_prepostedge();
       try { this.#inner.set_normalization_method(selected); }

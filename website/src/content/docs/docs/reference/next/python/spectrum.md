@@ -180,7 +180,7 @@ performing normalization or recalibrating the input energy axis.
 ## set_normalization_method
 
 ```python
-set_normalization_method(self, method: PrePostEdge | NormalizationMethod | None=None) -> Spectrum
+set_normalization_method(self, method: PrePostEdge | MBack | NormalizationMethod | None=None) -> Spectrum
 ```
 
 Copy the selected normalization method and clear normalization and later results.
@@ -286,7 +286,17 @@ and flat with its fitted post-edge trend removed. Missing E0 and
 automatic parameters are resolved from the data. Call norm(), flat(),
 pre_edge() and post_edge() to retrieve independent result arrays.
 This recomputes normalization, clears background/Fourier results and
-returns this spectrum. Invalid ranges, failed fits and MBack raise ValueError.
+returns this spectrum. Invalid ranges, missing absorber identity and failed fits raise ValueError.
+
+## mback_result
+
+```python
+mback_result(self) -> MbackResult | None
+```
+
+Copy the latest full MBACK result, or None when absent/invalidated.
+
+Arrays and diagnostics remain independent after further processing.
 
 ## calc_background
 
