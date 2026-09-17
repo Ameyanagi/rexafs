@@ -5980,7 +5980,7 @@ impl StudioApp {
         let in_plot_legend = self.maximized.is_some();
         let mut specs = crate::plotting::quantity_quadrant_specs(
             &traces,
-            &self.view,
+            &self.stage.plot_options(self.view),
             &self.theme,
             in_plot_legend,
             self.processing_plot_quantity(),

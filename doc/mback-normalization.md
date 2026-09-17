@@ -102,6 +102,9 @@ units. This puts the fitted line in the same units as the measured absorption.
 MBACK's auxiliary pre/post curves are not displayed. In a comparison the fit
 belongs to the active spectrum and follows its waterfall display offset.
 Plot/data exports include the fitted line while it is visible.
+Normalization fits appear only in **Normalize**. **Background** uses its own
+**Spline** toggle for AUTOBK. Returning to Normalize restores its fit-toggle
+preference without adding an extra curve to the Background plot.
 
 Changing method preserves the previous successful normalization in an immutable
 local artifact before changing the pipeline. **Compare methods…** retains the

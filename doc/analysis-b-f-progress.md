@@ -22,6 +22,10 @@ whereas **MBACK fit** overlays the complete fitted atomic model in μ(E) units.
 Native checks cover method switching and toggling the fit; the new plotting
 regression checks comparison offsets and hides MBACK's auxiliary baselines.
 The subsequent complete desktop suite passes 609 tests, with 6 ignored.
+The follow-up stage-transition fix keeps normalization fits in Normalize and
+AUTOBK's spline in Background, retaining each toggle when returning to its tab.
+It passes 13 focused regressions and native GUI checks; the screenshot record
+includes Background with only its own spline.
 The review record also documents fixes for the first PR's cross-platform Ru
 reference tolerance and generated API-page drift; CI qualification is separate
 from the local checks.

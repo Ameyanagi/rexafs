@@ -79,6 +79,8 @@ baselines; **MBACK fit** shows the complete fitted atomic model over the
 measured μ(E), without auxiliary pre/post lines. Enabling the toggle selects
 μ(E), so the fitted curve shares the original absorption units. Plot/data
 exports include the fit while visible.
+These fits are limited to Normalize; Background shows only its **Spline**
+overlay. Switching tabs preserves each toggle's preference.
 
 **Unreleased source checkout:** the range icon between **Colors** and **Overview plots**
 in the plot toolbar toggles shaded

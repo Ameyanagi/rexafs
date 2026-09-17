@@ -77,3 +77,28 @@ behavior, and replacement by polynomial baselines. The optimized release build
 passes. This follow-up changes only display behavior, not the MBACK calculation.
 The subsequent complete desktop suite passes **609 tests, with 6 ignored**,
 including both Cu/Ni fitting backends.
+
+## Correction: fit overlays when switching stages
+
+A subsequent user check found two orange curves in Background: the MBACK fit
+had carried over from Normalize and was drawn alongside AUTOBK. The previous
+checks above covered method switching within Normalize but missed this stage
+transition. Plot generation now filters fitted overlays by the active stage,
+without clearing the stored toggle preferences. This also prevents polynomial
+pre/post lines from appearing in Background.
+
+In a separate release-build test window containing the same experimental Cu
+arrays, with Cu/K explicitly selected, native controls verified this sequence:
+enable **MBACK fit**, switch to Background, turn **Spline** off and on, and
+return to Normalize. Background shows one AUTOBK spline when enabled and no
+fitted overlay when disabled. Returning to Normalize restores the full MBACK
+fit. The original user window was left untouched.
+
+![Background with only the AUTOBK spline](background-spline-only.jpg)
+
+The stage-transition regression passes for both polynomial and MBACK spectra,
+including all stage filters, spline-off behavior and return to Normalize.
+The 12 existing plotting tests also pass, as do the release build, formatting
+and the 37-file Astro documentation check. These 13 focused tests qualify the
+follow-up; the earlier 609-test full-suite result remains the preceding build's
+record. Numerical arrays and algorithms are unchanged.
