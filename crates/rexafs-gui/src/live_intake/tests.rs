@@ -6,6 +6,20 @@ fn source(dir: &tempfile::TempDir, name: &str) -> PathBuf {
     fs::write(&path, DATA).unwrap();
     path
 }
+fn rewrite_source(path: &Path, bytes: &[u8]) {
+    let before = Fingerprint::at(path).unwrap();
+    fs::write(path, bytes).unwrap();
+    // These tests advance the observation clock without sleeping. Make the
+    // producer's write time advance as well: same-size writes in one OS clock
+    // tick can otherwise leave the metadata unchanged, especially on Windows.
+    fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(before.modified + Duration::from_secs(2))
+        .unwrap();
+    assert_ne!(Fingerprint::at(path).unwrap(), before);
+}
 fn ready(observation: Observation) -> Snapshot {
     match observation {
         Observation::Ready(value) => value,
@@ -97,7 +111,7 @@ fn partial_writes_reset_quiet_counts_and_malformed_rows_need_review() {
     let now = Instant::now();
     let mut tracker = CompletionTracker::new(Default::default()).unwrap();
     tracker.observe(&path, now);
-    fs::write(&path, b"# energy mu\n7100 0.1\n7101 bad\n7102 0.3\n").unwrap();
+    rewrite_source(&path, b"# energy mu\n7100 0.1\n7101 bad\n7102 0.3\n");
     assert!(matches!(
         tracker.observe(&path, now + Duration::from_secs(1)),
         Observation::Waiting { observed: 1, .. }
@@ -107,7 +121,7 @@ fn partial_writes_reset_quiet_counts_and_malformed_rows_need_review() {
         tracker.observe(&path, now + Duration::from_secs(3)),
         Observation::NeedsReview(_)
     ));
-    fs::write(&path, DATA).unwrap();
+    rewrite_source(&path, DATA);
     quiet_ready(&mut tracker, &path, now + Duration::from_secs(4));
 }
 
@@ -142,7 +156,7 @@ fn producer_digest_requires_the_complete_matching_source_and_valid_structure() {
     );
     tracker.acknowledge(&snapshot).unwrap();
     let damaged = b"# energy mu\n7100 bad\n7101 0.2\n7102 0.3\n";
-    fs::write(&path, damaged).unwrap();
+    rewrite_source(&path, damaged);
     marker(&path, damaged);
     assert!(matches!(
         tracker.observe(&path, now),

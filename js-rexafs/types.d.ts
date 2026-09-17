@@ -1872,9 +1872,9 @@ export interface WaveletOptions {
 /** Checked output dimensions and approximate scientific buffer storage. */
 export interface WaveletSize {
   /** Prepared k columns, including padding. */ k_points: number;
-  /** Positive R rows. */ r_points: number;
-  /** Internal FFT length. */ nfft: number;
-  /** Complex cell count. */ cells: number;
+  /** Number of map rows at strictly positive R coordinates. */ r_points: number;
+  /** Power-of-two length of the internal fast Fourier transform. */ nfft: number;
+  /** Number of complex output cells: R rows multiplied by k columns. */ cells: number;
   /** Estimated bytes, excluding input copies, FFT scratch and serialization. */ bytes: number;
 }
 /**
@@ -2007,7 +2007,7 @@ export class FluorescenceCorrection {
 /** Internal conventional fit of original mu (unreleased), distinct from final
  * normalization. Lists are independent copies on the original energy grid. */
 export interface FluorescenceInternalNormalization {
-  /** Measured E0 in eV. */ e0: number;
+  /** Edge energy E0 used by the internal normalization, in electronvolts. */ e0: number;
   /** Resolved pre-edge eV offsets from E0. */ pre_edge: [number, number];
   /** Resolved post-edge eV offsets from E0. */ post_edge: [number, number];
   /** Internal post-edge polynomial degree; pre-edge is linear. */ degree: number;

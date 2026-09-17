@@ -107,3 +107,25 @@ field. The ranges now use code formatting; the width has field-level unit and
 constraint documentation. The strict `cargo doc` build passes with the website's
 core feature set, `-D missing-docs` and `-D rustdoc::broken-intra-doc-links`.
 These are documentation-only corrections.
+
+## Follow-up from Windows readiness and website content checks
+
+At `e751ff6`, core checks, both numerical benchmark jobs, Python/npm checks,
+and macOS/Linux desktop jobs passed. Both Windows desktop jobs failed Live
+readiness tests that immediately rewrote equal-length files and assumed that
+their filesystem modification times had advanced. The tests advanced their
+observation clock explicitly but left the file clock dependent on execution
+timing. The fixture rewrite helper now advances the modification time explicitly
+and asserts that the file fingerprint changed. All original readiness and
+malformed-row assertions remain; production readiness logic is unchanged.
+All ten Live readiness tests pass locally. Windows confirmation requires a new
+CI run.
+
+The website job passed strict Rust documentation generation, then rejected four
+TypeScript member descriptions that were below its minimum explanation length.
+The source declarations now explain the internal edge energy, positive-R row
+count, Fourier-transform length and complex map cell count. The Next reference
+pages were regenerated from those declarations. A fresh website build at the
+deployment base (`https://rexafs.com/`) and all 22 website tests pass, including
+the API-member and internal-link checks. All eight generator tests, Rust
+formatting and patch whitespace checks also pass locally.

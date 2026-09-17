@@ -27,7 +27,7 @@ Prepared k columns, including padding.
 r_points: number;
 ```
 
-Positive R rows.
+Number of map rows at strictly positive R coordinates.
 
 ## nfft
 
@@ -35,7 +35,7 @@ Positive R rows.
 nfft: number;
 ```
 
-Internal FFT length.
+Power-of-two length of the internal fast Fourier transform.
 
 ## cells
 
@@ -43,7 +43,7 @@ Internal FFT length.
 cells: number;
 ```
 
-Complex cell count.
+Number of complex output cells: R rows multiplied by k columns.
 
 ## bytes
 

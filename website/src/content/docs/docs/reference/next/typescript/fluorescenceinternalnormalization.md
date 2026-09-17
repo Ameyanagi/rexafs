@@ -20,7 +20,7 @@ normalization. Lists are independent copies on the original energy grid.
 e0: number;
 ```
 
-Measured E0 in eV.
+Edge energy E0 used by the internal normalization, in electronvolts.
 
 ## pre_edge
 
