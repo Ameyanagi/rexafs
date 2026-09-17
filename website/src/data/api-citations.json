@@ -91,6 +91,12 @@
     ]
   },
   {
+    "url": "https://doi.org/10.1080/08927028808080958",
+    "sources": [
+      "crates/rexafs/src/xafs/rmc/mod.rs"
+    ]
+  },
+  {
     "url": "https://doi.org/10.1103/PhysRevB.47.14126",
     "sources": [
       "py-rexafs/python/rexafs/__init__.pyi",
@@ -120,6 +126,7 @@
       "crates/rexafs/src/lib.rs",
       "crates/rexafs/src/xafs/fitting/mod.rs",
       "crates/rexafs/src/xafs/fitting/path_model.rs",
+      "crates/rexafs/src/xafs/rmc/mod.rs",
       "crates/rexafs/src/xafs/structure/pathrank.rs",
       "crates/rexafs/src/xafs/xrayfft.rs",
       "crates/rexafs/src/xafs/xrayfft_ndarray.rs"
@@ -338,6 +345,12 @@
     "url": "https://www.nist.gov/pml/nist-technical-note-1297/nist-tn-1297-appendix-law-propagation-uncertainty",
     "sources": [
       "crates/rexafs/src/xafs/analysis/metrics/uncertainty.rs"
+    ]
+  },
+  {
+    "url": "https://xraypy.github.io/xraylarch/xafs_autobk.html",
+    "sources": [
+      "crates/rexafs/src/xafs/rmc/spectrum.rs"
     ]
   },
   {
