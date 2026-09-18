@@ -120,6 +120,7 @@ impl StudioApp {
             div().id("chrome-menu-body"),
             match menu {
                 Menu::Project => "Project",
+                Menu::FitMode => "Fit mode",
                 Menu::Save => "Save project",
                 Menu::Plot => "Plot options",
                 Menu::Colors => "Spectrum colors",
@@ -306,6 +307,7 @@ impl StudioApp {
                     );
                 body
             }
+            Menu::FitMode => body.child(self.fit_mode_menu(cx)),
             Menu::Plot => body.child(self.plot_options(cx)),
             Menu::Colors => body.child(self.spectrum_colors_menu(cx)),
             Menu::Groups => body

@@ -48,6 +48,7 @@ pub(crate) mod path_routing;
 pub(crate) mod peaks;
 pub(crate) mod plot_export;
 pub(crate) mod publish;
+pub(crate) mod rmc;
 pub mod series;
 mod spectrum_colors;
 pub mod stage_strip;

@@ -89,6 +89,11 @@ pub enum FieldEvent {
 
 impl EventEmitter<FieldEvent> for NumericField {}
 
+/// Opt-in notification for lightweight previews while typing. Committed values
+/// and existing processing subscribers are unchanged; read `pending_value`.
+pub(crate) struct FieldPreview;
+impl EventEmitter<FieldPreview> for NumericField {}
+
 fn format_value(value: Option<f64>, decimals: Option<usize>) -> String {
     value
         .map(|v| match decimals {
@@ -138,6 +143,7 @@ impl NumericField {
                 InputEvent::Edited(_) => {
                     // typing resumed — stop flashing a previous rejection
                     input.update(cx, |i, cx| i.set_error(false, cx));
+                    cx.emit(FieldPreview);
                     return;
                 }
                 InputEvent::Step(direction) => {

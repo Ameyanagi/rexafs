@@ -27,6 +27,7 @@ mod plot_export;
 mod plotting;
 mod project;
 mod publication;
+mod rmc_fitting;
 mod series_measurements;
 // Live intake is not connected to the desktop until queue/recovery qualification.
 mod analysis_store;

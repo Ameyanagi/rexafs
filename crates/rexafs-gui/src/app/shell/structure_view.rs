@@ -1211,6 +1211,11 @@ impl StudioApp {
     }
 
     pub(crate) fn structure_generate_paths(&mut self, cx: &mut Context<Self>) {
+        if self.rmc.control.is_some() {
+            self.status = "Stop and save the active RMC run before calculating paths.".into();
+            cx.notify();
+            return;
+        }
         if self.feff_running {
             return;
         }
@@ -2541,9 +2546,16 @@ impl StudioApp {
                     .summary
                     .as_ref()
                     .is_some_and(|s| s.hit.id == hit.id && s.hit.source == hit.source);
-                list = list.child(
-                    div()
-                        .id(("st-hit", i))
+                list =
+                    list.child(
+                        crate::accessibility::Control::new(
+                            div().id(("st-hit", i)),
+                            format!("{} · {}", hit.formula, hit.name),
+                            accesskit::Role::Button,
+                        )
+                        .selected(chosen)
+                        .tab_index(0)
+                        .key_context("Control")
                         .h(px(46.))
                         .border_b_1()
                         .border_color(t.border)
@@ -2557,6 +2569,7 @@ impl StudioApp {
                             d.bg(t.raised).border_l_2().border_color(t.accent)
                         })
                         .hover(|d| d.bg(t.raised))
+                        .focus(|d| d.bg(t.raised).border_color(t.accent))
                         .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
                             this.structure_choose(i, cx)
                         }))
@@ -2597,7 +2610,7 @@ impl StudioApp {
                                 .text_color(t.text_muted)
                                 .child(hit.source.badge()),
                         ),
-                );
+                    );
             }
             let count = if st.source == StructureSourceKind::Cod
                 && shown == crate::structure::SEARCH_RESULT_LIMIT

@@ -179,3 +179,82 @@ fn reported_path_fourier_and_local_maps_add_as_complex_contributions() {
         assert!((*a + *b - *s).norm() < 1e-10);
     }
 }
+
+#[test]
+fn shared_transform_preserves_legacy_api_values_and_errors() {
+    let k: Vec<_> = (0..80).map(|i| 2. + i as f64 * 0.1).collect();
+    let values: Vec<_> = k.iter().map(|q| (4. * q).sin()).collect();
+    let settings =
+        rexafs::transform::LocalSpectrumSettings::morlet(rexafs::transform::WaveletSettings {
+            k_centers: k.clone(),
+            r: vec![1., 2., 3.],
+            omega0: 6.,
+        });
+    let shared = rexafs::transform::LocalSpectrumTransform::new(&k, &settings).unwrap();
+    let legacy = LocalSpectrumTransform::new(&k, &settings).unwrap();
+    assert_eq!(
+        shared.transform(&values).unwrap(),
+        legacy.transform(&values).unwrap()
+    );
+    assert_eq!(shared.uses_fft(), legacy.uses_fft());
+    assert!(matches!(
+        shared.transform(&[]),
+        Err(rexafs::transform::TransformError::Invalid(_))
+    ));
+    assert!(matches!(legacy.transform(&[]), Err(RmcError::Invalid(_))));
+    let encoded = serde_json::to_vec(&settings).unwrap();
+    let legacy_settings: LocalSpectrumSettings = serde_json::from_slice(&encoded).unwrap();
+    assert_eq!(legacy_settings, settings);
+}
+
+#[test]
+fn displayed_fourier_residual_matches_rmc_on_offset_irregular_grid() {
+    let k: Vec<_> = (0..181)
+        .map(|i| 2.03 + 0.05 * i as f64 + 0.002 * (i as f64).sin())
+        .collect();
+    let chi: Vec<_> = k.iter().map(|q| (4. * q).sin() / q.powi(2)).collect();
+    let model: Vec<_> = k
+        .iter()
+        .map(|q| 0.8 * (4.1 * q).sin() / q.powi(2))
+        .collect();
+    let transform = rexafs::fitting::FeffFitTransform {
+        kmin: 4.,
+        kmax: 9.,
+        rmin: 1.2,
+        rmax: 4.,
+        kstep: Some(0.05),
+        ..Default::default()
+    };
+    for weight in 0..=3 {
+        let a = transform_spectrum_fourier(&k, &chi, weight, &transform).unwrap();
+        let b = transform_spectrum_fourier(&k, &model, weight, &transform).unwrap();
+        let data = ExafsDataset {
+            name: "offset measured grid".into(),
+            absorbers: vec![0],
+            edge: Edge::K,
+            k: k.clone(),
+            chi: chi.clone(),
+            sigma: vec![1.; k.len()],
+            weight: 1.,
+            kweight: weight,
+            s02: 1.,
+            delta_e0: 0.,
+        };
+        let score = Objective::R(transform.clone())
+            .score(&data, &model)
+            .unwrap();
+        let from_curves = a
+            .r_space
+            .mask_indices
+            .iter()
+            .map(|&i| (a.r_space.chir[i] - b.r_space.chir[i]).norm_sqr())
+            .sum::<f64>()
+            / a.r_space.mask_indices.len() as f64;
+        assert!(
+            (score - from_curves).abs() < 1e-12 * score.max(1.),
+            "weight {weight}: {score} vs {from_curves}"
+        );
+    }
+    assert!(transform_spectrum_fourier(&k, &chi[..5], 2, &transform).is_err());
+    assert!(transform_spectrum_fourier(&k, &chi, 4, &transform).is_err());
+}

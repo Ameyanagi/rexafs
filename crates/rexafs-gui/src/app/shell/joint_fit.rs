@@ -269,6 +269,9 @@ impl StudioApp {
         cx.notify();
     }
     pub(crate) fn joint_blocker(&self) -> Option<&'static str> {
+        if self.rmc.control.is_some() {
+            return Some("Stop and save the active RMC run before starting a joint fit.");
+        }
         if self
             .joint
             .config

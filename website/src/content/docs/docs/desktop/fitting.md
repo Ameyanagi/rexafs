@@ -71,3 +71,32 @@ Save the project to retain the model/history, and use
 [publication exports](/docs/desktop/publication/) to preserve data and methods.
 For shared variables across spectra, continue with
 [multiple-spectrum fitting](/docs/desktop/multiple-spectra/).
+
+
+## Development preview: RMC fitting mode
+
+The unreleased desktop adds **Fit mode: RMC** at the upper right of Fitting.
+Choose a structure, edit its supercell with a live 3D preview, inspect the initial exact ReFEFF
+calculation and run coordinate refinement against the processed spectrum.
+The initial objective is R real plus imaginary, with R minimum at or above
+the saved AUTOBK Rbkg. Adaptive scattering remains experimental and is not
+exposed by these controls.
+
+Results update during a run with initial/best curves, coordinates, residual
+history and calculation statistics. Pause retains a warm calculator; Stop and
+save or an automatic checkpoint supports later resume. **Recover latest run**
+loads the most recent durable checkpoint after reopening the application.
+Resume uses its original inputs and random-number state. Wait for Pause or
+Stop and save to finish before closing if the latest state is needed; an
+unexpected exit can lose moves since the previous checkpoint.
+
+The current desktop supports one spectrum and one structure. Hybrid EA and
+mixture controls are later additions. Reaching a step limit does not establish
+convergence: the display separately reports the shared residual-trend criterion.
+These controls are not part of the released 0.2.9 packages.
+
+The builder updates after a short typing delay without running scattering.
+Invalid edits keep the last valid preview and block a new calculation. Suggested
+cell size uses the cluster radius and displacement margin; starting fit ranges
+respect measured k coverage and begin 0.15 Å above the spectrum's saved Rbkg.
+These are editable starting values, not a claim of structural convergence.

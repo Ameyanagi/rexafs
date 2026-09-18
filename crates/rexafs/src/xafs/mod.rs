@@ -62,6 +62,7 @@ pub mod rmc;
 pub(crate) mod spline;
 pub mod structure;
 pub mod tools;
+pub mod transform;
 pub mod wavelet;
 #[cfg(feature = "ndarray-compat")]
 #[path = "xafsutils_ndarray.rs"]

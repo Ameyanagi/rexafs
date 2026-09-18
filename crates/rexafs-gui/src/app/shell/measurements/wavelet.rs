@@ -73,9 +73,12 @@ impl StudioApp {
                     cx,
                 )
             });
-            cx.subscribe(&f, |app, _, _, cx| {
-                app.update_wavelet_trend_region(cx);
-            })
+            cx.subscribe(
+                &f,
+                |app, _, _: &crate::widgets::numeric_field::FieldEvent, cx| {
+                    app.update_wavelet_trend_region(cx);
+                },
+            )
             .detach();
             self.measurements.wavelet_fields.push(f);
         }

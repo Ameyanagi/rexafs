@@ -1283,6 +1283,8 @@ pub struct StudioApp {
     fit_history: Vec<FitHistoryEntry>,
     joint: shell::joint_fit::JointState,
     fit_preview: shell::fit_preview::FitPreviewState,
+    fit_mode: crate::rmc_fitting::FitMode,
+    rmc: shell::rmc::RmcState,
     fit_history_results: BTreeMap<usize, Arc<FeffFitResult>>,
     fit_history_selected: Option<usize>,
     fit_result: Option<Arc<FeffFitResult>>,
@@ -3122,6 +3124,8 @@ impl StudioApp {
             fit_history: Vec::new(),
             joint: Default::default(),
             fit_preview: Default::default(),
+            fit_mode: Default::default(),
+            rmc: Default::default(),
             fit_history_results: BTreeMap::new(),
             fit_history_selected: None,
             fit_result: None,
@@ -6133,6 +6137,7 @@ impl StudioApp {
         self.rebuild_operando_plots(cx);
         self.rebuild_fit_plots(cx);
         self.rebuild_fit_preview_plots(cx, false);
+        self.restyle_rmc(cx);
         cx.notify();
     }
 
@@ -8442,6 +8447,11 @@ impl StudioApp {
 
     /// Run FEFF10 on the workspace's feff.inp and import the generated paths.
     pub(crate) fn run_feff10_now(&mut self, cx: &mut Context<Self>) {
+        if self.rmc.control.is_some() {
+            self.status = "Stop and save the active RMC run before calculating paths.".into();
+            cx.notify();
+            return;
+        }
         if self.feff_running {
             return;
         }
@@ -8617,6 +8627,8 @@ impl StudioApp {
             fit_paths: self.fit_paths.iter().map(|r| r.spec.clone()).collect(),
             fit_vars: self.fit_vars.iter().map(|v| v.spec.clone()).collect(),
             fit_ranges: self.fit_ranges.clone(),
+            fit_mode: self.fit_mode,
+            rmc: self.rmc.project.clone(),
             feff_workspace: self.feff_workspace.clone(),
             derived: self.derived.clone(),
             active_derived: self
@@ -8993,6 +9005,17 @@ impl StudioApp {
             }
         }
         self.fit_ranges = project.fit_ranges;
+        self.fit_mode = project.fit_mode;
+        self.rmc = shell::rmc::RmcState::from_project(project.rmc);
+        if let Some(saved) = &self.rmc.project.saved {
+            self.rmc.request = Some(saved.request.clone());
+            self.rmc.live = Some(saved.progress.clone());
+            self.rmc.phase = "Saved run · ready to resume".into();
+            if self.fit_mode == crate::rmc_fitting::FitMode::Rmc {
+                self.stage_view.fit_step = shell::fit_workspace::FitStep::Results;
+            }
+        }
+        self.restore_rmc_plots(cx);
         self.fit_history = project.fit_history;
         self.joint = shell::joint_fit::JointState {
             config: project.joint,

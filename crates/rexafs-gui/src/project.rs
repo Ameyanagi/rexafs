@@ -122,6 +122,8 @@ pub struct ProjectFile {
     pub fit_paths: Vec<FitPathSpec>,
     pub fit_vars: Vec<FitVarSpec>,
     pub fit_ranges: FitRanges,
+    pub fit_mode: crate::rmc_fitting::FitMode,
+    pub rmc: crate::rmc_fitting::Project,
     pub feff_workspace: Option<PathBuf>,
     pub derived: Vec<DerivedSpectrum>,
     pub active_derived: Option<u64>,
