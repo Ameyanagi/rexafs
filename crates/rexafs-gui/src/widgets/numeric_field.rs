@@ -63,6 +63,7 @@ pub struct NumericField {
     /// extinguishes a newer error.
     error_epoch: u64,
     mixed: bool,
+    display_decimals: Option<usize>,
 }
 
 /// "pre-edge start (eV)" → ("pre-edge start", "eV").
@@ -88,8 +89,33 @@ pub enum FieldEvent {
 
 impl EventEmitter<FieldEvent> for NumericField {}
 
-fn format_value(value: Option<f64>) -> String {
-    value.map(|v| format!("{v}")).unwrap_or_default()
+/// Opt-in notification for lightweight previews while typing. Committed values
+/// and existing processing subscribers are unchanged; read `pending_value`.
+pub(crate) struct FieldPreview;
+impl EventEmitter<FieldPreview> for NumericField {}
+
+fn format_value(value: Option<f64>, decimals: Option<usize>) -> String {
+    value
+        .map(|v| match decimals {
+            Some(d) => format!("{v:.d$}"),
+            None => format!("{v}"),
+        })
+        .unwrap_or_default()
+}
+
+fn parse_displayed(
+    text: &str,
+    value: Option<f64>,
+    kind: FieldKind,
+    decimals: Option<usize>,
+) -> Result<Option<f64>, ()> {
+    // Focusing and submitting an unchanged rounded display must not alter the
+    // calculation. Newly entered text still uses the full numeric parser.
+    if decimals.is_some() && text.trim() == format_value(value, decimals) {
+        Ok(value)
+    } else {
+        parse_commit(text, kind)
+    }
 }
 
 impl NumericField {
@@ -102,12 +128,14 @@ impl NumericField {
         cx: &mut Context<Self>,
     ) -> Self {
         let input = cx.new(|cx| {
-            TextInput::new(placeholder, format_value(value), theme, cx).with_style(InputStyle {
-                align_right: true,
-                mono: true,
-                placeholder_accent: true,
-                ..Default::default()
-            })
+            TextInput::new(placeholder, format_value(value, None), theme, cx).with_style(
+                InputStyle {
+                    align_right: true,
+                    mono: true,
+                    placeholder_accent: true,
+                    ..Default::default()
+                },
+            )
         });
         cx.subscribe(&input, |this: &mut Self, input, event, cx| {
             let text = match event {
@@ -115,6 +143,7 @@ impl NumericField {
                 InputEvent::Edited(_) => {
                     // typing resumed — stop flashing a previous rejection
                     input.update(cx, |i, cx| i.set_error(false, cx));
+                    cx.emit(FieldPreview);
                     return;
                 }
                 InputEvent::Step(direction) => {
@@ -122,12 +151,12 @@ impl NumericField {
                     return;
                 }
             };
-            match parse_commit(text, this.kind) {
+            match parse_displayed(text, this.value, this.kind, this.display_decimals) {
                 Ok(value) => {
                     input.update(cx, |i, cx| {
                         i.set_error(false, cx);
                         // normalized display (e.g. "2.7" -> "3" for integers)
-                        i.set_text(format_value(value), cx);
+                        i.set_text(format_value(value, this.display_decimals), cx);
                     });
                     if value != this.value {
                         this.value = value;
@@ -144,7 +173,7 @@ impl NumericField {
                     let value = this.value;
                     input.update(cx, |i, cx| {
                         i.set_error(true, cx);
-                        i.set_text(format_value(value), cx);
+                        i.set_text(format_value(value, this.display_decimals), cx);
                     });
                     this.error_epoch += 1;
                     let epoch = this.error_epoch;
@@ -181,12 +210,21 @@ impl NumericField {
             },
             error_epoch: 0,
             mixed: false,
+            display_decimals: None,
         }
     }
 
     /// Increment used by the steppers and ↑/↓.
     pub fn with_step(mut self, step: f64) -> Self {
         self.step = step;
+        self
+    }
+
+    /// Round only the visible text. Unedited submissions preserve the full
+    /// stored value; newly entered numbers retain their entered precision.
+    pub fn with_display_decimals(mut self, decimals: usize, cx: &mut Context<Self>) -> Self {
+        self.display_decimals = Some(decimals);
+        self.set_value(self.value, cx);
         self
     }
 
@@ -247,11 +285,24 @@ impl NumericField {
         self.value
     }
 
+    /// Validate the visible text before a submit button removes the field.
+    /// Uses the same integer rounding and bounds as Enter, without committing
+    /// or emitting events. Invalid text is an error, never the previous value.
+    pub(crate) fn pending_value(&self, cx: &gpui::App) -> Result<Option<f64>, ()> {
+        parse_displayed(
+            self.input.read(cx).text(),
+            self.value,
+            self.kind,
+            self.display_decimals,
+        )
+    }
+
     /// Programmatically set value (None = auto/empty); does not emit.
     pub fn set_value(&mut self, value: Option<f64>, cx: &mut Context<Self>) {
         self.value = value;
-        self.input
-            .update(cx, |i, cx| i.set_text(format_value(value), cx));
+        self.input.update(cx, |i, cx| {
+            i.set_text(format_value(value, self.display_decimals), cx)
+        });
         cx.notify();
     }
 }
@@ -365,6 +416,25 @@ impl Render for NumericField {
 #[cfg(test)]
 mod tests {
     use super::{FieldKind, parse_commit};
+
+    #[test]
+    fn rounded_display_does_not_round_the_calculation_on_submit() {
+        let value = Some(3.485252958794127);
+        assert_eq!(super::format_value(value, Some(2)), "3.49");
+        assert_eq!(
+            super::parse_displayed("3.49", value, FieldKind::Float, Some(2)),
+            Ok(value)
+        );
+        assert_eq!(
+            super::parse_displayed("0", value, FieldKind::Float, Some(2)),
+            Ok(Some(0.0))
+        );
+        assert_eq!(
+            super::parse_displayed("3.4856", value, FieldKind::Float, Some(2)),
+            Ok(Some(3.4856))
+        );
+        assert!(super::parse_displayed("NaN", value, FieldKind::Float, Some(2)).is_err());
+    }
 
     #[test]
     fn unit_is_split_from_label() {

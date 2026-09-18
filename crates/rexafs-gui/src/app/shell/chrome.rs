@@ -21,6 +21,9 @@ impl StudioApp {
         if menu == Menu::Colors {
             self.sync_spectrum_colors_menu();
         }
+        if menu == Menu::SkipImports {
+            self.ui.pending_skip = self.intake.pending_targets();
+        }
         self.ui.return_focus = window.focused(cx);
         self.ui.menu_position = event.position();
         self.ui.menu = Some(menu);
@@ -117,13 +120,17 @@ impl StudioApp {
             div().id("chrome-menu-body"),
             match menu {
                 Menu::Project => "Project",
+                Menu::FitMode => "Fit mode",
                 Menu::Save => "Save project",
                 Menu::Plot => "Plot options",
                 Menu::Colors => "Spectrum colors",
                 Menu::Groups => "Groups",
                 Menu::Structure => "Structure appearance",
+                Menu::StructureSource => "Structure source",
+                Menu::ExportPlot => "Export plot",
                 Menu::Merge => "Merge preview",
                 Menu::RemoveMarked => "Remove marked groups",
+                Menu::SkipImports => "Skip pending imports",
             },
             accesskit::Role::Dialog,
         )
@@ -300,6 +307,7 @@ impl StudioApp {
                     );
                 body
             }
+            Menu::FitMode => body.child(self.fit_mode_menu(cx)),
             Menu::Plot => body.child(self.plot_options(cx)),
             Menu::Colors => body.child(self.spectrum_colors_menu(cx)),
             Menu::Groups => body
@@ -403,8 +411,11 @@ impl StudioApp {
                     ),
                 ),
             Menu::Structure => body.child(self.structure_display_menu(cx)),
+            Menu::StructureSource => body.child(self.structure_source_menu(cx)),
+            Menu::ExportPlot => body.child(self.plot_export_menu(cx)),
             Menu::Merge => body.child(self.merge_review_panel(cx)),
             Menu::RemoveMarked => body.child(self.marked_removal_panel(cx)),
+            Menu::SkipImports => body.child(self.pending_skip_menu(cx)),
         };
         let center = matches!(menu, Menu::Save | Menu::Merge | Menu::RemoveMarked);
         let width = if menu == Menu::Merge {

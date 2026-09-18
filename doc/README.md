@@ -20,6 +20,15 @@ Start with the [project README](../README.md), [API guide](api.md),
   AUTOBK, Fourier transforms and filtering, with equations and references.
 - [Fitting statistics](fitting-statistics.md): residuals, information counts,
   covariance, standard errors and interpretation limits.
+- [Experimental RMC with ReFEFF](rmc.md): unreleased atomic-coordinate refinement,
+  Rust examples, resumable mixtures, evolutionary search and scientific limitations;
+  [measured acceleration and validation](rmc-performance.md),
+  [prepared paths and current Rust additions](rmc-acceleration.md),
+  [hybrid search and adaptive basis stages](rmc-search-upgrade.md),
+  [auditing and exact fallback](rmc-adaptive-audits.md),
+  [Spectrum input and preprocessing snapshots](rmc-spectrum-input.md),
+  [Cu₂O adaptive qualification](rmc-cu2o-adaptive-qualification.md), and an
+  [experimental Cu₂O example with k/R plots](rmc-cu2o-demo.md).
 - [Fixed-penalty AUTOBK](autobk-fixed-penalty.md): the rexafs-specific objective.
 - [Contributor documentation baseline](../CONTRIBUTING.md): requirements for
   clear English, defined symbols/units, verified citations and useful API help.

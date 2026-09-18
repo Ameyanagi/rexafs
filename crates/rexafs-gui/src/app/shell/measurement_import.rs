@@ -10,6 +10,7 @@ use base64::Engine as _;
 use rexafs::io::{EnergyConversion, Measurement, SignalConversion, SpectrumMapping};
 use std::{io::Read, path::PathBuf, sync::Arc};
 
+mod batch;
 mod scan_choices;
 use scan_choices::ScanChoice;
 
@@ -17,6 +18,8 @@ use scan_choices::ScanChoice;
 #[derive(Clone)]
 pub(crate) struct MeasurementImport {
     pub path: PathBuf,
+    pub batch: Option<Arc<batch::BatchReview>>,
+    pub apply_to_batch: bool,
     original_bytes: Arc<Vec<u8>>,
     pub document: Arc<Measurement>,
     pub scan: usize,
@@ -50,6 +53,8 @@ impl MeasurementImport {
         let count = document.scans.len();
         let mut source = Self {
             path,
+            batch: None,
+            apply_to_batch: false,
             original_bytes: Arc::new(bytes),
             document: Arc::new(document),
             scan: usize::MAX,
@@ -443,6 +448,32 @@ impl StudioApp {
         remember: bool,
         cx: &mut Context<Self>,
     ) {
+        self.open_measurement_batch(path, remember, None, cx);
+    }
+
+    pub(crate) fn open_measurement_batch(
+        &mut self,
+        path: PathBuf,
+        remember: bool,
+        batch: Option<usize>,
+        cx: &mut Context<Self>,
+    ) {
+        let peers = batch
+            .and_then(|id| self.intake.history.get(id))
+            .map(|batch| {
+                batch
+                    .sources
+                    .iter()
+                    .filter(|(_, outcome)| {
+                        outcome
+                            .pending
+                            .as_ref()
+                            .is_some_and(|pending| pending.measurement_reader)
+                    })
+                    .map(|(path, _)| path.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
         self.measurement_request += 1;
         let request = self.measurement_request;
         let generation = self.project_generation;
@@ -451,14 +482,21 @@ impl StudioApp {
         cx.spawn(async move |this, cx| {
             let source = path.clone();
             let result = cx
-                .background_spawn(async move { read_source(&source) })
+                .background_spawn(async move {
+                    let (document, bytes) = read_source(&source)?;
+                    let mut source = MeasurementImport::new(source, document, bytes);
+                    if let Some(id) = batch {
+                        source.review_batch(id, peers);
+                    }
+                    Ok::<_, String>(source)
+                })
                 .await;
             this.update(cx, |app, cx| {
                 if app.measurement_request != request || app.project_generation != generation {
                     return;
                 }
                 match result {
-                    Ok((document, original_bytes)) => {
+                    Ok(source) => {
                         if remember
                             && let Ok(absolute) = path.canonicalize()
                             && let Some(parent) = absolute.parent()
@@ -470,8 +508,7 @@ impl StudioApp {
                             );
                             app.persist_recent_locations();
                         }
-                        app.measurement_import =
-                            Some(MeasurementImport::new(path, document, original_bytes));
+                        app.measurement_import = Some(source);
                         app.status = "Review import".into();
                     }
                     Err(error) => {
@@ -490,11 +527,31 @@ impl StudioApp {
     pub(crate) fn accept_measurements(
         &mut self,
         groups: Vec<DerivedSpectrum>,
+        batch: Option<usize>,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Result<(), String> {
         let count = groups.len();
         if count == 0 {
-            return;
+            return Ok(());
+        }
+        if let Some(batch) = batch {
+            let paths: Vec<PathBuf> = groups
+                .iter()
+                .filter_map(|group| {
+                    group
+                        .operation
+                        .as_ref()?
+                        .parameters
+                        .get("source_path")
+                        .and_then(|value| serde_json::from_value(value.clone()).ok())
+                })
+                .collect();
+            if paths.len() != count || !self.intake.measurement_review_is_current(batch, &paths) {
+                return Err(
+                    "The pending files changed or were skipped; reopen the remaining import."
+                        .into(),
+                );
+            }
         }
         let first = self.derived.len();
         let mut ids = std::collections::BTreeSet::new();
@@ -519,7 +576,7 @@ impl StudioApp {
             );
             self.derived.push(group);
         }
-        for batch in &mut self.intake.history {
+        if let Some(batch) = batch.and_then(|id| self.intake.history.get_mut(id)) {
             for (path, created) in &imported_sources {
                 if let Some(source) = batch.sources.get_mut(path)
                     && source
@@ -546,6 +603,7 @@ impl StudioApp {
         )
         .into();
         cx.notify();
+        Ok(())
     }
 }
 
@@ -592,6 +650,7 @@ fn materialize(
             path.file_name().unwrap_or_default().to_string_lossy(),
             scan.label
         ),
+        absorption_mode: spectrum.absorption_mode(),
         energy: spectrum.energy.unwrap().as_slice().to_vec(),
         mu: spectrum.mu.unwrap().as_slice().to_vec(),
         group_id: Some(crate::group_identity::GroupId::new_result()),

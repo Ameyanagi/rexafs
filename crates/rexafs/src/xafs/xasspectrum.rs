@@ -80,7 +80,8 @@ pub struct XASSpectrum {
     pub xftf: Option<xrayfft::XrayFFTF>,
     /// Inverse-transform settings and outputs; `None` selects [`xrayfft::XrayFFTR::default`].
     pub xftr: Option<xrayfft::XrayFFTR>,
-    /// Accumulated energy shift (eV) applied by `shift_energy`/`calibrate`/`align_to`.
+    /// Accumulated energy correction in eV. Prefer [`Self::energy_offset`] and
+    /// [`Self::set_energy_offset`]; assigning this legacy field does not move arrays.
     pub energy_shift: f64,
     /// Per-point spread stored by merge/rebin, in input absorption units.
     /// Other data edits do not consistently propagate, resize or clear this field;
@@ -103,9 +104,97 @@ pub struct XASSpectrum {
     /// Explicit pre/post-edge fitting of prepared input. False preserves its
     /// values and unit step; true is selected by `set_normalization_method`.
     refit_prepared: bool,
+    /// Acquisition interpretation, populated for explicit transmission imports.
+    /// Unknown remains distinct from fluorescence and electron-yield detector ratios.
+    #[serde(skip_serializing_if = "super::fluorescence::AbsorptionMode::is_unknown")]
+    absorption_mode: super::fluorescence::AbsorptionMode,
+    /// Immutable history of a thick-sample XANES correction; survives normalization
+    /// and data edits, blocks repeated correction and unqualified EXAFS processing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fluorescence_correction: Option<Box<super::fluorescence::FluorescenceCorrectionResult>>,
+    /// Inherited scientific domain restriction, independent of direct correction history.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    xanes_only: bool,
 }
 
 impl XASSpectrum {
+    /// Acquisition interpretation attached to these arrays. Unknown means missing
+    /// evidence, not an automatically selected fluorescence mode.
+    pub fn absorption_mode(&self) -> super::fluorescence::AbsorptionMode {
+        self.absorption_mode
+    }
+
+    /// Explicitly attach or revise the acquisition interpretation. Does not change
+    /// arrays or processing caches. A correction record remains attached; changing
+    /// this declaration cannot enable repeated correction or unqualified EXAFS.
+    pub fn set_absorption_mode(&mut self, mode: super::fluorescence::AbsorptionMode) -> &mut Self {
+        self.absorption_mode = mode;
+        self
+    }
+
+    /// Correct fluorescence over-absorption into an independent, unnormalized spectrum.
+    ///
+    /// Internal conventional normalization runs automatically; the original spectrum
+    /// stays unchanged. Calling this method on Unknown input explicitly interprets it
+    /// as fluorescence and records that assumption. Known transmission, prepared
+    /// norm/flat input and already corrected spectra are rejected. Select measured
+    /// geometry and emission in `settings`; no angle or sample formula is inferred.
+    /// The output retains original arrays and atomic/internal-fit provenance through
+    /// [`Self::fluorescence_correction`]. Call `normalize()` to run the independent
+    /// final normalization (polynomial by default; MBACK can be selected normally).
+    /// Corrected-array uncertainties are unavailable. This XANES-only branch cannot
+    /// run AUTOBK, EXAFS transforms or wavelets; use the retained original instead.
+    pub fn correct_fluorescence(
+        &self,
+        settings: &super::fluorescence::FluorescenceCorrection,
+    ) -> Result<Self, super::fluorescence::FluorescenceError> {
+        use super::fluorescence::{AbsorptionMode, FluorescenceError};
+        let fail = |message: &str| FluorescenceError(message.into());
+        if self.absorption_mode == AbsorptionMode::Transmission {
+            return Err(fail("transmission data cannot use fluorescence correction"));
+        }
+        if self.is_xanes_only() {
+            return Err(fail(
+                "this lineage is already corrected; start from its original uncorrected spectrum",
+            ));
+        }
+        if self.prepared_space.is_some() {
+            return Err(fail(
+                "provide uncorrected fluorescence mu, not normalized or flattened input",
+            ));
+        }
+        let energy = self.energy.as_ref().ok_or_else(|| fail("missing energy"))?;
+        let mu = self.mu.as_ref().ok_or_else(|| fail("missing absorption"))?;
+        let mut settings = settings.clone();
+        if settings.e0.is_none() {
+            settings.e0 = self.e0;
+        }
+        let mut result = settings.apply(energy.as_slice(), mu.as_slice())?;
+        result.input_mode = self.absorption_mode;
+        if self.absorption_mode == AbsorptionMode::Unknown {
+            result.warnings.push(
+                "The caller explicitly interpreted unknown acquisition provenance as fluorescence."
+                    .into(),
+            );
+        }
+        let mut output = Self::from_arrays(&result.energy, &result.corrected_mu)
+            .map_err(|e| FluorescenceError(e.to_string()))?;
+        output.name = self.name.clone();
+        output.e0 = Some(result.internal.e0);
+        output.energy_shift = self.energy_shift;
+        output.absorption_mode = AbsorptionMode::Fluorescence;
+        output.fluorescence_correction = Some(Box::new(result));
+        Ok(output)
+    }
+
+    /// Original correction record. Later data edits do not rewrite this historical
+    /// result; its own energy grid identifies its arrays. None means no native correction.
+    pub fn fluorescence_correction(
+        &self,
+    ) -> Option<&super::fluorescence::FluorescenceCorrectionResult> {
+        self.fluorescence_correction.as_deref()
+    }
+
     fn validate_energy_mu_inputs(
         energy: &DVector<f64>,
         mu: &DVector<f64>,
@@ -310,7 +399,8 @@ impl XASSpectrum {
     /// Energy is in eV. This legacy setter takes ownership after conversion and clones
     /// the baseline into working arrays. It does not check lengths or finite values;
     /// prefer [`Self::from_arrays`] for checked input. Clears E0 and derived results
-    /// while retaining other stage settings.
+    /// while retaining other stage settings. Replacing the arrays resets the
+    /// recorded energy offset to zero; the supplied axis becomes the new baseline.
     ///
     /// # Panics
     /// May panic when sorting mismatched arrays. Supply paired finite arrays.
@@ -345,6 +435,7 @@ impl XASSpectrum {
         }
         self.energy = self.raw_energy.clone();
         self.mu = self.raw_mu.clone();
+        self.energy_shift = 0.0;
         self.e0 = None;
         if let Some(method) = self.normalization.as_mut() {
             method.set_e0(None);
@@ -459,9 +550,11 @@ impl XASSpectrum {
     }
 
     /// Take ownership of normalization settings and clear dependent results.
-    /// Pass [`crate::PrePostEdge`] directly, a method enum, or an optional enum.
+    /// Pass [`crate::PrePostEdge`] or [`crate::MBack`] directly, a method enum,
+    /// or an optional enum.
     /// `None` selects default pre/post-edge normalization. A configured edge energy
-    /// takes precedence over the existing E0; an explicit edge step remains an override.
+    /// takes precedence over the existing E0; a polynomial edge step remains an override.
+    /// MBACK instead determines its step from the atomic match.
     /// No normalization is performed by this setter.
     /// For prepared input this explicitly enables fitting new pre/post-edge
     /// curves, replacing the default unit-step identity mapping. The original
@@ -593,13 +686,42 @@ impl XASSpectrum {
         Ok(self)
     }
 
+    /// Restrict this spectrum and its clones to XANES processing (since 0.2.10).
+    /// Use for calculated descendants of fluorescence-corrected spectra. This
+    /// irreversible marker preserves arrays and normalization, clears EXAFS caches,
+    /// and survives serialization and data edits. It does not invent a correction
+    /// record: retain the actual ancestor records separately. Normalization, LCF,
+    /// PCA and MCR in energy space remain available; background, Fourier, wavelet
+    /// and RMC processing are rejected. No calculation is performed.
+    pub fn restrict_to_xanes(&mut self) -> &mut Self {
+        self.xanes_only = true;
+        self.invalidate_background();
+        self
+    }
+
+    /// Whether a direct correction or an inherited restriction limits processing
+    /// to XANES. This does not imply a direct correction record exists.
+    pub fn is_xanes_only(&self) -> bool {
+        self.xanes_only || self.fluorescence_correction.is_some()
+    }
+
+    pub(crate) fn ensure_exafs_allowed(&self) -> Result<(), XAFSError> {
+        if self.is_xanes_only() {
+            return Err(super::errors::BackgroundError::Other { message: "The corrected branch is qualified for XANES only; use the uncorrected spectrum for EXAFS".into() }.into());
+        }
+        Ok(())
+    }
+
     /// Remove the smooth background using the selected method; normalize if needed.
     /// Default nalgebra AUTOBK minimizes low-R content with a fixed endpoint penalty;
     /// the optional `ndarray-compat` backend retains its historical clamp model.
     /// Successful results are dimensionless unweighted [`Self::chi`] on [`Self::k`].
     /// Recomputes this stage and clears Fourier results on every call. Missing data,
     /// insufficient coverage, invalid settings or solver failure return a typed error.
+    /// The native fluorescence-corrected XANES branch is rejected; retain the
+    /// original spectrum for EXAFS because this correction is not qualified there.
     pub fn calc_background(&mut self) -> Result<&mut Self, XAFSError> {
+        self.ensure_exafs_allowed()?;
         self.invalidate_background();
         if self
             .normalization
@@ -651,6 +773,7 @@ impl XASSpectrum {
     /// Successful calls retain resolved settings: an inferred `kstep` is reused
     /// after later background-grid changes unless reset through [`Self::set_fft`].
     pub fn fft(&mut self) -> Result<&mut Self, XAFSError> {
+        self.ensure_exafs_allowed()?;
         self.invalidate_fft();
         if self.k().is_none() || self.chi().is_none() {
             self.calc_background()?;
@@ -706,6 +829,7 @@ impl XASSpectrum {
     /// Resolved inverse grid settings persist across calls; after changing forward
     /// `nfft` or spacing, reset them with [`Self::set_ifft`] to request inference.
     pub fn ifft(&mut self) -> Result<&mut Self, XAFSError> {
+        self.ensure_exafs_allowed()?;
         if self.chir().is_none() {
             self.fft()?;
         }
@@ -788,6 +912,7 @@ impl XASSpectrum {
                 }
                 m.norm = None;
                 m.flat = None;
+                m.result = None;
             }
             None => {}
         }
@@ -843,6 +968,91 @@ impl XASSpectrum {
             (Some(raw), Some(energy)) => raw == energy,
             _ => false,
         }
+    }
+
+    /// Read the total constant energy correction in eV. Starts at zero and
+    /// includes corrections from [`Self::align_to`], [`Self::calibrate`] and
+    /// [`Self::shift_energy`]. Reading it does not run processing.
+    pub fn energy_offset(&self) -> f64 {
+        self.energy_shift
+    }
+
+    /// Set the total energy offset in eV (since 0.2.10).
+    ///
+    /// Positive values move features to higher energy. Repeated assignments do
+    /// not accumulate: setting 3.5 twice keeps +3.5 eV; zero removes the recorded
+    /// correction. Both working and baseline grids and existing E₀ settings move
+    /// by the difference from the previous offset. Absorption values stay unchanged.
+    /// Normalization, background and transform results are invalidated only when
+    /// the offset changes; the next processing call recomputes them normally.
+    ///
+    /// This reverses constant shifts to floating-point precision, not other data
+    /// edits such as truncation or rebinning. It does not retain an immutable
+    /// copy of the imported file. Replacing arrays with [`Self::set_spectrum`]
+    /// establishes a new baseline and resets the offset. Do not directly edit
+    /// the legacy `energy_shift` field: it describes shifts already in the arrays.
+    /// Existing repeated energy points are retained. Nonfinite offsets/settings,
+    /// decreasing grids, overflow or newly collapsed spacing between distinct
+    /// points return an error before any mutation. Empty spectra may store an offset, but loading
+    /// new arrays resets it; normally call this after constructing the spectrum.
+    ///
+    /// ```
+    /// use rexafs::Spectrum;
+    /// let mut spectrum = Spectrum::from_arrays(&[8970., 8980., 8990.], &[0., 0.5, 1.])?;
+    /// spectrum.set_energy_offset(3.5)?;
+    /// spectrum.set_energy_offset(3.5)?;
+    /// assert_eq!(spectrum.energy_offset(), 3.5);
+    /// spectrum.set_energy_offset(0.0)?;
+    /// assert_eq!(spectrum.energy.as_ref().unwrap()[0], 8970.);
+    /// # Ok::<(), rexafs::Error>(())
+    /// ```
+    pub fn set_energy_offset(&mut self, offset_ev: f64) -> Result<&mut Self, XAFSError> {
+        let delta = offset_ev - self.energy_shift;
+        let invalid = |reason: &str| DataError::InvalidEnergyOffset {
+            offset_ev,
+            reason: reason.into(),
+        };
+        if !offset_ev.is_finite() || !delta.is_finite() {
+            return Err(invalid("offset and previous correction must be finite").into());
+        }
+        let norm_e0 = self.normalization.as_ref().and_then(|m| m.get_e0());
+        let bkg_e0 = match &self.background {
+            Some(background::BackgroundMethod::AUTOBK(a)) => a.ek0,
+            _ => None,
+        };
+        if [self.e0, norm_e0, bkg_e0]
+            .into_iter()
+            .flatten()
+            .any(|e| !(e + delta).is_finite())
+        {
+            return Err(invalid("shifted E₀ must be finite").into());
+        }
+        for axis in [self.energy.as_ref(), self.raw_energy.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            let mut previous = None;
+            for &energy in axis.iter() {
+                let shifted = energy + delta;
+                if !shifted.is_finite() {
+                    return Err(invalid("shifted energy must be finite").into());
+                }
+                if previous.is_some_and(|(original, moved)| {
+                    energy < original || shifted < moved || (energy > original && shifted == moved)
+                }) {
+                    return Err(invalid(
+                        "shift must preserve energy order and distinct sample positions",
+                    )
+                    .into());
+                }
+                previous = Some((energy, shifted));
+            }
+        }
+        if delta != 0.0 {
+            self.shift_energy(delta);
+        }
+        self.energy_shift = offset_ev;
+        Ok(self)
     }
 
     /// Shift the energy axis (working and raw) by `delta_ev`, moving `e0` and

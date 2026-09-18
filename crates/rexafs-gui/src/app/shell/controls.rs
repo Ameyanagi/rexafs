@@ -12,7 +12,9 @@ pub(crate) struct Presentation {
     pub marked_removal: Option<super::marked_removal::MarkedRemoval>,
     pub merge_review: Option<crate::app::merge::MergeReview>,
     pub scan_picker: bool,
+    pub pending_skip: Vec<crate::app::import_state::PendingTarget>,
     pub menu: Option<Menu>,
+    pub plot_export: Option<super::plot_export::Target>,
     pub reverse_colors: bool,
     pub menu_focus: Option<FocusHandle>,
     pub return_focus: Option<FocusHandle>,
@@ -22,14 +24,18 @@ pub(crate) struct Presentation {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Menu {
+    FitMode,
     Project,
     Save,
     Plot,
     Colors,
     Groups,
     Structure,
+    StructureSource,
+    ExportPlot,
     Merge,
     RemoveMarked,
+    SkipImports,
 }
 
 pub(crate) fn icon(t: &Theme, icon: Icon) -> gpui::Svg {

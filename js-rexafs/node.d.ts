@@ -8,8 +8,22 @@
  */
 export default function init(): Promise<void>;
 export { Spectrum, PrePostEdge, AUTOBK, XrayFFTF, XrayFFTR, NormalizationMethod, BackgroundMethod } from "./types.js";
+export { FluorescenceCorrection } from "./types.js";
+export type { AbsorptionMode, FluorescenceCorrectionOptions, FluorescenceCorrectionResult, FluorescenceInternalNormalization } from "./types.js";
 
 export type { FFTGrid, FTWindow, AUTOBKSolver, AUTOBKClampScalePolicy, PrePostEdgeOptions, AUTOBKOptions, XrayFFTFOptions, XrayFFTROptions } from "./types.js";
 
 export { Measurement, read_measurement } from "./types.js";
 export type { MeasurementDocument, MeasurementScan, MeasurementColumn, MeasurementDataset, SpectrumMapping, ColumnSelector, MeasurementOptions, EnergyConversion, SignalConversion, SignalCandidate } from "./types.js";
+
+export type { SpectrumMeasurementOptions, MeasurementResult } from "./types.js";
+export { PeakFit } from "./types.js";
+export type { PeakFitResult, PeakContribution, PeakFitOutcome, PeakParameterOptions } from "./types.js";
+
+export type { PeakOptions, PseudoVoigtOptions, VoigtOptions, StepOptions } from "./types.js";
+
+export { MBack, MbackErfc } from "./types.js";
+export type { MbackOptions, MbackErfcOptions, MbackResult, AtomicReference } from "./types.js";
+
+export { Wavelet, WaveletMap } from "./types.js";
+export type { WaveletOptions, WaveletSize, WaveletPreparation, WaveletRegionValue } from "./types.js";

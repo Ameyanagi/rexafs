@@ -1176,13 +1176,20 @@ fn paint_scene(
             *edge,
             depth,
             &project,
-            alpha(t.text_muted, 0.12 * context_alpha),
+            alpha(
+                t.text_muted,
+                if scene.radius > 0. {
+                    0.12 * context_alpha
+                } else {
+                    0.45
+                },
+            ),
             0.65,
             t.raised,
         );
     }
     // Radius guides are a true sphere cut through the absorber, not a fitted box.
-    if !scene.edges.is_empty() {
+    if !scene.edges.is_empty() && scene.radius > 0. {
         for axis in 0..3 {
             let ring: Vec<_> = (0..=96)
                 .map(|n| {

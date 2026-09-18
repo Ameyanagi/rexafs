@@ -35,7 +35,7 @@ test("default TypeScript commands select native and compatibility compilers", ()
 for (const [entry, resolution] of [["rexafs", "NodeNext"], ["rexafs/node", "NodeNext"], ["rexafs/browser", "Bundler"]]) {
   test(`installed ${entry}: TypeScript 7 checking and editor completion, signatures and hover (${resolution})`, () => {
     const filename = join(directory, `example-${entry.replaceAll("/", "-")}.ts`);
-    let source = `import init, { Spectrum, AUTOBK, PrePostEdge, XrayFFTF, XrayFFTR,
+    let source = `import init, { Spectrum, PeakFit, MBack, MbackErfc, Wavelet, WaveletMap, FluorescenceCorrection, AUTOBK, PrePostEdge, XrayFFTF, XrayFFTR,
       read_measurement, type SpectrumMapping, type FTWindow, type FFTGrid, type AUTOBKSolver, type AUTOBKClampScalePolicy,
       type AUTOBKOptions, type PrePostEdgeOptions, type XrayFFTFOptions, type XrayFFTROptions } from "${entry}";
 await init();
@@ -60,6 +60,59 @@ console.log(sessionText, imaginary);
 const invalidMapping: SpectrumMapping = {energy_column:0,energy:{kind:"bragg"},signal:{kind:"direct",column:1}};
 const energy = new Float64Array([1, 2, 3]);
 const spectrum = new Spectrum(energy, energy);
+const correction = new FluorescenceCorrection("CuO","Cu","K",{line:"Ka1",angles:[45,45]});
+const corrected = spectrum.correct_fluorescence(correction).normalize();
+corrected.set_absorption_mode("fluorescence");
+corrected.fluorescence_correction()?.internal.norm[0].toFixed();
+const correctionResult = correction.apply(energy, energy);
+correctionResult.definition.free();
+correctionResult.corrected_mu[0].toFixed();
+corrected.free(); correction.free();
+// @ts-expect-error emission and measured geometry are required
+new FluorescenceCorrection("CuO","Cu","K",{});
+// @ts-expect-error mode choices have exact spellings
+spectrum.set_absorption_mode("guess");
+const wavelet = new Wavelet([2,12],{kweight:2,rmax:6});
+const waveletMap = spectrum.wavelet(wavelet);
+waveletMap.real[0].toFixed();
+waveletMap.shape[1].toFixed();
+waveletMap.integral([4,10],[1,3]).value.toFixed();
+waveletMap.mean([4,10],[1,3]).value.toFixed();
+waveletMap.maximum([4,10],[1,3]).value.toFixed();
+waveletMap.definition.free();
+WaveletMap.from_json(waveletMap.to_json()).free();
+// @ts-expect-error wavelet intervals require two numbers
+new Wavelet(12);
+// @ts-expect-error wavelet choices are named, checked options
+new Wavelet([2,12],{resolution:2});
+const atomic = new MBack("Cu", "K", {pre_edge:[-200,-50], post_edge:[100,800], erfc:new MbackErfc("Ka1", {width:[500,1500],amplitude:[0,10]})});
+const normalized = atomic.fit(new Float64Array([1,2]), new Float64Array([1,2]));
+normalized.norm[0].toFixed();
+normalized.reference.data.data_sha256.toUpperCase();
+normalized.definition.free();
+spectrum.set_normalization_method(atomic).normalize();
+spectrum.mback_result()?.objective.toFixed();
+atomic.free();
+// @ts-expect-error a range needs two numbers
+new MBack("Cu", "K", {pre_edge:5});
+const peak = new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 }).linear_baseline();
+const fit = spectrum.fit_peaks(peak);
+fit.parameters.p1_center.toFixed(3);
+fit.components[0].area?.toFixed(3);
+const batch = peak.fit_batch([spectrum]);
+for (const row of batch) { if (row.result !== null) row.result.objective.toFixed(3); }
+// @ts-expect-error peak parameters use named options
+peak.gaussian("p", 5, 2, 3);
+// @ts-expect-error typo in physical width
+peak.gaussian("p", { center: 5, area: 2, width: 3 });
+const mean = spectrum.measure("mean", [-20, 30], { space: "flat" });
+mean.value.toFixed(3);
+mean.standard_error?.toFixed(3);
+spectrum.measure("point", 10);
+// @ts-expect-error a point takes a scalar
+spectrum.measure("point", [0, 1]);
+// @ts-expect-error invalid signal
+spectrum.measure("mean", [0, 1], { space: "unknown" });
 const options: AUTOBKOptions = { rbkg: 1, solver: "LinearDirect" };
 const background = new AUTOBK(options);
 const forward = new XrayFFTF({ grid: "Larch", window: "Hanning" });
@@ -114,6 +167,15 @@ spectrum.chi()[0];
       const hoverText = (text, offset) => ts.displayPartsToString(hover(text, offset).documentation).replace(/\s+/g, " ");
       assert.match(hoverText("background.rbkg", 12), /angstroms.*Default: 1.0/);
       assert.match(hoverText("spectrum.fft", 10), /2048/);
+      assert.match(hoverText("spectrum.measure", 10), /private copy/);
+      assert.match(hoverText("spectrum.wavelet", 10), /private copy/);
+      assert.match(hoverText("spectrum.correct_fluorescence", 12), /XANES-only/);
+      assert.match(hoverText("correctionResult.corrected_mu", 19), /Final normalization|final normalization/);
+      assert.match(hoverText("waveletMap.integral", 13), /native bilinear/);
+      assert.match(hoverText("waveletMap.mean", 13), /area/i);
+      assert.match(hoverText("waveletMap.maximum", 13), /bilinear/);
+      assert.match(hoverText("spectrum.fit_peaks", 10), /E0-relative.*conditional/s);
+      assert.match(hoverText("peak.fit_batch", 7), /one outcome per input/);
       assert.match(hoverText("forward.kstep", 8), /infers the first spacing/);
       assert.match(hoverText("forward.dk", 8), /KaiserBessel.*shape parameter/);
       assert.match(hoverText("spectrum.chir_real", 10), /kstep\/sqrt\(pi\)/);
@@ -129,7 +191,14 @@ spectrum.chi()[0];
         assert.ok(result, suffix);
         return result.entries.map(e => e.name);
       };
+      assert.ok(completion('\nnew Wavelet([2,12], { ').includes("kweight"));
+      assert.ok(completion('\nnew FluorescenceCorrection("CuO","Cu","K", { ').includes("angles"));
       assert.ok(completion("\nspectrum.").includes("set_ifft"));
+      assert.ok(completion("\nspectrum.").includes("fit_peaks"));
+      assert.ok(completion("\nspectrum.").includes("mback_result"));
+      assert.ok(completion('\nnew MBack("Cu", "K", { ').includes("pre_edge"));
+      assert.ok(completion("\nnormalized.").includes("reference"));
+      assert.ok(completion('\npeak.gaussian("p", { ').includes("fwhm"));
       assert.ok(completion("\nnew AUTOBK({ ").includes("clamp_lambda"));
       assert.ok(completion('\nnew XrayFFTF({ window: "').includes("KaiserBessel"));
       assert.ok(completion("\nmeasurement.").includes("select_datasets"));

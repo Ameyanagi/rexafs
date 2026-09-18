@@ -6936,7 +6936,7 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
 name = "py-rexafs"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "ndarray",
  "numpy",
@@ -7142,6 +7142,7 @@ checksum = "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb"
 dependencies = [
  "ppv-lite86",
  "rand_core 0.9.5",
+ "serde",
 ]
 
 [[package]]
@@ -7386,9 +7387,9 @@ dependencies = [
 
 [[package]]
 name = "refeff"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f73b1a672dc79c05a4ad08c260e9db7f525e64617024aaeb43cc6fb94191ceb"
+checksum = "8fffc0b4b5dd4973a76a1441b9ae44423ae3da697bb0fe273fafaf834aa523bb"
 dependencies = [
  "refeff-core",
  "refeff-engine",
@@ -7399,9 +7400,9 @@ dependencies = [
 
 [[package]]
 name = "refeff-core"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "436aa3a1cfafef276eb88c97e906a5346c7bf4b1886f4c8f6ec6d46f65769b11"
+checksum = "d01f9b2c4cde247d58951d44e875db9bf0a96c63bfbaeff9cb3d60005ff2700b"
 dependencies = [
  "ndarray",
  "num-complex",
@@ -7413,9 +7414,9 @@ dependencies = [
 
 [[package]]
 name = "refeff-engine"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a2b452b8cb887bd542ec2e32a9149fa4f007abce3c1078b417226bc597ff08b"
+checksum = "1c9a363cc3d035f9021be6be50a03049b20be869a5432b42507c616420ee4208"
 dependencies = [
  "anyhow",
  "ndarray",
@@ -7427,14 +7428,15 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tempfile",
  "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "refeff-io"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7004b0c8f6c92b4008c490b659cc19c73272b71026a0efcae47c0d64e45602f7"
+checksum = "c8cdb7336c8589ecd6048ec1671f82bad97965a4f9e8df5b0e5b67409635cda4"
 dependencies = [
  "ndarray",
  "num-complex",
@@ -7445,9 +7447,9 @@ dependencies = [
 
 [[package]]
 name = "refeff-linalg"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1c457f404a29550d23d187ee2c9413763c2c2c7301025246695219007fb9699"
+checksum = "6161e5158f925d0b22a222618df43faf4852a05fdc2bb0a3dc3eb2a22f7a7209"
 dependencies = [
  "faer",
  "ndarray",
@@ -7534,7 +7536,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "apex-solver",
  "approx",
@@ -7561,6 +7563,8 @@ dependencies = [
  "pest_derive",
  "polyfit-rs",
  "pprof",
+ "rand 0.9.5",
+ "rand_chacha 0.9.0",
  "rayon",
  "refeff",
  "regex",
@@ -7573,11 +7577,12 @@ dependencies = [
  "thiserror 2.0.20",
  "ureq 3.4.1",
  "version",
+ "xraydb",
 ]
 
 [[package]]
 name = "rexafs-gui"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -7586,6 +7591,7 @@ dependencies = [
  "anyhow",
  "base64 0.23.1",
  "chrono",
+ "csv",
  "feff10",
  "flate2",
  "futures",
@@ -7597,6 +7603,7 @@ dependencies = [
  "raw-window-handle",
  "rayon",
  "rexafs",
+ "rusqlite",
  "ruviz",
  "ruviz-gpui",
  "semver",
@@ -7615,10 +7622,11 @@ dependencies = [
 
 [[package]]
 name = "rexafs-wasm"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "js-sys",
  "rexafs",
+ "serde",
  "serde_json",
  "wasm-bindgen",
 ]
@@ -7882,9 +7890,9 @@ dependencies = [
 
 [[package]]
 name = "ruviz"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2729a92b51a34e55b94e26e8336b15f2a909ff3798da2cc0796e53f84a3ff2a8"
+checksum = "5800a38ecc91758d8cccc97b03d944468390a1478d33089066c1331d3f54756c"
 dependencies = [
  "base64 0.22.1",
  "bytemuck",
@@ -7920,9 +7928,9 @@ dependencies = [
 
 [[package]]
 name = "ruviz-gpui"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b83705e4e6f5a6803b4f5803c7370a3859be5050b591197ff1a0a3cfb387b51e"
+checksum = "95569a176f7572ed2ac4bfa4ca1d68d84416513fc14c4385f119b2be3776ee5e"
 dependencies = [
  "arboard",
  "core-foundation 0.10.0",

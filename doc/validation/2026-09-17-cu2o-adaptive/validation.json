@@ -1,0 +1,18 @@
+{
+  "core_tests": {
+    "passed": 403,
+    "ignored": 3,
+    "command": "cargo test --locked -p rexafs"
+  },
+  "spectrum_refeff_tests": {
+    "passed": 7,
+    "command": "cargo test --release --locked -p rexafs --features refeff-runner --test rmc_spectrum"
+  },
+  "core_clippy": "passed; all targets, warnings denied",
+  "refeff_clippy": "passed; release library, Spectrum tests and qualification example, warnings denied",
+  "examples": "rmc_cu2o_search and rmc_qualify release builds passed; updated harness import reproduced accepted score",
+  "format": "passed",
+  "release_version": "passed with Python 3.12; version 0.2.9",
+  "rustdoc": "passed",
+  "origin_dev": "bb83016; already an ancestor as of 2026-09-17T03:08:30Z"
+}

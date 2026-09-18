@@ -58,6 +58,54 @@ multiple-file selections; import containers individually in these versions.
 Source files are unchanged; saved desktop projects
 retain original measurement bytes and accepted signal mappings.
 
+### Confirm matching files together (development version)
+
+Drop several `.qd` files, drop a folder, or select several files in **Import…**.
+In the measurement preview, **Apply to N matching files in this import** is
+initially checked when compatible files are available. Review the plotted
+spectrum and adjust the mapping once, then choose **Import N spectra**.
+Uncheck the option to import only the previewed file.
+
+Matching uses the content-detected format, column names and units, detector
+roles, reader warnings and energy conversion, including the monochromator
+spacing. Different point counts, acquisition timestamps and numeric values are
+allowed. Each imported spectrum retains its own original data and header.
+Files with different layouts, unreadable data, unnamed columns or multiple
+scans remain under **Pending import** for separate review. **Source details**
+lists files needing that review.
+
+This confirmation applies only to the current drop or file selection; it does
+not create a persistent recipe or approve a later drop. Every selected file is
+validated before any groups are added. If a matching file changes or its chosen
+arithmetic is invalid, no groups are added; the error identifies that file.
+Reopen the preview after correcting the source, or uncheck the batch option to
+review files individually. One undo removes the accepted batch.
+
+Implemented by the desktop's `measurement_import::batch` module. This option
+is newer than the released 0.2.9 GUI shown in the screenshots below.
+
+### Skip unwanted pending files (development version)
+
+Under **Pending**, choose the **× beside a filename** to skip that file.
+The **Skip ▾** menu offers **Skip .prj**, **Skip .xts**, and the other extensions
+currently waiting, or **Skip all pending**. Extension matching ignores letter
+case, so `.prj` and `.PRJ` are grouped together. Hover over a filename to read
+its review reason.
+
+**Undo skip** restores the most recent skipped selection in this session.
+Skipping applies only to the pending entries captured when you opened the menu;
+it does not exclude that extension from future imports. Original files and
+already imported groups remain intact. To reconsider a file later, import it again.
+Saved projects retain its skipped status and original review evidence.
+
+The **× on the import summary bar** only hides that summary. It does not skip
+pending files. Use the row's × or the Skip menu to remove them from the queue.
+
+[![Skip pending files individually or by extension](/screenshots/next/pending-import-skip.jpg)](/screenshots/next/pending-import-skip.jpg)
+
+This unreleased interface was checked through computer use on 2026-09-17 using
+generated software-test signals. The screenshot contains no experimental data.
+
 <a id="import-a-whole-project-unreleased"></a>
 
 ### Import a whole project

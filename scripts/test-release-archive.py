@@ -209,6 +209,7 @@ class WindowsArchiveRuntimeTests(unittest.TestCase):
                     "assets/brand/rexafs-icon.png", "assets/brand/rexafs.ico",
                     "crates/rexafs/tests/testfiles/xraylarch_d867/xafsdata/cu_150k.xmu",
                     "crates/rexafs/tests/testfiles/xraylarch_d867/README.md",
+                    "crates/rexafs/data/atomic/XrayDB-LICENSE.txt",
                     "assets/licenses/feff10-native/NOTICE", "LICENSE-MIT", "LICENSE-APACHE",
                 ]
                 for name in fixtures:
@@ -283,6 +284,10 @@ class WindowsArchiveRuntimeTests(unittest.TestCase):
                 stem = f"rexafs-0.2.5-{target}"
                 with ZipFile(root / f"target/distributions/{stem}.zip") as archive:
                     self.assertEqual(archive.read(stem + "/vcruntime140.dll"), runtime_bytes)
+                    self.assertEqual(
+                        archive.read(stem + "/licenses/rexafs-atomic-data/XrayDB-LICENSE.txt"),
+                        b"fixture",
+                    )
                     metadata = json.loads(archive.read(stem + "/build.json"))
                     self.assertEqual(metadata["microsoft_runtime"], {"vcruntime140.dll": provenance})
                     self.assertEqual(metadata["target"], target)

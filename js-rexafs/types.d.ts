@@ -914,9 +914,9 @@ export class XrayFFTR {
  * Select the normalization algorithm and hold an owned copy of its settings.
  *
  * Use PrePostEdge(settings) for customized pre/post-edge fits or new_prepostedge() for
- * automatic defaults. The MBack factory is only a placeholder; it does not implement that
- * algorithm. Copy this method into Spectrum.set_normalization_method(), then free() the wrapper
- * when no longer needed.
+ * automatic defaults. The no-argument MBack factory is a historical empty selector and cannot
+ * normalize data. MBACK was unimplemented through version 0.2.9. Copy this method into
+ * Spectrum.set_normalization_method(), then free() the wrapper when no longer needed.
  */
 export class NormalizationMethod {
   private constructor();
@@ -938,9 +938,10 @@ export class NormalizationMethod {
    */
   static new_prepostedge(): NormalizationMethod;
   /**
-   * Create an owned MBack placeholder for API compatibility. MBack processing is not
-   * implemented and normalize() throws if this method is selected. Use new_prepostedge() for
-   * supported normalization, and free() any placeholder you create.
+   * Create the historical empty MBack selector. Selecting it makes normalize() throw.
+   * Use new_prepostedge() for automatic polynomial normalization. MBACK was unimplemented
+   * through version 0.2.9; this no-argument selector remains unusable for normalization.
+   * Free this wrapper when finished.
    */
   static new_mback(): NormalizationMethod;
 }
@@ -1002,6 +1003,71 @@ export class BackgroundMethod {
  * assumptions and interpretation.
  */
 export class Spectrum {
+  /** Correct into an independent unnormalized Spectrum (since 0.2.10). Internal
+   * conventional normalization runs automatically; the source stays unchanged.
+   * Unknown provenance is explicitly interpreted as fluorescence. Known transmission,
+   * prepared norm/flat and repeated correction throw. Supply line and measured
+   * surface angles in the model. Call normalize() for separate final polynomial/MBACK
+   * normalization. History survives edits; this XANES-only branch rejects background,
+   * FFT and wavelets. Array uncertainties are unavailable. Free the new Spectrum. */
+  correct_fluorescence(model: FluorescenceCorrection): Spectrum;
+  /** Independent historical correction record, or undefined. Edits/normalization
+   * never rewrite original correction inputs or remove the XANES-only restriction. */
+  fluorescence_correction(): FluorescenceCorrectionResult | undefined;
+  /** Acquisition interpretation; unknown means missing evidence. */
+  absorption_mode(): AbsorptionMode;
+  /** Explicitly revise interpretation without changing arrays/caches. Correction
+   * history and restrictions survive. Returns this Spectrum; invalid names throw. */
+  set_absorption_mode(mode: AbsorptionMode): this;
+  /** Since 0.2.10: spectrum.wavelet(new Wavelet([2, 12])) prepares missing
+   * normalization/AUTOBK on a private copy, reusing existing χ. The inclusive
+   * interval uses Å⁻¹. Source arrays/settings/caches stay unchanged. Returns an
+   * owned native map; invalid coverage/grids and corrected XANES-only input throw.
+   * R is not phase-corrected and colors do not imply concentration. */
+  wavelet(model: Wavelet): WaveletMap;
+  /** Fit a composite XANES model, preparing missing normalization on a private copy (since 0.2.10).
+   * Recommended: spectrum.fit_peaks(new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 })).
+   * Model defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
+   * caches and model remain unchanged. Results use retained native points; no smoothing
+   * or interpolation occurs. Invalid models, coverage or preparation throw Error.
+   * Inspect termination and warnings: a numerical result can be nonconverged.
+   * Optional errors are positive independent standard deviations of the SELECTED signal
+   * on the original native grid, including excluded points. Raw errors are not propagated.
+   * Without errors, covariance uses residual-based variance. Active bounds, deficient rank
+   * and nonconvergence withhold local errors. These are conditional, not model confidence.
+   * Synchronous; use a Web Worker for large browser fits.
+   */
+  fit_peaks(model: PeakFit, options?: { errors?: Float64Array }): PeakFitResult;
+  /**
+   * Measure a point or region without changing this spectrum (since 0.2.10).
+   * Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
+   * mu and E0-relative energy offsets in eV; choose `space: "flat"` explicitly.
+   * k is in inverse angstroms; R is in angstroms without phase correction.
+   * Missing prerequisite stages run on a private copy using this spectrum's
+   * settings; caller arrays, settings and cached results remain unchanged.
+   * No extrapolation or display sampling occurs. Mean is the piecewise-linear
+   * integral divided by interval width, not the arithmetic sample mean.
+   * Returns an owned scalar result with units and the resolved absolute range.
+   * Throws on invalid input, preparation failure, or missing range coverage.
+   * Optional independent point errors apply to point/mean/integral only; see
+   * SpectrumMeasurementOptions.errors. No uncertainty is inferred by default.
+   */
+  measure(operation: "point", coordinates: number, options?: SpectrumMeasurementOptions): MeasurementResult;
+  /**
+   * Measure a point or region without changing this spectrum (since 0.2.10).
+   * Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
+   * mu and E0-relative energy offsets in eV; choose `space: "flat"` explicitly.
+   * k is in inverse angstroms; R is in angstroms without phase correction.
+   * Missing prerequisite stages run on a private copy using this spectrum's
+   * settings; caller arrays, settings and cached results remain unchanged.
+   * No extrapolation or display sampling occurs. Mean is the piecewise-linear
+   * integral divided by interval width, not the arithmetic sample mean.
+   * Returns an owned scalar result with units and the resolved absolute range.
+   * Throws on invalid input, preparation failure, or missing range coverage.
+   * Optional independent point errors apply to point/mean/integral only; see
+   * SpectrumMeasurementOptions.errors. No uncertainty is inferred by default.
+   */
+  measure(operation: "mean" | "integral" | "maximum", coordinates: readonly [number, number], options?: SpectrumMeasurementOptions): MeasurementResult;
   /**
    * Copy measured photon energy in eV and absorption mu into a new, initially unprocessed
    * spectrum. Both inputs must be Float64Arrays of equal length, with at least two finite
@@ -1048,7 +1114,9 @@ export class Spectrum {
    * settings, 0.2.4 accepts a NormalizationMethod wrapper; direct PrePostEdge settings
    * were added in 0.2.5.
    */
-  set_normalization_method(method?: PrePostEdge | NormalizationMethod | null): this;
+  set_normalization_method(method?: PrePostEdge | MBack | NormalizationMethod | null): this;
+  /** Copy the latest full MBACK result, or undefined when absent/invalidated. */
+  mback_result(): MbackResult | undefined;
   /**
    * Copy the selected background method and clear background, forward and inverse results while
    * retaining normalization. The caller keeps ownership of the settings and wrapper and may
@@ -1408,3 +1476,567 @@ export class Measurement {
  * occurs. Example: read_measurement(new Uint8Array(await file.arrayBuffer())).
  */
 export function read_measurement(data: string | Uint8Array): Measurement;
+
+/** Scalar spectrum measurement options (since 0.2.10); defaults prepare Norm on a copy. */
+export interface SpectrumMeasurementOptions {
+  /** Selected signal. Default: norm. mu retains original units; flat is dimensionless. */
+  space?: "mu" | "norm" | "flat" | "chi" | "fourier";
+  /** Default: e0 for energy, absolute for k/R. E0 means offsets in eV. k/R require absolute. */
+  origin?: "e0" | "absolute";
+  /** Nonnegative integer exponent on k, 0–255. Default: 0. Applies only to chi. */
+  kweight?: number;
+  /** Independent standard deviations on the selected signal's native grid, in its units.
+   * Raw-count errors are NOT propagated through normalization or Fourier transforms.
+   * Requires finite nonnegative values matching that grid. Supports point, mean and
+   * integral; maximum rejects this model. Axis, E0 and settings are treated as exact;
+   * no correlations or confidence intervals are inferred. Omit for unknown errors. */
+  errors?: Float64Array;
+}
+/** Owned native scalar result. JSON serialization preserves its complete definition. */
+export interface MeasurementResult {
+  /** Finite scalar in unit. */
+  value: number;
+  /** Signal unit for mean/maximum/point; signal times axis unit for integral. */
+  unit: string;
+  /** Resolved absolute native-axis bounds: eV, inverse angstroms, or angstroms. */
+  range: [number, number];
+  /** Absolute point/maximum position, otherwise null. */
+  position: number | null;
+  /** Propagated independent standard error, or null. Not a confidence interval. */
+  standard_error: number | null;
+  /** Resolved absorption edge in eV, or null when unnecessary. */
+  e0_ev: number | null;
+  /** Core definition for reproducible storage; coordinates retain their requested origin. */
+  measurement: {
+    metric: { Point: { x: number } } | { Mean: { start: number; end: number } }
+      | { Integral: { start: number; end: number } } | { Maximum: { start: number; end: number } };
+    space: "Mu" | "Norm" | "Flat" | "Fourier" | { Chi: { kweight: number } };
+    origin: "E0" | "Absolute";
+  };
+}
+
+/** Immutable composite XANES peak definition (since 0.2.10).
+ * Start with new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 }).linear_baseline().
+ * Defaults are Norm and E0-relative eV. Builders return NEW definitions; inputs
+ * remain unchanged. Missing normalization runs on a copy. No smoothing or
+ * chemical/component-count assignment is performed. Default bounds keep centers
+ * in the interval, areas nonnegative and widths positive. Inspect termination
+ * and warnings: local covariance is conditional on the selected model.
+ */
+export class PeakFit {
+  /** Create an empty Norm model over inclusive E0-relative eV; add components before fitting. */
+  constructor(range: readonly [number, number]);
+  /** Release this definition's native memory. Do not use it afterwards. Other copies remain valid. */
+  free(): void;
+  /** Use dimensionless flattened mu; prerequisites run on a copy. Returns a new model. */
+  flat(): PeakFit;
+  /** Use the original mapped absorption signal and its units. Returns a new model. */
+  raw_mu(): PeakFit;
+  /** Interpret ranges, centers and baseline references as absolute eV. Returns a new model. */
+  absolute(): PeakFit;
+  /** Use offsets from this fixed reference energy in eV. Returns a new model. */
+  reference(energy_ev: number): PeakFit;
+  /** Add a Gaussian: center/FWHM in eV, whole-axis area in signal units times eV. Returns a new model. */
+  gaussian(name: string, options: PeakOptions): PeakFit;
+  /** Add a Lorentzian with whole-axis area and FWHM in eV. Returns a new model. */
+  lorentzian(name: string, options: PeakOptions): PeakFit;
+  /** Add a common-FWHM mixture; fraction is the Lorentzian share from zero to one. Returns a new model. */
+  pseudo_voigt(name: string, options: PseudoVoigtOptions): PeakFit;
+  /** Add a true Voigt with independent Gaussian/Lorentzian FWHM in eV. Returns a new model. */
+  voigt(name: string, options: VoigtOptions): PeakFit;
+  /** Add height*(1+erf((E-center)/scale))/2; scale is positive eV. Returns a new model. */
+  erf_step(name: string, options: StepOptions): PeakFit;
+  /** Add height*(1/2+atan((E-center)/scale)/pi); scale is positive eV. Returns a new model. */
+  arctan_step(name: string, options: StepOptions): PeakFit;
+  /** Add a fitted constant named baseline, in signal units. Returns a new model. */
+  constant_baseline(offset?: number): PeakFit;
+  /** Add baseline = offset+slope*E_offset; slope is signal units/eV. Returns a new model. */
+  linear_baseline(options?: { offset?: number; slope?: number }): PeakFit;
+  /** Exclude an inclusive interval in model coordinates; masked gaps are not integrated. */
+  exclude(range: readonly [number, number]): PeakFit;
+  /** Replace an EXISTING parameter (e.g. p1_center or p1_width); returns a new model.
+   * Bounds default to unbounded: supply them explicitly to retain restrictions.
+   * An expression is a restricted tie, not executable code, and overrides vary.
+   * Unknown names fail immediately; domains/dependencies are checked when fitting.
+   */
+  parameter(name: string, value: number, options?: PeakParameterOptions): PeakFit;
+  /** Make a named peak part of the baseline, excluding it from the weighted center; steps cannot change role. */
+  as_baseline(name: string): PeakFit;
+  /** Positive optimizer limits, default 200 iterations and 1e-10 tolerance; returns a new model. */
+  solver(options?: { max_iterations?: number; tolerance?: number }): PeakFit;
+  /** Evaluate at absolute energy in eV without fitting/masking. Relative models require e0; returns an owned array. */
+  evaluate(energy: Float64Array, options?: { e0?: number }): Float64Array;
+  /** Initialize baseline-role variables outside peak intervals in model coordinates.
+   * Returns a new starting model. Source, final masks and this definition stay unchanged.
+   */
+  initialize_baseline(spectrum: Spectrum, peak_intervals: ReadonlyArray<readonly [number, number]>): PeakFit;
+  /** Independent unweighted fits from this starting model, one outcome per input.
+   * A bad frame keeps an error row and does not stop later frames. Inputs are unchanged.
+   * Runs synchronously; use a Web Worker for large browser batches.
+   */
+  fit_batch(spectra: readonly Spectrum[]): PeakFitOutcome[];
+  /** Serialize the complete initial definition, including constraints and masks. */
+  to_json(): string;
+  /** Restore and validate a complete definition. Browser init must have completed. */
+  static from_json(json: string): PeakFit;
+}
+/** Optional fixed values, bounds and restricted ties for an existing model parameter. */
+export interface PeakParameterOptions {
+  /** Independently vary this parameter, default true; a tie overrides this. */
+  vary?: boolean;
+  /** Inclusive minimum/maximum in parameter units; null means unbounded, the default. */
+  bounds?: readonly [number | null, number | null];
+  /** Restricted expression in other parameter names; never external code. */
+  expression?: string;
+}
+/** One batch outcome, including failures. A nonconverged numerical result remains a result. */
+export type PeakFitOutcome =
+  | { index: number; result: PeakFitResult; error: null }
+  | { index: number; result: null; error: string };
+/** Owned numerical result (since 0.2.10). Arrays are ordinary JavaScript copies.
+ * Editing the displayed values never changes the retained JSON or the input spectrum.
+ * Local errors are conditional, not model-selection confidence intervals.
+ */
+export interface PeakFitResult {
+  /** Initial model; each access returns a new native copy. Release it with free() when finished. */
+  readonly definition: PeakFit;
+  /** Copy fitted values for explicit reuse; caller owns the returned model. */
+  fitted_model(): PeakFit;
+  /** Named final values; parameter centers retain the model's coordinate origin. */
+  parameters: Record<string, number>;
+  /** Conditional local errors, null when unavailable or not independently estimated. */
+  parameter_errors: Record<string, number | null>;
+  /** Component curves/summaries in model order. */
+  components: PeakContribution[];
+  /** Full native snapshot with initial/final constraints, masks and diagnostics. */
+  to_json(): string;
+  /** Resolved energy origin in eV, added to parameter centers/reference energies. */
+  origin_ev: number;
+  /** Absolute energy in eV, only the native points used by this fit. */
+  energy: number[];
+  /** Original zero-based point indices; preserves masks and sampling provenance. */
+  source_indices: number[];
+  /** Selected representation's measured values, in its signal units. */
+  data: number[];
+  /** Joint baseline + peaks + steps, in the same signal units. */
+  model: number[];
+  /** Unweighted data minus model, in signal units (also for weighted fits). */
+  residual: number[];
+  /** Supplied selected-space standard deviations on the fitted points, if any. */
+  standard_deviation: number[] | null;
+  /** Sum of squared residuals, divided by supplied standard deviations if present. */
+  objective: number;
+  /** Number of fitted native data points (not EXAFS independent-point estimates). */
+  points: number;
+  /** Number of independent varying parameters; expression ties are excluded. */
+  free_parameters: number;
+  /** points − free_parameters. Fits with fewer points than variables are rejected. */
+  degrees_of_freedom: number;
+  /** Weighted numerical Jacobian rank under a 1e-10 relative singular-value cutoff. */
+  jacobian_rank: number;
+  /** Sorted independent parameter names defining covariance/correlation axes. */
+  covariance_names: string[];
+  /** Local covariance; absolute-error scaling when standard deviations were given,
+   * otherwise multiplied by objective/degrees_of_freedom. */
+  covariance: number[][] | null;
+  /** Dimensionless correlations corresponding to covariance_names. Absent when
+   * any conditional variance is zero; the warning explains that case. */
+  correlation: number[][] | null;
+  /** Why covariance/standard errors were withheld, rather than replaced by zero. */
+  uncertainty_unavailable: string | null;
+  /** Model peak-area-weighted center in absolute eV, excluding baseline/steps. */
+  peak_center_ev: number | null;
+  /** Conditional error in that center, using full parameter covariance. */
+  peak_center_standard_error_ev: number | null;
+  /** Explicit numerical termination category. */
+  termination: "FixedModel" | "Converged" | "NotConverged" | "Cancelled";
+  /** Solver-specific termination detail, retained verbatim for diagnosis. */
+  termination_detail: string;
+  /** Number of residual-vector evaluations during optimization, including numerical derivatives. */
+  evaluations: number;
+  /** Active bounds and other model/uncertainty limitations. */
+  warnings: string[];
+}
+/** One peak, step or baseline contribution on retained native points. */
+export interface PeakContribution {
+  /** Stable component identity from the initial definition. */
+  name: string;
+  /** Scientific role, independent of mathematical shape. */
+  role: "Peak" | "Baseline" | "Edge";
+  /** Mathematical shape used for evaluation. */
+  shape: "Gaussian" | "Lorentzian" | "PseudoVoigt" | "Voigt" | "ErfStep" | "ArctanStep" | "Constant" | "Linear";
+  /** Component values at the result's absolute-energy points, in signal units. */
+  curve: number[];
+  /** Peak/step center in absolute eV; None for polynomial baselines. */
+  center_ev: number | null;
+  /** Whole-axis model area in signal units × eV; None for steps/polynomials. */
+  area: number | null;
+  /** Peak contribution at its center, excluding all other components. */
+  height: number | null;
+  /** Peak FWHM in eV; true Voigt uses a numerical half-height root. */
+  fwhm_ev: number | null;
+  /** Conditional errors propagated with the full joint covariance; absent when
+   * local uncertainty is unavailable or the quantity does not apply. */
+  center_standard_error_ev: number | null;
+  /** Conditional whole-axis area error, in signal units × eV. */
+  area_standard_error: number | null;
+  /** Conditional peak-height error, in signal units. */
+  height_standard_error: number | null;
+  /** Conditional FWHM error, in eV, including both true-Voigt width parameters. */
+  fwhm_standard_error_ev: number | null;
+  /** Trapezoidal component integral over included native-grid segments only.
+   * Masked gaps are not bridged; this is not its whole-axis analytic area. */
+  sampled_integral: number;
+}
+
+/** Initial Gaussian/Lorentzian values; units follow the selected representation. */
+export interface PeakOptions {
+  /** Initial center in eV under the chosen origin: E0 offsets by default. */
+  center: number;
+  /** Whole-axis analytic area, signal units times eV; nonnegative by default. */
+  area: number;
+  /** Full width at half maximum in eV; strictly positive. */
+  fwhm: number;
+}
+/** Common-width Gaussian/Lorentzian mixture. */
+export interface PseudoVoigtOptions extends PeakOptions {
+  /** Lorentzian share from zero to one; zero is Gaussian and one Lorentzian. */
+  fraction: number;
+}
+/** True convolution with separate Gaussian/Lorentzian widths. */
+export interface VoigtOptions {
+  /** Center in eV under the selected origin, E0 offsets by default. */
+  center: number;
+  /** Whole-axis analytic area in signal units times eV, nonnegative by default. */
+  area: number;
+  /** Gaussian FWHM in eV. One width may be fixed to zero, not both. */
+  gaussian_fwhm: number;
+  /** Lorentzian FWHM in eV. Combined FWHM is computed in the result. */
+  lorentzian_fwhm: number;
+}
+/** Initial values for an absorption-edge step; a step has no finite peak area. */
+export interface StepOptions {
+  /** Center in eV under the selected origin, E0 offsets by default. */
+  center: number;
+  /** Change between asymptotes in the selected signal units. */
+  height: number;
+  /** Positive eV scale in erf((E-center)/scale) or atan((E-center)/scale); not a peak FWHM. */
+  scale: number;
+}
+
+/** Exact offline provider/table identity. Retain it for reproducible processing. */
+export interface AtomicReference {
+  /** Provider/profile version and actual decoded-data SHA-256. */
+  data: { provider: string; data_version: string; data_sha256: string };
+  /** Numerical table and interpolation/contribution profile. */
+  table: "ChantlerF2LogLogV1" | "ElamTotalV1" | "ElamTransitionsV1";
+}
+/** Explicit bounds for the optional MBACK erfc background, not a sample correction. */
+export interface MbackErfcOptions {
+  /** Positive increasing width bounds in eV. */
+  width: [number, number];
+  /** Increasing finite amplitude bounds in f2 units; signed values are allowed. */
+  amplitude: [number, number];
+  /** False selects an exact line such as Ka1; true selects a within-shell family such as Ka. */
+  family?: boolean;
+}
+/** Immutable optional smooth-background term (since 0.2.10). It does not correct over-absorption. */
+export class MbackErfc {
+  /** Select an emission originating at the absorber edge, with explicit scientific bounds. */
+  constructor(line: string, options: MbackErfcOptions);
+}
+/** Optional MBACK settings (since 0.2.10); energy and ranges use eV. */
+export interface MbackOptions {
+  /** Fixed measured edge origin in eV; omitted uses derivative detection. Does not shift the table. */
+  e0?: number;
+  /** Inclusive offsets from E0. Omitted suggests the outer 80% of the pre-edge span. */
+  pre_edge?: [number, number];
+  /** Inclusive offsets from E0. Omitted suggests the outer 80% of the post-edge span. */
+  post_edge?: [number, number];
+  /** Smooth-background polynomial degree 0–5, default 2. More flexibility can absorb real structure. */
+  degree?: number;
+  /** Optional bounded fluorescence-background term; omitted disables erfc. */
+  erfc?: MbackErfc;
+}
+/**
+ * Full Chantler MBACK normalization (since 0.2.10). Example:
+ * new MBack("Cu", "K", {pre_edge: [-200,-50], post_edge: [100,800]}).
+ *
+ * Default degree 2 and erfc off. Automatic ranges respect neighboring edges;
+ * inspect the returned intervals. Offline data are loaded automatically and
+ * never shifted. fit() copies inputs and leaves them/model unchanged. Assign to
+ * spectrum.set_normalization_method(model).normalize() for ordinary processing.
+ * Invalid coverage, unsupported tables, unidentifiable fits and nonpositive
+ * scale/step throw. Use a Worker for large browser fits; fit() is synchronous.
+ * Call free() when finished. Settings copied into a spectrum remain independent.
+ */
+export class MBack {
+  /** Select absorber/edge and optional named settings; browser init() is required first. */
+  constructor(element: string, edge: string, options?: MbackOptions);
+  /** Fit matching finite raw absorption arrays, with strictly increasing energy in eV. */
+  fit(energy: Float64Array, mu: Float64Array): MbackResult;
+  /** Versioned model JSON; no input arrays are added. Throws after free(). */
+  to_json(): string;
+  /** Restore a native definition. fit() checks scientific values and archived table identity. */
+  static from_json(json: string): MBack;
+  /** Release this native model. Spectrum settings and owned results remain valid. */
+  free(): void;
+}
+/**
+ * Owned full-MBACK result (since 0.2.10). Arrays are independent JavaScript copies.
+ * norm and fpp are different quantities. Region balancing is not inverse-variance
+ * weighting; objective/convergence alone do not establish experimental uncertainty.
+ */
+export interface MbackResult {
+  /** Named profile, currently mback_chantler_v1. */
+  method: string;
+  /** A fresh native replay model pinned to the original table; free() it after use. */
+  readonly definition: MBack;
+  /** Original result snapshot including all settings/provenance. Editing copied arrays does not alter it. */
+  to_json(): string;
+  /** Exact offline reference and interpolation identity. */
+  reference: AtomicReference;
+  /** Fixed resolved edge origin in eV. */
+  e0: number;
+  /** Tabulated edge in eV; not shifted to measured E0. */
+  tabulated_edge_ev: number;
+  /** Resolved inclusive pre-edge offsets in eV. */
+  pre_edge: [number, number];
+  /** Resolved inclusive post-edge offsets in eV. */
+  post_edge: [number, number];
+  /** Positive atomic conversion scale from input mu units. */
+  scale: number;
+  /** Positive fitted absorption step in input mu units. */
+  edge_step: number;
+  /** Sum of squared balanced residuals, in squared f2 units. */
+  objective: number;
+  /** Column-scaled Jacobian condition number. */
+  condition: number;
+  /** Final Jacobian rank, including erfc width when enabled. */
+  rank: number;
+  /** Number of linear solves during fitting. */
+  evaluations: number;
+  /** Width in eV, or null when erfc is disabled. */
+  erfc_width: number | null;
+  /** Amplitude in f2 units; zero when disabled. */
+  erfc_amplitude: number;
+  /** Polynomial coordinate scale in eV. */
+  energy_scale: number;
+  /** Original energy grid, in eV. */
+  energy: number[];
+  /** Atomic scattering factor in electron units. */
+  f2: number[];
+  /** Matched scale*mu-background in electron units; distinct from norm. */
+  fpp: number[];
+  /** Dimensionless normalized absorption (scale*mu-pre_curve)/Delta. */
+  norm: number[];
+  /** Dimensionless flattened absorption using the auxiliary post-edge trend. */
+  flat: number[];
+  /** Smooth background in f2 units. */
+  background: number[];
+  /** Auxiliary pre-edge line on f2+background, in f2 units. */
+  pre_curve: number[];
+  /** Auxiliary quadratic post-edge curve, in f2 units. */
+  post_curve: number[];
+  /** Unweighted f2+background-scale*mu on every input point. */
+  residual: number[];
+  /** Increasing polynomial powers of (energy-e0)/energy_scale, in f2 units. */
+  coefficients: number[];
+  /** Original zero-based indices included in the objective. */
+  fit_indices: number[];
+  /** 1/sqrt(region count), in fit_indices order. */
+  weights: number[];
+  /** Nonfatal boundary/conditioning diagnostics. */
+  warnings: string[];
+}
+
+/** Optional Cauchy settings (since 0.2.10). Construction copies these values. */
+export interface WaveletOptions {
+  /** Integer exponent 0–6, default 2; emphasizes high-k signal and noise. */
+  kweight?: number;
+  /** Cauchy order 1–4096, default 100. Larger order narrows frequency response and broadens localization in k. */
+  order?: number;
+  /** Uniform numerical k spacing in Å⁻¹, default 0.05; interpolation adds no experimental resolution. */
+  kstep?: number;
+  /** Maximum generated R in Å, default 6. R is not phase-corrected. */
+  rmax?: number;
+  /** Numerical R spacing in Å; default π/(FFT length*kstep). */
+  rstep?: number;
+  /** Half-cosine width inside the support endpoints in Å⁻¹. Default 0 means no taper. */
+  taper?: number;
+  /** Positive increasing R coordinates (Å), replacing the generated grid. */
+  radii?: number[] | Float64Array;
+  /** Power-of-two FFT length, at least twice the prepared k grid length; default automatic. No silent truncation. */
+  nfft?: number;
+}
+/** Checked output dimensions and approximate scientific buffer storage. */
+export interface WaveletSize {
+  /** Prepared k columns, including padding. */ k_points: number;
+  /** Number of map rows at strictly positive R coordinates. */ r_points: number;
+  /** Power-of-two length of the internal fast Fourier transform. */ nfft: number;
+  /** Number of complex output cells: R rows multiplied by k columns. */ cells: number;
+  /** Estimated bytes, excluding input copies, FFT scratch and serialization. */ bytes: number;
+}
+/**
+ * Cauchy settings, available since 0.2.10. Use spectrum.wavelet(new Wavelet([2, 12])).
+ * k_range is fully measured support in Å⁻¹. Defaults: weight 2, order 100,
+ * k step 0.05 Å⁻¹, R up to 6 Å, no taper and automatic FFT/R sampling.
+ * cauchy_v1 fixes order independently of R extent; larger order narrows frequency
+ * response and broadens localization in k. R is not phase-corrected.
+ * Browser init() is required. Calculations are synchronous native Wasm operations;
+ * use a Worker for large interactive jobs. Invalid coverage/grids/budgets throw.
+ */
+export class Wavelet {
+  /** Copy an inclusive measured k interval and optional named settings. */
+  constructor(k_range: [number, number], options?: WaveletOptions);
+  /** Transform original unweighted dimensionless χ(k). Copies finite matching arrays
+   * with increasing, nonnegative k; linearly resamples without extrapolation. */
+  calculate(k: Float64Array, chi: Float64Array): WaveletMap;
+  /** Validate dimensions and estimate buffer storage before transforming. */
+  estimate(k: Float64Array): WaveletSize;
+  /** Native settings JSON with automatic choices preserved; no input arrays. */
+  to_json(): string;
+  /** Restore settings. Calculation validates scientific values and resource limits. */
+  static from_json(json: string): Wavelet;
+  /** Release this model. Independent maps and copied spectrum settings remain valid. */
+  free(): void;
+}
+/** Spectrum preparation retained with a map; original k/χ are its direct replay inputs. */
+export interface WaveletPreparation {
+  /** Rexafs version that prepared the spectrum. */ software_version: string;
+  /** Numerical backend name. */ backend: string;
+  /** Resolved E₀ (eV), if available. */ e0: number | null;
+  /** Normalization edge step in input μ units, if available. */ edge_step: number | null;
+  /** Versioned native normalization settings, without large result arrays. */ normalization: unknown;
+  /** Versioned native background settings, without large result arrays. */ background: unknown;
+}
+/**
+ * Owned Cauchy map (since 0.2.10). All array getters return independent typed-array
+ * copies. Complex/magnitude/phase arrays are flat, row-major: index r*shape[1]+k.
+ * shape is [R rows, k columns]; W units are those of k**weight * χ, distinct from
+ * ordinary Fourier scaling. Display colors and sampling do not define a metric.
+ */
+export class WaveletMap {
+  private constructor();
+  /** Matrix dimensions in [R, k] order, including explicit k padding. */ readonly shape: [number, number];
+  /** Independent k coordinates, in Å⁻¹. */ readonly k: Float64Array;
+  /** Independent R coordinates, in Å; not phase-corrected distances. */ readonly r: Float64Array;
+  /** Original measured k before resampling. */ readonly input_k: Float64Array;
+  /** Original unweighted χ, unchanged. */ readonly input_chi: Float64Array;
+  /** Resampled unweighted χ; zero outside selected support. */ readonly prepared_chi: Float64Array;
+  /** Support/taper multipliers applied before weighting. */ readonly window: Float64Array;
+  /** One for measured support, zero for padding. */ readonly support: Uint8Array;
+  /** Flat native real values. */ readonly real: Float64Array;
+  /** Flat native imaginary values. */ readonly imaginary: Float64Array;
+  /** Flat native magnitude, without display normalization/resampling. */ readonly magnitude: Float64Array;
+  /** Radians, with NaN for zero amplitude or values below a fraction of the maximum
+   * (default 1%). Fraction must lie in [0,1]. The native map remains unchanged. */
+  phase(relative_floor?: number): Float64Array;
+  /** Native magnitude versus k at a covered R coordinate (Å). */ slice_at_r(r: number): Float64Array;
+  /** Native magnitude versus R at a covered k coordinate (Å⁻¹). */ slice_at_k(k: number): Float64Array;
+  /** Integrate native bilinear magnitude over a covered k/R rectangle. Display
+   * sampling never participates; invalid bounds throw. No uncertainty is inferred. */
+  integral(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
+  /** Area-weighted mean of native bilinear magnitude (since 0.2.10), not an average
+   * of cells. k is Å⁻¹ and R is Å. Increasing, fully covered ranges are required;
+   * invalid bounds throw. Returns units/method without inferred uncertainty. */
+  mean(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
+  /** Maximum native bilinear magnitude, including rectangle boundaries
+   * (since 0.2.10). k is Å⁻¹ and R is Å; increasing, fully covered ranges are
+   * required. Returns units/method without inferred uncertainty. */
+  maximum(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
+  /** Fresh independent settings; release them with free() after use. */ readonly definition: Wavelet;
+  /** Original processing metadata, or null for a direct array calculation. */ readonly preparation: WaveletPreparation | null;
+  /** Interpretation and boundary diagnostics, not confidence intervals. */ readonly warnings: string[];
+  /** Full native map, original inputs and preparation provenance as JSON. */ to_json(): string;
+  /** Restore checked method, dimensions, axes, finite values and budgets. This does
+   * not independently prove an external producer's numerical correctness. */
+  static from_json(json: string): WaveletMap;
+  /** Release the native map. Previously returned array copies remain valid. */ free(): void;
+}
+/** Native covered-rectangle magnitude statistic; method identifies integral, mean or maximum. Units are those of k**weight * χ. */
+export interface WaveletRegionValue {
+  /** Native region statistic; no experimental uncertainty is supplied. */ value: number;
+  /** Exact inclusive k bounds, in Å⁻¹. */ k_range: [number, number];
+  /** Exact inclusive R bounds, in Å. */ r_range: [number, number];
+  /** Integral units including k weight. */ unit: string;
+  /** Numerical convention: bilinear_magnitude_v1 (integral), bilinear_magnitude_mean_v1 or bilinear_magnitude_maximum_v1. */ method: string;
+}
+
+/** Acquisition interpretation (since 0.2.10). Unknown means missing evidence, not
+ * established fluorescence. Changing it never removes correction history. */
+export type AbsorptionMode = "unknown" | "transmission" | "fluorescence";
+
+/** Explicit sample geometry/emission plus optional internal-fit settings (since 0.2.10). */
+export interface FluorescenceCorrectionOptions {
+  /** Detected emission, for example Ka1; no line is inferred. */ line: string;
+  /** Measured [incidence, exit] angles in degrees FROM THE SAMPLE SURFACE, each in (0,90]. */ angles: [number, number];
+  /** Default false selects one line; true selects an unresolved within-shell family, e.g. Ka. */ family?: boolean;
+  /** Measured E0 in eV; omitted detects the edge. Does not shift the atomic table. */ e0?: number;
+  /** Internal pre-edge eV offsets from E0; omitted uses available low endpoint to -30 eV. */ pre_edge?: [number, number];
+  /** Internal post-edge eV offsets from E0; omitted uses +100 eV to available high endpoint. */ post_edge?: [number, number];
+  /** Internal post-edge polynomial degree 0–5, default 1. Pre-edge is linear; no Victoreen term. */ degree?: number;
+}
+/**
+ * Optically thick, homogeneous-sample XANES correction (since 0.2.10).
+ * new FluorescenceCorrection("CuO", "Cu", "K", {line:"Ka1", angles:[45,45]})
+ * requires the complete sample formula, absorber, edge, detected emission and
+ * measured geometry. Angles use the sample surface convention, not the normal.
+ * Internal conventional normalization runs automatically; final normalization
+ * of corrected mu is a separate operation. The fluo_elam_v1 model is not qualified
+ * for EXAFS or finite-thickness samples. Offline atomic data load automatically.
+ * See https://xraypy.github.io/xraylarch/xafs_preedge.html#over-absorption-corrections.
+ */
+export class FluorescenceCorrection {
+  /** Copy explicit settings. Invalid types/options throw; scientific checks run
+   * on calculation. Browser callers must await init() before construction. */
+  constructor(formula: string, element: string, edge: string, options: FluorescenceCorrectionOptions);
+  /** Correct original unnormalized fluorescence arrays on their energy grid (eV).
+   * Copies matching finite Float64Arrays; energy must be positive and increasing.
+   * Returns original/corrected mu in the same units. Invalid composition, geometry,
+   * coverage, fitted step or singular denominator throw; nothing is clipped.
+   * Uncertainty is unavailable. Prefer Spectrum.correct_fluorescence to retain
+   * domain restrictions in later processing. This synchronous calculation should
+   * run in a Worker for large browser workloads. Result needs no free(). */
+  apply(energy: Float64Array, mu: Float64Array): FluorescenceCorrectionResult;
+  /** Native settings JSON, including any pinned atomic identity. */ to_json(): string;
+  /** Restore settings; calculation checks scientific values and reference availability. */
+  static from_json(json: string): FluorescenceCorrection;
+  /** Release this model's Wasm allocation. Do not access it again; copied results remain valid. */ free(): void;
+}
+/** Internal conventional fit of original mu (since 0.2.10), distinct from final
+ * normalization. Lists are independent copies on the original energy grid. */
+export interface FluorescenceInternalNormalization {
+  /** Edge energy E0 used by the internal normalization, in electronvolts. */ e0: number;
+  /** Resolved pre-edge eV offsets from E0. */ pre_edge: [number, number];
+  /** Resolved post-edge eV offsets from E0. */ post_edge: [number, number];
+  /** Internal post-edge polynomial degree; pre-edge is linear. */ degree: number;
+  /** Positive fitted jump in original mu units, before numerical flooring. */ edge_step: number;
+  /** Pre-edge line in original mu units. */ pre_curve: number[];
+  /** Pre-edge line plus post-edge polynomial, in original mu units. */ post_curve: number[];
+  /** Dimensionless internal n0 in alpha+1-n0. */ norm: number[];
+}
+/** Independent historical correction (since 0.2.10), with copied arrays/dictionaries.
+ * Editing these values never alters the spectrum, to_json() record or replay
+ * definition. No free() is required for this JavaScript result. Inspect warnings
+ * and amplification; numerical success does not establish physical validity. */
+export interface FluorescenceCorrectionResult {
+  /** Original measured energy in eV, without resampling. */ readonly energy: Float64Array;
+  /** Original uncorrected absorption, in supplied units. */ readonly original_mu: Float64Array;
+  /** Corrected absorption, same grid/units; final normalization is separate. */ readonly corrected_mu: Float64Array;
+  /** Dimensionless alpha/denominator, without clipping. */ readonly factor: Float64Array;
+  /** Dimensionless alpha+1-internal_norm, without clipping. */ readonly denominator: Float64Array;
+  /** Named numerical convention, fluo_elam_v1. */ readonly method: string;
+  /** Original acquisition interpretation; unknown records a caller assumption. */ readonly input_mode: AbsorptionMode;
+  /** Dimensionless attenuation/geometry constant. */ readonly alpha: number;
+  /** sin(incidence)/sin(exit) with surface angles; dimensionless. */ readonly geometry_ratio: number;
+  /** Smallest dimensionless denominator on the whole input grid. */ readonly minimum_denominator: number;
+  /** Largest dimensionless factor; high values amplify noise. */ readonly maximum_amplification: number;
+  /** Numerical rejection limit, 64*epsilon*max(1, alpha+1). */ readonly singularity_threshold: number;
+  /** Domain, interpretation and numerical diagnostics; not confidence intervals. */ readonly warnings: string[];
+  /** Fresh independent settings pinned to resolved ranges/E0 and atomic data; call free() after use. */ readonly definition: FluorescenceCorrection;
+  /** Internal conventional fit of original mu, with independent lists. */ readonly internal: FluorescenceInternalNormalization;
+  /** Edge, emission and compound attenuation records: eV energies, mass fractions,
+   * cm²/g values, table identities and checksums. */ readonly atomic: Record<string, unknown>;
+  /** Original native record with full inputs/assumptions/atomic evidence. */ to_json(): string;
+}

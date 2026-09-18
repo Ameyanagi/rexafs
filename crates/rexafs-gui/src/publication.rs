@@ -461,6 +461,7 @@ mod tests {
                         inputs: [(
                             0,
                             crate::project::AnalysisInput {
+                                corrections: Vec::new(),
                                 group_id: None,
                                 label: "sample, \"one\"".into(),
                                 fingerprint: 7,
@@ -468,6 +469,7 @@ mod tests {
                         )]
                         .into(),
                         standards: vec![crate::project::AnalysisInput {
+                            corrections: Vec::new(),
                             group_id: None,
                             label: "Cu foil".into(),
                             fingerprint: 9,

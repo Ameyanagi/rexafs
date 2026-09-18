@@ -89,6 +89,30 @@ impl StudioApp {
         if open {
             panel = panel.child(self.import_summary_details(cx));
         }
+        if self.current_group_index().is_some()
+            && self.spectrum_quantity != crate::params::Quantity::ChiK
+        {
+            panel =
+                panel.child(
+                    div()
+                        .px_3()
+                        .py_1()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .children(self.field(crate::app::ParamKey::EnergyOffset, cx)),
+                        )
+                        .child(button(&t, "reset-energy-offset", "Zero", false).on_click(
+                            cx.listener(|app, _, _, cx| {
+                                app.apply_param(crate::app::ParamKey::EnergyOffset, Some(0.0), cx)
+                            }),
+                        )),
+                );
+        }
         panel
     }
 
@@ -125,6 +149,15 @@ impl StudioApp {
                         ));
                 } else {
                     card = card.child("No recorded operation for these stored arrays.");
+                }
+            }
+            if let Some(record) = &self.ui_params().alignment_record {
+                card = card.child(format!(
+                    "Last alignment: auto {:+.2}, manual {:+.2} eV",
+                    record.automatic_shift_ev, record.manual_shift_ev
+                ));
+                if let Some(reference) = record.inputs.get(1) {
+                    card = card.child(format!("Reference: {}", reference.label));
                 }
             }
             return card.into_any_element();
@@ -231,8 +264,17 @@ impl StudioApp {
                 .map(|target| format!("Saved reference alignment · target {target:.3} eV"))
                 .unwrap_or("0 eV · reference alignment has no target".into())
         } else {
-            "0 eV · original source axis".into()
+            format!("{:+.2} eV · active energy offset", params.energy_offset_ev)
         });
+        if let Some(record) = &params.alignment_record {
+            card = card.child(format!(
+                "Last alignment: auto {:+.2}, manual {:+.2} eV",
+                record.automatic_shift_ev, record.manual_shift_ev
+            ));
+            if let Some(reference) = record.inputs.get(1) {
+                card = card.child(format!("Reference: {}", reference.label));
+            }
+        }
         if application.is_some() {
             let id = group.clone();
             card = card.child(

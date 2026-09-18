@@ -1,6 +1,13 @@
 //! Thin Python bindings: all stage execution and defaults live in rexafs.
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::prelude::*;
+mod fluorescence;
+mod mback;
+mod metrics;
+mod peaks;
+mod wavelet;
+
+type PySpectrumArrays<'py> = (Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>);
 
 fn error(error: rexafs::Error) -> PyErr {
     match error {
@@ -1246,7 +1253,8 @@ impl PyXrayFFTR {
 /// Use NormalizationMethod.PrePostEdge(parameters) for configured pre/post-edge
 /// normalization or new_prepostedge() for automatic settings, then pass the
 /// result to Spectrum.set_normalization_method(). Creating a method does not
-/// process data. MBack is a named placeholder and is not implemented.
+/// process data. The no-argument MBack selector has no absorber/edge and cannot
+/// normalize. The MBACK algorithm was unimplemented through version 0.2.9.
 #[pyclass(name = "NormalizationMethod", module = "rexafs", skip_from_py_object)]
 #[derive(Clone)]
 struct PyNormalizationMethod {
@@ -1277,11 +1285,13 @@ impl PyNormalizationMethod {
             inner: rexafs::NormalizationMethod::new_prepostedge(),
         }
     }
-    /// Create the unimplemented MBack normalization placeholder.
+    /// Create the historical empty MBack normalization selector.
     ///
     /// Selecting it preserves the requested algorithm, but normalize() and
     /// dependent stages raise ValueError rather than substitute another method.
-    /// Use new_prepostedge() for the implemented normalization workflow.
+    /// Use new_prepostedge() for automatic polynomial normalization. Through
+    /// version 0.2.9 the MBACK algorithm was unimplemented; this historical
+    /// no-argument selector remains unusable for normalization.
     #[staticmethod]
     fn new_mback() -> Self {
         Self {
@@ -1365,6 +1375,135 @@ struct PySpectrum {
 }
 #[pymethods]
 impl PySpectrum {
+    /// Correct into an independent unnormalized Spectrum (since 0.2.10). Internal
+    /// conventional normalization runs automatically; the source stays unchanged.
+    /// Unknown acquisition provenance is explicitly interpreted as fluorescence.
+    /// Known transmission, prepared norm/flat and repeated correction raise ValueError.
+    /// Select a line and measured surface angles in FluorescenceCorrection. Releases
+    /// the GIL. Call normalize() for separate final polynomial/MBACK normalization.
+    /// History survives edits; this XANES-only branch rejects background/FFT/wavelets.
+    fn correct_fluorescence(
+        &self,
+        py: Python<'_>,
+        model: &fluorescence::PyFluorescenceCorrection,
+    ) -> PyResult<Self> {
+        let inner = py
+            .detach(|| self.inner.correct_fluorescence(&model.inner))
+            .map_err(fluorescence::invalid)?;
+        Ok(Self { inner })
+    }
+    /// Owned historical correction record, or None. Later edits/normalization do
+    /// not change its original inputs or remove its XANES-only processing restriction.
+    fn fluorescence_correction(&self) -> Option<fluorescence::PyFluorescenceCorrectionResult> {
+        self.inner
+            .fluorescence_correction()
+            .cloned()
+            .map(|inner| fluorescence::PyFluorescenceCorrectionResult { inner })
+    }
+    /// Acquisition interpretation: unknown, transmission or fluorescence. Unknown
+    /// means missing evidence, not an automatically recognized fluorescence signal.
+    fn absorption_mode(&self) -> &'static str {
+        fluorescence::mode_name(self.inner.absorption_mode())
+    }
+    /// Explicitly revise acquisition interpretation and return this Spectrum.
+    /// Arrays/caches are unchanged. A correction record and its restrictions survive.
+    fn set_absorption_mode<'py>(
+        mut slf: PyRefMut<'py, Self>,
+        mode: &str,
+    ) -> PyResult<PyRefMut<'py, Self>> {
+        slf.inner.set_absorption_mode(fluorescence::mode(mode)?);
+        Ok(slf)
+    }
+    /// Calculate a Cauchy wavelet map on a private copy (since 0.2.10).
+    /// Use spectrum.wavelet(Wavelet((2, 12))). The k interval is in inverse angstroms.
+    /// Missing normalization/AUTOBK run automatically; existing chi is reused.
+    /// Inputs, settings and cached results remain unchanged. Releases the GIL.
+    /// Returns an owned WaveletMap with copied NumPy arrays (rows=R, columns=k).
+    /// Incomplete support, invalid grids and unqualified corrected XANES inputs
+    /// raise ValueError. R is not phase-corrected; colors do not imply concentration.
+    fn wavelet(
+        &self,
+        py: Python<'_>,
+        model: &wavelet::PyWavelet,
+    ) -> PyResult<wavelet::PyWaveletMap> {
+        let inner = py
+            .detach(|| self.inner.wavelet(&model.inner))
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(wavelet::PyWaveletMap { inner })
+    }
+    /// Fit a composite XANES model, preparing missing normalization on a private copy.
+    ///
+    /// Available since 0.2.10. Example: spectrum.fit_peaks(PeakFit((-20, 40)).gaussian("p1", 5, 2, 3)).
+    /// Defaults come from the model: Norm, E0-relative eV, 200 iterations. The source
+    /// arrays, settings, caches and initial model remain unchanged. Returns an owned
+    /// PeakFitResult with data/model/residual arrays on retained native points.
+    /// Inspect termination and warnings; a returned result can be nonconverged.
+    /// Invalid definitions, insufficient coverage or failed preparation raise ValueError.
+    /// Rust calculation releases the GIL. No smoothing or interpolation occurs.
+    ///
+    /// Optional errors contain positive independent standard deviations in the selected
+    /// signal representation, one per ORIGINAL native point, including excluded points.
+    /// Raw detector errors are not propagated through normalization. Without errors,
+    /// covariance uses residual-based variance; it is withheld at active bounds,
+    /// deficient rank or nonconvergence. These are conditional local uncertainties.
+    #[pyo3(signature=(model, *, errors=None))]
+    fn fit_peaks(
+        &self,
+        py: Python<'_>,
+        model: &peaks::PyPeakFit,
+        errors: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<peaks::PyPeakFitResult> {
+        let errors = errors.map(|e| metrics::errors(py, e)).transpose()?;
+        let inner = py
+            .detach(|| model.inner.fit_with_errors(&self.inner, errors.as_deref()))
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(peaks::PyPeakFitResult { inner })
+    }
+    /// Measure a point or region, preparing missing stages on a private copy.
+    ///
+    /// Available since 0.2.10. Recommended: spectrum.measure("mean", (-20, 30)). Defaults
+    /// to normalized mu and E0-relative energy offsets in eV; select space="flat"
+    /// explicitly. point accepts a scalar; mean/integral/maximum accept two
+    /// increasing bounds. k (inverse angstroms) and R (angstroms, not phase
+    /// corrected) default to absolute coordinates. kweight defaults to zero and
+    /// applies only to chi. No extrapolation or display sampling occurs.
+    ///
+    /// Returns an owned MeasurementResult. Mean is integral divided by interval
+    /// width, not the arithmetic sample mean. Integral uses piecewise-linear
+    /// trapezoids with interpolated boundaries. Only required preparation runs;
+    /// arrays, settings and cached results on this spectrum remain unchanged.
+    /// Rust calculation releases the GIL. Invalid inputs, unavailable preparation
+    /// and missing coverage raise ValueError.
+    ///
+    /// Optional errors are independent standard deviations of the SELECTED
+    /// representation on its native grid, in its signal units. They must already
+    /// describe that processed signal: raw-count errors are not propagated through
+    /// normalization or Fourier transforms. Point/mean/integral support them;
+    /// maximum rejects them. Axis, E0 and settings are treated as exact. No
+    /// correlations, confidence intervals or errors are inferred when omitted.
+    #[pyo3(signature = (operation, coordinates, *, space="norm", origin=None, kweight=0, errors=None))]
+    // Keep the public keyword-only scientific options directly visible to Python editors.
+    #[allow(clippy::too_many_arguments)]
+    fn measure(
+        &self,
+        py: Python<'_>,
+        operation: &str,
+        coordinates: &Bound<'_, PyAny>,
+        space: &str,
+        origin: Option<&str>,
+        kweight: u8,
+        errors: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<metrics::PyMeasurementResult> {
+        let definition = metrics::definition(operation, coordinates, space, origin, kweight)?;
+        let errors = errors.map(|e| metrics::errors(py, e)).transpose()?;
+        let result = py
+            .detach(|| match errors {
+                Some(errors) => self.inner.measure_with_errors(&definition, &errors),
+                None => self.inner.measure(&definition),
+            })
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(metrics::PyMeasurementResult { inner: result })
+    }
     /// Create a spectrum by copying energy and mu into float64 storage.
     ///
     /// energy contains X-ray energies in eV; mu contains the corresponding
@@ -1505,6 +1644,8 @@ impl PySpectrum {
                     Some(rexafs::NormalizationMethod::PrePostEdge(
                         parameters.inner.clone(),
                     ))
+                } else if let Ok(parameters) = value.extract::<PyRef<'_, mback::PyMBack>>() {
+                    Some(rexafs::NormalizationMethod::MBack(parameters.inner.clone()))
                 } else {
                     Some(
                         value
@@ -1578,7 +1719,7 @@ impl PySpectrum {
     /// automatic parameters are resolved from the data. Call norm(), flat(),
     /// pre_edge() and post_edge() to retrieve independent result arrays.
     /// This recomputes normalization, clears background/Fourier results and
-    /// returns this spectrum. Invalid ranges, failed fits and MBack raise ValueError.
+    /// returns this spectrum. Invalid ranges, failed fits and an empty MBack selector raise ValueError.
     fn normalize(mut slf: PyRefMut<'_, Self>) -> PyResult<PyRefMut<'_, Self>> {
         let py = slf.py();
         let inner = &mut slf.inner;
@@ -1599,6 +1740,18 @@ impl PySpectrum {
         py.detach(|| inner.calc_background().map(|_| ()))
             .map_err(error)?;
         Ok(slf)
+    }
+    /// Copy the latest full MBACK result, or None if absent/invalidated. Its arrays
+    /// and diagnostics remain independent after further spectrum processing.
+    fn mback_result(&self) -> Option<mback::PyMbackResult> {
+        match self.inner.normalization.as_ref()? {
+            rexafs::NormalizationMethod::MBack(m) => {
+                m.result.as_ref().map(|r| mback::PyMbackResult {
+                    inner: (**r).clone(),
+                })
+            }
+            _ => None,
+        }
     }
     /// Compute the weighted k-to-R Fourier transform, running missing prerequisites.
     ///
@@ -1869,7 +2022,7 @@ fn read_qas_transmission(path: &str) -> PyResult<PySpectrum> {
         inner: rexafs::io::read_qas_transmission(path).map_err(|e| error(e.into()))?,
     })
 }
-/// Native storage for the unreleased rexafs.io.Measurement facade.
+/// Native storage for the rexafs.io.Measurement facade introduced in 0.2.10.
 /// Reading preserves source arrays; selecting a mapping performs only detector
 /// arithmetic and conversion to eV. No processing or input mutation occurs.
 #[pyclass(name = "Measurement")]
@@ -1904,7 +2057,7 @@ impl PyMeasurement {
         py: Python<'py>,
         scan: usize,
         mapping_json: Option<&str>,
-    ) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>)> {
+    ) -> PyResult<PySpectrumArrays<'py>> {
         let mapping = mapping_json
             .map(serde_json::from_str::<rexafs::io::SpectrumSelection>)
             .transpose()
@@ -1955,6 +2108,19 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyNormalizationMethod>()?;
     m.add_class::<PyBackgroundMethod>()?;
     m.add_class::<PySpectrum>()?;
+    m.add_class::<metrics::PyMeasurementResult>()?;
+    m.add_class::<wavelet::PyWavelet>()?;
+    m.add_class::<fluorescence::PyFluorescenceCorrection>()?;
+    m.add_class::<fluorescence::PyFluorescenceCorrectionResult>()?;
+    m.add_class::<wavelet::PyWaveletMap>()?;
+    m.add_class::<wavelet::PyWaveletRegionValue>()?;
+    m.add_class::<mback::PyMBack>()?;
+    m.add_class::<mback::PyMbackErfc>()?;
+    m.add_class::<mback::PyMbackResult>()?;
+    m.add_class::<peaks::PyPeakFit>()?;
+    m.add_class::<peaks::PyPeakFitResult>()?;
+    m.add_class::<peaks::PyPeakContribution>()?;
+    m.add_class::<peaks::PyPeakOutcome>()?;
     m.add_class::<PyMeasurement>()?;
     m.add_function(wrap_pyfunction!(read_qas_transmission, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

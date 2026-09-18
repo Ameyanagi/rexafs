@@ -9,6 +9,15 @@ use thiserror::Error;
 /// Errors related to data validation and input processing.
 #[derive(Error, Debug, Clone)]
 pub enum DataError {
+    /// A constant energy-axis correction cannot be represented safely.
+    #[error("invalid energy offset {offset_ev} eV: {reason}")]
+    InvalidEnergyOffset {
+        /// Requested total energy offset, in eV.
+        offset_ev: f64,
+        /// Nonfinite input, overflow or loss of energy-grid spacing.
+        reason: String,
+    },
+
     #[error("insufficient data: need at least {min} points, got {actual}")]
     /// The operation received fewer samples than its minimum requirement.
     InsufficientData {

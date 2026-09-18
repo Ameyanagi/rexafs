@@ -1,0 +1,150 @@
+# Analysis B–F review before the dev pull request
+
+Reviewed on 18 September 2026 in `feature/analysis-b-f`, including its 19 commits
+ahead of `dev` and the subsequent local refinements. The PR contains all requested
+B–F development work, not only the final alignment and normalization UI changes.
+
+## Issues corrected during review
+
+- Added checked absolute energy-offset operations to the core and routed desktop
+  axis adjustment through them. Replacing arrays resets the recorded offset;
+  zeroing an offset does not undo independent data edits.
+- A full GUI regression caught rejection of repeated energy points during merge.
+  Existing repeated samples now survive both zero and nonzero offsets; shifts
+  that collapse distinct samples still fail before mutation.
+- Restored released Stable reference pages after unreleased MBACK descriptions
+  had leaked into them. New API documentation remains in Next.
+- Updated the Windows archive test's isolated repository fixture for the newly
+  bundled atomic-data notices. Both architecture cases now verify that those
+  notice bytes survive packaging.
+- Moved the MBACK method editor into the Normalize sidebar. Group changes and
+  Undo/Redo replace the editor state and invalidate stale calculations; atomic
+  matching and method comparison remain optional views in the same tab.
+
+Review also checked immutable source/result retention, calculation generation
+checks, Live snapshot limits and transaction ordering, experimental-fixture
+provenance, bounded COD requests, wavelet region validation, and immutable plot
+exports. No additional blocking finding remains in these inspected paths.
+
+## Checks completed
+
+| Check | Result |
+| --- | --- |
+| Core with desktop-enabled features: 32 unit/integration suites | 481 passed, 6 ignored. |
+| Final energy-offset regressions, including experimental Ru and repeated samples | 3 passed. |
+| Final complete desktop suite | 608 passed, 6 ignored. |
+| Rust documentation examples | 9 passed. |
+| Core strict Clippy, all targets | Passed. |
+| Release desktop build | Passed; 12 existing dead-code warnings. |
+| Installed Python release wheel | 38 tests and 41 subtests passed. |
+| Installed Python editor completion/signature/hover checks | Passed. |
+| Built browser/Node Wasm and npm runtime/editor/package checks | 38 passed. |
+| Astro documentation checks | 37 files, no errors, warnings or hints. |
+| Documentation generator regressions | 8 passed. |
+| Release/package tooling | All 12 suites passed. |
+| Release-version and project-compatibility fixtures | Passed; version 0.2.9 and 40 retained project samples. |
+| Beamline fixture integrity and Cargo package contents | Passed; attributed fixtures and their integration targets excluded. |
+| Rust formatting and patch whitespace | Passed. |
+
+The combined core/desktop command finished all 32 core suites. Its pending
+redundant desktop invocation, compiled before the final fixes, was stopped;
+the separate final desktop command supplied the 608-test result above. Core
+offset regressions, doctests and Clippy were rerun after the repeated-point fix.
+The binding APIs were unchanged by that final core offset adjustment; these new
+Rust offset methods are not yet exposed in Python or TypeScript.
+
+## Evidence and remaining qualification
+
+The [MBACK desktop record](../2026-09-18-mback-normalize/README.md) includes fresh
+native screenshots. The [alignment/COD record](../2026-09-18-cod-alignment/README.md)
+and other dated records preserve the earlier checks. Only public attributed
+measurements or explicitly labeled synthetic workflow demonstrations appear in
+published screenshots. Private unpublished measurements remain outside this PR.
+
+Experimental Cu/Ru MBACK references and matched-input complex wavelet references
+are retained with licenses and checksums, and excluded from published packages.
+Wavelet agreement is qualified with identical prepared χ arrays; it does not
+establish end-to-end AUTOBK equivalence or physical accuracy.
+
+This local review does not qualify native Windows/Linux interaction, sustained
+Live acquisition on network storage, or release installers. CI and platform
+qualification remain separate. LCF/PCA/MCR bindings and the new energy-offset
+bindings remain tracked follow-up work. The PR does not change the release
+version or publish packages.
+
+## Follow-up from the first PR checks
+
+The local results above did not predict two failures on PR #88. The core CI
+matrix rejected the Ru auxiliary post-edge polynomial: its maximum absolute
+reference difference was 1.783×10⁻⁶ on Linux and 3.517×10⁻⁶ on Windows, while
+the atomic-matching background remained within 6.78×10⁻¹⁰. Only that auxiliary
+curve now uses a separate 5×10⁻⁶ absolute tolerance in f₂ units. The
+[reference record](../../../crates/rexafs/tests/fixtures/analysis/experimental-larch/README.md#cross-platform-tolerance-revision--18-september-2026)
+retains the initial measurements and the rationale. No numerical implementation
+or oracle array was changed. All six experimental reference tests pass locally.
+
+The website check also exposed that manually restoring Stable pages was not
+sufficient: the generators intentionally use maintained source help for shared
+members. Shared Python/TypeScript help now describes the historical empty MBACK
+selector consistently with both versions and explicitly records that MBACK was
+unimplemented through 0.2.9. Configured MBACK remains documented in Next.
+Regenerated reference pages and citations reproduce byte-for-byte, all eight
+generator tests pass, and all 37 Astro files have no diagnostics. CI must rerun
+these corrections on the supported platforms before its status is considered
+green.
+
+The subsequent method-specific fit overlay passed all 12 plotting tests and the
+complete desktop suite (609 passed, 6 ignored). Native macOS controls verified
+the full MBACK curve, on/off behavior and replacement by polynomial baselines;
+the release build and [new screenshot](../2026-09-18-mback-normalize/mback-fit-toggle.jpg)
+show this final UI. This overlay uses the existing core fit arrays and does not
+change the numerical algorithm.
+
+After the API-page drift was corrected, the website job reached strict Rust
+documentation generation and exposed four bracketed `[0,1]` ranges being
+interpreted as unresolved links, plus an undocumented cosine-window width
+field. The ranges now use code formatting; the width has field-level unit and
+constraint documentation. The strict `cargo doc` build passes with the website's
+core feature set, `-D missing-docs` and `-D rustdoc::broken-intra-doc-links`.
+These are documentation-only corrections.
+
+## Follow-up from Windows readiness and website content checks
+
+At `e751ff6`, core checks, both numerical benchmark jobs, Python/npm checks,
+and macOS/Linux desktop jobs passed. Both Windows desktop jobs failed Live
+readiness tests that immediately rewrote equal-length files and assumed that
+their filesystem modification times had advanced. The tests advanced their
+observation clock explicitly but left the file clock dependent on execution
+timing. The fixture rewrite helper now advances the modification time explicitly
+and asserts that the file fingerprint changed. All original readiness and
+malformed-row assertions remain; production readiness logic is unchanged.
+All ten Live readiness tests pass locally. Windows confirmation requires a new
+CI run.
+
+The website job passed strict Rust documentation generation, then rejected four
+TypeScript member descriptions that were below its minimum explanation length.
+The source declarations now explain the internal edge energy, positive-R row
+count, Fourier-transform length and complex map cell count. The Next reference
+pages were regenerated from those declarations. A fresh website build at the
+deployment base (`https://rexafs.com/`) and all 22 website tests pass, including
+the API-member and internal-link checks. All eight generator tests, Rust
+formatting and patch whitespace checks also pass locally.
+
+## Follow-up from browser engine staging
+
+The next website run passed generation, build and content checks but failed
+eight browser workspace tests. The same eight failures reproduced locally;
+the other 17 browser tests passed. The staged browser entry point imported four
+new helpers (`peaks.js`, `mback.js`, `fluorescence.js` and `wavelet.js`) that
+the website's old copy list omitted, preventing engine initialization for every
+import format. The earlier local website result did not include this browser
+suite.
+
+Staging now takes its JavaScript runtime modules from the npm package file
+list, excluding the Node entry point. A new test imports the actual built
+website engine, initializes its Wasm binary and verifies every original energy
+and absorption value in the experimental Cu example. It failed with the missing
+`wavelet.js` filename before the staging correction and passes afterward. The
+fresh build, all 23 website tests and Astro checks (38 files, no diagnostics)
+pass locally. The complete Chromium suite also passes all 25 tests, including
+imports, numerical export comparisons, cancellation/recovery and accessibility.

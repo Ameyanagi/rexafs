@@ -79,3 +79,9 @@ review failures and the reported per-frame uncertainties. Use
 [LCF theory](https://rexafs.com/docs/science/analysis/) to interpret standard weights. Processing
 choices and model inadequacy can create apparent trends; a smooth trend alone
 does not validate a model.
+
+## Live acquisition (unreleased)
+
+**Live…** watches completed files and applies a frozen processing and trend recipe.
+See [Live acquisition](live-acquisition.md) for the configurable quiet-file check,
+include-existing preview, review, pause/resume and recovery workflow.

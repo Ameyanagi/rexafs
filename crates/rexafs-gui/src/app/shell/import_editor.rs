@@ -68,6 +68,7 @@ enum Action {
     Scan(usize),
     IncludeScan(usize),
     AllScans(bool),
+    MatchingFiles,
     Signal(usize),
     IncludeSignal(usize),
     Mode(u8),
@@ -193,7 +194,7 @@ impl StudioApp {
         {
             let path = source.files[0].clone();
             self.import_editor = None;
-            self.open_measurement_path(path, false, cx);
+            self.open_measurement_batch(path, false, Some(batch), cx);
             return;
         }
         let Some(scope) = self.capture_review_scope(batch, cluster) else {
@@ -657,31 +658,47 @@ impl ImportEditor {
             return;
         }
         if let Some(source) = &self.measurement {
-            let groups = match source.materialize_import(draft.config()) {
-                Ok(group) => group,
-                Err(error) => {
-                    self.error = Some(error);
-                    cx.notify();
-                    return;
-                }
-            };
+            let source = source.clone();
+            let config = draft.config().clone();
             let expected = self.target.project_generation;
-            let accepted = self
-                .studio
-                .update(cx, |studio, cx| {
-                    if studio.project_generation != expected {
-                        return false;
-                    }
-                    studio.accept_measurements(groups, cx);
-                    true
-                })
-                .unwrap_or(false);
-            if accepted {
-                self.close(window, cx);
-            } else {
-                self.error = Some("The project changed; reopen the import.".into());
-                cx.notify();
-            }
+            let main = window.window_handle();
+            self.locked = true;
+            self.error = None;
+            cx.spawn(async move |this, cx| {
+                let batch = source.batch.as_ref().map(|b| b.id);
+                let result = cx
+                    .background_executor()
+                    .spawn(async move { source.materialize_batch(&config) })
+                    .await;
+                let _ = main.update(cx, |_, window, cx| {
+                    let _ = this.update(cx, |this, cx| {
+                        this.locked = false;
+                        match result {
+                            Ok(groups) => {
+                                let accepted = this
+                                    .studio
+                                    .update(cx, |studio, cx| {
+                                        if studio.project_generation != expected {
+                                            return Err(
+                                                "The project changed; reopen the import.".into()
+                                            );
+                                        }
+                                        studio.accept_measurements(groups, batch, cx)
+                                    })
+                                    .unwrap_or_else(|_| Err("The project closed.".into()));
+                                match accepted {
+                                    Ok(()) => this.close(window, cx),
+                                    Err(error) => this.error = Some(error),
+                                }
+                            }
+                            Err(error) => this.error = Some(error),
+                        }
+                        cx.notify();
+                    });
+                });
+            })
+            .detach();
+            cx.notify();
             return;
         }
         if SourceRevision::read(&key.path).ok().as_ref() != Some(&key.source_revision) {
@@ -822,6 +839,12 @@ impl ImportEditor {
     }
 
     fn activate(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
+        if self.measurement.is_some()
+            && self.locked
+            && !matches!(action, Action::Close | Action::Cancel)
+        {
+            return;
+        }
         if self.activate_measurement(action, cx) {
             return;
         }
@@ -1265,6 +1288,10 @@ impl ImportEditor {
         enabled: bool,
         cx: &mut Context<Self>,
     ) -> crate::accessibility::Control {
+        let enabled = enabled
+            && !(self.measurement.is_some()
+                && self.locked
+                && !matches!(action, Action::Close | Action::Cancel));
         let focus = self
             .controls
             .entry(action)
@@ -1310,7 +1337,8 @@ impl ImportEditor {
             Action::ReviewOutput(_)
             | Action::ConfirmUnits
             | Action::IncludeSignal(_)
-            | Action::IncludeScan(_) => accesskit::Role::CheckBox,
+            | Action::IncludeScan(_)
+            | Action::MatchingFiles => accesskit::Role::CheckBox,
             _ => accesskit::Role::Button,
         };
         let selected = match action {
@@ -1321,6 +1349,7 @@ impl ImportEditor {
             Action::IncludeSignal(index) => {
                 self.measurement.as_ref().is_some_and(|s| s.included[index])
             }
+            Action::MatchingFiles => self.measurement.as_ref().is_some_and(|s| s.apply_to_batch),
             Action::IncludeScan(index) => self
                 .measurement
                 .as_ref()

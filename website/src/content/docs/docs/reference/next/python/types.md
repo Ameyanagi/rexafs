@@ -19,6 +19,15 @@ __version__: str
 
 Version of the installed Python package, for example "0.2.4". Include this value when reporting results or requesting help; a source build can contain changes beyond the published package with the same version.
 
+## AbsorptionMode
+
+```python
+AbsorptionMode: TypeAlias = Literal['unknown', 'transmission', 'fluorescence']
+```
+
+Acquisition interpretation (since 0.2.10). Unknown means missing evidence;
+it does not establish fluorescence. Changing it never removes correction history.
+
 ## FFTGrid
 
 ```python

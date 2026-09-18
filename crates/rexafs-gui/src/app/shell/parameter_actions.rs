@@ -22,6 +22,9 @@ settings![
     (import, "Import", "Import"),
     (align_to_ref, "Reference alignment", "Import"),
     (align_target, "Alignment energy (eV)", "Import"),
+    (energy_offset_ev, "Energy offset (eV)", "Import"),
+    (alignment_record, "Alignment record", "Import"),
+    (mback, "MBACK model and atomic reference", "Normalization"),
     (e0, "E₀ (eV)", "Edge"),
     (edge_step, "Edge step", "Edge"),
     (refit_prepared, "Refit prepared absorption", "Normalization"),
@@ -158,6 +161,7 @@ impl ParamKey {
         match self {
             Self::ImpEnergyCol | Self::ImpI0Col | Self::ImpItCol | Self::ImpIrCol => "import",
             Self::AlignTarget => "align_target",
+            Self::EnergyOffset => "energy_offset_ev",
             Self::E0 => "e0",
             Self::EdgeStep => "edge_step",
             Self::PreEdgeStart => "pre_edge_start",
@@ -225,11 +229,22 @@ pub(crate) fn copy_scope(dst: &mut PipelineParams, src: &PipelineParams, scope: 
     }
     let mut out = serde_json::to_value(&*dst).expect("serializable processing settings");
     let source = serde_json::to_value(src).expect("serializable processing settings");
+    let previous_offset = dst.energy_offset_ev;
     for setting in SETTINGS.iter().filter(|s| scope.contains(s)) {
         out[setting.key] = source[setting.key].clone();
     }
     *dst =
         serde_json::from_value(out).expect("typed processing settings remain valid after copying");
+    if scope.contains(&Setting {
+        key: "energy_offset_ev",
+        label: "",
+        section: "Import",
+    }) {
+        let next_offset = dst.energy_offset_ev;
+        dst.energy_offset_ev = previous_offset;
+        dst.set_energy_offset(next_offset)
+            .expect("validated energy offset");
+    }
     // Solver and clamp-model selections are coupled in the inspector. Scoped
     // copies must maintain the same valid pairing as an explicit selection.
     let copies = |key| SETTINGS.iter().any(|s| s.key == key && scope.contains(s));
@@ -724,6 +739,26 @@ impl StudioApp {
 mod tests {
     use super::*;
     #[test]
+    fn energy_offset_copy_moves_explicit_origins_and_preserves_other_settings() {
+        let mut source = PipelineParams::default();
+        source.set_energy_offset(3.5).unwrap();
+        let mut target = PipelineParams {
+            energy_offset_ev: 1.0,
+            e0: Some(8980.0),
+            bkg_ek0: Some(8981.0),
+            fft_kweight: Some(3.0),
+            ..Default::default()
+        };
+        for _ in 0..2 {
+            copy_scope(&mut target, &source, ParamScope::Field("energy_offset_ev"));
+            assert_eq!(target.energy_offset_ev, 3.5);
+            assert_eq!(target.e0, Some(8982.5));
+            assert_eq!(target.bkg_ek0, Some(8983.5));
+            assert_eq!(target.fft_kweight, Some(3.0));
+        }
+    }
+
+    #[test]
     fn mapping_reset_restores_project_stage_defaults_in_both_group_stores() {
         use crate::app::{DERIVED_BASE, store_custom_params};
         use crate::params::{DerivedSpectrum, DetectionMode};
@@ -855,6 +890,7 @@ mod tests {
     fn populated_params(mode: crate::params::DetectionMode) -> PipelineParams {
         use rexafs::prelude::{AUTOBKClampScalePolicy, AUTOBKSolver, FTWindow};
         PipelineParams {
+            mback: Some(rexafs::MBack::for_edge("Cu", "K").options),
             import: crate::params::ImportConfig {
                 axis: crate::import_mapping::AxisConversion::EnergyKev,
                 reference_mu_col: Some(8),
@@ -868,6 +904,8 @@ mod tests {
             },
             align_to_ref: true,
             align_target: Some(9000.),
+            energy_offset_ev: 2.5,
+            alignment_record: None,
             e0: Some(8979.),
             edge_step: Some(1.2),
             refit_prepared: true,
@@ -942,8 +980,14 @@ mod tests {
             let after = serde_json::to_value(&dst).unwrap();
             let source = serde_json::to_value(&src).unwrap();
             for (key, value) in after.as_object().unwrap() {
-                let expected = if matches!(key.as_str(), "import" | "align_to_ref" | "align_target")
-                {
+                let expected = if matches!(
+                    key.as_str(),
+                    "import"
+                        | "align_to_ref"
+                        | "align_target"
+                        | "energy_offset_ev"
+                        | "alignment_record"
+                ) {
                     &before[key]
                 } else {
                     &source[key]
@@ -961,6 +1005,7 @@ mod tests {
             (
                 Stage::Normalize,
                 &[
+                    "mback",
                     "e0",
                     "edge_step",
                     "refit_prepared",

@@ -1,6 +1,6 @@
 {
   "name": "rexafs",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "description": "Rust-powered X-ray absorption analysis for JavaScript and TypeScript",
   "type": "module",
   "license": "MIT OR Apache-2.0",
@@ -44,8 +44,13 @@
     "node.d.ts",
     "types.d.ts",
     "spectrum.js",
+    "fluorescence.js",
     "configuration.js",
-    "measurement.js"
+    "measurement.js",
+    "peaks.js",
+    "licenses",
+    "mback.js",
+    "wavelet.js"
   ],
   "scripts": {
     "build": "node build.mjs",

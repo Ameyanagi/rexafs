@@ -13,7 +13,7 @@ use gpui::{
     Bounds, Context, Corners, Hsla, IntoElement, ParentElement, Pixels, Point, Rgba, Styled,
     canvas, div, fill, point, prelude::*, px, quad, size,
 };
-use rexafs::prelude::{BackgroundMethod, NormalizationMethod};
+use rexafs::prelude::BackgroundMethod;
 
 use gpui::Entity;
 use ruviz::core::plot::ViewportPoint;
@@ -88,6 +88,8 @@ pub enum HandleKey {
     FitKmax,
     FitRmin,
     FitRmax,
+    MeasurementStart,
+    MeasurementEnd,
 }
 
 impl HandleKey {
@@ -106,7 +108,12 @@ impl HandleKey {
             HandleKey::BftRmin => ParamKey::BftRmin,
             HandleKey::BftRmax => ParamKey::BftRmax,
             HandleKey::Rbkg => ParamKey::Rbkg,
-            HandleKey::FitKmin | HandleKey::FitKmax | HandleKey::FitRmin | HandleKey::FitRmax => {
+            HandleKey::MeasurementStart
+            | HandleKey::MeasurementEnd
+            | HandleKey::FitKmin
+            | HandleKey::FitKmax
+            | HandleKey::FitRmin
+            | HandleKey::FitRmax => {
                 return None;
             }
         })
@@ -122,6 +129,7 @@ impl HandleKey {
 
     fn rounding(self) -> f64 {
         match self {
+            HandleKey::MeasurementStart | HandleKey::MeasurementEnd => 0.1,
             HandleKey::E0 => 0.1,
             HandleKey::PreStart | HandleKey::PreEnd | HandleKey::NormStart | HandleKey::NormEnd => {
                 1.0
@@ -140,6 +148,7 @@ impl HandleKey {
     /// Text shown next to the handle while it is dragged.
     fn readout(self, x: f64) -> String {
         match self {
+            HandleKey::MeasurementStart | HandleKey::MeasurementEnd => format!("{x:.2}"),
             HandleKey::E0 => format!("E₀ {x:.1} eV"),
             HandleKey::PreStart | HandleKey::PreEnd | HandleKey::NormStart | HandleKey::NormEnd => {
                 format!("{x:.0} eV")
@@ -175,6 +184,8 @@ struct Span {
 
 #[derive(Default)]
 pub struct HandleState {
+    /// Display preference only; hiding ranges does not change any parameter.
+    pub hidden: bool,
     /// (plot index, handle) under the pointer.
     pub armed: Option<(usize, HandleKey)>,
     pub dragging: Option<(usize, HandleKey)>,
@@ -194,8 +205,63 @@ struct HandleDecor {
 }
 
 impl StudioApp {
+    pub(crate) fn plot_ranges_button(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        super::controls::icon_button(
+            &self.theme,
+            "toggle-plot-ranges",
+            crate::icons::Icon::Range,
+            if self.handles.hidden {
+                "Show plot ranges"
+            } else {
+                "Hide plot ranges"
+            },
+            !self.handles.hidden,
+        )
+        .on_click(cx.listener(|app, _, _, cx| app.toggle_plot_ranges(cx)))
+    }
+    pub(crate) fn toggle_plot_ranges(&mut self, cx: &mut Context<Self>) {
+        self.end_handle_drag(cx);
+        self.handles.armed = None;
+        self.measurements.wavelet_drag = None;
+        self.measurements.wavelet_armed = None;
+        self.handles.hidden = !self.handles.hidden;
+        if self.stage == Stage::Normalize && self.normalization.open {
+            self.rebuild_normalization_plot(true, cx);
+        }
+        if self.stage == Stage::Data && self.peaks.open {
+            self.rebuild_peak_plot(true, cx);
+        }
+        // Analysis boundaries are part of the plot specification. Ordinary
+        // processing handles only need repainting, not a scientific recompute.
+        if self.stage == Stage::Data && self.analysis_energy_interval(cx).is_some() {
+            self.invalidate_explore_plots(cx);
+        }
+        cx.notify();
+    }
+
     /// Handles the stage exposes on a given plot, with their current data x.
     fn handle_specs(&self, plot: usize) -> (Vec<(HandleKey, f64)>, Vec<Span>) {
+        if self.handles.hidden {
+            return (Vec::new(), Vec::new());
+        }
+        if plot == super::measurements::drag::PLOT_MEASUREMENT || plot == super::peaks::PLOT_PEAKS {
+            let specs = if plot == super::peaks::PLOT_PEAKS {
+                self.peak_handle_specs()
+            } else {
+                self.measurement_handle_specs()
+            };
+            let spans = if specs.len() == 2 {
+                vec![Span {
+                    lo: Some(HandleKey::MeasurementStart),
+                    hi: Some(HandleKey::MeasurementEnd),
+                    fixed_lo: 0.,
+                    accent: true,
+                }]
+            } else {
+                vec![]
+            };
+            return (specs, spans);
+        }
         if self.stage == Stage::Fit {
             let r = self
                 .joint_plotted_dataset_id()
@@ -241,31 +307,19 @@ impl StudioApp {
                     // energy origin is editable; baseline ranges do not apply.
                     return (vec![(HandleKey::E0, e0)], Vec::new());
                 }
-                let ppe = match sp.normalization.as_ref() {
-                    Some(NormalizationMethod::PrePostEdge(ppe)) => Some(ppe),
-                    _ => None,
-                };
+                let ranges = crate::params::normalization_ranges(sp);
                 let rel = |param: Option<f64>, from_sp: Option<f64>, default: f64| {
                     param.or(from_sp).unwrap_or(default)
                 };
-                let pre1 = rel(
-                    p.pre_edge_start,
-                    ppe.and_then(|x| x.get_pre_edge_start()),
-                    -200.0,
-                );
-                let pre2 = rel(
-                    p.pre_edge_end,
-                    ppe.and_then(|x| x.get_pre_edge_end()),
-                    -30.0,
-                );
-                let nor1 = rel(p.norm_start, ppe.and_then(|x| x.get_norm_start()), 150.0);
+                let pre1 = rel(p.pre_edge_start, ranges.map(|r| r[0]), -200.0);
+                let pre2 = rel(p.pre_edge_end, ranges.map(|r| r[1]), -30.0);
+                let nor1 = rel(p.norm_start, ranges.map(|r| r[2]), 150.0);
                 let emax = sp
                     .energy
                     .as_ref()
                     .and_then(|e| e.iter().next_back().copied())
                     .unwrap_or(e0 + 2000.0);
-                let nor2 =
-                    rel(p.norm_end, ppe.and_then(|x| x.get_norm_end()), 2000.0).min(emax - e0);
+                let nor2 = rel(p.norm_end, ranges.map(|r| r[3]), 2000.0).min(emax - e0);
                 (
                     vec![
                         (HandleKey::PreStart, e0 + pre1),
@@ -371,7 +425,10 @@ impl StudioApp {
 
     /// Spans + handle lines for plot `plot`, in data coordinates.
     fn handle_decor(&self, plot: usize) -> Option<HandleDecor> {
-        if !self.stage.is_processing() && self.stage != Stage::Fit {
+        if !self.stage.is_processing()
+            && self.stage != Stage::Fit
+            && plot != super::measurements::drag::PLOT_MEASUREMENT
+        {
             return None;
         }
         let (specs, spans) = self.handle_specs(plot);
@@ -413,6 +470,10 @@ impl StudioApp {
     /// The interactive plot behind a handle plot index.
     pub(crate) fn plot_entity(&self, plot: usize) -> Option<Entity<RuvizPlot>> {
         match plot {
+            super::measurements::drag::PLOT_MEASUREMENT => self.measurement_preview_entity(),
+            super::peaks::PLOT_PEAKS => self.peaks.plot.clone(),
+            super::wavelet::PLOT_WAVELET_K => self.wavelet.plot_k.clone(),
+            super::wavelet::PLOT_WAVELET_R => self.wavelet.plot_r.clone(),
             PREVIEW_K => self.fit_preview.k.clone(),
             PREVIEW_R => self.fit_preview.r.clone(),
             PREVIEW_Q => self.fit_preview.q.clone(),
@@ -437,10 +498,18 @@ impl StudioApp {
         let label: Option<(f64, String)> = match self.handles.dragging {
             Some((p, key)) if p == plot => {
                 let (specs, _) = self.handle_specs(plot);
-                specs
-                    .iter()
-                    .find(|(k, _)| *k == key)
-                    .map(|&(k, x)| (x, k.readout(x)))
+                specs.iter().find(|(k, _)| *k == key).map(|&(k, x)| {
+                    (
+                        x,
+                        if p == super::measurements::drag::PLOT_MEASUREMENT {
+                            self.measurement_handle_readout(x)
+                        } else if p == super::peaks::PLOT_PEAKS {
+                            self.peak_handle_readout(x)
+                        } else {
+                            k.readout(x)
+                        },
+                    )
+                })
             }
             _ => None,
         };
@@ -606,6 +675,12 @@ impl StudioApp {
         let Some(entity) = self.plot_entity(plot) else {
             return;
         };
+        if self.handles.hidden || entity.read(cx).is_context_menu_open() {
+            if self.handles.armed.take().is_some() {
+                cx.notify();
+            }
+            return;
+        }
         if let Some((drag_plot, key)) = self.handles.dragging {
             if drag_plot != plot {
                 return;
@@ -668,6 +743,11 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) {
         if event.button != gpui::MouseButton::Left {
+            // A context-menu press may start directly on a range boundary.
+            // Remove its capture layer before the plot opens the menu.
+            if self.handles.armed.take().is_some() {
+                cx.notify();
+            }
             return;
         }
         self.plot_pointer_move(plot, event.position, cx);
@@ -681,6 +761,14 @@ impl StudioApp {
     }
 
     fn apply_handle_drag(&mut self, key: HandleKey, x: f64, cx: &mut Context<Self>) {
+        if matches!(key, HandleKey::MeasurementStart | HandleKey::MeasurementEnd) {
+            if self.peaks.open && self.stage == Stage::Data {
+                self.drag_peak_boundary(key, x, cx);
+            } else {
+                self.drag_measurement_boundary(key, x, cx);
+            }
+            return;
+        }
         let e0 = self
             .ui_params()
             .e0
@@ -826,6 +914,7 @@ impl StudioApp {
         let sp = self.spectrum.as_ref()?;
         let last = |v: &nalgebra::DVector<f64>| v.iter().next_back().copied();
         match key {
+            HandleKey::MeasurementStart | HandleKey::MeasurementEnd => None,
             HandleKey::E0
             | HandleKey::PreStart
             | HandleKey::PreEnd
@@ -893,7 +982,12 @@ impl StudioApp {
     ) -> Option<impl IntoElement + use<>> {
         let active = matches!(self.handles.armed, Some((p, _)) if p == plot)
             || matches!(self.handles.dragging, Some((p, _)) if p == plot);
-        if !active {
+        if !active
+            || self.handles.hidden
+            || self
+                .plot_entity(plot)
+                .is_some_and(|p| p.read(cx).is_context_menu_open())
+        {
             return None;
         }
         Some(

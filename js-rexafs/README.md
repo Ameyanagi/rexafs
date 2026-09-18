@@ -175,8 +175,9 @@ npm pack
 ```
 
 The package includes Node/browser Wasm and declarations. Filesystem reading,
-fitting, groups, structure downloads and FEFF execution remain Rust/desktop
-APIs. MBack and ILPBkg are unimplemented placeholders; TrustRegionDogLeg requires
+EXAFS fitting, groups, structure downloads and FEFF execution remain Rust/desktop
+APIs. ILPBkg remains unimplemented. The `MBack` API below adds full (since 0.2.10)
+atomic-reference normalization. TrustRegionDogLeg requires
 a native Rust feature absent from Wasm. The recommended LinearDirect/FixedPenalty
 path works in both bindings. See [FFT compatibility](../doc/fft-grid-compatibility.md).
 Licensed under MIT OR Apache-2.0.
@@ -202,3 +203,94 @@ for transmission, `iff: "iff"` instead of `it` for fluorescence, or
 `i0: "it", it: "ir"` for the reference. Existing positional mappings remain valid.
 Duplicate names require indices. Omit `energy_unit` to preserve detected axis
 calibration, or explicitly override it with `"eV"` or `"keV"`.
+
+## Scalar measurements (since 0.2.10)
+
+Version 0.2.10 adds this call:
+
+```typescript
+const result = spectrum.measure("mean", [-20, 30], { space: "flat" });
+console.log(result.value, result.unit);
+```
+
+The default is normalized absorption with E₀-relative energy bounds in eV.
+Missing stages run on a private copy; existing arrays/settings remain unchanged.
+Choose `origin: "absolute"` for absolute energy, or `space: "chi"`/`"fourier"`
+for absolute k/R. Point, maximum, integral and mean share strict native-grid
+coverage checks. See the [measurement guide](../doc/full-frame-measurements.md)
+for units, optional independent errors and numerical assumptions. This scalar
+operation is separate from the `Measurement` input-file reader. Type declarations
+include options, result fields, completion choices and hover help.
+
+## Full MBACK normalization (since 0.2.10)
+
+```ts
+import { MBack } from "rexafs/node";
+const model = new MBack("Cu", "K", {pre_edge: [-200,-50], post_edge: [100,800]});
+const result = model.fit(energy, mu); // Float64Array inputs: eV and raw absorption
+spectrum.set_normalization_method(model).normalize();
+console.log(result.norm, result.flat);
+model.free();
+```
+
+Ranges are E₀-relative eV. Degree 2 and no erfc are the defaults. Offline atomic
+data load automatically. Results own their arrays; spectrum settings copy the
+model. `spectrum.mback_result()` retrieves its saved result or `undefined` after
+invalidation. `result.definition` creates a model pinned to the original reference;
+free that model after use. Browser callers must await `init()` and should use a
+Worker for large synchronous fits. See the [MBACK guide](../doc/mback-normalization.md)
+for equations, assumptions and optional backgrounds. Atomic-data notices ship
+in the npm package's `licenses/atomic` directory.
+
+## Cauchy wavelets (since 0.2.10)
+
+```ts
+import { Wavelet } from "rexafs/node";
+const model = new Wavelet([2, 12]);
+const map = spectrum.wavelet(model);
+try {
+  const image = map.magnitude; // Independent Float64Array: R rows, k columns
+  const region = map.integral([4, 10], [1, 3]);
+  console.log(image, region.value, region.unit);
+} finally {
+  map.free();
+  model.free();
+}
+```
+
+The k interval uses Å⁻¹; R uses Å and is not phase-corrected. Missing normalization
+and background stages run on a private copy. Defaults are weight 2, order 100,
+k spacing 0.05 Å⁻¹, R up to 6 Å and no taper. Named options override them, for
+example `new Wavelet([2, 12], {rmax: 4})`. `model.calculate(k, chi)` also accepts
+unweighted χ(k) in `Float64Array` inputs. Browser callers await `init()` first.
+See the [wavelet guide](../doc/wavelet-analysis.md) for layout, native-grid integrals,
+slices, ownership, JSON replay and scientific limitations.
+
+## Fluorescence over-absorption (since 0.2.10)
+
+```ts
+import { FluorescenceCorrection } from "rexafs/node";
+const model = new FluorescenceCorrection("CuO", "Cu", "K", {line:"Ka1", angles:[45,45]});
+const corrected = spectrum.correct_fluorescence(model);
+try { corrected.normalize(); }
+finally { corrected.free(); model.free(); }
+```
+
+Supply the complete sample composition, detected emission and measured
+incident/exit angles **from the sample surface**, in degrees. The angles above
+are examples. Internal normalization is automatic; final normalization is separate.
+The original stays unchanged. The new native spectrum preserves correction history
+and its XANES-only restriction through edits; known transmission and repeated
+correction fail. See the [correction guide](../doc/fluorescence-correction.md)
+for the homogeneous thick-sample assumptions, diagnostics, replay and array API.
+
+
+## XANES peak fitting (since 0.2.10)
+
+`PeakFit` and `Spectrum.fit_peaks` fit named peaks, absorption steps and baseline
+terms through the native core. The default representation is normalized
+absorption, with energy bounds relative to E₀ in eV. Results retain component
+curves, termination and conditional uncertainty diagnostics. The model does not
+select a peak count or identify chemical species. See the
+[XANES fitting guide](../doc/xanes-peak-fitting.md) for binding examples, area/width
+conventions, constraints and interpretation limits.

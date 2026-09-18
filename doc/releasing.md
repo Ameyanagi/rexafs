@@ -5,6 +5,13 @@ with a merge commit before tagging. Nightly desktop builds follow `dev`; they
 do not substitute for the qualified stable tag build below. See the
 [development branch workflow](development-branches.md).
 
+## Preparing 0.2.10
+
+The [0.2.10 notes](release-notes-0.2.10.md) and
+[qualification record](validation/2026-09-18-release-0.2.10/review.md) track the
+coordinated RMC, processing and analysis release. Existing 0.2.9 downloads remain
+Stable until the exact-tag build, signing and public package checks complete.
+
 ## Published 0.2.9
 
 The [0.2.9 notes](release-notes-0.2.9.md) and

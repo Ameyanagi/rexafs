@@ -274,10 +274,17 @@ impl MeasurementScan {
     /// Energy and signal are sorted together by the spectrum setter. Repeated
     /// energies remain; downstream numerical stages may require explicit cleanup.
     /// No processing prerequisites run and no source data or caches are changed.
+    /// Since 0.2.10: transmission arithmetic attaches a Transmission acquisition
+    /// interpretation. A direct signal or detector ratio remains Unknown; a ratio
+    /// alone does not distinguish fluorescence from electron yield.
     pub fn to_spectrum(&self, mapping: Option<&SpectrumMapping>) -> Result<XASSpectrum, ReadError> {
         let (energy, mu) = self.arrays(mapping)?;
         let mut spectrum = XASSpectrum::new();
         spectrum.set_spectrum(energy, mu);
+        let selected = mapping.or_else(|| self.signals.first().map(|s| &s.mapping));
+        if selected.is_some_and(|m| matches!(m.signal, SignalConversion::Transmission { .. })) {
+            spectrum.set_absorption_mode(crate::AbsorptionMode::Transmission);
+        }
         Ok(spectrum)
     }
 }

@@ -63,6 +63,18 @@ pub struct SourceFile {
 pub enum SourceKind {
     Spectrum,
     Feff,
+    /// Retained calculation inputs; never automatically added as catalog groups.
+    AnalysisArtifact,
+}
+
+impl SourceKind {
+    fn archive_root(self) -> &'static str {
+        match self {
+            Self::Spectrum => "raw",
+            Self::Feff => "feff",
+            Self::AnalysisArtifact => "analysis",
+        }
+    }
 }
 
 fn digest(bytes: &[u8]) -> String {
@@ -203,6 +215,16 @@ pub(super) fn map_paths(
         }
         Ok(())
     }
+    project.relocate_corrections(f)?;
+    project.normalizations.relocate(f)?;
+    project.wavelets.relocate(f)?;
+    project.peak_fits.relocate(f)?;
+    for session in &mut project.series_measurements.live_sessions {
+        session.snapshots = std::mem::take(&mut session.snapshots)
+            .into_iter()
+            .map(|path| f(&path))
+            .collect::<Result<_, _>>()?;
+    }
     for record in project.parser_evidence.values_mut() {
         record.path = f(&record.path)?;
     }
@@ -261,6 +283,42 @@ pub(super) fn map_paths(
     Ok(())
 }
 
+/// Recovery inputs retain bytes without becoming newly imported spectra.
+fn analysis_artifacts(project: &ProjectFile) -> BTreeSet<PathBuf> {
+    project
+        .series_measurements
+        .live_sessions
+        .iter()
+        .flat_map(|s| s.snapshots.iter().cloned())
+        .chain(project.peak_fits.artifacts().cloned())
+        .chain(project.wavelets.entries.iter().map(|r| r.path.clone()))
+        .chain(
+            project
+                .correction_receipts()
+                .into_iter()
+                .map(|r| r.path.clone()),
+        )
+        .chain(
+            project
+                .normalizations
+                .entries
+                .iter()
+                .map(|r| r.path.clone()),
+        )
+        .chain(
+            project
+                .derived
+                .iter()
+                .filter(|g| {
+                    g.operation
+                        .as_ref()
+                        .is_some_and(|op| op.tool == "Live acquisition")
+                })
+                .filter_map(|g| g.source.clone()),
+        )
+        .collect()
+}
+
 fn inputs(
     project: &ProjectFile,
     mode: DataStorage,
@@ -272,6 +330,11 @@ fn inputs(
             files.insert(p.to_owned(), SourceKind::Spectrum);
         }
     };
+    for session in &project.series_measurements.live_sessions {
+        for snapshot in &session.snapshots {
+            raw(snapshot);
+        }
+    }
     for group in &project.derived {
         if let Some(path) = &group.source {
             raw(path);
@@ -360,6 +423,9 @@ fn inputs(
             }
         }
     }
+    for artifact in analysis_artifacts(project) {
+        files.insert(artifact, SourceKind::AnalysisArtifact);
+    }
     Ok(files)
 }
 
@@ -383,7 +449,7 @@ fn archive_path(
         Path::new(if kind == SourceKind::Spectrum {
             "raw/external"
         } else {
-            "feff"
+            kind.archive_root()
         })
         .join(group)
         .join(name),
@@ -576,6 +642,15 @@ pub(super) fn restore(
         .filter(|f| f.kind == SourceKind::Spectrum)
         .map(|f| absolute(&folder.join(&f.path)))
         .collect::<Result<_, _>>()?;
+    let artifacts = analysis_artifacts(&project);
+    project.raw_files.retain(|path| !artifacts.contains(path));
+    if project
+        .spectrum_file
+        .as_ref()
+        .is_some_and(|path| artifacts.contains(path))
+    {
+        project.spectrum_file = None;
+    }
     if header.storage == DataStorage::Embedded {
         let root = cache_root()?.join("project-data").join(digest(json));
         restore_embedded(&mut project, &header, &folder, &root)?;
@@ -605,7 +680,7 @@ fn restore_embedded(
             .as_ref()
             .ok_or("Embedded file has no archive path")?;
         if !safe_tail(stored)
-            || !matches!(stored.components().next(),Some(Component::Normal(x)) if x == if entry.kind == SourceKind::Spectrum { "raw" } else { "feff" })
+            || !matches!(stored.components().next(),Some(Component::Normal(x)) if x == entry.kind.archive_root())
             || !destinations.insert(stored.clone())
             || !sources.insert(absolute(&folder.join(&entry.path))?)
         {
