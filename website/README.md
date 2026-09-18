@@ -149,8 +149,11 @@ follow the vendor README and preserve the original notice bytes.
 
 - `src/content/docs/` owns the curated public manual. Every page requires
   `audience: user`; the collection schema rejects any other audience.
-- `doc/` retains source-checkout guides and historical records. Website guides
-  target published 0.2.9; source-checkout additions belong in Next. Keep shared
+- `doc/` retains source-checkout guides and historical records. Downloads and
+  Stable references follow the verified published release metadata. Desktop
+  guides identify the 0.2.10 tagged CI build where they preview its workflows;
+  these captures do not establish package publication. Source API additions belong
+  in Next until publication is verified. Keep shared
   scientific explanations synchronized when the underlying method changes. Do not import `doc/` recursively.
 - `src/content/docs/docs/reference/{stable,next}/` is generated. Edit Python
   stubs/native docstrings or TypeScript declarations, then regenerate. Stable
@@ -177,8 +180,12 @@ follow the vendor README and preserve the original notice bytes.
   Extraction includes the Python declarations/native help, every TypeScript
   entry-point declaration, Wasm help and the Rust core's public documentation.
 - `public/` contains only selected public assets. Application screenshots are
-  full, unedited captures made with computer use. The current import, Assistant,
-  collection-analysis and Series guides use eight 1192 × 768 JPEG captures from
+  full, unedited captures made with computer use. `screenshots/0.2.10/` contains
+  eleven original 2880 × 1800 Retina window captures from the tagged ARM64 CI
+  build, before release signing/publication. Its `capture.json` records the build,
+  public CC0 Cu inputs, checksums and observed workflows. Native macOS accessibility
+  controls were used because the computer-use connector was unavailable.
+  The retained 0.2.9 examples use eight 1192 × 768 JPEG captures from
   the signed macOS ARM64 0.2.9 release in `screenshots/0.2.9/`. Other guides retain
   1192 × 768 captures from the official macOS ARM64 0.2.4 release; Next import
   documentation uses separate 1187 × 768 source-build captures in `screenshots/next/`.

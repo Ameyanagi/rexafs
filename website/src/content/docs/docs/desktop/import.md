@@ -4,7 +4,10 @@ description: "Map detector signals, confirm energy units and organize spectra."
 audience: user
 ---
 
-This guide describes **rexafs 0.2.9**.
+This guide covers the **0.2.10 desktop release preview**, unreleased at capture
+time, including confirmation for matching
+files and dismissal of pending imports. Screenshots identify their own build;
+older captures remain where they illustrate the same workflow.
 
 ## Import and review
 
@@ -28,11 +31,12 @@ establish the units or detector arithmetic.
    groups are added. Each signal becomes a separate spectrum, the Data view
    starts on raw μ(E), and one undo removes the entire import.
 
-![rexafs 0.2.6 import preview with transmission, fluorescence and reference choices](/screenshots/0.2.6/import-preview.png)
+[![rexafs 0.2.10 import preview with the stored Cu absorption selected](/screenshots/0.2.10/import-preview.jpg)](/screenshots/0.2.10/import-preview.jpg)
 
-Captured from the signed 0.2.6 Mac app. The QAS Mo foil measurement is from
-[Ryuichi Shimogawa and contributors, xasref](https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo%20foil%200001-r0003.dat),
-distributed under its MIT repository notice.
+Captured through computer use from the tagged 0.2.10 macOS CI build.
+This public Cu measurement contains 612 points and a stored `mutrans` signal;
+it does not need detector arithmetic. See
+[data and capture provenance](/licenses/#desktop-0210-workflow-captures).
 
 For transmission, rexafs computes `ln(I0 / It)` from incident and transmitted
 intensities in matching units. Reference uses `ln(It / Ir)`, with `Ir` measured
@@ -58,7 +62,7 @@ multiple-file selections; import containers individually in these versions.
 Source files are unchanged; saved desktop projects
 retain original measurement bytes and accepted signal mappings.
 
-### Confirm matching files together (development version)
+### Confirm matching files together
 
 Drop several `.qd` files, drop a folder, or select several files in **Import…**.
 In the measurement preview, **Apply to N matching files in this import** is
@@ -81,10 +85,11 @@ arithmetic is invalid, no groups are added; the error identifies that file.
 Reopen the preview after correcting the source, or uncheck the batch option to
 review files individually. One undo removes the accepted batch.
 
-Implemented by the desktop's `measurement_import::batch` module. This option
-is newer than the released 0.2.9 GUI shown in the screenshots below.
+Implemented by the desktop's
+[`measurement_import::batch` module](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/crates/rexafs-gui/src/app/shell/measurement_import/batch.rs).
+This option was added in 0.2.10.
 
-### Skip unwanted pending files (development version)
+### Skip unwanted pending files
 
 Under **Pending**, choose the **× beside a filename** to skip that file.
 The **Skip ▾** menu offers **Skip .prj**, **Skip .xts**, and the other extensions
@@ -103,7 +108,7 @@ pending files. Use the row's × or the Skip menu to remove them from the queue.
 
 [![Skip pending files individually or by extension](/screenshots/next/pending-import-skip.jpg)](/screenshots/next/pending-import-skip.jpg)
 
-This unreleased interface was checked through computer use on 2026-09-17 using
+This historical development capture was checked through computer use on 2026-09-17 using
 generated software-test signals. The screenshot contains no experimental data.
 
 <a id="import-a-whole-project-unreleased"></a>
