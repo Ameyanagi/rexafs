@@ -1,0 +1,208 @@
+{
+  "captured_date": "2026-09-18",
+  "build": {
+    "version": "0.2.10",
+    "channel": "stable",
+    "release_tag": "v0.2.10",
+    "commit": "0b3aca3331e38ac4a34364824a74e96271f5ca1d",
+    "built_at": null,
+    "features": [
+      "refeff-runner",
+      "feff10-runner"
+    ]
+  },
+  "distribution": "Unsigned tagged CI archive before release signing/publication, not the installed signed release package.",
+  "workflow": "https://github.com/Ameyanagi/rexafs/actions/runs/35316272629",
+  "artifact": "desktop-macos-15",
+  "archive": {
+    "file": "rexafs-0.2.10-aarch64-apple-darwin.zip",
+    "sha256": "bbde6f7148ba66c57f27318a62f9b0ff1714264550ea639d6a32f152d9050a7a",
+    "checksum_verified": true
+  },
+  "executable_sha256": "6459b641f2cd2be517421bda3da72320aa59c983768df095e823a73c1610c295",
+  "platform": {
+    "os": "macOS",
+    "version": "26.5.1",
+    "architecture": "arm64"
+  },
+  "capture": {
+    "method": "Native macOS System Events accessibility controls and screencapture -l; CUA connector unavailable (CUA_REPL_ENABLED_SURFACES missing).",
+    "logical_window_size": [
+      1440,
+      900
+    ],
+    "pixel_dimensions": [
+      2880,
+      1800
+    ],
+    "edited": false,
+    "scope": "Separate rexafs process with isolated settings; original full window captures, no cropping, resizing, annotation or synthetic plots."
+  },
+  "inputs": {
+    "cu_room_temperature": {
+      "path": "crates/rexafs/tests/fixtures/xas/samples/aps/13-id-c/xasdatalibrary/cu_metal_rt.xdi",
+      "sha256": "17b7076f1c3b5eccfa76dc6a7b3d26ea1fd388fa27f621a058779f70b71351d6",
+      "license": "CC0-1.0",
+      "source": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi",
+      "license_evidence": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst",
+      "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+      "changes": "None; original measurement bytes retained."
+    },
+    "cu_10k": {
+      "path": "crates/rexafs/tests/fixtures/xas/samples/nsls/x11a/xasdatalibrary/cu_metal_10K.xdi",
+      "sha256": "6fd3823892d218e576b27674f3faff998ffdf4de261e9ac92ea40a42e6f1ba88",
+      "license": "CC0-1.0",
+      "source": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_10K.xdi",
+      "license_evidence": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst",
+      "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+      "changes": "None; original measurement bytes retained."
+    }
+  },
+  "scientific_scope": "GUI workflow illustrations with existing public experimental measurements. The two-frame Series combines different acquisitions; it is not a time series, controlled temperature experiment or algorithm accuracy benchmark. Inputs were not aligned for the difference example.",
+  "observations": [
+    "Imported stored mutrans from both XDI files: 408 and 612 points.",
+    "Normalize switched between Polynomial and MBACK; Cu/K detected automatically from source metadata. Each fit toggle displayed the corresponding model over original mu.",
+    "Background showed one AUTOBK spline and no normalization fit overlays.",
+    "Changing wavelet R maximum from 6 to 5 angstrom automatically updated the map and its aligned R marginal without Calculate; restored 6.",
+    "Assistant, Groups and Parameters remained visible together; model/access menus opened. No prompt submitted and no access settings changed.",
+    "Created a named Series with Use loaded groups, previewed Flat maximum over 0–30 eV, then calculated wavelet integral over both frames (2/2 complete).",
+    "Difference used reference frame 1. Right selected frame 2 and changed the displayed spectrum while retaining the fixed reference and saved integral trend."
+  ],
+  "images": [
+    {
+      "file": "polynomial.jpg",
+      "sha256": "9db3961284a259993b6bb54a2b5cf3ff6e8f934d252a4138d5758acd853247a1",
+      "bytes": 404661,
+      "width": 2880,
+      "height": 1800,
+      "captured_at": "2026-09-18T07:15:21.292685+00:00",
+      "inputs": [
+        "cu_room_temperature"
+      ],
+      "description": "Polynomial normalization, original mu, Pre/post enabled; automatic E0 and baseline ranges."
+    },
+    {
+      "file": "mback.jpg",
+      "sha256": "edf075dd951e8b01cd2cbc20ec1e4566c651a53d3fef5ebd8a28a68f93df6fca",
+      "bytes": 422795,
+      "width": 2880,
+      "height": 1800,
+      "captured_at": "2026-09-18T07:10:46.915379+00:00",
+      "inputs": [
+        "cu_room_temperature"
+      ],
+      "description": "Normalize MBACK; Cu/K detected from XDI metadata; MBACK fit enabled; complete fitted atomic model."
+    },
+    {
+      "file": "background.jpg",
+      "sha256": "1e9557625e2c8d4166e81b88c8c9e6458f214eab87160b9fccf05ccf78d053c0",
+      "bytes": 422214,
+      "width": 2880,
+      "height": 1800,
+      "captured_at": "2026-09-18T07:11:31.114060+00:00",
+      "inputs": [
+        "cu_room_temperature"
+      ],
+      "description": "Background mu(E), Spline enabled; polynomial/MBACK overlays absent; Fourier magnitude below."
+    },
+    {
+      "file": "wavelet.jpg",
+      "sha256": "f0ef5df8a30c5396c84a6345400184c95274150c0ce17c7ba80d606cc413d9b4",
+      "bytes": 460168,
+      "width": 2880,
+      "height": 1800,
+      "captured_at": "2026-09-18T07:11:50.669357+00:00",
+      "inputs": [
+        "cu_room_temperature"
+      ],
+      "description": "Transform Wavelet Magnitude with Spectra marginals; k 2–12 inverse angstrom, k weight 2, R maximum 6 angstrom."
+    },
+    {
+      "file": "assistant.jpg",
+      "sha256": "27df750429ddb7e8aa60ad4bf87dec5d71e13c62dab2939b12df298a75e284ca",
+      "bytes": 430464,
+      "width": 2880,
+      "height": 1800,
+      "captured_at": "2026-09-18T07:15:39.569337+00:00",
+      "inputs": [
+        "cu_room_temperature"
+      ],
+      "description": "Assistant beside Normalize and Parameters, connected in Review mode; no message sent."
+    },
+    {
+      "file": "assistant-model.jpg",
+      "sha256": "2a358481161ad65e71c9ec471197eef867d8247c9085ac222096eacc8dcf563f",
+      "bytes": 441994,
+      "width": 2880,
+      "height": 1800,
+      "captured_at": "2026-09-18T07:15:54.267677+00:00",
+      "inputs": [
+        "cu_room_temperature"
+      ],
+      "description": "Model menu opened, Automatic retained; no selection changed or message sent."
+    },
+    {
+      "file": "assistant-access.jpg",
+      "sha256": "158092d59a080794908a359b2cfad8c0401ec5c9ed466bc25dbf711427544de5",
+      "bytes": 449226,
+      "width": 2880,
+      "height": 1800,
+      "captured_at": "2026-09-18T07:15:54.845085+00:00",
+      "inputs": [
+        "cu_room_temperature"
+      ],
+      "description": "Access menu opened, Review retained and Workspace commands off; no permission changed."
+    },
+    {
+      "file": "import-preview.jpg",
+      "sha256": "f372a910faf46c27d371fa27ea38087e75ef310b76382a1456b1e5d9f32aeb10",
+      "bytes": 361398,
+      "width": 2880,
+      "height": 1800,
+      "captured_at": "2026-09-18T07:17:04.435164+00:00",
+      "inputs": [
+        "cu_10k"
+      ],
+      "description": "Cu 10 K XDI: stored mutrans, detected energy, all 612 points; awaiting Import 1 spectrum."
+    },
+    {
+      "file": "series-trend.jpg",
+      "sha256": "a0ae30e9526c2e25e303dbd09dd5924f104a3183b9dda2a6e32dbea5187b63c2",
+      "bytes": 333686,
+      "width": 2880,
+      "height": 1800,
+      "captured_at": "2026-09-18T07:17:58.088753+00:00",
+      "inputs": [
+        "cu_room_temperature",
+        "cu_10k"
+      ],
+      "description": "Series of the two public Cu measurements: Add trend, Maximum, Flat, 0–30 eV from each E0; plot ranges visible."
+    },
+    {
+      "file": "series-wavelet.jpg",
+      "sha256": "e1cb4e8e7ca2a6e2f6411d016b0d5b5adad6699d44faddd6bff45fc03dd6dcc2",
+      "bytes": 377036,
+      "width": 2880,
+      "height": 1800,
+      "captured_at": "2026-09-18T07:18:19.671064+00:00",
+      "inputs": [
+        "cu_room_temperature",
+        "cu_10k"
+      ],
+      "description": "Series wavelet Integral, copied Transform settings; region k 4–10 inverse angstrom and R 1–3 angstrom."
+    },
+    {
+      "file": "series-difference.jpg",
+      "sha256": "0e4812656080cf451e445ff2ee8ce683270f577f7b82fab9b71bf7095cc12e13",
+      "bytes": 461126,
+      "width": 2880,
+      "height": 1800,
+      "captured_at": "2026-09-18T07:24:31.377921+00:00",
+      "inputs": [
+        "cu_room_temperature",
+        "cu_10k"
+      ],
+      "description": "Frame 2 minus fixed reference frame 1 in Flat; independent saved wavelet integral trend completed 2/2 frames. Parameters hidden for plot width."
+    }
+  ]
+}

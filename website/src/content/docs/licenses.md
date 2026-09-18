@@ -44,7 +44,35 @@ numerical changes from the XrayLarch example collection at revision
 
 ## Documentation screenshots
 
-The current import, Assistant, collection-analysis and Series guides include
+<a id="desktop-0210-workflow-captures"></a>
+
+### Desktop 0.2.10 workflow captures
+
+The import, processing, Assistant and Series guides include eleven full, unedited
+**2880 × 1800** JPEG window captures made through native macOS accessibility
+controls and window capture on **18 September 2026**. They show the ARM64
+**v0.2.10 tagged CI build**, commit `0b3aca3331e38ac4a34364824a74e96271f5ca1d`,
+from [Release builds run 35316272629](https://github.com/Ameyanagi/rexafs/actions/runs/35316272629).
+This is the CI archive before release signing and publication; the captures do
+not certify the downloaded, signed package. The
+[capture manifest](/screenshots/0.2.10/capture.json) records the archive,
+executable, input and image checksums, settings and checks performed.
+
+The inputs are the unchanged public
+[room-temperature Cu foil](https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi)
+and [10 K Cu foil](https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_10K.xdi)
+measurements from the International X-ray Absorption Society's X-ray Absorption
+Data Library and its credited contributors, distributed under the collection's
+[CC0 data notice](https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst).
+The headers retain the original beamline and acquisition attribution.
+Series uses these two separate measurements to demonstrate controls; it is not
+a time series or a controlled temperature comparison. No unpublished ReGe data
+or private project is included. No Assistant message was sent and no access
+permission was changed.
+
+### Earlier release captures
+
+The retained 0.2.9 import, Assistant, collection-analysis and Series examples include
 eight full, unedited 1192 × 768 JPEG captures made through computer use on
 16 September 2026 from the signed and notarized macOS ARM64 **0.2.9** release.
 The [release qualification record](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-09-16-release-0.2.9/review.md)

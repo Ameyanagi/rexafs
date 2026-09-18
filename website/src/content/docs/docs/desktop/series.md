@@ -4,48 +4,77 @@ description: "Browse scan frames and distinguish sampled overviews from complete
 audience: user
 ---
 
-This guide describes **rexafs 0.2.10**. Captions identify older screenshots.
+This guide describes **rexafs 0.2.10**. The new screenshots were captured
+through computer use from its tagged macOS CI build before signing, using two
+public Cu foil measurements. These are a small workflow example, **not a time series** or a
+controlled temperature experiment. See
+[data and capture provenance](/licenses/#desktop-0210-workflow-captures).
 
-Version **0.2.10** keeps the heatmap and frame browser as
-the main Series view, including named series of project-stored spectra.
-**Add trend… → choose metric and range → Calculate all N frames** adds a saved
-trend. New desktop trends use Flat, 0–30 eV from each frame's E₀; the core API
-still defaults to Norm. Drag the shaded preview’s boundaries to update the
-range fields and value, or type the bounds directly. **Left/Right** browses
-preview spectra; arrows in a focused field still edit text. K-space spectrum plots
-center zero with symmetric vertical limits; glitches remain visible.
-**Difference** subtracts a fixed reference frame from the heatmap and cursor
-spectrum. **Reference… / Ref: N ▾** changes it. **Colors ▾** opens a popup menu
-to select a palette or reverse it, keeping the plots and controls in place.
-Auto uses blue–red with a zero-centered scale for differences. These temporary
-view controls leave original groups and calculations unchanged.
-**Results…** contains saved runs, per-frame failures and CSV/JSON export.
-**Advanced** holds ordering, coordinates, presets, recipes and recovery.
+## Start with the overview
 
-The source selector lists named series and folder scans. **Use loaded groups**
-starts from spectra already in a project. The overview samples at most 192
-available frames, while custom trends calculate every member. Saved trends retain
-their original settings; changing the overview representation does not recalculate
-them. The older batch-fit and LCF controls still require a folder scan.
-See the [full-frame workflow](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/full-frame-measurements.md)
-for details.
+Open **Series**, then choose a folder scan or **Use loaded groups** for spectra
+already in your project. The source menu lists folder scans and named series.
+The heatmap, selected spectrum and trend share the frame cursor.
 
-[![Development Series overview with a saved trend from 513 synthetic spectra](/screenshots/next/series-trend-overview.jpg)](/screenshots/next/series-trend-overview.jpg)
+Choose **flat μ(E)**, **norm μ(E)**, weighted **χ(k)** or **|χ(R)|**.
+Click a heatmap row or use the scrubber to select a frame; **Left/Right** moves
+between frames when the plot has focus. K-space plots center zero with symmetric
+vertical limits; large glitches remain visible.
 
-Development screenshot captured through computer use on 2026-09-16, using the
-project's synthetic series generator. It contains no experimental data.
+## Add a measured trend
 
-[![Development difference heatmap with the color popup open](/screenshots/next/series-difference-colors.jpg)](/screenshots/next/series-difference-colors.jpg)
+1. Choose **Add trend…**, then a metric: Point, Maximum, Integral, Mean or Edge energy.
+2. Choose the signal and its interval. New desktop trends start with **Flat**,
+   **0–30 eV from each frame's E₀**; the core API defaults to Norm.
+3. Drag the shaded boundaries or type **From** and **To**. Use the range icon
+   to show or hide these handles without changing the interval.
+4. Review several frames with **Left/Right**, then choose **Calculate all N frames**.
 
-Captured through computer use on 2026-09-17 with the same synthetic source.
-Frame 258 is shown relative to frame 1. Opening the palette menu leaves the
-plot sizes and controls in place; the saved trend is unchanged.
-The overview and older batch controls described below remain available. The LCF screenshot retains its 0.2.9 provenance.
+[![Add trend showing flattened Cu absorption and draggable interval boundaries](/screenshots/0.2.10/series-trend.jpg)](/screenshots/0.2.10/series-trend.jpg)
 
-Import a folder of related spectra, then open **Series → Select scan**.
-The heatmap shows the scan; adjacent plots show the selected frame and trend.
-Choose **flat μ(E)** (the initial selection), **norm μ(E)**, weighted **χ(k)**
-or **|χ(R)|**. The energy plot uses the selected representation.
+*Maximum over 0–30 eV from E₀. Changing the preview frame does not change the
+interval. Arrow keys in a focused numeric field still edit that field.*
+
+**Results…** holds saved runs, per-frame failures and CSV/JSON export.
+**Advanced** in the trend editor holds ordering, coordinates, presets, recipes
+and recovery. Saved trends retain their settings: changing the overview's
+representation or difference display does not recalculate them.
+
+## Measure a wavelet region
+
+Set up the map in [**Transform → Wavelet**](/docs/desktop/processing/#forward-transform),
+then open **Series → Add trend… → Wavelet**. Choose **Use Transform settings**
+to copy that setup. Select **Integral**, **Maximum** or **Mean**, then drag the
+k–R rectangle or enter its four bounds. k is in Å⁻¹ and R is in Å.
+
+[![Series wavelet integral with a selected k–R rectangle and Calculate all frames](/screenshots/0.2.10/series-wavelet.jpg)](/screenshots/0.2.10/series-wavelet.jpg)
+
+*The example integrates wavelet magnitude over k = 4–10 Å⁻¹ and R = 1–3 Å.
+Both frames completed. A saved trend retains the transform settings and rectangle.*
+
+These measurements use native wavelet magnitude, not the rendered colors.
+Integral measures the area under the bilinearly interpolated magnitude surface;
+Mean divides it by the rectangle area; Maximum finds its largest value in the
+region. R is not phase-corrected. These are signal metrics, not direct coordination
+numbers or concentrations. See the [method and units](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/wavelet-analysis.md#region-measurements-and-bounded-calculation).
+
+## Compare against a reference frame
+
+**Difference** subtracts one fixed reference from the heatmap and selected
+spectrum. **Reference… / Ref: N ▾** chooses it. **Colors ▾** selects a palette or
+reverses it; Auto uses blue–red with a scale centered on zero for differences.
+These display controls leave original groups and saved calculations unchanged.
+
+[![Difference heatmap and selected frame beside the unchanged saved wavelet integral trend](/screenshots/0.2.10/series-difference.jpg)](/screenshots/0.2.10/series-difference.jpg)
+
+*Frame 2 minus frame 1 in flattened absorption. The saved wavelet trend remains
+the original per-frame integral. The two inputs have different acquisition
+conditions and energy estimates; this illustration is not a calibrated physical difference.*
+
+The overview samples at most 192 available frames, while custom trends calculate
+every member. The older batch-fit and LCF controls still require a folder scan.
+See the [full-frame measurement workflow](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/full-frame-measurements.md)
+for storage, recipes and recovery.
 
 ## Frames and overview sampling
 
@@ -73,13 +102,13 @@ frame while the selected frame loads; wait for processing before interpreting it
 Use **Refresh overview** after changes.
 
 These display choices are rexafs-specific, implemented in the [overview and
-frame loading](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs-gui/src/app.rs)
-and [Series controls](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs-gui/src/app/shell/series.rs).
+frame loading](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/crates/rexafs-gui/src/app.rs)
+and [Series controls](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/crates/rexafs-gui/src/app/shell/series.rs).
 
 ## What the trends mean
 
-The **$E_0$ trend** reports the absolute estimated or requested edge energy in eV,
-despite its “E₀ shift” label. It does not subtract a reference or calibrate the
+The **Edge energy trend** reports the absolute estimated or requested $E_0$ in eV.
+Older versions called it “E₀ shift.” It does not subtract a reference or calibrate the
 beamline. Noise and normalization choices can move automatic estimates, as can
 sample changes.
 
@@ -90,7 +119,7 @@ Its historical UI label is “white line (norm. μ).” The height is dimensionl
 edge-step normalization. It is a local maximum, not an integrated peak area,
 concentration or oxidation-state calibration. A glitch can dominate it. These
 definitions come from `frame_sample` and `trend_snapshot` in the
-[Series implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs-gui/src/app.rs).
+[Series implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/crates/rexafs-gui/src/app.rs).
 See [processing theory](/docs/science/processing/) for the meaning of normalized
 and flattened absorption.
 

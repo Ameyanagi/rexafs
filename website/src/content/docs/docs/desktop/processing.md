@@ -4,11 +4,17 @@ description: "Use normalization, AUTOBK, forward and inverse transforms."
 audience: user
 ---
 
+This guide describes **rexafs 0.2.10**. The screenshots show its tagged macOS
+CI build, captured before signing through computer use with public Cu measurements. They are
+full, unedited windows; select an image for full resolution. See
+[capture provenance](/licenses/#desktop-0210-workflow-captures) and
+[available downloads](/docs/getting-started/install/).
+
 Loading an absorption spectrum or changing its settings runs **normalization →
 AUTOBK → forward Fourier transform → inverse transform**. Selecting a stage
 changes the display and controls. The inverse transform runs even with its
 controls collapsed, so invalid back-transform settings can fail processing.
-See the [0.2.4 desktop pipeline](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/params.rs#L1589).
+See the [0.2.10 desktop pipeline](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/crates/rexafs-gui/src/params.rs).
 
 The inspector edits the **current** group. **Apply to N** copies only the selected
 processing stage to eligible marked groups, excluding the current group and
@@ -66,8 +72,8 @@ Python and TypeScript exposure of these energy-offset methods remains pending.
 
 ## Normalization
 
-**Since 0.2.10:** choose **Polynomial** or **MBACK** in the
-Normalize sidebar. MBACK shows absorber, edge and optional erfc-background
+Choose **Polynomial** or **MBACK** in the Normalize sidebar.
+MBACK shows absorber, edge and optional erfc-background
 settings in that same panel. A declared source absorber/edge lets it calculate
 on selection; otherwise enter them and choose **Apply**. The ordinary plot and
 range handles stay visible. **Atomic match…** and **Compare methods…** open
@@ -81,7 +87,18 @@ exports include the fit while visible.
 These fits are limited to Normalize; Background shows only its **Spline**
 overlay. Switching tabs preserves each toggle's preference.
 
-**Since 0.2.10:** the range icon between **Colors** and **Overview plots**
+[![Polynomial normalization with the Pre/post overlay enabled](/screenshots/0.2.10/polynomial.jpg)](/screenshots/0.2.10/polynomial.jpg)
+
+*Polynomial: Pre/post shows the two fitted baselines over measured μ(E).*
+
+[![MBACK normalization with automatically detected Cu and K edge and the complete fitted curve](/screenshots/0.2.10/mback.jpg)](/screenshots/0.2.10/mback.jpg)
+
+*MBACK: the orange curve is the complete fitted atomic model, including its
+background terms. Cu and K were read from this XDI file's header; check these
+choices for your own measurement. A fit overlay is a diagnostic, not proof of
+an appropriate normalization model.*
+
+The range icon between **Colors** and **Overview plots**
 in the plot toolbar toggles shaded
 selection windows and their drag handles across processing, fitting and analysis
 plots. Hiding them preserves the numerical ranges and processing results. The
@@ -95,7 +112,7 @@ the pre-edge line and divides by the edge step; **flat** also removes the fitted
 post-edge trend. Inspect the curve rather than treating automatic settings as
 proof of a valid baseline.
 
-Blank fields select Auto; placeholders show the resolved values. New 0.2.4
+Blank fields select Auto; placeholders show the resolved values. New
 desktop analyses start with these choices:
 
 | Setting | Starting value |
@@ -132,18 +149,19 @@ extra columns or malformed rows produce an error. This input is a reference for
 the background objective, not a new μ(E) spectrum or an already-windowed Fourier
 curve. Its arrays are stored inside the project. Leave it unset for the normal
 starting workflow; use **Clear standard** to remove it. See the [standard
-reader](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/params.rs#L983)
+reader](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/crates/rexafs-gui/src/params.rs)
 and [AUTOBK objective](/docs/science/autobk/).
 
 
-[![Full background-removal view showing weighted Cu EXAFS and AUTOBK settings](/screenshots/background.jpg)](/screenshots/background.jpg)
+[![Background showing measured Cu absorption, one AUTOBK spline and the Fourier magnitude below](/screenshots/0.2.10/background.jpg)](/screenshots/0.2.10/background.jpg)
 
-*Background settings control the spline fit; display weighting controls the plotted oscillations. rexafs 0.2.4 on macOS.*
+*Spline controls the orange AUTOBK overlay. Normalize's polynomial and MBACK
+fit overlays are not drawn in this stage.*
 
 
 ## Forward transform
 
-**Since 0.2.10:** the Transform view selector contains
+The Transform view selector contains
 **k**, **R**, **k + R**, **q**, and **Wavelet**. It remains visible in all five
 views. In Wavelet, **Magnitude**, **Real**, **Imaginary** and **Phase** appear
 immediately to the right of that selector. Switching back to Wavelet preserves
@@ -152,16 +170,20 @@ its map when the spectrum and processing settings are unchanged.
 FT and Back FT in the parameter panel. It is collapsed initially and opens when
 you select Wavelet. The map updates automatically after committed parameter edits
 and stepper clicks; calculations run in the background after a short pause.
-**Colors** and **Export** are at the top right. The History menu has been removed;
-existing saved results remain preserved. Region measurements live in **Series → Add trend → Wavelet**:
-copy the Transform settings, choose Integral, Maximum or Mean, drag the k–R
-rectangle and calculate all frames. Saved trends retain the settings and both
-intervals. The wavelet map has the k spectrum below
+**Colors** and **Export** are at the top right. Region measurements live in
+[**Series → Add trend → Wavelet**](/docs/desktop/series/#measure-a-wavelet-region).
+The wavelet map has the k spectrum below
 it and the R spectrum to its left. Their plotting areas align, and zooming or
 panning shares the matching k or R axis. **Spectra** shows the measured χ and
 Fourier magnitude; **Slices** shows wavelet magnitude at a selected coordinate.
 See the [wavelet guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/wavelet-analysis.md)
 for interpretation, settings, retained maps and region integration.
+
+[![Wavelet magnitude with linked R spectrum on the left, k spectrum below and settings in the Transform sidebar](/screenshots/0.2.10/wavelet.jpg)](/screenshots/0.2.10/wavelet.jpg)
+
+*Cu foil wavelet magnitude, k = 2–12 Å⁻¹, k weight 2 and R maximum 6 Å.
+R is not phase-corrected; a map maximum is not directly a bond distance.
+Changing R maximum to 5 Å updated the map automatically during the GUI check.*
 
 The recommended starting window is 2–15 Å⁻¹ with $k$ weight 2, taper parameter
 $dk=1$ Å⁻¹ and a Kaiser–Bessel window. Shorten the range for a noisier or narrower
@@ -192,7 +214,6 @@ Fourier signs, scales, units and limitations.
 
 ## Fluorescence correction
 
-This workflow is available in **0.2.10**.
 Select uncorrected μ(E), then **Data → Fluorescence correction…**. Enter the full
 sample composition, absorber, edge, emission line and measured incident/exit
 angles in degrees from the sample surface. For example, `Ka1` selects one line;

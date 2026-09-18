@@ -9,11 +9,13 @@ signed-in account. Use **Retry** or the login controls if needed. rexafs stores
 no separate model API key. The Assistant remains experimental; review scientific
 choices and results before relying on them.
 
-[![rexafs 0.2.9 showing the Assistant composer beside the Cu spectrum and Parameters panel](/screenshots/0.2.9/assistant-layout.jpg)](/screenshots/0.2.9/assistant-layout.jpg)
+[![rexafs 0.2.10 showing the Assistant composer beside the Cu spectrum and Parameters panel](/screenshots/0.2.10/assistant.jpg)](/screenshots/0.2.10/assistant.jpg)
 
-Captured through computer use from the signed 0.2.9 Mac app with the prepared
-Cu foil reference. See [screenshot provenance](/licenses/#documentation-screenshots).
-No Assistant message was sent for these three captures. The available
+Captured through computer use from the tagged **0.2.10 macOS CI build**, using a
+public experimental Cu foil spectrum. See
+[screenshot provenance](/licenses/#desktop-0210-workflow-captures).
+No Assistant message was sent and no access permission was changed for these
+three captures. The available
 models and reasoning levels depend on the connected Codex installation.
 Select an image to view it at full size.
 
@@ -27,7 +29,7 @@ Write your request in the message field. The footer has three menus:
   the selected model, or select one of its supported levels.
 - **Access** selects what the Assistant may do in the analysis.
 
-[![Model menu in the rexafs 0.2.9 Assistant](/screenshots/0.2.9/assistant-model.jpg)](/screenshots/0.2.9/assistant-model.jpg)
+[![Model menu in the rexafs 0.2.10 Assistant](/screenshots/0.2.10/assistant-model.jpg)](/screenshots/0.2.10/assistant-model.jpg)
 
 Use arrow keys to browse a menu, Enter or Space to choose, and Escape to close.
 **Enter** in the message field sends; **Shift+Enter** inserts a newline. The arrow
@@ -36,7 +38,7 @@ turn; an analysis calculation already running can finish independently.
 
 ## Choose access
 
-[![Access menu in the rexafs 0.2.9 Assistant](/screenshots/0.2.9/assistant-access.jpg)](/screenshots/0.2.9/assistant-access.jpg)
+[![Access menu in the rexafs 0.2.10 Assistant showing Review, Edit analysis and Workspace commands](/screenshots/0.2.10/assistant-access.jpg)](/screenshots/0.2.10/assistant-access.jpg)
 
 **Review** permits inspection and navigation. **Edit analysis** also permits
 supported parameter changes and calculations. App-authored receipts describe
