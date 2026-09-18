@@ -73,7 +73,7 @@ pub use crate::xafs::fluorescence::{
 };
 pub use crate::xafs::mback::{MBack, MbackErfc, MbackOptions, MbackResult};
 
-// Unreleased, native Cauchy wavelet analysis.
+// Since 0.2.10, native Cauchy wavelet analysis.
 pub use crate::xafs::wavelet::{
     Wavelet, WaveletError, WaveletMap, WaveletPreparation, WaveletRegionValue, WaveletSize,
     WaveletWindow,

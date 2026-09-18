@@ -294,7 +294,7 @@ pub struct SessionDiagnostics {
     pub recent_acceptance: Vec<bool>,
 }
 
-/// Unreleased: bounded acceptance feedback for optimization, disabled by default
+/// Since 0.2.10: bounded acceptance feedback for optimization, disabled by default
 /// through `SessionSettings::adaptation = None`. This history-dependent policy
 /// is not an equilibrium sampler. All coordinate widths (including species and
 /// collective widths) are multiplied by the recorded scale; fraction moves are

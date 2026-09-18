@@ -1375,7 +1375,7 @@ struct PySpectrum {
 }
 #[pymethods]
 impl PySpectrum {
-    /// Correct into an independent unnormalized Spectrum (unreleased). Internal
+    /// Correct into an independent unnormalized Spectrum (since 0.2.10). Internal
     /// conventional normalization runs automatically; the source stays unchanged.
     /// Unknown acquisition provenance is explicitly interpreted as fluorescence.
     /// Known transmission, prepared norm/flat and repeated correction raise ValueError.
@@ -1414,7 +1414,7 @@ impl PySpectrum {
         slf.inner.set_absorption_mode(fluorescence::mode(mode)?);
         Ok(slf)
     }
-    /// Calculate a Cauchy wavelet map on a private copy (unreleased).
+    /// Calculate a Cauchy wavelet map on a private copy (since 0.2.10).
     /// Use spectrum.wavelet(Wavelet((2, 12))). The k interval is in inverse angstroms.
     /// Missing normalization/AUTOBK run automatically; existing chi is reused.
     /// Inputs, settings and cached results remain unchanged. Releases the GIL.
@@ -1433,7 +1433,7 @@ impl PySpectrum {
     }
     /// Fit a composite XANES model, preparing missing normalization on a private copy.
     ///
-    /// Unreleased. Example: spectrum.fit_peaks(PeakFit((-20, 40)).gaussian("p1", 5, 2, 3)).
+    /// Available since 0.2.10. Example: spectrum.fit_peaks(PeakFit((-20, 40)).gaussian("p1", 5, 2, 3)).
     /// Defaults come from the model: Norm, E0-relative eV, 200 iterations. The source
     /// arrays, settings, caches and initial model remain unchanged. Returns an owned
     /// PeakFitResult with data/model/residual arrays on retained native points.
@@ -1461,7 +1461,7 @@ impl PySpectrum {
     }
     /// Measure a point or region, preparing missing stages on a private copy.
     ///
-    /// Unreleased. Recommended: spectrum.measure("mean", (-20, 30)). Defaults
+    /// Available since 0.2.10. Recommended: spectrum.measure("mean", (-20, 30)). Defaults
     /// to normalized mu and E0-relative energy offsets in eV; select space="flat"
     /// explicitly. point accepts a scalar; mean/integral/maximum accept two
     /// increasing bounds. k (inverse angstroms) and R (angstroms, not phase
@@ -2022,7 +2022,7 @@ fn read_qas_transmission(path: &str) -> PyResult<PySpectrum> {
         inner: rexafs::io::read_qas_transmission(path).map_err(|e| error(e.into()))?,
     })
 }
-/// Native storage for the unreleased rexafs.io.Measurement facade.
+/// Native storage for the rexafs.io.Measurement facade introduced in 0.2.10.
 /// Reading preserves source arrays; selecting a mapping performs only detector
 /// arithmetic and conversion to eV. No processing or input mutation occurs.
 #[pyclass(name = "Measurement")]

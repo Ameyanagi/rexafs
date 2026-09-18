@@ -58,7 +58,7 @@ pub trait Normalization {
 pub enum NormalizationMethod {
     /// Implemented pre/post-edge subtraction and edge-step normalization.
     PrePostEdge(PrePostEdge),
-    /// Full Chantler MBACK; requires absorber and edge (unreleased).
+    /// Full Chantler MBACK; requires absorber and edge (since 0.2.10).
     MBack(MBack),
 }
 
@@ -750,7 +750,7 @@ impl Normalization for PrePostEdge {
     }
 }
 
-/// Full Chantler MBACK model and cached results (unreleased).
+/// Full Chantler MBACK model and cached results (since 0.2.10).
 pub use super::mback::MBack;
 
 #[cfg(test)]

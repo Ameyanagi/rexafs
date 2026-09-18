@@ -56,7 +56,7 @@ pub struct EnsembleProblem {
 
 impl EnsembleProblem {
     /// Create a one-structure, one-dataset problem without changing its objective
-    /// or processing snapshot (unreleased). Takes ownership, assigns unit mixture
+    /// or processing snapshot (since 0.2.10). Takes ownership, assigns unit mixture
     /// weight, and uses the session's movable atoms. Validation runs at session
     /// creation. Add further datasets/components through the public fields.
     pub fn single(configuration: Configuration, dataset: RmcDataset) -> Self {

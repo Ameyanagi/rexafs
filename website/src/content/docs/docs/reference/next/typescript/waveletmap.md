@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Owned Cauchy map (unreleased). All array getters return independent typed-array
+Owned Cauchy map (since 0.2.10). All array getters return independent typed-array
 copies. Complex/magnitude/phase arrays are flat, row-major: index r*shape[1]+k.
 shape is [R rows, k columns]; W units are those of k**weight * χ, distinct from
 ordinary Fourier scaling. Display colors and sampling do not define a metric.
@@ -144,7 +144,7 @@ sampling never participates; invalid bounds throw. No uncertainty is inferred.
 mean(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
 ```
 
-Area-weighted mean of native bilinear magnitude (unreleased), not an average
+Area-weighted mean of native bilinear magnitude (since 0.2.10), not an average
 of cells. k is Å⁻¹ and R is Å. Increasing, fully covered ranges are required;
 invalid bounds throw. Returns units/method without inferred uncertainty.
 
@@ -155,7 +155,7 @@ maximum(k_range: [number, number], r_range: [number, number]): WaveletRegionValu
 ```
 
 Maximum native bilinear magnitude, including rectangle boundaries
-(unreleased). k is Å⁻¹ and R is Å; increasing, fully covered ranges are
+(since 0.2.10). k is Å⁻¹ and R is Å; increasing, fully covered ranges are
 required. Returns units/method without inferred uncertainty.
 
 ## definition

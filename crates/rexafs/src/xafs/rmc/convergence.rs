@@ -1,7 +1,7 @@
 //! Operational residual-trend diagnostics; not a structural convergence proof.
 use super::*;
 
-/// Empirical numerical plateau criterion (unreleased). Defaults compare three
+/// Empirical numerical plateau criterion (since 0.2.10). Defaults compare three
 /// consecutive 500-attempt windows after at least 3,000 attempts. Each window's
 /// best-score improvement must be ≤ absolute_tolerance + 0.005*|previous best|,
 /// and the mean score change must be ≤ absolute_tolerance + 0.01*|previous mean|.
@@ -46,7 +46,7 @@ pub enum ResidualTrendStatus {
     /// All required recent windows satisfy both numerical change tolerances.
     ResidualPlateau,
 }
-/// One nonoverlapping window, including rejected attempts (unreleased).
+/// One nonoverlapping window, including rejected attempts (since 0.2.10).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResidualWindow {
     /// First attempted move in this window, inclusive.
@@ -85,7 +85,7 @@ pub struct ResidualTrendReport {
     /// Up to stable_windows+1 recent complete windows in chronological order.
     pub windows: Vec<ResidualWindow>,
 }
-/// Assess recent changes without scattering or fitting (unreleased). History
+/// Assess recent changes without scattering or fitting (since 0.2.10). History
 /// must have finite scores, consecutive increasing steps and nonincreasing best
 /// scores no larger than current scores. Retaining fewer records than required
 /// reports InsufficientHistory rather than declaring convergence. Windows end at
@@ -112,7 +112,7 @@ struct TrendSample {
     score: f64,
     best_score: f64,
 }
-/// Apply the same best-plus-mean criterion to EA generation records (unreleased).
+/// Apply the same best-plus-mean criterion to EA generation records (since 0.2.10).
 /// Here window/minimum_attempts and reported step indices count generations;
 /// use explicit settings (for example window=10, minimum_attempts=60), not the
 /// 500-attempt RMC default. Uses population means, including individuals that

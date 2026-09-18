@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Independent historical correction (unreleased), with copied arrays/dictionaries.
+Independent historical correction (since 0.2.10), with copied arrays/dictionaries.
 Editing these values never alters the spectrum, to_json() record or replay
 definition. No free() is required for this JavaScript result. Inspect warnings
 and amplification; numerical success does not establish physical validity.

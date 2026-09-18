@@ -6,7 +6,7 @@ fn invalid(e: impl std::fmt::Display) -> PyErr {
     PyValueError::new_err(e.to_string())
 }
 
-/// Optional smooth fluorescence background for MBACK (unreleased).
+/// Optional smooth fluorescence background for MBACK (since 0.2.10).
 ///
 /// The line must originate at the selected absorber edge. width=(low, high)
 /// gives positive eV bounds; amplitude=(low, high) gives finite f2-unit bounds.
@@ -31,7 +31,7 @@ impl PyMbackErfc {
     }
 }
 
-/// Full Chantler MBACK normalization (unreleased). Example:
+/// Full Chantler MBACK normalization (since 0.2.10). Example:
 /// MBack("Cu", "K", pre_edge=(-200, -50), post_edge=(100, 800)).
 ///
 /// Ranges are eV offsets from E0. Degree defaults to 2; erfc is disabled. E0=None
@@ -105,7 +105,7 @@ impl PyMBack {
     }
 }
 
-/// Owned full-MBACK output (unreleased). Arrays are returned as independent copies.
+/// Owned full-MBACK output (since 0.2.10). Arrays are returned as independent copies.
 ///
 /// norm=(scale*mu-pre_curve)/Delta is dimensionless; fpp=scale*mu-background
 /// remains in f2 units. flat separately removes the auxiliary post-edge trend.

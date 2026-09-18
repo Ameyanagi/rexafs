@@ -3,7 +3,7 @@ use super::geometry::{distance, image_bounds};
 use super::*;
 
 /// Stable atom and lattice-image identity, independent of neighbor sorting.
-/// Added after 0.2.9 (unreleased). Images translate the unwrapped atom by integer
+/// Added in 0.2.10. Images translate the unwrapped atom by integer
 /// multiples of the fixed cell's row vectors; finite clusters use `[0; 3]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct AtomImage {

@@ -1,4 +1,4 @@
-//! Reproducible initialization, resource estimates and streaming analysis (unreleased).
+//! Reproducible initialization, resource estimates and streaming analysis (since 0.2.10).
 use super::*;
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;

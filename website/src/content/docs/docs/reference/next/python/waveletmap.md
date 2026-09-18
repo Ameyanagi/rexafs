@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-Owned native Cauchy map (unreleased), with independent NumPy array properties.
+Owned native Cauchy map (since 0.2.10), with independent NumPy array properties.
 
 Matrices have shape (R rows, k columns), including explicit k padding. W has
 units of k**weight * chi, distinct from ordinary Fourier scaling. No color
@@ -147,7 +147,7 @@ display sampling never participates. Invalid coverage raises ValueError.
 mean(self, k_range: tuple[float, float], r_range: tuple[float, float]) -> WaveletRegionValue
 ```
 
-Area-weighted mean of native bilinear magnitude (unreleased).
+Area-weighted mean of native bilinear magnitude (since 0.2.10).
 k is inverse angstroms; R is angstroms. Requires increasing, fully covered
 ranges. Returns units and method without uncertainty; releases the GIL.
 
@@ -158,7 +158,7 @@ maximum(self, k_range: tuple[float, float], r_range: tuple[float, float]) -> Wav
 ```
 
 Maximum native bilinear magnitude, including rectangle boundaries
-(unreleased). k is inverse angstroms; R is angstroms. Invalid coverage
+(since 0.2.10). k is inverse angstroms; R is angstroms. Invalid coverage
 raises ValueError. Returns units/method without uncertainty; releases the GIL.
 
 ## definition

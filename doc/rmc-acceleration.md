@@ -1,6 +1,6 @@
 # Prepared ReFEFF paths for RMC
 
-These Rust APIs are **unreleased**, added after 0.2.9. Enable `refeff-runner`.
+These Rust APIs are introduced in **0.2.10**. Enable `refeff-runner`.
 ReFEFF remains the primary scattering calculator. No EVAX source is incorporated.
 The existing `RefeffCalculator` remains available for fresh-potential and
 pinned-potential pipeline comparisons; its stage and wrapper timings are now
@@ -212,7 +212,7 @@ choose zero path criteria; archived screened calculations are not overwritten.
 See the [work record](rmc-implementation-progress.md) for measured validation,
 including approximation settings that failed the accuracy target.
 
-## Residual-trend monitoring (unreleased)
+## Residual-trend monitoring (0.2.10)
 
 `residual_trend` compares successive nonoverlapping windows of current and best
 objective records. Defaults use 500 attempts per window, three stable windows,
@@ -235,7 +235,7 @@ See [hybrid search, adaptive stages and population caching](rmc-search-upgrade.m
 for acceptance feedback, immutable trained basis stages, explicit rescoring,
 first-shell fitter integration and the measured population-cache comparison.
 
-## Experimental adaptive audits (unreleased)
+## Experimental adaptive audits (0.2.10)
 
 Adaptive training is disabled by default. It is a research option, with no
 established overall speedup in the [Cu₂O qualification](rmc-cu2o-adaptive-qualification.md).

@@ -1,6 +1,6 @@
 # Cauchy wavelet analysis
 
-Unreleased source-checkout feature. The native core implements `cauchy_v1`;
+Introduced in rexafs 0.2.10. The native core implements `cauchy_v1`;
 the source desktop provides a map workspace and full-frame Series region trends.
 Python and TypeScript expose the same native calculation and region statistics.
 Live acquisition qualification remains pending. This page does
@@ -53,7 +53,7 @@ Serde JSON preserves the scientific map; deserialization checks method, dimensio
 axes, finite values and resource limits. It does not independently prove that an
 external producer's numerical values are correct.
 
-## Python and TypeScript (unreleased)
+## Python and TypeScript (0.2.10)
 
 The common call is `spectrum.wavelet(model)` in each language. Missing
 normalization/background stages run on a private copy; users do not need to
@@ -114,7 +114,7 @@ The adapters live in [`py-rexafs/src/wavelet.rs`](../py-rexafs/src/wavelet.rs),
 [`js-rexafs/wavelet.js`](../js-rexafs/wavelet.js). They use the core calculation;
 no separate Python or JavaScript numerical algorithm is introduced.
 
-## Desktop workflow (unreleased)
+## Desktop workflow (0.2.10)
 
 Select a spectrum, then **Transform → Wavelet** in the shared
 **k · R · k + R · q · Wavelet** view selector. The selector stays visible in
@@ -231,7 +231,7 @@ results. In ordinary processing plots this icon sits between **Colors** and
 The retained data model and worker are implemented in
 [`series_measurements/wavelet.rs`](../crates/rexafs-gui/src/series_measurements/wavelet.rs)
 and [`series_measurements.rs`](../crates/rexafs-gui/src/series_measurements.rs).
-This is an unreleased Series workflow; Live acquisition and native Windows/Linux
+This Series workflow is introduced in 0.2.10; Live acquisition and native Windows/Linux
 qualification require further checks.
 
 See the [updated computer-use validation](validation/2026-09-18-wavelet-trends/README.md).

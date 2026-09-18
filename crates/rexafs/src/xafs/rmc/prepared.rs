@@ -13,8 +13,7 @@ fn backend(e: impl std::fmt::Display) -> RmcError {
 }
 
 /// ReFEFF amplitude and phase for one explicit path, with degeneracy and S₀²
-/// equal to one and no additional Debye–Waller factor. Added after 0.2.9
-/// (unreleased). Amplitude already includes reference-path propagation losses.
+/// equal to one and no additional Debye–Waller factor. Added in 0.2.10. Amplitude already includes reference-path propagation losses.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PathScattering {
     /// Source wave numbers, in Å⁻¹, strictly increasing.
@@ -128,7 +127,7 @@ impl PathTable {
 /// it does not rerun atomic/POT/XSPH/PATH or use temporary files. This is a
 /// pinned-electronic-state approximation, separate from any shared-path basis.
 /// Ordinary EXAFS and linear polarization are supported, with S₀²=1 and no
-/// extra disorder damping. See `doc/rmc-acceleration.md` (unreleased).
+/// extra disorder damping. See `doc/rmc-acceleration.md` (since 0.2.10).
 pub struct PreparedRefeffContext {
     reference: Configuration,
     absorber: usize,

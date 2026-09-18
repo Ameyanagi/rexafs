@@ -25,7 +25,7 @@ Version of the installed Python package, for example "0.2.4". Include this value
 AbsorptionMode: TypeAlias = Literal['unknown', 'transmission', 'fluorescence']
 ```
 
-Acquisition interpretation (unreleased). Unknown means missing evidence;
+Acquisition interpretation (since 0.2.10). Unknown means missing evidence;
 it does not establish fluorescence. Changing it never removes correction history.
 
 ## FFTGrid

@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-Unreleased Cauchy settings. Use spectrum.wavelet(Wavelet((2, 12))).
+Cauchy settings, available since 0.2.10. Use spectrum.wavelet(Wavelet((2, 12))).
 
 k_range is measured support in inverse angstroms. Defaults: weight 2, order
 100, kstep 0.05, R maximum 6 angstroms, no taper and automatic FFT/R sampling.

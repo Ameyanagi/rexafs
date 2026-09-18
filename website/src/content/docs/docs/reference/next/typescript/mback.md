@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Full Chantler MBACK normalization (unreleased). Example:
+Full Chantler MBACK normalization (since 0.2.10). Example:
 new MBack("Cu", "K", {pre_edge: [-200,-50], post_edge: [100,800]}).
 
 Default degree 2 and erfc off. Automatic ranges respect neighboring edges;

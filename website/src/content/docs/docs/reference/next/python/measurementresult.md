@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-Owned result from Spectrum.measure (unreleased). No processing state is mutated.
+Owned result from Spectrum.measure (since 0.2.10). No processing state is mutated.
 
 ## value
 

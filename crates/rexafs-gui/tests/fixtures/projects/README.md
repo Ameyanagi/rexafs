@@ -22,6 +22,7 @@ are not supported or retained as compatibility fixtures.
 | `rexafs-0.2.7-links.rxs`, `rexafs-0.2.7-embedded.rxs` | Saved and reopened through the 0.2.7 writer; unchanged format-1 state, numerical defaults and retained Assistant conversations |
 | `rexafs-0.2.8-links.rxs`, `rexafs-0.2.8-embedded.rxs` | Saved and reopened through the 0.2.8 writer; unchanged format-1 defaults, numerical settings, retained import mappings and Assistant conversations |
 | `rexafs-0.2.9-links.rxs`, `rexafs-0.2.9-embedded.rxs` | Saved and reopened through the 0.2.9 writer; synthetic flat LCF, batch LCF, centered PCA and native MCR results with ordered source identities, alongside retained format-1 state |
+| `rexafs-0.2.10-links.rxs`, `rexafs-0.2.10-embedded.rxs` | Saved and reopened through the 0.2.10 writer; retained synthetic collection results and format-1 defaults, including the new analysis and RMC state fields |
 | `future-version.rxs` | Future format: reject without modification |
 | `truncated.rxs` | Corrupt/incomplete input: reject without modification |
 | `data/*.xmu`, `feff/*.dat` | Real inputs for relocation, byte recovery and processing checks |

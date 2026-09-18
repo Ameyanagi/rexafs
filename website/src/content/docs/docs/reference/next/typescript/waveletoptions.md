@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Optional Cauchy settings (unreleased). Construction copies these values.
+Optional Cauchy settings (since 0.2.10). Construction copies these values.
 
 ## kweight
 

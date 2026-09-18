@@ -1,4 +1,4 @@
-//! First-shell calibration through the ordinary REXAFS path fitter (unreleased).
+//! First-shell calibration through the ordinary REXAFS path fitter (since 0.2.10).
 use super::*;
 use crate::fitting::{
     feffit_joint_with_options, FeffFitDataset, FeffFitOptions, FeffFitResult, FitSpace,

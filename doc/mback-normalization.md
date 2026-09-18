@@ -1,4 +1,4 @@
-# MBACK normalization (unreleased)
+# MBACK normalization (0.2.10)
 
 MBACK matches an absorption measurement to an atomic reference while fitting a
 smooth background outside the near-edge region. It provides an alternative to
@@ -64,7 +64,7 @@ absorber edge. A family can be requested through `MbackErfc.emission`; it remain
 distinct from an individual line and retains its contributing records. This term
 models a smooth background; it does not correct fluorescence over-absorption.
 
-## Desktop workflow (unreleased)
+## Desktop workflow (0.2.10)
 
 In **Normalize**, choose **Polynomial** or **MBACK** at the top of the parameter
 sidebar. Selecting MBACK replaces the method-specific controls in that same

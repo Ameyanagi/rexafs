@@ -1,4 +1,4 @@
-//! Full Chantler MBACK normalization (unreleased).
+//! Full Chantler MBACK normalization (since 0.2.10).
 //!
 //! [`MBack::for_edge`] selects an explicit absorber and edge. [`MBack::fit`]
 //! borrows energy/absorption arrays; using it as a spectrum normalization method

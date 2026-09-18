@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// Path treatment for the prepared calculator (unreleased). Both modes use
+/// Path treatment for the prepared calculator (since 0.2.10). Both modes use
 /// fixed reference electronic potentials and an explicit geometric catalogue.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub enum ScatteringBasis {
@@ -38,7 +38,7 @@ pub enum ScatteringBasis {
     },
 }
 
-/// Fixed scientific and resource limits for prepared calculations (unreleased).
+/// Fixed scientific and resource limits for prepared calculations (since 0.2.10).
 /// [`Self::default`] and omitted JSON settings select exact affected-path caching:
 /// [`ScatteringBasis::Exact`], a 256 MiB cache, no moments and no adaptive basis.
 /// This is the recommended mode. It still uses fixed reference potentials.
@@ -63,7 +63,7 @@ pub struct AccelerationSettings {
     /// default 256 MiB. Oversized results are evaluated but not cached. This
     /// excludes immutable phase tensors, catalogues, and transient batch results.
     pub cache_bytes: usize,
-    /// Unreleased: retained geometries per electronic context, 1..=1024 (default 1).
+    /// Since 0.2.10: retained geometries per electronic context, 1..=1024 (default 1).
     /// Population searches can use population size plus one. The nearest retained
     /// geometry by number of changed atoms is reused; the global byte limit still
     /// applies. This resource setting is excluded from scientific identity.
@@ -102,10 +102,10 @@ impl Default for AccelerationSettings {
 pub struct PreparedRefeffStats {
     /// Electronic contexts prepared, each containing fixed POT/XSPH results.
     pub contexts: usize,
-    /// Fresh electronic preparations in this calculator (unreleased).
+    /// Fresh electronic preparations in this calculator (since 0.2.10).
     #[serde(default)]
     pub electronic_preparations: usize,
-    /// Contexts reused from an immutable stage or exact audit (unreleased).
+    /// Contexts reused from an immutable stage or exact audit (since 0.2.10).
     #[serde(default)]
     pub shared_electronic_contexts: usize,
     /// Directed concrete paths, including paths reserved by the displacement envelope.
@@ -161,7 +161,7 @@ pub struct ScatteringAccuracy {
 }
 
 /// One active concrete path with geometry, basis membership and optional accuracy
-/// diagnostics (unreleased). Entries retain catalogue order; reverse paths remain
+/// diagnostics (since 0.2.10). Entries retain catalogue order; reverse paths remain
 /// separate. Transform `contribution.chi` with the same Fourier/local-spectrum
 /// settings as the total to obtain additive complex path maps.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -567,7 +567,7 @@ impl PreparedRefeffCalculator {
         next.cancellation = self.cancellation.clone();
         Ok(next)
     }
-    /// Unreleased: construct an exact typed-path calculator with the same pinned
+    /// Since 0.2.10: construct an exact typed-path calculator with the same pinned
     /// electronic references. Already prepared electronic contexts/catalogues are
     /// shared immutably; approximate spectra and tables are never reused. Fresh
     /// contexts remain lazy. This does not recompute self-consistent potentials

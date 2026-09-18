@@ -1,4 +1,4 @@
-//! Structural summaries and explicit histogram conventions (unreleased).
+//! Structural summaries and explicit histogram conventions (since 0.2.10).
 use super::geometry::distance;
 use super::*;
 

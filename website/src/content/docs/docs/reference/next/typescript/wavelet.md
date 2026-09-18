@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Unreleased Cauchy settings. Use spectrum.wavelet(new Wavelet([2, 12])).
+Cauchy settings, available since 0.2.10. Use spectrum.wavelet(new Wavelet([2, 12])).
 k_range is fully measured support in Å⁻¹. Defaults: weight 2, order 100,
 k step 0.05 Å⁻¹, R up to 6 Å, no taper and automatic FFT/R sampling.
 cauchy_v1 fixes order independently of R extent; larger order narrows frequency

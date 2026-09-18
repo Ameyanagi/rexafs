@@ -1,4 +1,4 @@
-//! Local Fourier maps with direct and equivalent zero-padded convolution (unreleased).
+//! Local Fourier maps with direct and equivalent zero-padded convolution (since 0.2.10).
 use super::{require, TransformError};
 use easyfft::dyn_size::{DynFftMut, DynIfftMut};
 use num_complex::Complex64;
@@ -50,7 +50,7 @@ pub enum LocalSpectrumAlgorithm {
     /// Require uniform input k and centers at its sample positions; no silent resampling.
     Fft,
 }
-/// Local Fourier transform and mask, added after 0.2.9 (unreleased). The complex
+/// Local Fourier transform and mask, added in 0.2.10. The complex
 /// kernel is `[exp(2 i R (k-center)) − correction] exp(-(k-center)²/(2 width²))`,
 /// multiplied by trapezoidal quadrature weights and normalized to unit Euclidean
 /// norm for each cell. Coefficients preserve the input's numerical units.

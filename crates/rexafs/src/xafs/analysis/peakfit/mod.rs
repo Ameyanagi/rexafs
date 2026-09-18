@@ -1,4 +1,4 @@
-//! Composite XANES peak, edge-step and baseline fitting (unreleased).
+//! Composite XANES peak, edge-step and baseline fitting (since 0.2.10).
 //!
 //! [`PeakFit`] uses normalized μ(E) by default and energy offsets from E₀.
 //! It prepares missing normalization on an owned copy and leaves the source

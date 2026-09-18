@@ -1,9 +1,10 @@
-# Live acquisition (unreleased)
+# Live acquisition (experimental, 0.2.10)
 
 Live acquisition watches completed files and adds their spectra and a chosen
 trend to **Series**. It reads the acquisition folder without changing its files.
-This is a development workflow on `feature/analysis-b-f`; native Windows/Linux
-and network-share qualification are still required before release.
+Introduced as an experimental workflow in 0.2.10. Physical Windows/Linux
+acquisition and network-share behavior remain unqualified; the release does not
+claim that the automated checks establish those operating conditions.
 
 ## Start a session
 

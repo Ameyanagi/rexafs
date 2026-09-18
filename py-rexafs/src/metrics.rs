@@ -78,7 +78,7 @@ pub fn array(py: Python<'_>, input: &Bound<'_, PyAny>, name: &str) -> PyResult<V
     Ok(array.as_array().iter().copied().collect())
 }
 
-/// Owned scalar result from Spectrum.measure (unreleased).
+/// Owned scalar result from Spectrum.measure (since 0.2.10).
 ///
 /// value is in unit; range and optional position use the absolute native axis
 /// (eV, inverse angstroms, or angstroms). standard_error is absent unless

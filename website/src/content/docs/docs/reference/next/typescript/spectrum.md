@@ -38,7 +38,7 @@ assumptions and interpretation.
 correct_fluorescence(model: FluorescenceCorrection): Spectrum;
 ```
 
-Correct into an independent unnormalized Spectrum (unreleased). Internal
+Correct into an independent unnormalized Spectrum (since 0.2.10). Internal
 conventional normalization runs automatically; the source stays unchanged.
 Unknown provenance is explicitly interpreted as fluorescence. Known transmission,
 prepared norm/flat and repeated correction throw. Supply line and measured
@@ -78,7 +78,7 @@ history and restrictions survive. Returns this Spectrum; invalid names throw.
 wavelet(model: Wavelet): WaveletMap;
 ```
 
-Unreleased: spectrum.wavelet(new Wavelet([2, 12])) prepares missing
+Since 0.2.10: spectrum.wavelet(new Wavelet([2, 12])) prepares missing
 normalization/AUTOBK on a private copy, reusing existing χ. The inclusive
 interval uses Å⁻¹. Source arrays/settings/caches stay unchanged. Returns an
 owned native map; invalid coverage/grids and corrected XANES-only input throw.
@@ -90,7 +90,7 @@ R is not phase-corrected and colors do not imply concentration.
 fit_peaks(model: PeakFit, options?: { errors?: Float64Array }): PeakFitResult;
 ```
 
-Fit a composite XANES model, preparing missing normalization on a private copy (unreleased).
+Fit a composite XANES model, preparing missing normalization on a private copy (since 0.2.10).
 Recommended: spectrum.fit_peaks(new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 })).
 Model defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
 caches and model remain unchanged. Results use retained native points; no smoothing
@@ -108,7 +108,7 @@ Synchronous; use a Web Worker for large browser fits.
 measure(operation: "point", coordinates: number, options?: SpectrumMeasurementOptions): MeasurementResult;
 ```
 
-Measure a point or region without changing this spectrum (unreleased).
+Measure a point or region without changing this spectrum (since 0.2.10).
 Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
 mu and E0-relative energy offsets in eV; choose `space: "flat"` explicitly.
 k is in inverse angstroms; R is in angstroms without phase correction.
@@ -127,7 +127,7 @@ SpectrumMeasurementOptions.errors. No uncertainty is inferred by default.
 measure(operation: "mean" | "integral" | "maximum", coordinates: readonly [number, number], options?: SpectrumMeasurementOptions): MeasurementResult;
 ```
 
-Measure a point or region without changing this spectrum (unreleased).
+Measure a point or region without changing this spectrum (since 0.2.10).
 Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
 mu and E0-relative energy offsets in eV; choose `space: "flat"` explicitly.
 k is in inverse angstroms; R is in angstroms without phase correction.

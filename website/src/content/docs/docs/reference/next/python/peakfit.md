@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-Immutable composite XANES peak definition (unreleased).
+Immutable composite XANES peak definition (since 0.2.10).
 
 PeakFit((-20, 40)).gaussian("p1", 5, 2, 3).linear_baseline(0, 0)
 starts with Norm and E0-relative eV. Each builder returns a NEW model.

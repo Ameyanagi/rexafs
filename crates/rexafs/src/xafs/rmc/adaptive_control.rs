@@ -1,8 +1,8 @@
-//! Exact audits for experimental, opt-in adaptive stages. Unreleased.
+//! Exact audits for experimental, opt-in adaptive stages. Available since 0.2.10.
 use super::*;
 use crate::rmc::session::{evaluate_candidates, PreparedEnsemble};
 
-/// Audit policy for experimental adaptive mode (unreleased). Numerical defaults
+/// Audit policy for experimental adaptive mode (since 0.2.10). Numerical defaults
 /// are not experimental uncertainties. Explicitly enable an adaptive basis first.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
@@ -83,7 +83,7 @@ pub struct AdaptiveAuditReport {
     /// Identity after this audit (unchanged for Passed).
     pub next: String,
 }
-/// Experimental and unreleased: periodically audit an adaptive calculator
+/// Experimental in 0.2.10: periodically audit an adaptive calculator
 /// against exact typed paths, retrain on retained geometries and atomically
 /// rebase the optimizer.
 /// Use `step_rmc` or `step_evolution` for automatic scheduling, and explicitly
@@ -413,7 +413,7 @@ impl AdaptiveBasisController {
 }
 macro_rules! checkpoint {
     ($name:ident, $checkpoint:ty, $session:ty) => {
-        /// Unreleased: combined optimizer/controller checkpoint, including immutable
+        /// Since 0.2.10: combined optimizer/controller checkpoint, including immutable
         /// basis training and original electronic references. Deserialize with serde,
         /// then resume to validate/recalculate retained states. No cached tensors or
         /// approximate path snapshots are trusted from disk.

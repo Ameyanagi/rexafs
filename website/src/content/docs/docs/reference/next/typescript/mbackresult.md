@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Owned full-MBACK result (unreleased). Arrays are independent JavaScript copies.
+Owned full-MBACK result (since 0.2.10). Arrays are independent JavaScript copies.
 norm and fpp are different quantities. Region balancing is not inverse-variance
 weighting; objective/convergence alone do not establish experimental uncertainty.
 

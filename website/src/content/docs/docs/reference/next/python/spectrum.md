@@ -38,7 +38,7 @@ are not currently exposed by this Python Spectrum API.
 correct_fluorescence(self, model: FluorescenceCorrection) -> Spectrum
 ```
 
-Correct into an independent unnormalized Spectrum (unreleased).
+Correct into an independent unnormalized Spectrum (since 0.2.10).
 Internal conventional normalization runs automatically; the source stays
 unchanged. Unknown acquisition provenance is explicitly interpreted as
 fluorescence. Known transmission, prepared norm/flat and repeated correction
@@ -79,7 +79,7 @@ Arrays/caches stay unchanged. Correction history and restrictions survive.
 wavelet(self, model: Wavelet) -> WaveletMap
 ```
 
-Unreleased: spectrum.wavelet(Wavelet((2, 12))) prepares missing
+Since 0.2.10: spectrum.wavelet(Wavelet((2, 12))) prepares missing
 normalization/AUTOBK on a copy, reusing existing chi. The interval uses
 inverse angstroms. Arrays/settings/caches are unchanged; Rust releases
 the GIL. Result matrices are owned (R rows, k columns). Invalid coverage,
@@ -92,7 +92,7 @@ phase-corrected; color intensity is not a concentration.
 fit_peaks(self, model: PeakFit, *, errors: NDArray[np.float64] | Sequence[float] | None=None) -> PeakFitResult
 ```
 
-Fit a composite XANES model, preparing missing normalization on a copy (unreleased).
+Fit a composite XANES model, preparing missing normalization on a copy (since 0.2.10).
 
 Example: spectrum.fit_peaks(PeakFit((-20, 40)).gaussian("p1", 5, 2, 3)).
 Defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
@@ -113,7 +113,7 @@ nonconvergence withhold conditional local uncertainty; this is not model confide
 measure(self, operation: Literal['point'], coordinates: float, *, space: Literal['mu', 'norm', 'flat', 'chi', 'fourier']='norm', origin: Literal['e0', 'absolute'] | None=None, kweight: int=0, errors: NDArray[np.float64] | Sequence[float] | None=None) -> MeasurementResult
 ```
 
-Measure a region on a private copy (unreleased).
+Measure a region on a private copy (since 0.2.10).
 
 Recommended: spectrum.measure("mean", (-20, 30)). Defaults to normalized
 mu and E0-relative energy offsets in eV; select space="flat" explicitly.
@@ -140,7 +140,7 @@ standard_error is None when errors are omitted.
 measure(self, operation: Literal['mean', 'integral', 'maximum'], coordinates: tuple[float, float], *, space: Literal['mu', 'norm', 'flat', 'chi', 'fourier']='norm', origin: Literal['e0', 'absolute'] | None=None, kweight: int=0, errors: NDArray[np.float64] | Sequence[float] | None=None) -> MeasurementResult
 ```
 
-Measure a region on a private copy (unreleased).
+Measure a region on a private copy (since 0.2.10).
 
 Recommended: spectrum.measure("mean", (-20, 30)). Defaults to normalized
 mu and E0-relative energy offsets in eV; select space="flat" explicitly.

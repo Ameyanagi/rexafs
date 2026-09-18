@@ -1,4 +1,4 @@
-//! Reusable spectral transforms, independent of refinement methods (unreleased).
+//! Reusable spectral transforms, independent of refinement methods (since 0.2.10).
 //!
 //! [`LocalSpectrumTransform`] prepares Morlet wavelet or Gaussian short-time
 //! Fourier maps from a measured k grid. Callers apply k weighting and noise

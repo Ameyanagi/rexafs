@@ -302,7 +302,7 @@ impl WaveletMap {
         })
     }
 
-    /// Area-weighted mean of native |W| in a k–R rectangle (unreleased).
+    /// Area-weighted mean of native |W| in a k–R rectangle (since 0.2.10).
     /// Divides [`Self::integral`] by Δk ΔR, rather than averaging grid cells;
     /// therefore nonuniform R sampling does not bias the mean. k is Å⁻¹ and R
     /// is Å. Both ranges must be finite, increasing and completely covered.
@@ -322,7 +322,7 @@ impl WaveletMap {
         Ok(result)
     }
 
-    /// Maximum of the bilinear native |W| surface in a k–R rectangle (unreleased).
+    /// Maximum of the bilinear native |W| surface in a k–R rectangle (since 0.2.10).
     /// Includes interpolated rectangle edges and corners, not just enclosed grid
     /// samples. A bilinear cell reaches its maximum at a corner. k is Å⁻¹ and R
     /// is Å; ranges must be finite, increasing and fully covered, including the

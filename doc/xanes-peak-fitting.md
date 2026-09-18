@@ -1,11 +1,10 @@
-# XANES peak fitting (unreleased)
+# XANES peak fitting (0.2.10)
 
-The development core fits a sum of named peaks, absorption steps and baseline
+The core fits a sum of named peaks, absorption steps and baseline
 terms on the original energy grid. It does not choose a peak count or identify
-chemical species. The development desktop supports current, marked and Series
+chemical species. The desktop supports current, marked and Series
 fits, and optional saved peak models in Live acquisition. The Python and
-TypeScript bindings below use the same native calculation. All of these APIs
-remain unreleased; see the [milestone C progress record](analysis-b-f-progress.md).
+TypeScript bindings below use the same native calculation. These APIs are introduced in 0.2.10; see the [milestone C progress record](analysis-b-f-progress.md).
 
 ```rust
 use rexafs::{PeakFit, Spectrum};
@@ -117,7 +116,7 @@ another grid for display; it does not alter the historical result.
 
 ## Python and TypeScript
 
-These APIs are **unreleased**. They use the same Rust calculation as the desktop.
+These APIs are available in **0.2.10**. They use the same Rust calculation as the desktop.
 Missing normalization is prepared on a copy; neither the source spectrum nor
 the starting model is changed. Norm and E₀-relative eV remain the defaults.
 

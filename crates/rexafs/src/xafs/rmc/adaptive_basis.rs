@@ -1,7 +1,7 @@
 //! Experimental, opt-in training stages for shared scattering representatives.
 use super::*;
 
-/// Experimental and unreleased: measured-error training for a shared path basis.
+/// Experimental in 0.2.10: measured-error training for a shared path basis.
 /// Disabled by default; explicitly set [`AccelerationSettings::adaptive`] to opt
 /// in. Exact affected-path caching is recommended for routine refinement.
 /// Training happens during context preparation, never in response to

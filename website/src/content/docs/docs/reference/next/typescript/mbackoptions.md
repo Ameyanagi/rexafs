@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Optional MBACK settings (unreleased); energy and ranges use eV.
+Optional MBACK settings (since 0.2.10); energy and ranges use eV.
 
 ## e0
 

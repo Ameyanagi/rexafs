@@ -1003,7 +1003,7 @@ export class BackgroundMethod {
  * assumptions and interpretation.
  */
 export class Spectrum {
-  /** Correct into an independent unnormalized Spectrum (unreleased). Internal
+  /** Correct into an independent unnormalized Spectrum (since 0.2.10). Internal
    * conventional normalization runs automatically; the source stays unchanged.
    * Unknown provenance is explicitly interpreted as fluorescence. Known transmission,
    * prepared norm/flat and repeated correction throw. Supply line and measured
@@ -1019,13 +1019,13 @@ export class Spectrum {
   /** Explicitly revise interpretation without changing arrays/caches. Correction
    * history and restrictions survive. Returns this Spectrum; invalid names throw. */
   set_absorption_mode(mode: AbsorptionMode): this;
-  /** Unreleased: spectrum.wavelet(new Wavelet([2, 12])) prepares missing
+  /** Since 0.2.10: spectrum.wavelet(new Wavelet([2, 12])) prepares missing
    * normalization/AUTOBK on a private copy, reusing existing χ. The inclusive
    * interval uses Å⁻¹. Source arrays/settings/caches stay unchanged. Returns an
    * owned native map; invalid coverage/grids and corrected XANES-only input throw.
    * R is not phase-corrected and colors do not imply concentration. */
   wavelet(model: Wavelet): WaveletMap;
-  /** Fit a composite XANES model, preparing missing normalization on a private copy (unreleased).
+  /** Fit a composite XANES model, preparing missing normalization on a private copy (since 0.2.10).
    * Recommended: spectrum.fit_peaks(new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 })).
    * Model defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
    * caches and model remain unchanged. Results use retained native points; no smoothing
@@ -1039,7 +1039,7 @@ export class Spectrum {
    */
   fit_peaks(model: PeakFit, options?: { errors?: Float64Array }): PeakFitResult;
   /**
-   * Measure a point or region without changing this spectrum (unreleased).
+   * Measure a point or region without changing this spectrum (since 0.2.10).
    * Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
    * mu and E0-relative energy offsets in eV; choose `space: "flat"` explicitly.
    * k is in inverse angstroms; R is in angstroms without phase correction.
@@ -1054,7 +1054,7 @@ export class Spectrum {
    */
   measure(operation: "point", coordinates: number, options?: SpectrumMeasurementOptions): MeasurementResult;
   /**
-   * Measure a point or region without changing this spectrum (unreleased).
+   * Measure a point or region without changing this spectrum (since 0.2.10).
    * Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
    * mu and E0-relative energy offsets in eV; choose `space: "flat"` explicitly.
    * k is in inverse angstroms; R is in angstroms without phase correction.
@@ -1477,7 +1477,7 @@ export class Measurement {
  */
 export function read_measurement(data: string | Uint8Array): Measurement;
 
-/** Scalar spectrum measurement options (unreleased); defaults prepare Norm on a copy. */
+/** Scalar spectrum measurement options (since 0.2.10); defaults prepare Norm on a copy. */
 export interface SpectrumMeasurementOptions {
   /** Selected signal. Default: norm. mu retains original units; flat is dimensionless. */
   space?: "mu" | "norm" | "flat" | "chi" | "fourier";
@@ -1515,7 +1515,7 @@ export interface MeasurementResult {
   };
 }
 
-/** Immutable composite XANES peak definition (unreleased).
+/** Immutable composite XANES peak definition (since 0.2.10).
  * Start with new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 }).linear_baseline().
  * Defaults are Norm and E0-relative eV. Builders return NEW definitions; inputs
  * remain unchanged. Missing normalization runs on a copy. No smoothing or
@@ -1593,7 +1593,7 @@ export interface PeakParameterOptions {
 export type PeakFitOutcome =
   | { index: number; result: PeakFitResult; error: null }
   | { index: number; result: null; error: string };
-/** Owned numerical result (unreleased). Arrays are ordinary JavaScript copies.
+/** Owned numerical result (since 0.2.10). Arrays are ordinary JavaScript copies.
  * Editing the displayed values never changes the retained JSON or the input spectrum.
  * Local errors are conditional, not model-selection confidence intervals.
  */
@@ -1740,12 +1740,12 @@ export interface MbackErfcOptions {
   /** False selects an exact line such as Ka1; true selects a within-shell family such as Ka. */
   family?: boolean;
 }
-/** Immutable optional smooth-background term (unreleased). It does not correct over-absorption. */
+/** Immutable optional smooth-background term (since 0.2.10). It does not correct over-absorption. */
 export class MbackErfc {
   /** Select an emission originating at the absorber edge, with explicit scientific bounds. */
   constructor(line: string, options: MbackErfcOptions);
 }
-/** Optional MBACK settings (unreleased); energy and ranges use eV. */
+/** Optional MBACK settings (since 0.2.10); energy and ranges use eV. */
 export interface MbackOptions {
   /** Fixed measured edge origin in eV; omitted uses derivative detection. Does not shift the table. */
   e0?: number;
@@ -1759,7 +1759,7 @@ export interface MbackOptions {
   erfc?: MbackErfc;
 }
 /**
- * Full Chantler MBACK normalization (unreleased). Example:
+ * Full Chantler MBACK normalization (since 0.2.10). Example:
  * new MBack("Cu", "K", {pre_edge: [-200,-50], post_edge: [100,800]}).
  *
  * Default degree 2 and erfc off. Automatic ranges respect neighboring edges;
@@ -1783,7 +1783,7 @@ export class MBack {
   free(): void;
 }
 /**
- * Owned full-MBACK result (unreleased). Arrays are independent JavaScript copies.
+ * Owned full-MBACK result (since 0.2.10). Arrays are independent JavaScript copies.
  * norm and fpp are different quantities. Region balancing is not inverse-variance
  * weighting; objective/convergence alone do not establish experimental uncertainty.
  */
@@ -1850,7 +1850,7 @@ export interface MbackResult {
   warnings: string[];
 }
 
-/** Optional Cauchy settings (unreleased). Construction copies these values. */
+/** Optional Cauchy settings (since 0.2.10). Construction copies these values. */
 export interface WaveletOptions {
   /** Integer exponent 0–6, default 2; emphasizes high-k signal and noise. */
   kweight?: number;
@@ -1878,7 +1878,7 @@ export interface WaveletSize {
   /** Estimated bytes, excluding input copies, FFT scratch and serialization. */ bytes: number;
 }
 /**
- * Unreleased Cauchy settings. Use spectrum.wavelet(new Wavelet([2, 12])).
+ * Cauchy settings, available since 0.2.10. Use spectrum.wavelet(new Wavelet([2, 12])).
  * k_range is fully measured support in Å⁻¹. Defaults: weight 2, order 100,
  * k step 0.05 Å⁻¹, R up to 6 Å, no taper and automatic FFT/R sampling.
  * cauchy_v1 fixes order independently of R extent; larger order narrows frequency
@@ -1911,7 +1911,7 @@ export interface WaveletPreparation {
   /** Versioned native background settings, without large result arrays. */ background: unknown;
 }
 /**
- * Owned Cauchy map (unreleased). All array getters return independent typed-array
+ * Owned Cauchy map (since 0.2.10). All array getters return independent typed-array
  * copies. Complex/magnitude/phase arrays are flat, row-major: index r*shape[1]+k.
  * shape is [R rows, k columns]; W units are those of k**weight * χ, distinct from
  * ordinary Fourier scaling. Display colors and sampling do not define a metric.
@@ -1937,12 +1937,12 @@ export class WaveletMap {
   /** Integrate native bilinear magnitude over a covered k/R rectangle. Display
    * sampling never participates; invalid bounds throw. No uncertainty is inferred. */
   integral(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
-  /** Area-weighted mean of native bilinear magnitude (unreleased), not an average
+  /** Area-weighted mean of native bilinear magnitude (since 0.2.10), not an average
    * of cells. k is Å⁻¹ and R is Å. Increasing, fully covered ranges are required;
    * invalid bounds throw. Returns units/method without inferred uncertainty. */
   mean(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
   /** Maximum native bilinear magnitude, including rectangle boundaries
-   * (unreleased). k is Å⁻¹ and R is Å; increasing, fully covered ranges are
+   * (since 0.2.10). k is Å⁻¹ and R is Å; increasing, fully covered ranges are
    * required. Returns units/method without inferred uncertainty. */
   maximum(k_range: [number, number], r_range: [number, number]): WaveletRegionValue;
   /** Fresh independent settings; release them with free() after use. */ readonly definition: Wavelet;
@@ -1963,11 +1963,11 @@ export interface WaveletRegionValue {
   /** Numerical convention: bilinear_magnitude_v1 (integral), bilinear_magnitude_mean_v1 or bilinear_magnitude_maximum_v1. */ method: string;
 }
 
-/** Acquisition interpretation (unreleased). Unknown means missing evidence, not
+/** Acquisition interpretation (since 0.2.10). Unknown means missing evidence, not
  * established fluorescence. Changing it never removes correction history. */
 export type AbsorptionMode = "unknown" | "transmission" | "fluorescence";
 
-/** Explicit sample geometry/emission plus optional internal-fit settings (unreleased). */
+/** Explicit sample geometry/emission plus optional internal-fit settings (since 0.2.10). */
 export interface FluorescenceCorrectionOptions {
   /** Detected emission, for example Ka1; no line is inferred. */ line: string;
   /** Measured [incidence, exit] angles in degrees FROM THE SAMPLE SURFACE, each in (0,90]. */ angles: [number, number];
@@ -1978,7 +1978,7 @@ export interface FluorescenceCorrectionOptions {
   /** Internal post-edge polynomial degree 0–5, default 1. Pre-edge is linear; no Victoreen term. */ degree?: number;
 }
 /**
- * Optically thick, homogeneous-sample XANES correction (unreleased).
+ * Optically thick, homogeneous-sample XANES correction (since 0.2.10).
  * new FluorescenceCorrection("CuO", "Cu", "K", {line:"Ka1", angles:[45,45]})
  * requires the complete sample formula, absorber, edge, detected emission and
  * measured geometry. Angles use the sample surface convention, not the normal.
@@ -2004,7 +2004,7 @@ export class FluorescenceCorrection {
   static from_json(json: string): FluorescenceCorrection;
   /** Release this model's Wasm allocation. Do not access it again; copied results remain valid. */ free(): void;
 }
-/** Internal conventional fit of original mu (unreleased), distinct from final
+/** Internal conventional fit of original mu (since 0.2.10), distinct from final
  * normalization. Lists are independent copies on the original energy grid. */
 export interface FluorescenceInternalNormalization {
   /** Edge energy E0 used by the internal normalization, in electronvolts. */ e0: number;
@@ -2016,7 +2016,7 @@ export interface FluorescenceInternalNormalization {
   /** Pre-edge line plus post-edge polynomial, in original mu units. */ post_curve: number[];
   /** Dimensionless internal n0 in alpha+1-n0. */ norm: number[];
 }
-/** Independent historical correction (unreleased), with copied arrays/dictionaries.
+/** Independent historical correction (since 0.2.10), with copied arrays/dictionaries.
  * Editing these values never alters the spectrum, to_json() record or replay
  * definition. No free() is required for this JavaScript result. Inspect warnings
  * and amplification; numerical success does not establish physical validity. */

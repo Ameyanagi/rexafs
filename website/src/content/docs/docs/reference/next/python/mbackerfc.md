@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-Optional smooth fluorescence background for MBACK (unreleased).
+Optional smooth fluorescence background for MBACK (since 0.2.10).
 
 The line must originate at the selected absorber edge. width=(low, high)
 gives positive eV bounds; amplitude=(low, high) gives finite f2-unit bounds.

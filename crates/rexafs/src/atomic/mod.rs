@@ -1,4 +1,4 @@
-//! Offline atomic references for absorption normalization and correction (unreleased).
+//! Offline atomic references for absorption normalization and correction (since 0.2.10).
 //!
 //! [`AtomicData::new`] opens the pinned xraydb 0.4.1 data without network access.
 //! Every output carries a checksum of the actual loaded dataset and the named

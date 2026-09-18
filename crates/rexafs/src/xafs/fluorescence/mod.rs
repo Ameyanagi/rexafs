@@ -1,4 +1,4 @@
-//! FLUO-style correction of fluorescence over-absorption (unreleased).
+//! FLUO-style correction of fluorescence over-absorption (since 0.2.10).
 //!
 //! This homogeneous, optically thick model is intended for XANES. It is not
 //! qualified here for EXAFS or finite-thickness samples. All geometry is explicit;

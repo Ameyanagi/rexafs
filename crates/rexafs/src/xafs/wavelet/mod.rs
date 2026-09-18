@@ -1,4 +1,4 @@
-//! Cauchy wavelet maps of EXAFS χ(k), using the `cauchy_v1` convention (unreleased).
+//! Cauchy wavelet maps of EXAFS χ(k), using the `cauchy_v1` convention (since 0.2.10).
 //!
 //! [`Wavelet::new`] selects measured k support; [`crate::Spectrum::wavelet`]
 //! prepares missing normalization/AUTOBK on a copy. The discrete positive-frequency

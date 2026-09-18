@@ -1,6 +1,6 @@
 use super::*;
 
-/// Independent amplitude/energy calibration limits (unreleased). Geometry and
+/// Independent amplitude/energy calibration limits (since 0.2.10). Geometry and
 /// mixture fractions remain fixed. Calibration on a known reference is preferable
 /// to treating fitted S₀²/ΔE₀ as independent structural evidence.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

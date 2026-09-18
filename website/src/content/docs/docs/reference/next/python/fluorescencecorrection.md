@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-Optically thick, homogeneous-sample XANES correction (unreleased).
+Optically thick, homogeneous-sample XANES correction (since 0.2.10).
 
 FluorescenceCorrection("CuO", "Cu", "K", line="Ka1", angles=(45,45))
 requires the complete sample formula, absorber, edge, detected emission and

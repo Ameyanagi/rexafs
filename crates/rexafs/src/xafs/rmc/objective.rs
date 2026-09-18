@@ -258,7 +258,7 @@ impl PreparedObjective {
 }
 
 /// Transform an individual path with the same Fourier support/interpolation as
-/// RMC objectives (unreleased). Input χ is dimensionless and already includes
+/// RMC objectives (since 0.2.10). Input χ is dimensionless and already includes
 /// degeneracy; apply S₀² and absorber/mixture weights explicitly when comparing
 /// components to an experimental fit. The measured k grid is in Å⁻¹ and may
 /// start above zero; unmeasured support is padded with zero. The returned owned
@@ -275,7 +275,7 @@ pub fn transform_path_fourier(
 }
 
 /// Transform experimental or calculated χ(k) on the RMC objective's grid
-/// (unreleased). Use this for result plots and exports so a measured k grid
+/// (since 0.2.10). Use this for result plots and exports so a measured k grid
 /// starting above zero receives exactly the objective's interpolation and zero
 /// padding before the shared native fitting transform.
 ///

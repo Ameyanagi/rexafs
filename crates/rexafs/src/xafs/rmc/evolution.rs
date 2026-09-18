@@ -33,7 +33,7 @@ pub struct EvolutionSettings {
     pub hypermutation_factor: f64,
     /// Convert a fraction difference into Å for the diversity metric; default 1.
     pub weight_distance_scale: f64,
-    /// Unreleased: Metropolis attempts after crossover/mutation for each nonelite
+    /// Since 0.2.10: Metropolis attempts after crossover/mutation for each nonelite
     /// child. Zero preserves the original EA; start with one, then benchmark.
     /// The best state visited during refinement survives, including its start.
     pub local_steps: usize,
@@ -113,7 +113,7 @@ pub struct EvolutionCheckpoint {
 /// Tournament selection, atom-wise uniform crossover, elitism and bounded
 /// mutation. A complete generation commits atomically; calculator errors leave
 /// the previous population and RNG available for checkpointing and retry.
-/// Unreleased: independent children are sent through calculator batches, bounded
+/// Since 0.2.10: independent children are sent through calculator batches, bounded
 /// to 32 candidates and approximately one million χ samples per batch. Reduction
 /// and random draws keep a fixed order regardless of calculator worker count.
 /// Optional local refinement reuses the RMC kernel, collective/species proposals,
@@ -185,7 +185,7 @@ fn tournament(population: &[EnsembleState], count: usize, rng: &mut ChaCha8Rng) 
 }
 impl EvolutionSession {
     /// Borrow the validated input and its captured spectrum processing state
-    /// (unreleased). This does not clone the population or run any processing.
+    /// (since 0.2.10). This does not clone the population or run any processing.
     pub fn problem(&self) -> &EnsembleProblem {
         &self.checkpoint.problem
     }
@@ -483,7 +483,7 @@ impl EvolutionSession {
     pub fn completed(&self) -> usize {
         self.checkpoint.completed
     }
-    /// Unreleased: explicitly rescore every individual with a new calculator
+    /// Since 0.2.10: explicitly rescore every individual with a new calculator
     /// identity, then sort by the new objective. RNG, original displacement bounds,
     /// generation/local-attempt counts and feedback state remain unchanged. Clears
     /// the old score history and stagnation counter, records a revision boundary,

@@ -12,7 +12,7 @@ __version__: str
 """Version of the installed Python package, for example "0.2.4". Include this value when reporting results or requesting help; a source build can contain changes beyond the published package with the same version."""
 
 AbsorptionMode: TypeAlias = Literal["unknown", "transmission", "fluorescence"]
-"""Acquisition interpretation (unreleased). Unknown means missing evidence;
+"""Acquisition interpretation (since 0.2.10). Unknown means missing evidence;
 it does not establish fluorescence. Changing it never removes correction history."""
 
 FFTGrid: TypeAlias = Literal["Input", "Larch"]
@@ -783,7 +783,7 @@ class BackgroundMethod:
         Use new_autobk() for the implemented background workflow."""
 
 class MeasurementResult:
-    """Owned result from Spectrum.measure (unreleased). No processing state is mutated."""
+    """Owned result from Spectrum.measure (since 0.2.10). No processing state is mutated."""
     @property
     def value(self) -> float:
         """Finite scalar in unit."""
@@ -827,7 +827,7 @@ class Spectrum:
     equations, interpretation and limitations. Groups and structural fitting
     are not currently exposed by this Python Spectrum API."""
     def correct_fluorescence(self, model: FluorescenceCorrection) -> Spectrum:
-        """Correct into an independent unnormalized Spectrum (unreleased).
+        """Correct into an independent unnormalized Spectrum (since 0.2.10).
         Internal conventional normalization runs automatically; the source stays
         unchanged. Unknown acquisition provenance is explicitly interpreted as
         fluorescence. Known transmission, prepared norm/flat and repeated correction
@@ -848,7 +848,7 @@ class Spectrum:
         Arrays/caches stay unchanged. Correction history and restrictions survive."""
         ...
     def wavelet(self, model: Wavelet) -> WaveletMap:
-        """Unreleased: spectrum.wavelet(Wavelet((2, 12))) prepares missing
+        """Since 0.2.10: spectrum.wavelet(Wavelet((2, 12))) prepares missing
         normalization/AUTOBK on a copy, reusing existing chi. The interval uses
         inverse angstroms. Arrays/settings/caches are unchanged; Rust releases
         the GIL. Result matrices are owned (R rows, k columns). Invalid coverage,
@@ -856,7 +856,7 @@ class Spectrum:
         phase-corrected; color intensity is not a concentration."""
         ...
     def fit_peaks(self, model: PeakFit, *, errors: NDArray[np.float64] | Sequence[float] | None = None) -> PeakFitResult:
-        """Fit a composite XANES model, preparing missing normalization on a copy (unreleased).
+        """Fit a composite XANES model, preparing missing normalization on a copy (since 0.2.10).
 
         Example: spectrum.fit_peaks(PeakFit((-20, 40)).gaussian("p1", 5, 2, 3)).
         Defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
@@ -876,7 +876,7 @@ class Spectrum:
                 space: Literal["mu", "norm", "flat", "chi", "fourier"] = "norm",
                 origin: Literal["e0", "absolute"] | None = None, kweight: int = 0,
                 errors: NDArray[np.float64] | Sequence[float] | None = None) -> MeasurementResult:
-        """Measure one interpolated point on a private copy (unreleased).
+        """Measure one interpolated point on a private copy (since 0.2.10).
 
         Defaults to normalized mu at an E0 offset in eV. Flat is explicit. k/R
         default to absolute inverse-angstrom/angstrom coordinates. Missing stages
@@ -889,7 +889,7 @@ class Spectrum:
                 space: Literal["mu", "norm", "flat", "chi", "fourier"] = "norm",
                 origin: Literal["e0", "absolute"] | None = None, kweight: int = 0,
                 errors: NDArray[np.float64] | Sequence[float] | None = None) -> MeasurementResult:
-        """Measure a region on a private copy (unreleased).
+        """Measure a region on a private copy (since 0.2.10).
 
         Recommended: spectrum.measure("mean", (-20, 30)). Defaults to normalized
         mu and E0-relative energy offsets in eV; select space="flat" explicitly.
@@ -1248,7 +1248,7 @@ class Spectrum:
         not change the spectrum."""
 
 class PeakFit:
-    """Immutable composite XANES peak definition (unreleased).
+    """Immutable composite XANES peak definition (since 0.2.10).
 
     PeakFit((-20, 40)).gaussian("p1", 5, 2, 3).linear_baseline(0, 0)
     starts with Norm and E0-relative eV. Each builder returns a NEW model.
@@ -1321,7 +1321,7 @@ class PeakFit:
         """Restore and validate a complete definition; invalid input raises ValueError."""
 
 class PeakFitOutcome:
-    """One independent batch outcome in input order (unreleased).
+    """One independent batch outcome in input order (since 0.2.10).
     Exactly one of result/error is present. Nonconvergence is retained as a result."""
     @property
     def index(self) -> int:
@@ -1334,7 +1334,7 @@ class PeakFitOutcome:
         """Failure reason, otherwise None."""
 
 class PeakFitResult:
-    """Owned native fit (unreleased). Array getters return independent copies.
+    """Owned native fit (since 0.2.10). Array getters return independent copies.
     Result energies/centers are absolute eV; parameter values retain model coordinates.
     Covariance/errors are conditional on the model/noise, not model-selection confidence."""
     @property
@@ -1423,7 +1423,7 @@ class PeakFitResult:
         """Active bounds and other model/uncertainty limitations."""
 
 class PeakContribution:
-    """One component curve and derived metrics (unreleased). Curve getters return copies."""
+    """One component curve and derived metrics (since 0.2.10). Curve getters return copies."""
     @property
     def name(self) -> str:
         """Stable component identity from the initial definition."""
@@ -1468,7 +1468,7 @@ class PeakContribution:
 
 
 class MbackErfc:
-    """Optional smooth fluorescence background for MBACK (unreleased).
+    """Optional smooth fluorescence background for MBACK (since 0.2.10).
 
     The line must originate at the selected absorber edge. width=(low, high)
     gives positive eV bounds; amplitude=(low, high) gives finite f2-unit bounds.
@@ -1479,7 +1479,7 @@ class MbackErfc:
         ...
 
 class MBack:
-    """Full Chantler MBACK normalization (unreleased). Example:
+    """Full Chantler MBACK normalization (since 0.2.10). Example:
     MBack("Cu", "K", pre_edge=(-200, -50), post_edge=(100, 800)).
 
     Ranges are eV offsets from E0. Degree defaults to 2; erfc is disabled. E0=None
@@ -1509,7 +1509,7 @@ class MBack:
         ...
 
 class MbackResult:
-    """Owned full-MBACK output (unreleased). Arrays are returned as independent copies.
+    """Owned full-MBACK output (since 0.2.10). Arrays are returned as independent copies.
 
     norm=(scale*mu-pre_curve)/Delta is dimensionless; fpp=scale*mu-background
     remains in f2 units. flat separately removes the auxiliary post-edge trend.
@@ -1651,7 +1651,7 @@ class AtomicReference(TypedDict):
     """Table and interpolation/contribution profile."""
 
 class FluorescenceInternalNormalization(TypedDict):
-    """Internal fit of original mu, distinct from final normalization (unreleased).
+    """Internal fit of original mu, distinct from final normalization (since 0.2.10).
     All arrays are independent Python lists on the original energy grid."""
     e0: float
     """Measured edge energy in eV."""
@@ -1671,7 +1671,7 @@ class FluorescenceInternalNormalization(TypedDict):
     """Dimensionless internal n0 used in alpha+1-n0."""
 
 class FluorescenceCorrection:
-    """Optically thick, homogeneous-sample XANES correction (unreleased).
+    """Optically thick, homogeneous-sample XANES correction (since 0.2.10).
 
     FluorescenceCorrection("CuO", "Cu", "K", line="Ka1", angles=(45,45))
     requires the complete sample formula, absorber, edge, detected emission and
@@ -1707,7 +1707,7 @@ class FluorescenceCorrection:
         ...
 
 class FluorescenceCorrectionResult:
-    """Historical correction (unreleased), with independent arrays and dictionaries.
+    """Historical correction (since 0.2.10), with independent arrays and dictionaries.
     Later spectrum edits do not rewrite this record. Inspect amplification/warnings;
     a finite result does not prove physical validity. No uncertainty is claimed."""
     @property
@@ -1793,7 +1793,7 @@ class WaveletSize(TypedDict):
     """Estimated scientific buffer bytes; input copies and scratch add overhead."""
 
 class Wavelet:
-    """Unreleased Cauchy settings. Use spectrum.wavelet(Wavelet((2, 12))).
+    """Cauchy settings, available since 0.2.10. Use spectrum.wavelet(Wavelet((2, 12))).
 
     k_range is measured support in inverse angstroms. Defaults: weight 2, order
     100, kstep 0.05, R maximum 6 angstroms, no taper and automatic FFT/R sampling.
@@ -1828,7 +1828,7 @@ class Wavelet:
         ...
 
 class WaveletMap:
-    """Owned native Cauchy map (unreleased), with independent NumPy array properties.
+    """Owned native Cauchy map (since 0.2.10), with independent NumPy array properties.
 
     Matrices have shape (R rows, k columns), including explicit k padding. W has
     units of k**weight * chi, distinct from ordinary Fourier scaling. No color
@@ -1894,13 +1894,13 @@ class WaveletMap:
         display sampling never participates. Invalid coverage raises ValueError."""
         ...
     def mean(self, k_range: tuple[float, float], r_range: tuple[float, float]) -> WaveletRegionValue:
-        """Area-weighted mean of native bilinear magnitude (unreleased).
+        """Area-weighted mean of native bilinear magnitude (since 0.2.10).
         k is inverse angstroms; R is angstroms. Requires increasing, fully covered
         ranges. Returns units and method without uncertainty; releases the GIL."""
         ...
     def maximum(self, k_range: tuple[float, float], r_range: tuple[float, float]) -> WaveletRegionValue:
         """Maximum native bilinear magnitude, including rectangle boundaries
-        (unreleased). k is inverse angstroms; R is angstroms. Invalid coverage
+        (since 0.2.10). k is inverse angstroms; R is angstroms. Invalid coverage
         raises ValueError. Returns units/method without uncertainty; releases the GIL."""
         ...
     @property

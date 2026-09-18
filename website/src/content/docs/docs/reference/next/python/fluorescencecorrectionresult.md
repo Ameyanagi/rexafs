@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-Historical correction (unreleased), with independent arrays and dictionaries.
+Historical correction (since 0.2.10), with independent arrays and dictionaries.
 Later spectrum edits do not rewrite this record. Inspect amplification/warnings;
 a finite result does not prove physical validity. No uncertainty is claimed.
 

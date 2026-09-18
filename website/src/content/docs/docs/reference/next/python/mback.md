@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-Full Chantler MBACK normalization (unreleased). Example:
+Full Chantler MBACK normalization (since 0.2.10). Example:
 MBack("Cu", "K", pre_edge=(-200, -50), post_edge=(100, 800)).
 
 Ranges are eV offsets from E0. Degree defaults to 2; erfc is disabled. E0=None

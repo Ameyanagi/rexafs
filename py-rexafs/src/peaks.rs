@@ -8,7 +8,7 @@ fn invalid(error: impl std::fmt::Display) -> PyErr {
     PyValueError::new_err(error.to_string())
 }
 
-/// Immutable composite XANES peak definition (unreleased).
+/// Immutable composite XANES peak definition (since 0.2.10).
 ///
 /// PeakFit((-20, 40)).gaussian("p1", 5, 2, 3).linear_baseline(0, 0)
 /// starts with normalized mu and E0-relative eV. Arguments are center, whole-axis
@@ -249,7 +249,7 @@ impl PyPeakFit {
     }
 }
 
-/// One batch outcome in input order (unreleased); exactly one of result/error is present.
+/// One batch outcome in input order (since 0.2.10); exactly one of result/error is present.
 #[pyclass(
     name = "PeakFitOutcome",
     module = "rexafs",
@@ -268,7 +268,7 @@ pub struct PyPeakOutcome {
     pub error: Option<String>,
 }
 
-/// Owned peak result (unreleased). Array getters return copies, so editing them cannot
+/// Owned peak result (since 0.2.10). Array getters return copies, so editing them cannot
 /// alter the fit. Energy/centers are absolute eV; model parameter values retain the
 /// selected coordinate origin. Inspect termination and uncertainty_unavailable;
 /// local standard errors are conditional, not model-selection confidence intervals.
@@ -440,7 +440,7 @@ impl PyPeakFitResult {
     }
 }
 
-/// One peak/step/baseline contribution with an independent NumPy curve copy (unreleased).
+/// One peak/step/baseline contribution with an independent NumPy curve copy (since 0.2.10).
 /// Centers and FWHM use absolute eV and eV respectively; areas use signal units times eV.
 #[pyclass(
     name = "PeakContribution",

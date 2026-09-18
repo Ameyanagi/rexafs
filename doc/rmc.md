@@ -1,6 +1,6 @@
 # Experimental reverse Monte Carlo with ReFEFF
 
-This **unreleased Rust API** on `feature/rmc-refeff`, based on rexafs 0.2.9,
+This **Rust API, introduced in 0.2.10**,
 refines explicit atomic coordinates and mixture fractions against EXAFS.
 ReFEFF is the primary calculator. The engine now includes calculation reuse,
 chemical restraints, k/R/q/wavelet objectives, exact-resume sessions, evolutionary
@@ -33,7 +33,7 @@ configured jobs and checkpoints retain their chosen mode.
 
 ## Start with a processed Spectrum
 
-The recommended **unreleased** input is `RmcDataset::from_spectrum(&spectrum,
+The recommended input is `RmcDataset::from_spectrum(&spectrum,
 options)`. `Spectrum` is the public alias of `XASSpectrum`. This constructor
 captures the processing state and reads the authoritative `k()` and `chi()`
 getters, so users do not need to extract arrays or assemble provenance manually.
@@ -372,7 +372,7 @@ approximation errors. Further qualification on larger, diverse structures and
 experimental data remains necessary. No PDF/Bragg fitting, RMCProfile adapter,
 EVAX job compatibility, uncertainty quantification or desktop workflow is added.
 
-## Prepared paths and new workflows (unreleased)
+## Prepared paths and new workflows (0.2.10)
 
 The [prepared-path guide](rmc-acceleration.md) documents ReFEFF 0.4.0 contexts,
 exact affected-path updates, optional representative tables and controlled moments,

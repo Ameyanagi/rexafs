@@ -1,4 +1,4 @@
-//! Controlled Taylor summation of path-length phases (unreleased).
+//! Controlled Taylor summation of path-length phases (since 0.2.10).
 use super::*;
 use num_complex::Complex64;
 

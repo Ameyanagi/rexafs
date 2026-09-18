@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-Owned full-MBACK output (unreleased). Arrays are returned as independent copies.
+Owned full-MBACK output (since 0.2.10). Arrays are returned as independent copies.
 
 norm=(scale*mu-pre_curve)/Delta is dimensionless; fpp=scale*mu-background
 remains in f2 units. flat separately removes the auxiliary post-edge trend.

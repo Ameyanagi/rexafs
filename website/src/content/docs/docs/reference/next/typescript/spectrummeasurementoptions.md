@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Scalar spectrum measurement options (unreleased); defaults prepare Norm on a copy.
+Scalar spectrum measurement options (since 0.2.10); defaults prepare Norm on a copy.
 
 ## space
 

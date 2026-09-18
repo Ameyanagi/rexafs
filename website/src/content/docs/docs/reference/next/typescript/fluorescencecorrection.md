@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Optically thick, homogeneous-sample XANES correction (unreleased).
+Optically thick, homogeneous-sample XANES correction (since 0.2.10).
 new FluorescenceCorrection("CuO", "Cu", "K", {line:"Ka1", angles:[45,45]})
 requires the complete sample formula, absorber, edge, detected emission and
 measured geometry. Angles use the sample surface convention, not the normal.

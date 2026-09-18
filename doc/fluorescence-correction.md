@@ -1,6 +1,6 @@
 # Fluorescence over-absorption correction
 
-Unreleased source-checkout feature. The native core implements the named
+Introduced in rexafs 0.2.10. The native core implements the named
 `fluo_elam_v1` profile, with Python and TypeScript APIs using that same calculation.
 The source-checkout desktop includes the preview and corrected-group workflow below.
 Series/Live correction recipes and native Windows/Linux interaction checks remain
@@ -58,7 +58,7 @@ historical record on its own recorded energy grid; they do not rewrite it.
 `correction.apply(energy, mu)` is the equivalent array API for explicitly
 interpreted fluorescence input.
 
-## Python and TypeScript (unreleased)
+## Python and TypeScript (0.2.10)
 
 Use the same two-stage workflow: make a corrected spectrum, then normalize it.
 The examples use illustrative 45° surface angles; replace them with the measured
@@ -167,7 +167,7 @@ not confidence intervals or physically universal acceptance criteria. Noise and
 uncertain angles/composition can be strongly amplified. Corrected-array uncertainty
 is unavailable until dependence on the internal normalization is propagated.
 
-## Desktop workflow (unreleased)
+## Desktop workflow (0.2.10)
 
 Select uncorrected μ(E), then **Data → Fluorescence correction…** in the
 processing tools. Enter the full sample composition (including its matrix),

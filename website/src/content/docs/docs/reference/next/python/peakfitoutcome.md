@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-One independent batch outcome in input order (unreleased).
+One independent batch outcome in input order (since 0.2.10).
 Exactly one of result/error is present. Nonconvergence is retained as a result.
 
 ## index

@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Immutable composite XANES peak definition (unreleased).
+Immutable composite XANES peak definition (since 0.2.10).
 Start with new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 }).linear_baseline().
 Defaults are Norm and E0-relative eV. Builders return NEW definitions; inputs
 remain unchanged. Missing normalization runs on a copy. No smoothing or

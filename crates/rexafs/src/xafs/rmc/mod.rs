@@ -1,4 +1,4 @@
-//! Experimental reverse Monte Carlo (RMC) refinement, added after 0.2.9 (unreleased).
+//! Experimental reverse Monte Carlo (RMC) refinement, added in 0.2.10.
 //!
 //! RMC proposes atomic displacements and compares calculated extended X-ray
 //! absorption fine structure (EXAFS) with measured, unweighted χ(k). This module
@@ -215,7 +215,7 @@ pub struct ExafsDataset {
 
 impl ExafsDataset {
     /// Copy the theoretical k grid in Å⁻¹ after applying this dataset's fixed
-    /// fitting ΔE₀ (unreleased). Uses the same conversion as the optimizer;
+    /// fitting ΔE₀ (since 0.2.10). Uses the same conversion as the optimizer;
     /// use this for `AdaptiveBasisSettings::k` to avoid an accidental exact-path
     /// fallback caused by training on the unshifted experimental grid.
     /// Requires at least two increasing finite nonnegative k values and finite

@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Internal conventional fit of original mu (unreleased), distinct from final
+Internal conventional fit of original mu (since 0.2.10), distinct from final
 normalization. Lists are independent copies on the original energy grid.
 
 ## e0

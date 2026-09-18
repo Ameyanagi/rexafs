@@ -7,7 +7,7 @@ fn invalid(e: impl std::fmt::Display) -> PyErr {
 fn dictionary<'py>(py: Python<'py>, json: String) -> PyResult<Bound<'py, PyAny>> {
     py.import("json")?.getattr("loads")?.call1((json,))
 }
-/// Cauchy wavelet settings (unreleased). Use Wavelet((2, 12)) with spectrum.wavelet(model).
+/// Cauchy wavelet settings (since 0.2.10). Use Wavelet((2, 12)) with spectrum.wavelet(model).
 ///
 /// k_range is measured support in inverse angstroms. Defaults: weight 2, order 100,
 /// kstep=0.05 inverse angstroms, rmax=6 angstroms, no taper and automatic FFT/R sampling.
@@ -95,7 +95,7 @@ impl PyWavelet {
         })
     }
 }
-/// Owned Cauchy map (unreleased). Array properties are independent NumPy copies.
+/// Owned Cauchy map (since 0.2.10). Array properties are independent NumPy copies.
 ///
 /// shape is (R rows, k columns). real, imaginary and magnitude have that shape;
 /// k/r are physical coordinates. W has units of k**weight * chi under cauchy_v1,
@@ -228,7 +228,7 @@ impl PyWaveletMap {
             .map_err(invalid)?;
         Ok(PyWaveletRegionValue { inner })
     }
-    /// Area-weighted mean of native bilinear magnitude (unreleased), not a mean
+    /// Area-weighted mean of native bilinear magnitude (since 0.2.10), not a mean
     /// of grid cells. k_range is inverse angstroms; r_range is angstroms. Fully
     /// covered, finite, increasing bounds are required. Returns units and method;
     /// no uncertainty is inferred. Releases the Python GIL.
@@ -247,7 +247,7 @@ impl PyWaveletMap {
         Ok(PyWaveletRegionValue { inner })
     }
     /// Maximum of the native bilinear magnitude surface, including interpolated
-    /// rectangle boundaries (unreleased). k_range is inverse angstroms; r_range
+    /// rectangle boundaries (since 0.2.10). k_range is inverse angstroms; r_range
     /// is angstroms. Invalid or uncovered bounds raise ValueError. Returns units
     /// and method without an inferred error bar; releases the Python GIL.
     fn maximum(

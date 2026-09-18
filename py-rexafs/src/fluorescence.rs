@@ -23,7 +23,7 @@ pub(crate) fn mode(value: &str) -> PyResult<rexafs::AbsorptionMode> {
     }
 }
 
-/// Optically thick, homogeneous-sample XANES correction (unreleased).
+/// Optically thick, homogeneous-sample XANES correction (since 0.2.10).
 ///
 /// FluorescenceCorrection("CuO", "Cu", "K", line="Ka1", angles=(45, 45))
 /// requires the complete sample formula, absorber, edge, detected emission and
@@ -113,7 +113,7 @@ impl PyFluorescenceCorrection {
     }
 }
 
-/// Immutable historical correction (unreleased). Arrays/dictionaries are independent
+/// Immutable historical correction (since 0.2.10). Arrays/dictionaries are independent
 /// copies. Original inputs, atomic data and internal normalization remain available
 /// after editing or normalizing a corrected Spectrum. This record describes the
 /// calculation-time arrays; later spectrum edits never rewrite it. No experimental

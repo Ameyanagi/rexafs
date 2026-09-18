@@ -102,7 +102,7 @@ class WaveletSize(TypedDict):
 
 
 class FluorescenceInternalNormalization(TypedDict):
-    """Internal fit of original mu, distinct from final normalization (unreleased).
+    """Internal fit of original mu, distinct from final normalization (since 0.2.10).
     All arrays are independent Python lists on the original energy grid."""
     e0: float
     """Measured edge energy in eV."""

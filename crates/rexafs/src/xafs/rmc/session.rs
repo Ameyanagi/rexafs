@@ -32,7 +32,7 @@ pub struct SessionSettings {
     pub cooling: CoolingSchedule,
     /// Optional numerical stopping rules; all disabled by default.
     pub stopping: StoppingSettings,
-    /// Optional acceptance-based coordinate widths; disabled by default (unreleased).
+    /// Optional acceptance-based coordinate widths; disabled by default (since 0.2.10).
     pub adaptation: Option<StepAdaptation>,
 }
 impl Default for SessionSettings {
@@ -522,7 +522,7 @@ pub fn evaluate_ensemble<C: ExafsCalculator + ?Sized>(
 
 impl RmcSession {
     /// Borrow the validated input, including any spectrum processing snapshots
-    /// (unreleased). Mixture weights are normalized; the original displacement
+    /// (since 0.2.10). Mixture weights are normalized; the original displacement
     /// reference and experimental arrays remain fixed throughout the run.
     pub fn problem(&self) -> &EnsembleProblem {
         &self.checkpoint.problem
@@ -659,7 +659,7 @@ impl RmcSession {
             prepared,
         })
     }
-    /// Unreleased: rescore initial/current/best states on an explicitly changed
+    /// Since 0.2.10: rescore initial/current/best states on an explicitly changed
     /// calculator (for example a refreshed adaptive basis). The lowest new score
     /// among those three becomes best; the accepted current geometry stays current.
     /// Original displacement references, RNG, attempt count and adaptation remain.

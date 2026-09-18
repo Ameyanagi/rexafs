@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-Owned native fit (unreleased). Array getters return independent copies.
+Owned native fit (since 0.2.10). Array getters return independent copies.
 Result energies/centers are absolute eV; parameter values retain model coordinates.
 Covariance/errors are conditional on the model/noise, not model-selection confidence.
 

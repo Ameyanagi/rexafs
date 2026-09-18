@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Explicit sample geometry/emission plus optional internal-fit settings (unreleased).
+Explicit sample geometry/emission plus optional internal-fit settings (since 0.2.10).
 
 ## line
 

@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Immutable optional smooth-background term (unreleased). It does not correct over-absorption.
+Immutable optional smooth-background term (since 0.2.10). It does not correct over-absorption.
 
 ## constructor
 

@@ -686,7 +686,7 @@ impl XASSpectrum {
         Ok(self)
     }
 
-    /// Restrict this spectrum and its clones to XANES processing (unreleased).
+    /// Restrict this spectrum and its clones to XANES processing (since 0.2.10).
     /// Use for calculated descendants of fluorescence-corrected spectra. This
     /// irreversible marker preserves arrays and normalization, clears EXAFS caches,
     /// and survives serialization and data edits. It does not invent a correction
@@ -977,7 +977,7 @@ impl XASSpectrum {
         self.energy_shift
     }
 
-    /// Set the total energy offset in eV (unreleased; after 0.2.9).
+    /// Set the total energy offset in eV (since 0.2.10).
     ///
     /// Positive values move features to higher energy. Repeated assignments do
     /// not accumulate: setting 3.5 twice keeps +3.5 eV; zero removes the recorded

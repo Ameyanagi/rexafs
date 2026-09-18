@@ -61,7 +61,7 @@ pub struct LennardJones {
     /// Exclusive cutoff in Å; subtracts V(cutoff) below this radius.
     pub cutoff: f64,
 }
-/// Optional restraint on arithmetic mean-square atomic displacement (unreleased).
+/// Optional restraint on arithmetic mean-square atomic displacement (since 0.2.10).
 /// This is an explicitly chosen structural prior, not experimental evidence.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MsdRestraint {

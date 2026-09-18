@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
-Acquisition interpretation (unreleased). Unknown means missing evidence, not
+Acquisition interpretation (since 0.2.10). Unknown means missing evidence, not
 established fluorescence. Changing it never removes correction history.
 
 ```typescript

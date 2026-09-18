@@ -11,7 +11,7 @@ pagefind: false
 
 [Declaration source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
-One component curve and derived metrics (unreleased). Curve getters return copies.
+One component curve and derived metrics (since 0.2.10). Curve getters return copies.
 
 ## name
 

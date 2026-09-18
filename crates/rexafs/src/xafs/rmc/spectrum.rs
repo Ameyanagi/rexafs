@@ -1,10 +1,10 @@
-//! Checked, provenance-preserving spectrum input (unreleased).
+//! Checked, provenance-preserving spectrum input (since 0.2.10).
 use super::*;
 use crate::fitting::{FeffFitTransform, FitSpace};
 use crate::{BackgroundMethod, Spectrum};
 
 /// Policy for the nominal lower R fit bound relative to the saved AUTOBK radius
-/// (unreleased). This is a rexafs input guard, not a leakage correction or a
+/// (since 0.2.10). This is a rexafs input guard, not a leakage correction or a
 /// physical convergence test. AUTOBK uses the low-R signal to determine background;
 /// see the [algorithm documentation](https://xraypy.github.io/xraylarch/xafs_autobk.html).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -21,7 +21,7 @@ pub enum RmcRbkgPolicy {
     },
 }
 
-/// Inputs for [`RmcDataset::from_spectrum`] (unreleased). Use [`Self::new`] with
+/// Inputs for [`RmcDataset::from_spectrum`] (since 0.2.10). Use [`Self::new`] with
 /// explicit absorbers, edge and the same [`FeffFitTransform`] used by ordinary
 /// fitting. Plotting FFT settings are preserved as provenance, not adopted as fit
 /// ranges. The constructor selects real + imaginary R fitting with one integer
@@ -80,7 +80,7 @@ impl RmcSpectrumOptions {
     }
 }
 
-/// Owned input snapshot captured before RMC (unreleased). Includes the complete
+/// Owned input snapshot captured before RMC (since 0.2.10). Includes the complete
 /// serialized Spectrum state: baseline/current arrays, normalization, AUTOBK,
 /// edge energy, and any Fourier settings/results. This preserves available
 /// state, not an immutable raw acquisition or a complete processing history.
@@ -164,7 +164,7 @@ fn check_rbkg(objective: &Objective, rbkg: f64, policy: &RmcRbkgPolicy) -> Resul
 }
 
 impl RmcDataset {
-    /// Capture a processed [`Spectrum`] as an owned complex-R dataset (unreleased).
+    /// Capture a processed [`Spectrum`] as an owned complex-R dataset (since 0.2.10).
     /// Reads authoritative [`Spectrum::k`] and [`Spectrum::chi`] getters, copies
     /// selected unweighted samples and the complete processing state, and validates
     /// the transform, shifted k support and Rbkg policy before scattering starts.
@@ -290,7 +290,7 @@ impl RmcDataset {
     }
 
     /// Set dataset weight so a zero model scores 1 in its current objective
-    /// (unreleased). Applies noise and k weights once to both data and residual.
+    /// (since 0.2.10). Applies noise and k weights once to both data and residual.
     /// Call again after changing the transform, kweight or sigma if this scaling
     /// is wanted; later field edits never silently renormalize the objective.
     /// Replaces the prior dataset weight. No scattering or preprocessing runs.

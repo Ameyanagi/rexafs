@@ -86,7 +86,7 @@ pub use xafs::{
     analysis, fitting, io, rmc, structure, tools, transform, Result, XAFSError as Error,
 };
 
-// Unreleased, native Cauchy wavelet analysis.
+// Since 0.2.10, native Cauchy wavelet analysis.
 pub use crate::xafs::wavelet::{
     Wavelet, WaveletError, WaveletMap, WaveletPreparation, WaveletRegionValue, WaveletSize,
     WaveletWindow,

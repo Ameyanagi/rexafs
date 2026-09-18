@@ -274,7 +274,7 @@ impl MeasurementScan {
     /// Energy and signal are sorted together by the spectrum setter. Repeated
     /// energies remain; downstream numerical stages may require explicit cleanup.
     /// No processing prerequisites run and no source data or caches are changed.
-    /// Unreleased: transmission arithmetic attaches a Transmission acquisition
+    /// Since 0.2.10: transmission arithmetic attaches a Transmission acquisition
     /// interpretation. A direct signal or detector ratio remains Unknown; a ratio
     /// alone does not distinguish fluorescence from electron yield.
     pub fn to_spectrum(&self, mapping: Option<&SpectrumMapping>) -> Result<XASSpectrum, ReadError> {
