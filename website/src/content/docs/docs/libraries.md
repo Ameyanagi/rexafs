@@ -7,13 +7,13 @@ audience: user
 [Try the browser workspace](/app/) for local processing without installation.
 
 All three libraries use the Rust numerical engine. These guides target
-**published 0.2.6**.
+**published 0.2.10**.
 
 | Library | Best for | Install |
 |---|---|---|
-| [Python](/docs/libraries/python/) | NumPy, Jupyter and analysis scripts | `uv add rexafs==0.2.6` |
-| [TypeScript / JavaScript](/docs/libraries/typescript/) | Node applications and browser tools | `bun add rexafs@0.2.6` |
-| [Rust](/docs/libraries/rust/) | Native applications, parallel groups, structures and fitting | `cargo add rexafs@0.2.6` |
+| [Python](/docs/libraries/python/) | NumPy, Jupyter and analysis scripts | `uv add rexafs==0.2.10` |
+| [TypeScript / JavaScript](/docs/libraries/typescript/) | Node applications and browser tools | `bun add rexafs@0.2.10` |
+| [Rust](/docs/libraries/rust/) | Native applications, parallel groups, structures and fitting | `cargo add rexafs@0.2.10` |
 
 The commands assume an existing project. Follow the language guide for project
 setup, editor configuration and a measured Cu example.
@@ -21,7 +21,8 @@ setup, editor configuration and a measured Cu example.
 ## Available operations
 
 Python and TypeScript expose single-spectrum normalization, AUTOBK background
-removal and Fourier transforms. Rust also exposes collections, data treatment,
+removal, Fourier and Cauchy wavelet transforms, MBACK, fluorescence correction,
+scalar measurements and XANES peak fits. Rust also exposes collections, data treatment,
 linear combination fitting, principal component analysis and structural fitting;
 see the
 [feature map](/docs/getting-started/#features-by-interface).

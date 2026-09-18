@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.9.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
+**Stable 0.2.10.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
 Own a measured absorption spectrum and its calculated processing stages.
 
@@ -31,6 +31,135 @@ errors raise ValueError; background and Fourier errors raise RuntimeError.
 See [processing theory](https://rexafs.com/docs/science/processing/) for
 equations, interpretation and limitations. Groups and structural fitting
 are not currently exposed by this Python Spectrum API.
+
+## correct_fluorescence
+
+```python
+correct_fluorescence(self, model: FluorescenceCorrection) -> Spectrum
+```
+
+Correct into an independent unnormalized Spectrum (since 0.2.10).
+Internal conventional normalization runs automatically; the source stays
+unchanged. Unknown acquisition provenance is explicitly interpreted as
+fluorescence. Known transmission, prepared norm/flat and repeated correction
+raise ValueError. Supply line and measured surface angles in the model.
+Releases the GIL. Call normalize() for separate final polynomial/MBACK
+normalization. History survives edits; this XANES-only branch rejects
+background/FFT/wavelets. Corrected-array uncertainty is unavailable.
+
+## fluorescence_correction
+
+```python
+fluorescence_correction(self) -> FluorescenceCorrectionResult | None
+```
+
+Owned historical correction record, or None. Later edits/normalization
+never rewrite its original inputs or remove the XANES-only restriction.
+
+## absorption_mode
+
+```python
+absorption_mode(self) -> AbsorptionMode
+```
+
+Acquisition interpretation: unknown, transmission or fluorescence.
+
+## set_absorption_mode
+
+```python
+set_absorption_mode(self, mode: AbsorptionMode) -> Spectrum
+```
+
+Explicitly revise acquisition interpretation and return this Spectrum.
+Arrays/caches stay unchanged. Correction history and restrictions survive.
+
+## wavelet
+
+```python
+wavelet(self, model: Wavelet) -> WaveletMap
+```
+
+Since 0.2.10: spectrum.wavelet(Wavelet((2, 12))) prepares missing
+normalization/AUTOBK on a copy, reusing existing chi. The interval uses
+inverse angstroms. Arrays/settings/caches are unchanged; Rust releases
+the GIL. Result matrices are owned (R rows, k columns). Invalid coverage,
+grids and unqualified corrected XANES input raise ValueError. R is not
+phase-corrected; color intensity is not a concentration.
+
+## fit_peaks
+
+```python
+fit_peaks(self, model: PeakFit, *, errors: NDArray[np.float64] | Sequence[float] | None=None) -> PeakFitResult
+```
+
+Fit a composite XANES model, preparing missing normalization on a copy (since 0.2.10).
+
+Example: spectrum.fit_peaks(PeakFit((-20, 40)).gaussian("p1", 5, 2, 3)).
+Defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
+caches and initial model remain unchanged; Rust releases the GIL. Results
+contain data/model/residual arrays on the retained native points. No smoothing
+or interpolation occurs. Invalid models, coverage or preparation raise ValueError.
+A result can be nonconverged: inspect termination, warnings and uncertainty_unavailable.
+
+Optional errors are positive independent standard deviations in the SELECTED
+signal representation on the original native grid, including excluded points.
+Raw detector errors are not propagated through normalization. Without errors,
+covariance uses residual-based variance. Active bounds, deficient rank and
+nonconvergence withhold conditional local uncertainty; this is not model confidence.
+
+## measure
+
+```python
+measure(self, operation: Literal['point'], coordinates: float, *, space: Literal['mu', 'norm', 'flat', 'chi', 'fourier']='norm', origin: Literal['e0', 'absolute'] | None=None, kweight: int=0, errors: NDArray[np.float64] | Sequence[float] | None=None) -> MeasurementResult
+```
+
+Measure a region on a private copy (since 0.2.10).
+
+Recommended: spectrum.measure("mean", (-20, 30)). Defaults to normalized
+mu and E0-relative energy offsets in eV; select space="flat" explicitly.
+k is in inverse angstroms and R in angstroms, without phase correction;
+these require absolute coordinates (selected automatically when origin=None).
+kweight defaults to zero and applies only to chi. Bounds must increase.
+Mean is the piecewise-linear integral divided by interval width, not an
+arithmetic sample mean. Integral uses trapezoids and interpolated endpoints.
+Missing stages run automatically using this spectrum's settings, with the
+GIL released. Arrays, settings and cached results remain unchanged. No
+extrapolation or display sampling occurs. Invalid input, missing coverage,
+or unavailable preparation raises ValueError. Results own their values.
+
+errors supplies independent standard deviations of the SELECTED signal on
+its native grid, in its signal units, finite and nonnegative. Raw-count
+errors are not propagated through normalization or transforms. Point,
+integral and mean support this model; maximum rejects it. Axis, E0 and
+settings are exact. No correlations or confidence intervals are inferred;
+standard_error is None when errors are omitted.
+
+## measure
+
+```python
+measure(self, operation: Literal['mean', 'integral', 'maximum'], coordinates: tuple[float, float], *, space: Literal['mu', 'norm', 'flat', 'chi', 'fourier']='norm', origin: Literal['e0', 'absolute'] | None=None, kweight: int=0, errors: NDArray[np.float64] | Sequence[float] | None=None) -> MeasurementResult
+```
+
+Measure a region on a private copy (since 0.2.10).
+
+Recommended: spectrum.measure("mean", (-20, 30)). Defaults to normalized
+mu and E0-relative energy offsets in eV; select space="flat" explicitly.
+k is in inverse angstroms and R in angstroms, without phase correction;
+these require absolute coordinates (selected automatically when origin=None).
+kweight defaults to zero and applies only to chi. Bounds must increase.
+Mean is the piecewise-linear integral divided by interval width, not an
+arithmetic sample mean. Integral uses trapezoids and interpolated endpoints.
+Missing stages run automatically using this spectrum's settings, with the
+GIL released. Arrays, settings and cached results remain unchanged. No
+extrapolation or display sampling occurs. Invalid input, missing coverage,
+or unavailable preparation raises ValueError. Results own their values.
+
+errors supplies independent standard deviations of the SELECTED signal on
+its native grid, in its signal units, finite and nonnegative. Raw-count
+errors are not propagated through normalization or transforms. Point,
+integral and mean support this model; maximum rejects it. Axis, E0 and
+settings are exact. No correlations or confidence intervals are inferred;
+standard_error is None when errors are omitted.
 
 ## Spectrum
 
@@ -105,7 +234,7 @@ performing normalization or recalibrating the input energy axis.
 ## set_normalization_method
 
 ```python
-set_normalization_method(self, method: PrePostEdge | NormalizationMethod | None=None) -> Spectrum
+set_normalization_method(self, method: PrePostEdge | MBack | NormalizationMethod | None=None) -> Spectrum
 ```
 
 Copy the selected normalization method and clear normalization and later results.
@@ -212,6 +341,16 @@ automatic parameters are resolved from the data. Call norm(), flat(),
 pre_edge() and post_edge() to retrieve independent result arrays.
 This recomputes normalization, clears background/Fourier results and
 returns this spectrum. Invalid ranges, failed fits and an empty MBack selector raise ValueError.
+
+## mback_result
+
+```python
+mback_result(self) -> MbackResult | None
+```
+
+Copy the latest full MBACK result, or None when absent/invalidated.
+
+Arrays and diagnostics remain independent after further processing.
 
 ## calc_background
 

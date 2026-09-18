@@ -9,16 +9,16 @@ audience: user
 Install with [Bun](https://bun.sh/docs/installation):
 
 ```sh
-bun add rexafs@0.2.9
+bun add rexafs@0.2.10
 ```
 
 The package runs in Node 22+ and browsers with WebAssembly support. You can also
-install it with `npm install rexafs@0.2.9` or `pnpm add rexafs@0.2.9`.
+install it with `npm install rexafs@0.2.10` or `pnpm add rexafs@0.2.10`.
 Use ECMAScript modules and TypeScript `moduleResolution: "NodeNext"` for Node or
 `"Bundler"` for browser bundlers. Typed declarations are included; see the
 [stable API reference](/docs/reference/stable/typescript/spectrum/).
 
-The package exposes single-spectrum processing. See
+The package exposes spectrum processing and selected analysis APIs. See
 [WebAssembly support](/docs/libraries/webassembly/) for other APIs and ReFEFF status.
 
 ## Node: load and transform a spectrum
@@ -170,3 +170,15 @@ remain supported.
 
 The [Spectrum reference](/docs/reference/stable/typescript/spectrum/) documents
 which stages each operation invalidates.
+
+
+## Analysis added in 0.2.10
+
+[MBack](/docs/reference/stable/typescript/mback/),
+[Wavelet](/docs/reference/stable/typescript/wavelet/),
+[PeakFit](/docs/reference/stable/typescript/peakfit/) and
+[FluorescenceCorrection](/docs/reference/stable/typescript/fluorescencecorrection/)
+use the same native core as Rust and Python. They cover atomic-reference
+normalization, Cauchy maps, composite XANES fits and XANES-only fluorescence
+correction. Free their Wasm objects when finished, as documented in each
+reference. Structural RMC remains a Rust and desktop workflow.

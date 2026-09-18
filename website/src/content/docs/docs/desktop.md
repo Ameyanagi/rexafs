@@ -19,8 +19,8 @@ group. The **stage bar** follows the analysis order:
 | [**Data**](/docs/desktop/import/) | Import files, review columns, organize groups, and apply alignment, rebinning or merging. |
 | [**Normalize**](/docs/desktop/processing/#normalization) | Estimate the edge energy, fit baselines and scale absorption to a unit edge step. |
 | [**Background**](/docs/desktop/processing/#background) | Remove the smooth background with AUTOBK to obtain $\chi(k)$. |
-| [**Transform**](/docs/desktop/processing/#forward-transform) | Weight and window $\chi(k)$, Fourier-transform to $\chi(R)$, and back-transform a selected R range to $\chi(q)$. |
-| [**Fit**](/docs/desktop/fitting/) | Build a structural model and run single or joint fits: **Structure → Calculate → Paths → Model → Results**. |
+| [**Transform**](/docs/desktop/processing/#forward-transform) | Weight and window $\chi(k)$, Fourier-transform to $\chi(R)$, back-transform a selected R range to $\chi(q)$, or inspect a Cauchy wavelet map. |
+| [**Fit**](/docs/desktop/fitting/) | Build a structural model and run single or joint fits: **Structure → Calculate → Paths → Model → Results**, or choose [RMC](/docs/desktop/rmc/) for coordinate refinement. |
 | [**Series**](/docs/desktop/series/) | Browse scans as ordered frames and inspect trends. |
 | [**Publish**](/docs/desktop/publication/) | Set figure size, labels, limits and captions; export PNG, SVG, CSV or an analysis folder. |
 
@@ -31,6 +31,7 @@ changes the display and controls.
 | Task | Guide |
 |---|---|
 | Choose an absorber, structure and scattering paths | [Structures and paths](/docs/desktop/structures/) |
+| Refine a periodic structure and resume a long run | [RMC fitting](/docs/desktop/rmc/) |
 | Share parameters or process a batch | [Multiple spectra](/docs/desktop/multiple-spectra/) |
 | Move or recover a project | [Projects](/docs/desktop/projects/) |
 | Use the optional analysis assistant | [Assistant](/docs/desktop/assistant/) |

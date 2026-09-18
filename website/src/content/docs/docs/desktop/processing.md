@@ -4,9 +4,8 @@ description: "Use normalization, AUTOBK, forward and inverse transforms."
 audience: user
 ---
 
-This guide covers the **0.2.10 desktop release preview**, unreleased at capture
-time. The screenshots show the tagged macOS
-CI build, captured through computer use with public Cu measurements. They are
+This guide describes **rexafs 0.2.10**. The screenshots show its tagged macOS
+CI build, captured before signing through computer use with public Cu measurements. They are
 full, unedited windows; select an image for full resolution. See
 [capture provenance](/licenses/#desktop-0210-workflow-captures) and
 [available downloads](/docs/getting-started/install/).
@@ -53,8 +52,7 @@ The automatic alignment uses the core derivative-matching implementation in
 with the manual correction applied afterward. See the
 [processing theory](/docs/science/processing/) for algorithm details.
 
-Rust users can set and read the correction directly on `Spectrum` in the
-0.2.10 source:
+Rust users can set and read the correction directly on `Spectrum` since 0.2.10:
 
 ```rust
 spectrum.set_energy_offset(3.5)?; // total offset in eV
@@ -238,9 +236,9 @@ This homogeneous, optically thick model is limited to XANES, following the
 Known transmission imports and repeated correction are rejected. Corrected groups
 and their calculated descendants retain this limit: use the original spectrum
 for EXAFS background removal, transforms, fitting or wavelets. Energy-space
-LCF/PCA/MCR remain available. See the development
-[Python](/docs/reference/next/python/fluorescencecorrection/) and
-[TypeScript](/docs/reference/next/typescript/fluorescencecorrection/) references
+LCF/PCA/MCR remain available. See the
+[Python](/docs/reference/stable/python/fluorescencecorrection/) and
+[TypeScript](/docs/reference/stable/typescript/fluorescencecorrection/) references
 for the same native calculation outside the desktop.
 
 ## Exporting a displayed plot

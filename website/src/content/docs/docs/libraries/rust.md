@@ -9,7 +9,7 @@ audience: user
 Add the stable crate:
 
 ```sh
-cargo add rexafs@0.2.9
+cargo add rexafs@0.2.10
 ```
 
 ```rust
@@ -34,10 +34,10 @@ after direct edits to legacy public fields, call `invalidate_derived()`.
 
 ## Full API reference
 
-The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.9 crate
+The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.10 crate
 with the default nalgebra backend and optional features. It excludes the legacy
 `ndarray-compat` backend, which replaces parts of that API and has different
-defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.9/rexafs/) is also available.
+defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.10/rexafs/) is also available.
 
 The [Next reference](/api/rust-next/rexafs/index.html) uses the checkout with the
 same features. Use it when working from source.
@@ -46,7 +46,7 @@ same features. Use it when working from source.
 |---|---|
 | `Spectrum`, `Group` | Normalization, background, FFT/IFFT, collections and parallel processing |
 | `tools` | Calibration, alignment, deglitching, truncation, smoothing, rebinning, merging and differences |
-| `analysis` | Bounded linear combination fitting, combination searches, principal component analysis and target transformation |
+| `analysis` | Bounded linear combination fitting, principal component analysis, MCR-ALS, target transformation and composite XANES peak fits |
 | `io` | Content-detected measurement import, raw columns/datasets and explicit signal selection |
 | `structure` | CIF/XYZ models, symmetry, clusters, neighbors, structure databases and FEFF input |
 | `fitting` | FEFF paths, variables/expressions, k/R/q transforms, joint and independent fitting |
@@ -69,7 +69,7 @@ automatic choices, units, angle conversion and supported containers.
 | `materials-project`, `cod` | HTTP structure-source integrations |
 | `ndarray-compat` | Legacy ndarray compatibility backend |
 
-For example, `cargo add rexafs@0.2.9 --features plotting,refeff-runner` enables
+For example, `cargo add rexafs@0.2.10 --features plotting,refeff-runner` enables
 plotting and ReFEFF. Backend availability depends on the platform; see
 [WebAssembly support](/docs/libraries/webassembly/) for browser limits.
 
@@ -113,3 +113,15 @@ errors only when the group is empty.
 The `io` module also supports Athena `.prj` interchange. Its legacy JSON/BSON
 serializers are separate from the desktop `.rxs` project format and do not provide
 the desktop's backup, migration or atomic replacement behavior.
+
+
+## RMC from a processed Spectrum
+
+Enable `refeff-runner` to use the RMC API in 0.2.10. Construct a dataset from
+`Spectrum` so its normalization, background and Fourier settings are retained,
+then prepare a structure and an exact cached ReFEFF session. The
+[RMC guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/rmc.md) provides
+runnable examples, checkpoint/resume and evolutionary search. The
+[desktop workflow](/docs/desktop/rmc/) explains the shared background-range
+guard and residual-trend interpretation. Adaptive scattering remains experimental
+and explicitly opt-in.

@@ -4,10 +4,9 @@ description: "Map detector signals, confirm energy units and organize spectra."
 audience: user
 ---
 
-This guide covers the **0.2.10 desktop release preview**, unreleased at capture
-time, including confirmation for matching
-files and dismissal of pending imports. Screenshots identify their own build;
-older captures remain where they illustrate the same workflow.
+This guide describes **rexafs 0.2.10**, including confirmation for matching
+files and dismissal of pending imports. Screenshot captions identify their
+actual versions and capture builds.
 
 ## Import and review
 

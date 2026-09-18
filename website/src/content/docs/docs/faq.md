@@ -23,7 +23,7 @@ in-situ measurement series quickly and reproducibly.
 
 **Is the software finished?**
 The desktop is stable on macOS, with Windows and Linux previews. This manual
-covers 0.2.9; **Next** documents the source checkout. See
+covers 0.2.10; **Next** documents the source checkout. See
 [release history](/releases/).
 
 ## Scope
@@ -33,17 +33,18 @@ No. Start with the desktop guide to [your first
 analysis](/docs/getting-started/first-analysis/).
 
 **What do the Python and TypeScript packages include?**
-Edge finding, normalization, AUTOBK, and configurable forward and inverse Fourier
-transforms.
-Groups, data treatment, LCF, PCA, structures and fitting are currently available
+Edge finding, normalization including MBACK, AUTOBK, forward/inverse Fourier
+transforms, Cauchy wavelets, scalar measurements, XANES peak fits and fluorescence
+correction. Groups, broader data treatment, LCF/PCA/MCR, structures and EXAFS fitting are available
 in the desktop and Rust only. See the [feature
 map](/docs/getting-started/#features-by-interface).
 
 **Can I use it for XANES?**
 rexafs normalizes and flattens XANES, overlays spectra, and offers linear
-combination fitting and principal component analysis in the desktop and Rust.
-Those interfaces do not perform XANES multiple-scattering simulations or edge
-fitting. The separate [ReFEFF browser preview](/app/scattering/) accepts FEFF
+combination fitting, principal component analysis and MCR-ALS in the desktop
+and Rust. Since 0.2.10, the desktop and all three libraries fit composite
+XANES peaks, steps and baselines. These fits do not simulate XANES multiple
+scattering or identify chemical species. The separate [ReFEFF browser preview](/app/scattering/) accepts FEFF
 inputs; its current browser validation covers the bundled ZnSe EXAFS workflow.
 
 **Are there Windows or Linux ARM64 downloads?**
@@ -52,7 +53,7 @@ the x64 packages. Windows ARM64 requires Windows 11 for its bundled x64 FEFF10
 helper. See [ARM64 availability](/docs/getting-started/install/#arm64-availability).
 
 **Which scattering engine is used?**
-Every 0.2.9 desktop package includes ReFEFF and FEFF10. Rust exposes them as
+Every 0.2.10 desktop package includes ReFEFF and FEFF10. Rust exposes them as
 optional features. Record the engine and version you used; the analysis export
 includes them. The browser scattering preview uses ReFEFF 0.4.0 separately.
 

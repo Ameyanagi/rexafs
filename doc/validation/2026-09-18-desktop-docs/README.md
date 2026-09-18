@@ -79,3 +79,21 @@ private project is included.
 
 Build output, browser test screenshots and temporary GUI state remain outside
 the committed documentation assets. No code or numerical API changed.
+
+## Post-publication integration
+
+After v0.2.10 was publicly released, this refresh was merged locally with the
+verified release-documentation update from dev (`bcf6c25`). The guides now
+describe released 0.2.10 behavior. Capture provenance remains unchanged: the
+eleven images were made from the tagged CI archive before signing. The published
+package and desktop qualification are recorded separately in the
+[release review](../2026-09-18-release-0.2.10/review.md).
+
+The combined site passed Astro checking without errors, warnings or hints, all
+eight generator tests, 23 website tests and 25 browser tests. Its production build
+contains 230 pages, with 1,889 HTML files indexed including generated Rust APIs.
+Both Rust reference caches passed their source and content-hash checks. All
+eleven screenshot hashes and original dimensions were reverified. Native Edge
+computer-use inspection confirmed the rendered normalization and Series region
+guides, including the fitted MBACK curve, wavelet rectangle and difference
+example. The computer-use connector was available for this later browser review.

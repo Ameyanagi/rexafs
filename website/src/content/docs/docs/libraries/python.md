@@ -12,7 +12,7 @@ analysis project. rexafs supports CPython 3.10–3.14; this example uses 3.12:
 ```sh
 uv init --python 3.12 rexafs-analysis
 cd rexafs-analysis
-uv add rexafs==0.2.9 numpy
+uv add rexafs==0.2.10 numpy
 uv run python -c "import rexafs; print(rexafs.__version__)"
 ```
 
@@ -151,5 +151,16 @@ starting points; inspect the windows and noise, and remember that uncorrected
 R peaks are not directly bond distances.
 
 [Processing theory](/docs/science/processing/) explains the equations and references.
-For repeated spectra, loop over `Spectrum` objects. Python currently exposes
-[single-spectrum processing](/docs/libraries/#available-operations).
+For repeated spectra, loop over `Spectrum` objects. See [available operations](/docs/libraries/#available-operations) for the binding scope.
+
+
+## Analysis added in 0.2.10
+
+Use [MBack](/docs/reference/stable/python/mback/) for configured atomic-reference
+normalization, [Wavelet](/docs/reference/stable/python/wavelet/) for Cauchy maps
+and region measurements, and [PeakFit](/docs/reference/stable/python/peakfit/)
+for composite XANES peaks, steps and baselines.
+[FluorescenceCorrection](/docs/reference/stable/python/fluorescencecorrection/)
+requires explicit composition, emission and geometry; its applicability is
+limited to XANES. Each reference documents units, defaults, retained results
+and errors. RMC remains available through Rust and the desktop.

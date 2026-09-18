@@ -1,8 +1,9 @@
 # rexafs 0.2.10
 
-Release candidate prepared on 18 September 2026. Publication and artifact checks
+Published on 18 September 2026. Publication and artifact checks
 are tracked in the [qualification record](validation/2026-09-18-release-0.2.10/review.md).
-The release contains the work merged into `dev` through PR 89.
+The release contains the work merged into `dev` through PR 89 and promoted to
+`main` through PR 90.
 
 ## RMC refinement
 

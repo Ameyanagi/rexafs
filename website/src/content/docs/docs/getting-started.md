@@ -9,7 +9,7 @@ fast X-ray absorption spectroscopy (XAS) analysis in a small package. It support
 text/XDI spectra, CIF/XYZ structures and CSV/SVG/PNG exports, with desktop tools
 for scattering calculations, joint fits and measurement series.
 
-This manual covers **stable 0.2.9** on the desktop and in Python, TypeScript and
+This manual covers **stable 0.2.10** on the desktop and in Python, TypeScript and
 Rust. The browser previews offer [spectrum processing](/app/) and
 [ReFEFF scattering](/app/scattering/), separately from the published npm API.
 
@@ -41,7 +41,7 @@ shell](/docs/desktop/fitting/).
 
 ## Features by interface
 
-Python and TypeScript expose spectrum processing. Rust includes the additional
+Python and TypeScript expose spectrum processing and selected analysis APIs. Rust includes the additional
 capabilities below, with optional features where indicated.
 
 | Feature | Desktop | Python | TypeScript / JS | Rust |
@@ -49,7 +49,14 @@ capabilities below, with optional features where indicated.
 | Energy/absorption arrays, normalization, AUTOBK, FFT and IFFT | Yes | Yes | Yes | Yes |
 | Normalization/background/forward-FFT settings | Yes | Yes | Yes | Yes |
 | Custom inverse-transform settings | Yes | Yes | Yes | Yes |
-| Text mapping, XDI and multiple imported channels | Yes | QAS reader / NumPy | Supply arrays | Readers |
+| Text mapping, XDI and multiple imported channels | Yes | Shared reader / NumPy | Shared reader / arrays | Shared reader |
+| MBACK atomic-reference normalization | Yes | Yes | Yes | Yes |
+| Cauchy wavelet maps and region measurements | Yes | Yes | Yes | Yes |
+| XANES peak, step and baseline fitting | Yes | Yes | Yes | Yes |
+| Fluorescence correction (XANES only) | Yes | Yes | Yes | Yes |
+| Scalar measurements | Yes | Yes | Yes | Yes |
+| Reverse Monte Carlo refinement | One spectrum/structure | — | — | Yes, `refeff-runner` |
+| Experimental Live acquisition | Yes | — | — | — |
 | Groups, marks, processing overrides and comparisons | Yes | Loop over spectra | Loop over spectra | Group API |
 | Alignment, calibration, deglitching, truncation, rebinning, smoothing, merging and differences | Yes | — | — | Yes |
 | Linear combination fits and principal components | Yes | — | — | Yes |

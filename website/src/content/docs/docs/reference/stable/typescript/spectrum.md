@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.9.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
+**Stable 0.2.10.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
 Mutable absorption spectrum processed by the Rust engine in WebAssembly.
 
@@ -31,6 +31,114 @@ finished.
 
 See [processing theory](https://rexafs.com/docs/science/processing/) for equations,
 assumptions and interpretation.
+
+## correct_fluorescence
+
+```typescript
+correct_fluorescence(model: FluorescenceCorrection): Spectrum;
+```
+
+Correct into an independent unnormalized Spectrum (since 0.2.10). Internal
+conventional normalization runs automatically; the source stays unchanged.
+Unknown provenance is explicitly interpreted as fluorescence. Known transmission,
+prepared norm/flat and repeated correction throw. Supply line and measured
+surface angles in the model. Call normalize() for separate final polynomial/MBACK
+normalization. History survives edits; this XANES-only branch rejects background,
+FFT and wavelets. Array uncertainties are unavailable. Free the new Spectrum.
+
+## fluorescence_correction
+
+```typescript
+fluorescence_correction(): FluorescenceCorrectionResult | undefined;
+```
+
+Independent historical correction record, or undefined. Edits/normalization
+never rewrite original correction inputs or remove the XANES-only restriction.
+
+## absorption_mode
+
+```typescript
+absorption_mode(): AbsorptionMode;
+```
+
+Acquisition interpretation; unknown means missing evidence.
+
+## set_absorption_mode
+
+```typescript
+set_absorption_mode(mode: AbsorptionMode): this;
+```
+
+Explicitly revise interpretation without changing arrays/caches. Correction
+history and restrictions survive. Returns this Spectrum; invalid names throw.
+
+## wavelet
+
+```typescript
+wavelet(model: Wavelet): WaveletMap;
+```
+
+Since 0.2.10: spectrum.wavelet(new Wavelet([2, 12])) prepares missing
+normalization/AUTOBK on a private copy, reusing existing χ. The inclusive
+interval uses Å⁻¹. Source arrays/settings/caches stay unchanged. Returns an
+owned native map; invalid coverage/grids and corrected XANES-only input throw.
+R is not phase-corrected and colors do not imply concentration.
+
+## fit_peaks
+
+```typescript
+fit_peaks(model: PeakFit, options?: { errors?: Float64Array }): PeakFitResult;
+```
+
+Fit a composite XANES model, preparing missing normalization on a private copy (since 0.2.10).
+Recommended: spectrum.fit_peaks(new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 })).
+Model defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
+caches and model remain unchanged. Results use retained native points; no smoothing
+or interpolation occurs. Invalid models, coverage or preparation throw Error.
+Inspect termination and warnings: a numerical result can be nonconverged.
+Optional errors are positive independent standard deviations of the SELECTED signal
+on the original native grid, including excluded points. Raw errors are not propagated.
+Without errors, covariance uses residual-based variance. Active bounds, deficient rank
+and nonconvergence withhold local errors. These are conditional, not model confidence.
+Synchronous; use a Web Worker for large browser fits.
+
+## measure
+
+```typescript
+measure(operation: "point", coordinates: number, options?: SpectrumMeasurementOptions): MeasurementResult;
+```
+
+Measure a point or region without changing this spectrum (since 0.2.10).
+Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
+mu and E0-relative energy offsets in eV; choose `space: "flat"` explicitly.
+k is in inverse angstroms; R is in angstroms without phase correction.
+Missing prerequisite stages run on a private copy using this spectrum's
+settings; caller arrays, settings and cached results remain unchanged.
+No extrapolation or display sampling occurs. Mean is the piecewise-linear
+integral divided by interval width, not the arithmetic sample mean.
+Returns an owned scalar result with units and the resolved absolute range.
+Throws on invalid input, preparation failure, or missing range coverage.
+Optional independent point errors apply to point/mean/integral only; see
+SpectrumMeasurementOptions.errors. No uncertainty is inferred by default.
+
+## measure
+
+```typescript
+measure(operation: "mean" | "integral" | "maximum", coordinates: readonly [number, number], options?: SpectrumMeasurementOptions): MeasurementResult;
+```
+
+Measure a point or region without changing this spectrum (since 0.2.10).
+Recommended: `spectrum.measure("mean", [-20, 30])`. Defaults to normalized
+mu and E0-relative energy offsets in eV; choose `space: "flat"` explicitly.
+k is in inverse angstroms; R is in angstroms without phase correction.
+Missing prerequisite stages run on a private copy using this spectrum's
+settings; caller arrays, settings and cached results remain unchanged.
+No extrapolation or display sampling occurs. Mean is the piecewise-linear
+integral divided by interval width, not the arithmetic sample mean.
+Returns an owned scalar result with units and the resolved absolute range.
+Throws on invalid input, preparation failure, or missing range coverage.
+Optional independent point errors apply to point/mean/integral only; see
+SpectrumMeasurementOptions.errors. No uncertainty is inferred by default.
 
 ## constructor
 
@@ -90,7 +198,7 @@ RangeError for a nonfinite value. Returns this spectrum.
 ## set_normalization_method
 
 ```typescript
-set_normalization_method(method?: PrePostEdge | NormalizationMethod | null): this;
+set_normalization_method(method?: PrePostEdge | MBack | NormalizationMethod | null): this;
 ```
 
 Copy the selected normalization method and clear normalization, background, forward and
@@ -102,6 +210,14 @@ Omitting the argument, undefined or null restores automatic pre/post-edge settin
 retaining the selected E0. These reset forms work in 0.2.4 and later. For custom
 settings, 0.2.4 accepts a NormalizationMethod wrapper; direct PrePostEdge settings
 were added in 0.2.5.
+
+## mback_result
+
+```typescript
+mback_result(): MbackResult | undefined;
+```
+
+Copy the latest full MBACK result, or undefined when absent/invalidated.
 
 ## set_background_method
 

@@ -4,10 +4,9 @@ description: "Browse scan frames and distinguish sampled overviews from complete
 audience: user
 ---
 
-This guide covers the **0.2.10 desktop release preview**, unreleased at capture
-time. The new screenshots were captured
-through computer use from its tagged macOS CI build, using two public Cu foil
-measurements. These are a small workflow example, **not a time series** or a
+This guide describes **rexafs 0.2.10**. The new screenshots were captured
+through computer use from its tagged macOS CI build before signing, using two
+public Cu foil measurements. These are a small workflow example, **not a time series** or a
 controlled temperature experiment. See
 [data and capture provenance](/licenses/#desktop-0210-workflow-captures).
 
@@ -103,8 +102,8 @@ frame while the selected frame loads; wait for processing before interpreting it
 Use **Refresh overview** after changes.
 
 These display choices are rexafs-specific, implemented in the [overview and
-frame loading](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs-gui/src/app.rs)
-and [Series controls](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs-gui/src/app/shell/series.rs).
+frame loading](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/crates/rexafs-gui/src/app.rs)
+and [Series controls](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/crates/rexafs-gui/src/app/shell/series.rs).
 
 ## What the trends mean
 
@@ -120,7 +119,7 @@ Its historical UI label is “white line (norm. μ).” The height is dimensionl
 edge-step normalization. It is a local maximum, not an integrated peak area,
 concentration or oxidation-state calibration. A glitch can dominate it. These
 definitions come from `frame_sample` and `trend_snapshot` in the
-[Series implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/crates/rexafs-gui/src/app.rs).
+[Series implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/crates/rexafs-gui/src/app.rs).
 See [processing theory](/docs/science/processing/) for the meaning of normalized
 and flattened absorption.
 
@@ -151,3 +150,19 @@ per-frame uncertainties. See [multiple spectra and batches](/docs/desktop/multip
 for fit setup and [LCF theory](/docs/science/analysis/) for standard weights.
 Processing choices and model inadequacy can create apparent trends; smoothness
 alone does not validate a model.
+
+
+## Experimental Live acquisition
+
+In 0.2.10, **Series → Live…** watches a selected folder and retains completed
+spectra and trends. Preview the filename filter, detector mapping and frozen
+processing or saved recipe before starting. The default quiet-file policy uses
+three matching observations one second apart. A writer pause can look complete;
+choose a policy suitable for the acquisition and inspect retained revisions.
+**Pause**, retry and **Open paused** preserve committed results and permit review
+before continuation. A saved XANES peak model can run as frames arrive.
+
+Live acquisition remains experimental. Physical Windows/Linux acquisition and
+network-share behavior are not qualified by the current local review. See the
+[Live guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/live-acquisition.md)
+for completion policies, recovery and source-revision handling.
