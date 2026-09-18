@@ -4,7 +4,7 @@ description: "Map detector signals, confirm energy units and organize spectra."
 audience: user
 ---
 
-This guide describes **rexafs 0.2.9**.
+This guide describes **rexafs 0.2.10**; screenshot captions identify their actual versions.
 
 ## Import and review
 
@@ -58,7 +58,7 @@ multiple-file selections; import containers individually in these versions.
 Source files are unchanged; saved desktop projects
 retain original measurement bytes and accepted signal mappings.
 
-### Confirm matching files together (development version)
+### Confirm matching files together (since 0.2.10)
 
 Drop several `.qd` files, drop a folder, or select several files in **Import…**.
 In the measurement preview, **Apply to N matching files in this import** is
@@ -82,9 +82,9 @@ Reopen the preview after correcting the source, or uncheck the batch option to
 review files individually. One undo removes the accepted batch.
 
 Implemented by the desktop's `measurement_import::batch` module. This option
-is newer than the released 0.2.9 GUI shown in the screenshots below.
+is introduced in 0.2.10; the older screenshots below retain their original version labels.
 
-### Skip unwanted pending files (development version)
+### Skip unwanted pending files (since 0.2.10)
 
 Under **Pending**, choose the **× beside a filename** to skip that file.
 The **Skip ▾** menu offers **Skip .prj**, **Skip .xts**, and the other extensions
@@ -103,7 +103,7 @@ pending files. Use the row's × or the Skip menu to remove them from the queue.
 
 [![Skip pending files individually or by extension](/screenshots/next/pending-import-skip.jpg)](/screenshots/next/pending-import-skip.jpg)
 
-This unreleased interface was checked through computer use on 2026-09-17 using
+This interface was checked before release through computer use on 2026-09-17 using
 generated software-test signals. The screenshot contains no experimental data.
 
 <a id="import-a-whole-project-unreleased"></a>

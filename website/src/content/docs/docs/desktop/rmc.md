@@ -1,0 +1,120 @@
+---
+title: "RMC structure refinement"
+description: "Refine atomic coordinates with exact cached ReFEFF, inspect live fits, and resume saved runs."
+audience: user
+---
+
+In **rexafs 0.2.10**, choose **Fit → Fit mode: RMC** at the upper right of the
+fitting workspace. Reverse Monte Carlo (RMC) proposes random coordinate moves,
+calculates their spectra and accepts or rejects them against the measured data
+and configured constraints. It refines a periodic structure rather than the
+path parameters used by ordinary EXAFS fitting.
+
+The desktop uses one processed spectrum and one structure. The
+[Rust API](/api/rust/rexafs/xafs/rmc/index.html) additionally supports evolutionary
+search, weighted structures and joint datasets. Those controls are not yet in
+the desktop, and RMC is not exposed by the Python or TypeScript bindings.
+
+## Prepare the spectrum and structure
+
+1. Import the measurement and inspect its normalization and **Background**
+   result. The RMC input captures the processed spectrum and its preprocessing
+   information, including AUTOBK Rbkg. It does not rerun AUTOBK for each move.
+2. Select **RMC**, choose a fully occupied periodic structure and press
+   **Use structure**. Resolve mixed or partial occupancy before refinement.
+3. In **Supercell**, edit repeat counts and inspect the live preview. **Use
+   suggested size** accounts for cluster radius and the allowed displacement.
+   Larger cells cost more to calculate. Invalid edits preserve the last valid
+   preview and block a new run; preview updates do not calculate scattering.
+4. Check absorber, edge, cluster/path radii, maximum path legs and constraints.
+   Blank absorber indices use all atoms of the selected element. Fixed atom
+   indices are zero based. Pair minimum distances accept entries such as
+   `Cu-O=1.5, Cu-Cu=2.0`, in Å.
+5. In **Fit settings**, inspect calibration, k/R ranges, k weight and the
+   attempt budget. Select **Preview initial fit** and compare its curves with
+   experiment before choosing **Run RMC**.
+
+Starting values are 10,000 attempts, 0.03 Å moves, numerical Metropolis tolerance
+0.001, a 0.2 Å displacement envelope, 1 Å global minimum distance and atom 0 as
+an anchor. These are editable starting values, not a physical model or a
+convergence guarantee. S₀² and ΔE₀ require sample-specific calibration and stay
+fixed during coordinate moves. The Metropolis tolerance controls acceptance of
+worse trial scores; it is not a measured thermodynamic temperature.
+
+## Fit ranges and the background
+
+The default objective minimizes the normalized sum of squared **real and
+imaginary R-space residuals**, using the same Fourier mapping as native path
+fitting. The magnitude plot is a diagnostic; matching magnitude alone is not
+the objective. Configured structural penalties are added separately.
+
+Starting k limits follow the spectrum's Transform settings within valid measured
+and calculator support, including the window. R minimum starts **0.15 Å above
+the saved AUTOBK Rbkg**. The desktop rejects R minimum below Rbkg, where background
+removal can produce artifacts. **Use spectrum ranges** reapplies the suggested
+ranges without changing S₀² or ΔE₀. One integer k weight from 0 through 3 is
+supported; automatic noise estimation and multiple k weights are not connected.
+
+Exact cached **ReFEFF 0.4.0** is the default. Changed geometry receives exact
+path calculations within fixed reference electronic potentials; unchanged paths
+can be reused. This does not recalculate the electronic potential after every
+move. Adaptive scattering remains experimental, opt-in in Rust, and absent from
+these desktop controls.
+
+## Read the live results
+
+Results show experiment, initial calculation and best calculation in k space,
+R magnitude, R real and R imaginary. The best coordinates and curves describe
+the same saved state. The current state can be worse than the best because the
+Metropolis rule can accept uphill moves. **Hide initial** changes the display
+scale without changing the objective.
+
+The statistics separate best score, improvement, acceptance, hard-constraint
+rejections and residual diagnosis. **Run details** includes timing, cache
+statistics and saved-input provenance. Updates arrive between completed
+calculations; one long scattering evaluation can delay the display or a pause.
+
+## Pause, save and resume
+
+**Pause** finishes the current move, saves a checkpoint and retains the prepared
+calculator for a fast resume. **Stop and save** cancels work and retains the
+last complete state. Wait for the paused or stopped status before closing when
+the latest state is needed.
+
+Checkpoints are saved after preparation, approximately every 30 seconds at move
+boundaries, and on pause, stop, completion or calculation failure. A sudden exit
+can lose moves since the preceding checkpoint. **Recover latest run** opens the
+latest recovery file; **Open checkpoint…** selects another. Loading results does
+not start calculation automatically. **Resume saved run** restores the saved
+inputs, settings and random state and rebuilds the calculator when necessary.
+
+Saving an `.rxs` project embeds the latest complete checkpoint and RMC setup.
+Recovery files also remain under `~/.rexafs/rmc/run-*/checkpoint.json`. The project
+currently retains one RMC run. After the budget finishes, enter **Additional
+attempts** and choose **Continue optimization**; the starting increment is 10,000.
+
+Editing preprocessing, changing the active spectrum or editing a new-run draft
+does not alter a saved run. Resume uses its original problem, including its
+background settings. An input mismatch is shown above the results. To use new
+preprocessing, stop the old worker and prepare a new run.
+
+## Decide whether to continue
+
+The budget is separate from convergence. The desktop's empirical diagnostic
+requires at least **3,000 attempts**, compares nonoverlapping **500-attempt
+windows**, and needs **three consecutive passing comparisons**:
+
+- Best-score improvement ≤ `1e-5 + 0.005 × |previous best|`.
+- Absolute mean-score change ≤ `1e-5 + 0.01 × |previous mean|`.
+
+The result is **Insufficient history**, **Still changing** or **Residual plateau**.
+The recent view shows 2,000 attempts; **All retained attempts** shows the retained
+history. A plateau does not stop the run automatically or prove a unique,
+physically complete structure. Inspect both spectral components, constraints and
+structural distributions, and compare independent seeds when drawing conclusions.
+
+The [workflow and implementation record](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/rmc-desktop-workflow.md)
+explains persistence, numerical conventions and software checks. Its short Cu₂O
+verification run remained **StillChanging**, not converged. The
+[Rust guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/rmc.md) covers
+Spectrum inputs and the broader RMC and evolutionary APIs.

@@ -4,9 +4,9 @@ description: "Browse scan frames and distinguish sampled overviews from complete
 audience: user
 ---
 
-This guide describes **rexafs 0.2.9**.
+This guide describes **rexafs 0.2.10**. Captions identify older screenshots.
 
-The **unreleased development branch** keeps the heatmap and frame browser as
+Version **0.2.10** keeps the heatmap and frame browser as
 the main Series view, including named series of project-stored spectra.
 **Add trend… → choose metric and range → Calculate all N frames** adds a saved
 trend. New desktop trends use Flat, 0–30 eV from each frame's E₀; the core API
@@ -27,7 +27,7 @@ starts from spectra already in a project. The overview samples at most 192
 available frames, while custom trends calculate every member. Saved trends retain
 their original settings; changing the overview representation does not recalculate
 them. The older batch-fit and LCF controls still require a folder scan.
-See the [development workflow](https://github.com/Ameyanagi/rexafs/blob/feature/complete-analysis/doc/full-frame-measurements.md)
+See the [full-frame workflow](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/full-frame-measurements.md)
 for details.
 
 [![Development Series overview with a saved trend from 513 synthetic spectra](/screenshots/next/series-trend-overview.jpg)](/screenshots/next/series-trend-overview.jpg)
@@ -40,7 +40,7 @@ project's synthetic series generator. It contains no experimental data.
 Captured through computer use on 2026-09-17 with the same synthetic source.
 Frame 258 is shown relative to frame 1. Opening the palette menu leaves the
 plot sizes and controls in place; the saved trend is unchanged.
-The remainder of this page and its versioned screenshot describe 0.2.9.
+The overview and older batch controls described below remain available. The LCF screenshot retains its 0.2.9 provenance.
 
 Import a folder of related spectra, then open **Series → Select scan**.
 The heatmap shows the scan; adjacent plots show the selected frame and trend.
@@ -121,3 +121,19 @@ per-frame uncertainties. See [multiple spectra and batches](/docs/desktop/multip
 for fit setup and [LCF theory](/docs/science/analysis/) for standard weights.
 Processing choices and model inadequacy can create apparent trends; smoothness
 alone does not validate a model.
+
+
+## Experimental Live acquisition
+
+In 0.2.10, **Series → Live…** watches a selected folder and retains completed
+spectra and trends. Preview the filename filter, detector mapping and frozen
+processing or saved recipe before starting. The default quiet-file policy uses
+three matching observations one second apart. A writer pause can look complete;
+choose a policy suitable for the acquisition and inspect retained revisions.
+**Pause**, retry and **Open paused** preserve committed results and permit review
+before continuation. A saved XANES peak model can run as frames arrive.
+
+Live acquisition remains experimental. Physical Windows/Linux acquisition and
+network-share behavior are not qualified by the current local review. See the
+[Live guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/live-acquisition.md)
+for completion policies, recovery and source-revision handling.

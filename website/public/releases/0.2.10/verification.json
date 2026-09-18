@@ -1,0 +1,171 @@
+{
+  "version": "0.2.10",
+  "tag": "v0.2.10",
+  "published_at": "2026-09-18T07:59:10Z",
+  "verified_at": "2026-09-18T07:59:26.120405+00:00",
+  "release_url": "https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.10",
+  "assets": [
+    {
+      "name": "rexafs-0.2.10-aarch64-apple-darwin.dmg",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-apple-darwin.dmg",
+      "sha256": "b046a042a51f568a3132b9540a3ad278892df6207edb38f541a3394b71b6961e",
+      "bytes": 47979782
+    },
+    {
+      "name": "rexafs-0.2.10-aarch64-apple-darwin.dmg.json",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-apple-darwin.dmg.json",
+      "sha256": "d5e43ebeedeaf34ea986aafe2689fed8c59344763afdae38c93158668a0b80cb",
+      "bytes": 1561
+    },
+    {
+      "name": "rexafs-0.2.10-aarch64-apple-darwin.dmg.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-apple-darwin.dmg.sha256",
+      "sha256": "77fb8a232406f95004f12433446f459e54c1ab224e3d3589899395fe4433a0b1",
+      "bytes": 105
+    },
+    {
+      "name": "rexafs-0.2.10-aarch64-apple-darwin.zip",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-apple-darwin.zip",
+      "sha256": "efd8bfb87c498a4b8670ae065816ceaa56394a045decb20186f3bb30a4dd24df",
+      "bytes": 53175115
+    },
+    {
+      "name": "rexafs-0.2.10-aarch64-apple-darwin.zip.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-apple-darwin.zip.sha256",
+      "sha256": "a33b81fae9c5e50270624e7e528236874a4e1b7693e197f466810545d873ab4b",
+      "bytes": 105
+    },
+    {
+      "name": "rexafs-0.2.10-aarch64-pc-windows-msvc-setup.build.json",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-pc-windows-msvc-setup.build.json",
+      "sha256": "d491aa65780301f559c4b148aea3449863d8d87294388a5d70cf33164b0ace88",
+      "bytes": 161569
+    },
+    {
+      "name": "rexafs-0.2.10-aarch64-pc-windows-msvc-setup.exe",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-pc-windows-msvc-setup.exe",
+      "sha256": "905eb052c5c0329b94594a4e7c5079179f263ae27ca5cf6560ee98a2998377f5",
+      "bytes": 34309464
+    },
+    {
+      "name": "rexafs-0.2.10-aarch64-pc-windows-msvc-setup.exe.qualification.json",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-pc-windows-msvc-setup.exe.qualification.json",
+      "sha256": "5c2bab8c9d642b473fc282e574041116fd6ed64a60ccc95dfc0ba29eb0f97e48",
+      "bytes": 1207
+    },
+    {
+      "name": "rexafs-0.2.10-aarch64-pc-windows-msvc-setup.exe.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-pc-windows-msvc-setup.exe.sha256",
+      "sha256": "e8f4dab687c13b01bc3a98aeca13579eb69c939a7251c334688e7bb2ee231a7d",
+      "bytes": 115
+    },
+    {
+      "name": "rexafs-0.2.10-aarch64-pc-windows-msvc.zip",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-pc-windows-msvc.zip",
+      "sha256": "6ea4ee223c8c4d7c7897eb7584c1c0c9afb7c9a40c2e8c5893efe926d5819d1d",
+      "bytes": 49021656
+    },
+    {
+      "name": "rexafs-0.2.10-aarch64-pc-windows-msvc.zip.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-pc-windows-msvc.zip.sha256",
+      "sha256": "e10f7bfa440458f3b2da1c6f4382c542bf0cfb0f48e4e99a3cef458725c727bc",
+      "bytes": 109
+    },
+    {
+      "name": "rexafs-0.2.10-aarch64-unknown-linux-gnu.tar.gz",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-unknown-linux-gnu.tar.gz",
+      "sha256": "a6dc9224fbecc08b232b80da8a3f49baa2b681cff8a1298e1d772458cd4228e7",
+      "bytes": 54461804
+    },
+    {
+      "name": "rexafs-0.2.10-aarch64-unknown-linux-gnu.tar.gz.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-aarch64-unknown-linux-gnu.tar.gz.sha256",
+      "sha256": "2981e1942e1a569c3aea7c802960b35f71c7b375186d1f8b142bd52b7c63e918",
+      "bytes": 113
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-apple-darwin.dmg",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-apple-darwin.dmg",
+      "sha256": "3d646c7847e07b4fb9d78eef7add26cd4dedaff235e35c6e4334ee2a8517d878",
+      "bytes": 49393247
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-apple-darwin.dmg.json",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-apple-darwin.dmg.json",
+      "sha256": "3ad7dfdf76540dda719076ebe8cbda146ae92cd413c4e969f10c9f11f47e003f",
+      "bytes": 1558
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-apple-darwin.dmg.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-apple-darwin.dmg.sha256",
+      "sha256": "b17f1077864c3e244deb872fcc4fb09ebd19c37e6848058dd42427c17bcf7bdb",
+      "bytes": 104
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-apple-darwin.zip",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-apple-darwin.zip",
+      "sha256": "ac727ad73b16c89299b7dc30998d3d9db5083718340d9f845b90429223b6bd1f",
+      "bytes": 54664410
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-apple-darwin.zip.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-apple-darwin.zip.sha256",
+      "sha256": "ef079e8f065d321c5760b56381647477385c9a123f240bde721aefc67e9104ef",
+      "bytes": 104
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-pc-windows-msvc-setup.build.json",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-pc-windows-msvc-setup.build.json",
+      "sha256": "bebbf3115375c906e0421b00fbc77998eec7ebe25d9753a690ce335ee6223b4a",
+      "bytes": 163640
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-pc-windows-msvc-setup.exe",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-pc-windows-msvc-setup.exe",
+      "sha256": "845aa996eedd04ef65415d669e48d070fc8f26eab6ae6032ea0392f9437a9951",
+      "bytes": 36473848
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-pc-windows-msvc-setup.exe.qualification.json",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-pc-windows-msvc-setup.exe.qualification.json",
+      "sha256": "8ea015115f149115af32d143bde37f045ff3d150ed0f96ed258a38d50f041227",
+      "bytes": 1152
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-pc-windows-msvc-setup.exe.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-pc-windows-msvc-setup.exe.sha256",
+      "sha256": "b726ce4921ae84477278acf446e73328538573be13ba07d6df2da1d48a82f602",
+      "bytes": 114
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-pc-windows-msvc.zip",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-pc-windows-msvc.zip",
+      "sha256": "1cbcee8426c3cdd9669a6e2bb33a51e7f0f22f93bf4462d7d15dd03fbf1aeda2",
+      "bytes": 51390536
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-pc-windows-msvc.zip.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-pc-windows-msvc.zip.sha256",
+      "sha256": "bb2dbc280b26e3466bed6c3de4695f86c1188836611fe7926d47d58bc0fd654a",
+      "bytes": 108
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-unknown-linux-gnu.tar.gz",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "cbfb62330e1ff3ccf74f6e361dec79ad47a9fa46b58eb0025d0251776651847f",
+      "bytes": 59039991
+    },
+    {
+      "name": "rexafs-0.2.10-x86_64-unknown-linux-gnu.tar.gz.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/rexafs-0.2.10-x86_64-unknown-linux-gnu.tar.gz.sha256",
+      "sha256": "37188f893f280764db36ccebd80704287aab18241e80694600817fc643d76389",
+      "bytes": 112
+    },
+    {
+      "name": "SHA256SUMS",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.10/SHA256SUMS",
+      "sha256": "cbb1c07f5f0733db7fe6e52f19c40dd2845e4a55a65cdda14c1324bcada6145e",
+      "bytes": 2965
+    }
+  ]
+}

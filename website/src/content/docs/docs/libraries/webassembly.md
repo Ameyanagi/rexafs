@@ -11,10 +11,11 @@ website's source checkout; scattering uses the published ReFEFF 0.4.0 engine.
 The TypeScript package already runs the Rust spectrum-processing engine in
 WebAssembly (WASM). Install `rexafs`; the package includes the compiled module.
 
-| Capability | Browser package, 0.2.9 |
+| Capability | Browser package, 0.2.10 |
 |---|---|
 | Normalization, AUTOBK, forward and inverse transforms | Available |
 | Beamline text, HDF5, Athena, Larix and XTUNES import | Shared reader; explicit detector/dataset selection where needed |
+| MBACK, XANES peak fitting, fluorescence correction and Cauchy wavelets | Available through the native-core bindings |
 | NumPy/Python interface | Separate native Python package |
 | Groups, LCF/PCA, structures and path fitting | Not exposed in TypeScript |
 | ReFEFF calculations | Separate browser workspace; not part of the npm API |
@@ -53,7 +54,7 @@ describes the adapter and upstream validation. See [licenses and example
 provenance](/licenses/) before redistributing its assets.
 
 ReFEFF's WASI adapter is separate from rexafs's `wasm-bindgen` processing module.
-Native rexafs 0.2.9 still uses ReFEFF 0.3.0. Structural fitting, the full desktop
+Native rexafs 0.2.10 also uses ReFEFF 0.4.0. Structural fitting, the full desktop
 interface and the native Python extension remain outside these browser previews.
 Use [Rust](/docs/libraries/rust/) or the [desktop](/docs/desktop/fitting/) for
 those workflows. The [build assessment](https://github.com/Ameyanagi/rexafs/blob/main/doc/webassembly.md)

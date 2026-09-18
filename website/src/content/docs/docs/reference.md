@@ -4,12 +4,12 @@ description: "Generated signatures and source documentation for stable and upcom
 audience: user
 ---
 
-The tutorials and stable reference target **published 0.2.9**. Choose Next only
+The tutorials and stable reference target **published 0.2.10**. Choose Next only
 when working from the source checkout.
 
 ## Choose your language
 
-These links describe **stable 0.2.9**:
+These links describe **stable 0.2.10**:
 
 | Task | Python | TypeScript | Rust |
 |---|---|---|---|
@@ -19,6 +19,10 @@ These links describe **stable 0.2.9**:
 | Configure the k → R transform | [XrayFFTF](/docs/reference/stable/python/xrayfftf/) | [XrayFFTF](/docs/reference/stable/typescript/xrayfftf/) | [XrayFFTF](/api/rust/rexafs/xafs/xrayfft/struct.XrayFFTF.html) |
 | Configure the R → q back-transform | [XrayFFTR](/docs/reference/stable/python/xrayfftr/) | [XrayFFTR](/docs/reference/stable/typescript/xrayfftr/) | [XrayFFTR](/api/rust/rexafs/xafs/xrayfft/struct.XrayFFTR.html) |
 | Read a measurement | [read_measurement](/docs/reference/stable/python/io-read_measurement/) | [read_measurement](/docs/reference/stable/typescript/read_measurement/) | [I/O](/api/rust/rexafs/xafs/io/index.html) |
+| Fit XANES peaks | [PeakFit](/docs/reference/stable/python/peakfit/) | [PeakFit](/docs/reference/stable/typescript/peakfit/) | [PeakFit](/api/rust/rexafs/xafs/analysis/peakfit/struct.PeakFit.html) |
+| Match atomic normalization | [MBack](/docs/reference/stable/python/mback/) | [MBack](/docs/reference/stable/typescript/mback/) | [MBACK](/api/rust/rexafs/xafs/mback/index.html) |
+| Compute a Cauchy wavelet map | [Wavelet](/docs/reference/stable/python/wavelet/) | [Wavelet](/docs/reference/stable/typescript/wavelet/) | [Wavelet](/api/rust/rexafs/xafs/wavelet/index.html) |
+| Refine a periodic structure by RMC | — | — | [RMC](/api/rust/rexafs/xafs/rmc/index.html) |
 | Initialize WebAssembly | — | [Browser init](/docs/reference/stable/typescript/init-browser/) · [Node init](/docs/reference/stable/typescript/init-node/) | — |
 
 The [full Rust reference](/api/rust/rexafs/index.html) also covers groups, data

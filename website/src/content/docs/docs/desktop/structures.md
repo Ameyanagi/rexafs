@@ -10,12 +10,12 @@ stages: **Structure → Calculate → Paths → Model → Results**.
 
 ## Find a structure
 
-**Unreleased:** choose the database from the source menu at the top of the
+**Since 0.2.10:** choose the database from the source menu at the top of the
 Structure library. All five sources remain accessible in a narrow panel.
 
 COD searches return up to 200 usable structures. A bare element such as `Cu`
 matches compounds containing that element; use a formula such as `CuO` or a
-COD ID to narrow the results. The unreleased client first retrieves IDs, then
+COD ID to narrow the results. The client first retrieves IDs, then
 loads metadata in small batches, so broad searches do not download every
 matching record at once. This uses COD's documented
 [ID-list and ID-query endpoints](https://wiki.crystallography.net/RESTful_API/).
@@ -40,7 +40,7 @@ construction](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/
 
 ## Calculate and select paths
 
-Choose the engine and cluster radius, then **Calculate paths**. Every 0.2.9
+Choose the engine and cluster radius, then **Calculate paths**. Every 0.2.10
 desktop package offers ReFEFF and FEFF10; see the
 [Windows ARM64 requirement](/docs/getting-started/install/#arm64-availability).
 Record the engine and settings in your methods.
