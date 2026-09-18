@@ -46,10 +46,11 @@ pub(crate) enum Icon {
     Trash,
     Play,
     Sliders,
+    Range,
 }
 
 impl Icon {
-    pub(crate) const ALL: [Self; 41] = [
+    pub(crate) const ALL: [Self; 42] = [
         Self::Folder,
         Self::Import,
         Self::Save,
@@ -91,6 +92,7 @@ impl Icon {
         Self::Trash,
         Self::Play,
         Self::Sliders,
+        Self::Range,
     ];
 
     pub(crate) fn path(self) -> SharedString {
@@ -99,6 +101,9 @@ impl Icon {
 
     fn geometry(self) -> &'static str {
         match self {
+            Self::Range => {
+                r#"<path d="M3 19h18M6 4v15M18 4v15"/><path d="M6 7h12v9H6Z" fill="currentColor" fill-opacity=".18"/><path d="M4 4h4M16 4h4"/>"#
+            }
             Self::Folder => r#"<path d="M3 7V5h6l2 2h10v12H3V7Z"/>"#,
             Self::Import => r#"<path d="M12 3v12m-4-4 4 4 4-4M4 15v5h16v-5"/>"#,
             Self::Save => r#"<path d="M4 3h13l3 3v15H4V3Z"/><path d="M8 3v6h8V3M8 21v-8h8v8"/>"#,

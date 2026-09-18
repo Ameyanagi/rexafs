@@ -27,8 +27,99 @@ fn current_label(
 
 impl StudioApp {
     pub(crate) fn stage_center(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        if self.stage == Stage::Transform && self.stage_view.tf_view == TfView::Wavelet {
-            return self.wavelet_center(cx);
+        if matches!(self.stage, Stage::Background | Stage::Transform)
+            && self
+                .current_group_index()
+                .is_some_and(|i| !self.correction_sources(i).is_empty())
+        {
+            return div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .p_4()
+                        .child("Use the original spectrum for EXAFS")
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(self.theme.text_muted)
+                                .child("This fluorescence correction is qualified for XANES."),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .gap_2()
+                                .child(
+                                    super::button(
+                                        &self.theme,
+                                        "fluo-normalize-return",
+                                        "Normalize",
+                                        true,
+                                    )
+                                    .on_click(
+                                        cx.listener(|a, _, _, cx| {
+                                            a.set_stage(Stage::Normalize, cx)
+                                        }),
+                                    ),
+                                )
+                                .child(
+                                    super::button(
+                                        &self.theme,
+                                        "fluo-history-return",
+                                        "Correction history",
+                                        false,
+                                    )
+                                    .on_click(cx.listener(
+                                        |a, _, _, cx| {
+                                            a.set_stage(Stage::Data, cx);
+                                            a.open_fluorescence(cx);
+                                        },
+                                    )),
+                                ),
+                        ),
+                );
+        }
+        if self.fluorescence.open && !self.fluorescence_matches_current() {
+            self.fluorescence.close();
+        }
+        if self.stage == Stage::Data && self.fluorescence.open {
+            return div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .child(self.fluorescence_center(cx));
+        }
+        if self.stage == Stage::Transform && self.wavelet.open && !self.wavelet_matches_current() {
+            self.open_wavelet(cx);
+        }
+        if self.stage == Stage::Transform && self.wavelet.open {
+            return div()
+                .flex_1()
+                .min_w_0()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .child(self.plot_bar(cx))
+                .child(self.wavelet_center(cx));
+        }
+        if self.stage == Stage::Data && self.peaks.open {
+            return div().flex_1().min_w_0().flex().child(self.peak_center(cx));
+        }
+        if self.normalization.open && !self.normalization_matches_current() {
+            self.normalization.open = false;
+        }
+        if self.stage == Stage::Normalize && self.normalization.open {
+            return div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .child(self.normalization_center(cx));
         }
         let t = self.theme;
         let ready = self.quadrants.len() > PLOT_CHIQ;
@@ -60,6 +151,7 @@ impl StudioApp {
         let tool_preview = (self.stage == Stage::Data && self.tool_preview_current(cx))
             .then(|| self.tools.preview_plot.clone())
             .flatten();
+        let has_tool_preview = tool_preview.is_some();
         let plots: Vec<(usize, SharedString)> = if tool_preview.is_some()
             || (self.stage == Stage::Data && self.analysis.plot.is_some())
         {
@@ -85,12 +177,17 @@ impl StudioApp {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(
-                        div()
-                            .text_size(px(11.5))
-                            .text_color(t.text_muted)
-                            .child("Preview · original / result / standard"),
-                    )
+                    .child(div().text_size(px(11.5)).text_color(t.text_muted).child(
+                        if self.tools.open == Some(super::tools::Tool::Align) {
+                            if self.tools.preview_running {
+                                "Updating alignment…"
+                            } else {
+                                "XANES · derivative peaks scaled to 1"
+                            }
+                        } else {
+                            "Preview · original / result / standard"
+                        },
+                    ))
                     .child(div().flex_1().min_h_0().min_w_0().child(plot)),
             );
         }
@@ -141,7 +238,15 @@ impl StudioApp {
                             .pt_2()
                             .text_size(px(11.5))
                             .font_weight(gpui::FontWeight::MEDIUM)
-                            .child(title),
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(div().flex_1().child(title))
+                            .child(self.plot_export_button(
+                                "analysis-export",
+                                super::plot_export::Target::Analysis,
+                                cx,
+                            )),
                     )
                     .child(views)
                     .child(
@@ -157,6 +262,7 @@ impl StudioApp {
             );
         }
         if self.stage == Stage::Data
+            && !self.handles.hidden
             && self.analysis.plot.is_none()
             && let Some((lo, hi)) = self.analysis_energy_interval(cx)
         {
@@ -164,7 +270,11 @@ impl StudioApp {
                 .child(format!("Analysis interval: {lo:.1}–{hi:.1} eV · dashed boundaries on the spectrum plot. Viewing presets change only the zoom.")));
         }
         column = column.child(area);
-        if self.analysis.plot.is_none() && self.view.legend && !self.legend_entries.is_empty() {
+        if !has_tool_preview
+            && self.analysis.plot.is_none()
+            && self.view.legend
+            && !self.legend_entries.is_empty()
+        {
             column = column.child(self.legend_strip());
         }
         column.when(self.ui.overview, |d| d.child(self.thumbnail_strip(cx)))
@@ -410,7 +520,49 @@ impl StudioApp {
         }
     }
 
-    pub(super) fn plot_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn transform_view_selector(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let t = self.theme;
+        let mut choices = segmented(&t).flex_none();
+        for (index, (view, label)) in [
+            (TfView::K, "k"),
+            (TfView::R, "R"),
+            (TfView::Both, "k + R"),
+            (TfView::Q, "q"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            choices = choices.child(
+                segment(
+                    &t,
+                    ("transform-view", index),
+                    label,
+                    !self.wavelet.open && self.stage_view.tf_view == view,
+                    index == 0,
+                )
+                .on_click(cx.listener(move |app, _, _, cx| {
+                    app.wavelet.hide();
+                    app.stage_view.tf_view = view;
+                    if view == TfView::Q {
+                        app.ui.sections.insert("back-transform");
+                    }
+                    app.stage_view_changed(cx);
+                })),
+            );
+        }
+        choices.child(
+            segment(
+                &t,
+                ("transform-view", 4_usize),
+                "Wavelet",
+                self.wavelet.open,
+                false,
+            )
+            .on_click(cx.listener(|app, _, _, cx| app.open_wavelet(cx))),
+        )
+    }
+
+    fn plot_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         use super::controls::{Menu, icon_button};
         use crate::icons::Icon;
         let t = self.theme;
@@ -428,32 +580,49 @@ impl StudioApp {
             .py_1()
             .bg(t.surface)
             .border_b_1()
-            .border_color(t.border)
-            .child(
-                icon_button(
-                    &t,
-                    "plot-compare",
-                    Icon::Layers,
-                    format!(
-                        "Compare current + {} marked · {} spectra",
-                        self.selection.len(),
-                        self.compare_count()
-                    ),
-                    v.scope == PlotScope::Marked,
-                )
-                .w_auto()
-                .px_2()
-                .gap_1()
-                .child(format!("Compare {}", self.compare_count()))
-                .on_click(cx.listener(|app, _, _, cx| {
-                    app.stage_view.scope = if app.stage_view.scope == PlotScope::Current {
-                        PlotScope::Marked
-                    } else {
-                        PlotScope::Current
-                    };
-                    app.stage_view_changed(cx);
-                })),
-            );
+            .border_color(t.border);
+        if self.stage == Stage::Data
+            && self.tools.open == Some(super::tools::Tool::Align)
+            && self.tool_preview_current(cx)
+        {
+            return bar
+                .child(div().text_color(t.text).child("Alignment · dμ/dE"))
+                .child(div().text_color(t.text_muted).child("XANES"));
+        }
+        if self.stage == Stage::Transform {
+            bar = bar.child(self.transform_view_selector(cx));
+            if self.wavelet.open {
+                return bar
+                    .child(self.wavelet_view_selector(cx))
+                    .child(div().flex_1())
+                    .child(self.wavelet_toolbar_actions(cx));
+            }
+        }
+        bar = bar.child(
+            icon_button(
+                &t,
+                "plot-compare",
+                Icon::Layers,
+                format!(
+                    "Compare current + {} marked · {} spectra",
+                    self.selection.len(),
+                    self.compare_count()
+                ),
+                v.scope == PlotScope::Marked,
+            )
+            .w_auto()
+            .px_2()
+            .gap_1()
+            .child(format!("Compare {}", self.compare_count()))
+            .on_click(cx.listener(|app, _, _, cx| {
+                app.stage_view.scope = if app.stage_view.scope == PlotScope::Current {
+                    PlotScope::Marked
+                } else {
+                    PlotScope::Current
+                };
+                app.stage_view_changed(cx);
+            })),
+        );
         if v.scope == PlotScope::Marked {
             bar = bar
                 .child(
@@ -540,38 +709,11 @@ impl StudioApp {
                     );
                 }
             }
-            Stage::Transform => {
-                for (index, (view, label)) in [
-                    (TfView::K, "k"),
-                    (TfView::R, "R"),
-                    (TfView::Both, "k + R"),
-                    (TfView::Q, "q"),
-                    (TfView::Wavelet, "Wavelet"),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    choices = choices.child(
-                        segment(
-                            &t,
-                            ("transform-view", index),
-                            label,
-                            v.tf_view == view,
-                            index == 0,
-                        )
-                        .on_click(cx.listener(move |app, _, _, cx| {
-                            app.stage_view.tf_view = view;
-                            if view == TfView::Q {
-                                app.ui.sections.insert("back-transform");
-                            }
-                            app.stage_view_changed(cx);
-                        })),
-                    );
-                }
-            }
             _ => {}
         }
-        bar = bar.child(choices);
+        if self.stage != Stage::Transform {
+            bar = bar.child(choices);
+        }
         match self.stage {
             Stage::Data | Stage::Normalize => {
                 bar =
@@ -594,13 +736,24 @@ impl StudioApp {
                         chip(
                             &t,
                             "common-pre-post",
-                            "Pre/post",
+                            if self.ui_params().mback.is_some() {
+                                "MBACK fit"
+                            } else {
+                                "Pre/post"
+                            },
                             self.view.show_pre && self.view.show_post,
                         )
+                        .w(px(80.))
+                        .justify_center()
                         .on_click(cx.listener(|a, _, _, c| {
                             let on = !(a.view.show_pre && a.view.show_post);
                             a.view.show_pre = on;
                             a.view.show_post = on;
+                            if on {
+                                // Both methods' fits are in input mu units,
+                                // so show their matching axis.
+                                a.stage_view.e_quantity = EQuantity::Mu;
+                            }
                             a.stage_view_changed(c);
                         })),
                     );
@@ -676,6 +829,7 @@ impl StudioApp {
                     app.open_chrome_menu(Menu::Colors, event, window, cx);
                 })),
             )
+            .child(self.plot_ranges_button(cx))
             .child(
                 icon_button(
                     &t,
@@ -847,7 +1001,20 @@ impl StudioApp {
                     .gap_2()
                     .text_size(px(11.5))
                     .child(div().font_weight(gpui::FontWeight::MEDIUM).child(title))
-                    .child(div().text_color(t.text_muted).child(label)),
+                    .child(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .text_color(t.text_muted)
+                            .child(label),
+                    )
+                    .child(div().flex_1())
+                    .child(self.plot_export_button(
+                        format!("plot-export-{index}"),
+                        super::plot_export::Target::Quadrant(index),
+                        cx,
+                    )),
             )
             .when(
                 self.stage_view.scope == PlotScope::Marked && self.stage != Stage::Fit,
@@ -1023,7 +1190,6 @@ pub(crate) fn stage_plot_selection(
             BkgView::K => vec![(PLOT_CHIK, chik), (PLOT_CHIR, chir)],
         },
         Stage::Transform => match v.tf_view {
-            TfView::Wavelet => Vec::new(),
             TfView::K => vec![(PLOT_CHIK, chik)],
             TfView::R => vec![(PLOT_CHIR, chir)],
             TfView::Q => vec![(PLOT_CHIQ, "χ(q) back-transform".into())],

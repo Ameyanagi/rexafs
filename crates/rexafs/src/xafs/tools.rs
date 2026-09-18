@@ -1109,6 +1109,90 @@ mod tests {
     }
 
     #[test]
+    fn energy_offset_is_absolute_and_reversible_on_experimental_ru() {
+        let mut spectrum = load_ru();
+        spectrum.fft().unwrap();
+        let original_energy = spectrum.energy.clone().unwrap();
+        let original_raw = spectrum.raw_energy.clone().unwrap();
+        let original_mu = spectrum.mu.clone();
+        let original_e0 = spectrum.e0.unwrap();
+        let original_norm = spectrum.norm().unwrap();
+        spectrum.set_energy_offset(0.0).unwrap();
+        assert_eq!(spectrum.norm().unwrap(), original_norm);
+        assert!(spectrum.chir().is_some());
+
+        spectrum.set_energy_offset(3.5).unwrap();
+        assert_eq!(spectrum.energy_offset(), 3.5);
+        assert!(spectrum.norm().is_none());
+        assert!(spectrum.chir().is_none());
+        assert_eq!(spectrum.mu, original_mu);
+        spectrum.fft().unwrap();
+        let computed = spectrum.norm().unwrap();
+        spectrum.set_energy_offset(3.5).unwrap();
+        assert_eq!(spectrum.norm().unwrap(), computed);
+        spectrum.shift_energy(0.5);
+        assert_eq!(spectrum.energy_offset(), 4.0);
+
+        // Serialization preserves the one existing offset field; loading does
+        // not replay a correction already present in the stored arrays.
+        let saved = serde_json::to_string(&spectrum).unwrap();
+        let mut restored: XASSpectrum = serde_json::from_str(&saved).unwrap();
+        assert_eq!(restored.energy_offset(), 4.0);
+        restored.set_energy_offset(0.0).unwrap();
+        assert_abs_diff_eq!(restored.energy.unwrap(), original_energy, epsilon = 1e-9);
+        assert_abs_diff_eq!(restored.raw_energy.unwrap(), original_raw, epsilon = 1e-9);
+        assert_abs_diff_eq!(restored.e0.unwrap(), original_e0, epsilon = 1e-9);
+        assert_eq!(restored.mu, original_mu);
+    }
+
+    #[test]
+    fn energy_offset_rejects_invalid_changes_atomically_and_resets_on_new_data() {
+        let mut spectrum = load_ru();
+        spectrum.normalize().unwrap();
+        spectrum.set_energy_offset(1.5).unwrap();
+        let before = serde_json::to_string(&spectrum).unwrap();
+        for offset in [f64::NAN, f64::INFINITY, f64::MAX, -f64::MAX] {
+            assert!(spectrum.set_energy_offset(offset).is_err());
+            assert_eq!(serde_json::to_string(&spectrum).unwrap(), before);
+        }
+        // Resetting the offset does not undo a separate data edit.
+        spectrum.truncate(Some(22100.0), Some(22400.0)).unwrap();
+        let count = spectrum.energy.as_ref().unwrap().len();
+        spectrum.set_energy_offset(0.0).unwrap();
+        assert_eq!(spectrum.energy.as_ref().unwrap().len(), count);
+        spectrum.set_energy_offset(2.0).unwrap();
+        spectrum.set_spectrum(vec![8970., 8980., 8990.], vec![0., 0.5, 1.]);
+        assert_eq!(spectrum.energy_offset(), 0.0);
+        spectrum.set_energy_offset(0.0).unwrap();
+        assert_eq!(spectrum.energy.as_ref().unwrap()[0], 8970.0);
+    }
+
+    #[test]
+    fn energy_offset_preserves_existing_repeated_samples() {
+        let mut spectrum = XASSpectrum::new();
+        spectrum.set_spectrum(vec![8970., 8980., 8980., 8990.], vec![0., 0.5, 0.6, 1.]);
+        for offset in [0., 2.5, 2.5, 0.] {
+            spectrum.set_energy_offset(offset).unwrap();
+            assert_eq!(
+                spectrum.energy.as_ref().unwrap().as_slice(),
+                &[
+                    8970. + offset,
+                    8980. + offset,
+                    8980. + offset,
+                    8990. + offset
+                ]
+            );
+            assert_eq!(spectrum.raw_energy, spectrum.energy);
+            assert_eq!(
+                spectrum.mu.as_ref().unwrap().as_slice(),
+                &[0., 0.5, 0.6, 1.]
+            );
+        }
+        assert!(spectrum.set_energy_offset(f64::MAX).is_err());
+        assert_eq!(spectrum.energy_offset(), 0.);
+    }
+
+    #[test]
     fn tools_calibrate_derivative_max_lands_on_target() {
         let mut s = load_ru();
         let target = 22117.0;

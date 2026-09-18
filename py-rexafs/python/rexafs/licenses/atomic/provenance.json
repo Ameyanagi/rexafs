@@ -1,0 +1,22 @@
+{
+  "XrayDB-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/xraypy/XrayDB/663d2171bd301dc51dbe048cae459934e60347c2/LICENSE",
+    "sha256": "ed0e88d833d0ad5bd19a393e6e3331ae4bbf0606acbd75924389cf41f0082159"
+  },
+  "xraydb-rs-LICENSE-MIT.txt": {
+    "url": "https://raw.githubusercontent.com/Ameyanagi/xraydb-rs/c07d4cf0c71977587a36320be72c50dde12bda2d/LICENSE-MIT",
+    "sha256": "74c52648e6feb213da8cab51f7ecd1d75075b69940c031474f351d7c15b6974a"
+  },
+  "xraydb-rs-LICENSE-APACHE.txt": {
+    "url": "https://raw.githubusercontent.com/Ameyanagi/xraydb-rs/c07d4cf0c71977587a36320be72c50dde12bda2d/LICENSE-APACHE",
+    "sha256": "4ef94be6b45f27bdf9783232691b00ff96273a43ee11e19ca14128a1a0274070"
+  },
+  "embedded_database": {
+    "crate": "xraydb",
+    "version": "0.4.1",
+    "path": "data/xraydb.bin.zst",
+    "bytes": 3187870,
+    "sha256": "a7c37bf49499845c95a80d777224298863d9f5b6e51c29475889fb156a83151d",
+    "source_commit": "c07d4cf0c71977587a36320be72c50dde12bda2d"
+  }
+}

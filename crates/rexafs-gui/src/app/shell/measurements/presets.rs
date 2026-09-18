@@ -17,6 +17,9 @@ impl PresetFile {
         if d.name.trim().is_empty() || d.name.len() > 200 {
             return Err("Preset names need 1–200 characters".into());
         }
+        if let Some(w) = &d.wavelet {
+            w.validate()?;
+        }
         let (lo, hi) = d.measurement.metric.bounds();
         if !lo.is_finite()
             || !hi.is_finite()
@@ -64,7 +67,8 @@ impl StudioApp {
                 definition.revision = previous.revision
                     + u64::from(
                         previous.measurement != definition.measurement
-                            || previous.edge_energy != definition.edge_energy,
+                            || previous.edge_energy != definition.edge_energy
+                            || previous.wavelet != definition.wavelet,
                     );
             } else {
                 definition.id = crate::group_identity::GroupId::new_result();
@@ -105,7 +109,13 @@ impl StudioApp {
         definition: MetricDefinition,
         cx: &mut Context<Self>,
     ) {
-        self.measurements.kind = if definition.edge_energy {
+        self.measurements.kind = if let Some(w) = &definition.wavelet {
+            match w.statistic {
+                WaveletStatistic::Maximum => 1,
+                WaveletStatistic::Integral => 2,
+                WaveletStatistic::Mean => 3,
+            }
+        } else if definition.edge_energy {
             4
         } else {
             match definition.measurement.metric {
@@ -115,6 +125,9 @@ impl StudioApp {
                 _ => 3,
             }
         };
+        self.measurements.wavelet = definition.wavelet.clone();
+        self.measurements.wavelet_fields.clear();
+        self.ensure_wavelet_trend_fields(cx);
         self.measurements.space = definition.measurement.space;
         self.measurements.relative = definition.measurement.origin == AxisOrigin::E0;
         let (lo, hi) = definition.measurement.metric.bounds();
@@ -270,6 +283,7 @@ mod tests {
                 name: "White line".into(),
                 measurement: Measurement::maximum(0.0..=30.0).flat(),
                 edge_energy: false,
+                wavelet: None,
             },
         };
         let encoded = serde_json::to_vec(&preset).unwrap();

@@ -97,10 +97,15 @@ pub(super) fn mcr_groups(
             r.e0,
         ));
     }
+    let corrections =
+        crate::fluorescence_history::combine(saved.inputs.iter().map(|i| i.corrections.as_slice()));
+    for group in &mut out {
+        group.corrections = corrections.clone();
+    }
     Ok(out)
 }
 
-pub(super) fn lcf_groups(
+pub(in crate::app::shell) fn lcf_groups(
     result: &rexafs::prelude::LcfResult,
     records: &[crate::project::AnalysisInput],
     config: Option<&LcfConfig>,
@@ -133,12 +138,18 @@ pub(super) fn lcf_groups(
             Some(i),
         ));
     }
-    Ok(series.into_iter().map(|(label,y,q,role,index)| calculated_group(label,result.x.as_slice(),&y,q,
+    let corrections =
+        crate::fluorescence_history::combine(records.iter().map(|i| i.corrections.as_slice()));
+    let mut groups: Vec<_> = series.into_iter().map(|(label,y,q,role,index)| calculated_group(label,result.x.as_slice(),&y,q,
         Operation {tool:"Linear combination fit".into(),inputs:inputs(records),applied_energy_shift_ev:0.0,
             parameters:serde_json::json!({"rexafs_version":env!("CARGO_PKG_VERSION"),"role":role,"space":result.space,
                 "energy_range_ev":[result.x[0],result.x[result.x.len()-1]],"weights":result.weights,
                 "configuration":config,"contribution_index":index,"r_factor":result.r_factor,
-                "array_processing":"retained calculated values; preserve scale by default; optional pre/post-edge refitting for absorption outputs is a separate processing choice"})},None)).collect())
+                "array_processing":"retained calculated values; preserve scale by default; optional pre/post-edge refitting for absorption outputs is a separate processing choice"})},None)).collect();
+    for group in &mut groups {
+        group.corrections = corrections.clone();
+    }
+    Ok(groups)
 }
 
 impl StudioApp {

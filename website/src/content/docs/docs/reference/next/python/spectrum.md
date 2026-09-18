@@ -32,6 +32,81 @@ See [processing theory](https://rexafs.com/docs/science/processing/) for
 equations, interpretation and limitations. Groups and structural fitting
 are not currently exposed by this Python Spectrum API.
 
+## correct_fluorescence
+
+```python
+correct_fluorescence(self, model: FluorescenceCorrection) -> Spectrum
+```
+
+Correct into an independent unnormalized Spectrum (unreleased).
+Internal conventional normalization runs automatically; the source stays
+unchanged. Unknown acquisition provenance is explicitly interpreted as
+fluorescence. Known transmission, prepared norm/flat and repeated correction
+raise ValueError. Supply line and measured surface angles in the model.
+Releases the GIL. Call normalize() for separate final polynomial/MBACK
+normalization. History survives edits; this XANES-only branch rejects
+background/FFT/wavelets. Corrected-array uncertainty is unavailable.
+
+## fluorescence_correction
+
+```python
+fluorescence_correction(self) -> FluorescenceCorrectionResult | None
+```
+
+Owned historical correction record, or None. Later edits/normalization
+never rewrite its original inputs or remove the XANES-only restriction.
+
+## absorption_mode
+
+```python
+absorption_mode(self) -> AbsorptionMode
+```
+
+Acquisition interpretation: unknown, transmission or fluorescence.
+
+## set_absorption_mode
+
+```python
+set_absorption_mode(self, mode: AbsorptionMode) -> Spectrum
+```
+
+Explicitly revise acquisition interpretation and return this Spectrum.
+Arrays/caches stay unchanged. Correction history and restrictions survive.
+
+## wavelet
+
+```python
+wavelet(self, model: Wavelet) -> WaveletMap
+```
+
+Unreleased: spectrum.wavelet(Wavelet((2, 12))) prepares missing
+normalization/AUTOBK on a copy, reusing existing chi. The interval uses
+inverse angstroms. Arrays/settings/caches are unchanged; Rust releases
+the GIL. Result matrices are owned (R rows, k columns). Invalid coverage,
+grids and unqualified corrected XANES input raise ValueError. R is not
+phase-corrected; color intensity is not a concentration.
+
+## fit_peaks
+
+```python
+fit_peaks(self, model: PeakFit, *, errors: NDArray[np.float64] | Sequence[float] | None=None) -> PeakFitResult
+```
+
+Fit a composite XANES model, preparing missing normalization on a copy (unreleased).
+
+Example: spectrum.fit_peaks(PeakFit((-20, 40)).gaussian("p1", 5, 2, 3)).
+Defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
+caches and initial model remain unchanged; Rust releases the GIL. Results
+contain data/model/residual arrays on the retained native points. No smoothing
+or interpolation occurs. Invalid models, coverage or preparation raise ValueError.
+A result can be nonconverged: inspect termination, warnings and uncertainty_unavailable.
+
+Optional errors are positive independent standard deviations in the SELECTED
+signal representation on the original native grid, including excluded points.
+Raw detector errors are not propagated through normalization. Without errors,
+covariance uses residual-based variance. Active bounds, deficient rank and
+nonconvergence withhold conditional local uncertainty; this is not model confidence.
+
 ## measure
 
 ```python
@@ -159,7 +234,7 @@ performing normalization or recalibrating the input energy axis.
 ## set_normalization_method
 
 ```python
-set_normalization_method(self, method: PrePostEdge | NormalizationMethod | None=None) -> Spectrum
+set_normalization_method(self, method: PrePostEdge | MBack | NormalizationMethod | None=None) -> Spectrum
 ```
 
 Copy the selected normalization method and clear normalization and later results.
@@ -265,7 +340,17 @@ and flat with its fitted post-edge trend removed. Missing E0 and
 automatic parameters are resolved from the data. Call norm(), flat(),
 pre_edge() and post_edge() to retrieve independent result arrays.
 This recomputes normalization, clears background/Fourier results and
-returns this spectrum. Invalid ranges, failed fits and MBack raise ValueError.
+returns this spectrum. Invalid ranges, failed fits and an empty MBack selector raise ValueError.
+
+## mback_result
+
+```python
+mback_result(self) -> MbackResult | None
+```
+
+Copy the latest full MBACK result, or None when absent/invalidated.
+
+Arrays and diagnostics remain independent after further processing.
 
 ## calc_background
 

@@ -26,7 +26,7 @@ use ruviz::render::Color as PlotColor;
 use ruviz_gpui::{RuvizPlot, plot_builder};
 
 use super::fit_workspace::FitStep;
-use super::{MONO, button, chip, section_label, segment, segmented};
+use super::{MONO, button, chip, section_label};
 use crate::app::StudioApp;
 use crate::settings::{UserSettings, default_amcsd_path};
 use crate::structure::{
@@ -2197,6 +2197,31 @@ impl StudioApp {
         crate::spectrum_interest::SpectrumInterest::infer(header, e0)
     }
 
+    pub(crate) fn structure_source_menu(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let mut menu = div().flex().flex_col().gap_1();
+        for kind in StructureSourceKind::ALL {
+            menu = menu.child(
+                button(
+                    &self.theme,
+                    format!("src-{}", kind.badge()),
+                    kind.label(),
+                    self.structure.source == kind,
+                )
+                .w_full()
+                .on_click(cx.listener(move |app, _, window, cx| {
+                    app.close_chrome_menu(window, cx);
+                    if app.structure.source != kind {
+                        app.structure.source = kind;
+                        app.structure.hits.clear();
+                        app.structure.search_error = None;
+                        app.structure_search(cx);
+                    }
+                })),
+            );
+        }
+        menu
+    }
+
     pub(crate) fn structure_library_panel(
         &self,
         cx: &mut Context<Self>,
@@ -2225,30 +2250,27 @@ impl StudioApp {
                 .text_color(t.text_muted)
                 .child(SharedString::from(text))
         };
-        let mut sources = segmented(&t);
-        for (i, k) in StructureSourceKind::ALL.into_iter().enumerate() {
-            sources = sources.child(
-                segment(
-                    &t,
-                    SharedString::from(format!("src-{}", k.badge())),
-                    k.label(),
-                    st.source == k,
-                    i == 0,
-                )
-                .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
-                    this.structure.source = k;
-                    this.structure.hits.clear();
-                    this.structure.search_error = None;
-                    this.structure_search(cx);
-                })),
-            );
-        }
         let mut panel = div()
+            .w_full()
             .flex()
             .flex_col()
+            .items_stretch()
+            .min_w_0()
             .gap_1p5()
             .px_3()
-            .child(div().flex().flex_wrap().child(sources));
+            .child(
+                button(
+                    &t,
+                    "structure-source",
+                    format!("{} ▾", st.source.label()),
+                    false,
+                )
+                .w_full()
+                .justify_between()
+                .on_click(cx.listener(|app, event, window, cx| {
+                    app.open_chrome_menu(super::controls::Menu::StructureSource, event, window, cx);
+                })),
+            );
 
         // Per-source configuration.
         match st.source {
@@ -2590,7 +2612,13 @@ impl StudioApp {
                         ),
                     );
             }
-            let count = format!("{} result{}", shown, if shown == 1 { "" } else { "s" });
+            let count = if st.source == StructureSourceKind::Cod
+                && shown == crate::structure::SEARCH_RESULT_LIMIT
+            {
+                format!("{shown} results · limit reached; refine search")
+            } else {
+                format!("{} result{}", shown, if shown == 1 { "" } else { "s" })
+            };
             if shown == 0 {
                 panel = panel.child(div().py_2().text_color(t.text_muted).child("No matches for these filters. Choose All materials or All types, or import your own CIF / XYZ."));
             }

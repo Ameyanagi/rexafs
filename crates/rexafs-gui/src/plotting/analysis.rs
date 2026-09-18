@@ -264,7 +264,7 @@ pub(crate) fn build_pca_diagnostic(
 
 /// Cosine similarity in the retained score subspace. Undefined zero vectors
 /// remain NaN (missing cells), rather than appearing to match another sample.
-fn pca_similarity(model: &PcaModel, retained: usize) -> Vec<Vec<f64>> {
+pub(crate) fn pca_similarity(model: &PcaModel, retained: usize) -> Vec<Vec<f64>> {
     let scores = model.scores.columns(0, retained.min(model.scores.ncols()));
     (0..scores.nrows())
         .map(|i| {

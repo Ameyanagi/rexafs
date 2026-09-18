@@ -44,8 +44,13 @@
     "node.d.ts",
     "types.d.ts",
     "spectrum.js",
+    "fluorescence.js",
     "configuration.js",
-    "measurement.js"
+    "measurement.js",
+    "peaks.js",
+    "licenses",
+    "mback.js",
+    "wavelet.js"
   ],
   "scripts": {
     "build": "node build.mjs",

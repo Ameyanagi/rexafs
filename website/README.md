@@ -87,9 +87,13 @@ ReFEFF 0.3.0 dependency; the two browser engines have separate manifests.
 `npm run dev` and `npm run build` first prepare both engines. Install `wasm-pack 0.15.0`
 and the `wasm32-unknown-unknown` target before either command. Cargo's binary
 directory must be on `PATH`; `REXAFS_WASM_PACK` can select an explicit executable.
-The build stages only browser runtime assets in ignored `public/wasm/` and writes
+The build stages the JavaScript runtime modules listed in the npm package,
+excluding its Node entry point, in ignored `public/wasm/`. It also stages the
+browser Wasm loader and binary and writes
 a manifest with the source commit, uncommitted-change flag and WASM SHA-256. The Worker verifies that hash
 before initialization; no source files are uploaded for processing.
+The website tests import the built engine and read the Cu example before the
+browser interaction tests, so an omitted runtime module fails with its filename.
 
 Import/setting limits are documented in `src/browser/input.ts` and tested with
 `npm test`. After normalization resolves E0, the preview checks that the inferred

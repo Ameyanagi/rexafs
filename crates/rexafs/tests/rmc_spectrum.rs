@@ -104,6 +104,29 @@ impl ExafsCalculator for Toy {
 }
 
 #[test]
+fn corrected_xanes_input_is_rejected_even_with_legacy_exafs_buffers() {
+    let processed = spectrum();
+    let original = Spectrum::from_arrays(
+        processed.energy.as_ref().unwrap().as_slice(),
+        processed.mu.as_ref().unwrap().as_slice(),
+    )
+    .unwrap();
+    let correction = rexafs::FluorescenceCorrection::new("CuO", "Cu", "K")
+        .line("Ka1")
+        .angles(45., 45.)
+        .e0(8980.);
+    let mut corrected = original.correct_fluorescence(&correction).unwrap();
+    // Legacy public caches, including those restored from a project, must not
+    // override a retained scientific-domain restriction at an EXAFS entry point.
+    corrected.background = processed.background.clone();
+    let before = serde_json::to_value(&corrected).unwrap();
+    let error = RmcDataset::from_spectrum(&corrected, options())
+        .expect_err("RMC must reject the corrected XANES-only branch");
+    assert!(error.to_string().contains("XANES only"), "{error}");
+    assert_eq!(serde_json::to_value(&corrected).unwrap(), before);
+}
+
+#[test]
 fn authoritative_samples_and_full_snapshot_are_unchanged() {
     let mut spectrum = spectrum();
     // Legacy slots and plotting weights must not override background getters.

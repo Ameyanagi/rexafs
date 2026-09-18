@@ -20,6 +20,7 @@ mod depth_controls;
 pub mod fit;
 pub(crate) mod fit_preview;
 pub mod fit_workspace;
+pub(crate) mod fluorescence;
 pub(crate) mod group_menu;
 pub mod groups_panel;
 pub mod handles;
@@ -32,16 +33,20 @@ pub mod inspector;
 mod joint_browser;
 pub(crate) mod joint_fit;
 pub mod journal;
+pub(crate) mod live;
 mod marked_removal;
 pub(crate) mod measurement_import;
 pub(crate) mod measurements;
 mod molecular_geometry;
 pub mod molecule_view;
+pub(crate) mod normalization;
 pub mod palette;
 pub(crate) mod parameter_actions;
 mod path_diagnostics;
 pub mod path_picker;
 pub(crate) mod path_routing;
+pub(crate) mod peaks;
+pub(crate) mod plot_export;
 pub(crate) mod publish;
 pub(crate) mod rmc;
 pub mod series;
@@ -116,6 +121,18 @@ impl Stage {
             Stage::Data | Stage::Normalize | Stage::Background | Stage::Transform
         )
     }
+
+    /// Limit fitted overlays to their owning stage without clearing the user's
+    /// toggle preferences, so returning to Normalize restores its fit.
+    pub(crate) fn plot_options(
+        self,
+        mut view: crate::plotting::ViewOptions,
+    ) -> crate::plotting::ViewOptions {
+        view.show_pre &= self == Self::Normalize;
+        view.show_post &= self == Self::Normalize;
+        view.show_bkg &= self == Self::Background;
+        view
+    }
 }
 
 /// Which groups the stage plots show (Athena: current vs marked).
@@ -145,7 +162,6 @@ pub enum BkgView {
 /// Transform stage main view.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TfView {
-    Wavelet,
     K,
     R,
     Q,
@@ -394,7 +410,7 @@ impl StudioApp {
             .then(|| self.groups_panel(cx).into_any_element());
         let inspector = (self.context_panel_open
             && (self.stage != Stage::Series
-                || (self.measurements.overview && self.series_ready()))
+                || (self.measurements.overview && !self.live.open && self.series_ready()))
             && !matches!(self.stage, Stage::Fit | Stage::Publish))
         .then(|| self.inspector(cx).into_any_element());
         let assistant = self.assistant_panel(cx);
@@ -454,6 +470,9 @@ impl StudioApp {
             )
             .child(self.status_bar(cx))
             .children(self.series_appearance_overlay(cx))
+            .children(self.wavelet_appearance_overlay(cx))
+            .children(self.live_recipe_overlay(cx))
+            .children(self.peak_menu_overlay(cx))
             .children(self.group_menu_overlay(cx))
             .children(self.palette_overlay(cx))
             .children(self.parameter_menu_overlay(cx))
@@ -649,5 +668,76 @@ impl StudioApp {
             .child(action("help", Icon::Help, "Help", false, |a, c| {
                 a.open_help(c)
             }))
+    }
+}
+
+#[cfg(test)]
+mod plot_overlay_tests {
+    #[test]
+    fn fitted_overlays_follow_stage_and_restore_on_return() {
+        use super::{Stage, Theme};
+        use crate::params::{PipelineParams, process_file};
+        use crate::plotting::{
+            QuadTrace, SeriesKey, ViewOptions, build_quadrant_specs, quantity_quadrant_specs,
+        };
+        use std::{path::Path, sync::Arc};
+        let file =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/projects/data/cu_150k.xmu");
+        let polynomial = process_file(&file, &PipelineParams::default()).unwrap();
+        let mut mback = polynomial.clone();
+        mback
+            .set_normalization_method(rexafs::MBack::for_edge("Cu", "K"))
+            .unwrap();
+        mback.calc_background().unwrap();
+        let preferences = ViewOptions {
+            show_pre: true,
+            show_post: true,
+            show_bkg: true,
+            ..Default::default()
+        };
+        for (spectrum, is_mback) in [(polynomial, false), (mback, true)] {
+            let traces = [QuadTrace {
+                color_index: 0,
+                color: None,
+                label: "Experimental Cu".into(),
+                sp: Arc::new(spectrum),
+                active: true,
+            }];
+            // Normalize -> Background -> every other stage -> Normalize again.
+            for stage in Stage::ALL.into_iter().chain([Stage::Normalize]) {
+                let visible = stage.plot_options(preferences);
+                let specs = quantity_quadrant_specs(
+                    &traces,
+                    &visible,
+                    &Theme::dark(),
+                    true,
+                    crate::params::Quantity::RawMu,
+                );
+                let keys = specs[0].series.iter().map(|s| s.key).collect::<Vec<_>>();
+                assert_eq!(keys.contains(&SeriesKey::Bkg), stage == Stage::Background);
+                assert_eq!(
+                    keys.contains(&SeriesKey::MbackFit),
+                    is_mback && stage == Stage::Normalize
+                );
+                for key in [SeriesKey::PreEdge, SeriesKey::PostEdge] {
+                    assert_eq!(keys.contains(&key), !is_mback && stage == Stage::Normalize);
+                }
+                if stage == Stage::Background {
+                    assert_eq!(keys, [SeriesKey::Trace(0), SeriesKey::Bkg]);
+                    // Turning Spline off also leaves no hidden normalization fit.
+                    let hidden = stage.plot_options(ViewOptions {
+                        show_bkg: false,
+                        ..preferences
+                    });
+                    assert_eq!(
+                        build_quadrant_specs(&traces, &hidden, &Theme::dark(), true)[0]
+                            .series
+                            .len(),
+                        1
+                    );
+                }
+            }
+        }
+        assert!(preferences.show_pre && preferences.show_post && preferences.show_bkg);
     }
 }

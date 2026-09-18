@@ -39,6 +39,7 @@ pub mod bessel_i0;
 pub mod errors;
 mod fft_grid;
 pub mod fitting;
+pub mod fluorescence;
 mod inverse_fft;
 pub mod io;
 /// Historical Levenberg–Marquardt solver settings.
@@ -48,6 +49,7 @@ pub mod lmutils;
 pub mod mathutils;
 #[cfg(not(feature = "ndarray-compat"))]
 pub mod mathutils;
+pub mod mback;
 #[cfg(feature = "ndarray-compat")]
 #[path = "normalization_ndarray.rs"]
 /// Pre/post-edge normalization and algorithm selection.
@@ -61,6 +63,7 @@ pub(crate) mod spline;
 pub mod structure;
 pub mod tools;
 pub mod transform;
+pub mod wavelet;
 #[cfg(feature = "ndarray-compat")]
 #[path = "xafsutils_ndarray.rs"]
 /// Wave-number conversion, windows, smoothing and edge-location helpers.

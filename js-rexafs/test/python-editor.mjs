@@ -15,7 +15,7 @@ const rootUri = pathToFileURL(directory).href;
 writeFileSync(join(directory, "pyrightconfig.json"), JSON.stringify({
   typeCheckingMode: "strict", pythonVersion: "3.10",
 }));
-const valid = `from rexafs import AUTOBK, Spectrum, XrayFFTF, XrayFFTR, FTWindow
+const valid = `from rexafs import AUTOBK, Spectrum, PeakFit, MBack, MbackErfc, Wavelet, WaveletMap, FluorescenceCorrection, XrayFFTF, XrayFFTR, FTWindow
 from rexafs.io import parse_measurement, SpectrumMapping
 measurement = parse_measurement("energy,mu\\n7100,1\\n7101,2")
 mapping: SpectrumMapping = {"energy_column":0,"energy":{"kind":"offset_ev","offset_ev":20000},"signal":{"kind":"direct","column":1}}
@@ -29,10 +29,34 @@ archived: list[float | None] | None = measurement.document["datasets"][0]["imagi
 print(archived, measurement.document["metadata"].get("larix.session_text"))
 window: FTWindow = "Hanning"
 spectrum = Spectrum([1., 2.], [1., 2.])
+correction = FluorescenceCorrection("CuO", "Cu", "K", line="Ka1", angles=(45,45))
+corrected = spectrum.correct_fluorescence(correction).normalize()
+corrected.set_absorption_mode("fluorescence")
+record = corrected.fluorescence_correction()
+if record is not None:
+    print(record.corrected_mu[0], record.definition, record.internal["norm"][0], record.atomic)
 spectrum.set_background_method(AUTOBK(rbkg=1.2)).set_fft(XrayFFTF(window=window)).set_ifft(XrayFFTR(rmin=1.0)).ifft()
 scalar = spectrum.measure("mean", (-20., 30.), space="flat")
 print(scalar.value, scalar.standard_error, scalar.range, scalar.to_json())
 spectrum.measure("point", 10.)
+wavelet = Wavelet((2.,12.), kweight=2)
+wavelet_map = spectrum.wavelet(wavelet)
+print(wavelet_map.real[0,0], wavelet_map.shape, wavelet_map.integral((4.,10.),(1.,3.)).value)
+print(wavelet_map.mean((4.,10.),(1.,3.)).value, wavelet_map.maximum((4.,10.),(1.,3.)).value)
+print(WaveletMap.from_json(wavelet_map.to_json()).warnings)
+atomic = MBack("Cu", "K", pre_edge=(-200., -50.), post_edge=(100., 800.), erfc=MbackErfc("Ka1", width=(500.,1500.), amplitude=(0.,10.)))
+normalized = atomic.fit([1.,2.], [1.,2.])
+print(normalized.norm[0], normalized.reference["data"]["data_sha256"])
+spectrum.set_normalization_method(atomic).normalize()
+saved = spectrum.mback_result()
+if saved is not None:
+    print(saved.objective, saved.definition)
+peak = PeakFit((-20., 40.)).gaussian("p1", center=5, area=2, fwhm=3).linear_baseline()
+fit = spectrum.fit_peaks(peak)
+print(fit.parameters["p1_center"], fit.components[0].area, fit.to_json())
+for row in peak.fit_batch([spectrum]):
+    if row.result is not None:
+        print(row.result.objective)
 chi = spectrum.chi()
 if chi is not None:
     print(chi[0])
@@ -128,6 +152,46 @@ XrayFFTF(window="")
   const scalarPosition = (line, character) => ({textDocument:{uri:scalarUri},position:{line,character}});
   assert.match(JSON.stringify(await request("textDocument/hover",scalarPosition(2,5))), /private copy/);
   assert.match(JSON.stringify(await request("textDocument/signatureHelp",scalarPosition(3,27))), /space/);
+  const peakText = 'from rexafs import Spectrum, PeakFit\ns = Spectrum([0., 1.], [1., 2.])\np = PeakFit((-20., 40.))\ns.fit_peaks\np.fit_batch\np.gaussian("p", \n';
+  const peakUri = pathToFileURL(join(directory, "peaks.py")).href;
+  send({ method: "textDocument/didOpen", params: { textDocument: { uri: peakUri, languageId: "python", version: 1, text: peakText } } });
+  const peakPosition = (line, character) => ({ textDocument: { uri: peakUri }, position: { line, character } });
+  assert.match(JSON.stringify(await request("textDocument/hover", peakPosition(3, 7))), /E0-relative/);
+  assert.match(JSON.stringify(await request("textDocument/hover", peakPosition(4, 7))), /one outcome per input/);
+  assert.match(JSON.stringify(await request("textDocument/signatureHelp", peakPosition(5, 16))), /fwhm/);
+  const peakKeywords = await request("textDocument/completion", peakPosition(5, 16));
+  assert.ok((peakKeywords.items ?? peakKeywords).some(x => x.label.startsWith("fwhm")));
+  const mbackText = 'from rexafs import MBack\nm = MBack("Cu", "K")\nm.fit\nMBack("Cu", "K", ';
+  const mbackUri = pathToFileURL(join(directory, "mback.py")).href;
+  send({method:"textDocument/didOpen",params:{textDocument:{uri:mbackUri,languageId:"python",version:1,text:mbackText}}});
+  const mbackPosition = (line,character) => ({textDocument:{uri:mbackUri},position:{line,character}});
+  assert.match(JSON.stringify(await request("textDocument/hover",mbackPosition(2,3))), /energy eV/);
+  assert.match(JSON.stringify(await request("textDocument/signatureHelp",mbackPosition(3,17))), /pre_edge/);
+  const mbackKeywords=await request("textDocument/completion",mbackPosition(3,17));
+  assert.ok((mbackKeywords.items ?? mbackKeywords).some(x=>x.label.startsWith("pre_edge")));
+  const waveletText = 'from rexafs import Wavelet, Spectrum\nw = Wavelet((2.,12.))\nr = Spectrum([0.,1.],[1.,2.]).wavelet(w)\nr.integral\nr.';
+  const waveletUri = pathToFileURL(join(directory,"wavelet.py")).href;
+  send({method:"textDocument/didOpen",params:{textDocument:{uri:waveletUri,languageId:"python",version:1,text:waveletText}}});
+  const waveletPosition=(line,character)=>({textDocument:{uri:waveletUri},position:{line,character}});
+  assert.match(JSON.stringify(await request("textDocument/hover",waveletPosition(3,4))),/native bilinear/);
+  const waveletMethods=await request("textDocument/completion",waveletPosition(4,2));
+  for (const name of ["slice_at_r", "mean", "maximum"])
+    assert.ok((waveletMethods.items??waveletMethods).some(x=>x.label===name));
+  // Keep constructor completion separate from the deliberately incomplete member access.
+  const waveletConstructorText = 'from rexafs import Wavelet\nWavelet((2.,12.), r';
+  const waveletConstructorUri = pathToFileURL(join(directory,"wavelet_constructor.py")).href;
+  send({method:"textDocument/didOpen",params:{textDocument:{uri:waveletConstructorUri,languageId:"python",version:1,text:waveletConstructorText}}});
+  const waveletConstructorPosition={textDocument:{uri:waveletConstructorUri},position:{line:1,character:waveletConstructorText.split("\n")[1].length}};
+  assert.match(JSON.stringify(await request("textDocument/signatureHelp",waveletConstructorPosition)),/kweight/);
+  const waveletKeywords=await request("textDocument/completion",waveletConstructorPosition);
+  assert.ok((waveletKeywords.items??waveletKeywords).some(x=>x.label.startsWith("rmax")), JSON.stringify((waveletKeywords.items??waveletKeywords).map(x=>x.label)));
+  const fluorescenceText = 'from rexafs import Spectrum, FluorescenceCorrection\ns = Spectrum([1.,2.],[1.,2.])\ns.correct_fluorescence\nFluorescenceCorrection("CuO","Cu","K", a';
+  const fluorescenceUri = pathToFileURL(join(directory,"fluorescence.py")).href;
+  send({method:"textDocument/didOpen",params:{textDocument:{uri:fluorescenceUri,languageId:"python",version:1,text:fluorescenceText}}});
+  const fluorescencePosition=(line,character)=>({textDocument:{uri:fluorescenceUri},position:{line,character}});
+  assert.match(JSON.stringify(await request("textDocument/hover",fluorescencePosition(2,7))),/XANES-only/);
+  const fluorescenceKeywords=await request("textDocument/completion",fluorescencePosition(3,fluorescenceText.split("\n")[3].length));
+  assert.ok((fluorescenceKeywords.items??fluorescenceKeywords).some(x=>x.label.startsWith("angles")));
   console.log("Installed Python wheel: property/method hovers, member/keyword/literal completion and signature defaults passed");
   await request("shutdown", null);
   send({ method: "exit", params: null });

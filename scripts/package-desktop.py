@@ -112,6 +112,7 @@ for package_id in sorted(included):
             dest = notices / f"{p['name']}-{p['version']}" / source.name
             dest.parent.mkdir(exist_ok=True)
             shutil.copy2(source, dest)
+shutil.copytree(root / "crates/rexafs/data/atomic", notices / "rexafs-atomic-data")
 (bundle / "dependencies.json").write_text(json.dumps(inventory, indent=2) + "\n")
 if "feff10-runner" in features:
     shutil.copytree(root / "assets/licenses/feff10-native", notices / "feff10-native")

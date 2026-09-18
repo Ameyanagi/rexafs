@@ -138,13 +138,14 @@ checkpoint, initial/best XYZ, configuration JSON preserving periodic cells,
 experimental/initial/best k and R CSV files, convergence settings/report and a
 Markdown summary. Ordinary XYZ alone does not preserve a periodic cell.
 
-Wavelet display is under **Transform → Wavelet**. It uses processed unweighted
-χ(k), applies the selected Transform k weight once, and displays magnitude, real
-or imaginary Morlet coefficients. Controls set Fourier-distance limits, carrier
-frequency and grid sizes. R is Fourier distance, not a phase-corrected bond length.
-This map does not change the RMC objective. The shared
-`rexafs::transform::LocalSpectrumTransform` also supports Gaussian STFT and direct
-or FFT evaluation; the existing RMC API retains its numerical/error compatibility.
+Wavelet display is under **Transform → Wavelet**. After integration with the
+current `dev` branch, the desktop uses its retained Cauchy-wavelet workspace,
+including linked plots, region measurements and saved map history; see
+[Wavelet analysis](wavelet-analysis.md). This display does not change the RMC
+objective. The RMC-compatible Morlet and Gaussian STFT implementation remains in
+`rexafs::transform::LocalSpectrumTransform`, with direct and FFT evaluation.
+These are distinct wavelet conventions; no numerical equivalence is implied.
+The earlier Morlet desktop preview is superseded by the Cauchy workspace.
 
 ## Scope and implementation
 
@@ -231,3 +232,13 @@ window with dk = 4.0 Å⁻¹. S₀² = 0.9840213777547031 and
 ΔE₀ = 8.762386660183811 eV were fixed during moves. Its objective/window differ
 from the archived scientific comparison, so the scores are not directly
 comparable. This is a native workflow qualification, not a converged refinement.
+
+### Integration with current dev
+
+Before merging PR 89, the branch was integrated with PR 88. Its retained Cauchy
+wavelet workspace, fluorescence/normalization tools and Live acquisition remain
+available. The earlier standalone Morlet desktop adapter was removed; its shared
+Rust numerical API is unchanged. Numeric fields retain both live-preview events
+and the newer precision-preserving display formatting. The native screenshots
+above document the pre-integration RMC review; automated checks also cover the
+combined branch.

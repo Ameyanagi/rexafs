@@ -183,6 +183,12 @@ fn run_merge(inputs: Vec<MergeInput>, cancel: &AtomicBool) -> Result<DerivedSpec
         inputs: inputs.iter().map(|i| i.target.operation_input()).collect(),
         applied_energy_shift_ev: 0.0,
     };
+    let corrections = crate::fluorescence_history::combine(
+        inputs
+            .iter()
+            .filter_map(|i| i.derived.as_ref())
+            .map(|d| d.corrections.as_slice()),
+    );
     let mut seen = Vec::new();
     let mut acc: Option<StreamingAverage> = None;
     // Keep only the accumulator, one raw input, and scalar compatibility data.
@@ -223,6 +229,7 @@ fn run_merge(inputs: Vec<MergeInput>, cancel: &AtomicBool) -> Result<DerivedSpec
         .finish()
         .map_err(|e| format!("merge refused ({label}): {e}"))?;
     Ok(DerivedSpectrum {
+        corrections,
         declared_edge: seen.first().and_then(|info| info.declared_edge.clone()),
         label,
         energy,
@@ -412,7 +419,7 @@ impl StudioApp {
             let merged = run_merge(inputs, &AtomicBool::new(false))?;
             let mut after = XASSpectrum::new();
             after.set_spectrum(merged.energy, merged.mu);
-            crate::plotting::build_tool_preview(&before, &after, None, false, &theme)
+            crate::plotting::build_tool_preview(&before, &after, None, false, None, &theme)
         });
         cx.spawn(async move |this, cx| {
             let result = job.await;
@@ -935,18 +942,28 @@ mod tests {
 
     #[test]
     fn merge_accepts_repeated_energy_points_in_template_and_other_input() {
-        let mut a = input(DERIVED_BASE, "repeated A", 2.);
-        let mut b = input(DERIVED_BASE + 1, "repeated B", 4.);
-        for input in [&mut a, &mut b] {
-            let data = input.derived.as_mut().unwrap();
-            data.energy.insert(100, data.energy[100]);
-            data.mu.insert(100, data.mu[100]);
-        }
-        let expected_grid = a.derived.as_ref().unwrap().energy.clone();
-        let output = run_merge(vec![a, b], &AtomicBool::new(false)).unwrap();
-        assert_eq!(output.energy, expected_grid);
-        for (&e, &mu) in output.energy.iter().zip(&output.mu) {
-            assert!((mu - (3. + edge_mu(e, 9000.))).abs() < 1e-12);
+        for offset in [0., 2.5] {
+            let mut a = input(DERIVED_BASE, "repeated A", 2.);
+            let mut b = input(DERIVED_BASE + 1, "repeated B", 4.);
+            for input in [&mut a, &mut b] {
+                input.params.set_energy_offset(offset).unwrap();
+                let data = input.derived.as_mut().unwrap();
+                data.energy.insert(100, data.energy[100]);
+                data.mu.insert(100, data.mu[100]);
+            }
+            let expected_grid: Vec<_> = a
+                .derived
+                .as_ref()
+                .unwrap()
+                .energy
+                .iter()
+                .map(|e| e + offset)
+                .collect();
+            let output = run_merge(vec![a, b], &AtomicBool::new(false)).unwrap();
+            assert_eq!(output.energy, expected_grid);
+            for (&e, &mu) in output.energy.iter().zip(&output.mu) {
+                assert!((mu - (3. + edge_mu(e - offset, 9000.))).abs() < 1e-12);
+            }
         }
         let mut descending = input(DERIVED_BASE, "descending", 0.);
         let data = descending.derived.as_mut().unwrap();

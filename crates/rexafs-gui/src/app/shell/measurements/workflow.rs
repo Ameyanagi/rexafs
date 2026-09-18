@@ -135,6 +135,8 @@ impl StudioApp {
         self.measurements.selected_recipe = None;
         self.measurements.selected_preset = None;
         self.measurements.preset_name = None;
+        self.measurements.wavelet = None;
+        self.measurements.wavelet_preview = None;
         self.measurements.kind = 1;
         self.measurements.preview_full = false;
         self.measurements.space = MeasurementSpace::Flat;
@@ -239,6 +241,12 @@ impl StudioApp {
             .runs
             .get(index)
             .map(|r| {
+                if let Some(w) = &r.definition.wavelet {
+                    return format!(
+                        "{} · k {:.2}…{:.2} Å⁻¹ · R {:.2}…{:.2} Å · saved",
+                        r.definition.name, w.k_range[0], w.k_range[1], w.r_range[0], w.r_range[1]
+                    );
+                }
                 if r.definition.edge_energy {
                     return "Edge energy · saved".into();
                 }
@@ -391,6 +399,7 @@ mod tests {
             name: "Mean".into(),
             measurement: Measurement::mean(0.0..=1.0).raw_mu().absolute(),
             edge_energy: false,
+            wavelet: None,
         };
         let run = SeriesRun::new(&series, definition, &inputs);
         (series, run, registry)
@@ -447,15 +456,18 @@ mod tests {
         let (_, mut run, _) = fixture(513);
         for (i, row) in run.rows.iter_mut().enumerate() {
             let value = if i == 257 { 19. } else { 1. };
-            row.result = Some(rexafs::prelude::MeasurementResult {
-                measurement: run.definition.measurement.clone(),
-                value,
-                position: None,
-                range: [0., 1.],
-                standard_error: None,
-                unit: "μ".into(),
-                e0_ev: None,
-            });
+            row.result = Some(
+                rexafs::prelude::MeasurementResult {
+                    measurement: run.definition.measurement.clone(),
+                    value,
+                    position: None,
+                    range: [0., 1.],
+                    standard_error: None,
+                    unit: "μ".into(),
+                    e0_ev: None,
+                }
+                .into(),
+            );
         }
         run.rows[256].result = None;
         let values = retained_values(Some(&run), 513, true);

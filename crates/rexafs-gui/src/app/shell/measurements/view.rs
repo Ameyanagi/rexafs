@@ -6,6 +6,9 @@ use gpui::{IntoElement, ParentElement, Styled, div, prelude::*, px};
 
 impl StudioApp {
     pub(crate) fn series_stage_center(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        if self.live.open {
+            return self.live_center(cx);
+        }
         self.monitor_measurements(cx);
         if !self.measurements.initialized {
             self.measurements.initialized = true;
@@ -97,6 +100,7 @@ impl StudioApp {
         let t = self.theme;
         self.ensure_measurement_fields(cx);
         let running = self.measurements.cancel.is_some();
+        let wavelet = self.measurements.wavelet.is_some();
         let mut body = div()
             .id("full-frame-measurements")
             .flex_1()
@@ -133,7 +137,11 @@ impl StudioApp {
             if !self.measurements.message.is_empty() {
                 body = body.child(self.measurements.message.clone());
             }
-            if let Some(plot) = &self.measurements.preview {
+            if self.measurements.wavelet_preview.is_some() {
+                body = body
+                    .child(self.measurements.preview_label.clone())
+                    .child(self.wavelet_trend_plot(cx));
+            } else if let Some(plot) = &self.measurements.preview {
                 body = body
                     .child(self.measurements.preview_label.clone())
                     .child(div().h(px(300.)).min_h(px(300.)).child(plot.clone()));
@@ -241,17 +249,22 @@ impl StudioApp {
                         )
                         .on_click(cx.listener(|app, _, _, cx| app.check_measurement_inputs(cx))),
                     );
-                body = body.child(export).child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(t.text_muted)
-                    .child(format!(
+                let caption = if run.definition.wavelet.is_some() {
+                    self.measurement_trend_name(self.measurements.selected_run.unwrap())
+                } else {
+                    format!(
                         "Retained run · series revision {} · {:?} · {:?} · no inferred uncertainty",
                         run.series_revision,
                         run.definition.measurement.space,
                         run.definition.measurement.origin
-                    )),
-            );
+                    )
+                };
+                body = body.child(export).child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(t.text_muted)
+                        .child(caption),
+                );
                 let result_count = run.rows.len();
                 let begin =
                     (self.measurements.page * 50).min(result_count.saturating_sub(1) / 50 * 50);
@@ -394,10 +407,17 @@ impl StudioApp {
                     label,
                     self.measurements.kind == index,
                 )
+                .when(wavelet && (index == 0 || index == 4), |d| {
+                    d.disabled(true).opacity(0.4)
+                })
                 .on_click(cx.listener(move |app, _, _, cx| {
                     app.measurements.kind = index;
                     app.clear_measurement_handles();
-                    app.preview_measurement(cx);
+                    if app.measurements.wavelet.is_some() {
+                        app.update_wavelet_trend_region(cx);
+                    } else {
+                        app.preview_measurement(cx);
+                    }
                 })),
             );
         }
@@ -420,7 +440,7 @@ impl StudioApp {
                         &t,
                         ("measurement-space", index),
                         label,
-                        self.measurements.space == space,
+                        !wavelet && self.measurements.space == space,
                     )
                     .on_click(cx.listener(move |app, _, _, cx| {
                         let was_energy = matches!(
@@ -431,6 +451,8 @@ impl StudioApp {
                             space,
                             MeasurementSpace::Mu | MeasurementSpace::Norm | MeasurementSpace::Flat
                         );
+                        app.measurements.wavelet = None;
+                        app.measurements.wavelet_preview = None;
                         app.measurements.space = space;
                         app.clear_measurement_handles();
                         app.measurements.relative = energy;
@@ -449,41 +471,50 @@ impl StudioApp {
                     })),
                 );
             }
-            body = body.child(spaces);
-            let mut range = div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap_2()
-                .child(div().w(px(240.)).child(self.measurements.fields[0].clone()));
-            if self.measurements.kind != 0 {
-                range = range.child(div().w(px(240.)).child(self.measurements.fields[1].clone()));
-            }
-            let energy = matches!(
-                self.measurements.space,
-                MeasurementSpace::Mu | MeasurementSpace::Norm | MeasurementSpace::Flat
+            spaces = spaces.child(
+                button(&t, "measurement-wavelet-space", "Wavelet", wavelet)
+                    .on_click(cx.listener(|app, _, _, cx| app.choose_wavelet_trend(cx))),
             );
-            if energy {
-                range = range.child(
-                    button(
-                        &t,
-                        "measurement-origin",
-                        if self.measurements.relative {
-                            "eV from E₀"
-                        } else {
-                            "eV absolute"
-                        },
-                        false,
-                    )
-                    .on_click(cx.listener(|app, _, _, cx| {
-                        app.measurements.relative = !app.measurements.relative;
-                        app.preview_measurement(cx);
-                    })),
-                );
+            body = body.child(spaces);
+            if wavelet {
+                body = body.child(self.wavelet_trend_controls(cx));
             } else {
-                range = range.child(axis_label(self.measurements.space));
+                let mut range = div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .child(div().w(px(240.)).child(self.measurements.fields[0].clone()));
+                if self.measurements.kind != 0 {
+                    range =
+                        range.child(div().w(px(240.)).child(self.measurements.fields[1].clone()));
+                }
+                let energy = matches!(
+                    self.measurements.space,
+                    MeasurementSpace::Mu | MeasurementSpace::Norm | MeasurementSpace::Flat
+                );
+                if energy {
+                    range = range.child(
+                        button(
+                            &t,
+                            "measurement-origin",
+                            if self.measurements.relative {
+                                "eV from E₀"
+                            } else {
+                                "eV absolute"
+                            },
+                            false,
+                        )
+                        .on_click(cx.listener(|app, _, _, cx| {
+                            app.measurements.relative = !app.measurements.relative;
+                            app.preview_measurement(cx);
+                        })),
+                    );
+                } else {
+                    range = range.child(axis_label(self.measurements.space));
+                }
+                body = body.child(range);
             }
-            body = body.child(range);
         }
         let mut preview_controls = div()
             .flex()
@@ -503,18 +534,23 @@ impl StudioApp {
                 button(&t, "measurement-preview", "Refresh", false)
                     .on_click(cx.listener(|app, _, _, cx| app.preview_measurement(cx))),
             );
-        preview_controls = preview_controls.child(
-            button(
-                &t,
-                "measurement-full-preview",
-                "Full spectrum",
-                self.measurements.preview_full,
-            )
-            .on_click(cx.listener(|app, _, _, cx| {
-                app.measurements.preview_full = !app.measurements.preview_full;
-                app.preview_measurement(cx);
-            })),
-        );
+        if !wavelet {
+            preview_controls = preview_controls.child(
+                button(
+                    &t,
+                    "measurement-full-preview",
+                    "Full spectrum",
+                    self.measurements.preview_full,
+                )
+                .on_click(cx.listener(|app, _, _, cx| {
+                    app.measurements.preview_full = !app.measurements.preview_full;
+                    app.preview_measurement(cx);
+                })),
+            );
+        }
+        if !wavelet {
+            preview_controls = preview_controls.child(self.plot_ranges_button(cx));
+        }
         body = body.child(preview_controls);
         let mut controls = div().flex().items_center().gap_2();
         if running {
@@ -576,7 +612,9 @@ impl StudioApp {
                 .text_size(px(12.))
                 .child(self.measurements.preview_label.clone()),
         );
-        if let Some(plot) = &self.measurements.preview {
+        if self.measurements.wavelet_preview.is_some() {
+            body = body.child(self.wavelet_trend_plot(cx));
+        } else if let Some(plot) = &self.measurements.preview {
             body = body.child(
                 div()
                     .id("measurement-preview-card")

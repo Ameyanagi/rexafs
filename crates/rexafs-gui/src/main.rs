@@ -23,11 +23,20 @@ mod import_recipes;
 mod joint_fitting;
 mod licenses;
 mod params;
+mod plot_export;
 mod plotting;
 mod project;
 mod publication;
 mod rmc_fitting;
 mod series_measurements;
+// Live intake is not connected to the desktop until queue/recovery qualification.
+mod analysis_store;
+mod fluorescence_history;
+mod live;
+#[allow(dead_code)]
+mod live_intake;
+mod normalization_history;
+mod peak_fits;
 mod settings;
 mod source_evidence;
 mod spectrum_colors;
@@ -35,7 +44,7 @@ mod spectrum_interest;
 mod structure;
 mod theme;
 mod updates;
-mod wavelet;
+mod wavelet_history;
 mod widgets;
 
 use std::path::PathBuf;

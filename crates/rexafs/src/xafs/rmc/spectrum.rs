@@ -116,6 +116,9 @@ impl RmcSpectrumSource {
 }
 
 fn processed(spectrum: &Spectrum) -> Result<(&[f64], &[f64], f64), RmcError> {
+    spectrum
+        .ensure_exafs_allowed()
+        .map_err(|e| RmcError::Invalid(e.to_string()))?;
     let k = spectrum.k().ok_or_else(|| {
         RmcError::Invalid(
             "spectrum has no processed k; call calc_background() explicitly first".into(),
@@ -177,7 +180,9 @@ impl RmcDataset {
     /// The default objective is the squared real-plus-imaginary residual divided
     /// by experimental power in the SAME R window. Missing/invalid processing,
     /// empty selections, invalid scales, zero normalization power and unsupported
-    /// fitting settings return [`RmcError::Invalid`]. Geometry-dependent absorber
+    /// fitting settings return [`RmcError::Invalid`]. A fluorescence-corrected
+    /// XANES-only spectrum is rejected even if legacy EXAFS buffers are present.
+    /// Geometry-dependent absorber
     /// checks occur at session creation. No files are written here.
     ///
     /// ```no_run

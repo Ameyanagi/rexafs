@@ -252,6 +252,10 @@ impl StudioApp {
                         .items_center()
                         .justify_center()
                         .gap_3()
+                        .child(
+                            button(&t, "series-live-empty", "Live acquisition…", false)
+                                .on_click(cx.listener(|app, _, _, cx| app.open_live(cx))),
+                        )
                         .when(running, |d| d.child("Building overview…"))
                         .when(!running, |d| {
                             d.child(
@@ -317,6 +321,11 @@ impl StudioApp {
             .gap_2()
             .child(div().flex_1().child("Heatmap"))
             .child(self.series_appearance_buttons(cx))
+            .child(self.plot_export_button(
+                "series-map-export",
+                super::plot_export::Target::SeriesMap,
+                cx,
+            ))
             .into_any_element();
         let card = |heading: gpui::AnyElement| {
             div()
@@ -422,9 +431,17 @@ impl StudioApp {
                             .child(
                                 card(
                                     div()
-                                        .child(format!(
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(div().flex_1().child(format!(
                                             "frame {} · {space_label}",
                                             self.time_pos + 1
+                                        )))
+                                        .child(self.plot_export_button(
+                                            "series-frame-export",
+                                            super::plot_export::Target::SeriesFrame,
+                                            cx,
                                         ))
                                         .into_any_element(),
                                 )
@@ -443,7 +460,17 @@ impl StudioApp {
                             .child(
                                 card(
                                     div()
-                                        .child(format!("trend · {trend_name}"))
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(
+                                            div().flex_1().child(format!("trend · {trend_name}")),
+                                        )
+                                        .child(self.plot_export_button(
+                                            "series-trend-export",
+                                            super::plot_export::Target::SeriesTrend,
+                                            cx,
+                                        ))
                                         .into_any_element(),
                                 )
                                 .flex_1()
@@ -527,6 +554,8 @@ impl StudioApp {
                 .on_click(cx.listener(|app, _, window, cx| { app.begin_series_trend(cx); app.operando_focus.focus(window, cx); })))
             .child(button(&t, "series-results", "Results…", false)
                 .on_click(cx.listener(|app, _, _, cx| app.series_results(cx))))
+            .child(button(&t, "series-live", "Live…", false)
+                .on_click(cx.listener(|app, _, _, cx| app.open_live(cx))))
             .child(icon_button(&t, "series-shortcuts", Icon::Help, "Click a heatmap row to jump. ←/→: frame; Shift+←/→: 1%; Home/End: first/last.", false))
     }
 

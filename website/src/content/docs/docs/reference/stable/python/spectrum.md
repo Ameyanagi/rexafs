@@ -211,7 +211,7 @@ and flat with its fitted post-edge trend removed. Missing E0 and
 automatic parameters are resolved from the data. Call norm(), flat(),
 pre_edge() and post_edge() to retrieve independent result arrays.
 This recomputes normalization, clears background/Fourier results and
-returns this spectrum. Invalid ranges, failed fits and MBack raise ValueError.
+returns this spectrum. Invalid ranges, failed fits and an empty MBack selector raise ValueError.
 
 ## calc_background
 

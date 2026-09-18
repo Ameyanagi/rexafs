@@ -17,7 +17,78 @@ defaults. Copying all processing settings does not also copy column mappings or
 reference calibration; copying a column mapping is a separate guarded action.
 An Auto request is copied as Auto, so its resolved value can differ by spectrum.
 
+## Alignment (unreleased)
+
+In **Data → Align to reference**, choose a standard. The preview shows dμ/dE
+over the alignment window, initially −50 to +100 eV relative to the reference
+E₀. Original, aligned and reference derivatives retain their own energy grids;
+each is divided by its largest absolute derivative in that window for visual
+comparison. This display scaling does not change the absorption arrays or fit.
+
+**Manual shift (eV)** adds to the automatic correction. Use the arrows for
+0.1 eV steps, or enter a value; positive values move the aligned spectrum toward
+higher energy. Zero keeps the automatic result. The preview updates after each
+committed edit. **Apply offset** saves the total energy offset on the current
+group, retaining the original arrays and recording the reference, fit window,
+automatic correction and manual adjustment.
+
+In **Data → Source**, **Offset (eV)** is the active, editable energy correction:
+the displayed energy is the original energy plus this constant. **Zero** removes
+it; entering the same value twice does not accumulate shifts. Explicit
+normalization and background E₀ settings move with the change in offset, and
+processing caches are invalidated. Undo restores the previous setting. Project
+files retain the offset and alignment record, including when the offset is reset.
+An older group's correction already stored in its arrays, or separate
+reference-channel calibration, is not removed by this control.
+
+The automatic alignment uses the core derivative-matching implementation in
+[`align_to`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs/src/xafs/xasspectrum.rs),
+with the manual correction applied afterward. See the
+[processing theory](/docs/science/processing/) for algorithm details.
+
+Rust users can set and read the correction directly on `Spectrum` in the
+unreleased source checkout:
+
+```rust
+spectrum.set_energy_offset(3.5)?; // total offset in eV
+let offset_ev = spectrum.energy_offset();
+spectrum.set_energy_offset(0.0)?; // remove the recorded correction
+```
+
+No settings or history struct is required for this operation. The setter uses
+the existing `energy_shift` state, adjusts both energy grids and E₀ settings,
+and invalidates derived results when the offset changes. `shift_energy(delta)`
+remains available for incremental corrections. The GUI uses the same checked
+core setter on an owned source-axis buffer, retaining original project data.
+In a standalone core spectrum, zero removes recorded constant shifts to
+floating-point precision; it does not undo truncation, smoothing or other data
+edits. Replacing arrays with `set_spectrum` starts a new baseline at zero offset.
+Python and TypeScript exposure of these energy-offset methods remains pending.
+
 ## Normalization
+
+**Unreleased source checkout:** choose **Polynomial** or **MBACK** in the
+Normalize sidebar. MBACK shows absorber, edge and optional erfc-background
+settings in that same panel. A declared source absorber/edge lets it calculate
+on selection; otherwise enter them and choose **Apply**. The ordinary plot and
+range handles stay visible. **Atomic match…** and **Compare methods…** open
+optional diagnostics within Normalize. See the [MBACK guide](https://github.com/Ameyanagi/rexafs/blob/feature/analysis-b-f/doc/mback-normalization.md)
+for the model, assumptions and retained results.
+The fit toggle follows the selected method: **Pre/post** shows polynomial
+baselines; **MBACK fit** shows the complete fitted atomic model over the
+measured μ(E), without auxiliary pre/post lines. Enabling the toggle selects
+μ(E), so the fitted curve shares the original absorption units. Plot/data
+exports include the fit while visible.
+These fits are limited to Normalize; Background shows only its **Spline**
+overlay. Switching tabs preserves each toggle's preference.
+
+**Unreleased source checkout:** the range icon between **Colors** and **Overview plots**
+in the plot toolbar toggles shaded
+selection windows and their drag handles across processing, fitting and analysis
+plots. Hiding them preserves the numerical ranges and processing results. The
+icon stays in place; its tooltip changes between **Hide plot ranges** and
+**Show plot ranges**. The separate **Window** control in Transform displays the
+Fourier taper curve.
 
 Set $E_0$ or leave it automatic. Pre/post-edge range controls are offsets from $E_0$
 in eV. Choose a meaningful baseline on either side of the edge. **norm** subtracts
@@ -73,6 +144,26 @@ and [AUTOBK objective](/docs/science/autobk/).
 
 ## Forward transform
 
+**Unreleased source checkout:** the Transform view selector contains
+**k**, **R**, **k + R**, **q**, and **Wavelet**. It remains visible in all five
+views. In Wavelet, **Magnitude**, **Real**, **Imaginary** and **Phase** appear
+immediately to the right of that selector. Switching back to Wavelet preserves
+its map when the spectrum and processing settings are unchanged.
+**Wavelet settings** sits between Forward
+FT and Back FT in the parameter panel. It is collapsed initially and opens when
+you select Wavelet. The map updates automatically after committed parameter edits
+and stepper clicks; calculations run in the background after a short pause.
+**Colors** and **Export** are at the top right. The History menu has been removed;
+existing saved results remain preserved. Region measurements live in **Series → Add trend → Wavelet**:
+copy the Transform settings, choose Integral, Maximum or Mean, drag the k–R
+rectangle and calculate all frames. Saved trends retain the settings and both
+intervals. The wavelet map has the k spectrum below
+it and the R spectrum to its left. Their plotting areas align, and zooming or
+panning shares the matching k or R axis. **Spectra** shows the measured χ and
+Fourier magnitude; **Slices** shows wavelet magnitude at a selected coordinate.
+See the [wavelet guide](https://github.com/Ameyanagi/rexafs/blob/feature/analysis-b-f/doc/wavelet-analysis.md)
+for interpretation, settings, retained maps and region integration.
+
 The recommended starting window is 2–15 Å⁻¹ with $k$ weight 2, taper parameter
 $dk=1$ Å⁻¹ and a Kaiser–Bessel window. Shorten the range for a noisier or narrower
 measurement. View **k**, **R**, or **k + R**, and enable real/imaginary components
@@ -100,12 +191,54 @@ transform; it is not generally the original unweighted $\chi(k)$.
 [Processing theory](/docs/science/processing/) defines the normalization and
 Fourier signs, scales, units and limitations.
 
+## Fluorescence correction (development preview)
 
-## Development preview: Wavelet
+This workflow is **unreleased** and available in the development source checkout.
+Select uncorrected μ(E), then **Data → Fluorescence correction…**. Enter the full
+sample composition, absorber, edge, emission line and measured incident/exit
+angles in degrees from the sample surface. For example, `Ka1` selects one line;
+`family:Ka` explicitly selects an unresolved family. Geometry has no defaults.
 
-The unreleased **Transform → Wavelet** view displays magnitude, real or imaginary
-Morlet coefficients from processed χ(k). It uses the Transform k range and
-applies its k weight once; it does not repeat background removal or change a
-fitting objective. R is Fourier distance, not a phase-corrected bond length.
-The Morlet width and map grid are adjustable. This development view is not
-available in the released 0.2.9 desktop.
+Confirm the fluorescence input and select **Preview** to compare original and
+corrected μ(E). **Factor** shows the amplification. **Internal normalization**
+exposes optional E₀ and pre/post intervals in eV from E₀; **Calculation notes**
+contains the applicability and numerical diagnostics. The default internal
+post-edge polynomial is linear. It is separate from final normalization.
+
+**Add corrected spectrum →** retains the original and creates a new group, then
+opens **Normalize** for independent polynomial or MBACK processing. Reopen the
+correction tool on that group to inspect or export its historical calculation.
+Choose **Include source files** when saving a portable project to include the
+correction history and original arrays.
+
+This homogeneous, optically thick model is limited to XANES, following the
+[Larch applicability guidance](https://xraypy.github.io/xraylarch/xafs_preedge.html#over-absorption-corrections).
+Known transmission imports and repeated correction are rejected. Corrected groups
+and their calculated descendants retain this limit: use the original spectrum
+for EXAFS background removal, transforms, fitting or wavelets. Energy-space
+LCF/PCA/MCR remain available. See the development
+[Python](/docs/reference/next/python/fluorescencecorrection/) and
+[TypeScript](/docs/reference/next/typescript/fluorescencecorrection/) references
+for the same native calculation outside the desktop.
+
+## Exporting a displayed plot (unreleased)
+
+Use **Export** on a processing or comparison plot, an LCF/PCA/MCR result, a Series
+heatmap/frame/trend, or the Wavelet toolbar. Choose **Data · CSV**, **Image · PNG**,
+or **Vector image · SVG**. Plot images retain the current axis bounds.
+
+Comparison CSVs contain every displayed spectrum, with its complete label, axis
+labels and independent x/y coordinates. Different grids are not interpolated to
+a shared grid. Zoom does not trim the exported curves. A sampled preview exports
+its plotted subset; choose **Plot all** before exporting the full comparison.
+CSV uses a long table (`series_index`, `series`, `point`, `x_label`, `y_label`, `x`, `y`), with blank
+cells for missing values. Display offsets in waterfall and residual plots are
+retained. PCA and MCR diagnostic values retain true zeros rather than the small
+positive floor used to display them on a logarithmic axis.
+
+Series heatmap CSVs contain the overview's sampled rows, identified by their
+one-based frame labels. Difference mode exports the differences and identifies
+the reference in the value label. Trend coordinates retain the plot's zero-based
+frame axis. Use the existing Series result export for complete per-frame
+measurement tables. Wavelet CSVs contain the native grid and complex values; the
+additional JSON option includes original arrays and processing provenance.

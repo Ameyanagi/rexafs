@@ -18,6 +18,12 @@ exclude = [
     "/tests/fixtures/sessions/",
     "/tests/fixtures/analysis/",
     "/tests/cu_mixture_recovery.rs",
+    "/tests/peak_fitting.rs",
+    "/tests/atomic_reference.rs",
+    "/tests/mback_reference.rs",
+    "/tests/fluorescence_reference.rs",
+    "/tests/wavelet_reference.rs",
+    "/tests/experimental_analysis_reference.rs",
     "/tests/beamline_formats.rs",
     "/tests/measurement_fixtures.rs",
     "/tests/measurement_fixtures/",
@@ -60,6 +66,8 @@ base64 = "0.23.1"
 hdf5-pure = "0.45.0"
 encoding_rs = "0.8"
 regex = "1"
+# Pin interpolation and the embedded atomic dataset as a processing-version input.
+xraydb = "=0.4.1"
 rand = { version = "0.9", default-features = false, features = ["std"] }
 rand_chacha = { version = "0.9", features = ["serde"] }
 sha2 = "0.11"
