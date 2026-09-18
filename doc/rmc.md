@@ -70,6 +70,42 @@ Implementation: [energy search](../crates/rexafs/src/xafs/rmc/energy_refinement.
 [state representation](../crates/rexafs/src/xafs/rmc/ensemble.rs).
 These additions are not part of published 0.2.10 or its Python/TypeScript APIs.
 
+## Unreleased: absorber-first CPU parallelism
+
+The prepared calculator has one bounded Rayon pool. Its `workers` setting is the
+total CPU thread budget, not a process count. Independent absorbers run concurrently
+first. With `parallel_paths: true`, a batch with fewer absorbers than workers can
+also evaluate independent scattering paths concurrently using the same pool.
+This includes calculations with a single absorbing site. The two levels do not
+multiply the thread count. Electronic preparation remains serial across contexts;
+identical electronic inputs can still share preparation.
+
+```rust
+use rexafs::rmc::AccelerationSettings;
+let acceleration = AccelerationSettings {
+    workers: 4,
+    parallel_paths: true,
+    ..Default::default()
+};
+```
+
+`workers` accepts 1–64. The core defaults remain one worker and no path fallback
+for compatibility. The GUI enables automatic parallelism for new jobs, choosing
+available logical CPUs up to 64. Users can set a smaller or larger explicit budget
+within that limit. More threads can increase temporary memory and do not guarantee
+lower elapsed time. Compare complete runs on the intended hardware.
+
+Path spectra are summed in catalogue order and absorbers in request order, keeping
+floating-point reductions independent of scheduling. Cached results, rejected
+trials and cancellation retain the existing rules. Coordinate attempts and
+energy-search stages remain sequential. Worker settings are captured in a job's
+calculator identity; resume keeps them rather than redetecting CPUs.
+`RefeffOptions::threads` separately controls internal backend preparation and
+remains one by default. It does not accelerate the later prepared path loop.
+
+Implementation: [bounded pool and path evaluation](../crates/rexafs/src/xafs/rmc/accelerated.rs),
+[desktop job settings](../crates/rexafs-gui/src/rmc_fitting.rs).
+
 ## Default calculator and experimental adaptive mode
 
 Use `PreparedRefeffCalculator` with `AccelerationSettings::default()` for the

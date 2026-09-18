@@ -189,6 +189,37 @@ equal elapsed times. Experimental measurements, derived results and detailed
 timing reports remain local-only. The 250-attempt default is a starting heuristic;
 these short budgets cannot establish an optimal cadence or physical accuracy.
 
+## CPU parallelism validation
+
+The unreleased CPU controls pass seven ReFEFF integration tests, eight
+spectrum-input tests, 30 session tests and 16 desktop RMC tests. One manual
+large-cell desktop test remains ignored. Strict core Clippy with ReFEFF enabled,
+formatting, whitespace checks, the optimized desktop build and website diagnostics
+pass. These targeted counts supersede the corresponding counts above.
+
+The parallelism regression compares serial execution with two and eight workers,
+with and without the path fallback. It uses the bundled CuO crystal, checks
+multiple and single absorbing sites, and compares complete spectra and individual
+path contributions exactly after moving and restoring a geometry. It also checks
+cancellation and historical calculator identity. Desktop tests cover automatic
+worker detection, explicit budgets, invalid counts, captured request settings,
+serialization and historical one-worker defaults.
+
+Computer-use checks in an isolated release application used the public
+`cu_150k.xmu` example and a four-atom Cu cell. An older project retained one worker;
+clearing the field selected Auto, a manual count was accepted, and 65 workers
+disabled submission with a validation message. Parallel paths could be enabled
+without moving the control. A six-attempt job recorded ten workers and one backend
+preparation thread. Saving, reopening and continuing to eight attempts retained
+those settings. This checks the workflow, not physical convergence.
+
+Experimental CPU scaling records and their inputs remain outside the repository.
+The local protocol compares complete short runs across worker counts, separately
+timing preparation, the attempt loop and periodic energy updates. It checks exact
+trajectory agreement, independent evaluation and checkpoint reload. Timing depends
+on hardware, structure and path count; neither worker count nor short-run speed
+establishes physical accuracy.
+
 ## Remaining qualification
 
 Multi-seed, calibrated experimental convergence studies have not been completed.

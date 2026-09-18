@@ -92,6 +92,18 @@ ordering; restarting a new job opts into the improved preparation. See the
 for reproducible timing and numerical-agreement checks once merged to `dev`.
 
 
+## CPU workers in the source checkout
+
+This option is unreleased. **Fit settings → CPU workers** starts at **Auto** for
+new jobs, using available logical CPUs up to 64. Enter a count from 1 to 64 to
+override it, or clear the field to restore Auto. Independent absorbers run first.
+**Advanced settings → Parallel paths**, enabled for new jobs, uses spare workers
+for paths within an absorber. Both levels share one thread pool.
+
+Older projects keep their existing scheduling. **Run details** shows the captured
+worker count; saved jobs resume with that count. Changing the form affects a new
+run. More workers may use more temporary memory and are not always faster.
+
 ## Energy refinement in the source checkout
 
 This option is unreleased. In **Fit settings**, choose **ΔE₀ → Refine** to update

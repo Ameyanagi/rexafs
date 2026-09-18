@@ -913,6 +913,8 @@ impl StudioApp {
             } else {
                 panel = panel.child(section_label(&t, "Run budget"))
                     .child(self.rmc.fields[8].clone())
+                    .child(self.rmc.fields[27].clone())
+                    .child(hint(&t, format!("{} CPUs available · absorbers first", engine::available_workers())))
                     .child(div().flex().gap_2()
                         .child(chip(&t, "rmc-auto-moves", "Auto moves", self.rmc.project.draft.auto_moves)
                             .on_click(cx.listener(|app, _, _, cx| {
@@ -1031,6 +1033,25 @@ impl StudioApp {
                         .child(hint(&t, "Tolerance controls acceptance of worse moves; zero accepts improvements only. It is numerical, not a physical temperature."))
                         .child("Pair minimum distances (Å)").child(self.rmc.texts[2].clone())
                         .child(hint(&t, "Optional: Cu-O=1.5, Cu-Cu=2.0. Choose physically justified bounds for your material."));
+                    panel = panel
+                        .child(section_label(&t, "Parallel calculation"))
+                        .child(
+                            chip(
+                                &t,
+                                "rmc-parallel-paths",
+                                "Parallel paths",
+                                self.rmc.project.draft.parallel_paths,
+                            )
+                            .on_click(cx.listener(|app, _, _, cx| {
+                                app.rmc.project.draft.parallel_paths =
+                                    !app.rmc.project.draft.parallel_paths;
+                                cx.notify();
+                            })),
+                        )
+                        .child(hint(
+                            &t,
+                            "Use spare CPU workers for paths within an absorber.",
+                        ));
                     if self.rmc.project.draft.refine_energy {
                         panel = panel.child(section_label(&t, "Energy refinement"));
                         for i in 24..27 {
@@ -1156,7 +1177,12 @@ impl StudioApp {
             let value = field
                 .read(cx)
                 .pending_value(cx)
-                .map_err(|_| format!("{}: enter a valid number.", FIELD_LABELS[index]))?
+                .map_err(|_| format!("{}: enter a valid number.", FIELD_LABELS[index]))?;
+            if index == 27 {
+                draft.workers = value.map(|v| v as usize);
+                continue;
+            }
+            let value = value
                 .ok_or_else(|| format!("{} requires an explicit value.", FIELD_LABELS[index]))?;
             set_draft_field(&mut draft, index, value);
         }
@@ -1246,9 +1272,15 @@ impl StudioApp {
             ("ΔE₀ minimum (eV)", d.energy_refinement.bounds[0]),
             ("ΔE₀ maximum (eV)", d.energy_refinement.bounds[1]),
             ("Every N attempts", d.energy_refinement.interval as f64),
+            (
+                "CPU workers",
+                d.workers.unwrap_or_else(engine::available_workers) as f64,
+            ),
         ];
         for (index, (label, value)) in specs.into_iter().enumerate() {
-            let kind = if matches!(index, 0..=2 | 5 | 8 | 11 | 18 | 26) {
+            let kind = if index == 27 {
+                FieldKind::Integer { min: Some(1) }
+            } else if matches!(index, 0..=2 | 5 | 8 | 11 | 18 | 26) {
                 FieldKind::Integer { min: Some(0) }
             } else {
                 FieldKind::Float
@@ -1265,8 +1297,17 @@ impl StudioApp {
                 _ => 1.,
             };
             let field = cx.new(|cx| {
-                NumericField::new(label, "required", Some(value), kind, self.theme, cx)
-                    .with_step(step)
+                let placeholder = if index == 27 {
+                    format!("auto ({})", engine::available_workers())
+                } else {
+                    "required".into()
+                };
+                let value = if index == 27 {
+                    d.workers.map(|v| v as f64)
+                } else {
+                    Some(value)
+                };
+                NumericField::new(label, placeholder, value, kind, self.theme, cx).with_step(step)
             });
             cx.subscribe(&field, |_, _, _: &FieldPreview, cx| cx.notify())
                 .detach();
@@ -1278,6 +1319,11 @@ impl StudioApp {
             }
             cx.subscribe(&field, move |app, _, event, cx| {
                 if let FieldEvent::Changed(value) = event {
+                    if index == 27 {
+                        app.rmc.project.draft.workers = value.map(|v| v as usize);
+                        cx.notify();
+                        return;
+                    }
                     let Some(v) = value else {
                         if index <= 2 {
                             app.build_rmc_supercell(cx);
@@ -1724,6 +1770,14 @@ impl StudioApp {
                 .child(format!("Active time {:.1} s · setup this session {:.1} s · {sec} inclusive", p.elapsed_seconds, p.setup_seconds))
                 .child(hint(&t, "Time includes preparation and calculation but excludes pauses. Inclusive time per attempt is not an isolated scattering benchmark."))
                 .child(section_label(&t, "Exact scattering cache"))
+                .when_some(self.rmc.request.as_ref(), |details, request| {
+                    details.child(format!(
+                        "{} CPU workers · parallel paths {} · {} backend preparation threads",
+                        request.workers,
+                        if request.parallel_paths { "on" } else { "off" },
+                        request.calculator.threads
+                    ))
+                })
                 .child(format!("Active path reuse {reuse} · {} exact path calculations · {:.1} MiB cached", count(p.cache.exact as usize), p.cache.bytes as f64 / 1048576.))
                 .child(format!("Electronic setup: {} calculated · {} shared", count(p.cache.electronic_preparations), count(p.cache.shared_electronic_contexts)))
                 .child(hint(&t, "Reuse = reused active paths / (reused active paths + exact calculations). Cache counters restart on a cold resume."))
@@ -2263,7 +2317,7 @@ impl StudioApp {
         .detach();
     }
 }
-const FIELD_LABELS: [&str; 27] = [
+const FIELD_LABELS: [&str; 28] = [
     "Repeat a",
     "Repeat b",
     "Repeat c",
@@ -2291,6 +2345,7 @@ const FIELD_LABELS: [&str; 27] = [
     "ΔE₀ minimum",
     "ΔE₀ maximum",
     "Update interval",
+    "CPU workers",
 ];
 fn hint(t: &crate::theme::Theme, text: impl Into<gpui::SharedString>) -> gpui::Div {
     div()
@@ -2359,6 +2414,7 @@ fn set_draft_field(d: &mut engine::Draft, index: usize, v: f64) {
         22..=23 => d.calibration_amplitude[index - 22] = v,
         24..=25 => d.energy_refinement.bounds[index - 24] = v,
         26 => d.energy_refinement.interval = v as usize,
+        27 => d.workers = Some(v as usize),
         _ => unreachable!("unknown RMC field"),
     }
 }

@@ -48,6 +48,13 @@ pub struct Draft {
     /// New drafts use bounded feedback and cooling; old projects stay fixed.
     #[serde(default)]
     pub auto_moves: bool,
+    /// Total CPU budget; None uses available CPUs (at most 64). Historical
+    /// projects retain one worker until the user selects automatic parallelism.
+    #[serde(default = "legacy_workers")]
+    pub workers: Option<usize>,
+    /// Let spare workers evaluate independent paths in a smaller absorber batch.
+    #[serde(default)]
+    pub parallel_paths: bool,
     pub temperature: f64,
     pub max_displacement: f64,
     pub min_distance: f64,
@@ -78,6 +85,8 @@ impl Default for Draft {
             steps: 10_000,
             step_size: 0.05,
             auto_moves: true,
+            workers: None,
+            parallel_paths: true,
             temperature: 0.001,
             max_displacement: 0.2,
             min_distance: 1.,
@@ -108,6 +117,13 @@ impl Default for Draft {
     }
 }
 impl Draft {
+    pub fn resolved_workers(&self) -> Result<usize, String> {
+        let workers = self.workers.unwrap_or_else(available_workers);
+        if !(1..=64).contains(&workers) {
+            return Err("Choose 1–64 CPU workers, or Auto.".into());
+        }
+        Ok(workers)
+    }
     fn transform(&self) -> rexafs::xafs::fitting::FeffFitTransform {
         let ranges = self.ranges.transform();
         let Some(mut transform) = self.transform_settings.clone() else {
@@ -131,6 +147,7 @@ impl Draft {
         spectrum: &Spectrum,
         configuration: &Configuration,
     ) -> Result<(), String> {
+        self.resolved_workers()?;
         if spectrum.k().is_none() || spectrum.chi().is_none() {
             return Err("Prepare χ(k) in Background before starting RMC.".into());
         }
@@ -282,6 +299,17 @@ impl Draft {
     }
 }
 
+fn legacy_workers() -> Option<usize> {
+    Some(1)
+}
+fn one_worker() -> usize {
+    1
+}
+/// Available logical CPUs, bounded by the prepared calculator's resource limit.
+pub fn available_workers() -> usize {
+    std::thread::available_parallelism().map_or(1, |n| n.get().min(64))
+}
+
 /// Geometry-only preview. No ReFEFF, potentials or path enumeration are run.
 pub fn build_preview(structure: &Structure, repeats: [usize; 3]) -> Result<Configuration, String> {
     Configuration::from_structure(structure, repeats).map_err(|e| e.to_string())
@@ -325,6 +353,11 @@ pub struct Request {
     /// requests retain historical ordering and calculator identity on resume.
     #[serde(default)]
     pub reuse_electronic_inputs: bool,
+    /// Resolved thread budget captured at submission; resume never redetects CPUs.
+    #[serde(default = "one_worker")]
+    pub workers: usize,
+    #[serde(default)]
+    pub parallel_paths: bool,
     pub source: Source,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -660,6 +693,8 @@ impl Request {
             calculator,
             catalogue,
             reuse_electronic_inputs: true,
+            workers: draft.resolved_workers()?,
+            parallel_paths: draft.parallel_paths,
             source,
         })
     }
@@ -694,6 +729,8 @@ impl Request {
             }
         }
         Ok(AccelerationSettings {
+            workers: self.workers,
+            parallel_paths: self.parallel_paths,
             catalogue: self.catalogue.clone(),
             max_contexts: contexts
                 .len()
@@ -1660,17 +1697,53 @@ pub(crate) mod tests {
         let request = request();
         assert!(request.reuse_electronic_inputs);
         let mut value = serde_json::to_value(request).unwrap();
-        value
-            .as_object_mut()
-            .unwrap()
-            .remove("reuse_electronic_inputs");
+        for key in ["reuse_electronic_inputs", "workers", "parallel_paths"] {
+            value.as_object_mut().unwrap().remove(key);
+        }
         let restored: Request = serde_json::from_value(value).unwrap();
         let settings = restored.acceleration_settings().unwrap();
         assert!(!settings.reuse_electronic_inputs);
+        assert_eq!(settings.workers, 1);
+        assert!(!settings.parallel_paths);
         assert_eq!(
             settings.max_contexts,
             AccelerationSettings::default().max_contexts
         );
+    }
+
+    #[cfg(feature = "refeff-runner")]
+    #[test]
+    fn worker_budget_is_automatic_for_new_jobs_and_frozen_on_submission() {
+        let mut draft = Draft::default();
+        assert_eq!(draft.workers, None);
+        assert!(draft.parallel_paths);
+        assert_eq!(draft.resolved_workers().unwrap(), available_workers());
+        let old: Draft = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.workers, Some(1));
+        assert!(!old.parallel_paths);
+        let reference = request();
+        // Use the same checked form and measured spectrum as the native worker.
+        draft.ranges.rmin = 1.2;
+        draft.ranges.kmin = 3.;
+        draft.ranges.kmax = 10.;
+        draft.workers = Some(4);
+        let built = Request::new(
+            &spectrum(),
+            reference.problem.structures[0].configuration.clone(),
+            &draft,
+            reference.source,
+        )
+        .unwrap();
+        assert_eq!(built.workers, 4);
+        assert_eq!(built.acceleration_settings().unwrap().workers, 4);
+        assert!(built.acceleration_settings().unwrap().parallel_paths);
+        let restored: Request =
+            serde_json::from_value(serde_json::to_value(&built).unwrap()).unwrap();
+        assert_eq!(restored.workers, 4);
+        draft.workers = Some(0);
+        assert!(draft.resolved_workers().is_err());
+        draft.workers = Some(65);
+        assert!(draft.resolved_workers().is_err());
     }
 
     #[cfg(feature = "refeff-runner")]

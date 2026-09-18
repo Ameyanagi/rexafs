@@ -66,6 +66,24 @@ These corrections are not part of the published 0.2.10 binary. Implementation:
 [`Draft::use_spectrum_ranges`, `Request::new` and the worker settings](../crates/rexafs-gui/src/rmc_fitting.rs),
 with [core resource checks](../crates/rexafs/src/xafs/rmc/accelerated.rs).
 
+## Unreleased CPU controls
+
+**Fit settings → CPU workers** selects the total thread budget. New drafts use
+**Auto**, which detects available logical CPUs up to 64. Enter 1–64 to override
+it, or clear the field to return to Auto. The adjacent label shows available CPUs.
+Parallel execution first distributes absorbing sites. **Advanced settings →
+Parallel paths** lets spare workers evaluate paths within an absorber, using the
+same bounded pool. It is enabled for new drafts and also benefits single-site jobs.
+
+Older drafts keep one worker and their historical path scheduling until explicitly
+changed. Existing saved/running jobs retain their captured settings. **Run details**
+shows the actual saved worker count, path fallback and backend preparation threads.
+Checkpoint and exported job settings retain these choices; form edits apply to a
+new run. Backend electronic preparation remains serial across contexts, and the
+backend's internal thread setting remains one by default. See the
+[core parallelism guide](rmc.md#unreleased-absorber-first-cpu-parallelism) for the
+scope, deterministic reductions and resource limits.
+
 ## Unreleased fitting controls
 
 New jobs start with **Auto moves** and a 0.05 Å Cartesian move width. The width

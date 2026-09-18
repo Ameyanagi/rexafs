@@ -53,8 +53,17 @@ pub struct AccelerationSettings {
     /// Exact affected-path caching by default. Frozen representatives are an
     /// experimental approximation and require explicit opt-in.
     pub basis: ScatteringBasis,
-    /// Bounded Rayon worker pool; default 1, accepted range 1..=64.
+    /// Total CPU thread budget for absorber calculations; default 1, range 1..=64.
+    /// Independent absorber requests run first. With [`Self::parallel_paths`],
+    /// spare threads also evaluate paths within a smaller absorber batch. Both
+    /// levels share this one pool; their thread counts do not multiply.
     pub workers: usize,
+    /// Unreleased: use spare workers for paths when a batch has fewer absorbers
+    /// than workers. Default false retains historical scheduling. Recommended
+    /// with multiple workers, especially for a single absorbing site. Path sums
+    /// retain catalogue order, including cached/rejected trials. Electronic
+    /// preparation remains serial; this does not create backend thread pools.
+    pub parallel_paths: bool,
     /// Maximum prepared structure/absorber/edge/settings contexts; default 128.
     /// A 256-site single-element cell averaged over every site needs at least
     /// 256. Shared datasets with the same combinations reuse contexts. Set this
@@ -98,6 +107,7 @@ impl Default for AccelerationSettings {
             catalogue: Default::default(),
             basis: ScatteringBasis::Exact,
             workers: 1,
+            parallel_paths: false,
             max_contexts: 128,
             reuse_electronic_inputs: false,
             max_total_paths: 1_000_000,
@@ -337,6 +347,9 @@ impl PreparedRefeffCalculator {
         }
         if !settings.reuse_electronic_inputs {
             settings_bytes = settings_bytes.replace(",\"reuse_electronic_inputs\":false", "");
+        }
+        if !settings.parallel_paths {
+            settings_bytes = settings_bytes.replace(",\"parallel_paths\":false", "");
         }
         let bytes = format!(
             "[{},{},{}]",
@@ -734,6 +747,7 @@ impl PreparedRefeffCalculator {
             &ScatteringBasis::Exact,
             None,
             Some((&self.cancellation, deadline)),
+            false,
         )?;
         let reference = work.spectrum.chi;
         Ok(accuracy(model, reference))
@@ -822,6 +836,7 @@ impl PreparedAbsorber {
         basis: &ScatteringBasis,
         moments: Option<&MomentSettings>,
         control: Option<(&CancellationToken, Instant)>,
+        parallel_paths: bool,
     ) -> Result<Work, RmcError> {
         check_control(control)?;
         let moments = moments.filter(|_| !request.paths);
@@ -851,27 +866,20 @@ impl PreparedAbsorber {
             }
         }
         let mut paths = previous.map_or_else(|| vec![None; count], |p| p.paths.clone());
-        let mut exact = 0;
-        let mut fast = 0;
-        let mut reused = 0;
-        let mut reused_active = 0;
-        let mut outside_radius = 0;
-        for (i, path) in self.catalogue.paths().iter().enumerate() {
+        let update_path = |(i, cached): (usize, &mut Option<CachedPath>)| {
             check_control(control)?;
             if !changed[i] {
-                reused += 1;
-                reused_active += u64::from(paths[i].is_some());
-                continue;
+                return Ok([0, 0, 1, u64::from(cached.is_some()), 0]);
             }
+            let path = &self.catalogue.paths()[i];
             let length = path.half_length(request.configuration)?;
             if length > self.catalogue.settings().radius {
-                paths[i] = None;
-                outside_radius += 1;
-                continue;
+                *cached = None;
+                return Ok([0, 0, 0, 0, 1]);
             }
             let (table, selected_group) = self.table(i, request, basis)?;
+            let fast = u64::from(table.is_some());
             let (chi, group) = if let Some(table) = table {
-                fast += 1;
                 (
                     if moments.is_none() {
                         Some(Arc::new(table.sample(request.k, length)?))
@@ -881,7 +889,6 @@ impl PreparedAbsorber {
                     selected_group,
                 )
             } else {
-                exact += 1;
                 (
                     Some(Arc::new(
                         self.context
@@ -891,12 +898,30 @@ impl PreparedAbsorber {
                     None,
                 )
             };
-            paths[i] = Some(CachedPath {
+            *cached = Some(CachedPath {
                 length,
                 chi,
                 basis: group,
             });
-        }
+            Ok::<_, RmcError>([1 - fast, fast, 0, 0, 0])
+        };
+        let add_counts =
+            |a: [u64; 5], b: [u64; 5]| Ok::<_, RmcError>(std::array::from_fn(|i| a[i] + b[i]));
+        // Only called from the calculator's bounded pool. Parallelize independent
+        // path evaluations, then sum floating-point spectra below in index order.
+        let [exact, fast, reused, reused_active, outside_radius] = if parallel_paths {
+            paths
+                .par_iter_mut()
+                .enumerate()
+                .map(update_path)
+                .try_reduce(|| [0; 5], add_counts)?
+        } else {
+            paths
+                .iter_mut()
+                .enumerate()
+                .map(update_path)
+                .try_fold([0; 5], |counts, result| add_counts(counts, result?))?
+        };
         // Fixed index order ensures cache history/parallel scheduling cannot change reductions.
         let mut chi = vec![0.; request.k.len()];
         let mut contributions = Vec::new();
@@ -1017,6 +1042,7 @@ impl ExafsCalculator for PreparedRefeffCalculator {
                                         r.options.unwrap_or(&self.options).timeout_seconds,
                                     ),
                             )),
+                            self.settings.parallel_paths && chunk.len() < self.settings.workers,
                         )
                     })
                     .collect::<Result<Vec<_>, _>>()

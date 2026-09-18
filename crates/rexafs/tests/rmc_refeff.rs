@@ -31,6 +31,107 @@ fn dimer() -> Configuration {
 }
 
 #[test]
+fn absorber_and_path_parallelism_preserve_exact_sums_and_rejected_trial_recovery() {
+    let crystal = rexafs::structure::BuiltinLibrary::get()
+        .unwrap()
+        .structure("cuo_tenorite")
+        .unwrap();
+    let original = Configuration::from_structure(&crystal, [1; 3]).unwrap();
+    let absorbers: Vec<_> = original
+        .atoms
+        .iter()
+        .enumerate()
+        .filter_map(|(i, a)| (a.atomic_number == 29).then_some(i))
+        .collect();
+    let options = RefeffOptions {
+        path_criteria: [0., 0.],
+        max_legs: 3,
+        ..Default::default()
+    };
+    let settings = AccelerationSettings {
+        catalogue: PathCatalogueSettings {
+            max_legs: 3,
+            ..Default::default()
+        },
+        reuse_electronic_inputs: true,
+        ..Default::default()
+    };
+    let mut serial =
+        PreparedRefeffCalculator::new(options.clone(), vec![original.clone()], settings.clone())
+            .unwrap();
+    let k: Vec<_> = (0..51).map(|i| 3. + i as f64 * 0.15).collect();
+    let mut trial = original.clone();
+    trial.atoms[1].position[0] += 0.023;
+    let mut expected = Vec::new();
+    for geometry in [&original, &trial, &original] {
+        for sites in [&absorbers[..], &absorbers[..1]] {
+            let requests: Vec<_> = sites
+                .iter()
+                .map(|&absorber| CalculationRequest {
+                    structure: 0,
+                    configuration: geometry,
+                    absorber,
+                    edge: Edge::K,
+                    k: &k,
+                    options: None,
+                    paths: true,
+                })
+                .collect();
+            expected.push(serial.calculate_batch(&requests).unwrap());
+        }
+    }
+    // A full batch uses absorber parallelism; one site uses the path fallback.
+    for (workers, parallel_paths) in [(2, false), (2, true), (8, true)] {
+        let mut parallel = PreparedRefeffCalculator::new(
+            options.clone(),
+            vec![original.clone()],
+            AccelerationSettings {
+                workers,
+                parallel_paths,
+                ..settings.clone()
+            },
+        )
+        .unwrap();
+        let mut index = 0;
+        for geometry in [&original, &trial, &original] {
+            for sites in [&absorbers[..], &absorbers[..1]] {
+                let requests: Vec<_> = sites
+                    .iter()
+                    .map(|&absorber| CalculationRequest {
+                        structure: 0,
+                        configuration: geometry,
+                        absorber,
+                        edge: Edge::K,
+                        k: &k,
+                        options: None,
+                        paths: true,
+                    })
+                    .collect();
+                assert_eq!(
+                    parallel.calculate_batch(&requests).unwrap(),
+                    expected[index]
+                );
+                index += 1;
+            }
+        }
+        assert!(parallel.stats().exact_paths > 0);
+        parallel.cancellation_token().cancel();
+        assert!(parallel
+            .calculate(&trial, absorbers[0], Edge::K, &k)
+            .is_err());
+    }
+    let mut legacy_value = serde_json::to_value(&settings).unwrap();
+    legacy_value
+        .as_object_mut()
+        .unwrap()
+        .remove("parallel_paths");
+    let legacy: AccelerationSettings = serde_json::from_value(legacy_value).unwrap();
+    assert!(!legacy.parallel_paths);
+    let restored = PreparedRefeffCalculator::new(options, vec![original], legacy).unwrap();
+    assert_eq!(restored.identity(), serial.identity());
+}
+
+#[test]
 fn real_refeff_changes_with_geometry_and_returns_to_original() {
     let mut calc = calculator();
     let mut config = dimer();
