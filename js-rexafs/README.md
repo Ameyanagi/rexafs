@@ -175,8 +175,8 @@ npm pack
 ```
 
 The package includes Node/browser Wasm and declarations. Filesystem reading,
-fitting, groups, structure downloads and FEFF execution remain Rust/desktop
-APIs. ILPBkg remains unimplemented. The unreleased `MBack` API below adds full
+EXAFS fitting, groups, structure downloads and FEFF execution remain Rust/desktop
+APIs. ILPBkg remains unimplemented. The `MBack` API below adds full (since 0.2.10)
 atomic-reference normalization. TrustRegionDogLeg requires
 a native Rust feature absent from Wasm. The recommended LinearDirect/FixedPenalty
 path works in both bindings. See [FFT compatibility](../doc/fft-grid-compatibility.md).
@@ -204,9 +204,9 @@ for transmission, `iff: "iff"` instead of `it` for fluorescence, or
 Duplicate names require indices. Omit `energy_unit` to preserve detected axis
 calibration, or explicitly override it with `"eV"` or `"keV"`.
 
-## Development-only scalar measurements
+## Scalar measurements (since 0.2.10)
 
-The source checkout adds this call (newer than 0.2.9):
+Version 0.2.10 adds this call:
 
 ```typescript
 const result = spectrum.measure("mean", [-20, 30], { space: "flat" });
@@ -222,7 +222,7 @@ for units, optional independent errors and numerical assumptions. This scalar
 operation is separate from the `Measurement` input-file reader. Type declarations
 include options, result fields, completion choices and hover help.
 
-## Full MBACK normalization (unreleased)
+## Full MBACK normalization (since 0.2.10)
 
 ```ts
 import { MBack } from "rexafs/node";
@@ -242,7 +242,7 @@ Worker for large synchronous fits. See the [MBACK guide](../doc/mback-normalizat
 for equations, assumptions and optional backgrounds. Atomic-data notices ship
 in the npm package's `licenses/atomic` directory.
 
-## Cauchy wavelets (unreleased)
+## Cauchy wavelets (since 0.2.10)
 
 ```ts
 import { Wavelet } from "rexafs/node";
@@ -266,7 +266,7 @@ unweighted χ(k) in `Float64Array` inputs. Browser callers await `init()` first.
 See the [wavelet guide](../doc/wavelet-analysis.md) for layout, native-grid integrals,
 slices, ownership, JSON replay and scientific limitations.
 
-## Fluorescence over-absorption (unreleased)
+## Fluorescence over-absorption (since 0.2.10)
 
 ```ts
 import { FluorescenceCorrection } from "rexafs/node";
@@ -283,3 +283,14 @@ The original stays unchanged. The new native spectrum preserves correction histo
 and its XANES-only restriction through edits; known transmission and repeated
 correction fail. See the [correction guide](../doc/fluorescence-correction.md)
 for the homogeneous thick-sample assumptions, diagnostics, replay and array API.
+
+
+## XANES peak fitting (since 0.2.10)
+
+`PeakFit` and `Spectrum.fit_peaks` fit named peaks, absorption steps and baseline
+terms through the native core. The default representation is normalized
+absorption, with energy bounds relative to E₀ in eV. Results retain component
+curves, termination and conditional uncertainty diagnostics. The model does not
+select a peak count or identify chemical species. See the
+[XANES fitting guide](../doc/xanes-peak-fitting.md) for binding examples, area/width
+conventions, constraints and interpretation limits.

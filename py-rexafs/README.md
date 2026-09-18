@@ -189,9 +189,9 @@ uv run --no-project maturin develop --release --locked
 uv run --no-project python py-rexafs/tests/test_api.py
 ```
 
-Fitting, groups, structures, plotting and direct ReFEFF calculation remain
+EXAFS fitting, groups, structures, plotting and direct ReFEFF calculation remain
 Rust/desktop APIs. ILPBkg remains an unimplemented selector. The historical empty
-MBACK selector lacks absorber/edge identity; the unreleased configured `MBack` API
+MBACK selector lacks absorber/edge identity; the configured `MBack` API (since 0.2.10)
 below implements the full atomic match. See [AUTOBK defaults](../doc/autobk-fixed-penalty.md)
 and [FFT grid compatibility](../doc/fft-grid-compatibility.md).
 Licensed under MIT OR Apache-2.0.
@@ -218,9 +218,9 @@ for transmission, `iff="iff"` instead of `it` for fluorescence, or
 Duplicate names require indices. Omit `energy_unit` to preserve detected axis
 calibration, or explicitly override it with `"eV"` or `"keV"`.
 
-## Development-only scalar measurements
+## Scalar measurements (since 0.2.10)
 
-The source checkout adds a one-call measurement API (newer than 0.2.9):
+Version 0.2.10 adds a one-call measurement API:
 
 ```python
 result = spectrum.measure("mean", (-20.0, 30.0), space="flat")
@@ -236,7 +236,7 @@ independent errors, numerical meaning and the equivalent Rust/TypeScript calls.
 This scalar operation is separate from `rexafs.io.Measurement`, the input-file
 reader. The installed wheel includes result types and editor help.
 
-## Full MBACK normalization (unreleased)
+## Full MBACK normalization (since 0.2.10)
 
 ```python
 from rexafs import MBack
@@ -255,7 +255,7 @@ pins the original atomic reference for replay. See the
 [MBACK guide](../doc/mback-normalization.md) for equations, assumptions and optional
 background terms. Runtime atomic-data notices are included in `rexafs/licenses/atomic`.
 
-## Cauchy wavelets (unreleased)
+## Cauchy wavelets (since 0.2.10)
 
 ```python
 from rexafs import Wavelet
@@ -272,7 +272,7 @@ for example `Wavelet((2, 12), rmax=4)`. `model.calculate(k, chi)` also accepts
 original unweighted χ(k). The [wavelet guide](../doc/wavelet-analysis.md) explains
 native-grid integrals, slices, ownership, JSON replay and scientific limitations.
 
-## Fluorescence over-absorption (unreleased)
+## Fluorescence over-absorption (since 0.2.10)
 
 ```python
 from rexafs import FluorescenceCorrection
@@ -288,3 +288,14 @@ The original spectrum stays unchanged. The corrected spectrum retains its histor
 and XANES-only restriction through edits. Known transmission and repeated correction
 fail. See the [correction guide](../doc/fluorescence-correction.md) for the
 homogeneous thick-sample assumptions, diagnostics, replay and array API.
+
+
+## XANES peak fitting (since 0.2.10)
+
+`PeakFit` and `Spectrum.fit_peaks` fit named peaks, absorption steps and baseline
+terms through the native core. The default representation is normalized
+absorption, with energy bounds relative to E₀ in eV. Results retain component
+curves, termination and conditional uncertainty diagnostics. The model does not
+select a peak count or identify chemical species. See the
+[XANES fitting guide](../doc/xanes-peak-fitting.md) for binding examples, area/width
+conventions, constraints and interpretation limits.
