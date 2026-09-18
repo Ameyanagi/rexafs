@@ -271,14 +271,36 @@ pub fn transform_path_fourier(
     kweight: u8,
     settings: &FeffFitTransform,
 ) -> Result<crate::fitting::transform::KweightTransform, RmcError> {
+    transform_spectrum_fourier(k, &path.chi, kweight, settings)
+}
+
+/// Transform experimental or calculated χ(k) on the RMC objective's grid
+/// (unreleased). Use this for result plots and exports so a measured k grid
+/// starting above zero receives exactly the objective's interpolation and zero
+/// padding before the shared native fitting transform.
+///
+/// Inputs are borrowed unchanged: k is increasing in Å⁻¹, χ is dimensionless,
+/// kweight is an integer in 0..=3, and settings supply the same k/R windows,
+/// FFT size and sampling as the objective. No preprocessing, scattering, noise
+/// scaling, dataset weighting or normalization runs here. The weight is applied
+/// once, before interpolation as in the objective. Returns owned weighted-k,
+/// complex R and filtered-q arrays; R is Fourier
+/// distance in Å, not a phase-corrected bond length. Invalid lengths, nonfinite
+/// arrays, unsupported weights or invalid transform support return RmcError.
+pub fn transform_spectrum_fourier(
+    k: &[f64],
+    chi: &[f64],
+    kweight: u8,
+    settings: &FeffFitTransform,
+) -> Result<crate::fitting::transform::KweightTransform, RmcError> {
     require(
         k.len() >= 2
-            && k.len() == path.chi.len()
+            && k.len() == chi.len()
             && kweight <= 3
             && k.iter().all(|v| v.is_finite() && *v >= 0.)
             && k.windows(2).all(|w| w[1] > w[0])
-            && path.chi.iter().all(|v| v.is_finite()),
-        "invalid path Fourier arrays or kweight",
+            && chi.iter().all(|v| v.is_finite()),
+        "invalid Fourier arrays or kweight",
     )?;
     let PreparedObjective::Fourier {
         settings,
@@ -291,10 +313,15 @@ pub fn transform_path_fourier(
     };
     let values = DVector::from_iterator(
         grid.len(),
-        mapping
-            .iter()
-            .map(|entry| entry.map_or(0., |(i, t)| path.chi[i] * (1. - t) + path.chi[i + 1] * t)),
+        mapping.iter().map(|entry| {
+            entry.map_or(0., |(i, t)| {
+                chi[i] * k[i].powi(i32::from(kweight)) * (1. - t)
+                    + chi[i + 1] * k[i + 1].powi(i32::from(kweight)) * t
+            })
+        }),
     );
-    apply_kweight_transform(&grid, &values, &settings, f64::from(kweight))
-        .map_err(|e| RmcError::Invalid(e.to_string()))
+    let mut output = apply_kweight_transform(&grid, &values, &settings, 0.)
+        .map_err(|e| RmcError::Invalid(e.to_string()))?;
+    output.kweight = f64::from(kweight);
+    Ok(output)
 }

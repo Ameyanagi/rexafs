@@ -88,6 +88,93 @@ impl Default for Draft {
     }
 }
 impl Draft {
+    /// Fast form validation without preparing scattering or copying a spectrum.
+    /// The native Spectrum adapter and session still validate the full problem
+    /// at submission; this supplies actionable errors while editing the form.
+    pub fn validate_form(
+        &self,
+        spectrum: &Spectrum,
+        configuration: &Configuration,
+    ) -> Result<(), String> {
+        if spectrum.k().is_none() || spectrum.chi().is_none() {
+            return Err("Prepare χ(k) in Background before starting RMC.".into());
+        }
+        let rbkg = crate::fitting::spectrum_rbkg(spectrum)
+            .ok_or("Prepare the spectrum with AUTOBK in Background first.")?;
+        self.ranges.validate_background(rbkg)?;
+        if !self.s02.is_finite() || self.s02 <= 0. {
+            return Err("S₀² must be positive. Use an independently calibrated amplitude.".into());
+        }
+        if !self.delta_e0.is_finite() {
+            return Err("Set a finite fit ΔE₀ in eV.".into());
+        }
+        for (name, value) in [
+            ("Move size", self.step_size),
+            ("Maximum displacement", self.max_displacement),
+            ("Minimum distance", self.min_distance),
+        ] {
+            if !value.is_finite() || value <= 0. {
+                return Err(format!("{name} must be positive, in Å."));
+            }
+        }
+        if !self.temperature.is_finite() || self.temperature < 0. {
+            return Err("Metropolis tolerance must be zero or positive.".into());
+        }
+        if !(1..=1_000_000_000).contains(&self.steps) {
+            return Err("Set an attempt budget between 1 and 1,000,000,000.".into());
+        }
+        let weights = self.ranges.transform().effective_kweights();
+        if weights.len() != 1 || !(0. ..=3.).contains(&weights[0]) || weights[0].fract() != 0. {
+            return Err("Choose one integer k weight from 0 through 3.".into());
+        }
+        self.options.validate().map_err(|e| e.to_string())?;
+        self.k_support(spectrum)?;
+        selected_absorbers(configuration, self)?;
+        if atom_indices(&self.fixed_atoms, configuration.atoms.len())?.len()
+            == configuration.atoms.len()
+        {
+            return Err(
+                "At least one atom must remain movable; reduce the fixed atom selection.".into(),
+            );
+        }
+        Ok(())
+    }
+
+    /// Cover the native fitting window (half a dk beyond each bound), with
+    /// one grid point of interpolation margin. Reject unresolved shifted k
+    /// before scattering; do not silently clip a nonzero Fourier window.
+    fn k_support(&self, spectrum: &Spectrum) -> Result<[f64; 2], String> {
+        use rexafs::xafs::xafsutils::constants::ETOK;
+        let k = spectrum
+            .k()
+            .filter(|k| k.len() >= 2)
+            .ok_or("Prepare χ(k) in Background first.")?;
+        let transform = self.ranges.transform();
+        let step = transform.kstep.unwrap_or(k[1] - k[0]);
+        let lo = (transform.kmin - transform.dk / 2. - step).max(k[0]);
+        let hi = (transform.kmax + transform.dk2.unwrap_or(transform.dk) / 2. + step)
+            .min(k[k.len() - 1]);
+        let selected: Vec<_> = k.iter().copied().filter(|x| *x >= lo && *x <= hi).collect();
+        if selected.len() < 2
+            || selected[0] > transform.kmin
+            || selected[selected.len() - 1] < transform.kmax
+        {
+            return Err("The k fit range must lie inside the measured spectrum.".into());
+        }
+        let shifted = selected[0].powi(2) - ETOK * self.delta_e0;
+        if shifted < 0. {
+            let minimum = (ETOK * self.delta_e0).max(0.).sqrt() + transform.dk / 2. + step;
+            return Err(format!(
+                "This ΔE₀ needs k min above {minimum:.2} Å⁻¹ to retain the Fourier taper. Increase k min or review the calibration."
+            ));
+        }
+        if (selected[selected.len() - 1].powi(2) - ETOK * self.delta_e0).sqrt() > self.options.kmax
+        {
+            return Err("The fit window and ΔE₀ exceed ReFEFF k support. Reduce k max.".into());
+        }
+        Ok([lo, hi])
+    }
+
     /// Starting ranges from the active processing settings, clipped to measured
     /// k support with the native fitting window width as a conservative margin.
     /// Leave amplitude and energy calibration explicit.
@@ -395,6 +482,7 @@ impl Request {
         source: Source,
     ) -> Result<Self, String> {
         configuration.validate().map_err(|e| e.to_string())?;
+        draft.validate_form(spectrum, &configuration)?;
         let ranges = draft.ranges.resolved(source.recipe.fft_kweight);
         if ranges.fitspace != FitSpaceSpec::R || ranges.noise {
             return Err("Desktop RMC currently requires R space with explicit unit χ noise scales; automatic noise estimation is not connected.".into());
@@ -426,10 +514,7 @@ impl Request {
         }
         let transform = ranges.transform();
         let mut input = RmcSpectrumOptions::new(absorbers, draft.edge, transform.clone());
-        input.k_range = Some([
-            (ranges.kmin - transform.dk).max(0.),
-            ranges.kmax + transform.dk2.unwrap_or(transform.dk),
-        ]);
+        input.k_range = Some(draft.k_support(spectrum)?);
         input.s02 = draft.s02;
         input.delta_e0 = draft.delta_e0;
         let mut dataset = RmcDataset::from_spectrum(spectrum, input).map_err(|e| e.to_string())?;
@@ -467,6 +552,25 @@ impl Request {
             source,
         })
     }
+}
+
+/// Resume the existing budget, or extend a completed run by an explicit number
+/// of additional attempts. This changes no inputs, calibration or random state.
+pub fn continuation_limit(
+    completed: usize,
+    limit: usize,
+    additional: usize,
+) -> Result<usize, String> {
+    if completed < limit {
+        return Ok(limit);
+    }
+    completed
+        .checked_add(additional)
+        .filter(|total| additional > 0 && *total <= 1_000_000_000)
+        .ok_or_else(|| {
+            "Additional attempts must be positive and keep the total at or below 1,000,000,000."
+                .into()
+        })
 }
 
 pub fn save_run(path: &Path, run: &SavedRun) -> Result<(), String> {
@@ -896,9 +1000,6 @@ pub fn export(parent: &Path, saved: &SavedRun) -> Result<PathBuf, String> {
         .map_err(|e| e.to_string())?;
     }
     if let Objective::R(transform) = &data.objective {
-        use nalgebra::DVector;
-        use rexafs::fitting::transform::apply_kweight_transform;
-        let k = DVector::from_column_slice(&data.exafs.k);
         let transformed = [
             &data.exafs.chi,
             &saved.progress.initial.evaluation.datasets[0].chi,
@@ -906,13 +1007,8 @@ pub fn export(parent: &Path, saved: &SavedRun) -> Result<PathBuf, String> {
         ]
         .into_iter()
         .map(|chi| {
-            apply_kweight_transform(
-                &k,
-                &DVector::from_column_slice(chi),
-                transform,
-                data.exafs.kweight as f64,
-            )
-            .map_err(|e| e.to_string())
+            transform_spectrum_fourier(&data.exafs.k, chi, data.exafs.kweight, transform)
+                .map_err(|e| e.to_string())
         })
         .collect::<Result<Vec<_>, _>>()?;
         let mut csv =
@@ -1016,6 +1112,52 @@ pub(crate) mod tests {
         .unwrap()
     }
     #[test]
+    fn form_validation_and_continuation_preserve_the_saved_budget() {
+        let spectrum = spectrum();
+        let request = request();
+        let configuration = &request.problem.structures[0].configuration;
+        let mut draft = Draft::default();
+        draft.ranges.rmin = 1.2;
+        assert!(draft.validate_form(&spectrum, configuration).is_ok());
+        draft.ranges.rmin = 0.1;
+        assert!(
+            draft
+                .validate_form(&spectrum, configuration)
+                .unwrap_err()
+                .contains("Rbkg")
+        );
+        draft.ranges.rmin = 1.2;
+        draft.step_size = 0.;
+        assert!(
+            draft
+                .validate_form(&spectrum, configuration)
+                .unwrap_err()
+                .contains("Move size")
+        );
+        draft.step_size = 0.03;
+        draft.fixed_atoms = "0,1".into();
+        assert!(
+            draft
+                .validate_form(&spectrum, configuration)
+                .unwrap_err()
+                .contains("movable")
+        );
+        draft.fixed_atoms = "0".into();
+        draft.s02 = 0.;
+        assert!(
+            draft
+                .validate_form(&spectrum, configuration)
+                .unwrap_err()
+                .contains("S₀²")
+        );
+        assert_eq!(continuation_limit(80, 100, 0).unwrap(), 100);
+        assert_eq!(continuation_limit(100, 100, 25).unwrap(), 125);
+        assert!(continuation_limit(100, 100, 0).is_err());
+        assert!(continuation_limit(1_000_000_000, 1_000_000_000, 1).is_err());
+        assert!(continuation_limit(usize::MAX, usize::MAX, 1).is_err());
+    }
+
+    #[test]
     fn input_snapshot_retains_processing_and_rejects_unsupported_modes() {
         let spectrum = spectrum();
         let before = serde_json::to_value(&spectrum).unwrap();
@@ -1060,6 +1202,36 @@ pub(crate) mod tests {
         draft.ranges.fitspace = FitSpaceSpec::R;
         draft.ranges.kweights = vec![1., 2.];
         assert!(Request::new(&spectrum, configuration, &draft, request.source).is_err());
+    }
+    #[test]
+    fn positive_calibration_retains_native_window_without_unresolved_low_k() {
+        let spectrum = spectrum();
+        let reference = request();
+        let mut draft = Draft {
+            delta_e0: 8.76,
+            ..Default::default()
+        };
+        draft.ranges.kmin = 4.;
+        draft.ranges.kmax = 10.;
+        draft.ranges.rmin = 1.2;
+        let request = Request::new(
+            &spectrum,
+            reference.problem.structures[0].configuration.clone(),
+            &draft,
+            reference.source.clone(),
+        )
+        .unwrap();
+        let data = &request.problem.datasets[0].exafs;
+        assert!(data.k[0] > 1.5 && data.k[0] <= 2.);
+        assert!(data.k.last().unwrap() >= &12.);
+        assert!(data.theoretical_k().unwrap().iter().all(|k| k.is_finite()));
+        draft.delta_e0 = 40.;
+        assert!(
+            draft
+                .validate_form(&spectrum, &reference.problem.structures[0].configuration)
+                .unwrap_err()
+                .contains("k min above")
+        );
     }
     #[test]
     fn spectrum_defaults_and_live_builder_preserve_data_and_bound_resources() {

@@ -6009,6 +6009,7 @@ impl StudioApp {
         self.rebuild_operando_plots(cx);
         self.rebuild_fit_plots(cx);
         self.rebuild_fit_preview_plots(cx, false);
+        self.restyle_rmc(cx);
         cx.notify();
     }
 

@@ -206,3 +206,55 @@ fn shared_transform_preserves_legacy_api_values_and_errors() {
     let legacy_settings: LocalSpectrumSettings = serde_json::from_slice(&encoded).unwrap();
     assert_eq!(legacy_settings, settings);
 }
+
+#[test]
+fn displayed_fourier_residual_matches_rmc_on_offset_irregular_grid() {
+    let k: Vec<_> = (0..181)
+        .map(|i| 2.03 + 0.05 * i as f64 + 0.002 * (i as f64).sin())
+        .collect();
+    let chi: Vec<_> = k.iter().map(|q| (4. * q).sin() / q.powi(2)).collect();
+    let model: Vec<_> = k
+        .iter()
+        .map(|q| 0.8 * (4.1 * q).sin() / q.powi(2))
+        .collect();
+    let transform = rexafs::fitting::FeffFitTransform {
+        kmin: 4.,
+        kmax: 9.,
+        rmin: 1.2,
+        rmax: 4.,
+        kstep: Some(0.05),
+        ..Default::default()
+    };
+    for weight in 0..=3 {
+        let a = transform_spectrum_fourier(&k, &chi, weight, &transform).unwrap();
+        let b = transform_spectrum_fourier(&k, &model, weight, &transform).unwrap();
+        let data = ExafsDataset {
+            name: "offset measured grid".into(),
+            absorbers: vec![0],
+            edge: Edge::K,
+            k: k.clone(),
+            chi: chi.clone(),
+            sigma: vec![1.; k.len()],
+            weight: 1.,
+            kweight: weight,
+            s02: 1.,
+            delta_e0: 0.,
+        };
+        let score = Objective::R(transform.clone())
+            .score(&data, &model)
+            .unwrap();
+        let from_curves = a
+            .r_space
+            .mask_indices
+            .iter()
+            .map(|&i| (a.r_space.chir[i] - b.r_space.chir[i]).norm_sqr())
+            .sum::<f64>()
+            / a.r_space.mask_indices.len() as f64;
+        assert!(
+            (score - from_curves).abs() < 1e-12 * score.max(1.),
+            "weight {weight}: {score} vs {from_curves}"
+        );
+    }
+    assert!(transform_spectrum_fourier(&k, &chi[..5], 2, &transform).is_err());
+    assert!(transform_spectrum_fourier(&k, &chi, 4, &transform).is_err());
+}

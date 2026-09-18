@@ -87,7 +87,7 @@ pub use first_shell::*;
 pub use geometry::{Atom, Configuration};
 pub use local_spectrum::*;
 pub use moments::*;
-pub use objective::{transform_path_fourier, Objective};
+pub use objective::{transform_path_fourier, transform_spectrum_fourier, Objective};
 pub use options::RefeffOptions;
 pub use paths::*;
 #[cfg(feature = "refeff-runner")]

@@ -4,6 +4,7 @@ use super::{
     controls::Menu,
     fit_workspace::FitStep,
     molecule_view::{MoleculeScene, SceneAtom},
+    section_label,
 };
 use crate::{
     app::StudioApp,
@@ -38,7 +39,13 @@ pub(crate) struct RmcState {
     fields: Vec<Entity<NumericField>>,
     texts: Vec<Entity<TextInput>>,
     plots: Vec<Entity<RuvizPlot>>,
+    plotted_best: Option<u64>,
     plot_tab: usize,
+    fit_plot_view: usize,
+    hide_initial_curve: bool,
+    full_history: bool,
+    advanced: bool,
+    continuation: Option<Entity<NumericField>>,
     show_initial: bool,
     scene_key: Option<(usize, u64, bool)>,
     page: Option<FitStep>,
@@ -133,6 +140,8 @@ impl StudioApp {
             return div();
         }
         let paused = self.rmc.phase == "Paused";
+        let pending =
+            self.rmc.phase.starts_with("Pausing") || self.rmc.phase.starts_with("Stopping");
         let mut bar = div()
             .flex()
             .flex_wrap()
@@ -141,43 +150,72 @@ impl StudioApp {
             .px_3()
             .py_2()
             .bg(self.theme.raised)
-            .child(div().flex_1().child(if let Some(p) = &self.rmc.live {
-                format!(
-                    "RMC · {} · {}/{} attempts · best {:.6} · {:?}",
-                    self.rmc.phase, p.completed, p.limit, p.best.evaluation.score, p.trend.status
-                )
-            } else {
-                format!("RMC · {}", self.rmc.phase)
-            }));
+            .child(div().flex_1().min_w_0().flex().flex_col().gap_1()
+                .child(format!("RMC · {}", self.rmc.phase))
+                .child(div().text_size(px(11.)).text_color(self.theme.text_muted).child(
+                    if let Some(p) = &self.rmc.live {
+                        format!("{} / {} attempts · {:.1}% of budget · {}", count(p.completed), count(p.limit),
+                            100. * p.completed as f64 / p.limit.max(1) as f64,
+                            if paused { "Calculator retained for a fast resume" } else { "Updates after completed moves" })
+                    } else {
+                        "Preparing potentials and exact scattering paths. This may take several minutes; you can stop safely.".into()
+                    })));
         if paused {
             bar = bar.child(
-                button(&self.theme, "rmc-resume-live", "Resume", true)
-                    .on_click(cx.listener(|app, _, _, cx| app.resume_rmc(cx))),
+                button(
+                    &self.theme,
+                    "rmc-resume-live",
+                    if self.rmc.live.as_ref().is_some_and(|p| p.completed == 0) {
+                        "Start optimization"
+                    } else {
+                        "Resume"
+                    },
+                    true,
+                )
+                .on_click(cx.listener(|app, _, _, cx| app.resume_rmc(cx))),
             );
         } else {
             bar = bar.child(
-                button(&self.theme, "rmc-pause", "Pause", true).on_click(cx.listener(
-                    |app, _, _, cx| {
+                button(&self.theme, "rmc-pause", "Pause", false)
+                    .disabled(pending)
+                    .when(pending, |d| d.opacity(0.45).cursor_default())
+                    .on_click(cx.listener(|app, _, _, cx| {
                         if let Some(c) = &app.rmc.control {
                             c.pause();
                             app.rmc.phase = "Pausing after current move".into();
                         }
                         cx.notify();
-                    },
-                )),
+                    })),
             );
         }
-        bar.child(
-            button(&self.theme, "rmc-stop", "Stop and save", true).on_click(cx.listener(
-                |app, _, _, cx| {
+        bar = bar.child(
+            button(&self.theme, "rmc-stop", "Stop and save", false)
+                .disabled(self.rmc.phase.starts_with("Stopping"))
+                .when(self.rmc.phase.starts_with("Stopping"), |d| {
+                    d.opacity(0.45).cursor_default()
+                })
+                .on_click(cx.listener(|app, _, _, cx| {
                     if let Some(c) = &app.rmc.control {
                         c.stop();
                         app.rmc.phase = "Stopping and saving".into();
                     }
                     cx.notify();
-                },
-            )),
-        )
+                })),
+        );
+        let mut out = div().flex().flex_col().child(bar);
+        if let Some(p) = &self.rmc.live {
+            out = out.child(
+                div().h(px(3.)).bg(self.theme.border).child(
+                    div()
+                        .h_full()
+                        .w(gpui::relative(
+                            (p.completed as f32 / p.limit.max(1) as f32).clamp(0., 1.),
+                        ))
+                        .bg(self.theme.accent),
+                ),
+            );
+        }
+        out
     }
     fn rmc_source(&self) -> Source {
         Source {
@@ -288,6 +326,8 @@ impl StudioApp {
         self.rmc.recovery = Some(recovery);
         self.rmc.error = None;
         self.rmc.live = None;
+        self.rmc.project.saved = None;
+        self.rmc.continuation = None;
         self.rmc.plots.clear();
         self.rmc.scene_key = None;
         self.rmc.phase = "Preparing exact ReFEFF".into();
@@ -371,24 +411,34 @@ impl StudioApp {
         cx.notify();
     }
     fn resume_rmc(&mut self, cx: &mut Context<Self>) {
-        if !(1..=1_000_000_000).contains(&self.rmc.project.draft.steps) {
-            self.rmc.error = Some("Set 1…1,000,000,000 attempts for a continuation.".into());
-            cx.notify();
+        let Some(p) = self.rmc.live.as_ref() else {
             return;
-        }
+        };
+        let additional = self
+            .rmc
+            .continuation
+            .as_ref()
+            .map_or(Ok(Some(10_000.)), |field| field.read(cx).pending_value(cx));
+        let total = if p.completed < p.limit {
+            Ok(p.limit)
+        } else {
+            additional
+                .map_err(|_| "Enter a valid number of additional attempts.".to_string())
+                .and_then(|v| {
+                    v.ok_or_else(|| "Enter the number of additional attempts.".to_string())
+                })
+                .and_then(|v| engine::continuation_limit(p.completed, p.limit, v as usize))
+        };
+        let total = match total {
+            Ok(total) => total,
+            Err(e) => {
+                self.rmc.error = Some(e);
+                cx.notify();
+                return;
+            }
+        };
+        self.rmc.error = None;
         if let Some(c) = &self.rmc.control {
-            let total = self
-                .rmc
-                .live
-                .as_ref()
-                .map_or(self.rmc.project.draft.steps.max(1), |p| {
-                    if p.completed >= p.limit {
-                        p.completed
-                            .saturating_add(self.rmc.project.draft.steps.max(1))
-                    } else {
-                        p.limit
-                    }
-                });
             c.resume(total);
             self.rmc.phase = "Running".into();
             cx.notify();
@@ -399,12 +449,7 @@ impl StudioApp {
             cx.notify();
             return;
         };
-        if saved.progress.completed >= saved.request.settings.moves.steps {
-            saved.request.settings.moves.steps = saved
-                .progress
-                .completed
-                .saturating_add(self.rmc.project.draft.steps.max(1));
-        }
+        saved.request.settings.moves.steps = total;
         self.begin_rmc(false, Some(saved), cx);
     }
     fn rmc_checkpoint_dialog(&mut self, cx: &mut Context<Self>) {
@@ -448,6 +493,7 @@ impl StudioApp {
             cx.notify();
             return;
         }
+        self.rmc.generation += 1; // Ignore an older asynchronous file selection.
         let project = self.project_generation;
         let generation = self.rmc.generation;
         cx.spawn(async move |this, cx| {
@@ -471,6 +517,9 @@ impl StudioApp {
                         app.rmc.project.saved = Some(Box::new(saved));
                         app.rmc.recovery = Some(path);
                         app.rmc.error = None;
+                        app.rmc.continuation = None;
+                        app.rmc.plots.clear();
+                        app.rmc.plotted_best = None;
                         app.rebuild_rmc_plots(cx);
                         app.stage_view.fit_step = FitStep::Results;
                     }
@@ -658,10 +707,10 @@ impl StudioApp {
         let step = self.stage_view.fit_step;
         let mut nav = div().flex().flex_wrap().gap_2().px_3().py_2();
         for (i, (dest, label)) in [
-            (FitStep::Structure, "Structure"),
-            (FitStep::Calculate, "Calculate"),
-            (FitStep::Model, "Model"),
-            (FitStep::Results, "Results"),
+            (FitStep::Structure, "1 · Structure"),
+            (FitStep::Calculate, "2 · Supercell"),
+            (FitStep::Model, "3 · Fit settings"),
+            (FitStep::Results, "4 · Results"),
         ]
         .into_iter()
         .enumerate()
@@ -681,6 +730,9 @@ impl StudioApp {
             .child(
                 button(&t, "rmc-recover-latest", "Recover latest run", false)
                     .disabled(self.rmc.control.is_some())
+                    .when(self.rmc.control.is_some(), |d| {
+                        d.opacity(0.45).cursor_default()
+                    })
                     .on_click(cx.listener(|app, _, _, cx| app.recover_latest_rmc(cx))),
             )
             .child(self.fit_mode_picker(cx));
@@ -693,11 +745,43 @@ impl StudioApp {
             .child(nav)
             .child(self.rmc_job_bar(cx));
         if let Some(error) = &self.rmc.error {
-            out = out.child(div().px_3().py_2().text_color(t.warn).child(error.clone()));
+            out = out.child(
+                div()
+                    .px_3()
+                    .py_2()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .bg(t.raised)
+                    .child(div().flex_1().text_color(t.warn).child(error.clone()))
+                    .child(button(&t, "rmc-dismiss-error", "Dismiss", false).on_click(
+                        cx.listener(|app, _, _, cx| {
+                            app.rmc.error = None;
+                            cx.notify();
+                        }),
+                    )),
+            );
         }
-        if self.rmc.project.saved.is_some() || self.rmc.control.is_some() {
-            out = out.child(div().px_3().text_size(px(11.)).text_color(t.text_muted)
-                .child("Resume uses the saved spectrum, structure and settings. Edits apply to a new run. Pause before exporting the latest result."));
+        if step != FitStep::Results {
+            out = out.child(
+                div()
+                    .px_3()
+                    .py_2()
+                    .text_size(px(12.))
+                    .text_color(t.text_muted)
+                    .child(if self.spectrum.is_some() {
+                        format!(
+                            "Spectrum: {} · R-space real + imaginary · exact ReFEFF",
+                            self.spectrum_label
+                        )
+                    } else {
+                        "Select and process a spectrum in Background to begin.".into()
+                    }),
+            );
+            if self.rmc.control.is_some() {
+                out = out.child(div().px_3().py_2().text_color(t.warn)
+                    .child("A run is active. These settings are for the next run; use Results to pause, resume or stop the current run."));
+            }
         }
         if self.rmc_source_stale() {
             out=out.child(div().px_3().py_2().text_color(t.warn).child("Showing the saved run's inputs. The active spectrum or preprocessing differs; Resume continues the saved problem."));
@@ -722,7 +806,7 @@ impl StudioApp {
                                 button(
                                     &t,
                                     "rmc-use-structure",
-                                    "Use structure →",
+                                    "Use structure → Supercell",
                                     self.structure.summary.is_some(),
                                 )
                                 .disabled(
@@ -732,7 +816,7 @@ impl StudioApp {
                                 .on_click(cx.listener(|app, _, _, cx| app.use_rmc_structure(cx))),
                             )
                             .child(
-                                button(&t, "rmc-load-checkpoint", "Open RMC checkpoint…", true)
+                                button(&t, "rmc-load-checkpoint", "Open RMC checkpoint…", false)
                                     .on_click(
                                         cx.listener(|app, _, _, cx| app.rmc_checkpoint_dialog(cx)),
                                     ),
@@ -743,38 +827,28 @@ impl StudioApp {
         }
         if matches!(step, FitStep::Calculate | FitStep::Model) {
             self.ensure_rmc_fields(cx);
-            let fields = if step == FitStep::Calculate {
-                0..8
-            } else {
-                8..self.rmc.fields.len()
-            };
+            let is_cell = step == FitStep::Calculate;
             let mut panel = div()
                 .id("rmc-settings")
-                .w(px(340.))
-                .flex_none()
+                .flex_1()
                 .min_h_0()
                 .overflow_y_scroll()
                 .p_3()
                 .flex()
                 .flex_col()
-                .gap_2();
-            panel = panel.child(div().child(if step == FitStep::Calculate {
-                "Supercell and exact ReFEFF"
-            } else {
-                "Coordinate refinement · R real + imaginary"
-            }));
-            for i in fields {
-                panel = panel.child(self.rmc.fields[i].clone());
-            }
-            if step == FitStep::Calculate {
+                .gap_3();
+            if is_cell {
+                panel = panel.child(section_label(&t, "Periodic supercell"))
+                    .child(hint(&t, "Edit the repeats to update the 3D preview. Scattering starts only when you prepare or run."));
+                for i in 0..3 {
+                    panel = panel.child(self.rmc.fields[i].clone());
+                }
                 panel = panel.child(
                     button(&t, "rmc-supercell", "Use suggested size", false)
                         .on_click(cx.listener(|app, _, _, cx| app.suggest_rmc_supercell(cx))),
                 );
-                panel = panel.child(div().text_size(px(11.5)).text_color(t.text_muted)
-                    .child("Live preview while typing · no scattering calculation. Suggested size spans twice the cluster radius plus the displacement margin; larger cells cost more."));
                 if self.rmc.builder_busy {
-                    panel = panel.child("Updating preview…");
+                    panel = panel.child(hint(&t, "Updating preview…"));
                 }
                 if let Some(e) = &self.rmc.builder_error {
                     panel = panel.child(
@@ -789,14 +863,19 @@ impl StudioApp {
                     if let Err(e) = &absorbers {
                         panel = panel.child(div().text_color(t.warn).child(e.clone()));
                     }
-                    let absorbers = absorbers.unwrap_or(0);
-                    panel = panel.child(format!(
-                        "{} atoms · {absorbers} absorbing sites · periodic cell",
-                        c.atoms.len()
-                    ));
+                    panel = panel.child(div().rounded_md().p_2().bg(t.raised).child(format!(
+                        "{} atoms · {} absorbing sites",
+                        count(c.atoms.len()),
+                        count(absorbers.unwrap_or(0))
+                    )));
                     let elements: std::collections::BTreeSet<_> =
                         c.atoms.iter().map(|a| a.atomic_number).collect();
-                    let mut row = div().flex().flex_wrap().gap_1().child("Absorber");
+                    let mut row = div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_2()
+                        .child("Absorber");
                     for z in elements {
                         let label = Element::from_z(z).map_or("?", |e| e.symbol);
                         row = row.child(
@@ -817,7 +896,7 @@ impl StudioApp {
                     }
                     panel = panel.child(row);
                 }
-                let mut edges = div().flex().gap_1().child("Edge");
+                let mut edges = div().flex().items_center().gap_2().child("Edge");
                 for (i, edge) in [Edge::K, Edge::L1, Edge::L2, Edge::L3]
                     .into_iter()
                     .enumerate()
@@ -835,44 +914,116 @@ impl StudioApp {
                         })),
                     );
                 }
-                panel = panel.child(edges);
-                panel = panel
-                    .child("Absorbing atom indices (blank = all of element)")
-                    .child(self.rmc.texts[0].clone())
-                    .child("Fixed atom indices (zero based)")
-                    .child(self.rmc.texts[1].clone());
+                panel = panel.child(edges).child(hint(&t, "All sites of the selected element contribute to the average. Larger cells and more sites cost more."));
             } else {
+                panel = panel.child(section_label(&t, "Run budget"))
+                    .child(self.rmc.fields[8].clone())
+                    .child(self.rmc.fields[9].clone())
+                    .child(hint(&t, "10,000 attempts is a starting budget, not a convergence guarantee. Pause and continue whenever needed."))
+                    .child(section_label(&t, "R-space objective"));
+                for i in 14..19 {
+                    panel = panel.child(self.rmc.fields[i].clone());
+                }
                 panel = panel.child(button(&t, "rmc-spectrum-ranges", "Use spectrum ranges", false)
                     .on_click(cx.listener(|app, _, _, cx| app.use_rmc_spectrum_ranges(cx))))
-                    .child(div().text_size(px(11.5)).text_color(t.text_muted)
-                        .child("Defaults: 10,000 attempts, 0.03 Å moves, numerical tolerance 0.001, exact paths. Spectrum ranges start 0.15 Å above saved Rbkg. Check calibration and convergence for your sample."));
-                panel=panel.child("Pair minimum distances (Å)").child(self.rmc.texts[2].clone())
-                    .child(div().text_size(px(11.5)).text_color(t.text_muted).child("Exact cached paths; fixed reference potentials. Adaptive scattering remains experimental and is not enabled here. R min must be at least the spectrum's Rbkg."));
+                    .child(hint(&t, "R min starts 0.15 Å above saved Rbkg to avoid the low-R background region."))
+                    .child(section_label(&t, "Fixed calibration"))
+                    .child(self.rmc.fields[12].clone()).child(self.rmc.fields[13].clone())
+                    .child(hint(&t, "Check S₀² and ΔE₀ before running. RMC moves coordinates; these two values stay fixed."));
             }
-            panel = panel
-                .child(
-                    button(
-                        &t,
-                        "rmc-prepare",
-                        "Prepare initial fit",
-                        self.rmc.control.is_none(),
-                    )
-                    .disabled(
-                        self.rmc.control.is_some()
-                            || self.rmc.builder_busy
-                            || self.rmc.builder_error.is_some(),
-                    )
-                    .on_click(cx.listener(|app, _, _, cx| app.begin_rmc(true, None, cx))),
+            panel = panel.child(
+                button(
+                    &t,
+                    "rmc-advanced",
+                    if self.rmc.advanced {
+                        "▾ Advanced settings"
+                    } else {
+                        "▸ Advanced settings"
+                    },
+                    false,
                 )
-                .child(
-                    button(&t, "rmc-run", "Run RMC", true)
+                .on_click(cx.listener(|app, _, _, cx| {
+                    app.rmc.advanced = !app.rmc.advanced;
+                    cx.notify();
+                })),
+            );
+            if self.rmc.advanced {
+                if is_cell {
+                    panel = panel.child(section_label(&t, "Exact scattering"));
+                    for i in 3..6 {
+                        panel = panel.child(self.rmc.fields[i].clone());
+                    }
+                    panel = panel.child(hint(&t, "Exact cached paths with fixed reference potentials. Adaptive scattering is experimental and disabled."))
+                        .child(section_label(&t, "Physical bounds"));
+                    for i in 6..8 {
+                        panel = panel.child(self.rmc.fields[i].clone());
+                    }
+                    panel = panel.child(hint(&t, "Displacement is measured from the starting positions. Minimum distance rejects atomic overlaps."))
+                        .child("Absorbing atom indices (blank = all)").child(self.rmc.texts[0].clone())
+                        .child("Fixed atom indices").child(self.rmc.texts[1].clone())
+                        .child(hint(&t, "Indices start at 0. Atom 0 is fixed by default to anchor the structure."));
+                } else {
+                    panel = panel.child(self.rmc.fields[10].clone()).child(self.rmc.fields[11].clone())
+                        .child(hint(&t, "Tolerance controls acceptance of worse moves; zero accepts improvements only. It is numerical, not a physical temperature."))
+                        .child("Pair minimum distances (Å)").child(self.rmc.texts[2].clone())
+                        .child(hint(&t, "Optional: Cu-O=1.5, Cu-Cu=2.0. Choose physically justified bounds for your material."));
+                }
+            }
+            let reason = self.rmc_form_blocker(cx);
+            let mut footer = div()
+                .p_3()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .border_t_1()
+                .border_color(t.border)
+                .bg(t.surface);
+            if is_cell {
+                footer = footer.child(
+                    button(&t, "rmc-next-model", "Next: fit settings →", true)
                         .disabled(
-                            self.rmc.control.is_some()
+                            self.rmc.project.configuration.is_none()
                                 || self.rmc.builder_busy
                                 || self.rmc.builder_error.is_some(),
                         )
-                        .on_click(cx.listener(|app, _, _, cx| app.begin_rmc(false, None, cx))),
+                        .on_click(cx.listener(|app, _, _, cx| {
+                            app.stage_view.fit_step = FitStep::Model;
+                            app.rmc.advanced = false;
+                            cx.notify();
+                        })),
                 );
+            } else {
+                footer = footer
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(if reason.is_some() { t.warn } else { t.success })
+                            .child(reason.clone().unwrap_or_else(|| {
+                                "Ready · processed spectrum and valid supercell".into()
+                            })),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .child(
+                                button(&t, "rmc-prepare", "Preview initial fit", false)
+                                    .disabled(reason.is_some())
+                                    .when(reason.is_some(), |d| d.opacity(0.45).cursor_default())
+                                    .on_click(
+                                        cx.listener(|app, _, _, cx| app.begin_rmc(true, None, cx)),
+                                    ),
+                            )
+                            .child(
+                                button(&t, "rmc-run", "Run RMC →", true)
+                                    .disabled(reason.is_some())
+                                    .when(reason.is_some(), |d| d.opacity(0.45).cursor_default())
+                                    .on_click(
+                                        cx.listener(|app, _, _, cx| app.begin_rmc(false, None, cx)),
+                                    ),
+                            ),
+                    );
+            }
             let scene = self.rmc_structure_panel(false, cx);
             return out.child(
                 div()
@@ -880,7 +1031,18 @@ impl StudioApp {
                     .min_h_0()
                     .min_w_0()
                     .flex()
-                    .child(panel)
+                    .child(
+                        div()
+                            .w(px(340.))
+                            .flex_none()
+                            .min_h_0()
+                            .flex()
+                            .flex_col()
+                            .border_r_1()
+                            .border_color(t.border)
+                            .child(panel)
+                            .child(footer),
+                    )
                     .child(scene),
             );
         }
@@ -889,25 +1051,15 @@ impl StudioApp {
 }
 
 impl StudioApp {
-    /// Read the visible input, including uncommitted edits, before submission.
-    fn commit_rmc_fields(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
-        if self.rmc.fields.is_empty() {
-            return Ok(());
-        }
-        let values: Vec<f64> = self
-            .rmc
-            .fields
-            .iter()
-            .map(|field| {
-                field
-                    .read(cx)
-                    .pending_value(cx)
-                    .map_err(|_| "Invalid numeric RMC setting.".to_string())?
-                    .ok_or_else(|| "All RMC settings require explicit values.".to_string())
-            })
-            .collect::<Result<_, _>>()?;
+    /// Read uncommitted controls for both inline feedback and submission.
+    fn pending_rmc_draft(&self, cx: &Context<Self>) -> Result<engine::Draft, String> {
         let mut draft = self.rmc.project.draft.clone();
-        for (index, value) in values.into_iter().enumerate() {
+        for (index, field) in self.rmc.fields.iter().enumerate() {
+            let value = field
+                .read(cx)
+                .pending_value(cx)
+                .map_err(|_| format!("{}: enter a valid number.", FIELD_LABELS[index]))?
+                .ok_or_else(|| format!("{} requires an explicit value.", FIELD_LABELS[index]))?;
             set_draft_field(&mut draft, index, value);
         }
         if self.rmc.texts.len() == 3 {
@@ -915,8 +1067,47 @@ impl StudioApp {
             draft.fixed_atoms = self.rmc.texts[1].read(cx).text().into();
             draft.constraints.pairs = engine::pair_distances(self.rmc.texts[2].read(cx).text())?;
         }
+        Ok(draft)
+    }
+    fn rmc_form_blocker(&self, cx: &Context<Self>) -> Option<String> {
+        (|| -> Result<(), String> {
+            if self.rmc.control.is_some() {
+                return Err("Stop and save the active run before starting a new one.".into());
+            }
+            if self.fit_running || self.feff_running || self.batch_running {
+                return Err("Wait for the active calculation to finish.".into());
+            }
+            if self.load_running || self.stale_plots.is_some() {
+                return Err("Finish spectrum processing in Background first.".into());
+            }
+            if !cfg!(feature = "refeff-runner") {
+                return Err("This desktop build needs the ReFEFF backend.".into());
+            }
+            if self.rmc.builder_busy {
+                return Err("Updating the supercell preview…".into());
+            }
+            if let Some(e) = &self.rmc.builder_error {
+                return Err(e.clone());
+            }
+            let spectrum = self
+                .spectrum
+                .as_ref()
+                .ok_or("Select a spectrum in the Groups panel.")?;
+            let configuration = self
+                .rmc
+                .project
+                .configuration
+                .as_ref()
+                .ok_or("Choose a structure and build its supercell first.")?;
+            let draft = self.pending_rmc_draft(cx)?;
+            draft.validate_form(spectrum, configuration)
+        })()
+        .err()
+    }
+    fn commit_rmc_fields(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
+        let draft = self.pending_rmc_draft(cx)?;
         if draft.repeats != self.rmc.project.draft.repeats {
-            self.rmc.project.configuration = None;
+            return Err("Wait for the supercell preview to finish updating.".into());
         }
         self.rmc.project.draft = draft;
         Ok(())
@@ -935,7 +1126,7 @@ impl StudioApp {
             ("Maximum path legs", d.options.max_legs as f64),
             ("Maximum displacement (Å)", d.max_displacement),
             ("Minimum distance (Å)", d.min_distance),
-            ("Attempts / continuation", d.steps as f64),
+            ("Attempt budget", d.steps as f64),
             ("Move size (Å)", d.step_size),
             ("Metropolis tolerance", d.temperature),
             ("Random seed", d.seed as f64),
@@ -953,8 +1144,20 @@ impl StudioApp {
             } else {
                 FieldKind::Float
             };
-            let field = cx
-                .new(|cx| NumericField::new(label, "required", Some(value), kind, self.theme, cx));
+            let step = match index {
+                8 => 1_000.,
+                9 => 0.01,
+                10 => 0.0001,
+                12 => 0.01,
+                3 | 4 | 6 | 7 | 13..=17 => 0.1,
+                _ => 1.,
+            };
+            let field = cx.new(|cx| {
+                NumericField::new(label, "required", Some(value), kind, self.theme, cx)
+                    .with_step(step)
+            });
+            cx.subscribe(&field, |_, _, _: &FieldPreview, cx| cx.notify())
+                .detach();
             if index <= 2 {
                 cx.subscribe(&field, |app, _, _: &FieldPreview, cx| {
                     app.build_rmc_supercell(cx)
@@ -1011,6 +1214,9 @@ impl StudioApp {
         {
             let field = cx.new(|cx| TextInput::new(placeholder, value, self.theme, cx));
             cx.subscribe(&field, move |app, _, event, cx| {
+                if matches!(event, InputEvent::Edited(_)) {
+                    cx.notify();
+                }
                 if let InputEvent::Edited(value) = event
                     && index == 0
                 {
@@ -1041,15 +1247,34 @@ impl StudioApp {
         }
     }
     pub(crate) fn restore_rmc_plots(&mut self, cx: &mut Context<Self>) {
+        self.rmc.plotted_best = None;
         self.rebuild_rmc_plots(cx);
+    }
+    pub(crate) fn restyle_rmc(&mut self, cx: &mut Context<Self>) {
+        for field in self.rmc.fields.iter().chain(self.rmc.continuation.iter()) {
+            field.update(cx, |f, cx| f.set_theme(self.theme, cx));
+        }
+        for field in &self.rmc.texts {
+            field.update(cx, |f, cx| f.set_theme(self.theme, cx));
+        }
+        self.restore_rmc_plots(cx);
     }
     fn rebuild_rmc_plots(&mut self, cx: &mut Context<Self>) {
         let (Some(progress), Some(request)) = (&self.rmc.live, &self.rmc.request) else {
             return;
         };
-        match result_plots(progress, request, self.theme) {
+        let key = progress.best.evaluation.score.to_bits();
+        let refresh_curves = self.rmc.plots.len() != 5 || self.rmc.plotted_best != Some(key);
+        match result_plots(
+            progress,
+            request,
+            self.theme,
+            refresh_curves,
+            !self.rmc.hide_initial_curve,
+            self.rmc.full_history,
+        ) {
             Ok(plots) => {
-                for (i, plot) in plots.into_iter().enumerate() {
+                for (i, plot) in plots {
                     if let Some(entity) = self.rmc.plots.get(i) {
                         entity.update(cx, |view, cx| view.set_plot_keep_view(plot, cx));
                     } else {
@@ -1058,16 +1283,27 @@ impl StudioApp {
                             .push(plot_builder(plot).interactive().build(cx));
                     }
                 }
+                self.rmc.plotted_best = Some(key);
             }
             Err(e) => self.rmc.error = Some(e),
         }
-        self.rmc.scene_key = None;
+        if refresh_curves {
+            self.rmc.scene_key = None;
+        }
     }
     fn rmc_results(&mut self, cx: &mut Context<Self>) -> gpui::Div {
         let t = self.theme;
         let mut out = div().flex_1().min_h_0().min_w_0().flex().flex_col();
-        let mut actions = div().flex().flex_wrap().gap_2().px_3().py_2();
-        for (i, label) in ["Fit plots", "Structure", "Convergence"]
+        let export_disabled = self.rmc.project.saved.is_none()
+            || (self.rmc.control.is_some() && self.rmc.phase != "Paused");
+        let mut actions = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .px_3()
+            .py_2();
+        for (i, label) in ["Fit plots", "Structure", "Convergence", "Run details"]
             .into_iter()
             .enumerate()
         {
@@ -1080,38 +1316,31 @@ impl StudioApp {
                 ),
             );
         }
-        actions = actions.child(div().flex_1());
-        if self.rmc.control.is_none() && self.rmc.project.saved.is_some() {
-            actions = actions.child(
-                button(&t, "rmc-resume-saved", "Resume / continue", true)
-                    .on_click(cx.listener(|app, _, _, cx| app.resume_rmc(cx))),
-            );
-        }
         actions = actions
+            .child(div().flex_1())
             .child(
-                button(&t, "rmc-open-run", "Open checkpoint…", true)
+                button(&t, "rmc-open-run", "Open checkpoint…", false)
+                    .disabled(self.rmc.control.is_some())
+                    .when(self.rmc.control.is_some(), |d| {
+                        d.opacity(0.45).cursor_default()
+                    })
                     .on_click(cx.listener(|app, _, _, cx| app.rmc_checkpoint_dialog(cx))),
             )
             .child(
-                button(
-                    &t,
-                    "rmc-export",
-                    "Export result…",
-                    self.rmc.project.saved.is_some(),
-                )
-                .disabled(
-                    self.rmc.project.saved.is_none()
-                        || (self.rmc.control.is_some() && self.rmc.phase != "Paused"),
-                )
-                .on_click(cx.listener(|app, _, _, cx| app.export_rmc(cx))),
+                button(&t, "rmc-export", "Export result…", false)
+                    .disabled(export_disabled)
+                    .when(export_disabled, |d| d.opacity(0.45).cursor_default())
+                    .on_click(cx.listener(|app, _, _, cx| app.export_rmc(cx))),
             );
         out = out.child(actions);
-        let Some(p) = self.rmc.live.clone() else {
-            return out.child(
-                div()
-                    .p_3()
-                    .child("Prepare a structure and run RMC, or open a saved checkpoint."),
-            );
+        let Some(p) = &self.rmc.live else {
+            return out.child(div().flex_1().flex().flex_col().justify_center().items_center().gap_3().p_4()
+                .child(div().text_size(px(18.)).child(if self.rmc.control.is_some() { "Preparing your initial fit" } else { "Your RMC results will appear here" }))
+                .child(hint(&t, if self.rmc.control.is_some() {
+                    "Exact ReFEFF preparation runs in the background. Live curves will appear when the initial calculation finishes."
+                } else { "Choose a structure, check the fit settings, then preview the initial fit or start optimization." }))
+                .when(self.rmc.control.is_none(), |d| d.child(button(&t, "rmc-back-setup", "Go to fit settings →", true)
+                    .on_click(cx.listener(|app, _, _, cx| { app.stage_view.fit_step = FitStep::Model; cx.notify(); })))));
         };
         let initial = p.initial.evaluation.score;
         let best = p.best.evaluation.score;
@@ -1120,80 +1349,286 @@ impl StudioApp {
         } else {
             "—".into()
         };
-        let trend = match p.trend.status {
-            ResidualTrendStatus::InsufficientHistory => "Insufficient history",
-            ResidualTrendStatus::StillChanging => "Still changing",
-            ResidualTrendStatus::ResidualPlateau => "Residual plateau",
-        };
-        let acceptance = if p.completed > 0 {
-            100. * p.accepted as f64 / p.completed as f64
-        } else {
-            0.
-        };
-        let reuse = p
-            .cache
-            .active_reuse()
-            .map(|v| format!("{:.1}%", 100. * v))
-            .unwrap_or_else(|| "—".into());
-        let sec = if p.completed > 0 {
-            p.elapsed_seconds / p.completed as f64
-        } else {
-            0.
-        };
-        let mut summary=div().px_3().py_2().flex().flex_col().gap_1().bg(t.surface)
-            .child(format!("Initial {initial:.7}  →  best {best:.7}  ·  improvement {improvement}  ·  current {:.7}",p.current_score))
-            .child(format!("{} · {trend} · {}/{} attempts · accepted {acceptance:.1}% · constraint rejected {}",self.rmc.phase,p.completed,p.limit,p.constraint_rejected))
-            .child(format!("Active time {:.1}s · setup this session {:.1}s · inclusive {:.3}s/attempt · active path reuse {reuse}",p.elapsed_seconds,p.setup_seconds,sec))
-            .child(div().text_size(px(11.5)).text_color(t.text_muted).child("Normalized R real + imaginary residual plus structural penalty. Reuse = reused active paths / (reused active + exact path calculations), current calculator only."));
-        for fit in &p.best.evaluation.datasets {
-            summary = summary.child(format!(
-                "{}: spectral residual {:.7} · structural penalty {:.7}",
-                fit.name, fit.score, p.best.penalty
-            ));
+        if self.rmc.control.is_none() && self.rmc.project.saved.is_some() {
+            let complete = p.completed >= p.limit;
+            let mut resume = div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_3()
+                .px_3()
+                .py_2()
+                .bg(t.raised)
+                .child(div().flex_1().child(format!(
+                    "{} · {} completed attempts",
+                    self.rmc.phase,
+                    count(p.completed)
+                )));
+            if complete {
+                let field = self.rmc.continuation.get_or_insert_with(|| {
+                    cx.new(|cx| {
+                        NumericField::new(
+                            "Additional attempts",
+                            "required",
+                            Some(10_000.),
+                            FieldKind::Integer { min: Some(0) },
+                            t,
+                            cx,
+                        )
+                        .with_step(1_000.)
+                    })
+                });
+                resume = resume.child(div().w(px(320.)).flex_none().child(field.clone()));
+            }
+            resume = resume.child(
+                button(
+                    &t,
+                    "rmc-resume-saved",
+                    if complete {
+                        "Continue optimization →"
+                    } else {
+                        "Resume saved run →"
+                    },
+                    true,
+                )
+                .on_click(cx.listener(|app, _, _, cx| app.resume_rmc(cx))),
+            );
+            out = out.child(resume);
         }
-        if let Some(request) = &self.rmc.request
-            && let rexafs::rmc::Objective::R(transform) = &request.problem.datasets[0].objective
-        {
-            summary = summary.child(format!("Objective window: k {:.2}–{:.2} Å⁻¹ · R {:.2}–{:.2} Å · k weight {}. Curves may extend outside the fitted region.",
-                    transform.kmin, transform.kmax, transform.rmin, transform.rmax,
-                    request.problem.datasets[0].exafs.kweight));
+        let trend = trend_label(&p.trend.status);
+        out = out.child(
+            div()
+                .flex()
+                .gap_2()
+                .px_3()
+                .py_2()
+                .child(metric(
+                    &t,
+                    "Best objective ↓",
+                    format!("{best:.7}"),
+                    format!("Initial {initial:.7}"),
+                ))
+                .child(metric(
+                    &t,
+                    "Improvement",
+                    improvement,
+                    format!("Current {:.7}", p.current_score),
+                ))
+                .child(metric(
+                    &t,
+                    "Convergence",
+                    trend.into(),
+                    match p.trend.status {
+                        ResidualTrendStatus::InsufficientHistory => format!(
+                            "Need at least {} attempts",
+                            count(p.trend.settings.minimum_attempts)
+                        ),
+                        ResidualTrendStatus::StillChanging => {
+                            "Continue and monitor the trend".into()
+                        }
+                        ResidualTrendStatus::ResidualPlateau => {
+                            "Numerical plateau; inspect the fit".into()
+                        }
+                    },
+                )),
+        );
+        if let Some(request) = &self.rmc.request {
+            let data = &request.problem.datasets[0];
+            if let rexafs::rmc::Objective::R(transform) = &data.objective {
+                out = out.child(div().px_3().pb_2().text_size(px(11.5)).text_color(t.text_muted).child(format!(
+                    "{} · R {:.2}–{:.2} Å · k {:.2}–{:.2} Å⁻¹ · k weight {} · fitting real + imaginary",
+                    request.source.label, transform.rmin, transform.rmax, transform.kmin, transform.kmax, data.exafs.kweight)));
+            }
         }
-        if let Some(window) = p.trend.windows.last() {
-            let best_change = window
-                .best_improvement
-                .map_or_else(|| "—".into(), |v| format!("{v:.3e}"));
-            let mean_change = window
-                .mean_change
-                .map_or_else(|| "—".into(), |v| format!("{v:.3e}"));
-            summary = summary.child(format!("Recent {}–{}: best change {best_change}, mean change {mean_change} · plateau requires 3 passing 500-attempt comparisons after 3,000 attempts", window.first_step, window.last_step));
-        }
-        if let Some(path) = &self.rmc.recovery {
-            summary = summary.child(div().text_size(px(11.5)).text_color(t.text_muted).child(
-                format!(
-                    "Recovery checkpoint: {} · saved at move boundaries every 30 seconds and on pause/stop",
-                    path.display()
-                ),
-            ));
-        }
-        out = out.child(summary);
         if self.rmc.plot_tab == 1 {
             return out.child(self.rmc_structure_panel(true, cx));
         }
         if self.rmc.plot_tab == 2 {
+            let settings = &p.trend.settings;
+            let mut diagnostic = div().px_3().py_2().flex().flex_col().gap_1().bg(t.surface)
+                .child(match p.trend.status {
+                    ResidualTrendStatus::InsufficientHistory => "Too early to assess convergence. Reaching the attempt budget alone does not establish a plateau.",
+                    ResidualTrendStatus::StillChanging => "The recent residual is still changing. Continue the same run to assess whether it settles.",
+                    ResidualTrendStatus::ResidualPlateau => "The recent residual has plateaued. This does not establish a unique or physically complete structure.",
+                })
+                .child(hint(&t, format!("Criterion: {} consecutive comparisons of {}-attempt windows, after {} attempts. This diagnostic does not stop the run.",
+                    settings.stable_windows, count(settings.window), count(settings.minimum_attempts))));
+            if let Some(w) = p.trend.windows.last() {
+                diagnostic = diagnostic.child(format!(
+                    "Recent attempts {}–{} · best improvement {} · mean change {}",
+                    count(w.first_step),
+                    count(w.last_step),
+                    w.best_improvement
+                        .map_or_else(|| "—".into(), |v| format!("{v:.3e}")),
+                    w.mean_change
+                        .map_or_else(|| "—".into(), |v| format!("{v:.3e}"))
+                ));
+            }
+            diagnostic = diagnostic.child(
+                div()
+                    .flex()
+                    .gap_3()
+                    .child(
+                        div()
+                            .text_color(crate::plotting::trace_rgba(&t, 0))
+                            .child("━ Current objective"),
+                    )
+                    .child(
+                        div()
+                            .text_color(crate::plotting::trace_rgba(&t, 2))
+                            .child("━ Best objective"),
+                    ),
+            );
+            let mut scope = div().flex().gap_2().items_center();
+            for (i, label) in ["Recent trend", "All retained attempts"]
+                .into_iter()
+                .enumerate()
+            {
+                scope = scope.child(
+                    chip(
+                        &t,
+                        ("rmc-trend-scope", i),
+                        label,
+                        self.rmc.full_history == (i == 1),
+                    )
+                    .on_click(cx.listener(move |app, _, _, cx| {
+                        app.rmc.full_history = i == 1;
+                        if app.rmc.plots.len() == 5 {
+                            app.rmc.plots.pop();
+                        }
+                        app.rebuild_rmc_plots(cx);
+                        cx.notify();
+                    })),
+                );
+            }
+            diagnostic = diagnostic.child(scope).child(hint(&t, "Recent view shows the latest four diagnostic windows. Changing this view does not change the convergence criterion."));
+            out = out.child(diagnostic);
             if let Some(plot) = self.rmc.plots.get(4) {
                 out = out.child(div().flex_1().min_h_0().p_3().child(plot.clone()));
             }
             return out;
         }
+        if self.rmc.plot_tab == 3 {
+            let acceptance = if p.completed > 0 {
+                100. * p.accepted as f64 / p.completed as f64
+            } else {
+                0.
+            };
+            let reuse = p
+                .cache
+                .active_reuse()
+                .map(|v| format!("{:.1}%", 100. * v))
+                .unwrap_or_else(|| "—".into());
+            let sec = if p.completed > 0 {
+                format!("{:.3} s/attempt", p.elapsed_seconds / p.completed as f64)
+            } else {
+                "Awaiting moves".into()
+            };
+            let mut details = div().id("rmc-run-details").flex_1().min_h_0().overflow_y_scroll().p_3().flex().flex_col().gap_3()
+                .child(section_label(&t, "Optimization"))
+                .child(format!("{} / {} attempts · accepted {acceptance:.1}% · constraint rejected {}", count(p.completed), count(p.limit), count(p.constraint_rejected)))
+                .child(format!("Active time {:.1} s · setup this session {:.1} s · {sec} inclusive", p.elapsed_seconds, p.setup_seconds))
+                .child(hint(&t, "Time includes preparation and calculation but excludes pauses. Inclusive time per attempt is not an isolated scattering benchmark."))
+                .child(section_label(&t, "Exact scattering cache"))
+                .child(format!("Active path reuse {reuse} · {} exact path calculations · {:.1} MiB cached", count(p.cache.exact as usize), p.cache.bytes as f64 / 1048576.))
+                .child(hint(&t, "Reuse = reused active paths / (reused active paths + exact calculations). Cache counters restart on a cold resume."))
+                .child(section_label(&t, "Objective"))
+                .child(hint(&t, "Normalized R-space real + imaginary residual plus a structural penalty. R magnitude and k-space curves are diagnostic views."));
+            for fit in &p.best.evaluation.datasets {
+                details = details.child(format!(
+                    "Spectral residual {:.7} · structural penalty {:.7}",
+                    fit.score, p.best.penalty
+                ));
+            }
+            details = details.child(section_label(&t, "Recovery and provenance"));
+            if let Some(saved) = &self.rmc.project.saved {
+                details = details.child(format!(
+                    "Checkpoint state: {} completed attempts",
+                    count(saved.progress.completed)
+                ));
+            }
+            if let Some(path) = &self.rmc.recovery {
+                details = details.child(format!("Recovery file: {}", path.display()));
+            }
+            details = details.child(hint(&t, "Saved after preparation, every 30 seconds at move boundaries, and on pause, stop or completion. Resume keeps the saved spectrum, preprocessing, structure, calibration and random sequence. Draft edits apply to a new run."))
+                .child(hint(&t, "Pause before exporting the latest completed state. Export includes checkpoint, initial/best structures, k/R curves and a convergence report."));
+            return out.child(details);
+        }
+        let mut views = div().flex().flex_wrap().items_center().gap_2().px_3();
+        for (i, label) in ["k + R magnitude", "R real + imaginary", "All four plots"]
+            .into_iter()
+            .enumerate()
+        {
+            views = views.child(
+                chip(
+                    &t,
+                    ("rmc-curve-view", i),
+                    label,
+                    self.rmc.fit_plot_view == i,
+                )
+                .on_click(cx.listener(move |app, _, _, cx| {
+                    app.rmc.fit_plot_view = i;
+                    cx.notify();
+                })),
+            );
+        }
+        views = views.child(
+            button(
+                &t,
+                "rmc-toggle-initial",
+                if self.rmc.hide_initial_curve {
+                    "Show initial"
+                } else {
+                    "Hide initial"
+                },
+                false,
+            )
+            .on_click(cx.listener(|app, _, _, cx| {
+                app.rmc.hide_initial_curve = !app.rmc.hide_initial_curve;
+                app.rmc.plotted_best = None;
+                // Recompute automatic limits when toggling traces, while ordinary
+                // live updates keep the user's zoom/pan unchanged.
+                app.rmc.plots.clear();
+                app.rebuild_rmc_plots(cx);
+                cx.notify();
+            })),
+        );
+        let mut legend = div().flex().flex_wrap().items_center().gap_3();
+        for (i, label) in ["Experimental", "Initial", "Best"].into_iter().enumerate() {
+            if i == 1 && self.rmc.hide_initial_curve {
+                continue;
+            }
+            legend = legend.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .w(px(16.))
+                            .h(px(3.))
+                            .bg(crate::plotting::trace_rgba(&t, i)),
+                    )
+                    .child(hint(&t, label)),
+            );
+        }
+        out = out.child(views.child(div().flex_1()).child(legend));
+        let indices: &[usize] = match self.rmc.fit_plot_view {
+            1 => &[2, 3],
+            2 => &[0, 1, 2, 3],
+            _ => &[0, 1],
+        };
         let mut grid = div().flex_1().min_h_0().flex().flex_col().gap_2().p_3();
-        for pair in self.rmc.plots.iter().take(4).collect::<Vec<_>>().chunks(2) {
+        for pair in indices.chunks(2) {
             let mut row = div().flex_1().min_h_0().min_w_0().flex().gap_2();
-            for plot in pair {
-                row = row.child(div().flex_1().min_w_0().min_h_0().child((*plot).clone()));
+            for &index in pair {
+                if let Some(plot) = self.rmc.plots.get(index) {
+                    row = row.child(div().flex_1().min_w_0().min_h_0().child(plot.clone()));
+                }
             }
             grid = grid.child(row);
         }
-        out.child(grid)
+        out.child(grid).child(div().px_3().pb_2().child(hint(&t, "Experimental / initial / best · curves may extend outside the fitted window. Best fit and best structure always refer to the same state.")))
     }
     fn rmc_structure_panel(&mut self, result: bool, cx: &mut Context<Self>) -> gpui::Div {
         let configuration = if result {
@@ -1276,9 +1711,49 @@ impl StudioApp {
                 length(cell[2])
             ));
         }
+        bar = bar.child(div().flex_1()).child(
+            button(&self.theme, "rmc-reset-view", "Reset view", false).on_click(cx.listener(
+                |app, _, _, cx| {
+                    app.structure.camera = Default::default();
+                    cx.notify();
+                },
+            )),
+        );
+        let elements: std::collections::BTreeSet<_> = configuration
+            .atoms
+            .iter()
+            .map(|a| a.atomic_number)
+            .collect();
+        let legend = elements
+            .into_iter()
+            .map(|z| {
+                let name = Element::from_z(z).map_or("?", |e| e.symbol);
+                if source
+                    .iter()
+                    .any(|i| configuration.atoms[*i].atomic_number == z)
+                {
+                    format!("{name}: absorbing sites")
+                } else {
+                    name.into()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" · ");
         out = out
             .child(bar)
-            .child(div().flex_1().min_h_0().min_w_0().child(canvas));
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .min_w_0()
+                    .relative()
+                    .overflow_hidden()
+                    .child(canvas),
+            )
+            .child(div().px_3().py_2().child(hint(
+                &self.theme,
+                format!("{legend} · Drag to rotate · scroll to zoom"),
+            )));
         out
     }
     fn export_rmc(&mut self, cx: &mut Context<Self>) {
@@ -1322,6 +1797,66 @@ impl StudioApp {
         .detach();
     }
 }
+const FIELD_LABELS: [&str; 19] = [
+    "Repeat a",
+    "Repeat b",
+    "Repeat c",
+    "Cluster radius",
+    "Path radius",
+    "Maximum path legs",
+    "Maximum displacement",
+    "Minimum distance",
+    "Attempt budget",
+    "Move size",
+    "Metropolis tolerance",
+    "Random seed",
+    "S₀²",
+    "Fit ΔE₀",
+    "k min",
+    "k max",
+    "R min",
+    "R max",
+    "k weight",
+];
+fn hint(t: &crate::theme::Theme, text: impl Into<gpui::SharedString>) -> gpui::Div {
+    div()
+        .text_size(px(11.5))
+        .text_color(t.text_muted)
+        .child(text.into())
+}
+fn metric(t: &crate::theme::Theme, label: &str, value: String, detail: String) -> gpui::Div {
+    div()
+        .flex_1()
+        .min_w_0()
+        .p_2()
+        .rounded_md()
+        .border_1()
+        .border_color(t.border)
+        .bg(t.surface)
+        .child(hint(t, label.to_string()))
+        .child(div().text_size(px(17.)).child(value))
+        .child(hint(t, detail))
+}
+fn count(n: usize) -> String {
+    let digits = n.to_string();
+    digits
+        .chars()
+        .enumerate()
+        .fold(String::new(), |mut out, (i, c)| {
+            if i > 0 && (digits.len() - i).is_multiple_of(3) {
+                out.push(',');
+            }
+            out.push(c);
+            out
+        })
+}
+fn trend_label(status: &ResidualTrendStatus) -> &'static str {
+    match status {
+        ResidualTrendStatus::InsufficientHistory => "Not assessed yet",
+        ResidualTrendStatus::StillChanging => "Still changing",
+        ResidualTrendStatus::ResidualPlateau => "Residual plateau",
+    }
+}
 fn set_draft_field(d: &mut engine::Draft, index: usize, v: f64) {
     match index {
         0..=2 => d.repeats[index] = v as usize,
@@ -1351,28 +1886,46 @@ fn length(v: [f64; 3]) -> f64 {
     v.iter().map(|x| x * x).sum::<f64>().sqrt()
 }
 fn configuration_scene(c: &Configuration, absorbers: &[usize]) -> MoleculeScene {
-    let center = std::array::from_fn(|axis| {
-        let lo = c
-            .atoms
-            .iter()
-            .map(|a| a.position[axis])
-            .fold(f64::INFINITY, f64::min);
-        let hi = c
-            .atoms
-            .iter()
-            .map(|a| a.position[axis])
-            .fold(f64::NEG_INFINITY, f64::max);
-        (lo + hi) / 2.
-    });
-    let extent = c
+    let center = c
+        .cell
+        .map(|cell| std::array::from_fn(|axis| cell.iter().map(|v| v[axis]).sum::<f64>() / 2.))
+        .unwrap_or_else(|| {
+            std::array::from_fn(|axis| {
+                let lo = c
+                    .atoms
+                    .iter()
+                    .map(|a| a.position[axis])
+                    .fold(f64::INFINITY, f64::min);
+                let hi = c
+                    .atoms
+                    .iter()
+                    .map(|a| a.position[axis])
+                    .fold(f64::NEG_INFINITY, f64::max);
+                (lo + hi) / 2.
+            })
+        });
+    let mut extent = c
         .atoms
         .iter()
         .map(|a| length(std::array::from_fn(|i| a.position[i] - center[i])))
         .fold(1.5, f64::max);
+    if let Some(cell) = c.cell {
+        for n in 0..8 {
+            let corner = std::array::from_fn(|axis| {
+                (0..3)
+                    .filter(|i| n & (1 << i) != 0)
+                    .map(|i| cell[i][axis])
+                    .sum::<f64>()
+                    - center[axis]
+            });
+            extent = extent.max(length(corner));
+        }
+    }
     let mut scene = MoleculeScene {
         center,
         extent,
-        radius: extent,
+        // A periodic configuration has no single absorber-centred radius guide.
+        radius: 0.,
         atoms: c
             .atoms
             .iter()
@@ -1415,62 +1968,91 @@ fn result_plots(
     p: &Progress,
     request: &Request,
     theme: crate::theme::Theme,
-) -> Result<Vec<Plot>, String> {
-    use nalgebra::DVector;
-    use rexafs::{fitting::transform::apply_kweight_transform, rmc::Objective};
+    refresh_curves: bool,
+    show_initial: bool,
+    full_history: bool,
+) -> Result<Vec<(usize, Plot)>, String> {
+    use rexafs::rmc::{Objective, transform_spectrum_fourier};
     engine::validate_progress(p, request)?;
-    let dataset = request
-        .problem
-        .datasets
-        .first()
-        .ok_or("Missing saved dataset")?;
-    let Objective::R(transform) = &dataset.objective else {
-        return Err("The desktop result viewer currently requires R space.".into());
-    };
-    let k = DVector::from_column_slice(&dataset.exafs.k);
-    let weight = dataset.exafs.kweight as f64;
-    let curves = [
-        ("Experimental", &dataset.exafs.chi),
-        ("Initial", &p.initial.evaluation.datasets[0].chi),
-        ("Best", &p.best.evaluation.datasets[0].chi),
-    ];
-    let mut kp = Plot::new()
-        .theme(theme.plot_theme())
-        .xlabel("k (Å⁻¹)")
-        .ylabel(crate::plotting::chik_label(weight));
-    let mut rs: Vec<_> = ["|χ(R)|", "Re χ(R)", "Im χ(R)"]
-        .iter()
-        .map(|name| {
-            Plot::new()
-                .theme(theme.plot_theme())
-                .xlabel("R (Å)")
-                .ylabel(*name)
-                .xlim(0., transform.rmax + 1.)
-        })
-        .collect();
-    for (i, (label, chi)) in curves.into_iter().enumerate() {
-        let a = apply_kweight_transform(&k, &DVector::from_column_slice(chi), transform, weight)
-            .map_err(|e| e.to_string())?;
-        kp = kp
-            .line(k.as_slice(), a.chik.as_slice())
-            .label(label)
-            .color(crate::plotting::trace_color(&theme, i))
-            .into();
-        for (plot, y) in
-            rs.iter_mut()
-                .zip([&a.r_space.chir_mag, &a.r_space.chir_re, &a.r_space.chir_im])
-        {
-            *plot = plot
-                .clone()
-                .line(a.r_space.r.as_slice(), y.as_slice())
+    let mut out = Vec::new();
+    if refresh_curves {
+        let dataset = request
+            .problem
+            .datasets
+            .first()
+            .ok_or("Missing saved dataset")?;
+        let Objective::R(transform) = &dataset.objective else {
+            return Err("The desktop result viewer currently requires R space.".into());
+        };
+        let weight = dataset.exafs.kweight as f64;
+        let curves = [
+            ("Experimental", &dataset.exafs.chi),
+            ("Initial", &p.initial.evaluation.datasets[0].chi),
+            ("Best", &p.best.evaluation.datasets[0].chi),
+        ];
+        let mut kp = Plot::new()
+            .theme(theme.plot_theme())
+            .xlabel("k (Å⁻¹)")
+            .ylabel(crate::plotting::chik_label(weight));
+        let mut rs: Vec<_> = ["|χ(R)|", "Re χ(R)", "Im χ(R)"]
+            .iter()
+            .map(|name| {
+                Plot::new()
+                    .theme(theme.plot_theme())
+                    .xlabel("R (Å)")
+                    .ylabel(*name)
+                    .xlim(0., transform.rmax + 1.)
+            })
+            .collect();
+        for (i, (label, chi)) in curves.into_iter().enumerate() {
+            if i == 1 && !show_initial {
+                continue;
+            }
+            let a =
+                transform_spectrum_fourier(&dataset.exafs.k, chi, dataset.exafs.kweight, transform)
+                    .map_err(|e| e.to_string())?;
+            let weighted: Vec<_> = dataset
+                .exafs
+                .k
+                .iter()
+                .zip(chi)
+                .map(|(k, x)| x * k.powf(weight))
+                .collect();
+            kp = kp
+                .line(&dataset.exafs.k, &weighted)
                 .label(label)
                 .color(crate::plotting::trace_color(&theme, i))
                 .into();
+            for (plot, y) in
+                rs.iter_mut()
+                    .zip([&a.r_space.chir_mag, &a.r_space.chir_re, &a.r_space.chir_im])
+            {
+                *plot = plot
+                    .clone()
+                    .line(a.r_space.r.as_slice(), y.as_slice())
+                    .label(label)
+                    .color(crate::plotting::trace_color(&theme, i))
+                    .into();
+            }
         }
+
+        let mut curves = vec![kp];
+        curves.extend(rs);
+        out.extend(curves.into_iter().enumerate());
     }
-    let mut x: Vec<_> = p.history.iter().map(|s| s.step as f64).collect();
-    let mut current: Vec<_> = p.history.iter().map(|s| s.score).collect();
-    let mut best: Vec<_> = p.history.iter().map(|s| s.best_score).collect();
+    let recent = p
+        .trend
+        .settings
+        .window
+        .saturating_mul(p.trend.settings.stable_windows.saturating_add(1));
+    let history = if full_history {
+        &p.history[..]
+    } else {
+        &p.history[p.history.len().saturating_sub(recent)..]
+    };
+    let mut x: Vec<_> = history.iter().map(|s| s.step as f64).collect();
+    let mut current: Vec<_> = history.iter().map(|s| s.score).collect();
+    let mut best: Vec<_> = history.iter().map(|s| s.best_score).collect();
     if x.is_empty() {
         x.push(p.completed as f64);
         current.push(p.current_score);
@@ -1487,8 +2069,38 @@ fn result_plots(
         .label("Best")
         .color(crate::plotting::trace_color(&theme, 2))
         .into();
-    let mut out = vec![kp];
-    out.extend(rs);
-    out.push(trend);
+    out.push((4, trend));
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn periodic_preview_frames_cell_and_preserves_coordinates() {
+        let configuration = Configuration {
+            atoms: vec![
+                rexafs::rmc::Atom {
+                    atomic_number: 29,
+                    position: [0.; 3],
+                },
+                rexafs::rmc::Atom {
+                    atomic_number: 8,
+                    position: [2., 2., 2.],
+                },
+            ],
+            cell: Some([[8., 0., 0.], [2., 7., 0.], [0., 1., 6.]]),
+        };
+        let scene = configuration_scene(&configuration, &[0]);
+        assert_eq!(scene.center, [5., 4., 3.]);
+        assert_eq!(scene.atoms[1].pos, configuration.atoms[1].position);
+        assert_eq!(scene.radius, 0.); // No absorber-centred guides on a periodic cell.
+        for edge in scene.edges {
+            for point in edge {
+                assert!(
+                    length(std::array::from_fn(|i| point[i] - scene.center[i])) <= scene.extent
+                );
+            }
+        }
+    }
 }
