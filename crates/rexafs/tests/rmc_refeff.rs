@@ -53,6 +53,184 @@ fn real_refeff_changes_with_geometry_and_returns_to_original() {
 }
 
 #[test]
+fn full_and_prepared_refeff_calculate_above_fifteen_inverse_angstroms() {
+    let options = RefeffOptions {
+        cluster_radius: 4.,
+        path_radius: 3.,
+        max_legs: 2,
+        path_criteria: [0., 0.],
+        kmax: 22.,
+        ..Default::default()
+    };
+    let configuration = dimer();
+    let k = [15., 16., 18., 20.];
+    let full = RefeffCalculator::new(options.clone())
+        .unwrap()
+        .calculate(&configuration, 0, Edge::K, &k)
+        .unwrap();
+    let mut prepared = PreparedRefeffCalculator::new(
+        options,
+        vec![configuration.clone()],
+        AccelerationSettings {
+            catalogue: PathCatalogueSettings {
+                radius: 3.,
+                max_legs: 2,
+                ..Default::default()
+            },
+            max_contexts: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let result = prepared
+        .calculate_request(CalculationRequest {
+            structure: 0,
+            configuration: &configuration,
+            absorber: 0,
+            edge: Edge::K,
+            k: &k,
+            options: None,
+            paths: false,
+        })
+        .unwrap();
+    assert_eq!(result.chi.len(), k.len());
+    assert!(result.chi.iter().all(|v| v.is_finite()));
+    assert!(result.chi.iter().any(|v| v.abs() > 1e-8));
+    for (actual, expected) in result.chi.iter().zip(full) {
+        assert!(
+            (actual - expected).abs() < 1e-5,
+            "typed {actual}, full {expected}"
+        );
+    }
+    let error = prepared
+        .calculate_request(CalculationRequest {
+            structure: 0,
+            configuration: &configuration,
+            absorber: 1,
+            edge: Edge::K,
+            k: &k,
+            options: None,
+            paths: false,
+        })
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("1 absorber contexts"));
+    assert!(error.contains("AccelerationSettings.max_contexts"));
+}
+
+#[test]
+fn electronic_reuse_preserves_distinct_sites_paths_and_changed_geometries() {
+    // Two translated Cu-O-O clusters have identical complete local inputs;
+    // a third has a genuinely different bond length and must prepare separately.
+    let mut c = Configuration {
+        atoms: Vec::new(),
+        cell: None,
+    };
+    for i in 0..3 {
+        let x = i as f64 * 20.;
+        c.atoms.extend([
+            Atom {
+                atomic_number: 29,
+                position: [x, 0., 0.],
+            },
+            Atom {
+                atomic_number: 8,
+                position: [x + 1.8 + if i == 2 { 0.1 } else { 0. }, 0., 0.],
+            },
+            Atom {
+                atomic_number: 8,
+                position: [x, 1.8, 0.],
+            },
+        ]);
+    }
+    let options = RefeffOptions {
+        cluster_radius: 3.,
+        path_radius: 3.,
+        max_legs: 3,
+        path_criteria: [0., 0.],
+        kmax: 14.,
+        ..Default::default()
+    };
+    let settings = |reuse| AccelerationSettings {
+        catalogue: PathCatalogueSettings {
+            radius: 3.,
+            max_legs: 3,
+            ..Default::default()
+        },
+        reuse_electronic_inputs: reuse,
+        ..Default::default()
+    };
+    let k = [3., 5., 8., 12.];
+    let request = |absorber| CalculationRequest {
+        structure: 0,
+        configuration: &c,
+        absorber,
+        edge: Edge::K,
+        k: &k,
+        options: None,
+        paths: true,
+    };
+    let requests: Vec<_> = [0, 3, 6].into_iter().map(request).collect();
+    let mut legacy =
+        PreparedRefeffCalculator::new(options.clone(), vec![c.clone()], settings(false)).unwrap();
+    let mut shared =
+        PreparedRefeffCalculator::new(options.clone(), vec![c.clone()], settings(true)).unwrap();
+    assert_ne!(legacy.identity(), shared.identity());
+    let before = legacy.calculate_batch(&requests).unwrap();
+    let after = shared.calculate_batch(&requests).unwrap();
+    for (a, b) in after.iter().zip(&before) {
+        assert_eq!(a.paths.len(), b.paths.len());
+        for (x, y) in a.chi.iter().zip(&b.chi) {
+            assert!((x - y).abs() < 1e-10, "{x} != {y}");
+        }
+    }
+    assert_eq!(shared.stats().contexts, 3);
+    assert_eq!(shared.stats().electronic_preparations, 2);
+    assert_eq!(shared.stats().shared_electronic_contexts, 1);
+    assert_eq!(
+        shared.stats().catalogue_paths,
+        legacy.stats().catalogue_paths
+    );
+    // A cold calculator visiting the equivalent sites in reverse order gives
+    // identical results; cache history does not select a different potential.
+    let mut cold =
+        PreparedRefeffCalculator::new(options.clone(), vec![c.clone()], settings(true)).unwrap();
+    for i in (0..requests.len()).rev() {
+        assert_eq!(cold.calculate_request(requests[i]).unwrap(), after[i]);
+    }
+    let mut changed = c.clone();
+    changed.atoms[4].position[0] += 0.025;
+    let moved = CalculationRequest {
+        configuration: &changed,
+        ..request(3)
+    };
+    let a = shared.calculate_request(moved).unwrap();
+    let b = legacy.calculate_request(moved).unwrap();
+    assert!(a
+        .chi
+        .iter()
+        .zip(&after[1].chi)
+        .any(|(x, y)| (x - y).abs() > 1e-6));
+    for (x, y) in a.chi.iter().zip(&b.chi) {
+        assert!((x - y).abs() < 1e-10);
+    }
+    // Full options are in the cache key, including polarization.
+    let polarized = RefeffOptions {
+        polarization: Some([1., 0., 0.]),
+        ..options
+    };
+    shared
+        .calculate_request(CalculationRequest {
+            options: Some(&polarized),
+            ..request(0)
+        })
+        .unwrap();
+    assert_eq!(shared.stats().electronic_preparations, 3);
+    shared.cancellation_token().cancel();
+    assert!(shared.calculate_request(request(3)).is_err());
+}
+
+#[test]
 fn multiple_scattering_changes_the_triangle_spectrum() {
     let mut config = dimer();
     config.atoms.push(Atom {

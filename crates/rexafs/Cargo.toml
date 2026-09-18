@@ -160,3 +160,7 @@ required-features = ["refeff-runner"]
 [[example]]
 name = "rmc_qualify"
 required-features = ["refeff-runner"]
+
+[[example]]
+name = "rmc_startup_benchmark"
+required-features = ["refeff-runner"]

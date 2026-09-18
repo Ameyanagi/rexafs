@@ -55,8 +55,20 @@ pub struct AccelerationSettings {
     pub basis: ScatteringBasis,
     /// Bounded Rayon worker pool; default 1, accepted range 1..=64.
     pub workers: usize,
-    /// Maximum prepared absorber/edge/settings contexts; default 128.
+    /// Maximum prepared structure/absorber/edge/settings contexts; default 128.
+    /// A 256-site single-element cell averaged over every site needs at least
+    /// 256. Shared datasets with the same combinations reuse contexts. Set this
+    /// explicitly for larger calculations; sites are never silently sampled.
     pub max_contexts: usize,
+    /// Unreleased: share immutable electronic setup when complete FEFF inputs
+    /// match after sorting scatterer rows at the existing 12-decimal precision.
+    /// Recommended for new periodic jobs; no sites, paths or species are merged.
+    /// Defaults to false to preserve historical input ordering and checkpoint
+    /// identity. Sorting can change numerical summation and FEFF's representative
+    /// atom when several atoms of one potential tie for nearest distance. It is
+    /// not guaranteed to reproduce legacy results bit for bit; compare both modes
+    /// for order-sensitive environments. The mode cannot change on saved-run resume.
+    pub reuse_electronic_inputs: bool,
     /// Maximum catalogue paths across all contexts; default one million.
     pub max_total_paths: usize,
     /// Approximate numerical payload budget for last-geometry path spectra;
@@ -87,6 +99,7 @@ impl Default for AccelerationSettings {
             basis: ScatteringBasis::Exact,
             workers: 1,
             max_contexts: 128,
+            reuse_electronic_inputs: false,
             max_total_paths: 1_000_000,
             cache_bytes: 256 * 1024 * 1024,
             snapshots_per_context: 1,
@@ -105,7 +118,8 @@ pub struct PreparedRefeffStats {
     /// Fresh electronic preparations in this calculator (since 0.2.10).
     #[serde(default)]
     pub electronic_preparations: usize,
-    /// Contexts reused from an immutable stage or exact audit (since 0.2.10).
+    /// Contexts reused from an immutable stage, exact audit, or matching canonical
+    /// electronic input. All absorber-specific catalogues remain separate.
     #[serde(default)]
     pub shared_electronic_contexts: usize,
     /// Directed concrete paths, including paths reserved by the displacement envelope.
@@ -246,6 +260,7 @@ pub struct PreparedRefeffCalculator {
     pool: rayon::ThreadPool,
     contexts: HashMap<String, PreparedAbsorber>,
     shared_contexts: HashMap<String, (Arc<PathCatalogue>, Arc<PreparedRefeffContext>)>,
+    electronic_inputs: HashMap<String, Arc<PreparedRefeffContext>>,
     snapshots: HashMap<String, Vec<Snapshot>>,
     stats: PreparedRefeffStats,
     tick: u64,
@@ -320,6 +335,9 @@ impl PreparedRefeffCalculator {
         if settings.adaptive.is_none() {
             settings_bytes = settings_bytes.replace(",\"adaptive\":null", "");
         }
+        if !settings.reuse_electronic_inputs {
+            settings_bytes = settings_bytes.replace(",\"reuse_electronic_inputs\":false", "");
+        }
         let bytes = format!(
             "[{},{},{}]",
             serde_json::to_string(&options).unwrap(),
@@ -344,6 +362,7 @@ impl PreparedRefeffCalculator {
             pool,
             contexts: HashMap::new(),
             shared_contexts: HashMap::new(),
+            electronic_inputs: HashMap::new(),
             snapshots: HashMap::new(),
             stats: Default::default(),
             tick: 0,
@@ -395,7 +414,7 @@ impl PreparedRefeffCalculator {
         }
         require(
             self.contexts.len() < self.settings.max_contexts,
-            "prepared calculator exceeds max_contexts",
+            format!("Prepared RMC needs more than {} absorber contexts (structure, atom, edge and settings combinations). Increase AccelerationSettings.max_contexts or explicitly select fewer absorbing sites.", self.settings.max_contexts),
         )?;
         let start = Instant::now();
         let deadline = start
@@ -403,6 +422,7 @@ impl PreparedRefeffCalculator {
         check_control(Some((&self.cancellation, deadline)))?;
         let options = request.options.unwrap_or(&self.options).clone();
         let shared = self.shared_contexts.get(key).cloned();
+        let mut reused_electronic = shared.is_some();
         let (catalogue, context) = if let Some(shared) = shared {
             shared
         } else {
@@ -418,15 +438,45 @@ impl PreparedRefeffCalculator {
                     .catalogue_paths
                     .saturating_add(catalogue.paths().len())
                     <= self.settings.max_total_paths,
-                "prepared calculator exceeds max_total_paths",
+                format!("Prepared RMC needs {} catalogue paths; the limit is {}. Reduce path radius, scattering order or the selected absorbing sites, or explicitly increase AccelerationSettings.max_total_paths.", self.stats.catalogue_paths.saturating_add(catalogue.paths().len()), self.settings.max_total_paths),
             )?;
-            let context = Arc::new(PreparedRefeffContext::prepare_controlled(
-                reference,
-                request.absorber,
-                request.edge,
-                options.clone(),
-                self.cancellation.clone(),
-            )?);
+            let context = if self.settings.reuse_electronic_inputs {
+                let input = PreparedRefeffContext::canonical_input(
+                    &reference,
+                    request.absorber,
+                    request.edge,
+                    &options,
+                )?;
+                // Retain exact strings rather than a lossy geometric signature.
+                let input_key = format!("{}\n{input}", serde_json::to_string(&options).unwrap());
+                if let Some(shared) = self.electronic_inputs.get(&input_key) {
+                    reused_electronic = true;
+                    Arc::new(shared.with_equivalent_input(
+                        reference,
+                        request.absorber,
+                        options.clone(),
+                    ))
+                } else {
+                    let context = Arc::new(PreparedRefeffContext::prepare_input(
+                        reference,
+                        request.absorber,
+                        options.clone(),
+                        input,
+                        self.cancellation.clone(),
+                    )?);
+                    self.electronic_inputs
+                        .insert(input_key, Arc::clone(&context));
+                    context
+                }
+            } else {
+                Arc::new(PreparedRefeffContext::prepare_controlled(
+                    reference,
+                    request.absorber,
+                    request.edge,
+                    options.clone(),
+                    self.cancellation.clone(),
+                )?)
+            };
             (catalogue, context)
         };
         catalogue.validate(request.configuration)?;
@@ -435,7 +485,7 @@ impl PreparedRefeffCalculator {
                 .catalogue_paths
                 .saturating_add(catalogue.paths().len())
                 <= self.settings.max_total_paths,
-            "prepared calculator exceeds max_total_paths",
+            format!("Prepared RMC needs {} catalogue paths; the limit is {}. Reduce path radius, scattering order or the selected absorbing sites, or explicitly increase AccelerationSettings.max_total_paths.", self.stats.catalogue_paths.saturating_add(catalogue.paths().len()), self.settings.max_total_paths),
         )?;
         let mut bases = Vec::new();
         let mut basis_groups = Vec::new();
@@ -482,7 +532,7 @@ impl PreparedRefeffCalculator {
             None
         };
         self.stats.contexts += 1;
-        if self.shared_contexts.contains_key(key) {
+        if reused_electronic {
             self.stats.shared_electronic_contexts += 1;
         } else {
             self.stats.electronic_preparations += 1;
@@ -555,6 +605,7 @@ impl PreparedRefeffCalculator {
     fn with_shared_contexts(&self, settings: AccelerationSettings) -> Result<Self, RmcError> {
         let mut next = Self::new(self.options.clone(), self.references.clone(), settings)?;
         next.shared_contexts = self.shared_contexts.clone();
+        next.electronic_inputs = self.electronic_inputs.clone();
         for (key, prepared) in &self.contexts {
             next.shared_contexts.insert(
                 key.clone(),

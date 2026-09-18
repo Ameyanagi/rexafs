@@ -43,6 +43,21 @@ worse trial scores; it is not a measured thermodynamic temperature.
 
 ## Fit ranges and the background
 
+:::note[Unreleased correction]
+The next action stays at the upper right on each RMC page, matching path fitting.
+Fit settings places **Preview initial fit** beside **Run RMC →**.
+
+The source checkout now copies Transform windows, widths and forward sampling
+as well as k bounds and weight. Explicit Back FT R bounds are used; otherwise the
+starting R range remains Rbkg + 0.15 Å to max(4 Å, Rbkg + 1.15 Å). **Use spectrum
+ranges** copies these settings again after processing edits. It does not retarget
+a saved run. ReFEFF coverage expands for the fit window and ΔE₀, up to the
+adapter's 30 Å⁻¹ limit, with actual returned support checked. The released 0.2.10
+desktop instead uses a fixed 16 Å⁻¹ calculator limit and the fitting default
+window width. See the [source-checkout workflow](https://github.com/Ameyanagi/rexafs/blob/dev/doc/rmc-desktop-workflow.md)
+for details once merged to `dev`.
+:::
+
 The default objective minimizes the normalized sum of squared **real and
 imaginary R-space residuals**, using the same Fourier mapping as native path
 fitting. The magnitude plot is a diagnostic; matching magnitude alone is not
@@ -60,6 +75,60 @@ path calculations within fixed reference electronic potentials; unchanged paths
 can be reused. This does not recalculate the electronic potential after every
 move. Adaptive scattering remains experimental, opt-in in Rust, and absent from
 these desktop controls.
+
+The 0.2.10 prepared calculator allows 128 absorber contexts by default. Selecting
+all 256 absorbing atoms in a cell can exceed this resource limit; it is unrelated
+to Assistant message length. The unreleased desktop sizes the context count from
+the selected sites, edges and settings without discarding absorbers. Independent
+path-count and memory-related limits still apply, and larger cells cost more.
+
+New source-checkout runs also share electronic preparation for identical local
+inputs after deterministic ordering of the scatterer rows. All absorbing sites
+and their explicit paths are retained. **Run details** shows calculated and shared
+electronic contexts. Sorting can change numerical summation and the representative
+atom for a potential when nearest sites tie. Old checkpoints retain their original
+ordering; restarting a new job opts into the improved preparation. See the
+[startup profiling method](https://github.com/Ameyanagi/rexafs/blob/dev/doc/rmc-startup-profiling.md)
+for reproducible timing and numerical-agreement checks once merged to `dev`.
+
+
+## Energy refinement in the source checkout
+
+This option is unreleased. In **Fit settings**, choose **ΔE₀ → Refine** to update
+the theoretical energy shift while keeping S₀² fixed. **Fixed** remains the default,
+including for older projects. Set S₀² from an appropriate reference calibration.
+
+A new run searches the starting shift before moving atoms. Further local searches
+run every 250 attempts by default. Change the interval and energy bounds under
+**Advanced → Energy refinement**. Bounds are in eV; the default initial search
+uses 0.5 eV spacing and local searches use ±1 eV at 0.1 eV spacing. The grid spacing
+is resolution, not uncertainty. Only a full-objective improvement is accepted.
+
+Results show ΔE₀ for the best structure and warn when it reaches a bound. Saved
+runs keep each structure's matching shift; exports include these values in
+`fit-parameters.json` and the report. Experimental energy alignment and spectrum
+preprocessing stay unchanged. This is alternating structural/energy optimization;
+a small residual alone does not establish a unique structure.
+
+## Calibration and local refinement in the source checkout
+
+:::note[Unreleased]
+New jobs offer **Auto moves** (starting at 0.05 Å) and **Fixed moves**. Auto adjusts
+the width during the early part of the original budget and cools the numerical
+tolerance to zero. Existing saved runs keep their settings.
+
+**Estimate calibration…** previews amplitude S₀² and theoretical energy shift
+ΔE₀ using the starting structure. Review the bounds and choose **Use calibration**
+explicitly; changes to the inputs require a new estimate. A suitable experimental
+reference is needed to interpret these correlated parameters physically.
+
+After pausing or finishing, choose **Refine best…** to try local coordinate
+improvements. This uses numerical gradients, with full scattering verification
+and the original constraints. It preserves the RMC checkpoint. **Refinement**
+compares the previous and refined spectra; **Export result…** includes both,
+refined XYZ coordinates and a separate JSON audit. A smaller residual does not
+establish a unique structure. Local refinement uses numerical derivatives.
+:::
 
 ## Read the live results
 

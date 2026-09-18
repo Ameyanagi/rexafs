@@ -34,6 +34,11 @@ pub struct SessionSettings {
     pub stopping: StoppingSettings,
     /// Optional acceptance-based coordinate widths; disabled by default (since 0.2.10).
     pub adaptation: Option<StepAdaptation>,
+    /// Unreleased: bounded theoretical ΔE₀ searches before the first move and
+    /// between coordinate blocks. None (default) keeps shifts fixed. S₀² and
+    /// experimental preprocessing always stay fixed. See [`EnergyRefinement`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub energy_refinement: Option<EnergyRefinement>,
 }
 impl Default for SessionSettings {
     fn default() -> Self {
@@ -50,7 +55,66 @@ impl Default for SessionSettings {
             cooling: CoolingSchedule::default(),
             stopping: StoppingSettings::default(),
             adaptation: None,
+            energy_refinement: None,
         }
+    }
+}
+
+impl SessionSettings {
+    /// Unreleased: refine each dataset's theoretical ΔE₀ with S₀² fixed.
+    /// The inclusive bounds are in eV. Uses the documented [`EnergyRefinement`]
+    /// defaults (250 attempts between updates, 0.1 eV local grid). Review bounds
+    /// and timing for your experiment; validation occurs at session creation.
+    /// Existing fixed-energy sessions are unchanged unless this is selected.
+    ///
+    /// ```
+    /// use rexafs::rmc::SessionSettings;
+    /// let settings = SessionSettings::default().with_energy_refinement(-10.0..=10.0);
+    /// ```
+    pub fn with_energy_refinement(mut self, bounds: std::ops::RangeInclusive<f64>) -> Self {
+        self.energy_refinement = Some(EnergyRefinement {
+            bounds: [*bounds.start(), *bounds.end()],
+            ..Default::default()
+        });
+        self
+    }
+
+    /// Unreleased: enable bounded move-size feedback and cooling for optimization.
+    ///
+    /// Starts at `moves.step_size` Å per Cartesian coordinate, adjusts every 100
+    /// coordinate attempts, and bounds all proposal widths to 0.1–2 times their
+    /// declared values. Widths shrink below 10% acceptance and grow above 40%, by
+    /// a factor of 1.2. Feedback freezes after 80% of the original attempt budget;
+    /// the numerical Metropolis tolerance decreases linearly to zero at that
+    /// budget. Continuing a completed run retains the frozen widths and zero
+    /// tolerance. Original displacement and distance constraints still apply.
+    ///
+    /// These are rexafs starting heuristics, not material-specific optimal values
+    /// or an equilibrium sampling policy. Compare residual improvement per unit
+    /// time across seeds. This replaces `adaptation` and `cooling`, changes no
+    /// calibration, and leaves the historical `Default` behavior unchanged.
+    ///
+    /// ```
+    /// use rexafs::rmc::{RmcSettings, SessionSettings};
+    /// let settings = SessionSettings {
+    ///     moves: RmcSettings { steps: 10_000, step_size: 0.05,
+    ///         temperature: 0.001, ..Default::default() },
+    ///     ..Default::default()
+    /// }.with_auto_moves();
+    /// ```
+    pub fn with_auto_moves(mut self) -> Self {
+        self.adaptation = Some(StepAdaptation {
+            factor: 1.2,
+            minimum_scale: 0.1,
+            maximum_scale: 2.,
+            freeze_after: Some(self.moves.steps.saturating_mul(4) / 5),
+            ..Default::default()
+        });
+        self.cooling = CoolingSchedule::Linear {
+            final_temperature: 0.,
+            attempts: self.moves.steps.max(1),
+        };
+        self
     }
 }
 
@@ -82,6 +146,11 @@ pub enum EnsembleMove {
 /// Completed move. Calculator failures produce no record and consume no RNG state.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SessionStep {
+    /// Unreleased: optional energy search following this coordinate/weight attempt.
+    /// `accepted` still describes the coordinate/weight move; `score` and
+    /// `best_score` include any verified energy improvement. No RNG draws are used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub energy: Option<EnergyUpdate>,
     /// One-based number of completed attempts.
     pub step: usize,
     /// Selected atom or weight pair.
@@ -125,6 +194,8 @@ pub struct CalculatorRevision {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RmcCheckpoint {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    initial_energy: Option<EnergyUpdate>,
     version: u32,
     #[serde(default)]
     adaptation: StepAdaptationState,
@@ -195,6 +266,9 @@ pub(super) fn prepare(
             && (sum - 1.).abs() < 1e-10,
         "mixture weights must sum to one",
     )?;
+    if let Some(policy) = &settings.energy_refinement {
+        policy.validate_problem(problem)?;
+    }
     let m = &settings.moves;
     settings.cooling.temperature(m.temperature, 0)?;
     settings.stopping.validate()?;
@@ -304,35 +378,93 @@ pub(super) fn evaluate_prepared<C: ExafsCalculator + ?Sized>(
     reuse: Option<(&EnsembleState, Option<usize>)>,
     calculator: &mut C,
 ) -> Result<EnsembleState, RmcError> {
+    let shifts = reuse
+        .map(|(state, _)| state.delta_e0.clone())
+        .unwrap_or_else(|| {
+            if settings.energy_refinement.is_some() {
+                problem.datasets.iter().map(|d| d.exafs.delta_e0).collect()
+            } else {
+                Vec::new()
+            }
+        });
+    evaluate_at_shifts(
+        problem, settings, prepared, structures, &shifts, reuse, calculator,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn evaluate_at_shifts<C: ExafsCalculator + ?Sized>(
+    problem: &EnsembleProblem,
+    settings: &SessionSettings,
+    prepared: &PreparedEnsemble,
+    structures: Vec<WeightedStructure>,
+    delta_e0: &[f64],
+    reuse: Option<(&EnsembleState, Option<usize>)>,
+    calculator: &mut C,
+) -> Result<EnsembleState, RmcError> {
     evaluate_prepared_with(
         problem,
         settings,
         prepared,
         structures,
+        delta_e0,
         reuse,
         &mut |requests| calculator.calculate_batch(requests),
     )
 }
 
+pub(super) fn evaluate_state<C: ExafsCalculator + ?Sized>(
+    problem: &EnsembleProblem,
+    settings: &SessionSettings,
+    prepared: &PreparedEnsemble,
+    state: &EnsembleState,
+    calculator: &mut C,
+) -> Result<EnsembleState, RmcError> {
+    evaluate_at_shifts(
+        problem,
+        settings,
+        prepared,
+        state.structures.clone(),
+        &state.delta_e0,
+        None,
+        calculator,
+    )
+}
+
 // Keep objective assembly identical for single proposals and population batches.
+#[allow(clippy::too_many_arguments)]
 fn evaluate_prepared_with(
     problem: &EnsembleProblem,
     settings: &SessionSettings,
     prepared: &PreparedEnsemble,
     structures: Vec<WeightedStructure>,
+    delta_e0: &[f64],
     reuse: Option<(&EnsembleState, Option<usize>)>,
     calculate: &mut impl FnMut(&[CalculationRequest<'_>]) -> Result<Vec<CalculatedSpectrum>, RmcError>,
 ) -> Result<EnsembleState, RmcError> {
+    require(
+        delta_e0.is_empty() || delta_e0.len() == problem.datasets.len(),
+        "state ΔE₀ count differs",
+    )?;
     let mut component_chi = Vec::new();
     let mut paths = Vec::new();
     let mut fits = Vec::new();
     let penalty = settings.constraints.energy(&structures)?;
     let mut total = penalty;
     for (d, data) in problem.datasets.iter().enumerate() {
+        let shifted;
+        let q = if let Some(&shift) = delta_e0.get(d) {
+            let mut input = data.exafs.clone();
+            input.delta_e0 = shift;
+            shifted = super::engine::shifted_grid(&input)?;
+            &shifted
+        } else {
+            &prepared.grids[d]
+        };
         let mut components = Vec::new();
         for (s, structure) in structures.iter().enumerate() {
             if let Some((previous, changed)) = reuse {
-                if changed != Some(s) {
+                if changed != Some(s) && previous.delta_e0 == delta_e0 {
                     components.push(previous.component_chi[d][s].clone());
                     if settings.retain_paths {
                         paths.extend(
@@ -347,7 +479,6 @@ fn evaluate_prepared_with(
                 }
             }
             let indices = &prepared.absorbers[d][s];
-            let q = &prepared.grids[d];
             let mut chi = vec![0.; q.len()];
             let requests: Vec<_> = indices
                 .iter()
@@ -414,6 +545,7 @@ fn evaluate_prepared_with(
     }
     require(total.is_finite(), "total objective overflow")?;
     Ok(EnsembleState {
+        delta_e0: delta_e0.to_vec(),
         structures,
         evaluation: Evaluation {
             score: total,
@@ -483,6 +615,7 @@ pub(super) fn evaluate_candidates<C: ExafsCalculator + ?Sized>(
                 settings,
                 prepared,
                 structures,
+                &[],
                 None,
                 &mut |requests| Ok(spectra.by_ref().take(requests.len()).collect()),
             )?);
@@ -521,6 +654,54 @@ pub fn evaluate_ensemble<C: ExafsCalculator + ?Sized>(
 }
 
 impl RmcSession {
+    /// Unreleased: improve the best RMC state with constrained numerical gradients.
+    ///
+    /// Uses full calculator evaluations and the original displacement reference.
+    /// Does not mutate this session, its random stream, calibration or checkpoint.
+    /// Defaults perform three passes with 0.001 Å derivative probes, at most
+    /// 0.02 Å local moves and 5000 geometry evaluations. This is local optimization,
+    /// not automatic differentiation or uncertainty sampling. The returned audit
+    /// includes initial/best spectra, constraints, settings and accepted steps.
+    /// Backend failures return an error and leave the session unchanged.
+    pub fn refine_best<C: ExafsCalculator + ?Sized>(
+        &self,
+        settings: &LocalRefinementSettings,
+        calculator: &mut C,
+    ) -> Result<LocalRefinementResult, RmcError> {
+        self.refine_best_with_progress(
+            settings,
+            calculator,
+            |_| std::ops::ControlFlow::Continue(()),
+        )
+    }
+
+    /// Local refinement with cancellation/progress at geometry-evaluation boundaries.
+    /// Returning `Break(())` preserves the best verified local state in the result.
+    /// See [`Self::refine_best`] for units, defaults, provenance and limitations.
+    pub fn refine_best_with_progress<C, F>(
+        &self,
+        settings: &LocalRefinementSettings,
+        calculator: &mut C,
+        progress: F,
+    ) -> Result<LocalRefinementResult, RmcError>
+    where
+        C: ExafsCalculator + ?Sized,
+        F: FnMut(&LocalRefinementProgress) -> std::ops::ControlFlow<()>,
+    {
+        require(
+            self.checkpoint.calculator == calculator.identity(),
+            "local refinement calculator differs from the saved RMC model",
+        )?;
+        super::local_refinement::refine_local(
+            &self.checkpoint.problem,
+            &self.checkpoint.settings,
+            &self.checkpoint.best,
+            self.completed(),
+            settings,
+            calculator,
+            progress,
+        )
+    }
     /// Borrow the validated input, including any spectrum processing snapshots
     /// (since 0.2.10). Mixture weights are normalized; the original displacement
     /// reference and experimental arrays remain fixed throughout the run.
@@ -554,11 +735,20 @@ impl RmcSession {
             None,
             calculator,
         )?;
+        let (current, initial_energy) = if settings.energy_refinement.is_some() {
+            let (state, update) = super::energy_refinement::refine_energy(
+                &problem, settings, &prepared, &initial, true, calculator,
+            )?;
+            (state, Some(update))
+        } else {
+            (initial.clone(), None)
+        };
         let trajectory = if settings.trajectory_stride > 0 {
             vec![TrajectoryFrame {
                 step: 0,
-                structures: initial.structures.clone(),
-                score: initial.evaluation.score,
+                structures: current.structures.clone(),
+                score: current.evaluation.score,
+                delta_e0: current.delta_e0.clone(),
             }]
         } else {
             Vec::new()
@@ -566,18 +756,19 @@ impl RmcSession {
         Ok(Self {
             checkpoint: RmcCheckpoint {
                 version: 1,
+                initial_energy,
                 adaptation: StepAdaptationState::default(),
                 revisions: Vec::new(),
                 calculator: calculator.identity(),
                 problem,
                 settings: settings.clone(),
                 initial: initial.clone(),
-                current: initial.clone(),
+                current: current.clone(),
                 diagnostics: SessionDiagnostics {
-                    improvement_anchor: initial.evaluation.score,
+                    improvement_anchor: current.evaluation.score,
                     ..Default::default()
                 },
-                best: initial,
+                best: current,
                 rng: ChaCha8Rng::seed_from_u64(settings.moves.seed),
                 completed: 0,
                 history: Vec::new(),
@@ -633,14 +824,83 @@ impl RmcSession {
                 && checkpoint.trajectory.len() <= checkpoint.settings.trajectory_capacity,
             "invalid checkpoint counters",
         )?;
+        match (
+            &checkpoint.settings.energy_refinement,
+            &checkpoint.initial_energy,
+        ) {
+            (Some(policy), Some(initial)) => {
+                initial.validate(policy, checkpoint.problem.datasets.len())?;
+                require(
+                    initial.calculator
+                        == checkpoint
+                            .revisions
+                            .first()
+                            .map_or(checkpoint.calculator.as_str(), |revision| {
+                                revision.previous.as_str()
+                            }),
+                    "checkpoint initial energy audit has an unknown calculator",
+                )?;
+                require(
+                    initial.before == checkpoint.initial.energy_shifts(&checkpoint.problem)?
+                        && initial.before
+                            == checkpoint
+                                .problem
+                                .datasets
+                                .iter()
+                                .map(|d| d.exafs.delta_e0)
+                                .collect::<Vec<_>>(),
+                    "checkpoint initial ΔE₀ differs from the input",
+                )?;
+                if initial.calculator == checkpoint.calculator {
+                    require(
+                        initial.score_before == checkpoint.initial.evaluation.score,
+                        "checkpoint initial energy audit differs from its initial state",
+                    )?;
+                }
+                for record in &checkpoint.history {
+                    require(
+                        record.energy.is_some() == record.step.is_multiple_of(policy.interval),
+                        "checkpoint energy-update cadence differs",
+                    )?;
+                    if let Some(update) = &record.energy {
+                        update.validate(policy, checkpoint.problem.datasets.len())?;
+                        require(
+                            update.calculator == checkpoint.calculator
+                                && update.score_after == record.score,
+                            "checkpoint energy audit differs from the move record",
+                        )?;
+                    }
+                }
+                for frame in &checkpoint.trajectory {
+                    require(
+                        frame.delta_e0.len() == checkpoint.problem.datasets.len()
+                            && frame.delta_e0.iter().all(|v| {
+                                v.is_finite() && *v >= policy.bounds[0] && *v <= policy.bounds[1]
+                            }),
+                        "checkpoint trajectory has invalid ΔE₀",
+                    )?;
+                }
+            }
+            (None, None) => {
+                require(
+                    checkpoint.history.iter().all(|h| h.energy.is_none())
+                        && checkpoint.trajectory.iter().all(|t| t.delta_e0.is_empty()),
+                    "fixed-energy checkpoint contains energy updates",
+                )?;
+            }
+            _ => {
+                return Err(RmcError::Invalid(
+                    "checkpoint initial energy audit is missing or unexpected".into(),
+                ))
+            }
+        }
         for state in [&checkpoint.initial, &checkpoint.current, &checkpoint.best] {
             validate_state(state, &checkpoint.problem, &checkpoint.settings)?;
-            let recalculated = evaluate_prepared(
+            let recalculated = evaluate_state(
                 &checkpoint.problem,
                 &checkpoint.settings,
                 &prepared,
-                state.structures.clone(),
-                None,
+                state,
                 calculator,
             )?;
             require(
@@ -677,16 +937,12 @@ impl RmcSession {
             identity != cp.calculator,
             "rebasing requires a changed calculator identity",
         )?;
-        let mut states = evaluate_candidates(
-            &cp.problem,
-            &cp.settings,
-            &self.prepared,
-            [&cp.initial, &cp.current, &cp.best]
-                .iter()
-                .map(|s| s.structures.clone())
-                .collect(),
-            calculator,
-        )?;
+        let mut states = [&cp.initial, &cp.current, &cp.best]
+            .into_iter()
+            .map(|state| {
+                evaluate_state(&cp.problem, &cp.settings, &self.prepared, state, calculator)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         require(
             identity == calculator.identity(),
             "calculator identity changed while rebasing",
@@ -758,7 +1014,11 @@ impl RmcSession {
     pub fn best(&self) -> &EnsembleState {
         &self.checkpoint.best
     }
-    /// Initial state and normalized fractions.
+    /// Unreleased: initial fixed-geometry energy-search audit, when enabled.
+    pub fn initial_energy(&self) -> Option<&EnergyUpdate> {
+        self.checkpoint.initial_energy.as_ref()
+    }
+    /// Initial state before optional energy refinement, and normalized fractions.
     pub fn initial(&self) -> &EnsembleState {
         &self.checkpoint.initial
     }
@@ -846,7 +1106,7 @@ impl RmcSession {
             return Ok(None);
         }
         let mut rng = cp.rng.clone();
-        let (record, accepted_state) = attempt_move(
+        let (mut record, mut accepted_state) = attempt_move(
             &cp.problem,
             &cp.settings,
             &self.prepared,
@@ -856,6 +1116,27 @@ impl RmcSession {
             cp.adaptation.scale,
             &mut rng,
             calculator,
+        )?;
+        if let Some(policy) = &cp.settings.energy_refinement {
+            if (cp.completed + 1).is_multiple_of(policy.interval) {
+                let current = accepted_state.as_ref().unwrap_or(&cp.current);
+                let (refined, update) = super::energy_refinement::refine_energy(
+                    &cp.problem,
+                    &cp.settings,
+                    &self.prepared,
+                    current,
+                    false,
+                    calculator,
+                )?;
+                record.score = refined.evaluation.score;
+                record.best_score = cp.best.evaluation.score.min(record.score);
+                record.energy = Some(update);
+                accepted_state = Some(refined);
+            }
+        }
+        require(
+            calculator.identity() == cp.calculator,
+            "calculator identity changed during session step",
         )?;
         let cp = &mut self.checkpoint;
         cp.adaptation
@@ -902,6 +1183,7 @@ impl RmcSession {
                     step: cp.completed,
                     structures: cp.current.structures.clone(),
                     score: cp.current.evaluation.score,
+                    delta_e0: cp.current.delta_e0.clone(),
                 },
                 cp.settings.trajectory_capacity,
             );
@@ -915,6 +1197,21 @@ pub(super) fn validate_state(
     problem: &EnsembleProblem,
     settings: &SessionSettings,
 ) -> Result<(), RmcError> {
+    let shifts = state.energy_shifts(problem)?;
+    if let Some(policy) = &settings.energy_refinement {
+        require(
+            state.delta_e0.len() == problem.datasets.len()
+                && shifts
+                    .iter()
+                    .all(|s| *s >= policy.bounds[0] && *s <= policy.bounds[1]),
+            "checkpoint ΔE₀ is missing or outside refinement bounds",
+        )?;
+    } else {
+        require(
+            state.delta_e0.is_empty(),
+            "fixed-energy checkpoint contains variable ΔE₀",
+        )?;
+    }
     require(
         state.structures.len() == problem.structures.len(),
         "checkpoint structure count differs",
@@ -1060,6 +1357,7 @@ pub(super) fn attempt_move<C: ExafsCalculator + ?Sized>(
         (proposal, Some(structure), allowed)
     };
     let mut record = SessionStep {
+        energy: None,
         step: completed + 1,
         proposal,
         accepted: false,

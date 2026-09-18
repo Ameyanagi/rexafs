@@ -16,7 +16,8 @@ pub struct WeightedStructure {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct RmcDataset {
-    /// Measured unweighted χ and fixed amplitude, energy and noise scales.
+    /// Measured unweighted χ, fixed amplitude and noise scales, and initial
+    /// theoretical energy shift (fixed unless session refinement is enabled).
     pub exafs: ExafsDataset,
     /// Comparison space; K reproduces the original RMC objective.
     pub objective: Objective,
@@ -146,6 +147,11 @@ pub struct AbsorberPaths {
 /// scattering calculation; a coordinate move recalculates only its component.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EnsembleState {
+    /// Unreleased: theoretical ΔE₀ for each dataset, in eV. Populated when energy
+    /// refinement is enabled. Empty historical/fixed states use the input values;
+    /// prefer [`Self::energy_shifts`] to resolve either representation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub delta_e0: Vec<f64>,
     /// Current configurations and normalized mixture fractions.
     pub structures: Vec<WeightedStructure>,
     /// Total objective, including structural penalties, and mixture spectra.
@@ -156,4 +162,23 @@ pub struct EnsembleState {
     pub component_chi: Vec<Vec<Vec<f64>>>,
     /// Optional per-absorber path output; enabled through session settings.
     pub paths: Vec<AbsorberPaths>,
+}
+
+impl EnsembleState {
+    /// Resolve each dataset's theoretical energy shift in eV, including fixed
+    /// values from historical states. Returns an owned vector; neither input is
+    /// changed. Invalid state dimensions or nonfinite shifts return an error.
+    pub fn energy_shifts(&self, problem: &EnsembleProblem) -> Result<Vec<f64>, RmcError> {
+        let shifts = if self.delta_e0.is_empty() {
+            problem.datasets.iter().map(|d| d.exafs.delta_e0).collect()
+        } else {
+            require(
+                self.delta_e0.len() == problem.datasets.len(),
+                "state ΔE₀ count differs from datasets",
+            )?;
+            self.delta_e0.clone()
+        };
+        require(shifts.iter().all(|v| v.is_finite()), "nonfinite state ΔE₀")?;
+        Ok(shifts)
+    }
 }

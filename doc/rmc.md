@@ -5,7 +5,9 @@ refines explicit atomic coordinates and mixture fractions against EXAFS.
 ReFEFF is the primary calculator. The engine now includes calculation reuse,
 chemical restraints, k/R/q/wavelet objectives, exact-resume sessions, evolutionary
 search, weighted structures, dataset-specific calculator settings, and structural
-analysis. Desktop controls and Python/JavaScript bindings are outside this change.
+analysis. See the [desktop workflow](rmc-desktop-workflow.md) for GUI controls.
+The advanced session APIs below are Rust-only; Python and TypeScript bindings
+do not yet expose RMC.
 
 The implementation is original Rust code. It neither incorporates EVAX or
 RMCProfile source nor reads their job formats. The
@@ -13,6 +15,60 @@ RMCProfile source nor reads their job formats. The
 implementation; the [new validation and performance record](rmc-performance.md)
 describes this extension. These capabilities do not establish EVAX numerical
 parity or experimental accuracy.
+
+## Unreleased: refine theoretical ΔE₀ with fixed S₀²
+
+The source checkout adds optional energy refinement to `RmcSession`. Existing
+jobs retain fixed energy shifts. For a new job:
+
+```rust
+use rexafs::rmc::SessionSettings;
+let settings = SessionSettings::default()
+    .with_auto_moves()
+    .with_energy_refinement(-15.0..=15.0);
+// Set each input dataset's s02 to its independently calibrated fixed value.
+// let mut session = RmcSession::new(&problem, &settings, &mut calculator)?;
+// session.run(&mut calculator)?;
+// let shifts_eV = session.best().energy_shifts(session.problem())?;
+```
+
+Bounds are theoretical energy shifts in eV, not normalization E₀ or experimental
+energy alignment. Positive ΔE₀ evaluates theory at smaller k according to the
+formula below. S₀² remains exactly the input value for each dataset. Each dataset
+has one independent shift shared by its absorbers and structure components.
+The [Larch path documentation](https://xraypy.github.io/xraylarch/xafs_feffpaths.html)
+describes these EXAFS parameters; this alternating optimizer is a rexafs policy.
+
+`EnergyRefinement` defaults to a broad initial grid with 0.5 eV spacing, followed
+by a local ±1 eV search at 0.1 eV spacing. It then performs a local search every
+250 coordinate/weight attempts, counting rejected attempts. The interval is a
+starting setting, not a universal optimum. The inclusive bounds clip local grids;
+the current shift is always included. Grid spacing is numerical resolution, not
+an uncertainty estimate. The full objective, including structural penalties, is
+recalculated at the chosen shifts. A change is kept only if that score decreases.
+The procedure is an optimizer, not equilibrium sampling. Review correlations
+between energy shift and bond distance and compare independently calibrated data.
+
+The input problem is unchanged. `EnsembleState::energy_shifts` returns the shifts
+matching its coordinates, spectra and score. `initial()` retains the original
+pre-search state; `initial_energy()` records the initial search. Periodic updates
+appear in `SessionStep::energy`, and trajectory frames retain their shifts.
+Energy searches do not consume random draws or count as extra coordinate attempts.
+A failing periodic search rolls back its entire coordinate step, including RNG,
+current/best states and history. Resume and calculator rebase evaluate every state
+at its own shifts. Local coordinate refinement holds its starting shifts fixed.
+Old checkpoints retain fixed-energy behavior. Evolutionary crossover currently
+rejects this option explicitly; use `RmcSession` for alternating energy refinement.
+
+Bounds must preserve real, increasing theoretical k across the full measured grid,
+including Fourier tapers. Backend support errors abort without extrapolation.
+Per-search candidate counts are bounded, and an unresolved calibration is an error.
+The desktop expands requested ReFEFF k support to cover the configured bounds.
+
+Implementation: [energy search](../crates/rexafs/src/xafs/rmc/energy_refinement.rs),
+[transactional session and state evaluation](../crates/rexafs/src/xafs/rmc/session.rs),
+[state representation](../crates/rexafs/src/xafs/rmc/ensemble.rs).
+These additions are not part of published 0.2.10 or its Python/TypeScript APIs.
 
 ## Default calculator and experimental adaptive mode
 
