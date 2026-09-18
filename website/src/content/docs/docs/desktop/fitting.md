@@ -14,7 +14,7 @@ Open **Fit → Structure → Curated**, select **Cu / Copper**, then
 **Use structure →**. In Calculate, select Cu as absorber, the K edge, an 8 Å
 radius and **ReFEFF**. Choose **Calculate paths** and wait for completion.
 
-Every 0.2.9 desktop package offers ReFEFF and FEFF10; see the
+Every 0.2.10 desktop package offers ReFEFF and FEFF10; see the
 [Windows ARM64 requirement](/docs/getting-started/install/#arm64-availability).
 Record the engine used.
 
@@ -73,9 +73,9 @@ For shared variables across spectra, continue with
 [multiple-spectrum fitting](/docs/desktop/multiple-spectra/).
 
 
-## Development preview: RMC fitting mode
+## RMC fitting mode
 
-The unreleased desktop adds **Fit mode: RMC** at the upper right of Fitting.
+Version 0.2.10 adds **Fit mode: RMC** at the upper right of Fitting.
 Choose a structure, edit its supercell with a live 3D preview, inspect the initial exact ReFEFF
 calculation and run coordinate refinement against the processed spectrum.
 The initial objective is R real plus imaginary, with R minimum at or above
@@ -93,7 +93,8 @@ unexpected exit can lose moves since the previous checkpoint.
 The current desktop supports one spectrum and one structure. Hybrid EA and
 mixture controls are later additions. Reaching a step limit does not establish
 convergence: the display separately reports the shared residual-trend criterion.
-These controls are not part of the released 0.2.9 packages.
+Follow the [RMC workflow](/docs/desktop/rmc/) for setup, saved preprocessing,
+resume and convergence diagnostics.
 
 The builder updates after a short typing delay without running scattering.
 Invalid edits keep the last valid preview and block a new calculation. Suggested

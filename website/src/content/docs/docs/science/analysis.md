@@ -4,7 +4,7 @@ description: "Analyze collections while keeping preprocessing assumptions explic
 audience: user
 ---
 
-This guide describes **rexafs 0.2.9**.
+This guide describes **rexafs 0.2.10**; older figures retain their capture versions.
 LCF, PCA and native MCR-ALS are available in the desktop and Rust. Python and
 TypeScript expose spectrum processing; their collection-analysis bindings remain
 planned. In the desktop, use **Data → Parameters** or action search.
@@ -285,3 +285,23 @@ member receives zero spread. This is the formula implemented by
 not the standard error of the merged mean. It also does not estimate correlations
 introduced by interpolation. Keep the individual scans when assessing whether
 variation reflects noise, energy drift or an actual change in the sample.
+
+
+## XANES peak fitting
+
+Version 0.2.10 adds **Data → XANES peak fit** and the shared `PeakFit` API in
+Rust, Python and TypeScript. Build a sum of named peaks, steps and baseline
+terms, choose the signal representation and energy interval, and inspect the
+component curves and residual. Fits can be applied to marked groups or a Series;
+saved models can also run during experimental Live acquisition.
+
+Peak area is the whole-axis model integral in signal units × eV, not peak
+height. Widths are full widths at half maximum in eV; absorption steps use a
+separate positive energy scale. Bounds, fixed parameters and mathematical ties
+encode assumptions. The optimizer does not choose a peak count or identify
+chemical species. Report its termination status and inspect local uncertainty
+diagnostics; a small residual does not establish a unique decomposition.
+
+See the [model and uncertainty guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/xanes-peak-fitting.md),
+[Python API](/docs/reference/stable/python/peakfit/) and
+[TypeScript API](/docs/reference/stable/typescript/peakfit/).

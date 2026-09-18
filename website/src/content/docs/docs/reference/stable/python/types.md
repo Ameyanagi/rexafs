@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.9.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
+**Stable 0.2.10.** These signatures match the released Python package. Explanations are maintained in the source docstrings and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [Python tutorial](/docs/libraries/python/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/py-rexafs/python/rexafs/__init__.pyi) · [Docstring source](https://github.com/Ameyanagi/rexafs/blob/main/py-rexafs/python/rexafs/__init__.pyi)
 
 ## __version__
 
@@ -18,6 +18,15 @@ __version__: str
 ```
 
 Version of the installed Python package, for example "0.2.4". Include this value when reporting results or requesting help; a source build can contain changes beyond the published package with the same version.
+
+## AbsorptionMode
+
+```python
+AbsorptionMode: TypeAlias = Literal['unknown', 'transmission', 'fluorescence']
+```
+
+Acquisition interpretation (since 0.2.10). Unknown means missing evidence;
+it does not establish fluorescence. Changing it never removes correction history.
 
 ## FFTGrid
 

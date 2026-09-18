@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.9.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
+**Stable 0.2.10.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.9/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
 Source axis conversion to eV; no magnitude-based unit guessing (since 0.2.6).
 

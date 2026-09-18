@@ -8,9 +8,39 @@ Published changes and migration notes are listed below. Back up projects before
 updating. Source-checkout APIs are documented in the [Next API
 reference](/docs/reference/).
 
-## Stable 0.2.9
+## Stable 0.2.10
 
-[Download 0.2.9](/download/) or read the
+[Download 0.2.10](/download/) or read the
+[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.10).
+
+- [RMC fitting](/docs/desktop/rmc/) adds guided structure/supercell setup, exact
+  cached ReFEFF, real-plus-imaginary R-space fitting, live curves and coordinates,
+  residual-trend diagnostics and saved-run recovery. Saved preprocessing is
+  retained on resume. Adaptive scattering stays experimental and opt-in in Rust.
+- [Processing](/docs/desktop/processing/) adds MBACK normalization, retained
+  Cauchy wavelet maps in Transform, energy-offset controls and explicit
+  fluorescence correction limited to XANES. Corrected groups cannot enter EXAFS.
+- [XANES peak fitting](/docs/science/analysis/#xanes-peak-fitting) provides named
+  peaks, steps and baselines with constraints and retained results. Python and
+  TypeScript expose the same native calculation, MBACK and Cauchy wavelets.
+- [Series](/docs/desktop/series/) adds full-frame measurements, saved recipes,
+  region trends and recovery. Experimental Live acquisition watches completed
+  source revisions; network-share and physical Windows/Linux acquisition remain
+  unqualified.
+- [Import](/docs/desktop/import/) can reuse a reviewed mapping across matching
+  files and skip unwanted pending files with undo. Plot CSV/PNG/SVG exports cover
+  additional processing, analysis, Series and Wavelet views.
+
+All package channels share version 0.2.10. Mac downloads are signed and notarized;
+Windows and Linux remain desktop previews. The desktop RMC workflow currently
+uses one spectrum and structure; evolutionary and weighted-structure workflows
+are Rust APIs. Project format 1 and historical compatibility fixtures are retained.
+See the [release notes](https://github.com/Ameyanagi/rexafs/blob/main/doc/release-notes-0.2.10.md)
+and [qualification record](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-09-18-release-0.2.10/review.md).
+
+## Previous stable 0.2.9
+
+[Download 0.2.9](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.9) or read the
 [published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.9).
 
 - Native [MCR-ALS, LCF and PCA workflows](/docs/science/analysis/) prepare missing
@@ -106,7 +136,7 @@ was not promoted. Version 0.2.9 includes those updater and import-discovery chan
   browser Worker, with generated FEFF files and a provenance record.
 
 These follow website deployment, separately from the versioned npm API. Native
-rexafs 0.2.9 retains ReFEFF 0.3.0. See [WASM scope](/docs/libraries/webassembly/).
+rexafs 0.2.10 also uses ReFEFF 0.4.0. See [WASM scope](/docs/libraries/webassembly/).
 
 ## Earlier releases
 

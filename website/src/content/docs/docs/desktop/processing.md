@@ -17,7 +17,7 @@ defaults. Copying all processing settings does not also copy column mappings or
 reference calibration; copying a column mapping is a separate guarded action.
 An Auto request is copied as Auto, so its resolved value can differ by spectrum.
 
-## Alignment (unreleased)
+## Alignment
 
 In **Data → Align to reference**, choose a standard. The preview shows dμ/dE
 over the alignment window, initially −50 to +100 eV relative to the reference
@@ -42,12 +42,11 @@ An older group's correction already stored in its arrays, or separate
 reference-channel calibration, is not removed by this control.
 
 The automatic alignment uses the core derivative-matching implementation in
-[`align_to`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs/src/xafs/xasspectrum.rs),
+[`align_to`](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/crates/rexafs/src/xafs/xasspectrum.rs),
 with the manual correction applied afterward. See the
 [processing theory](/docs/science/processing/) for algorithm details.
 
-Rust users can set and read the correction directly on `Spectrum` in the
-unreleased source checkout:
+Rust users can set and read the correction directly on `Spectrum` since 0.2.10:
 
 ```rust
 spectrum.set_energy_offset(3.5)?; // total offset in eV
@@ -67,12 +66,12 @@ Python and TypeScript exposure of these energy-offset methods remains pending.
 
 ## Normalization
 
-**Unreleased source checkout:** choose **Polynomial** or **MBACK** in the
+**Since 0.2.10:** choose **Polynomial** or **MBACK** in the
 Normalize sidebar. MBACK shows absorber, edge and optional erfc-background
 settings in that same panel. A declared source absorber/edge lets it calculate
 on selection; otherwise enter them and choose **Apply**. The ordinary plot and
 range handles stay visible. **Atomic match…** and **Compare methods…** open
-optional diagnostics within Normalize. See the [MBACK guide](https://github.com/Ameyanagi/rexafs/blob/feature/analysis-b-f/doc/mback-normalization.md)
+optional diagnostics within Normalize. See the [MBACK guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/mback-normalization.md)
 for the model, assumptions and retained results.
 The fit toggle follows the selected method: **Pre/post** shows polynomial
 baselines; **MBACK fit** shows the complete fitted atomic model over the
@@ -82,7 +81,7 @@ exports include the fit while visible.
 These fits are limited to Normalize; Background shows only its **Spline**
 overlay. Switching tabs preserves each toggle's preference.
 
-**Unreleased source checkout:** the range icon between **Colors** and **Overview plots**
+**Since 0.2.10:** the range icon between **Colors** and **Overview plots**
 in the plot toolbar toggles shaded
 selection windows and their drag handles across processing, fitting and analysis
 plots. Hiding them preserves the numerical ranges and processing results. The
@@ -144,7 +143,7 @@ and [AUTOBK objective](/docs/science/autobk/).
 
 ## Forward transform
 
-**Unreleased source checkout:** the Transform view selector contains
+**Since 0.2.10:** the Transform view selector contains
 **k**, **R**, **k + R**, **q**, and **Wavelet**. It remains visible in all five
 views. In Wavelet, **Magnitude**, **Real**, **Imaginary** and **Phase** appear
 immediately to the right of that selector. Switching back to Wavelet preserves
@@ -161,7 +160,7 @@ intervals. The wavelet map has the k spectrum below
 it and the R spectrum to its left. Their plotting areas align, and zooming or
 panning shares the matching k or R axis. **Spectra** shows the measured χ and
 Fourier magnitude; **Slices** shows wavelet magnitude at a selected coordinate.
-See the [wavelet guide](https://github.com/Ameyanagi/rexafs/blob/feature/analysis-b-f/doc/wavelet-analysis.md)
+See the [wavelet guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/wavelet-analysis.md)
 for interpretation, settings, retained maps and region integration.
 
 The recommended starting window is 2–15 Å⁻¹ with $k$ weight 2, taper parameter
@@ -191,9 +190,9 @@ transform; it is not generally the original unweighted $\chi(k)$.
 [Processing theory](/docs/science/processing/) defines the normalization and
 Fourier signs, scales, units and limitations.
 
-## Fluorescence correction (development preview)
+## Fluorescence correction
 
-This workflow is **unreleased** and available in the development source checkout.
+This workflow is available in **0.2.10**.
 Select uncorrected μ(E), then **Data → Fluorescence correction…**. Enter the full
 sample composition, absorber, edge, emission line and measured incident/exit
 angles in degrees from the sample surface. For example, `Ka1` selects one line;
@@ -216,12 +215,12 @@ This homogeneous, optically thick model is limited to XANES, following the
 Known transmission imports and repeated correction are rejected. Corrected groups
 and their calculated descendants retain this limit: use the original spectrum
 for EXAFS background removal, transforms, fitting or wavelets. Energy-space
-LCF/PCA/MCR remain available. See the development
-[Python](/docs/reference/next/python/fluorescencecorrection/) and
-[TypeScript](/docs/reference/next/typescript/fluorescencecorrection/) references
+LCF/PCA/MCR remain available. See the
+[Python](/docs/reference/stable/python/fluorescencecorrection/) and
+[TypeScript](/docs/reference/stable/typescript/fluorescencecorrection/) references
 for the same native calculation outside the desktop.
 
-## Exporting a displayed plot (unreleased)
+## Exporting a displayed plot
 
 Use **Export** on a processing or comparison plot, an LCF/PCA/MCR result, a Series
 heatmap/frame/trend, or the Wavelet toolbar. Choose **Data · CSV**, **Image · PNG**,
