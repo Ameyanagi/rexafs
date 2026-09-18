@@ -66,15 +66,26 @@
 //! and [Rehr and Albers, XAFS theory (2000)](https://doi.org/10.1103/RevModPhys.72.621).
 //! The fixed endpoint penalty is a rexafs-specific choice; Fourier peaks are not automatically phase corrected.
 
+pub mod atomic;
 pub mod parser;
 #[cfg(feature = "plotting")]
 pub mod plot;
 pub mod prelude;
 pub mod xafs;
 
+pub use xafs::analysis::peakfit::{PeakFit, PeakFitError, PeakFitResult};
 pub use xafs::background::{BackgroundMethod, AUTOBK};
-pub use xafs::normalization::{NormalizationMethod, PrePostEdge};
+pub use xafs::fluorescence::{
+    AbsorptionMode, FluorescenceCorrection, FluorescenceCorrectionResult, FluorescenceError,
+};
+pub use xafs::normalization::{MBack, NormalizationMethod, PrePostEdge};
 pub use xafs::xasgroup::XASGroup as Group;
 pub use xafs::xasspectrum::XASSpectrum as Spectrum;
 pub use xafs::xrayfft::{FFTGrid, XrayFFTF, XrayFFTR};
 pub use xafs::{analysis, fitting, io, rmc, structure, tools, Result, XAFSError as Error};
+
+// Unreleased, native Cauchy wavelet analysis.
+pub use crate::xafs::wavelet::{
+    Wavelet, WaveletError, WaveletMap, WaveletPreparation, WaveletRegionValue, WaveletSize,
+    WaveletWindow,
+};

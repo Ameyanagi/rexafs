@@ -789,6 +789,7 @@ mod tests {
             quantity: Default::default(),
             quantity_unconfirmed: false,
             operation: None,
+            ..Default::default()
         }
     }
     fn channels() -> Vec<DerivedSpectrum> {

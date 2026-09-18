@@ -20,6 +20,8 @@ pub use storage::{DataStorage, ProjectHeader};
 /// prepared input, so historical calculations survive subsequent preprocessing.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AnalysisInput {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub corrections: Vec<crate::fluorescence_history::CorrectionReceipt>,
     pub group_id: Option<crate::group_identity::GroupId>,
     pub label: String,
     pub fingerprint: u64,
@@ -91,6 +93,9 @@ pub struct ParamOverride {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProjectFile {
+    pub normalizations: crate::normalization_history::NormalizationHistory,
+    pub wavelets: crate::wavelet_history::WaveletArchive,
+    pub peak_fits: crate::peak_fits::PeakArchive,
     pub series_measurements: crate::series_measurements::SeriesArchive,
     pub lcf_series_analysis: Option<LcfSeriesAnalysis>,
     pub pca_analysis: Option<PcaAnalysis>,
@@ -272,7 +277,8 @@ pub fn save_with_storage(
     let mut value = serde_json::to_value(&prepared).map_err(|e| e.to_string())?;
     value["version"] = PROJECT_VERSION.into();
     let mut json = compact::encode(value)?;
-    if !measurements.series.is_empty()
+    if !measurements.live_sessions.is_empty()
+        || !measurements.series.is_empty()
         || !measurements.runs.is_empty()
         || !measurements.presets.is_empty()
         || !measurements.recipes.is_empty()
@@ -450,3 +456,83 @@ fn replace_with(
 
 #[cfg(test)]
 pub(crate) mod tests;
+
+impl ProjectFile {
+    pub(crate) fn correction_receipts(
+        &self,
+    ) -> Vec<&crate::fluorescence_history::CorrectionReceipt> {
+        let mut out = self
+            .derived
+            .iter()
+            .flat_map(|d| d.corrections.iter())
+            .collect::<Vec<_>>();
+        for input in self
+            .lcf_analysis
+            .iter()
+            .flat_map(|a| a.inputs.iter())
+            .chain(self.pca_analysis.iter().flat_map(|a| a.inputs.iter()))
+            .chain(self.mcr_analysis.iter().flat_map(|a| a.inputs.iter()))
+            .chain(
+                self.mcr_analysis
+                    .iter()
+                    .flat_map(|a| a.comparison.iter())
+                    .flat_map(|c| c.inputs.iter()),
+            )
+            .chain(
+                self.lcf_series_analysis
+                    .iter()
+                    .flat_map(|a| a.inputs.values().chain(a.standards.iter())),
+            )
+        {
+            out.extend(&input.corrections);
+        }
+        out
+    }
+    pub(crate) fn relocate_corrections(
+        &mut self,
+        f: &mut impl FnMut(&Path) -> Result<PathBuf, String>,
+    ) -> Result<(), String> {
+        for r in self
+            .derived
+            .iter_mut()
+            .flat_map(|d| d.corrections.iter_mut())
+        {
+            r.path = f(&r.path)?;
+        }
+        for input in self
+            .lcf_analysis
+            .iter_mut()
+            .flat_map(|a| a.inputs.iter_mut())
+            .chain(
+                self.pca_analysis
+                    .iter_mut()
+                    .flat_map(|a| a.inputs.iter_mut()),
+            )
+            .chain(
+                self.mcr_analysis
+                    .iter_mut()
+                    .flat_map(|a| a.inputs.iter_mut()),
+            )
+            .chain(
+                self.lcf_series_analysis
+                    .iter_mut()
+                    .flat_map(|a| a.inputs.values_mut().chain(a.standards.iter_mut())),
+            )
+        {
+            for r in &mut input.corrections {
+                r.path = f(&r.path)?;
+            }
+        }
+        for input in self
+            .mcr_analysis
+            .iter_mut()
+            .flat_map(|a| a.comparison.iter_mut())
+            .flat_map(|c| c.inputs.iter_mut())
+        {
+            for r in &mut input.corrections {
+                r.path = f(&r.path)?;
+            }
+        }
+        Ok(())
+    }
+}

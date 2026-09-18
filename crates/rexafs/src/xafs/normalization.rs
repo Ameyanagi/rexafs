@@ -44,15 +44,26 @@ pub trait Normalization {
 
 /// Absorption normalization algorithm and its settings/results.
 ///
-/// Pre/post-edge normalization is implemented; MBACK is a retained placeholder
-/// and returns `NotImplemented`. `new()` uses automatic ranges while `default()`
+/// Pre/post-edge normalization remains the default; full Chantler MBACK is
+/// available with explicit absorber/edge settings. `new()` uses automatic ranges while `default()`
 /// uses `PrePostEdge::default()` with fixed initial ranges.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum NormalizationMethod {
     /// Implemented pre/post-edge subtraction and edge-step normalization.
     PrePostEdge(PrePostEdge),
-    /// Placeholder that returns `NotImplemented` when normalization is requested.
+    /// Full Chantler MBACK; requires absorber and edge (unreleased).
     MBack(MBack),
+}
+
+impl From<MBack> for NormalizationMethod {
+    fn from(parameters: MBack) -> Self {
+        Self::MBack(parameters)
+    }
+}
+impl From<MBack> for Option<NormalizationMethod> {
+    fn from(parameters: MBack) -> Self {
+        Some(NormalizationMethod::MBack(parameters))
+    }
 }
 
 impl From<PrePostEdge> for NormalizationMethod {
@@ -85,8 +96,8 @@ impl NormalizationMethod {
         NormalizationMethod::PrePostEdge(PrePostEdge::new())
     }
 
-    /// Create the MBACK placeholder; attempting normalization returns
-    /// `NormalizationError::NotImplemented`. Use pre/post-edge normalization.
+    /// Create historical empty MBACK settings. Normalization requires an explicit
+    /// absorber and edge; prefer `MBack::for_edge(element, edge).into()`.
     pub fn new_mback() -> NormalizationMethod {
         NormalizationMethod::MBack(MBack::new())
     }
@@ -96,7 +107,7 @@ impl NormalizationMethod {
     /// For PrePostEdge, use matching finite energy/mu arrays with at least two
     /// nondecreasing energy samples in eV; this resolves ranges and low-level E0
     /// automatically. Spectrum validates an explicit E0 more strictly before
-    /// normalizing. The unimplemented MBACK variant performs no work or validation.
+    /// normalizing. MBACK resolves its checked ranges during fitting; this variant performs no work.
     pub fn fill_parameter(
         &mut self,
         energy: &DVector<f64>,
@@ -120,8 +131,8 @@ impl NormalizationMethod {
     /// Insufficient fit points or failed fits return `NormalizationError`.
     /// The low-level PrePostEdge path zips and filters input pairs before
     /// validation, so unequal tails/nonfinite pairs may be discarded; Spectrum
-    /// instead rejects such inputs before dispatch. MBACK always returns
-    /// `NotImplemented`. Borrowed inputs themselves are unchanged.
+    /// instead rejects such inputs before dispatch. MBACK also rejects invalid arrays,
+    /// unsupported atomic data and nonidentifiable fits. Borrowed inputs are unchanged.
     pub fn normalize(
         &mut self,
         energy: &DVector<f64>,
@@ -140,8 +151,8 @@ impl NormalizationMethod {
     }
 
     /// Read the stored edge energy in eV without detecting or validating it.
-    /// `None` means no value is stored. Automatic detection belongs to PrePostEdge
-    /// calculation; MBACK never calculates an E0.
+    /// `None` means no value is stored. Both algorithms resolve a missing E₀ during
+    /// normalization; neither detector shifts the atomic reference table.
     pub fn get_e0(&self) -> Option<f64> {
         match self {
             NormalizationMethod::PrePostEdge(pre_post_edge) => pre_post_edge.get_e0(),
@@ -151,7 +162,7 @@ impl NormalizationMethod {
 
     /// Read the stored absorption jump in input mu units without calculating it.
     /// `None` means no value is stored. PrePostEdge estimates a missing jump during
-    /// normalization; MBACK never calculates one.
+    /// normalization; MBACK calculates its step from the matched atomic scale.
     pub fn get_edge_step(&self) -> Option<f64> {
         match self {
             NormalizationMethod::PrePostEdge(pre_post_edge) => pre_post_edge.get_edge_step(),
@@ -161,7 +172,7 @@ impl NormalizationMethod {
 
     /// Borrow the stored dimensionless flattened absorption without calculating.
     /// PrePostEdge removes its fitted post-edge trend above E0. Returns `None`
-    /// when no array is stored; MBACK never populates this output.
+    /// when no successful result is stored. MBACK uses its auxiliary fitted trend.
     pub fn get_flat(&self) -> Option<&DVector<f64>> {
         match self {
             NormalizationMethod::PrePostEdge(pre_post_edge) => pre_post_edge.get_flat(),
@@ -171,7 +182,7 @@ impl NormalizationMethod {
 
     /// Borrow the stored dimensionless normalized absorption without calculating.
     /// PrePostEdge produces `(mu - pre_edge) / edge_step`. Returns `None` when no
-    /// array is stored; MBACK never populates this output.
+    /// array is stored. MBACK uses `(s*mu-P)/Delta` from its saved auxiliary model.
     pub fn get_norm(&self) -> Option<&DVector<f64>> {
         match self {
             NormalizationMethod::PrePostEdge(pre_post_edge) => pre_post_edge.get_norm(),
@@ -182,7 +193,7 @@ impl NormalizationMethod {
     /// Store edge energy in eV, or `None` to request PrePostEdge detection.
     /// An explicit value used through Spectrum must be finite and strictly inside
     /// the input energy range. This standalone setter does not validate, recalculate
-    /// or clear arrays; setting a value does not implement the MBACK placeholder.
+    /// or clear arrays; use Spectrum setters to invalidate dependent results.
     pub fn set_e0(&mut self, e0: Option<f64>) -> &mut Self {
         match self {
             NormalizationMethod::PrePostEdge(pre_post_edge) => {
@@ -198,7 +209,8 @@ impl NormalizationMethod {
 
     /// Store the absorption jump in mu units, or `None` for PrePostEdge estimation.
     /// This standalone setter does not validate, recalculate or clear stored arrays.
-    /// The MBACK placeholder only stores the value and remains unimplemented.
+    /// For MBACK this is only historical output storage: the next fit determines
+    /// its step from atomic data and does not use this value as an override.
     pub fn set_edge_step(&mut self, edge_step: Option<f64>) -> &mut Self {
         match self {
             NormalizationMethod::PrePostEdge(pre_post_edge) => {
@@ -717,85 +729,8 @@ impl Normalization for PrePostEdge {
     }
 }
 
-/// Unimplemented MBACK normalization placeholder.
-///
-/// Construction succeeds, but `normalize` always returns
-/// `NormalizationError::NotImplemented`; the presence of this type does not
-/// mean the MBACK algorithm is available.
-///
-/// The retained name refers to normalization against tabulated absorption in
-/// [Weng, Waldo and Penner-Hahn (2005)](https://doi.org/10.1107/S0909049504034193);
-/// rexafs does not currently implement that paper's algorithm.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-#[derive(Default)]
-pub struct MBack {
-    /// Stored edge-energy placeholder in eV; default `None`.
-    /// MBACK does not estimate, validate or update this value.
-    pub e0: Option<f64>,
-    /// Stored absorption-jump placeholder in input mu units; default `None`.
-    /// MBACK does not estimate, floor or update this value.
-    pub edge_step: Option<f64>,
-    /// Reserved normalized-output storage; default `None`.
-    /// MBACK never calculates or populates this array.
-    pub norm: Option<DVector<f64>>,
-    /// Reserved flattened-output storage; default `None`.
-    /// MBACK never calculates or populates this array.
-    pub flat: Option<DVector<f64>>,
-}
-
-impl MBack {
-    /// Create an empty placeholder; no MBACK calculation is implemented.
-    pub fn new() -> MBack {
-        MBack {
-            ..Default::default()
-        }
-    }
-
-    /// No-op retained for compatibility; no MBACK defaults or results are calculated.
-    pub fn fill_parameter(&mut self) {
-        // MBack parameter filling is not implemented yet.
-        // Keep this as a no-op to avoid panics in callers that probe this method.
-    }
-}
-
-impl Normalization for MBack {
-    fn normalize(
-        &mut self,
-        _energy: &DVector<f64>,
-        _mu: &DVector<f64>,
-    ) -> Result<&mut Self, NormalizationError> {
-        Err(NormalizationError::NotImplemented {
-            method: "MBack normalization".to_string(),
-        })
-    }
-
-    fn get_e0(&self) -> Option<f64> {
-        self.e0
-    }
-
-    fn get_edge_step(&self) -> Option<f64> {
-        self.edge_step
-    }
-
-    fn get_flat(&self) -> Option<&DVector<f64>> {
-        self.flat.as_ref()
-    }
-
-    fn get_norm(&self) -> Option<&DVector<f64>> {
-        self.norm.as_ref()
-    }
-
-    fn set_e0(&mut self, e0: Option<f64>) -> &mut Self {
-        self.e0 = e0;
-        self
-    }
-
-    fn set_edge_step(&mut self, edge_step: Option<f64>) -> &mut Self {
-        self.edge_step = edge_step;
-        self
-    }
-}
+/// Full Chantler MBACK model and cached results (unreleased).
+pub use super::mback::MBack;
 
 #[cfg(test)]
 mod tests {

@@ -10,6 +10,16 @@ stages: **Structure → Calculate → Paths → Model → Results**.
 
 ## Find a structure
 
+**Unreleased:** choose the database from the source menu at the top of the
+Structure library. All five sources remain accessible in a narrow panel.
+
+COD searches return up to 200 usable structures. A bare element such as `Cu`
+matches compounds containing that element; use a formula such as `CuO` or a
+COD ID to narrow the results. The unreleased client first retrieves IDs, then
+loads metadata in small batches, so broad searches do not download every
+matching record at once. This uses COD's documented
+[ID-list and ID-query endpoints](https://wiki.crystallography.net/RESTful_API/).
+
 Choose an offline **Curated** example, import CIF/XYZ, or search Materials
 Project, AMCSD or COD. Connectivity, downloaded catalogs and credentials depend
 on the source.

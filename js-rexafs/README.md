@@ -176,7 +176,8 @@ npm pack
 
 The package includes Node/browser Wasm and declarations. Filesystem reading,
 fitting, groups, structure downloads and FEFF execution remain Rust/desktop
-APIs. MBack and ILPBkg are unimplemented placeholders; TrustRegionDogLeg requires
+APIs. ILPBkg remains unimplemented. The unreleased `MBack` API below adds full
+atomic-reference normalization. TrustRegionDogLeg requires
 a native Rust feature absent from Wasm. The recommended LinearDirect/FixedPenalty
 path works in both bindings. See [FFT compatibility](../doc/fft-grid-compatibility.md).
 Licensed under MIT OR Apache-2.0.
@@ -220,3 +221,65 @@ coverage checks. See the [measurement guide](../doc/full-frame-measurements.md)
 for units, optional independent errors and numerical assumptions. This scalar
 operation is separate from the `Measurement` input-file reader. Type declarations
 include options, result fields, completion choices and hover help.
+
+## Full MBACK normalization (unreleased)
+
+```ts
+import { MBack } from "rexafs/node";
+const model = new MBack("Cu", "K", {pre_edge: [-200,-50], post_edge: [100,800]});
+const result = model.fit(energy, mu); // Float64Array inputs: eV and raw absorption
+spectrum.set_normalization_method(model).normalize();
+console.log(result.norm, result.flat);
+model.free();
+```
+
+Ranges are E₀-relative eV. Degree 2 and no erfc are the defaults. Offline atomic
+data load automatically. Results own their arrays; spectrum settings copy the
+model. `spectrum.mback_result()` retrieves its saved result or `undefined` after
+invalidation. `result.definition` creates a model pinned to the original reference;
+free that model after use. Browser callers must await `init()` and should use a
+Worker for large synchronous fits. See the [MBACK guide](../doc/mback-normalization.md)
+for equations, assumptions and optional backgrounds. Atomic-data notices ship
+in the npm package's `licenses/atomic` directory.
+
+## Cauchy wavelets (unreleased)
+
+```ts
+import { Wavelet } from "rexafs/node";
+const model = new Wavelet([2, 12]);
+const map = spectrum.wavelet(model);
+try {
+  const image = map.magnitude; // Independent Float64Array: R rows, k columns
+  const region = map.integral([4, 10], [1, 3]);
+  console.log(image, region.value, region.unit);
+} finally {
+  map.free();
+  model.free();
+}
+```
+
+The k interval uses Å⁻¹; R uses Å and is not phase-corrected. Missing normalization
+and background stages run on a private copy. Defaults are weight 2, order 100,
+k spacing 0.05 Å⁻¹, R up to 6 Å and no taper. Named options override them, for
+example `new Wavelet([2, 12], {rmax: 4})`. `model.calculate(k, chi)` also accepts
+unweighted χ(k) in `Float64Array` inputs. Browser callers await `init()` first.
+See the [wavelet guide](../doc/wavelet-analysis.md) for layout, native-grid integrals,
+slices, ownership, JSON replay and scientific limitations.
+
+## Fluorescence over-absorption (unreleased)
+
+```ts
+import { FluorescenceCorrection } from "rexafs/node";
+const model = new FluorescenceCorrection("CuO", "Cu", "K", {line:"Ka1", angles:[45,45]});
+const corrected = spectrum.correct_fluorescence(model);
+try { corrected.normalize(); }
+finally { corrected.free(); model.free(); }
+```
+
+Supply the complete sample composition, detected emission and measured
+incident/exit angles **from the sample surface**, in degrees. The angles above
+are examples. Internal normalization is automatic; final normalization is separate.
+The original stays unchanged. The new native spectrum preserves correction history
+and its XANES-only restriction through edits; known transmission and repeated
+correction fail. See the [correction guide](../doc/fluorescence-correction.md)
+for the homogeneous thick-sample assumptions, diagnostics, replay and array API.

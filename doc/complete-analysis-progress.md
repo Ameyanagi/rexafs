@@ -85,3 +85,20 @@ for later milestones and recipe replay follow their stabilized core contracts;
 installed-package and editor-help tests remain completion gates. All numerical
 reference artifacts need source/version/license records. Unpublished experimental
 data and private workflow reports must remain outside this checkout.
+
+## Live branch: first intake building block (historical)
+
+`feature/live-acquisition` starts B1 on top of the Phase A PR. It adds deterministic
+quiet-file and producer-digest completion checks, immutable captured bytes with
+parsed scans, and explicit acknowledgement of committed source revisions.
+Ten focused tests pass. This module is not connected to the GUI and does not
+yet implement automatic intake, a durable queue or restart-safe result publication.
+See [the Live progress record](live-acquisition-progress.md) for the contracts
+and next integration steps. The Phase A implementation and its PR remain isolated.
+
+## Subsequent B–F development
+
+The foundation above has been integrated into a Series Live workspace on
+`feature/analysis-b-f`. See the [current Live guide](live-acquisition.md) and
+[B–F progress record](analysis-b-f-progress.md). The latter distinguishes local
+validation from the platform/network qualification still required before release.

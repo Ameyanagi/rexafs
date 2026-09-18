@@ -1,5 +1,9 @@
 //! Thin Wasm bindings: stage execution and defaults live in rexafs.
 use wasm_bindgen::prelude::*;
+mod fluorescence;
+mod mback;
+mod peaks;
+mod wavelet;
 fn error(error: rexafs::Error) -> JsValue {
     js_sys::Error::new(&error.to_string()).into()
 }
@@ -21,6 +25,11 @@ fn error(error: rexafs::Error) -> JsValue {
 #[wasm_bindgen(js_name = PrePostEdge)]
 pub struct WasmPrePostEdge {
     inner: rexafs::PrePostEdge,
+}
+impl Default for WasmPrePostEdge {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 #[wasm_bindgen(js_class = PrePostEdge)]
 impl WasmPrePostEdge {
@@ -166,6 +175,11 @@ impl WasmPrePostEdge {
 #[wasm_bindgen(js_name = AUTOBK)]
 pub struct WasmAUTOBK {
     inner: rexafs::AUTOBK,
+}
+impl Default for WasmAUTOBK {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 #[wasm_bindgen(js_class = AUTOBK)]
 impl WasmAUTOBK {
@@ -569,6 +583,11 @@ impl WasmAUTOBK {
 pub struct WasmXrayFFTF {
     inner: rexafs::XrayFFTF,
 }
+impl Default for WasmXrayFFTF {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 #[wasm_bindgen(js_class = XrayFFTF)]
 impl WasmXrayFFTF {
     /// Create owned settings with the recommended Rust defaults. Automatic fields are resolved
@@ -765,6 +784,11 @@ impl WasmXrayFFTF {
 pub struct WasmXrayFFTR {
     inner: rexafs::XrayFFTR,
 }
+impl Default for WasmXrayFFTR {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 #[wasm_bindgen(js_class = XrayFFTR)]
 impl WasmXrayFFTR {
     /// Create owned settings with the recommended Rust defaults. Automatic fields are resolved
@@ -918,8 +942,8 @@ impl WasmXrayFFTR {
 /// Select the normalization algorithm and hold an owned copy of its settings.
 ///
 /// Use PrePostEdge(settings) for customized pre/post-edge fits or new_prepostedge() for
-/// automatic defaults. The MBack factory is only a placeholder; it does not implement that
-/// algorithm. Copy this method into Spectrum.set_normalization_method(), then free() the
+/// automatic defaults. The no-argument MBack factory is a historical empty selector and cannot
+/// normalize data. MBACK was unimplemented through version 0.2.9. Copy this method into Spectrum.set_normalization_method(), then free() the
 /// wrapper when no longer needed.
 #[wasm_bindgen(js_name = NormalizationMethod)]
 pub struct WasmNormalizationMethod {
@@ -945,9 +969,10 @@ impl WasmNormalizationMethod {
             inner: rexafs::NormalizationMethod::new_prepostedge(),
         }
     }
-    /// Create an owned MBack placeholder for API compatibility. MBack processing is not
-    /// implemented and normalize() throws if this method is selected. Use new_prepostedge() for
-    /// supported normalization, and free() any placeholder you create.
+    /// Create the historical empty MBack selector. Selecting it makes normalize() throw.
+    /// Use new_prepostedge() for automatic polynomial normalization. MBACK was unimplemented
+    /// through version 0.2.9; this no-argument selector remains unusable for normalization.
+    /// Free this wrapper when finished.
     pub fn new_mback() -> Self {
         Self {
             inner: rexafs::NormalizationMethod::new_mback(),
@@ -1005,6 +1030,97 @@ pub struct WasmSpectrum {
 }
 #[wasm_bindgen(js_class = Spectrum)]
 impl WasmSpectrum {
+    /// Correct into an independently owned native spectrum; retain XANES-only history.
+    pub fn correct_fluorescence(&self, definition: &str) -> Result<Self, JsValue> {
+        let model = fluorescence::WasmFluorescenceCorrection::new(definition)?;
+        Ok(Self {
+            inner: self
+                .inner
+                .correct_fluorescence(&model.inner)
+                .map_err(fluorescence::error)?,
+        })
+    }
+    /// Historical result plus native replay definition, or None for uncorrected data.
+    pub fn fluorescence_correction_json(&self) -> Result<Option<String>, JsValue> {
+        self.inner
+            .fluorescence_correction()
+            .map(fluorescence::result_json)
+            .transpose()
+    }
+    /// Original or explicitly revised acquisition interpretation.
+    pub fn absorption_mode(&self) -> String {
+        fluorescence::mode_name(self.inner.absorption_mode()).into()
+    }
+    /// Revise evidence without altering arrays/caches or clearing correction history.
+    pub fn set_absorption_mode(&mut self, mode: &str) -> Result<(), JsValue> {
+        self.inner.set_absorption_mode(fluorescence::mode(mode)?);
+        Ok(())
+    }
+    /// Copy MBACK settings into this spectrum, invalidating dependent results.
+    pub fn set_mback_json(&mut self, json: &str) -> Result<(), JsValue> {
+        let model = mback::WasmMBack::from_json(json)?;
+        self.inner
+            .set_normalization_method(model.inner)
+            .map_err(error)?;
+        Ok(())
+    }
+    /// Latest owned full MBACK result JSON, or None after invalidation/non-MBACK processing.
+    pub fn mback_result_json(&self) -> Result<Option<String>, JsValue> {
+        let Some(rexafs::NormalizationMethod::MBack(model)) = self.inner.normalization.as_ref()
+        else {
+            return Ok(None);
+        };
+        model
+            .result
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+    /// Prepare missing normalization/background on a copy and return an owned native map.
+    /// The facade supplies versioned settings JSON; original spectrum state is untouched.
+    pub fn wavelet(&self, definition_json: &str) -> Result<wavelet::WasmWaveletMap, JsValue> {
+        let definition = wavelet::WasmWavelet::new(definition_json)?;
+        let inner = self
+            .inner
+            .wavelet(&definition.inner)
+            .map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        Ok(wavelet::WasmWaveletMap { inner })
+    }
+    /// Internal bridge for Spectrum.fit_peaks. The native model prepares on a copy.
+    /// Optional errors must describe the selected signal on the original native grid.
+    pub fn fit_peaks_json(
+        &self,
+        definition: &str,
+        errors: Option<Vec<f64>>,
+    ) -> Result<String, JsValue> {
+        let model: rexafs::prelude::PeakFit =
+            serde_json::from_str(definition).map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        let result = model
+            .fit_with_errors(&self.inner, errors.as_deref())
+            .map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        serde_json::to_string(&result).map_err(|e| js_sys::Error::new(&e.to_string()).into())
+    }
+    /// Internal bridge for baseline-only initialization outside peak intervals.
+    /// Returns a new definition; source, initial model and final masks are unchanged.
+    pub fn initialize_peaks_json(
+        &self,
+        definition: &str,
+        intervals: &str,
+    ) -> Result<String, JsValue> {
+        let model: rexafs::prelude::PeakFit =
+            serde_json::from_str(definition).map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        let intervals: Vec<[f64; 2]> =
+            serde_json::from_str(intervals).map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        let ranges = intervals
+            .into_iter()
+            .map(|r| r[0]..=r[1])
+            .collect::<Vec<_>>();
+        let result = model
+            .initialize_baseline(&self.inner, &ranges)
+            .map_err(|e| js_sys::Error::new(&e.to_string()))?;
+        serde_json::to_string(&result).map_err(|e| js_sys::Error::new(&e.to_string()).into())
+    }
     /// Internal JSON bridge for the documented JavaScript Spectrum.measure facade.
     /// Prepares only required stages on a private copy; never modifies this spectrum.
     /// Optional errors describe the selected signal on its native grid, not raw
@@ -1150,7 +1266,7 @@ impl WasmSpectrum {
     /// Returns undefined before background removal or after invalidation; this getter never
     /// runs a stage.
     pub fn k(&self) -> Option<js_sys::Float64Array> {
-        self.inner.k().map(|v| js_sys::Float64Array::from(v))
+        self.inner.k().map(js_sys::Float64Array::from)
     }
     /// Return an independent copy of unweighted EXAFS chi(k) = (mu - smooth background) /
     /// edge_step, dimensionless and paired with k(). The measured absorption and smooth
@@ -1158,7 +1274,7 @@ impl WasmSpectrum {
     /// before background removal or after invalidation. Forward kweight and window settings do
     /// not change this array.
     pub fn chi(&self) -> Option<js_sys::Float64Array> {
-        self.inner.chi().map(|v| js_sys::Float64Array::from(v))
+        self.inner.chi().map(js_sys::Float64Array::from)
     }
     /// Return an independent copy of dimensionless normalized absorption, (mu - pre_edge) /
     /// edge_step, on the original input energy grid. Here pre_edge is the fitted baseline and

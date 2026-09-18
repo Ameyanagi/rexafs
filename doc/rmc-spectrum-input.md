@@ -82,6 +82,11 @@ results produce actionable errors. Direct edits to legacy public spectrum fields
 still require `invalidate_derived()` and explicit reprocessing; neither the
 constructor nor ordinary getters can detect arbitrary stale caches.
 
+The native fluorescence-corrected branch is qualified only for XANES and is
+rejected at RMC input and retained-source validation, including when legacy EXAFS
+buffers are present. Use the uncorrected original spectrum for RMC; see the
+[correction model's applicability](fluorescence-correction.md).
+
 The explicit `FeffFitTransform` determines fitting. Cached plotted χ(R) and the
 spectrum's plotting ranges are not used as the objective. The constructor accepts
 R fitting with one integer k weight from 0 through 3, rejecting other spaces or

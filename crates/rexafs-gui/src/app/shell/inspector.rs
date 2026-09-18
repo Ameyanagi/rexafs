@@ -73,7 +73,15 @@ impl StudioApp {
     }
     pub(crate) fn inspector(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
+        if self.stage == Stage::Transform {
+            self.ensure_wavelet_fields(cx);
+        }
+        if self.stage == Stage::Normalize {
+            self.ensure_normalization_editor(cx);
+        }
         let body = match self.stage {
+            Stage::Data if self.fluorescence.open => self.fluorescence_inspector(cx),
+            Stage::Data if self.peaks.open => self.peak_inspector(cx),
             Stage::Data => self.data_inspector(cx).into_any_element(),
             Stage::Normalize => self.normalize_inspector(cx).into_any_element(),
             Stage::Background => self.background_inspector(cx).into_any_element(),
@@ -90,7 +98,11 @@ impl StudioApp {
             // Only legacy groups whose stored quantity is unknown get the
             // confirmation prompt; a blocked quantity (Δμnorm) gets the plain
             // notice; every other derived group renders the normal body.
-            let blocked = group.processing_block_reason();
+            let blocked = group.processing_block_reason().or_else(|| {
+                (!group.corrections.is_empty()
+                    && matches!(self.stage, Stage::Background | Stage::Transform))
+                .then(|| crate::fluorescence_history::XANES_ONLY.into())
+            });
             if !group.quantity_unconfirmed && (blocked.is_none() || self.stage == Stage::Data) {
                 body
             } else {
@@ -405,6 +417,7 @@ impl StudioApp {
             "Clamps & window"
                 | "Solver"
                 | "Advanced"
+                | "Wavelet settings"
                 | "Back FT  R → q"
                 | "Background options"
                 | "Result"
@@ -696,6 +709,7 @@ impl StudioApp {
                     cx,
                 ));
         }
+        let mback = self.normalization.show_mback;
         let sp = self.spectrum.as_deref();
         let e0 = sp.and_then(|s| s.e0());
         let step = self.edge_step();
@@ -709,13 +723,16 @@ impl StudioApp {
             .flex()
             .flex_col()
             .children(prepared_controls)
+            .child(self.normalization_controls(cx))
             .child(
                 self.section(
                     "Edge",
                     Some(ParamSection::Norm),
                     [
                         self.field(ParamKey::E0, cx),
-                        self.field(ParamKey::EdgeStep, cx),
+                        (!mback)
+                            .then(|| self.field(ParamKey::EdgeStep, cx))
+                            .flatten(),
                     ]
                     .into_iter()
                     .flatten()
@@ -730,7 +747,9 @@ impl StudioApp {
                     [
                         self.field(ParamKey::PreEdgeStart, cx),
                         self.field(ParamKey::PreEdgeEnd, cx),
-                        self.field(ParamKey::NVictoreen, cx),
+                        (!mback)
+                            .then(|| self.field(ParamKey::NVictoreen, cx))
+                            .flatten(),
                         None,
                     ]
                     .into_iter()
@@ -760,7 +779,7 @@ impl StudioApp {
                 None,
                 vec![
                     self.result_card(vec![
-                        ("E₀ (max. derivative)".into(), fmt(e0, 1, " eV")),
+                        ("E₀".into(), fmt(e0, 1, " eV")),
                         ("Edge step".into(), fmt(step, 4, "")),
                         ("White line".into(), fmt(whiteline, 3, "")),
                     ])
@@ -931,6 +950,12 @@ impl StudioApp {
                     cx,
                 ),
             )
+            .child(self.section(
+                "Wavelet settings",
+                None,
+                vec![self.wavelet_inspector(cx)],
+                cx,
+            ))
             .child(
                 self.section(
                     "Back FT  R → q",

@@ -979,6 +979,7 @@ pub(crate) fn load_raw_snapshot(
             *energy += shift;
         }
     }
+    params.offset_energy_axis(&mut raw.energy)?;
     Ok((raw.energy, raw.mu))
 }
 
@@ -1177,7 +1178,18 @@ pub struct PipelineParams {
     pub align_to_ref: bool,
     /// Desired reference-channel E₀ in eV. None applies no reference alignment.
     pub align_target: Option<f64>,
-    // Normalization (pre/post-edge); energies relative to E0.
+    /// Add this constant offset in eV to the source energy axis at read time.
+    /// Zero preserves the source axis. Original arrays are never rewritten.
+    /// Use `set_energy_offset` to move explicit E₀ overrides with the offset.
+    pub energy_offset_ev: f64,
+    /// Historical calculation that selected an offset. Editing the active
+    /// offset preserves this record; loading never replays its calculation.
+    pub alignment_record: Option<AlignmentRecord>,
+    /// None keeps polynomial normalization. MBACK records explicit absorber,
+    /// edge and atomic-data identity. Shared numeric fields override its saved
+    /// ranges/degree; its saved ranges supply each unspecified bound.
+    pub mback: Option<MbackOptions>,
+    // Normalization; energies relative to E0.
     /// Normalization edge energy in eV. None estimates the maximum-derivative edge.
     pub e0: Option<f64>,
     /// Positive measured edge-step override; None derives it from the fits.
@@ -1346,6 +1358,45 @@ fn legacy_bkg_clamp_policy() -> AUTOBKClampScalePolicy {
 }
 
 impl PipelineParams {
+    /// Set the active source-axis offset in eV, without accumulating repeated
+    /// assignments. Positive values move all energy points higher. Zero restores
+    /// the source axis before this offset; historical materialized corrections
+    /// and optional reference-channel calibration remain separate.
+    /// Explicit normalization and background E₀ overrides move by the change
+    /// in offset. The last alignment record is preserved as history.
+    pub fn set_energy_offset(&mut self, offset_ev: f64) -> Result<(), String> {
+        let delta = offset_ev - self.energy_offset_ev;
+        if !offset_ev.is_finite()
+            || !delta.is_finite()
+            || self.e0.is_some_and(|e| !(e + delta).is_finite())
+            || self.bkg_ek0.is_some_and(|e| !(e + delta).is_finite())
+        {
+            return Err("Energy offset must be finite".into());
+        }
+        self.e0 = self.e0.map(|e| e + delta);
+        self.bkg_ek0 = self.bkg_ek0.map(|e| e + delta);
+        self.energy_offset_ev = offset_ev;
+        Ok(())
+    }
+
+    fn offset_energy_axis(&self, energy: &mut Vec<f64>) -> Result<(), String> {
+        // Move the buffer through the core setter without copying it. The source
+        // array is already an owned read; project/source bytes remain untouched.
+        let mut spectrum = XASSpectrum::new();
+        spectrum.energy = Some(std::mem::take(energy).into());
+        let result = spectrum
+            .set_energy_offset(self.energy_offset_ev)
+            .map(|_| ())
+            .map_err(|e| e.to_string());
+        *energy = spectrum
+            .energy
+            .take()
+            .expect("offset retains the axis")
+            .data
+            .into();
+        result
+    }
+
     pub fn effective_bkg_kweight(&self) -> i32 {
         if self.bkg_kweight_linked {
             // XrayFFTF::fill_parameter uses the same nonnegative integer weight.
@@ -1364,6 +1415,7 @@ impl PipelineParams {
         params.bkg_ek0 = params.bkg_ek0.map(|e| e + applied_shift_ev);
         params.align_to_ref = false;
         params.align_target = None;
+        params.energy_offset_ev = 0.0;
         params
     }
 
@@ -1388,6 +1440,9 @@ impl PipelineParams {
         self.import.axis.fingerprint().hash(hasher);
         self.align_to_ref.hash(hasher);
         self.align_target.map(f64::to_bits).hash(hasher);
+        if self.energy_offset_ev != 0.0 {
+            self.energy_offset_ev.to_bits().hash(hasher);
+        }
         self.import.energy_col.hash(hasher);
         self.import.i0_col.hash(hasher);
         self.import.it_col.hash(hasher);
@@ -1402,6 +1457,13 @@ impl PipelineParams {
         self.hash_raw_fields(&mut hasher);
         if self.refit_prepared {
             "refit_prepared".hash(&mut hasher);
+        }
+        if let Some(options) = &self.mback {
+            // Settings are finite after validation. Invalid nonfinite values
+            // cannot successfully populate the processed-spectrum cache.
+            serde_json::to_string(options)
+                .unwrap_or_default()
+                .hash(&mut hasher);
         }
         self.bkg_kweight_linked.hash(&mut hasher);
         self.fft_grid.hash(&mut hasher);
@@ -1511,6 +1573,7 @@ pub fn load_raw_with_diagnostics(
             *e += shift;
         }
     }
+    params.offset_energy_axis(&mut raw.energy)?;
     Ok(raw)
 }
 
@@ -1526,7 +1589,7 @@ pub(crate) fn load_group_raw_with_diagnostics(
             None => Ok(RawData {
                 channel: params.import.mode,
                 declared_edge: group.declared_edge.clone(),
-                energy: group.energy.clone(),
+                energy: group.raw(params)?.0,
                 mu: group.mu.clone(),
                 diagnostics: ParserDiagnostics {
                     valid_points: group.energy.len(),
@@ -1543,6 +1606,11 @@ pub(crate) fn load_group_raw_with_diagnostics(
 /// be retained until the group is viewed or analyzed.
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct DerivedSpectrum {
+    /// Immutable ancestor corrections. These remain history after later data edits.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub corrections: Vec<crate::fluorescence_history::CorrectionReceipt>,
+    #[serde(default)]
+    pub absorption_mode: rexafs::AbsorptionMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub declared_edge: Option<crate::source_evidence::DeclaredEdge>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1622,6 +1690,26 @@ pub struct OperationInput {
     pub size: Option<u64>,
 }
 
+/// Historical alignment calculation; the active offset is stored separately.
+/// Copied settings retain the originating input identities, not a claim that
+/// the alignment was recalculated for another spectrum.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AlignmentRecord {
+    /// Spectrum first, then reference, with the identities used in the fit.
+    pub inputs: Vec<OperationInput>,
+    /// Derivative comparison interval in eV relative to the reference E₀.
+    pub window_relative_e0_ev: [f64; 2],
+    /// Fitted correction in eV, relative to the spectrum's then-current axis.
+    pub automatic_shift_ev: f64,
+    /// User adjustment added to the fitted correction, in eV.
+    pub manual_shift_ev: f64,
+    /// Active source-axis offset before applying the alignment, in eV.
+    pub offset_before_ev: f64,
+    /// Active source-axis offset immediately after alignment, in eV.
+    /// The current setting may differ after subsequent manual edits.
+    pub offset_after_ev: f64,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Operation {
     pub tool: String,
@@ -1634,10 +1722,34 @@ pub struct Operation {
 }
 
 impl DerivedSpectrum {
+    /// Preserve explicit logarithmic import evidence in older project files too.
+    pub fn acquisition_mode(&self) -> rexafs::AbsorptionMode {
+        let transmission = self
+            .operation
+            .as_ref()
+            .filter(|o| o.tool == "Measurement import")
+            .and_then(|o| {
+                serde_json::from_value::<rexafs::io::SpectrumMapping>(
+                    o.parameters["mapping"].clone(),
+                )
+                .ok()
+            })
+            .is_some_and(|m| matches!(m.signal, rexafs::io::SignalConversion::Transmission { .. }));
+        if transmission {
+            rexafs::AbsorptionMode::Transmission
+        } else {
+            self.absorption_mode
+        }
+    }
+
     pub fn fingerprint(&self, params: &PipelineParams) -> u64 {
         let mut hasher = std::hash::DefaultHasher::new();
         params.fingerprint().hash(&mut hasher);
         self.quantity.hash(&mut hasher);
+        for correction in &self.corrections {
+            correction.digest.hash(&mut hasher);
+        }
+        format!("{:?}", self.absorption_mode).hash(&mut hasher);
         self.declared_edge.hash(&mut hasher);
         self.quantity_unconfirmed.hash(&mut hasher);
         hasher.finish()
@@ -1690,6 +1802,9 @@ impl DerivedSpectrum {
         if let Some(reason) = self.processing_block_reason() {
             return Err(reason);
         }
+        if stage > RequiredStage::Normalized && !self.corrections.is_empty() {
+            return Err(crate::fluorescence_history::XANES_ONLY.into());
+        }
         let (energy, mu) = self.raw(params)?;
         if let Some(space) = self.quantity.prepared_space() {
             let e0 = if let Some(e0) = params.e0 {
@@ -1700,15 +1815,24 @@ impl DerivedSpectrum {
                 estimate.find_e0().map_err(|e| e.to_string())?;
                 estimate.e0().ok_or("Could not determine component E0")?
             };
-            let sp =
+            let mut sp =
                 XASSpectrum::from_prepared(&energy, &mu, space, e0).map_err(|e| e.to_string())?;
+            if !self.corrections.is_empty() {
+                sp.restrict_to_xanes();
+            }
+            sp.set_absorption_mode(self.acquisition_mode());
             if params.refit_prepared {
                 normalize_to_stage(sp, params, stage)
             } else {
                 process_exafs_to_stage(sp, params, stage)
             }
         } else {
-            prepare_arrays(energy, mu, params, stage)
+            let mut sp = XASSpectrum::from_arrays(&energy, &mu).map_err(|e| e.to_string())?;
+            sp.set_absorption_mode(self.acquisition_mode());
+            if !self.corrections.is_empty() {
+                sp.restrict_to_xanes();
+            }
+            normalize_to_stage(sp, params, stage)
         }
     }
 
@@ -1716,10 +1840,18 @@ impl DerivedSpectrum {
     /// No normalization/background objects are manufactured for differences.
     pub fn for_display(&self, params: &PipelineParams) -> Result<XASSpectrum, String> {
         if self.processing_block_reason().is_none() {
-            return self.process(params);
+            return if self.corrections.is_empty() {
+                self.process(params)
+            } else {
+                self.prepare(params, RequiredStage::Normalized)
+            };
         }
         let (energy, mu) = self.raw(params)?;
         let mut sp = XASSpectrum::new();
+        if !self.corrections.is_empty() {
+            sp.restrict_to_xanes();
+        }
+        sp.set_absorption_mode(self.acquisition_mode());
         sp.set_name(self.display_label());
         if self.quantity == Quantity::ChiK {
             sp.k = Some(energy.into());
@@ -1755,7 +1887,14 @@ impl DerivedSpectrum {
     pub fn raw(&self, params: &PipelineParams) -> Result<(Vec<f64>, Vec<f64>), String> {
         match &self.source {
             Some(source) => load_raw(source, params),
-            None => Ok((self.energy.clone(), self.mu.clone())),
+            None => {
+                if self.quantity == Quantity::ChiK && params.energy_offset_ev != 0.0 {
+                    return Err("An energy offset cannot be applied to a k-axis spectrum".into());
+                }
+                let mut energy = self.energy.clone();
+                params.offset_energy_axis(&mut energy)?;
+                Ok((energy, self.mu.clone()))
+            }
         }
     }
 }
@@ -1938,36 +2077,99 @@ fn normalize_to_stage(
         }
     }
 
-    if params
-        .edge_step
-        .is_some_and(|value| !value.is_finite() || value <= 0.0)
-    {
-        return Err("Edge step must be finite and greater than zero.".into());
-    }
-    let mut ppe = PrePostEdge::new();
-    ppe.edge_step = params.edge_step;
-    let defaults = PrePostEdge::default();
-    ppe.pre_edge_start = params.pre_edge_start.or(defaults.pre_edge_start);
-    ppe.pre_edge_end = params.pre_edge_end.or(defaults.pre_edge_end);
-    ppe.norm_start = params.norm_start.or(defaults.norm_start);
-    // Auto follows this spectrum's measured endpoint (relative to E0), rather
-    // than inheriting the library's fixed 2000 eV constructor default.
-    ppe.norm_end = params.norm_end.or_else(|| {
-        sp.energy
-            .as_ref()?
-            .iter()
-            .copied()
-            .reduce(f64::max)
-            .zip(sp.e0())
-            .map(|(end, e0)| end - e0)
-    });
-    ppe.norm_polyorder = params.norm_polyorder.or(defaults.norm_polyorder);
-    ppe.n_victoreen = params.n_victoreen.or(defaults.n_victoreen);
-    sp.set_normalization_method(Some(NormalizationMethod::PrePostEdge(ppe)))
+    let method = if let Some(saved) = &params.mback {
+        let mut options = saved.clone();
+        fn range(
+            lo: Option<f64>,
+            hi: Option<f64>,
+            fallback: Option<[f64; 2]>,
+        ) -> Result<Option<[f64; 2]>, String> {
+            let lo = lo.or(fallback.map(|r| r[0]));
+            let hi = hi.or(fallback.map(|r| r[1]));
+            match (lo, hi) {
+                (None, None) => Ok(None),
+                (Some(lo), Some(hi)) => Ok(Some([lo, hi])),
+                _ => Err("Set both bounds of the MBACK interval, or leave both automatic".into()),
+            }
+        }
+        options.pre_edge = range(params.pre_edge_start, params.pre_edge_end, options.pre_edge)?;
+        options.post_edge = range(params.norm_start, params.norm_end, options.post_edge)?;
+        if let Some(degree) = params.norm_polyorder {
+            options.degree = usize::try_from(degree).map_err(|_| "MBACK degree must be 0–5")?;
+        }
+        NormalizationMethod::MBack(MBack {
+            e0: params.e0,
+            options,
+            ..Default::default()
+        })
+    } else {
+        if params
+            .edge_step
+            .is_some_and(|value| !value.is_finite() || value <= 0.0)
+        {
+            return Err("Edge step must be finite and greater than zero.".into());
+        }
+        let mut ppe = PrePostEdge::new();
+        ppe.edge_step = params.edge_step;
+        let defaults = PrePostEdge::default();
+        ppe.pre_edge_start = params.pre_edge_start.or(defaults.pre_edge_start);
+        ppe.pre_edge_end = params.pre_edge_end.or(defaults.pre_edge_end);
+        ppe.norm_start = params.norm_start.or(defaults.norm_start);
+        // Auto follows this spectrum's measured endpoint (relative to E0), rather
+        // than inheriting the library's fixed 2000 eV constructor default.
+        ppe.norm_end = params.norm_end.or_else(|| {
+            sp.energy
+                .as_ref()?
+                .iter()
+                .copied()
+                .reduce(f64::max)
+                .zip(sp.e0())
+                .map(|(end, e0)| end - e0)
+        });
+        ppe.norm_polyorder = params.norm_polyorder.or(defaults.norm_polyorder);
+        ppe.n_victoreen = params.n_victoreen.or(defaults.n_victoreen);
+        NormalizationMethod::PrePostEdge(ppe)
+    };
+    sp.set_normalization_method(Some(method))
         .map_err(|e| e.to_string())?;
     sp.normalize().map_err(|e| e.to_string())?;
 
     process_exafs_to_stage(sp, params, stage)
+}
+
+/// Shared forward settings for ordinary processing and linked analysis views.
+/// This resolves only requested/default settings; it does not calculate a transform.
+pub(crate) fn forward_settings(params: &PipelineParams) -> Result<XrayFFTF, String> {
+    let mut xftf = XrayFFTF::default();
+    if params.fft_kmin.is_some() {
+        xftf.kmin = params.fft_kmin;
+    }
+    if params.fft_kmax.is_some() {
+        xftf.kmax = params.fft_kmax;
+    }
+    if params.fft_dk.is_some() {
+        xftf.dk = params.fft_dk;
+    }
+    if params.fft_kweight.is_some() {
+        xftf.kweight = params.fft_kweight;
+    }
+    if params.fft_dk2.is_some() {
+        xftf.dk2 = params.fft_dk2;
+    }
+    if params.fft_rmax.is_some() {
+        xftf.rmax_out = params.fft_rmax;
+    }
+    xftf.grid = params.fft_grid;
+    if params.fft_window.is_some() {
+        xftf.window = params.fft_window;
+    }
+    if params.fft_kstep.is_some() {
+        xftf.kstep = params.fft_kstep;
+    }
+    if let Some(nfft) = params.fft_nfft {
+        xftf.nfft = Some(usize::try_from(nfft).map_err(|_| "Forward NFFT must be at least 2")?);
+    }
+    Ok(xftf)
 }
 
 /// Continue from the retained absorption representation. Prepared component
@@ -2046,36 +2248,7 @@ fn process_exafs_to_stage(
         return Ok(sp);
     }
 
-    let mut xftf = XrayFFTF::default();
-    if params.fft_kmin.is_some() {
-        xftf.kmin = params.fft_kmin;
-    }
-    if params.fft_kmax.is_some() {
-        xftf.kmax = params.fft_kmax;
-    }
-    if params.fft_dk.is_some() {
-        xftf.dk = params.fft_dk;
-    }
-    if params.fft_kweight.is_some() {
-        xftf.kweight = params.fft_kweight;
-    }
-    if params.fft_dk2.is_some() {
-        xftf.dk2 = params.fft_dk2;
-    }
-    if params.fft_rmax.is_some() {
-        xftf.rmax_out = params.fft_rmax;
-    }
-    xftf.grid = params.fft_grid;
-    if params.fft_window.is_some() {
-        xftf.window = params.fft_window;
-    }
-    if params.fft_kstep.is_some() {
-        xftf.kstep = params.fft_kstep;
-    }
-    if let Some(nfft) = params.fft_nfft {
-        xftf.nfft = Some(usize::try_from(nfft).map_err(|_| "Forward NFFT must be at least 2")?);
-    }
-    sp.xftf = Some(xftf);
+    sp.xftf = Some(forward_settings(params)?);
     sp.fft().map_err(|e| e.to_string())?;
     if stage == RequiredStage::Fourier {
         return Ok(sp);
@@ -2133,9 +2306,116 @@ pub fn resample_chik(sp: &XASSpectrum, grid: &[f64]) -> Option<Vec<f64>> {
     Some(out)
 }
 
+/// Resolved E₀-relative fitting intervals, shared by plot handles and overlays.
+pub fn normalization_ranges(sp: &XASSpectrum) -> Option<[f64; 4]> {
+    match sp.normalization.as_ref()? {
+        NormalizationMethod::PrePostEdge(n) => Some([
+            n.pre_edge_start?,
+            n.pre_edge_end?,
+            n.norm_start?,
+            n.norm_end?,
+        ]),
+        NormalizationMethod::MBack(n) => {
+            let r = n.result.as_ref()?;
+            Some([r.pre_edge[0], r.pre_edge[1], r.post_edge[0], r.post_edge[1]])
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn energy_offset_is_absolute_reversible_and_invalidates_raw_cache() {
+        let group = DerivedSpectrum {
+            energy: vec![7000.0, 7001.0, 7003.0],
+            mu: vec![0.1, 0.3, 1.0],
+            ..Default::default()
+        };
+        let mut params = PipelineParams {
+            e0: Some(7001.0),
+            bkg_ek0: Some(7001.5),
+            ..Default::default()
+        };
+        let initial_hash = params.raw_fingerprint();
+        let original = group.raw(&params).unwrap();
+        for _ in 0..2 {
+            params.set_energy_offset(2.5).unwrap();
+            assert_eq!(
+                group.raw(&params).unwrap(),
+                (vec![7002.5, 7003.5, 7005.5], original.1.clone())
+            );
+            assert_eq!(params.e0, Some(7003.5));
+            assert_eq!(params.bkg_ek0, Some(7004.0));
+            assert_ne!(params.raw_fingerprint(), initial_hash);
+            assert_eq!(
+                group
+                    .prepare(&params, RequiredStage::Raw)
+                    .unwrap()
+                    .energy
+                    .unwrap()
+                    .as_slice(),
+                &[7002.5, 7003.5, 7005.5]
+            );
+        }
+        let saved = serde_json::to_string(&params).unwrap();
+        let restored: PipelineParams = serde_json::from_str(&saved).unwrap();
+        assert_eq!(group.raw(&restored).unwrap(), group.raw(&params).unwrap());
+        let materialized = params.for_materialized(0.3);
+        assert_eq!(materialized.energy_offset_ev, 0.0);
+        params.set_energy_offset(0.0).unwrap();
+        assert_eq!(group.raw(&params).unwrap(), original);
+        assert_eq!(group.energy, original.0);
+        assert_eq!(params.e0, Some(7001.0));
+        assert_eq!(params.raw_fingerprint(), initial_hash);
+        assert!(params.set_energy_offset(f64::INFINITY).is_err());
+        assert_eq!(params.energy_offset_ev, 0.0);
+        assert_eq!(
+            serde_json::from_str::<PipelineParams>("{}")
+                .unwrap()
+                .energy_offset_ev,
+            0.0
+        );
+    }
+
+    #[test]
+    fn energy_offset_matches_file_snapshot_and_diagnostic_readers() {
+        let text = b"# energy mu\n7000 0.1\n7001 0.3\n7003 1.0\n";
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("offset.dat");
+        std::fs::write(&path, text).unwrap();
+        let mut params = PipelineParams::default();
+        params.import.mode = DetectionMode::MuColumn;
+        params.import.energy_col = Some(0);
+        params.import.mu_col = Some(1);
+        let original = load_raw(&path, &params).unwrap();
+        params.set_energy_offset(-0.5).unwrap();
+        let shifted = load_raw(&path, &params).unwrap();
+        assert_eq!(shifted.0, vec![6999.5, 7000.5, 7002.5]);
+        assert_eq!(load_raw_snapshot(text, &path, &params).unwrap(), shifted);
+        let channel = DerivedSpectrum {
+            source: Some(path.clone()),
+            ..Default::default()
+        };
+        assert_eq!(channel.raw(&params).unwrap(), shifted);
+        let memory = DerivedSpectrum {
+            energy: original.0.clone(),
+            mu: original.1.clone(),
+            ..Default::default()
+        };
+        let diagnostics = load_group_raw_with_diagnostics(&path, &params, Some(&memory)).unwrap();
+        assert_eq!((diagnostics.energy, diagnostics.mu), shifted);
+        params.set_energy_offset(0.0).unwrap();
+        assert_eq!(load_raw(&path, &params).unwrap(), original);
+        assert_eq!(std::fs::read(&path).unwrap(), text);
+        let chi = DerivedSpectrum {
+            quantity: Quantity::ChiK,
+            ..memory
+        };
+        params.set_energy_offset(1.0).unwrap();
+        assert!(chi.raw(&params).is_err());
+    }
 
     #[test]
     fn fft_grid_survives_roundtrip_and_invalidates_processing_cache() {

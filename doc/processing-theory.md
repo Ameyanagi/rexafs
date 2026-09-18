@@ -99,6 +99,12 @@ see [Larch's normalization reference](https://xraypy.github.io/xraylarch/xafs_pr
 The equations here describe rexafs and should not be read as a claim that every
 Larch default or flattening detail is identical.
 
+The unreleased full [MBACK normalization](mback-normalization.md) provides a
+separate atomic-reference method with an explicit absorber and edge, positive
+fitted scale, strict fit regions and retained reference identity. Its matched
+scattering curve `fpp` is distinct from its dimensionless `norm` and `flat`.
+Conventional polynomial normalization remains the default.
+
 ## 3. Convert energy to wave number and remove the smooth background
 
 For energies above the edge, the nonrelativistic photoelectron relation is

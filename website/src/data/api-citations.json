@@ -85,9 +85,21 @@
     ]
   },
   {
+    "url": "https://doi.org/10.1016/S0969-806X(01",
+    "sources": [
+      "crates/rexafs/src/atomic/mod.rs"
+    ]
+  },
+  {
     "url": "https://doi.org/10.1021/ac50012a027",
     "sources": [
       "crates/rexafs/src/xafs/analysis/pca.rs"
+    ]
+  },
+  {
+    "url": "https://doi.org/10.1063/1.1321055",
+    "sources": [
+      "crates/rexafs/src/atomic/mod.rs"
     ]
   },
   {
@@ -135,8 +147,13 @@
   {
     "url": "https://doi.org/10.1107/S0909049504034193",
     "sources": [
-      "crates/rexafs/src/xafs/normalization.rs",
-      "crates/rexafs/src/xafs/normalization_ndarray.rs"
+      "crates/rexafs/src/xafs/mback/mod.rs"
+    ]
+  },
+  {
+    "url": "https://doi.org/10.2138/am-2003-0423",
+    "sources": [
+      "crates/rexafs/src/xafs/wavelet/mod.rs"
     ]
   },
   {
@@ -222,6 +239,13 @@
     "url": "https://github.com/XraySpectroscopy/XAS-Data-Interchange/tree/master/specification",
     "sources": [
       "crates/rexafs/src/xafs/io/xdi.rs"
+    ]
+  },
+  {
+    "url": "https://lmfit.github.io/lmfit-py/builtin_models.html",
+    "sources": [
+      "crates/rexafs/src/xafs/analysis/peakfit/mod.rs",
+      "crates/rexafs/src/xafs/analysis/peakfit/profiles.rs"
     ]
   },
   {
@@ -378,6 +402,14 @@
     "sources": [
       "crates/rexafs/src/xafs/xafsutils.rs",
       "crates/rexafs/src/xafs/xafsutils_ndarray.rs"
+    ]
+  },
+  {
+    "url": "https://xraypy.github.io/xraylarch/xafs_preedge.html#over-absorption-corrections",
+    "sources": [
+      "py-rexafs/python/rexafs/__init__.pyi",
+      "js-rexafs/types.d.ts",
+      "crates/rexafs/src/xafs/fluorescence/mod.rs"
     ]
   },
   {

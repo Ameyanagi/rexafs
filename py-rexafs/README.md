@@ -190,8 +190,9 @@ uv run --no-project python py-rexafs/tests/test_api.py
 ```
 
 Fitting, groups, structures, plotting and direct ReFEFF calculation remain
-Rust/desktop APIs. MBack and ILPBkg selectors are unimplemented placeholders and
-raise errors when processed. See [AUTOBK defaults](../doc/autobk-fixed-penalty.md)
+Rust/desktop APIs. ILPBkg remains an unimplemented selector. The historical empty
+MBACK selector lacks absorber/edge identity; the unreleased configured `MBack` API
+below implements the full atomic match. See [AUTOBK defaults](../doc/autobk-fixed-penalty.md)
 and [FFT grid compatibility](../doc/fft-grid-compatibility.md).
 Licensed under MIT OR Apache-2.0.
 
@@ -234,3 +235,56 @@ and mean are supported, with strict coverage checks. See the
 independent errors, numerical meaning and the equivalent Rust/TypeScript calls.
 This scalar operation is separate from `rexafs.io.Measurement`, the input-file
 reader. The installed wheel includes result types and editor help.
+
+## Full MBACK normalization (unreleased)
+
+```python
+from rexafs import MBack
+model = MBack("Cu", "K", pre_edge=(-200, -50), post_edge=(100, 800))
+result = model.fit(energy, mu)
+norm, flat = result.norm, result.flat
+spectrum.set_normalization_method(model).normalize()
+```
+
+Energy and E₀-relative ranges use eV; `norm` and `flat` are separate dimensionless
+outputs. Degree 2 and no erfc are the defaults. Offline atomic data load
+automatically. Inputs and model are unchanged by `fit`; assigning settings to a
+spectrum copies them. `spectrum.mback_result()` retrieves its full result, or
+`None` after invalidation. Inspect resolved ranges and warnings. `result.definition`
+pins the original atomic reference for replay. See the
+[MBACK guide](../doc/mback-normalization.md) for equations, assumptions and optional
+background terms. Runtime atomic-data notices are included in `rexafs/licenses/atomic`.
+
+## Cauchy wavelets (unreleased)
+
+```python
+from rexafs import Wavelet
+wavelet_map = spectrum.wavelet(Wavelet((2, 12)))
+image = wavelet_map.magnitude  # Independent NumPy matrix: R rows, k columns
+region = wavelet_map.integral((4, 10), (1, 3))
+print(region.value, region.unit)
+```
+
+The k interval uses Å⁻¹; R uses Å and is not phase-corrected. Missing normalization
+and background stages run on a private copy. Defaults are weight 2, order 100,
+k spacing 0.05 Å⁻¹, R up to 6 Å and no taper. Use named options to change them,
+for example `Wavelet((2, 12), rmax=4)`. `model.calculate(k, chi)` also accepts
+original unweighted χ(k). The [wavelet guide](../doc/wavelet-analysis.md) explains
+native-grid integrals, slices, ownership, JSON replay and scientific limitations.
+
+## Fluorescence over-absorption (unreleased)
+
+```python
+from rexafs import FluorescenceCorrection
+model = FluorescenceCorrection("CuO", "Cu", "K", line="Ka1", angles=(45, 45))
+corrected = spectrum.correct_fluorescence(model)
+corrected.normalize()
+```
+
+Supply the complete sample composition, detected emission and measured
+incident/exit angles **from the sample surface**, in degrees. The angles above
+are examples. Internal normalization is automatic; final normalization is separate.
+The original spectrum stays unchanged. The corrected spectrum retains its history
+and XANES-only restriction through edits. Known transmission and repeated correction
+fail. See the [correction guide](../doc/fluorescence-correction.md) for the
+homogeneous thick-sample assumptions, diagnostics, replay and array API.

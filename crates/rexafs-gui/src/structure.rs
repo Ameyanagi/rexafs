@@ -836,6 +836,8 @@ pub trait StructureProvider: Send + Sync {
     fn fetch(&self, hit: &StructureHit) -> Result<StructureSummary, String>;
 }
 
+pub(crate) const SEARCH_RESULT_LIMIT: usize = 200;
+
 fn query_for(text: &str) -> core::StructureQuery {
     // "Fe S" / "Fe,S" → element filter; anything else → free text.
     let toks: Vec<&str> = text
@@ -852,7 +854,7 @@ fn query_for(text: &str) -> core::StructureQuery {
     } else if !text.trim().is_empty() {
         q.text = Some(text.trim().to_string());
     }
-    q.limit = 200;
+    q.limit = SEARCH_RESULT_LIMIT;
     q
 }
 

@@ -24,6 +24,7 @@ fn definition() -> MetricDefinition {
         revision: 1,
         name: "Mean".into(),
         edge_energy: false,
+        wavelet: None,
         measurement: Measurement {
             space: MeasurementSpace::Mu,
             origin: AxisOrigin::Absolute,
@@ -184,6 +185,7 @@ fn project_roundtrip_preserves_ids_definitions_and_failed_rows() {
         runs: vec![Arc::new(run)],
         presets: vec![],
         recipes: vec![],
+        live_sessions: vec![],
     };
     let project = crate::project::ProjectFile {
         version: crate::project::PROJECT_VERSION,
@@ -610,5 +612,113 @@ fn recipe_runs_survive_project_and_locked_recovery_roundtrips() {
             .rows[0]
             .status,
         FrameStatus::Pending
+    );
+}
+
+#[test]
+fn experimental_cu_wavelet_trends_retain_regions_settings_and_failures() {
+    use rexafs::io::*;
+    let mut inputs = Vec::new();
+    for (file, column) in [
+        ("aps/13-id-c/xasdatalibrary/cu_metal_rt.xdi", 3),
+        ("nsls/x11a/xasdatalibrary/cu_metal_10K.xdi", 1),
+    ] {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../rexafs/tests/fixtures/xas/samples")
+            .join(file);
+        let doc = parse_measurement(&std::fs::read(path).unwrap()).unwrap();
+        let scan = &doc.scans[0];
+        let signal = scan
+            .signals
+            .iter()
+            .find(|s| s.mapping.signal == SignalConversion::Direct { column })
+            .unwrap();
+        let (energy, mu) = scan.arrays(Some(&signal.mapping)).unwrap();
+        let mut frame = input(file, 1.);
+        let group = Arc::make_mut(frame.derived.as_mut().unwrap());
+        group.energy = energy;
+        group.mu = mu;
+        inputs.push(frame);
+    }
+    let transform = rexafs::Wavelet::new(2. ..=12.);
+    let mut d = definition();
+    d.wavelet = Some(WaveletTrend {
+        transform: transform.clone(),
+        statistic: WaveletStatistic::Integral,
+        k_range: [4., 10.],
+        r_range: [1., 3.],
+    });
+    for statistic in [
+        WaveletStatistic::Integral,
+        WaveletStatistic::Mean,
+        WaveletStatistic::Maximum,
+    ] {
+        d.wavelet.as_mut().unwrap().statistic = statistic;
+        let mut run = SeriesRun::new(&series(&inputs), d.clone(), &inputs);
+        run.freeze(&inputs, || false);
+        for (row, input) in run.rows.iter_mut().zip(&inputs) {
+            *row = calculate_row(input, row, &d);
+            assert_eq!(row.status, FrameStatus::Succeeded, "{:?}", row.reason);
+            let (sp, _, _) = input.prepare(&d, None).unwrap();
+            let map = sp.wavelet(&transform).unwrap();
+            let expected = d.wavelet.as_ref().unwrap().measure(&map).unwrap();
+            let result = row.result.as_ref().unwrap();
+            assert_eq!(result.wavelet.as_ref(), Some(&expected));
+            assert!(result.measurement.is_none());
+            assert_eq!(result.value, expected.value);
+        }
+        run.finish(false);
+        let json = serde_json::to_value(&run).unwrap();
+        let restored: SeriesRun = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&restored).unwrap(), json);
+        assert!(run.csv().contains("wavelet_r_start"));
+        assert!(run.csv().contains("bilinear_magnitude"));
+        // A changed definition reserves a revision, while retained runs are unchanged.
+        let mut archive = SeriesArchive::default();
+        archive.runs.push(Arc::new(run));
+        let mut changed = d.clone();
+        changed.wavelet.as_mut().unwrap().r_range = [1., 2.];
+        assert_eq!(archive.definition_revision(&changed), 2);
+        changed.wavelet.as_mut().unwrap().r_range = [1., 100.];
+        let failed = calculate_row(&inputs[0], &restored.rows[0], &changed);
+        assert_eq!(failed.status, FrameStatus::Failed);
+        assert!(failed.result.is_none());
+        let mut recipe =
+            AnalysisRecipe::capture("Cu wavelet".into(), d.clone(), &inputs[0]).unwrap();
+        let old = recipe.clone();
+        recipe
+            .definition
+            .wavelet
+            .as_mut()
+            .unwrap()
+            .transform
+            .kweight = 1;
+        assert!(!old.same_choices(&recipe));
+    }
+}
+
+#[test]
+fn old_scalar_values_and_definitions_still_deserialize() {
+    let old = MeasurementResult {
+        measurement: Measurement::mean(1. ..=2.),
+        value: 3.,
+        position: None,
+        range: [1., 2.],
+        standard_error: None,
+        unit: "1".into(),
+        e0_ev: Some(9000.),
+    };
+    let restored: MetricValue =
+        serde_json::from_value(serde_json::to_value(&old).unwrap()).unwrap();
+    assert_eq!(restored.value, 3.);
+    assert!(restored.wavelet.is_none());
+    assert_eq!(restored.measurement.as_ref(), Some(&old.measurement));
+    let mut d = serde_json::to_value(definition()).unwrap();
+    d.as_object_mut().unwrap().remove("wavelet");
+    assert!(
+        serde_json::from_value::<MetricDefinition>(d)
+            .unwrap()
+            .wavelet
+            .is_none()
     );
 }

@@ -12,6 +12,7 @@ shared data, not two physical copies.
 | [Expanded measurement corpus](xas/collections/rexafs-corpus/INDEX.md) | 222 files: 182 parsed, including five partial HDF5 recoveries; 40 known rejections | [Original manifest](xas/collections/rexafs-corpus/manifest.json), [licenses](xas/collections/rexafs-corpus/LICENSE.md), [snapshot checksums](xas/collections/rexafs-corpus/SNAPSHOT.json) |
 | [Saved sessions](sessions/README.md) | 6 XTUNES files, 15 valid Larix sessions and 6 intentionally invalid Larix sessions | Separate original bundle manifests, source records and MIT notices |
 | [Copper mixture recovery](analysis/cu-mixtures/README.md) | 100 generated mixtures and three prepared standards | Exact fractions, seed, source checksum and explicit permission record; upstream open-data license not established |
+| [Experimental Larch comparisons](analysis/experimental-larch/README.md) | Two measured Cu foils and Aichi RuO₂, referenced from `xas/`; full MBACK and wavelet expected arrays | Source hashes, CC0/CC-BY-NC-SA attribution, pinned Larch functions and package versions |
 
 The `xas/` and session suites cover **175 readable inputs**. Readability includes preserved tables,
 images and saved results that require explicit interpretation before conversion

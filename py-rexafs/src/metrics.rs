@@ -63,13 +63,18 @@ pub fn definition(
 }
 
 pub fn errors(py: Python<'_>, input: &Bound<'_, PyAny>) -> PyResult<Vec<f64>> {
+    array(py, input, "errors")
+}
+
+/// Copy a named one-dimensional numeric argument with contextual shape errors.
+pub fn array(py: Python<'_>, input: &Bound<'_, PyAny>, name: &str) -> PyResult<Vec<f64>> {
     let array = py
         .import("numpy")?
         .getattr("asarray")?
         .call1((input, "float64"))?;
     let array = array
         .extract::<PyReadonlyArray1<'_, f64>>()
-        .map_err(|_| PyValueError::new_err("errors must be one-dimensional"))?;
+        .map_err(|_| PyValueError::new_err(format!("{name} must be one-dimensional")))?;
     Ok(array.as_array().iter().copied().collect())
 }
 

@@ -1,6 +1,6 @@
 """Typed Rust spectrum processing. Energy: eV; k/q: inverse angstroms; R: angstroms."""
 
-from typing import Literal, TypeAlias, overload
+from typing import Literal, TypeAlias, TypedDict, overload
 from collections.abc import Sequence
 
 import numpy as np
@@ -10,6 +10,10 @@ from . import io as io
 
 __version__: str
 """Version of the installed Python package, for example "0.2.4". Include this value when reporting results or requesting help; a source build can contain changes beyond the published package with the same version."""
+
+AbsorptionMode: TypeAlias = Literal["unknown", "transmission", "fluorescence"]
+"""Acquisition interpretation (unreleased). Unknown means missing evidence;
+it does not establish fluorescence. Changing it never removes correction history."""
 
 FFTGrid: TypeAlias = Literal["Input", "Larch"]
 """Sampling conventions for the forward transform: "Input" or "Larch".
@@ -723,7 +727,8 @@ class NormalizationMethod:
     Use NormalizationMethod.PrePostEdge(parameters) for configured pre/post-edge
     normalization or new_prepostedge() for automatic settings, then pass the
     result to Spectrum.set_normalization_method(). Creating a method does not
-    process data. MBack is a named placeholder and is not implemented."""
+    process data. The no-argument MBack selector has no absorber/edge and cannot
+    normalize. The MBACK algorithm was unimplemented through version 0.2.9."""
     @staticmethod
     def PrePostEdge(parameters: PrePostEdge) -> NormalizationMethod:
         """Copy PrePostEdge parameters into a normalization method.
@@ -740,11 +745,13 @@ class NormalizationMethod:
         assign the method to a spectrum to use it. No data are processed here."""
     @staticmethod
     def new_mback() -> NormalizationMethod:
-        """Create the unimplemented MBack normalization placeholder.
+        """Create the historical empty MBack normalization selector.
 
         Selecting it preserves the requested algorithm, but normalize() and
         dependent stages raise ValueError rather than substitute another method.
-        Use new_prepostedge() for the implemented normalization workflow."""
+        Use new_prepostedge() for automatic polynomial normalization. Through
+        version 0.2.9 the MBACK algorithm was unimplemented; this historical
+        no-argument selector remains unusable for normalization."""
 
 class BackgroundMethod:
     """Select a background algorithm and own a copy of its settings.
@@ -819,6 +826,51 @@ class Spectrum:
     See [processing theory](https://rexafs.com/docs/science/processing/) for
     equations, interpretation and limitations. Groups and structural fitting
     are not currently exposed by this Python Spectrum API."""
+    def correct_fluorescence(self, model: FluorescenceCorrection) -> Spectrum:
+        """Correct into an independent unnormalized Spectrum (unreleased).
+        Internal conventional normalization runs automatically; the source stays
+        unchanged. Unknown acquisition provenance is explicitly interpreted as
+        fluorescence. Known transmission, prepared norm/flat and repeated correction
+        raise ValueError. Supply line and measured surface angles in the model.
+        Releases the GIL. Call normalize() for separate final polynomial/MBACK
+        normalization. History survives edits; this XANES-only branch rejects
+        background/FFT/wavelets. Corrected-array uncertainty is unavailable."""
+        ...
+    def fluorescence_correction(self) -> FluorescenceCorrectionResult | None:
+        """Owned historical correction record, or None. Later edits/normalization
+        never rewrite its original inputs or remove the XANES-only restriction."""
+        ...
+    def absorption_mode(self) -> AbsorptionMode:
+        """Acquisition interpretation: unknown, transmission or fluorescence."""
+        ...
+    def set_absorption_mode(self, mode: AbsorptionMode) -> Spectrum:
+        """Explicitly revise acquisition interpretation and return this Spectrum.
+        Arrays/caches stay unchanged. Correction history and restrictions survive."""
+        ...
+    def wavelet(self, model: Wavelet) -> WaveletMap:
+        """Unreleased: spectrum.wavelet(Wavelet((2, 12))) prepares missing
+        normalization/AUTOBK on a copy, reusing existing chi. The interval uses
+        inverse angstroms. Arrays/settings/caches are unchanged; Rust releases
+        the GIL. Result matrices are owned (R rows, k columns). Invalid coverage,
+        grids and unqualified corrected XANES input raise ValueError. R is not
+        phase-corrected; color intensity is not a concentration."""
+        ...
+    def fit_peaks(self, model: PeakFit, *, errors: NDArray[np.float64] | Sequence[float] | None = None) -> PeakFitResult:
+        """Fit a composite XANES model, preparing missing normalization on a copy (unreleased).
+
+        Example: spectrum.fit_peaks(PeakFit((-20, 40)).gaussian("p1", 5, 2, 3)).
+        Defaults are Norm, E0-relative eV and 200 iterations. Source arrays, settings,
+        caches and initial model remain unchanged; Rust releases the GIL. Results
+        contain data/model/residual arrays on the retained native points. No smoothing
+        or interpolation occurs. Invalid models, coverage or preparation raise ValueError.
+        A result can be nonconverged: inspect termination, warnings and uncertainty_unavailable.
+
+        Optional errors are positive independent standard deviations in the SELECTED
+        signal representation on the original native grid, including excluded points.
+        Raw detector errors are not propagated through normalization. Without errors,
+        covariance uses residual-based variance. Active bounds, deficient rank and
+        nonconvergence withhold conditional local uncertainty; this is not model confidence.
+        """
     @overload
     def measure(self, operation: Literal["point"], coordinates: float, *,
                 space: Literal["mu", "norm", "flat", "chi", "fourier"] = "norm",
@@ -906,7 +958,7 @@ class Spectrum:
         processing runs, not at this setter. Returns this spectrum without
         performing normalization or recalibrating the input energy axis."""
     def set_normalization_method(
-        self, method: PrePostEdge | NormalizationMethod | None = None
+        self, method: PrePostEdge | MBack | NormalizationMethod | None = None
     ) -> Spectrum:
         """Copy the selected normalization method and clear normalization and later results.
 
@@ -977,7 +1029,13 @@ class Spectrum:
         automatic parameters are resolved from the data. Call norm(), flat(),
         pre_edge() and post_edge() to retrieve independent result arrays.
         This recomputes normalization, clears background/Fourier results and
-        returns this spectrum. Invalid ranges, failed fits and MBack raise ValueError."""
+        returns this spectrum. Invalid ranges, failed fits and an empty MBack selector raise ValueError."""
+    def mback_result(self) -> MbackResult | None:
+        """Copy the latest full MBACK result, or None when absent/invalidated.
+
+        Arrays and diagnostics remain independent after further processing."""
+        ...
+
     def calc_background(self) -> Spectrum:
         """Fit the selected smooth background and calculate dimensionless chi(k).
 
@@ -1188,3 +1246,708 @@ class Spectrum:
         ifft() (or a dependent stage) succeeds or after invalidation.
         Reading this result does not run processing; editing the copy does
         not change the spectrum."""
+
+class PeakFit:
+    """Immutable composite XANES peak definition (unreleased).
+
+    PeakFit((-20, 40)).gaussian("p1", 5, 2, 3).linear_baseline(0, 0)
+    starts with Norm and E0-relative eV. Each builder returns a NEW model.
+    Peak arguments are center, whole-axis area (signal units times eV), and
+    FWHM (eV). Default bounds keep centers in the fit range, areas nonnegative,
+    and widths positive. Missing normalization runs on a copy; inputs stay intact.
+    No smoothing or automatic chemical/component-count assignment is performed.
+    Inspect termination and warnings; covariance is conditional on the chosen model.
+    """
+    def __init__(self, range: tuple[float, float]) -> None:
+        """Create an empty Norm model over inclusive E0-relative eV. Add components before fitting."""
+    def flat(self) -> PeakFit:
+        """Use dimensionless flattened mu; prerequisites run on a copy. Returns a new model."""
+    def raw_mu(self) -> PeakFit:
+        """Use the original mapped absorption signal and its units. Returns a new model."""
+    def absolute(self) -> PeakFit:
+        """Interpret ranges, centers and baseline references as absolute eV. Returns a new model."""
+    def reference(self, energy_ev: float) -> PeakFit:
+        """Use offsets from this fixed reference energy in eV. Returns a new model."""
+    def gaussian(self, name: str, center: float, area: float, fwhm: float) -> PeakFit:
+        """Add a Gaussian: center/FWHM in eV, whole-axis area in signal units times eV. Returns a new model."""
+    def lorentzian(self, name: str, center: float, area: float, fwhm: float) -> PeakFit:
+        """Add a Lorentzian with whole-axis area and FWHM in eV. Returns a new model."""
+    def pseudo_voigt(self, name: str, center: float, area: float, fwhm: float, fraction: float) -> PeakFit:
+        """Add a common-FWHM mixture; fraction is the Lorentzian share from zero to one. Returns a new model."""
+    def voigt(self, name: str, center: float, area: float, gaussian_fwhm: float, lorentzian_fwhm: float) -> PeakFit:
+        """Add a true Voigt with independent Gaussian/Lorentzian FWHM in eV. Returns a new model."""
+    def erf_step(self, name: str, center: float, height: float, scale: float) -> PeakFit:
+        """Add height*(1+erf((E-center)/scale))/2; scale is positive eV. Returns a new model."""
+    def arctan_step(self, name: str, center: float, height: float, scale: float) -> PeakFit:
+        """Add height*(1/2+atan((E-center)/scale)/pi); scale is positive eV. Returns a new model."""
+    def constant_baseline(self, offset: float = 0) -> PeakFit:
+        """Add a fitted constant named baseline, in signal units. Returns a new model."""
+    def linear_baseline(self, offset: float = 0, slope: float = 0) -> PeakFit:
+        """Add baseline = offset+slope*E_offset; slope is signal units/eV. Returns a new model."""
+    def exclude(self, range: tuple[float, float]) -> PeakFit:
+        """Exclude an inclusive interval in model coordinates. Masked gaps are not integrated."""
+    def parameter(self, name: str, value: float, *, vary: bool = True,
+                  bounds: tuple[float | None, float | None] = (None, None),
+                  expression: str | None = None) -> PeakFit:
+        """Replace an EXISTING parameter, returning a new model.
+
+        Names use component_parameter, for example p1_center, p1_area, p1_width.
+        Bounds default to unbounded; pass them explicitly to retain restrictions.
+        An expression is a restricted tie, not executable code; it overrides vary.
+        Dependencies, physical domains and finite values are checked at fit/evaluation.
+        Unknown names raise ValueError immediately. Use vary=False to fix a value.
+        """
+    def as_baseline(self, name: str) -> PeakFit:
+        """Make a named peak part of the baseline, excluding it from the area-weighted center.
+        Shapes are unchanged; steps must remain edges. Returns a new model."""
+    def solver(self, *, max_iterations: int = 200, tolerance: float = 1e-10) -> PeakFit:
+        """Set positive iteration/tolerance limits on a new model; validated when fitting."""
+    def evaluate(self, energy: NDArray[np.float64] | Sequence[float], *, e0: float | None = None) -> NDArray[np.float64]:
+        """Evaluate without fitting or masking at absolute energy in eV.
+        E0-relative models require e0 in eV. Returns a new NumPy array;
+        invalid definitions and nonfinite arrays raise ValueError."""
+    def initialize_baseline(self, spectrum: Spectrum, peak_intervals: Sequence[tuple[float, float]]) -> PeakFit:
+        """Initialize only baseline-role variables outside the given peak intervals.
+        Intervals use model coordinates; final masks and input spectra stay unchanged.
+        Returns a new starting model for a joint final fit. Rust releases the GIL."""
+    def fit_batch(self, spectra: Sequence[Spectrum]) -> list[PeakFitOutcome]:
+        """Independent unweighted fits from this frozen start, one outcome per input.
+        Bad frames keep an error row and do not stop later frames. Inputs are unchanged.
+        Rust releases the GIL. Use spectrum.fit_peaks for supplied point errors."""
+    def to_json(self) -> str:
+        """Serialize the complete initial definition, constraints and masks."""
+    @staticmethod
+    def from_json(json: str) -> PeakFit:
+        """Restore and validate a complete definition; invalid input raises ValueError."""
+
+class PeakFitOutcome:
+    """One independent batch outcome in input order (unreleased).
+    Exactly one of result/error is present. Nonconvergence is retained as a result."""
+    @property
+    def index(self) -> int:
+        """Zero-based input index, also retained on failure."""
+    @property
+    def result(self) -> PeakFitResult | None:
+        """Owned numerical result; inspect its termination and warnings."""
+    @property
+    def error(self) -> str | None:
+        """Failure reason, otherwise None."""
+
+class PeakFitResult:
+    """Owned native fit (unreleased). Array getters return independent copies.
+    Result energies/centers are absolute eV; parameter values retain model coordinates.
+    Covariance/errors are conditional on the model/noise, not model-selection confidence."""
+    @property
+    def definition(self) -> PeakFit:
+        """Independent copy of the initial definition."""
+    def fitted_model(self) -> PeakFit:
+        """Copy fitted values for explicit reuse without changing the initial definition."""
+    @property
+    def parameters(self) -> dict[str, float]:
+        """Named final values; parameter centers use the chosen model coordinates."""
+    @property
+    def parameter_errors(self) -> dict[str, float | None]:
+        """Named conditional local errors; None means unavailable or not independently estimated."""
+    @property
+    def components(self) -> list[PeakContribution]:
+        """Component curves and summaries in model order; independent copies."""
+    def to_json(self) -> str:
+        """Full native result with initial/final constraints, masks and diagnostics."""
+    @property
+    def origin_ev(self) -> float:
+        """Resolved energy origin in eV, added to parameter centers/reference energies."""
+    @property
+    def energy(self) -> NDArray[np.float64]:
+        """Absolute energy in eV, only the native points used by this fit."""
+    @property
+    def source_indices(self) -> list[int]:
+        """Original zero-based point indices; preserves masks and sampling provenance."""
+    @property
+    def data(self) -> NDArray[np.float64]:
+        """Selected representation's measured values, in its signal units."""
+    @property
+    def model(self) -> NDArray[np.float64]:
+        """Joint baseline + peaks + steps, in the same signal units."""
+    @property
+    def residual(self) -> NDArray[np.float64]:
+        """Unweighted data minus model, in signal units (also for weighted fits)."""
+    @property
+    def standard_deviation(self) -> list[float] | None:
+        """Supplied selected-space standard deviations on the fitted points, if any."""
+    @property
+    def objective(self) -> float:
+        """Sum of squared residuals, divided by supplied standard deviations if present."""
+    @property
+    def points(self) -> int:
+        """Number of fitted native data points (not EXAFS independent-point estimates)."""
+    @property
+    def free_parameters(self) -> int:
+        """Number of independent varying parameters; expression ties are excluded."""
+    @property
+    def degrees_of_freedom(self) -> int:
+        """points − free_parameters. Fits with fewer points than variables are rejected."""
+    @property
+    def jacobian_rank(self) -> int:
+        """Weighted numerical Jacobian rank under a 1e-10 relative singular-value cutoff."""
+    @property
+    def covariance_names(self) -> list[str]:
+        """Sorted independent parameter names defining covariance/correlation axes."""
+    @property
+    def covariance(self) -> list[list[float]] | None:
+        """Local covariance; absolute-error scaling when standard deviations were given,
+        otherwise multiplied by objective/degrees_of_freedom."""
+    @property
+    def correlation(self) -> list[list[float]] | None:
+        """Dimensionless correlations corresponding to covariance_names. Absent when
+        any conditional variance is zero; the warning explains that case."""
+    @property
+    def uncertainty_unavailable(self) -> str | None:
+        """Why covariance/standard errors were withheld, rather than replaced by zero."""
+    @property
+    def peak_center_ev(self) -> float | None:
+        """Model peak-area-weighted center in absolute eV, excluding baseline/steps."""
+    @property
+    def peak_center_standard_error_ev(self) -> float | None:
+        """Conditional error in that center, using full parameter covariance."""
+    @property
+    def termination(self) -> Literal["FixedModel", "Converged", "NotConverged", "Cancelled"]:
+        """Explicit numerical termination category."""
+    @property
+    def termination_detail(self) -> str:
+        """Solver-specific termination detail, retained verbatim for diagnosis."""
+    @property
+    def evaluations(self) -> int:
+        """Number of residual-vector evaluations during optimization, including numerical derivatives."""
+    @property
+    def warnings(self) -> list[str]:
+        """Active bounds and other model/uncertainty limitations."""
+
+class PeakContribution:
+    """One component curve and derived metrics (unreleased). Curve getters return copies."""
+    @property
+    def name(self) -> str:
+        """Stable component identity from the initial definition."""
+    @property
+    def role(self) -> Literal["Peak", "Baseline", "Edge"]:
+        """Scientific role, independent of mathematical shape."""
+    @property
+    def shape(self) -> Literal["Gaussian", "Lorentzian", "PseudoVoigt", "Voigt", "ErfStep", "ArctanStep", "Constant", "Linear"]:
+        """Mathematical shape used for evaluation."""
+    @property
+    def curve(self) -> NDArray[np.float64]:
+        """Component values at the result's absolute-energy points, in signal units."""
+    @property
+    def center_ev(self) -> float | None:
+        """Peak/step center in absolute eV; None for polynomial baselines."""
+    @property
+    def area(self) -> float | None:
+        """Whole-axis model area in signal units × eV; None for steps/polynomials."""
+    @property
+    def height(self) -> float | None:
+        """Peak contribution at its center, excluding all other components."""
+    @property
+    def fwhm_ev(self) -> float | None:
+        """Peak FWHM in eV; true Voigt uses a numerical half-height root."""
+    @property
+    def center_standard_error_ev(self) -> float | None:
+        """Conditional errors propagated with the full joint covariance; absent when
+        local uncertainty is unavailable or the quantity does not apply."""
+    @property
+    def area_standard_error(self) -> float | None:
+        """Conditional whole-axis area error, in signal units × eV."""
+    @property
+    def height_standard_error(self) -> float | None:
+        """Conditional peak-height error, in signal units."""
+    @property
+    def fwhm_standard_error_ev(self) -> float | None:
+        """Conditional FWHM error, in eV, including both true-Voigt width parameters."""
+    @property
+    def sampled_integral(self) -> float:
+        """Trapezoidal component integral over included native-grid segments only.
+        Masked gaps are not bridged; this is not its whole-axis analytic area."""
+
+
+class MbackErfc:
+    """Optional smooth fluorescence background for MBACK (unreleased).
+
+    The line must originate at the selected absorber edge. width=(low, high)
+    gives positive eV bounds; amplitude=(low, high) gives finite f2-unit bounds.
+    family=False selects one exact line such as Ka1; True selects a within-shell
+    family such as Ka. This is not an over-absorption correction. Settings are copied."""
+    def __init__(self, line: str, *, width: tuple[float, float], amplitude: tuple[float, float], family: bool = False) -> None:
+        """Select an emission and explicit increasing width/amplitude bounds."""
+        ...
+
+class MBack:
+    """Full Chantler MBACK normalization (unreleased). Example:
+    MBack("Cu", "K", pre_edge=(-200, -50), post_edge=(100, 800)).
+
+    Ranges are eV offsets from E0. Degree defaults to 2; erfc is disabled. E0=None
+    uses the derivative detector. Automatic ranges use the outer 80% of measured
+    pre/post spans with neighboring-edge limits; inspect resolved result ranges.
+    The offline atomic table is loaded automatically and never energy shifted.
+    fit(energy, mu) leaves both inputs/model unchanged and returns owned norm/flat
+    arrays and full diagnostics. set_normalization_method(model) copies settings
+    into a Spectrum; normalize() invalidates its dependent background/FFT results.
+    Invalid ranges, unsupported data, nonidentifiability and nonpositive scale/step
+    raise ValueError. No experimental uncertainty is inferred from fit weights."""
+    def __init__(self, element: str, edge: str, *, e0: float | None = None, pre_edge: tuple[float, float] | None = None, post_edge: tuple[float, float] | None = None, degree: int = 2, erfc: MbackErfc | None = None) -> None:
+        """Create immutable settings; erfc requires an explicit MbackErfc object."""
+        ...
+    def fit(self, energy: NDArray[np.float64] | Sequence[float], mu: NDArray[np.float64] | Sequence[float]) -> MbackResult:
+        """Fit finite 1D arrays (energy eV, raw absorption), leaving inputs unchanged.
+
+        Copies input buffers and releases the GIL. Returns separate dimensionless
+        norm/flat and matched fpp in electron units. Invalid scientific inputs raise ValueError."""
+        ...
+    def to_json(self) -> str:
+        """Serialize native settings without adding input arrays."""
+        ...
+    @staticmethod
+    def from_json(json: str) -> MBack:
+        """Restore native settings; fit validates scientific values and reference identity."""
+        ...
+
+class MbackResult:
+    """Owned full-MBACK output (unreleased). Arrays are returned as independent copies.
+
+    norm=(scale*mu-pre_curve)/Delta is dimensionless; fpp=scale*mu-background
+    remains in f2 units. flat separately removes the auxiliary post-edge trend.
+    objective uses balanced pre/post sample counts, not inverse measurement
+    variances. Inspect warnings/condition and resolved ranges. No covariance or
+    experimental confidence interval is implied. to_json retains all provenance."""
+    def to_json(self) -> str:
+        """Complete result JSON, including reference identity, settings, weights and curves."""
+        ...
+    @property
+    def definition(self) -> MBack:
+        """Immutable replay definition pinned to the original table.
+
+        Requested automatic E0/ranges remain automatic; explicit settings remain explicit."""
+        ...
+    @property
+    def reference(self) -> AtomicReference:
+        """Independent dictionary with provider, data checksum and table identity."""
+        ...
+    @property
+    def reference_json(self) -> str:
+        """Reference identity JSON, including the actual data checksum."""
+        ...
+    @property
+    def pre_edge(self) -> tuple[float, float]:
+        """Resolved inclusive pre-edge offsets in eV from E0."""
+        ...
+    @property
+    def post_edge(self) -> tuple[float, float]:
+        """Resolved inclusive post-edge offsets in eV from E0."""
+        ...
+    @property
+    def fit_indices(self) -> list[int]:
+        """Original zero-based indices included in the objective."""
+        ...
+    @property
+    def warnings(self) -> list[str]:
+        """Nonfatal boundary/conditioning diagnostics. Empty does not establish physical validity."""
+        ...
+    @property
+    def erfc_width(self) -> float | None:
+        """Positive erfc width in eV, or None when disabled."""
+        ...
+    @property
+    def e0(self) -> float:
+        """Resolved fixed energy origin in eV."""
+        ...
+    @property
+    def edge_step(self) -> float:
+        """Positive fitted absorption step in input mu units."""
+        ...
+    @property
+    def scale(self) -> float:
+        """Positive conversion from input absorption to f2."""
+        ...
+    @property
+    def objective(self) -> float:
+        """Sum of squared region-balanced residuals, in squared f2 units."""
+        ...
+    @property
+    def condition(self) -> float:
+        """Condition number of the column-scaled final Jacobian."""
+        ...
+    @property
+    def rank(self) -> int:
+        """Rank of the final Jacobian, including erfc width when enabled."""
+        ...
+    @property
+    def evaluations(self) -> int:
+        """Number of linear solves used by the fit."""
+        ...
+    @property
+    def erfc_amplitude(self) -> float:
+        """Fitted erfc amplitude in f2 units; zero when disabled."""
+        ...
+    @property
+    def energy_scale(self) -> float:
+        """Polynomial coordinate scale in eV."""
+        ...
+    @property
+    def energy(self) -> NDArray[np.float64]:
+        """Original energy grid in eV. Returns a copy."""
+        ...
+    @property
+    def f2(self) -> NDArray[np.float64]:
+        """Unshifted atomic scattering factor, in electron units. Returns a copy."""
+        ...
+    @property
+    def fpp(self) -> NDArray[np.float64]:
+        """Matched scale*mu-background, in electron units; distinct from norm. Returns a copy."""
+        ...
+    @property
+    def norm(self) -> NDArray[np.float64]:
+        """Dimensionless normalized absorption. Returns a copy."""
+        ...
+    @property
+    def flat(self) -> NDArray[np.float64]:
+        """Dimensionless flattened absorption using the auxiliary post-edge trend. Returns a copy."""
+        ...
+    @property
+    def background(self) -> NDArray[np.float64]:
+        """Fitted smooth background in f2 units. Returns a copy."""
+        ...
+    @property
+    def pre_curve(self) -> NDArray[np.float64]:
+        """Auxiliary pre-edge line on f2+background, in f2 units. Returns a copy."""
+        ...
+    @property
+    def post_curve(self) -> NDArray[np.float64]:
+        """Auxiliary post-edge curve on f2+background, in f2 units. Returns a copy."""
+        ...
+    @property
+    def residual(self) -> NDArray[np.float64]:
+        """Unweighted f2+background-scale*mu on every energy point. Returns a copy."""
+        ...
+    @property
+    def coefficients(self) -> NDArray[np.float64]:
+        """Increasing polynomial powers of (energy-e0)/energy_scale, in f2 units. Returns a copy."""
+        ...
+    @property
+    def weights(self) -> NDArray[np.float64]:
+        """1/sqrt(region sample count), in fit_indices order. Returns a copy."""
+        ...
+
+class AtomicDataIdentity(TypedDict):
+    """Exact offline provider, database version and decoded-data checksum."""
+    provider: str
+    """Named provider/interpolation implementation version."""
+    data_version: str
+    """Upstream database version."""
+    data_sha256: str
+    """SHA-256 of the actual decoded data."""
+
+class AtomicReference(TypedDict):
+    """Exact atomic dataset and numerical table identity."""
+    data: AtomicDataIdentity
+    """Actual loaded dataset identity."""
+    table: Literal["ChantlerF2LogLogV1", "ElamTotalV1", "ElamTransitionsV1"]
+    """Table and interpolation/contribution profile."""
+
+class FluorescenceInternalNormalization(TypedDict):
+    """Internal fit of original mu, distinct from final normalization (unreleased).
+    All arrays are independent Python lists on the original energy grid."""
+    e0: float
+    """Measured edge energy in eV."""
+    pre_edge: list[float]
+    """Resolved pre-edge eV offsets from E0, [start, end]."""
+    post_edge: list[float]
+    """Resolved post-edge eV offsets from E0, [start, end]."""
+    degree: int
+    """Internal post-edge polynomial degree; pre-edge is linear."""
+    edge_step: float
+    """Positive fitted jump in original absorption units, before numerical flooring."""
+    pre_curve: list[float]
+    """Pre-edge line in original absorption units."""
+    post_curve: list[float]
+    """Pre-edge line plus post-edge polynomial, in original absorption units."""
+    norm: list[float]
+    """Dimensionless internal n0 used in alpha+1-n0."""
+
+class FluorescenceCorrection:
+    """Optically thick, homogeneous-sample XANES correction (unreleased).
+
+    FluorescenceCorrection("CuO", "Cu", "K", line="Ka1", angles=(45,45))
+    requires the complete sample formula, absorber, edge, detected emission and
+    measured incident/exit angles. Angles are degrees FROM THE SAMPLE SURFACE,
+    each in (0,90]; geometry is never inferred. family=True selects an unresolved
+    within-shell family such as Ka. Internal conventional normalization runs
+    automatically (degree 1, no Victoreen term). Final normalization is separate.
+    The fluo_elam_v1 model is not qualified for EXAFS or finite-thickness samples.
+    See https://xraypy.github.io/xraylarch/xafs_preedge.html#over-absorption-corrections."""
+    def __init__(self, formula: str, element: str, edge: str, *, line: str,
+                 angles: tuple[float, float], family: bool = False, e0: float | None = None,
+                 pre_edge: tuple[float, float] | None = None,
+                 post_edge: tuple[float, float] | None = None, degree: int = 1) -> None:
+        """Copy settings. e0=None detects the edge. Internal pre/post ranges are
+        inclusive eV offsets from E0; None uses available low endpoint to -30 eV
+        and +100 eV to available high endpoint. Complete coverage is required.
+        degree=1 is the internal post-edge degree (0–5). No final normalization runs."""
+        ...
+    def apply(self, energy: NDArray[np.float64] | Sequence[float], mu: NDArray[np.float64] | Sequence[float]) -> FluorescenceCorrectionResult:
+        """Copy original unnormalized fluorescence arrays and release the GIL.
+        Energy must be positive, strictly increasing eV; arrays are matching finite
+        one-dimensional values. Output keeps original grid/units. Invalid geometry,
+        composition, coverage, fitted step or singular denominator raise ValueError;
+        nothing is clipped. Array uncertainty is unavailable. Prefer
+        Spectrum.correct_fluorescence to preserve restrictions in further processing."""
+        ...
+    def to_json(self) -> str:
+        """Native settings JSON, including any pinned atomic identity."""
+        ...
+    @staticmethod
+    def from_json(json: str) -> FluorescenceCorrection:
+        """Restore settings; calculation checks scientific values and data availability."""
+        ...
+
+class FluorescenceCorrectionResult:
+    """Historical correction (unreleased), with independent arrays and dictionaries.
+    Later spectrum edits do not rewrite this record. Inspect amplification/warnings;
+    a finite result does not prove physical validity. No uncertainty is claimed."""
+    @property
+    def energy(self) -> NDArray[np.float64]:
+        """Original measured energy in eV, without resampling."""
+        ...
+    @property
+    def original_mu(self) -> NDArray[np.float64]:
+        """Original uncorrected absorption, in supplied units."""
+        ...
+    @property
+    def corrected_mu(self) -> NDArray[np.float64]:
+        """Corrected absorption, same grid/units; final normalization is separate."""
+        ...
+    @property
+    def factor(self) -> NDArray[np.float64]:
+        """Dimensionless alpha/denominator, without clipping."""
+        ...
+    @property
+    def denominator(self) -> NDArray[np.float64]:
+        """Dimensionless alpha+1-internal_norm, without clipping."""
+        ...
+    @property
+    def method(self) -> str:
+        """Named convention, fluo_elam_v1."""
+        ...
+    @property
+    def input_mode(self) -> AbsorptionMode:
+        """Original acquisition interpretation; unknown records a caller assumption."""
+        ...
+    @property
+    def alpha(self) -> float:
+        """Dimensionless attenuation/geometry constant."""
+        ...
+    @property
+    def geometry_ratio(self) -> float:
+        """sin(incidence)/sin(exit) using measured surface angles; dimensionless."""
+        ...
+    @property
+    def minimum_denominator(self) -> float:
+        """Smallest dimensionless denominator on the whole input grid."""
+        ...
+    @property
+    def maximum_amplification(self) -> float:
+        """Largest dimensionless factor; high values amplify noise."""
+        ...
+    @property
+    def singularity_threshold(self) -> float:
+        """Numerical rejection limit, 64*epsilon*max(1, alpha+1)."""
+        ...
+    @property
+    def warnings(self) -> list[str]:
+        """Domain, interpretation and numerical diagnostics; not confidence intervals."""
+        ...
+    @property
+    def definition(self) -> FluorescenceCorrection:
+        """Independent settings pinned to resolved ranges/E0 and atomic data."""
+        ...
+    @property
+    def internal(self) -> FluorescenceInternalNormalization:
+        """Internal conventional fit of original mu, with independent Python lists."""
+        ...
+    @property
+    def atomic(self) -> dict[str, object]:
+        """Edge, emission and compound attenuation records: energies (eV), mass
+        fractions, cm²/g values, table identities and checksums."""
+        ...
+    def to_json(self) -> str:
+        """Full native record with original inputs, assumptions and atomic evidence."""
+        ...
+
+class WaveletSize(TypedDict):
+    """Checked dimensions and buffer estimate; input copies/scratch/serialization add overhead."""
+    k_points: int
+    """Number of prepared k columns, including padding."""
+    r_points: int
+    """Number of positive R rows."""
+    nfft: int
+    """Internal FFT length, in samples."""
+    cells: int
+    """Number of complex map cells."""
+    bytes: int
+    """Estimated scientific buffer bytes; input copies and scratch add overhead."""
+
+class Wavelet:
+    """Unreleased Cauchy settings. Use spectrum.wavelet(Wavelet((2, 12))).
+
+    k_range is measured support in inverse angstroms. Defaults: weight 2, order
+    100, kstep 0.05, R maximum 6 angstroms, no taper and automatic FFT/R sampling.
+    Missing normalization/AUTOBK run on a copy; existing chi is reused. Larger
+    order narrows frequency response and broadens localization in k. R is not
+    phase-corrected. Fixed order is independent of R extent (cauchy_v1).
+    Calculations release the GIL and return owned results; invalid definitions,
+    uncovered intervals and excessive allocations raise ValueError."""
+    def __init__(self, k_range: tuple[float, float], *, kweight: int = 2,
+                 order: int = 100, kstep: float = 0.05, rmax: float = 6.0,
+                 rstep: float | None = None, taper: float = 0.0,
+                 nfft: int | None = None, radii: Sequence[float] | None = None) -> None:
+        """Copy settings. taper is half-cosine width inside support (inverse angstroms);
+        zero means none. radii replaces generated positive increasing R coordinates.
+        nfft must be a power of two at least twice the prepared grid length."""
+        ...
+    def calculate(self, k: NDArray[np.float64] | Sequence[float], chi: NDArray[np.float64] | Sequence[float]) -> WaveletMap:
+        """Copy original unweighted chi(k), release the GIL and calculate a native map.
+        k is finite, nonnegative, increasing and in inverse angstroms; chi is finite
+        and dimensionless. Linear resampling never extrapolates measured support.
+        Original inputs are retained; no display sampling alters the result."""
+        ...
+    def estimate(self, k: NDArray[np.float64] | Sequence[float]) -> WaveletSize:
+        """Validate dimensions and estimate scientific buffer bytes before calculation."""
+        ...
+    def to_json(self) -> str:
+        """Native settings JSON, with automatic choices preserved and no input arrays."""
+        ...
+    @staticmethod
+    def from_json(json: str) -> Wavelet:
+        """Restore native settings; calculation validates scientific values and budgets."""
+        ...
+
+class WaveletMap:
+    """Owned native Cauchy map (unreleased), with independent NumPy array properties.
+
+    Matrices have shape (R rows, k columns), including explicit k padding. W has
+    units of k**weight * chi, distinct from ordinary Fourier scaling. No color
+    normalization changes the scientific data; to_json retains full provenance."""
+    @property
+    def shape(self) -> tuple[int, int]:
+        """Matrix dimensions: R rows, k columns."""
+        ...
+    @property
+    def k(self) -> NDArray[np.float64]:
+        """Independent inverse-angstrom coordinates, including padded columns."""
+        ...
+    @property
+    def r(self) -> NDArray[np.float64]:
+        """Independent angstrom coordinates; not phase-corrected distances."""
+        ...
+    @property
+    def input_k(self) -> NDArray[np.float64]:
+        """Original measured k before resampling."""
+        ...
+    @property
+    def input_chi(self) -> NDArray[np.float64]:
+        """Original unweighted dimensionless chi, unchanged."""
+        ...
+    @property
+    def prepared_chi(self) -> NDArray[np.float64]:
+        """Resampled unweighted chi; values outside support are padding zeros."""
+        ...
+    @property
+    def window(self) -> NDArray[np.float64]:
+        """Support/taper multipliers applied before k weighting."""
+        ...
+    @property
+    def support(self) -> NDArray[np.bool_]:
+        """True for selected measured support; False for padding."""
+        ...
+    @property
+    def real(self) -> NDArray[np.float64]:
+        """Independent real matrix, rows=R and columns=k."""
+        ...
+    @property
+    def imaginary(self) -> NDArray[np.float64]:
+        """Independent imaginary matrix, rows=R and columns=k."""
+        ...
+    @property
+    def magnitude(self) -> NDArray[np.float64]:
+        """Independent full-native-grid magnitude matrix."""
+        ...
+    def phase(self, relative_floor: float = 0.01) -> NDArray[np.float64]:
+        """Radians; NaN masks zero amplitude and values below a fraction of the map
+        maximum (default 1%). Fraction is in [0,1]. Native data stay unchanged."""
+        ...
+    def slice_at_r(self, r: float) -> NDArray[np.float64]:
+        """Native magnitude versus k at a covered R coordinate (angstroms)."""
+        ...
+    def slice_at_k(self, k: float) -> NDArray[np.float64]:
+        """Native magnitude versus R at a covered k coordinate (inverse angstroms)."""
+        ...
+    def integral(self, k_range: tuple[float, float], r_range: tuple[float, float]) -> WaveletRegionValue:
+        """Integrate native bilinear magnitude over a fully covered rectangle.
+        k_range uses inverse angstroms and r_range angstroms. Returns exact bounds,
+        value, units and method without experimental uncertainty. Releases the GIL;
+        display sampling never participates. Invalid coverage raises ValueError."""
+        ...
+    def mean(self, k_range: tuple[float, float], r_range: tuple[float, float]) -> WaveletRegionValue:
+        """Area-weighted mean of native bilinear magnitude (unreleased).
+        k is inverse angstroms; R is angstroms. Requires increasing, fully covered
+        ranges. Returns units and method without uncertainty; releases the GIL."""
+        ...
+    def maximum(self, k_range: tuple[float, float], r_range: tuple[float, float]) -> WaveletRegionValue:
+        """Maximum native bilinear magnitude, including rectangle boundaries
+        (unreleased). k is inverse angstroms; R is angstroms. Invalid coverage
+        raises ValueError. Returns units/method without uncertainty; releases the GIL."""
+        ...
+    @property
+    def definition(self) -> Wavelet:
+        """Independent transform definition, retaining automatic and explicit choices."""
+        ...
+    @property
+    def preparation(self) -> dict[str, object] | None:
+        """Original spectrum preparation metadata; None for direct array calculations."""
+        ...
+    @property
+    def warnings(self) -> list[str]:
+        """Interpretation/boundary diagnostics, not confidence intervals."""
+        ...
+    def to_json(self) -> str:
+        """Complete native map, original inputs and processing provenance."""
+        ...
+    @staticmethod
+    def from_json(json: str) -> WaveletMap:
+        """Restore checked method, dimensions, axes, finite values and budgets.
+        Validation does not independently prove external numerical results."""
+        ...
+
+class WaveletRegionValue:
+    """Immutable native magnitude statistic. dk times dR cancels for integrals; units equal
+    k**weight * chi. This is a descriptive transform metric, not concentration."""
+    @property
+    def value(self) -> float:
+        """Native region statistic, without an experimental uncertainty estimate."""
+        ...
+    @property
+    def k_range(self) -> tuple[float, float]:
+        """Exact inclusive k bounds in inverse angstroms."""
+        ...
+    @property
+    def r_range(self) -> tuple[float, float]:
+        """Exact inclusive R bounds in angstroms."""
+        ...
+    @property
+    def unit(self) -> str:
+        """Units of k**weight * chi for all three region statistics."""
+        ...
+    @property
+    def method(self) -> str:
+        """Method: bilinear_magnitude_v1 (integral), bilinear_magnitude_mean_v1
+        or bilinear_magnitude_maximum_v1."""
+        ...
+    def to_json(self) -> str:
+        """Value, exact bounds, units and method as JSON."""
+        ...

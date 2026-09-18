@@ -11,7 +11,7 @@
 //! descriptive `User-Agent`, run with a timeout, and are throttled to a
 //! minimum spacing shared across COD clients in the process.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -40,8 +40,13 @@ const USER_AGENT: &str = concat!(
 const MIN_REQUEST_GAP: Duration = Duration::from_millis(500);
 /// Hits kept when the query gives no limit.
 const DEFAULT_LIMIT: usize = 200;
+/// Bound metadata downloads independently of the number of matching IDs.
+const METADATA_BATCH_SIZE: usize = 100;
 
 static LAST_REQUEST: Mutex<Option<Instant>> = Mutex::new(None);
+
+#[cfg(test)]
+mod search_tests;
 
 fn throttle() {
     let mut last = LAST_REQUEST.lock().unwrap_or_else(|e| e.into_inner());
@@ -74,6 +79,13 @@ impl Default for CodConfig {
 }
 
 /// Client. Cheap to clone; no credentials needed.
+///
+/// Search first downloads a compact ID list, then metadata in batches of up to
+/// 100 IDs until the requested number of usable structures is found (200 by
+/// default). Entries without coordinates and entries failing the full element
+/// filters are skipped. Results are capped, not an exhaustive database count.
+/// Each request retains the timeout and response-size limit; a failed batch
+/// returns an error rather than a silently incomplete result.
 #[derive(Debug, Clone, Default)]
 pub struct Cod {
     config: CodConfig,
@@ -115,9 +127,15 @@ impl Cod {
     /// an exact element set to `strictmin`/`strictmax`.
     /// This only constructs text and makes no request. Required/excluded element
     /// lists are limited to the endpoint's eight/four query slots. Search applies
-    /// the full element filters locally afterward; no automatic pagination occurs.
+    /// the full element filters locally afterward. This public helper describes
+    /// the JSON endpoint; search uses the same filters with `format=lst` first,
+    /// then requests JSON metadata for bounded batches of the returned IDs.
     pub fn result_query(query: &StructureQuery) -> String {
-        let mut parts: Vec<String> = vec!["format=json".to_string()];
+        Self::result_query_format(query, "json")
+    }
+
+    fn result_query_format(query: &StructureQuery, format: &str) -> String {
+        let mut parts: Vec<String> = vec![format!("format={format}")];
         if let Some(text) = query
             .text
             .as_deref()
@@ -156,22 +174,40 @@ impl Cod {
         format!("result?{}", parts.join("&"))
     }
 
-    fn get_json(&self, path_and_query: &str) -> Result<Value, StructureError> {
+    fn get_search_text(
+        &self,
+        path_and_query: &str,
+        accept: &str,
+    ) -> Result<String, StructureError> {
         let url = self.url(path_and_query);
         throttle();
         let mut resp = self
             .agent()
             .get(&url)
-            .header("accept", "application/json")
+            .header("accept", accept)
             .call()
             .map_err(|e| StructureError::Network {
                 reason: format!("{url}: {e}"),
             })?;
         resp.body_mut()
-            .read_json::<Value>()
+            .read_to_string()
             .map_err(|e| StructureError::Network {
-                reason: format!("{url}: invalid JSON: {e}"),
+                reason: match e {
+                    ureq::Error::BodyExceedsLimit(_) => {
+                        "COD search response is too large. Narrow the formula or element filters."
+                            .into()
+                    }
+                    _ => format!("COD search response could not be read: {e}"),
+                },
             })
+    }
+
+    fn get_json(&self, path_and_query: &str) -> Result<Value, StructureError> {
+        serde_json::from_str(&self.get_search_text(path_and_query, "application/json")?).map_err(
+            |e| StructureError::Network {
+                reason: format!("COD returned invalid search metadata: {e}"),
+            },
+        )
     }
 
     /// Download owned CIF text for a COD identifier; no structure parsing occurs.
@@ -214,6 +250,23 @@ fn normalise_id(id: &str) -> String {
         .trim_start_matches("COD")
         .trim()
         .to_string()
+}
+
+fn search_ids(text: &str) -> Result<Vec<&str>, StructureError> {
+    let mut seen = HashSet::new();
+    let mut ids = Vec::new();
+    for id in text.split_whitespace() {
+        if id.len() != 7 || !id.bytes().all(|c| c.is_ascii_digit()) {
+            return Err(StructureError::Network {
+                reason: "COD returned an invalid search ID list. Try the search again later."
+                    .into(),
+            });
+        }
+        if seen.insert(id) {
+            ids.push(id);
+        }
+    }
+    Ok(ids)
 }
 
 fn encode(s: &str) -> String {
@@ -380,26 +433,49 @@ impl StructureSource for Cod {
                     .into(),
             });
         }
-        let v = self.get_json(&Self::result_query(query))?;
-        let mut hits = hits_from_response(&v)?;
-        // Entries without coordinates cannot become clusters (COD flags
-        // every usable entry with "has coordinates").
-        hits.retain(|h| {
-            h.extra
-                .get("flags")
-                .map(|f| f.contains("has coordinates"))
-                .unwrap_or(false)
-        });
-        // Constraints the endpoint cannot express exactly (element sets).
+        let id_list =
+            self.get_search_text(&Self::result_query_format(query, "lst"), "text/plain")?;
+        let ids = search_ids(&id_list)?;
+        // Apply all element constraints locally, including those beyond the
+        // endpoint's slots. Continue through rejected records to fill the cap.
         let mut q = query.clone();
         q.text = None;
-        hits.retain(|h| q.matches(h));
         let limit = if query.limit == 0 {
             DEFAULT_LIMIT
         } else {
             query.limit
         };
-        hits.truncate(limit);
+        let mut hits = Vec::new();
+        let mut offset = 0;
+        while offset < ids.len() && hits.len() < limit {
+            let end = offset
+                + METADATA_BATCH_SIZE
+                    .min(limit - hits.len())
+                    .min(ids.len() - offset);
+            let batch = &ids[offset..end];
+            let path = format!("result?format=json&id={}", encode(&batch.join(",")));
+            let metadata = self.get_json(&path)?;
+            let mut records: BTreeMap<_, _> = hits_from_response(&metadata)?
+                .into_iter()
+                .map(|hit| (hit.id.clone(), hit))
+                .collect();
+            // Preserve the ID-list ordering even if the metadata response is
+            // reordered, and never accept records outside the requested batch.
+            for id in batch {
+                let Some(hit) = records.remove(*id) else {
+                    continue;
+                };
+                if hit
+                    .extra
+                    .get("flags")
+                    .is_some_and(|f| f.contains("has coordinates"))
+                    && q.matches(&hit)
+                {
+                    hits.push(hit);
+                }
+            }
+            offset = end;
+        }
         Ok(hits)
     }
 

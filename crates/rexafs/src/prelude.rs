@@ -63,3 +63,18 @@ pub use crate::xafs::analysis::metrics::{
     AxisOrigin, Measurement, MeasurementArrays, MeasurementResult, MeasurementSpace, Metric,
     MetricError, MetricValue,
 };
+pub use crate::xafs::analysis::peakfit::{
+    PeakComponent, PeakContribution, PeakFit, PeakFitError, PeakFitResult, PeakRole, PeakShape,
+    PeakTermination,
+};
+
+pub use crate::xafs::fluorescence::{
+    AbsorptionMode, FluorescenceCorrection, FluorescenceCorrectionResult, FluorescenceError,
+};
+pub use crate::xafs::mback::{MBack, MbackErfc, MbackOptions, MbackResult};
+
+// Unreleased, native Cauchy wavelet analysis.
+pub use crate::xafs::wavelet::{
+    Wavelet, WaveletError, WaveletMap, WaveletPreparation, WaveletRegionValue, WaveletSize,
+    WaveletWindow,
+};

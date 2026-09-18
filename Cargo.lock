@@ -7577,6 +7577,7 @@ dependencies = [
  "thiserror 2.0.20",
  "ureq 3.4.1",
  "version",
+ "xraydb",
 ]
 
 [[package]]
@@ -7602,6 +7603,7 @@ dependencies = [
  "raw-window-handle",
  "rayon",
  "rexafs",
+ "rusqlite",
  "ruviz",
  "ruviz-gpui",
  "semver",
@@ -7624,6 +7626,7 @@ version = "0.2.9"
 dependencies = [
  "js-sys",
  "rexafs",
+ "serde",
  "serde_json",
  "wasm-bindgen",
 ]
@@ -7887,9 +7890,9 @@ dependencies = [
 
 [[package]]
 name = "ruviz"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2729a92b51a34e55b94e26e8336b15f2a909ff3798da2cc0796e53f84a3ff2a8"
+checksum = "5800a38ecc91758d8cccc97b03d944468390a1478d33089066c1331d3f54756c"
 dependencies = [
  "base64 0.22.1",
  "bytemuck",
@@ -7925,9 +7928,9 @@ dependencies = [
 
 [[package]]
 name = "ruviz-gpui"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b83705e4e6f5a6803b4f5803c7370a3859be5050b591197ff1a0a3cfb387b51e"
+checksum = "95569a176f7572ed2ac4bfa4ca1d68d84416513fc14c4385f119b2be3776ee5e"
 dependencies = [
  "arboard",
  "core-foundation 0.10.0",
