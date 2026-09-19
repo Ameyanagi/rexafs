@@ -29,6 +29,14 @@ the error does not establish that your version is current.
 
 ### Update and restart
 
+**macOS issue found after 0.2.11 publication:** the signed 0.2.10 updater stops
+before replacement because its helper loses the signed app-bundle layout. The
+same helper layout remains in 0.2.11. The existing app and saved analysis are
+preserved. A correction is in progress; the current signed Mac builds cannot
+complete the restart step. Windows and Linux use different helpers and passed
+their packaged replacement and recovery checks.
+
+
 On macOS, Windows and Linux, choose **Update and restart** to download, verify and
 install a newer build of the current channel. rexafs saves an embedded recovery
 copy of the analysis, then reopens that copy after restarting. Your original
