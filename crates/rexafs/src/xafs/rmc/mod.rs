@@ -34,7 +34,7 @@
 //! and χ and its positive noise scale σ are dimensionless. Total F also includes
 //! configured structural energies. Model χ averages selected absorbers within
 //! each structure, then combines normalized mixture fractions and fixed
-//! S₀². The fixed energy shift samples theory at
+//! S₀². The energy shift (fixed by default) samples theory at
 //! `q = sqrt(k² − ETOK * delta_e0)`, with `ETOK` in Å⁻²/eV. Negative q² is an
 //! error. No extrapolation or extra Debye–Waller damping is applied.
 //!
@@ -54,11 +54,13 @@ mod analysis;
 mod calibration;
 mod constraints;
 mod convergence;
+mod energy_refinement;
 mod engine;
 mod ensemble;
 mod evolution;
 mod first_shell;
 mod geometry;
+mod local_refinement;
 mod local_spectrum;
 mod moments;
 mod objective;
@@ -80,11 +82,13 @@ pub use analysis::*;
 pub use calibration::*;
 pub use constraints::*;
 pub use convergence::*;
+pub use energy_refinement::*;
 pub use engine::{evaluate, refine, refine_with_progress};
 pub use ensemble::*;
 pub use evolution::*;
 pub use first_shell::*;
 pub use geometry::{Atom, Configuration};
+pub use local_refinement::*;
 pub use local_spectrum::*;
 pub use moments::*;
 pub use objective::{transform_path_fourier, transform_spectrum_fourier, Objective};
@@ -209,7 +213,9 @@ pub struct ExafsDataset {
     pub kweight: u8,
     /// Fixed positive amplitude reduction S₀², usually calibrated independently.
     pub s02: f64,
-    /// Fixed energy shift in eV. Positive values sample theory at smaller k.
+    /// Initial theoretical energy shift in eV. Positive values sample theory at
+    /// smaller k. Fixed by default; since 0.2.11, [`EnergyRefinement`] optionally
+    /// optimizes it in a session without changing this input value.
     pub delta_e0: f64,
 }
 

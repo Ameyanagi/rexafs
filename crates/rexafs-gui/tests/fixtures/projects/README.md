@@ -23,6 +23,7 @@ are not supported or retained as compatibility fixtures.
 | `rexafs-0.2.8-links.rxs`, `rexafs-0.2.8-embedded.rxs` | Saved and reopened through the 0.2.8 writer; unchanged format-1 defaults, numerical settings, retained import mappings and Assistant conversations |
 | `rexafs-0.2.9-links.rxs`, `rexafs-0.2.9-embedded.rxs` | Saved and reopened through the 0.2.9 writer; synthetic flat LCF, batch LCF, centered PCA and native MCR results with ordered source identities, alongside retained format-1 state |
 | `rexafs-0.2.10-links.rxs`, `rexafs-0.2.10-embedded.rxs` | Saved and reopened through the 0.2.10 writer; retained synthetic collection results and format-1 defaults, including the new analysis and RMC state fields |
+| `rexafs-0.2.11-links.rxs`, `rexafs-0.2.11-embedded.rxs` | Saved and reopened through the 0.2.11 writer; explicit four-worker RMC draft, parallel paths, automatic moves and periodic energy-refinement settings, plus retained format-1 state |
 | `future-version.rxs` | Future format: reject without modification |
 | `truncated.rxs` | Corrupt/incomplete input: reject without modification |
 | `data/*.xmu`, `feff/*.dat` | Real inputs for relocation, byte recovery and processing checks |
@@ -56,7 +57,7 @@ The 0.1.4 pair adds per-path coordination number N and two synthetic saved
 Assistant conversations, including thinking, tool activity, receipts and status
 entries. It was saved through the 0.1.4 writer. The current maintainer writer loads
 the retained 0.2.0 linked project and adds the 0.2.1 settings and the 0.2.9
-synthetic collection-analysis results. These use three mixtures of two analytic
+synthetic collection-analysis results, plus the explicit 0.2.11 RMC controls. These use three mixtures of two analytic
 arctangent curves; they are persistence examples, not measured Cu spectra. To generate a new pair explicitly,
 set `REXAFS_FIXTURE_OUTPUT` and run `cargo test -p rexafs-gui
 write_release_compatibility_fixtures -- --ignored`; the maintainer test refuses

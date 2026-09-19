@@ -4,6 +4,10 @@ use super::*;
 /// Coordinate frame sampled after an attempted move, including rejected moves.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TrajectoryFrame {
+    /// Since 0.2.11: per-dataset theoretical ΔE₀ in eV at this frame. Empty
+    /// historical/fixed frames use the original problem's fixed shifts.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub delta_e0: Vec<f64>,
     /// Attempt count; zero denotes the initial structure.
     pub step: usize,
     /// Unwrapped coordinates, cells and mixture weights.

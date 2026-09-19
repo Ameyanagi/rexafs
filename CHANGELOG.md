@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.2.11 (release preparation)
+
+- Copy RMC fit ranges from the spectrum’s Transform settings and expand ReFEFF
+  coverage for the Fourier taper and theoretical energy shift.
+- Support every requested absorber in larger cells and reuse identical electronic
+  inputs while retaining each site’s path catalogue.
+- Add configurable CPU workers, with automatic allocation for new desktop jobs
+  and optional path parallelism within the same worker pool.
+- Add explicit calibration preview/application, bounded automatic coordinate
+  moves, optional local refinement, and periodic theoretical ΔE₀ optimization
+  with S₀² fixed. Preserve checkpoint settings and matching parameter/curve exports.
+- Keep next actions at the upper right of the RMC workflow and document the
+  assumptions, resource limits and historical defaults.
+- Use FEFF10 0.2.4 and its corrected Windows helper to prevent intermittent
+  `gg.bin` header failures. Package self-checks reject undefined format labels.
+
+See the [release notes](doc/release-notes-0.2.11.md) and
+[qualification record](doc/validation/2026-09-19-release-0.2.11/review.md).
+
 ## 0.2.7 (release preparation)
 
 - Compact the Assistant into Model, Reasoning and Access menus beneath the

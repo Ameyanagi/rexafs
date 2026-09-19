@@ -17,7 +17,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.2.10"
+version = "0.2.11"
 edition = "2021"
 rust-version = "1.98"
 authors = ["Ameyanagi <contact@ameyanagi.com>"]
@@ -68,9 +68,9 @@ gpui = "0.2.2"
 # 0.14.2 keeps plot menus above host overlays and exposes their open state.
 ruviz-gpui = { version = "0.14.2", features = ["gpu", "3d"] }
 refeff = { version = "0.4.0", default-features = false, features = ["exafs"] }
-feff10 = { version = "0.2.3", features = ["prebuilt"] }
+feff10 = { version = "0.2.4", features = ["prebuilt"] }
 
-rexafs = { version = "0.2.10", path = "crates/rexafs" }
+rexafs = { version = "0.2.11", path = "crates/rexafs" }
 
 [patch.crates-io]
 gpui = { git = "https://github.com/zed-industries/zed", rev = "3060e4170ea5ef0e6886b9ac1853aaead9ddd59f" }

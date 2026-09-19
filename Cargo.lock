@@ -2786,9 +2786,9 @@ dependencies = [
 
 [[package]]
 name = "feff10"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e595b5738bf1ed264a2bf7f2d760f29ed65f4c48ef7ecb9a2342e27d4a271e8"
+checksum = "6dbd2f9c990316618c48fda62a6f7a19ca2e98a688a178f685d181a9b290c20d"
 dependencies = [
  "feff10-sys",
  "libc",
@@ -2798,9 +2798,9 @@ dependencies = [
 
 [[package]]
 name = "feff10-sys"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7422dd28b6fbbd2d00fc5983537d7aa4cc5fb153a8b694dee4f3dffed456298e"
+checksum = "df4c98b25a1f79934762f249d1190d32c8b3a259f5054ddb7066a9878987c39a"
 dependencies = [
  "sha2 0.10.9",
  "which 7.0.3",
@@ -6936,7 +6936,7 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
 name = "py-rexafs"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "ndarray",
  "numpy",
@@ -7536,7 +7536,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "apex-solver",
  "approx",
@@ -7582,7 +7582,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs-gui"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -7622,7 +7622,7 @@ dependencies = [
 
 [[package]]
 name = "rexafs-wasm"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "js-sys",
  "rexafs",

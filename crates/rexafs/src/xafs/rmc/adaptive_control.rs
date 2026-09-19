@@ -154,13 +154,20 @@ fn evaluate<S: AuditSession>(
     calc: &mut PreparedRefeffCalculator,
 ) -> Result<Vec<EnsembleState>, RmcError> {
     let (problem, settings, prepared, _) = session.context();
-    evaluate_candidates(
-        problem,
-        settings,
-        prepared,
-        states.iter().map(|s| s.structures.clone()).collect(),
-        calc,
-    )
+    if states.iter().any(|s| !s.delta_e0.is_empty()) {
+        states
+            .iter()
+            .map(|state| super::session::evaluate_state(problem, settings, prepared, state, calc))
+            .collect()
+    } else {
+        evaluate_candidates(
+            problem,
+            settings,
+            prepared,
+            states.iter().map(|s| s.structures.clone()).collect(),
+            calc,
+        )
+    }
 }
 fn errors(
     problem: &EnsembleProblem,

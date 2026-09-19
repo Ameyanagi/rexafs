@@ -27,6 +27,10 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 pub(crate) struct RmcState {
     pub project: engine::Project,
     pub control: Option<engine::Control>,
+    diagnostic: Option<engine::diagnostics::DiagnosticControl>,
+    diagnostic_generation: u64,
+    refining: bool,
+    refinement_plots: Vec<Entity<RuvizPlot>>,
     pub live: Option<Progress>,
     pub request: Option<Request>,
     pub phase: String,
@@ -172,6 +176,7 @@ impl StudioApp {
                     },
                     true,
                 )
+                .disabled(self.rmc.diagnostic.is_some())
                 .on_click(cx.listener(|app, _, _, cx| app.resume_rmc(cx))),
             );
         } else {
@@ -261,6 +266,11 @@ impl StudioApp {
         resume: Option<Box<engine::SavedRun>>,
         cx: &mut Context<Self>,
     ) {
+        if self.rmc.diagnostic.is_some() {
+            self.rmc.error = Some("Finish or cancel the calibration preview first.".into());
+            cx.notify();
+            return;
+        }
         if self.fit_running || self.feff_running || self.batch_running {
             self.rmc.error =
                 Some("Wait for the active fit or scattering calculation to finish.".into());
@@ -327,6 +337,8 @@ impl StudioApp {
         self.rmc.error = None;
         self.rmc.live = None;
         self.rmc.project.saved = None;
+        self.rmc.project.refinement = None;
+        self.rmc.refinement_plots.clear();
         self.rmc.continuation = None;
         self.rmc.plots.clear();
         self.rmc.scene_key = None;
@@ -411,6 +423,9 @@ impl StudioApp {
         cx.notify();
     }
     fn resume_rmc(&mut self, cx: &mut Context<Self>) {
+        if self.rmc.diagnostic.is_some() {
+            return;
+        }
         let Some(p) = self.rmc.live.as_ref() else {
             return;
         };
@@ -438,6 +453,8 @@ impl StudioApp {
             }
         };
         self.rmc.error = None;
+        self.rmc.project.refinement = None;
+        self.rmc.refinement_plots.clear();
         if let Some(c) = &self.rmc.control {
             c.resume(total);
             self.rmc.phase = "Running".into();
@@ -487,9 +504,9 @@ impl StudioApp {
         }
     }
     fn load_rmc_checkpoint(&mut self, path: PathBuf, cx: &mut Context<Self>) {
-        if self.rmc.control.is_some() {
+        if self.rmc.control.is_some() || self.rmc.diagnostic.is_some() {
             self.rmc.error =
-                Some("Stop and save the active RMC run before loading a checkpoint.".into());
+                Some("Finish or cancel the current RMC work before loading a checkpoint.".into());
             cx.notify();
             return;
         }
@@ -506,11 +523,15 @@ impl StudioApp {
                 if app.project_generation != project
                     || app.rmc.generation != generation
                     || app.rmc.control.is_some()
+                    || app.rmc.diagnostic.is_some()
                 {
                     return;
                 }
                 match result {
                     Ok(saved) => {
+                        app.rmc.project.refinement = None;
+                        app.rmc.refinement_plots.clear();
+                        app.rmc.plot_tab = 0;
                         app.rmc.request = Some(saved.request.clone());
                         app.rmc.live = Some(saved.progress.clone());
                         app.rmc.phase = "Saved run · ready to resume".into();
@@ -705,6 +726,9 @@ impl StudioApp {
     pub(super) fn rmc_workspace(&mut self, cx: &mut Context<Self>) -> gpui::Div {
         let t = self.theme;
         let step = self.stage_view.fit_step;
+        if matches!(step, FitStep::Calculate | FitStep::Model) {
+            self.ensure_rmc_fields(cx);
+        }
         let mut nav = div().flex().flex_wrap().gap_2().px_3().py_2();
         for (i, (dest, label)) in [
             (FitStep::Structure, "1 · Structure"),
@@ -729,10 +753,11 @@ impl StudioApp {
             .child(div().flex_1())
             .child(
                 button(&t, "rmc-recover-latest", "Recover latest run", false)
-                    .disabled(self.rmc.control.is_some())
-                    .when(self.rmc.control.is_some(), |d| {
-                        d.opacity(0.45).cursor_default()
-                    })
+                    .disabled(self.rmc.control.is_some() || self.rmc.diagnostic.is_some())
+                    .when(
+                        self.rmc.control.is_some() || self.rmc.diagnostic.is_some(),
+                        |d| d.opacity(0.45).cursor_default(),
+                    )
                     .on_click(cx.listener(|app, _, _, cx| app.recover_latest_rmc(cx))),
             )
             .child(self.fit_mode_picker(cx));
@@ -743,6 +768,7 @@ impl StudioApp {
             .flex()
             .flex_col()
             .child(nav)
+            .child(self.rmc_workflow_header(cx))
             .child(self.rmc_job_bar(cx));
         if let Some(error) = &self.rmc.error {
             out = out.child(
@@ -762,26 +788,9 @@ impl StudioApp {
                     )),
             );
         }
-        if step != FitStep::Results {
-            out = out.child(
-                div()
-                    .px_3()
-                    .py_2()
-                    .text_size(px(12.))
-                    .text_color(t.text_muted)
-                    .child(if self.spectrum.is_some() {
-                        format!(
-                            "Spectrum: {} · R-space real + imaginary · exact ReFEFF",
-                            self.spectrum_label
-                        )
-                    } else {
-                        "Select and process a spectrum in Background to begin.".into()
-                    }),
-            );
-            if self.rmc.control.is_some() {
-                out = out.child(div().px_3().py_2().text_color(t.warn)
-                    .child("A run is active. These settings are for the next run; use Results to pause, resume or stop the current run."));
-            }
+        if step != FitStep::Results && self.rmc.control.is_some() {
+            out = out.child(div().px_3().py_2().text_color(t.warn)
+                .child("A run is active. These settings are for the next run; use Results to pause, resume or stop the current run."));
         }
         if self.rmc_source_stale() {
             out=out.child(div().px_3().py_2().text_color(t.warn).child("Showing the saved run's inputs. The active spectrum or preprocessing differs; Resume continues the saved problem."));
@@ -803,19 +812,6 @@ impl StudioApp {
                             .overflow_y_scroll()
                             .child(library)
                             .child(
-                                button(
-                                    &t,
-                                    "rmc-use-structure",
-                                    "Use structure → Supercell",
-                                    self.structure.summary.is_some(),
-                                )
-                                .disabled(
-                                    self.structure.summary.is_none()
-                                        || self.structure.fetch_running,
-                                )
-                                .on_click(cx.listener(|app, _, _, cx| app.use_rmc_structure(cx))),
-                            )
-                            .child(
                                 button(&t, "rmc-load-checkpoint", "Open RMC checkpoint…", false)
                                     .on_click(
                                         cx.listener(|app, _, _, cx| app.rmc_checkpoint_dialog(cx)),
@@ -826,7 +822,6 @@ impl StudioApp {
             );
         }
         if matches!(step, FitStep::Calculate | FitStep::Model) {
-            self.ensure_rmc_fields(cx);
             let is_cell = step == FitStep::Calculate;
             let mut panel = div()
                 .id("rmc-settings")
@@ -918,18 +913,89 @@ impl StudioApp {
             } else {
                 panel = panel.child(section_label(&t, "Run budget"))
                     .child(self.rmc.fields[8].clone())
+                    .child(self.rmc.fields[27].clone())
+                    .child(hint(&t, format!("{} CPUs available · absorbers first", engine::available_workers())))
+                    .child(div().flex().gap_2()
+                        .child(chip(&t, "rmc-auto-moves", "Auto moves", self.rmc.project.draft.auto_moves)
+                            .on_click(cx.listener(|app, _, _, cx| {
+                                app.rmc.project.draft.auto_moves = true;
+                                cx.notify();
+                            })))
+                        .child(chip(&t, "rmc-fixed-moves", "Fixed moves", !self.rmc.project.draft.auto_moves)
+                            .on_click(cx.listener(|app, _, _, cx| {
+                                app.rmc.project.draft.auto_moves = false;
+                                cx.notify();
+                            }))))
                     .child(self.rmc.fields[9].clone())
-                    .child(hint(&t, "10,000 attempts is a starting budget, not a convergence guarantee. Pause and continue whenever needed."))
+                    .child(hint(&t, if self.rmc.project.draft.auto_moves {
+                        "Auto adjusts the starting move size and cools toward improvements only."
+                    } else {
+                        "Fixed move size and Metropolis tolerance throughout the run."
+                    }))
                     .child(section_label(&t, "R-space objective"));
                 for i in 14..19 {
                     panel = panel.child(self.rmc.fields[i].clone());
                 }
+                if let Ok(draft) = self.pending_rmc_draft(cx)
+                    && let Some(warning) =
+                        engine::path_coverage_warning(draft.ranges.rmax, draft.options.path_radius)
+                {
+                    panel = panel.child(div().text_color(t.warn).child(warning));
+                }
                 panel = panel.child(button(&t, "rmc-spectrum-ranges", "Use spectrum ranges", false)
                     .on_click(cx.listener(|app, _, _, cx| app.use_rmc_spectrum_ranges(cx))))
-                    .child(hint(&t, "R min starts 0.15 Å above saved Rbkg to avoid the low-R background region."))
-                    .child(section_label(&t, "Fixed calibration"))
-                    .child(self.rmc.fields[12].clone()).child(self.rmc.fields[13].clone())
-                    .child(hint(&t, "Check S₀² and ΔE₀ before running. RMC moves coordinates; these two values stay fixed."));
+                    .child(hint(&t, "Copies Transform windows and sampling. ReFEFF k coverage expands automatically."))
+                    .child(section_label(&t, "Amplitude and energy"))
+                    .child(self.rmc.fields[12].clone())
+                    .child(div().flex().items_center().gap_2().child("ΔE₀")
+                        .child(chip(&t, "rmc-energy-fixed", "Fixed", !self.rmc.project.draft.refine_energy)
+                            .on_click(cx.listener(|app, _, _, cx| {
+                                app.rmc.project.draft.refine_energy = false; cx.notify();
+                            })))
+                        .child(chip(&t, "rmc-energy-refine", "Refine", self.rmc.project.draft.refine_energy)
+                            .on_click(cx.listener(|app, _, _, cx| {
+                                app.rmc.project.draft.refine_energy = true; cx.notify();
+                            }))))
+                    .child(self.rmc.fields[13].clone())
+                    .child(hint(&t, if self.rmc.project.draft.refine_energy {
+                        "Refines theory ΔE₀ with S₀² fixed. Bounds and interval are in Advanced."
+                    } else { "S₀² and ΔE₀ stay fixed during RMC." }));
+                if self.rmc.diagnostic.is_some() {
+                    panel = panel
+                        .child(
+                            button(&t, "rmc-cancel-calibration", "Cancel preview", false).on_click(
+                                cx.listener(|app, _, _, cx| {
+                                    app.rmc.diagnostic_generation += 1;
+                                    app.rmc.diagnostic = None;
+                                    app.rmc.refining = false;
+                                    cx.notify();
+                                }),
+                            ),
+                        )
+                        .child(hint(&t, "Estimating from the starting structure…"));
+                } else {
+                    panel = panel.child(
+                        button(&t, "rmc-calibrate", "Estimate calibration…", false)
+                            .disabled(self.rmc.control.is_some())
+                            .on_click(
+                                cx.listener(|app, _, _, cx| app.estimate_rmc_calibration(cx)),
+                            ),
+                    );
+                }
+                if let Some(preview) = &self.rmc.project.calibration {
+                    let b = &preview.result.best;
+                    panel = panel.child(hint(&t, format!("Estimate: S₀² {:.3} · ΔE₀ {:+.2} eV · residual {:.5}", b.s02, b.delta_e0, b.score)))
+                        .child(hint(&t, "Fixed-structure estimate. Validate with a suitable reference before using it."));
+                    if let Some(warning) = engine::diagnostics::bound_warning(preview) {
+                        panel = panel
+                            .child(div().text_size(px(11.5)).text_color(t.warn).child(warning));
+                    }
+                    panel = panel.child(
+                        button(&t, "rmc-use-calibration", "Use calibration", false)
+                            .disabled(self.rmc.control.is_some() || self.rmc.diagnostic.is_some())
+                            .on_click(cx.listener(|app, _, _, cx| app.apply_rmc_calibration(cx))),
+                    );
+                }
             }
             panel = panel.child(
                 button(
@@ -967,62 +1033,36 @@ impl StudioApp {
                         .child(hint(&t, "Tolerance controls acceptance of worse moves; zero accepts improvements only. It is numerical, not a physical temperature."))
                         .child("Pair minimum distances (Å)").child(self.rmc.texts[2].clone())
                         .child(hint(&t, "Optional: Cu-O=1.5, Cu-Cu=2.0. Choose physically justified bounds for your material."));
-                }
-            }
-            let reason = self.rmc_form_blocker(cx);
-            let mut footer = div()
-                .p_3()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .border_t_1()
-                .border_color(t.border)
-                .bg(t.surface);
-            if is_cell {
-                footer = footer.child(
-                    button(&t, "rmc-next-model", "Next: fit settings →", true)
-                        .disabled(
-                            self.rmc.project.configuration.is_none()
-                                || self.rmc.builder_busy
-                                || self.rmc.builder_error.is_some(),
-                        )
-                        .on_click(cx.listener(|app, _, _, cx| {
-                            app.stage_view.fit_step = FitStep::Model;
-                            app.rmc.advanced = false;
-                            cx.notify();
-                        })),
-                );
-            } else {
-                footer = footer
-                    .child(
-                        div()
-                            .text_size(px(11.5))
-                            .text_color(if reason.is_some() { t.warn } else { t.success })
-                            .child(reason.clone().unwrap_or_else(|| {
-                                "Ready · processed spectrum and valid supercell".into()
-                            })),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .child(
-                                button(&t, "rmc-prepare", "Preview initial fit", false)
-                                    .disabled(reason.is_some())
-                                    .when(reason.is_some(), |d| d.opacity(0.45).cursor_default())
-                                    .on_click(
-                                        cx.listener(|app, _, _, cx| app.begin_rmc(true, None, cx)),
-                                    ),
+                    panel = panel
+                        .child(section_label(&t, "Parallel calculation"))
+                        .child(
+                            chip(
+                                &t,
+                                "rmc-parallel-paths",
+                                "Parallel paths",
+                                self.rmc.project.draft.parallel_paths,
                             )
-                            .child(
-                                button(&t, "rmc-run", "Run RMC →", true)
-                                    .disabled(reason.is_some())
-                                    .when(reason.is_some(), |d| d.opacity(0.45).cursor_default())
-                                    .on_click(
-                                        cx.listener(|app, _, _, cx| app.begin_rmc(false, None, cx)),
-                                    ),
-                            ),
-                    );
+                            .on_click(cx.listener(|app, _, _, cx| {
+                                app.rmc.project.draft.parallel_paths =
+                                    !app.rmc.project.draft.parallel_paths;
+                                cx.notify();
+                            })),
+                        )
+                        .child(hint(
+                            &t,
+                            "Use spare CPU workers for paths within an absorber.",
+                        ));
+                    if self.rmc.project.draft.refine_energy {
+                        panel = panel.child(section_label(&t, "Energy refinement"));
+                        for i in 24..27 {
+                            panel = panel.child(self.rmc.fields[i].clone());
+                        }
+                    }
+                    panel = panel.child(section_label(&t, "Calibration search"));
+                    for i in 19..24 {
+                        panel = panel.child(self.rmc.fields[i].clone());
+                    }
+                }
             }
             let scene = self.rmc_structure_panel(false, cx);
             return out.child(
@@ -1040,8 +1080,7 @@ impl StudioApp {
                             .flex_col()
                             .border_r_1()
                             .border_color(t.border)
-                            .child(panel)
-                            .child(footer),
+                            .child(panel),
                     )
                     .child(scene),
             );
@@ -1051,6 +1090,86 @@ impl StudioApp {
 }
 
 impl StudioApp {
+    /// Keep the next action above the workspace, like ordinary path fitting.
+    /// Validation still reads pending controls before preparation or submission.
+    fn rmc_workflow_header(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let t = self.theme;
+        let step = self.stage_view.fit_step;
+        let (action, blocker) = match step {
+            FitStep::Structure => (
+                "Use structure →",
+                if self.structure.fetch_running {
+                    Some("Loading structure…".into())
+                } else if self.structure.summary.is_none() {
+                    Some("Choose a structure".into())
+                } else {
+                    None
+                },
+            ),
+            FitStep::Calculate => (
+                "Next: fit settings →",
+                if self.rmc.builder_busy {
+                    Some("Updating supercell preview…".into())
+                } else if let Some(error) = &self.rmc.builder_error {
+                    Some(error.clone())
+                } else if self.rmc.project.configuration.is_none() {
+                    Some("Choose a structure and build its supercell".into())
+                } else {
+                    None
+                },
+            ),
+            FitStep::Model => ("Run RMC →", self.rmc_form_blocker(cx)),
+            _ => ("Edit settings →", None),
+        };
+        let enabled = blocker.is_none();
+        div()
+            .flex_none()
+            .px_3()
+            .py_2()
+            .flex()
+            .items_center()
+            .flex_wrap()
+            .gap_2()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(140.))
+                    .text_size(px(11.5))
+                    .text_color(t.warn)
+                    .when_some(blocker, |d, reason| d.child(reason)),
+            )
+            .when(step == FitStep::Model, |d| {
+                d.child(
+                    button(&t, "rmc-prepare", "Preview initial fit", false)
+                        .disabled(!enabled)
+                        .when(!enabled, |d| d.opacity(0.45).cursor_default())
+                        .on_click(cx.listener(|app, _, _, cx| app.begin_rmc(true, None, cx))),
+                )
+            })
+            .child(
+                button(&t, "rmc-workflow-action", action, enabled)
+                    .min_w(px(154.))
+                    .justify_center()
+                    .disabled(!enabled)
+                    .when(!enabled, |d| d.opacity(0.45).cursor_default())
+                    .on_click(cx.listener(move |app, _, _, cx| {
+                        if !enabled {
+                            return;
+                        }
+                        match step {
+                            FitStep::Structure => app.use_rmc_structure(cx),
+                            FitStep::Model => app.begin_rmc(false, None, cx),
+                            _ => {
+                                app.stage_view.fit_step = FitStep::Model;
+                                app.rmc.advanced = false;
+                                app.rmc.scene_key = None;
+                                cx.notify();
+                            }
+                        }
+                    })),
+            )
+    }
+
     /// Read uncommitted controls for both inline feedback and submission.
     fn pending_rmc_draft(&self, cx: &Context<Self>) -> Result<engine::Draft, String> {
         let mut draft = self.rmc.project.draft.clone();
@@ -1058,7 +1177,12 @@ impl StudioApp {
             let value = field
                 .read(cx)
                 .pending_value(cx)
-                .map_err(|_| format!("{}: enter a valid number.", FIELD_LABELS[index]))?
+                .map_err(|_| format!("{}: enter a valid number.", FIELD_LABELS[index]))?;
+            if index == 27 {
+                draft.workers = value.map(|v| v as usize);
+                continue;
+            }
+            let value = value
                 .ok_or_else(|| format!("{} requires an explicit value.", FIELD_LABELS[index]))?;
             set_draft_field(&mut draft, index, value);
         }
@@ -1071,6 +1195,9 @@ impl StudioApp {
     }
     fn rmc_form_blocker(&self, cx: &Context<Self>) -> Option<String> {
         (|| -> Result<(), String> {
+            if self.rmc.diagnostic.is_some() {
+                return Err("Finish or cancel the calibration preview first.".into());
+            }
             if self.rmc.control.is_some() {
                 return Err("Stop and save the active run before starting a new one.".into());
             }
@@ -1137,9 +1264,23 @@ impl StudioApp {
             ("R min (Å)", d.ranges.rmin),
             ("R max (Å)", d.ranges.rmax),
             ("k weight", d.ranges.kweight),
+            ("ΔE₀ from (eV)", d.calibration_range[0]),
+            ("ΔE₀ to (eV)", d.calibration_range[1]),
+            ("ΔE₀ grid step (eV)", d.calibration_step),
+            ("S₀² minimum", d.calibration_amplitude[0]),
+            ("S₀² maximum", d.calibration_amplitude[1]),
+            ("ΔE₀ minimum (eV)", d.energy_refinement.bounds[0]),
+            ("ΔE₀ maximum (eV)", d.energy_refinement.bounds[1]),
+            ("Every N attempts", d.energy_refinement.interval as f64),
+            (
+                "CPU workers",
+                d.workers.unwrap_or_else(engine::available_workers) as f64,
+            ),
         ];
         for (index, (label, value)) in specs.into_iter().enumerate() {
-            let kind = if matches!(index, 0..=2 | 5 | 8 | 11 | 18) {
+            let kind = if index == 27 {
+                FieldKind::Integer { min: Some(1) }
+            } else if matches!(index, 0..=2 | 5 | 8 | 11 | 18 | 26) {
                 FieldKind::Integer { min: Some(0) }
             } else {
                 FieldKind::Float
@@ -1149,12 +1290,24 @@ impl StudioApp {
                 9 => 0.01,
                 10 => 0.0001,
                 12 => 0.01,
+                19..=21 | 24..=25 => 0.5,
+                26 => 50.,
+                22..=23 => 0.05,
                 3 | 4 | 6 | 7 | 13..=17 => 0.1,
                 _ => 1.,
             };
             let field = cx.new(|cx| {
-                NumericField::new(label, "required", Some(value), kind, self.theme, cx)
-                    .with_step(step)
+                let placeholder = if index == 27 {
+                    format!("auto ({})", engine::available_workers())
+                } else {
+                    "required".into()
+                };
+                let value = if index == 27 {
+                    d.workers.map(|v| v as f64)
+                } else {
+                    Some(value)
+                };
+                NumericField::new(label, placeholder, value, kind, self.theme, cx).with_step(step)
             });
             cx.subscribe(&field, |_, _, _: &FieldPreview, cx| cx.notify())
                 .detach();
@@ -1166,6 +1319,11 @@ impl StudioApp {
             }
             cx.subscribe(&field, move |app, _, event, cx| {
                 if let FieldEvent::Changed(value) = event {
+                    if index == 27 {
+                        app.rmc.project.draft.workers = value.map(|v| v as usize);
+                        cx.notify();
+                        return;
+                    }
                     let Some(v) = value else {
                         if index <= 2 {
                             app.build_rmc_supercell(cx);
@@ -1178,7 +1336,12 @@ impl StudioApp {
                     if index <= 2 {
                         app.build_rmc_supercell(cx);
                     }
-                    app.rmc.error = None;
+                    // Committing fields emits deferred change events. Do not let
+                    // those erase a calibration/run error raised by the action
+                    // that committed them.
+                    if app.rmc.error.as_deref() == Some("RMC settings require explicit values.") {
+                        app.rmc.error = None;
+                    }
                     app.rmc.scene_key = None;
                     cx.notify();
                 } else if index <= 2 && matches!(event, FieldEvent::Invalid(_)) {
@@ -1303,9 +1466,15 @@ impl StudioApp {
             .gap_2()
             .px_3()
             .py_2();
-        for (i, label) in ["Fit plots", "Structure", "Convergence", "Run details"]
-            .into_iter()
-            .enumerate()
+        for (i, label) in [
+            "Fit plots",
+            "Structure",
+            "Convergence",
+            "Run details",
+            "Refinement",
+        ]
+        .into_iter()
+        .enumerate()
         {
             actions = actions.child(
                 chip(&t, ("rmc-result-tab", i), label, self.rmc.plot_tab == i).on_click(
@@ -1319,11 +1488,40 @@ impl StudioApp {
         actions = actions
             .child(div().flex_1())
             .child(
+                button(
+                    &t,
+                    "rmc-refine-best",
+                    if self.rmc.refining {
+                        "Cancel refinement"
+                    } else {
+                        "Refine best…"
+                    },
+                    false,
+                )
+                .disabled(
+                    self.rmc.project.saved.is_none()
+                        || (!self.rmc.refining
+                            && (self.rmc.diagnostic.is_some()
+                                || (self.rmc.control.is_some() && self.rmc.phase != "Paused"))),
+                )
+                .on_click(cx.listener(|app, _, _, cx| {
+                    if app.rmc.refining {
+                        app.rmc.diagnostic_generation += 1;
+                        app.rmc.diagnostic = None;
+                        app.rmc.refining = false;
+                    } else {
+                        app.refine_rmc_best(cx);
+                    }
+                    cx.notify();
+                })),
+            )
+            .child(
                 button(&t, "rmc-open-run", "Open checkpoint…", false)
-                    .disabled(self.rmc.control.is_some())
-                    .when(self.rmc.control.is_some(), |d| {
-                        d.opacity(0.45).cursor_default()
-                    })
+                    .disabled(self.rmc.control.is_some() || self.rmc.diagnostic.is_some())
+                    .when(
+                        self.rmc.control.is_some() || self.rmc.diagnostic.is_some(),
+                        |d| d.opacity(0.45).cursor_default(),
+                    )
                     .on_click(cx.listener(|app, _, _, cx| app.rmc_checkpoint_dialog(cx))),
             )
             .child(
@@ -1333,6 +1531,9 @@ impl StudioApp {
                     .on_click(cx.listener(|app, _, _, cx| app.export_rmc(cx))),
             );
         out = out.child(actions);
+        if self.rmc.plot_tab == 4 {
+            return out.child(self.rmc_refinement_view(cx));
+        }
         let Some(p) = &self.rmc.live else {
             return out.child(div().flex_1().flex().flex_col().justify_center().items_center().gap_3().p_4()
                 .child(div().text_size(px(18.)).child(if self.rmc.control.is_some() { "Preparing your initial fit" } else { "Your RMC results will appear here" }))
@@ -1342,6 +1543,32 @@ impl StudioApp {
                 .when(self.rmc.control.is_none(), |d| d.child(button(&t, "rmc-back-setup", "Go to fit settings →", true)
                     .on_click(cx.listener(|app, _, _, cx| { app.stage_view.fit_step = FitStep::Model; cx.notify(); })))));
         };
+        if let Some(request) = &self.rmc.request {
+            if let Ok(shifts) = p.best.energy_shifts(&request.problem) {
+                let shift = shifts[0];
+                let bounded = request
+                    .settings
+                    .energy_refinement
+                    .as_ref()
+                    .is_some_and(|policy| policy.bounds.contains(&shift));
+                out = out.child(
+                    div()
+                        .px_3()
+                        .py_1()
+                        .text_size(px(12.))
+                        .text_color(if bounded { t.warn } else { t.text_muted })
+                        .child(format!(
+                            "Best ΔE₀ {shift:+.2} eV · S₀² {:.3} fixed{}",
+                            request.problem.datasets[0].exafs.s02,
+                            if bounded {
+                                " · energy bound reached"
+                            } else {
+                                ""
+                            }
+                        )),
+                );
+            }
+        }
         let initial = p.initial.evaluation.score;
         let best = p.best.evaluation.score;
         let improvement = if initial > 0. {
@@ -1391,6 +1618,7 @@ impl StudioApp {
                     },
                     true,
                 )
+                .disabled(self.rmc.diagnostic.is_some())
                 .on_click(cx.listener(|app, _, _, cx| app.resume_rmc(cx))),
             );
             out = out.child(resume);
@@ -1410,9 +1638,9 @@ impl StudioApp {
                 ))
                 .child(metric(
                     &t,
-                    "Improvement",
+                    "Reduction from initial",
                     improvement,
-                    format!("Current {:.7}", p.current_score),
+                    "Not a goodness-of-fit percentage".into(),
                 ))
                 .child(metric(
                     &t,
@@ -1438,6 +1666,18 @@ impl StudioApp {
                 out = out.child(div().px_3().pb_2().text_size(px(11.5)).text_color(t.text_muted).child(format!(
                     "{} · R {:.2}–{:.2} Å · k {:.2}–{:.2} Å⁻¹ · k weight {} · fitting real + imaginary",
                     request.source.label, transform.rmin, transform.rmax, transform.kmin, transform.kmax, data.exafs.kweight)));
+                if let Some(warning) =
+                    engine::path_coverage_warning(transform.rmax, request.calculator.path_radius)
+                {
+                    out = out.child(
+                        div()
+                            .px_3()
+                            .pb_2()
+                            .text_size(px(11.5))
+                            .text_color(t.warn)
+                            .child(warning),
+                    );
+                }
             }
         }
         if self.rmc.plot_tab == 1 {
@@ -1530,7 +1770,16 @@ impl StudioApp {
                 .child(format!("Active time {:.1} s · setup this session {:.1} s · {sec} inclusive", p.elapsed_seconds, p.setup_seconds))
                 .child(hint(&t, "Time includes preparation and calculation but excludes pauses. Inclusive time per attempt is not an isolated scattering benchmark."))
                 .child(section_label(&t, "Exact scattering cache"))
+                .when_some(self.rmc.request.as_ref(), |details, request| {
+                    details.child(format!(
+                        "{} CPU workers · parallel paths {} · {} backend preparation threads",
+                        request.workers,
+                        if request.parallel_paths { "on" } else { "off" },
+                        request.calculator.threads
+                    ))
+                })
                 .child(format!("Active path reuse {reuse} · {} exact path calculations · {:.1} MiB cached", count(p.cache.exact as usize), p.cache.bytes as f64 / 1048576.))
+                .child(format!("Electronic setup: {} calculated · {} shared", count(p.cache.electronic_preparations), count(p.cache.shared_electronic_contexts)))
                 .child(hint(&t, "Reuse = reused active paths / (reused active paths + exact calculations). Cache counters restart on a cold resume."))
                 .child(section_label(&t, "Objective"))
                 .child(hint(&t, "Normalized R-space real + imaginary residual plus a structural penalty. R magnitude and k-space curves are diagnostic views."));
@@ -1541,6 +1790,21 @@ impl StudioApp {
                 ));
             }
             details = details.child(section_label(&t, "Recovery and provenance"));
+            if let Some(scale) = p.move_scale {
+                let step = self
+                    .rmc
+                    .request
+                    .as_ref()
+                    .map_or(0., |r| r.settings.moves.step_size)
+                    * scale;
+                details = details.child(format!("Auto move size: {step:.4} Å per coordinate"));
+                if let Some(acceptance) = p.recent_acceptance {
+                    details = details.child(format!(
+                        "Last feedback window: {:.1}% accepted",
+                        acceptance * 100.
+                    ));
+                }
+            }
             if let Some(saved) = &self.rmc.project.saved {
                 details = details.child(format!(
                     "Checkpoint state: {} completed attempts",
@@ -1756,6 +2020,246 @@ impl StudioApp {
             )));
         out
     }
+    fn refine_rmc_best(&mut self, cx: &mut Context<Self>) {
+        if self.rmc.diagnostic.is_some()
+            || (self.rmc.control.is_some() && self.rmc.phase != "Paused")
+        {
+            return;
+        }
+        let Some(saved) = self.rmc.project.saved.clone() else {
+            return;
+        };
+        let (control, rx) = engine::diagnostics::spawn_refinement(saved, Default::default());
+        self.rmc.diagnostic = Some(control);
+        self.rmc.refining = true;
+        self.rmc.error = None;
+        self.rmc.plot_tab = 4;
+        self.rmc.diagnostic_generation += 1;
+        let generation = self.rmc.diagnostic_generation;
+        let project = self.project_generation;
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(200))
+                    .await;
+                let result = match rx.try_recv() {
+                    Ok(result) => Some(result),
+                    Err(std::sync::mpsc::TryRecvError::Empty) => None,
+                    Err(_) => Some(Err("Local refinement worker ended unexpectedly.".into())),
+                };
+                let keep = this
+                    .update(cx, |app, cx| {
+                        if app.project_generation != project
+                            || app.rmc.diagnostic_generation != generation
+                        {
+                            return false;
+                        }
+                        if let Some(result) = result {
+                            app.rmc.diagnostic = None;
+                            app.rmc.refining = false;
+                            match result {
+                                Ok(result) => {
+                                    app.rmc.project.refinement = Some(Box::new(result));
+                                    app.rmc.refinement_plots.clear();
+                                }
+                                Err(error) => app.rmc.error = Some(error),
+                            }
+                            cx.notify();
+                            false
+                        } else {
+                            true
+                        }
+                    })
+                    .unwrap_or(false);
+                if !keep {
+                    break;
+                }
+            }
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn rmc_refinement_view(&mut self, cx: &mut Context<Self>) -> gpui::Div {
+        let t = self.theme;
+        let mut out = div().flex_1().min_h_0().flex().flex_col().gap_2().p_3();
+        if self.rmc.refining {
+            return out.child("Refining the best structure…")
+                .child(hint(&t, "Numerical coordinate gradients · original constraints · full scattering verification"));
+        }
+        let (Some(result), Some(saved)) = (&self.rmc.project.refinement, &self.rmc.project.saved)
+        else {
+            return out.child("Pause RMC, then choose Refine best.")
+                .child(hint(&t, "Three local passes, limited to 5,000 geometry evaluations. The RMC checkpoint stays unchanged."));
+        };
+        let display = match engine::diagnostics::refinement_progress(saved, result) {
+            Ok(p) => p,
+            Err(error) => return out.child(div().text_color(t.warn).child(error)),
+        };
+        let stop = match result.stop {
+            rexafs::rmc::LocalRefinementStop::SweepLimit => "Pass limit reached",
+            rexafs::rmc::LocalRefinementStop::EvaluationLimit => "Evaluation limit reached",
+            rexafs::rmc::LocalRefinementStop::NoDescent => "No further descent found",
+            rexafs::rmc::LocalRefinementStop::Cancelled => "Cancelled",
+        };
+        out = out
+            .child(format!(
+                "Objective {:.6} → {:.6} · {} accepted moves · {} evaluations · {}",
+                result.initial.evaluation.score,
+                result.best.evaluation.score,
+                result.history.len(),
+                result.evaluations,
+                stop
+            ))
+            .child(hint(
+                &t,
+                "Export result includes the RMC checkpoint and the separate refinement audit.",
+            ));
+        let mut legend = div().flex().flex_wrap().items_center().gap_3();
+        for (i, label) in ["Experimental", "Before refinement", "After refinement"]
+            .into_iter()
+            .enumerate()
+        {
+            legend = legend.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .w(px(16.))
+                            .h(px(3.))
+                            .bg(crate::plotting::trace_rgba(&t, i)),
+                    )
+                    .child(hint(&t, label)),
+            );
+        }
+        out = out.child(legend);
+        if self.rmc.refinement_plots.is_empty() {
+            match result_plots(&display, &saved.request, t, true, true, false) {
+                Ok(plots) => {
+                    self.rmc.refinement_plots = plots
+                        .into_iter()
+                        .take(2)
+                        .map(|(_, plot)| plot_builder(plot).interactive().build(cx))
+                        .collect()
+                }
+                Err(error) => return out.child(div().text_color(t.warn).child(error)),
+            }
+        }
+        let mut row = div().flex_1().min_h_0().flex().gap_2();
+        for plot in &self.rmc.refinement_plots {
+            row = row.child(div().flex_1().min_w_0().min_h_0().child(plot.clone()));
+        }
+        out.child(row)
+    }
+
+    fn estimate_rmc_calibration(&mut self, cx: &mut Context<Self>) {
+        if self.rmc.diagnostic.is_some() || self.rmc.control.is_some() {
+            return;
+        }
+        let input = (|| {
+            if let Some(error) = self.rmc_form_blocker(cx) {
+                return Err(error);
+            }
+            self.commit_rmc_fields(cx)?;
+            Ok((
+                self.new_rmc_request()?,
+                engine::diagnostics::calibration_settings(&self.rmc.project.draft)?,
+            ))
+        })();
+        let (request, settings) = match input {
+            Ok(input) => input,
+            Err(error) => {
+                self.rmc.error = Some(error);
+                cx.notify();
+                return;
+            }
+        };
+        let (control, rx) = engine::diagnostics::spawn_calibration(request, settings);
+        self.rmc.diagnostic = Some(control);
+        self.rmc.error = None;
+        self.rmc.diagnostic_generation += 1;
+        let generation = self.rmc.diagnostic_generation;
+        let project = self.project_generation;
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(200))
+                    .await;
+                let result = match rx.try_recv() {
+                    Ok(result) => Some(result),
+                    Err(std::sync::mpsc::TryRecvError::Empty) => None,
+                    Err(_) => Some(Err("Calibration worker ended unexpectedly.".into())),
+                };
+                let keep = this
+                    .update(cx, |app, cx| {
+                        if app.project_generation != project
+                            || app.rmc.diagnostic_generation != generation
+                        {
+                            return false;
+                        }
+                        if let Some(result) = result {
+                            app.rmc.diagnostic = None;
+                            match result {
+                                Ok(preview) => {
+                                    app.rmc.project.calibration = Some(Box::new(preview))
+                                }
+                                Err(error) => app.rmc.error = Some(error),
+                            }
+                            cx.notify();
+                            false
+                        } else {
+                            true
+                        }
+                    })
+                    .unwrap_or(false);
+                if !keep {
+                    break;
+                }
+            }
+        })
+        .detach();
+        cx.notify();
+    }
+    fn apply_rmc_calibration(&mut self, cx: &mut Context<Self>) {
+        if self.rmc.control.is_some() || self.rmc.diagnostic.is_some() {
+            return;
+        }
+        let apply = (|| {
+            self.commit_rmc_fields(cx)?;
+            let request = self.new_rmc_request()?;
+            let preview = self
+                .rmc
+                .project
+                .calibration
+                .as_ref()
+                .ok_or("Estimate calibration first.")?;
+            if engine::diagnostics::input_key(&request)? != preview.input {
+                return Err(
+                    "Inputs changed. Estimate calibration again before applying it.".into(),
+                );
+            }
+            let best = &preview.result.best;
+            if !best.s02.is_finite() || best.s02 <= 0. || !best.delta_e0.is_finite() {
+                return Err("Invalid saved calibration estimate.".into());
+            }
+            let mut draft = self.rmc.project.draft.clone();
+            draft.s02 = best.s02;
+            draft.delta_e0 = best.delta_e0;
+            let spectrum = self
+                .spectrum
+                .as_ref()
+                .ok_or("Select a processed spectrum.")?;
+            draft.validate_form(spectrum, &request.problem.structures[0].configuration)?;
+            self.rmc.project.draft = draft;
+            self.rmc.fields.clear();
+            self.rmc.texts.clear();
+            Ok(())
+        })();
+        self.rmc.error = apply.err();
+        cx.notify();
+    }
     fn export_rmc(&mut self, cx: &mut Context<Self>) {
         if self.rmc.control.is_some() && self.rmc.phase != "Paused" {
             self.rmc.error =
@@ -1766,6 +2270,8 @@ impl StudioApp {
         let Some(saved) = self.rmc.project.saved.clone() else {
             return;
         };
+        let refinement = self.rmc.project.refinement.clone();
+        let calibration = self.rmc.project.calibration.clone();
         let prompt = cx.prompt_for_paths(gpui::PathPromptOptions {
             files: false,
             directories: true,
@@ -1779,7 +2285,21 @@ impl StudioApp {
                 let parent = parent.clone();
                 let result = cx
                     .background_executor()
-                    .spawn(async move { engine::export(&parent, &saved) })
+                    .spawn(async move {
+                        let directory = engine::export(&parent, &saved)?;
+                        if let Some(result) = refinement {
+                            engine::diagnostics::export_refinement(&directory, &saved, &result)?;
+                        }
+                        if let Some(calibration) = calibration {
+                            std::fs::write(
+                                directory.join("calibration-preview.json"),
+                                serde_json::to_vec_pretty(&calibration)
+                                    .map_err(|e| e.to_string())?,
+                            )
+                            .map_err(|e| e.to_string())?;
+                        }
+                        Ok::<_, String>(directory)
+                    })
                     .await;
                 this.update(cx, |app, cx| {
                     match result {
@@ -1797,7 +2317,7 @@ impl StudioApp {
         .detach();
     }
 }
-const FIELD_LABELS: [&str; 19] = [
+const FIELD_LABELS: [&str; 28] = [
     "Repeat a",
     "Repeat b",
     "Repeat c",
@@ -1817,6 +2337,15 @@ const FIELD_LABELS: [&str; 19] = [
     "R min",
     "R max",
     "k weight",
+    "ΔE₀ from",
+    "ΔE₀ to",
+    "ΔE₀ grid step",
+    "S₀² minimum",
+    "S₀² maximum",
+    "ΔE₀ minimum",
+    "ΔE₀ maximum",
+    "Update interval",
+    "CPU workers",
 ];
 fn hint(t: &crate::theme::Theme, text: impl Into<gpui::SharedString>) -> gpui::Div {
     div()
@@ -1875,11 +2404,18 @@ fn set_draft_field(d: &mut engine::Draft, index: usize, v: f64) {
         15 => d.ranges.kmax = v,
         16 => d.ranges.rmin = v,
         17 => d.ranges.rmax = v,
-        _ => {
+        18 => {
             d.ranges.kweight = v;
             d.ranges.kweights = vec![v];
             d.ranges.follow_transform = false;
         }
+        19..=20 => d.calibration_range[index - 19] = v,
+        21 => d.calibration_step = v,
+        22..=23 => d.calibration_amplitude[index - 22] = v,
+        24..=25 => d.energy_refinement.bounds[index - 24] = v,
+        26 => d.energy_refinement.interval = v as usize,
+        27 => d.workers = Some(v as usize),
+        _ => unreachable!("unknown RMC field"),
     }
 }
 fn length(v: [f64; 3]) -> f64 {

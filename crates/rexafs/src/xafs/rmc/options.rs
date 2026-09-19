@@ -28,7 +28,10 @@ pub struct RefeffOptions {
     /// Optional linear-polarization vector in the Cartesian coordinate frame.
     /// Default None uses orientational averaging; nonzero vectors are normalized.
     pub polarization: Option<[f64; 3]>,
-    /// Worker count passed to ReFEFF; default 1 for repeatable reference runs.
+    /// Internal ReFEFF pipeline threads; default 1 for reference runs. In the
+    /// prepared calculator this controls electronic preparation, not the later
+    /// cached path evaluations. Use `AccelerationSettings::workers` for absorber
+    /// and path concurrency; keeping this at 1 avoids competing thread pools.
     pub threads: usize,
     /// Cooperative timeout per absorber calculation in seconds; default 300.
     /// Timeout aborts refinement with an error, rather than rejecting a move.

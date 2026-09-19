@@ -20,13 +20,13 @@ from pathlib import Path
 
 from release_archive import validate_pe_binary
 
-RELEASE = "v0.2.3"
+RELEASE = "v0.2.4"
 BASE_URL = f"https://github.com/Ameyanagi/feff10-rs/releases/download/{RELEASE}/"
 # Published asset name -> (bundled file name, SHA-256 from the release's sha256sums.txt).
 ASSETS = {
     "feff10-windows-x86_64.exe": (
         "feff10-rs.exe",
-        "351e4fccad1896afb44d84cb5169afe41d6f3ec07d4af0a87acb035737088cd6",
+        "f70a22ac854511809b1f2e7e0ba4e7ebc9fb70f93343414a5c8b25bcd88278f0",
     ),
     "libgcc_s_seh-1.dll": (
         "libgcc_s_seh-1.dll",

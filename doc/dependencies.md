@@ -55,6 +55,22 @@ feature checks, Python wheel installation, Wasm runtime tests and desktop builds
 Version resolution alone is not evidence of a working release. Record final
 results and remaining platform qualification in [the release runbook](releasing.md).
 
+## FEFF10 array-header correction — 19 September 2026
+
+The 0.2.11 release candidate selects
+[FEFF10 0.2.4](https://github.com/Ameyanagi/feff10-rs/releases/tag/v0.2.4).
+Its native Fortran build initializes the format label and selector in all five
+numeric-array writers. This corrects intermittent `gg.bin` parsing failures;
+rebuilding the Rust wrapper with a 0.2.3 archive does not repair that archive.
+The Windows helper is pinned to the matching 0.2.4 executable and verified
+runtime DLLs. The original September 7 dependency selection is retained below.
+
+All six upstream native builds and clean-runner smoke tests passed. All 18
+downloaded release assets matched their manifest and GitHub digests. Rexafs's
+package check also requires valid generated array headers. See the
+[qualification record](validation/2026-09-19-release-0.2.11/review.md) for
+downstream checks and publication status.
+
 ## Embedded FEFF engines — 7 September 2026
 
 The September 7 dependency update selected [ReFEFF 0.3.0](https://github.com/Ameyanagi/refeff/releases/tag/v0.3.0)
