@@ -14,6 +14,13 @@ successful app launch alone does not qualify the updater. The
 0.2.10/0.2.11 failure and the source correction. Do not reuse the older qualification
 as evidence that signed in-app updates work.
 
+## Preparing 0.2.12
+
+The [0.2.12 notes](release-notes-0.2.12.md) and
+[qualification record](validation/2026-09-19-release-0.2.12/review.md) track the
+updater correction. This version is not published yet. Require the new signed
+helper checks before announcing that the Mac update path is qualified.
+
 ## Published 0.2.11
 
 The [0.2.11 notes](release-notes-0.2.11.md) and
