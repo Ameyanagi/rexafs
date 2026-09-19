@@ -5,7 +5,7 @@ import release from '../data/release.json';
 const canonical=new URL(url(),Astro.site).href;
 const ogImage=new URL(url('brand/rexafs-og.jpg'),Astro.site).href;
 const tour=[
-  ['normalize','Normalize','Check the baseline fits against your measured spectrum.','docs/getting-started/first-analysis/#2-inspect-normalization'],
+  ['polynomial','Normalize','Check the baseline fits against your measured spectrum.','docs/getting-started/first-analysis/#2-inspect-normalization'],
   ['background','Background','Adjust background removal and inspect the resulting oscillations.','docs/desktop/processing/#background'],
   ['paths','Structures and paths','Choose scattering paths beside the 3D atomic cluster.','docs/desktop/structures/'],
   ['publication','Publish','Export figures, data and a complete analysis folder.','docs/desktop/publication/'],
@@ -38,7 +38,7 @@ const tour=[
     <article class="entry desktop-entry">
       <div class="entry-heading"><span class="number">01 /</span><h2><a href={url('docs/desktop/')}>Desktop</a></h2><span class="entry-label">EXPLORE VISUALLY</span></div>
       <p>Scattering calculations, joint fits and series analysis.<br/> Work visually and save portable projects.</p>
-      <a class="screenshot-link" href={url('docs/getting-started/first-analysis/')} aria-label="Start your first analysis with the rexafs desktop"><img src={url('screenshots/fit-result.jpg')} width="1192" height="768" alt="Complete rexafs 0.2.4 window showing the Cu first-shell fit, residuals and fitted parameters" loading="eager"/></a>
+      <a class="screenshot-link" href={url('docs/getting-started/first-analysis/')} aria-label="Start your first analysis with the rexafs desktop"><img src={url('screenshots/0.2.11/fit-result.jpg')} width="1192" height="768" alt="Complete rexafs 0.2.11 window showing the Cu first-shell fit, residuals and fitted parameters" loading="eager"/></a>
       <div class="entry-bottom"><a class="primary" href={url('download/')}>Download the desktop <span aria-hidden="true">↗</span></a><a class="secondary" href={url('app/')}>Browser preview →</a></div>
       <div class="platforms">macOS <span>·</span> Windows preview <span>·</span> Linux preview <span>·</span> No Python or Rust installation required</div>
     </article>
@@ -63,9 +63,9 @@ const tour=[
   </section>
 
   <section class="tour" aria-labelledby="tour-title">
-    <div class="section-intro"><p class="eyebrow">A LOOK INSIDE</p><h2 id="tour-title">Explore the desktop.</h2><p>rexafs 0.2.4 on macOS, using the bundled Cu foil example. Each screenshot opens its guide.</p></div>
+    <div class="section-intro"><p class="eyebrow">A LOOK INSIDE</p><h2 id="tour-title">Explore the desktop.</h2><p>rexafs 0.2.11 on macOS, using a public Cu foil measurement. Each screenshot opens its guide.</p></div>
     <div class="tour-grid">
-      {tour.map(([file,title,text,href])=><figure><a href={url(href)}><img src={url(`screenshots/${file}.jpg`)} width="1192" height="768" loading="lazy" alt={`Complete rexafs 0.2.4 window at the ${title} stage`}/></a><figcaption><strong>{title}</strong><span>{text}</span></figcaption></figure>)}
+      {tour.map(([file,title,text,href])=><figure><a href={url(href)}><img src={url(`screenshots/0.2.11/${file}.jpg`)} width="1192" height="768" loading="lazy" alt={`Complete rexafs 0.2.11 window at the ${title} stage`}/></a><figcaption><strong>{title}</strong><span>{text}</span></figcaption></figure>)}
     </div>
   </section>
 
@@ -74,7 +74,7 @@ const tour=[
     <div><p>Read the equations, units, defaults and assumptions, with references and links to the implementation.</p><a href={url('docs/science/')}>Explore the science <span aria-hidden="true">↗</span></a><a href={url('docs/science/references/')}>References & citations <span aria-hidden="true">↗</span></a><a href={url('docs/concepts/')}>Concepts & glossary <span aria-hidden="true">↗</span></a></div>
   </section>
 
-  <section class="closing"><div><p>Try your first analysis.</p><p class="closing-sub">Start with the bundled Cu foil spectrum and crystal structure.</p></div><div class="closing-links"><a class="primary" href={url('download/')}>Get rexafs {release.version} <span aria-hidden="true">↗</span></a><a href={url('docs/getting-started/first-analysis/')}>Try the bundled Cu example →</a></div></section>
+  <section class="closing"><div><p>Try your first analysis.</p><p class="closing-sub">Start with a public Cu foil spectrum and the built-in crystal structure.</p></div><div class="closing-links"><a class="primary" href={url('download/')}>Get rexafs {release.version} <span aria-hidden="true">↗</span></a><a href={url('docs/getting-started/first-analysis/')}>Try the Cu walkthrough →</a></div></section>
 </main>
 <footer class="wrap">
   <div class="footer-top">

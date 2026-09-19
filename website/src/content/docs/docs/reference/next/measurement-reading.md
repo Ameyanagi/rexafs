@@ -214,9 +214,9 @@ explicit selection of equal-length real HDF5 vectors; incomplete HDF5 group
 recovery is flagged visibly. A readable container does not guarantee that every
 detector group was recovered.
 
-[![Pre-release import preview showing transmission, fluorescence and reference inclusion checkboxes, with the reference spectrum plotted.](/screenshots/next/import-signals.jpg)](/screenshots/next/import-signals.jpg)
+[![rexafs 0.2.11 import preview showing transmission, fluorescence and reference inclusion checkboxes, with the reference spectrum plotted.](/screenshots/0.2.11/import-signals.jpg)](/screenshots/0.2.11/import-signals.jpg)
 
-Pre-release macOS ARM64 build, captured on 14 September 2026. The QAS
+Signed 0.2.11 macOS ARM64 release, captured through computer use on 19 September 2026. The QAS
 example has three selected outputs; **Previewing Reference** shows `ln(it / ir)`
 without changing which spectra will be imported. The 651-point Mo-foil file is
 retained from [xasref](https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo%20foil%200001-r0003.dat)
@@ -224,16 +224,15 @@ with its [MIT repository notice](https://github.com/Ameyanagi/xasref/blob/74d1e7
 and credit to Ryuichi Shimogawa and contributors. See
 [screenshot provenance](/licenses/#documentation-screenshots).
 
-[![Earlier unreleased desktop import preview with the 624-point PbTe EX3 spectrum and detected energy and stored signal.](/screenshots/next/import-preview.jpg)](/screenshots/next/import-preview.jpg)
+[![rexafs 0.2.11 import preview with the 624-point PbTe EX3 spectrum and detected energy and stored signal.](/screenshots/0.2.11/import-ex3.jpg)](/screenshots/0.2.11/import-ex3.jpg)
 
-Earlier unreleased macOS ARM64 source build, captured on 14 September 2026 before
-the visible signal checkboxes were added. The preview
+Signed 0.2.11 macOS ARM64 release, captured on 19 September 2026. The preview
 shows the stored absorption before import. Data: Masashi Ishii and the Industrial
 Application and Partnership Division, [XAFS spectrum of Lead telluride](https://doi.org/10.48505/nims.3178),
 under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). See
 [screenshot provenance](/licenses/#documentation-screenshots).
 
-[![The same import preview with Source details expanded to show the original EX3 header.](/screenshots/next/import-source-details.jpg)](/screenshots/next/import-source-details.jpg)
+[![The same import preview with Source details expanded to show the original EX3 header.](/screenshots/0.2.11/import-source-details.jpg)](/screenshots/0.2.11/import-source-details.jpg)
 
 **Source details** expands below the plot; the header remains available without
 crowding the initial selection screen. Both images are full, unedited window captures.

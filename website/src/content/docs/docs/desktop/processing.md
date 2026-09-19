@@ -4,10 +4,10 @@ description: "Use normalization, AUTOBK, forward and inverse transforms."
 audience: user
 ---
 
-This guide describes **rexafs 0.2.11**. The screenshots show the tagged 0.2.10 macOS
-CI build, captured before signing through computer use with public Cu measurements. They are
+This guide describes **rexafs 0.2.11**. The screenshots show the signed 0.2.11 macOS
+release, captured through computer use with a public Cu measurement. They are
 full, unedited windows; select an image for full resolution. See
-[capture provenance](/licenses/#desktop-0210-workflow-captures) and
+[capture provenance](/licenses/#desktop-0211-workflow-captures) and
 [available downloads](/docs/getting-started/install/).
 
 Loading an absorption spectrum or changing its settings runs **normalization →
@@ -87,11 +87,11 @@ exports include the fit while visible.
 These fits are limited to Normalize; Background shows only its **Spline**
 overlay. Switching tabs preserves each toggle's preference.
 
-[![Polynomial normalization with the Pre/post overlay enabled](/screenshots/0.2.10/polynomial.jpg)](/screenshots/0.2.10/polynomial.jpg)
+[![Polynomial normalization with the Pre/post overlay enabled](/screenshots/0.2.11/polynomial.jpg)](/screenshots/0.2.11/polynomial.jpg)
 
 *Polynomial: Pre/post shows the two fitted baselines over measured μ(E).*
 
-[![MBACK normalization with automatically detected Cu and K edge and the complete fitted curve](/screenshots/0.2.10/mback.jpg)](/screenshots/0.2.10/mback.jpg)
+[![MBACK normalization with automatically detected Cu and K edge and the complete fitted curve](/screenshots/0.2.11/mback.jpg)](/screenshots/0.2.11/mback.jpg)
 
 *MBACK: the orange curve is the complete fitted atomic model, including its
 background terms. Cu and K were read from this XDI file's header; check these
@@ -153,7 +153,7 @@ reader](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/crates/rexafs-gui/src/p
 and [AUTOBK objective](/docs/science/autobk/).
 
 
-[![Background showing measured Cu absorption, one AUTOBK spline and the Fourier magnitude below](/screenshots/0.2.10/background.jpg)](/screenshots/0.2.10/background.jpg)
+[![Background showing measured Cu absorption, one AUTOBK spline and the Fourier magnitude below](/screenshots/0.2.11/background.jpg)](/screenshots/0.2.11/background.jpg)
 
 *Spline controls the orange AUTOBK overlay. Normalize's polynomial and MBACK
 fit overlays are not drawn in this stage.*
@@ -179,7 +179,7 @@ Fourier magnitude; **Slices** shows wavelet magnitude at a selected coordinate.
 See the [wavelet guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/wavelet-analysis.md)
 for interpretation, settings, retained maps and region integration.
 
-[![Wavelet magnitude with linked R spectrum on the left, k spectrum below and settings in the Transform sidebar](/screenshots/0.2.10/wavelet.jpg)](/screenshots/0.2.10/wavelet.jpg)
+[![Wavelet magnitude with linked R spectrum on the left, k spectrum below and settings in the Transform sidebar](/screenshots/0.2.11/wavelet.jpg)](/screenshots/0.2.11/wavelet.jpg)
 
 *Cu foil wavelet magnitude, k = 2–12 Å⁻¹, k weight 2 and R maximum 6 Å.
 R is not phase-corrected; a map maximum is not directly a bond distance.

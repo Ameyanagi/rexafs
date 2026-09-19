@@ -95,6 +95,15 @@ fn main() {
             }
             return;
         }
+        #[cfg(target_os = "macos")]
+        Some("--self-check-updater") => {
+            if let Err(error) = updates::install::check_helper() {
+                eprintln!("rexafs updater check failed: {error}");
+                std::process::exit(1);
+            }
+            println!("rexafs signed updater helper check passed");
+            return;
+        }
         Some("--self-check-feff") => {
             if let Err(error) = feffgen::check_package_backends() {
                 eprintln!("rexafs FEFF package check failed: {error}");

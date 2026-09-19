@@ -142,7 +142,7 @@ def verify_installation(image, metadata, verify_app=None):
     """Mount the DMG and exercise an installed copy in a temporary directory.
 
     Verify payload/build identity, signatures, architecture and calculation
-    self-checks, then return the copied executable's SHA-256 digest. verify_app
+    self-checks and the copied updater helper, then return the executable's SHA-256 digest. verify_app
     optionally supplies Developer ID/notarization checks; otherwise codesign
     validates the preview's signature. The FEFF self-check runs when the recorded
     features include feff10-runner. This does not launch or validate the GUI.
@@ -174,6 +174,7 @@ def verify_installation(image, metadata, verify_app=None):
             subprocess.run(["lipo", str(executable), "-verify_arch",
                             "arm64" if metadata["target"] == "aarch64-apple-darwin" else "x86_64"], check=True)
             subprocess.run([str(executable), "--self-check"], cwd=temporary, check=True)
+            subprocess.run([str(executable), "--self-check-updater"], cwd=temporary, check=True, timeout=120)
             if "feff10-runner" in metadata.get("features", []):
                 if actual.get("features") != metadata["features"]:
                     raise ValueError("Installed binary has incorrect calculation engines")

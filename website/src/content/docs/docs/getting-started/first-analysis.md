@@ -1,25 +1,28 @@
 ---
 title: "Your first analysis"
-description: "Process the bundled Cu spectrum and save a reproducible project."
+description: "Process a public Cu foil spectrum and save a reproducible project."
 audience: user
 ---
 
-Use the bundled **Cu foil at 150 K**, measured at NSLS X-11A in September 1992.
+Download the [room-temperature Cu foil spectrum](/examples/cu_metal_rt.xdi)
+from the X-ray Absorption Data Library. It was measured at APS 13-ID-C.
 This is a teaching example; use a suitable reference for experimental calibration.
 See [data provenance](/licenses/). Select a screenshot for the full application
 window.
 
 ## 1. Open and verify the data
 
-Choose **Open Cu example** in the empty workspace. In the import review, choose
-**μ column**, energy column 1 and absorption column 2. Select **eV** and confirm
-the units when asked. Choose **Revalidate** if the mapping has changed, then
-**Import 1 files → 1 groups**. This file already contains absorption: do not apply
-a second logarithm.
+Choose **Import…** and select `cu_metal_rt.xdi`. In the preview, keep
+**Stored signal · mutrans** checked and inspect **Detected energy**. The XDI
+header declares energy in eV. Choose **Import 1 spectrum**. This file already
+contains absorption: do not apply a second logarithm.
 
-[![Full import dialog showing the Cu absorption column, eV units and validated preview](/screenshots/import-mapping.jpg)](/screenshots/import-mapping.jpg)
+**Open Cu example** in the empty workspace offers a separate bundled 150 K Cu
+measurement. The same workflow applies, but its measured arrays and fit results differ.
 
-*Check the Cu edge and column mapping before importing. rexafs 0.2.4, macOS.*
+[![Import preview showing the stored Cu absorption and detected energy axis](/screenshots/0.2.11/import-preview.jpg)](/screenshots/0.2.11/import-preview.jpg)
+
+*Check the Cu edge and column mapping before importing. rexafs 0.2.11, macOS.*
 
 ## 2. Inspect normalization
 
@@ -32,9 +35,9 @@ Start with the defaults. When processing your own sample, choose baseline window
 that exclude the edge structure and remain inside the measured range. Automatic
 $E_0$ is an estimate, not an energy calibration.
 
-[![Full normalization window showing the Cu edge and baseline fitting regions](/screenshots/normalize.jpg)](/screenshots/normalize.jpg)
+[![Full normalization window showing the Cu edge and baseline fitting regions](/screenshots/0.2.11/polynomial.jpg)](/screenshots/0.2.11/polynomial.jpg)
 
-*Normalization divides pre-edge-subtracted absorption by the fitted edge step. rexafs 0.2.4, macOS.*
+*The Pre/post toggle displays the baseline fits over the original absorption. rexafs 0.2.11, macOS.*
 
 ## 3. Extract EXAFS and transform it
 
@@ -44,12 +47,12 @@ A higher cutoff can remove structural signal as well as background.
 
 Open **Transform**, then **k + R**. The default forward window is 2–15 Å⁻¹,
 with weight 2 and a Kaiser–Bessel window. Choose a useful upper limit for the
-signal-to-noise range of your actual spectrum. The lower plot displays the
+signal-to-noise range of your actual spectrum; this example uses 12 Å⁻¹. The lower plot displays the
 magnitude of the Fourier transform. Its peak locations are not phase corrected.
 
-[![Full transform window showing weighted EXAFS and Fourier magnitude together](/screenshots/transform.jpg)](/screenshots/transform.jpg)
+[![Full transform window showing weighted EXAFS and Fourier magnitude together](/screenshots/0.2.11/transform.jpg)](/screenshots/0.2.11/transform.jpg)
 
-*The Cu spectrum in k and R, with forward-transform controls. rexafs 0.2.4, macOS.*
+*The Cu spectrum in k and R, with forward-transform controls. rexafs 0.2.11, macOS.*
 
 ## 4. Save and export
 

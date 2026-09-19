@@ -21,6 +21,18 @@
 - Plots and Series: integer frame and component ticks, grouped Transform toolbar,
   a first-run range-handle hint, and a one-line Series definition.
 
+## 0.2.12 (release preparation)
+
+- Preserve the complete signed macOS app bundle when launching the update
+  helper, correcting the startup failure in 0.2.10 and 0.2.11.
+- Keep **Update and restart** available after a download completes on macOS,
+  Windows and Linux, with a reason when the installation cannot be updated.
+- Qualify the Mac helper from both signed ZIP and installed DMG outputs.
+- Refresh desktop documentation with 29 unedited 0.2.11 workflow captures.
+
+See the [release notes](doc/release-notes-0.2.12.md) and
+[qualification record](doc/validation/2026-09-19-release-0.2.12/review.md).
+
 ## 0.2.11 — 2026-09-19
 
 - Copy RMC fit ranges from the spectrum’s Transform settings and expand ReFEFF
