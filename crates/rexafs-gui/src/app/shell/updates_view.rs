@@ -183,9 +183,7 @@ impl StudioApp {
                 match result {
                     Ok(path) => {
                         app.updates.downloaded = Some(path);
-                        app.status =
-                            "Update downloaded and SHA-256 verified. Open Updates to reveal it."
-                                .into();
+                        app.status = "Download verified. Open Updates for the next step.".into();
                     }
                     Err(e) => app.updates.error = Some(e),
                 }
@@ -394,6 +392,32 @@ impl StudioApp {
             .settings
             .check_updates_on_startup
             .unwrap_or(true);
+        let install_status = self
+            .updates
+            .result
+            .as_ref()
+            .filter(|result| result.available)
+            .and_then(|result| result.release.as_ref())
+            .map(|release| {
+                if channel != updates::installed_channel() {
+                    return Err(
+                        "Install the other channel separately; this app keeps its current channel."
+                            .into(),
+                    );
+                }
+                #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+                {
+                    updates::install::check_install(release)
+                }
+                #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+                {
+                    let _ = release;
+                    Err::<(), String>(
+                        "In-app installation is not supported on this platform.".into(),
+                    )
+                }
+            });
+        let automatic = matches!(&install_status, Some(Ok(())));
         let mut panel = crate::accessibility::Control::new(
             div().id("updates-panel"),
             "Updates",
@@ -464,23 +488,8 @@ impl StudioApp {
                 if let Some(asset) = &release.asset {
                     if !self.updates.downloading
                         && !self.updates.installing
-                        && self.updates.downloaded.is_none()
                         && (result.available || self.updates.preferences_open)
                     {
-                        #[cfg(any(
-                            target_os = "macos",
-                            target_os = "windows",
-                            target_os = "linux"
-                        ))]
-                        let automatic = result.available
-                            && channel == updates::installed_channel()
-                            && updates::install::can_install(release);
-                        #[cfg(not(any(
-                            target_os = "macos",
-                            target_os = "windows",
-                            target_os = "linux"
-                        )))]
-                        let automatic = false;
                         #[cfg(any(
                             target_os = "macos",
                             target_os = "windows",
@@ -499,7 +508,9 @@ impl StudioApp {
                                     updates::install::download_size(release) as f64 / 1_000_000.
                                 )));
                         }
-                        if !automatic || self.updates.preferences_open {
+                        if self.updates.downloaded.is_none()
+                            && (!automatic || self.updates.preferences_open)
+                        {
                             panel = panel.child(
                                 button(
                                     &t,
@@ -543,7 +554,15 @@ impl StudioApp {
         if self.updates.downloading {
             panel = panel.child("Downloading and verifying…");
         }
-        if let Some(path) = &self.updates.downloaded {
+        if !self.updates.installing
+            && !self.updates.downloading
+            && let Some(Err(reason)) = &install_status
+        {
+            panel = panel.child(div().text_color(t.text_muted).child(reason.clone()));
+        }
+        if let Some(path) = &self.updates.downloaded
+            && !self.updates.installing
+        {
             let path = path.clone();
             panel = panel
                 .child(
@@ -554,14 +573,16 @@ impl StudioApp {
                         .child("Download verified"),
                 )
                 .child(
-                    button(&t, "reveal-update", "Show download", true)
+                    button(&t, "reveal-update", "Show download", !automatic)
                         .on_click(cx.listener(move |_, _, _, cx| cx.reveal_path(&path))),
                 )
-                .child(
-                    div()
-                        .text_color(t.text_muted)
-                        .child("Save your project and quit before replacing the app."),
-                );
+                .when(!automatic, |panel| {
+                    panel.child(
+                        div()
+                            .text_color(t.text_muted)
+                            .child("Save your project and quit before replacing the app."),
+                    )
+                });
         }
         if let Some(error) = &self.updates.error {
             panel = panel.child(div().text_color(t.error).child(error.clone()));

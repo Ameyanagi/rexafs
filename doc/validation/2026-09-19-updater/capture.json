@@ -1,0 +1,53 @@
+{
+  "date": "2026-09-19",
+  "scope": "Local macOS ARM64 source qualification, not a released fix.",
+  "input": {
+    "path": "crates/rexafs/tests/fixtures/xas/samples/aps/13-id-c/xasdatalibrary/cu_metal_rt.xdi",
+    "sha256": "17b7076f1c3b5eccfa76dc6a7b3d26ea1fd388fa27f621a058779f70b71351d6",
+    "license": "CC0-1.0",
+    "source": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi",
+    "license_evidence": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst",
+    "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+    "changes": "None; original measurement bytes retained."
+  },
+  "source_build": {
+    "base_commit": "94378d2468458e9617b6d7886aeab132a9f203e8",
+    "branch": "fix/in-app-update-flow",
+    "package_version": "0.2.11",
+    "display_tag": "nightly-local-updater-test",
+    "signing": "Ad hoc local signature; not Developer ID or notarized.",
+    "discovery": "A deliberately older local build timestamp allows discovery of the real official Nightly release; no update server or verification override was used."
+  },
+  "destination": {
+    "release_tag": "nightly-20260919-35415292296",
+    "commit": "70f61e81262f9ac593f813c895ed843aa23ee640",
+    "signing": "Official Developer ID and notarization verified by the updater.",
+    "executable_sha256": "9645846fd0daef59ad9c35b3195419dd5bd571b5e150ec47cc34bd102940a745"
+  },
+  "capture": {
+    "method": "Original window JPEGs from cua_repl; no image editing.",
+    "edited": false
+  },
+  "observations": [
+    "The download-only action completed and Update and restart remained available.",
+    "One click reused the verified cache, saved an embedded recovery project, installed the official app and reopened it.",
+    "The reopened recovery project displayed the Cu group with all 408 points.",
+    "The previous app and recovery file remained in the private transaction folder."
+  ],
+  "images": [
+    {
+      "file": "download-verified.jpg",
+      "sha256": "84a547fca75ddb403f87413fef06e5e1382c0fa298cbb10879296ace7ac397d7",
+      "bytes": 101965,
+      "width": 1187,
+      "height": 768
+    },
+    {
+      "file": "recovered-analysis.jpg",
+      "sha256": "29c0b84e206be6b5941b86dd3aa442319d9fbb828a6cbc7dab1c3be05b271f2e",
+      "bytes": 122963,
+      "width": 1192,
+      "height": 768
+    }
+  ]
+}

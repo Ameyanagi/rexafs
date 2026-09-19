@@ -120,9 +120,7 @@ impl PreparedUpdate {
     /// retained in the private transaction directory, including after errors.
     pub(crate) fn start(self) -> Result<UpdateHandoff, String> {
         let root = self.directory.keep();
-        let helper = root.join("installer");
-        fs::copy(std::env::current_exe().map_err(|e| e.to_string())?, &helper)
-            .map_err(|e| e.to_string())?;
+        let helper = stage_helper(&self.plan.target, &root, &self.plan.previous_hash)?;
         fs::write(
             root.join("plan.json"),
             serde_json::to_vec(&self.plan).map_err(|e| e.to_string())?,
@@ -141,9 +139,9 @@ impl PreparedUpdate {
             .map_err(|e| format!("Cannot start the update helper: {e}"))?;
         let started = Instant::now();
         loop {
-            if child.try_wait().map_err(|e| e.to_string())?.is_some() {
+            if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
                 return Err(format!(
-                    "The update helper stopped. Your app is unchanged; details: {}",
+                    "The update helper stopped ({status}). Your app is unchanged; details: {}",
                     root.join("install.log").display()
                 ));
             }
@@ -165,6 +163,44 @@ impl PreparedUpdate {
     }
 }
 
+fn helper_executable(root: &Path) -> PathBuf {
+    root.join("helper.app/Contents/MacOS/rexafs")
+}
+
+/// Preserve the signed Info.plist and resource seal when moving the helper.
+/// A bare executable copied out of a Developer ID bundle is rejected by macOS.
+fn stage_helper(target: &Path, root: &Path, expected_hash: &str) -> Result<PathBuf, String> {
+    let bundle = root.join("helper.app");
+    run(Command::new("/usr/bin/ditto").arg(target).arg(&bundle))?;
+    run(Command::new("/usr/bin/codesign")
+        .args(["--verify", "--deep", "--strict"])
+        .arg(&bundle))?;
+    let helper = helper_executable(root);
+    if hash_file(&helper)? != expected_hash {
+        return Err("The updater copy differs from the running app; update cancelled.".into());
+    }
+    Ok(helper)
+}
+
+/// Exercise helper copying and launch from an installed, signed package.
+/// This checks the same helper layout used by updates without replacing an app.
+pub(crate) fn check_helper() -> Result<(), String> {
+    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    let target = app_for_executable(&executable)?;
+    let directory = tempfile::Builder::new()
+        .prefix("rexafs-updater-check-")
+        .tempdir()
+        .map_err(|e| e.to_string())?;
+    let helper = stage_helper(&target, directory.path(), &hash_file(&executable)?)?;
+    let info: serde_json::Value =
+        serde_json::from_slice(&run(Command::new(helper).arg("--build-info"))?)
+            .map_err(|e| e.to_string())?;
+    if info != crate::updates::build_info() {
+        return Err("The updater helper reported a different build identity.".into());
+    }
+    Ok(())
+}
+
 /// Internal helper entry point, executed before any GUI or Assistant starts.
 pub(crate) fn finish_update(root: &Path) -> Result<(), String> {
     let root = root.canonicalize().map_err(|e| e.to_string())?;
@@ -172,7 +208,7 @@ pub(crate) fn finish_update(root: &Path) -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .canonicalize()
         .map_err(|e| e.to_string())?
-        != root.join("installer")
+        != helper_executable(&root)
     {
         return Err("Update installation must run from its private helper copy.".into());
     }
@@ -187,6 +223,7 @@ pub(crate) fn finish_update(root: &Path) -> Result<(), String> {
         || plan.parent_pid <= 1
         || plan.target.extension().is_none_or(|ext| ext != "app")
         || plan.target.canonicalize().map_err(|e| e.to_string())? != plan.target
+        || hash_file(&helper_executable(&root))? != plan.previous_hash
     {
         return Err("Invalid update transaction paths".into());
     }
@@ -365,6 +402,73 @@ fn validate_archive(archive: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn helper_preserves_signed_bundle_context_and_rejects_changed_resources() {
+        let directory = tempfile::tempdir().unwrap();
+        let app = directory.path().join("source.app");
+        let binary = app.join("Contents/MacOS/rexafs");
+        fs::create_dir_all(binary.parent().unwrap()).unwrap();
+        let source = directory.path().join("helper.c");
+        fs::write(
+            &source,
+            "#include <stdio.h>\nint main(void) { puts(\"helper-ok\"); return 0; }\n",
+        )
+        .unwrap();
+        run(Command::new("/usr/bin/cc")
+            .arg(&source)
+            .arg("-o")
+            .arg(&binary))
+        .unwrap();
+        let info = app.join("Contents/Info.plist");
+        fs::write(
+            &info,
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>org.rexafs.test.updater</string>
+<key>CFBundleExecutable</key><string>rexafs</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+</dict></plist>"#,
+        )
+        .unwrap();
+        run(Command::new("/usr/bin/codesign")
+            .args(["--force", "--sign", "-"])
+            .arg(&app))
+        .unwrap();
+        let expected = hash_file(&binary).unwrap();
+
+        // This is the previous layout: the executable alone loses Info.plist's seal.
+        let bare = directory.path().join("bare-helper");
+        fs::copy(&binary, &bare).unwrap();
+        assert!(
+            run(Command::new("/usr/bin/codesign")
+                .args(["--verify", "--strict"])
+                .arg(&bare))
+            .is_err()
+        );
+
+        let transaction = directory.path().join("transaction");
+        fs::create_dir(&transaction).unwrap();
+        let helper = stage_helper(&app, &transaction, &expected).unwrap();
+        assert_eq!(run(&mut Command::new(&helper)).unwrap(), b"helper-ok\n");
+        assert_eq!(
+            fs::read(
+                helper
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .join("Info.plist")
+            )
+            .unwrap(),
+            fs::read(&info).unwrap()
+        );
+
+        fs::write(&info, "changed after signing").unwrap();
+        let tampered = directory.path().join("tampered");
+        fs::create_dir(&tampered).unwrap();
+        assert!(stage_helper(&app, &tampered, &expected).is_err());
+    }
 
     #[test]
     fn concurrent_updates_cannot_prepare_the_same_app() {
