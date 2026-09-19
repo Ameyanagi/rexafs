@@ -5,14 +5,17 @@ with a merge commit before tagging. Nightly desktop builds follow `dev`; they
 do not substitute for the qualified stable tag build below. See the
 [development branch workflow](development-branches.md).
 
-## Preparing 0.2.11
+## Published 0.2.11
 
 The [0.2.11 notes](release-notes-0.2.11.md) and
 [qualification record](validation/2026-09-19-release-0.2.11/review.md) track the
 RMC setup, CPU controls and fixed-amplitude energy-refinement release.
-Publication requires green feature and promotion PRs, a successful manual build
-of the immutable tag, signed Mac outputs and verified registry/desktop bytes.
-Stable website metadata remains on 0.2.10 until publication is verified.
+Published on 19 September 2026 after all 67 promotion checks and 37 exact-tag
+build jobs passed. All seven public registry files and 27 desktop assets matched
+the qualified build and signed Mac outputs. The installed signed ARM64 app
+passed native self-checks and a public-Cu RMC save/reload check using two workers
+and periodic energy updates with fixed amplitude. Stable website metadata now
+identifies the verified packages and downloads.
 
 ## Published 0.2.10
 

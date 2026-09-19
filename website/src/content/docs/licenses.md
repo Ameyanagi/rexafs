@@ -44,6 +44,23 @@ numerical changes from the XrayLarch example collection at revision
 
 ## Documentation screenshots
 
+### Desktop 0.2.11 RMC captures
+
+The RMC guide includes three original, unedited **1192 × 768** JPEG window
+captures made through the computer-use connector on **19 September 2026**.
+They show the signed and notarized ARM64 **0.2.11** app installed from its DMG,
+commit `70f61e81262f9ac593f813c895ed843aa23ee640`. The
+[capture manifest](/screenshots/0.2.11/capture.json) records build and signing
+workflows, archive and executable checksums, input attribution and image hashes.
+
+The unchanged public room-temperature Cu measurement is from the International
+X-ray Absorption Society's X-ray Absorption Data Library, with the source and
+CC0 notice linked below. The built-in Cu structure uses a 32-atom supercell.
+The ten-attempt run illustrates worker controls, periodic theoretical energy
+updates with fixed amplitude and project reload. It reached the deliberately
+narrow energy bound and did not establish convergence or physical accuracy.
+No unpublished measurements or private project is included.
+
 <a id="desktop-0210-workflow-captures"></a>
 
 ### Desktop 0.2.10 workflow captures
