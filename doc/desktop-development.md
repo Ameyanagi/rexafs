@@ -48,8 +48,10 @@ xvfb-run -a -s "-screen 0 1366x768x24" uv run --no-project --with Pillow \
 ```
 
 The test opens a temporary copy of an embedded project, switches processing
-stages with Ctrl shortcuts, resizes the window, and quits. Screenshots and logs
-are saved under `target/gui-smoke/`. This uses X11 and can use Mesa software
+stages with Ctrl shortcuts, resizes the window, and quits. It uses temporary user
+settings so saved panel widths do not change its click targets. Screenshots and
+logs are saved under `target/gui-smoke/`, including `failure.png` if a check fails
+while the window is still open. This uses X11 and can use Mesa software
 rendering; it does not qualify native Wayland or physical GPU performance.
 
 ## Windows
