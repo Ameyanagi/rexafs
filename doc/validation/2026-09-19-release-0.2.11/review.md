@@ -71,14 +71,40 @@ tests (including Cu EXAFS and Cu/BN XANES reference comparisons), strict Clippy
 and formatting locally. Twelve extended integration cases remained ignored.
 Rexafs's release-mode FEFF10 amplitude-stability and ZnSe fitting comparisons
 also passed against the corrected local native archive (two tests).
-The fix requires new native archives and a rexafs dependency/helper update;
-the current rexafs candidate still contains FEFF10 0.2.3. Release promotion is
-held pending that dependency correction. No check or tolerance was disabled.
+The desktop package self-check now validates every generated `gg.bin` array
+header, so an older archive cannot pass merely because its undefined bytes
+happen to be readable. Both focused regression tests passed in release mode,
+including malformed labels and valid LF/CRLF line endings.
+The fix requires new native archives and a rexafs dependency/helper update.
+No check or tolerance was disabled.
+
+All seven checks on FEFF10's versioned candidate
+`bbec441d493b1d1cfb5d211af728c243a61a43d5` passed, including macOS, Windows
+and Intel-compiler Linux tests, installed Python wheels and review. PR 4 merged
+at `343744557e5acbd029811db8fc41e22b5f95def0`, with the same tree as the checked
+candidate. The immutable `v0.2.4` tag started
+[release build 35411760951](https://github.com/Ameyanagi/feff10-rs/actions/runs/35411760951).
+All six native builds and their clean-runner smoke tests passed. GitHub published
+the 18 release assets on 19 September 2026; every downloaded file matched the
+release manifest and GitHub digest. All 20 jobs in the release workflow passed.
+The three Rust packages and five Python wheels published successfully; public
+wheels matched the original CI artifacts, and downloaded crates matched the
+registry checksums.
+
+The rexafs candidate now selects FEFF10 0.2.4 and pins the matching Windows
+executable by its verified SHA-256. The four runtime DLL checksums are unchanged.
+With no native-library override, all 12 release-mode native integration tests
+passed against the published dependency: seven RMC, three ReFEFF-runner and two
+FEFF10 amplitude/fitting tests. The nine archive-tool tests also passed.
+Both focused desktop header tests passed against the published archive. The
+optimized desktop executable passed `--self-check-feff` for both engines,
+including the new header guard. The Windows helper downloader independently
+verified all five public files and their x64 PE headers. Cross-platform rexafs
+qualification still requires the promotion and exact-tag release matrix.
 
 ## Pending qualification
 
 - Dev → main promotion checks and merge identity.
-- Corrected FEFF10 release, native archive checks and rexafs dependency update.
 - Immutable tag and successful manually dispatched full release build.
 - Package checksums and trusted publication to crates.io, PyPI and npm.
 - Signing, notarization and installed Mac checks using the exact build archives.

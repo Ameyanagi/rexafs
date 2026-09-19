@@ -68,7 +68,7 @@ gpui = "0.2.2"
 # 0.14.2 keeps plot menus above host overlays and exposes their open state.
 ruviz-gpui = { version = "0.14.2", features = ["gpu", "3d"] }
 refeff = { version = "0.4.0", default-features = false, features = ["exafs"] }
-feff10 = { version = "0.2.3", features = ["prebuilt"] }
+feff10 = { version = "0.2.4", features = ["prebuilt"] }
 
 rexafs = { version = "0.2.11", path = "crates/rexafs" }
 

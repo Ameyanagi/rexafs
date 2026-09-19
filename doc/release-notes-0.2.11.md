@@ -54,6 +54,10 @@ a starting heuristic. The [RMC guide](rmc.md) explains units and assumptions.
 <summary>Packages and compatibility</summary>
 
 The coordinated version covers Rust, Python, npm/WebAssembly and desktop builds.
+FEFF10 0.2.4 initializes native array-format labels, correcting intermittent
+`gg.bin` parsing failures during scattering calculations and package checks.
+Windows bundles the matching helper; package self-checks validate the generated
+headers on every desktop target.
 The new RMC APIs are available in Rust and the native desktop; Python and
 TypeScript do not yet expose RMC. Core worker defaults remain one worker with
 path fallback disabled. Automatic CPU allocation is a new desktop-job default.

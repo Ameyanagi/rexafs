@@ -15,6 +15,8 @@
   with S₀² fixed. Preserve checkpoint settings and matching parameter/curve exports.
 - Keep next actions at the upper right of the RMC workflow and document the
   assumptions, resource limits and historical defaults.
+- Use FEFF10 0.2.4 and its corrected Windows helper to prevent intermittent
+  `gg.bin` header failures. Package self-checks reject undefined format labels.
 
 See the [release notes](doc/release-notes-0.2.11.md) and
 [qualification record](doc/validation/2026-09-19-release-0.2.11/review.md).

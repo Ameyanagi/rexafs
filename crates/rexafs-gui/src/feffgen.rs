@@ -285,6 +285,11 @@ pub fn check_package_backends() -> Result<(), String> {
             }
             #[cfg(not(all(feature = "feff10-runner", not(windows))))]
             run_backend(&workspace, mode)?;
+            if mode == FeffExecutionMode::Feff10Pipeline {
+                let headers = std::fs::read(workspace.join("gg.bin"))
+                    .map_err(|error| format!("Cannot inspect FEFF10 gg.bin: {error}"))?;
+                check_feff10_array_headers(&headers)?;
+            }
             let file = workspace.join("feff0001.dat");
             let path = feffpath(&file.to_string_lossy(), FeffFlavor::Feff85L)
                 .map_err(|e| e.to_string())?
@@ -314,6 +319,28 @@ pub fn check_package_backends() -> Result<(), String> {
     })();
     let cleanup = std::fs::remove_dir_all(root).map_err(|e| e.to_string());
     result.and(cleanup)
+}
+
+/// Require the corrected native archive even when an older archive happens to
+/// finish the calculation. FEFF10 0.2.3 wrote uninitialized format-label bytes,
+/// which only failed intermittently when they contained a newline.
+fn check_feff10_array_headers(bytes: &[u8]) -> Result<(), String> {
+    let invalid = || {
+        "FEFF10 generated invalid gg.bin format metadata; use the corrected native library"
+            .to_string()
+    };
+    let text = std::str::from_utf8(bytes).map_err(|_| invalid())?;
+    let mut count = 0;
+    for line in text.lines().filter(|line| line.starts_with("#DF#")) {
+        if line != "#DF# This section written in TXT ." {
+            return Err(invalid());
+        }
+        count += 1;
+    }
+    if count == 0 {
+        return Err(invalid());
+    }
+    Ok(())
 }
 
 pub(crate) fn selected_feff_mode() -> Result<FeffExecutionMode, String> {
@@ -360,6 +387,28 @@ pub(crate) fn feff_test_lock() -> std::sync::MutexGuard<'static, ()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn packaged_feff_rejects_undefined_format_labels() {
+        for bytes in [
+            b"#DF# This section written in  \xe0\x0as.\n".as_slice(),
+            b"#DF# This section written in  `Ds.\n",
+            b"#DF# This section written in  \n s.\n",
+            b"#H# no array sections\n",
+        ] {
+            assert!(check_feff10_array_headers(bytes).is_err());
+        }
+    }
+
+    #[test]
+    fn packaged_feff_accepts_text_sections_with_both_line_endings() {
+        for ending in ["\n", "\r\n"] {
+            let section = format!(
+                "#SN#   Section: 1{ending}#DF# This section written in TXT .{ending}0.0 0.0{ending}"
+            );
+            check_feff10_array_headers(section.repeat(2).as_bytes()).unwrap();
+        }
+    }
 
     fn test_root() -> PathBuf {
         std::env::temp_dir().join(format!("rexafs-feff-tests-{}", std::process::id()))
