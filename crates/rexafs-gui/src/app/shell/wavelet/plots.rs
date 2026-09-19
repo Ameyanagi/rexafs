@@ -9,15 +9,18 @@ use ruviz_gpui::plot_builder;
 
 /// Fixed physical margins align data rectangles, not just the outer widgets.
 /// Reserve the same right margin below the map as its colorbar occupies above.
+/// The rotated |χ(R)| marginal is only as wide as the map's left gutter, so
+/// its x axis keeps a smaller font and fewer ticks to stop labels colliding.
 pub(super) fn panel_plot(theme: &crate::theme::Theme, size: (u32, u32), rotated: bool) -> Plot {
     let plot = Plot::new()
         .theme(theme.plot_theme())
         .size_px(size.0, size.1)
-        .font_size(8.5);
+        .font_size(if rotated { 8.5 } else { 10. });
+    let plot = if rotated { plot.major_ticks_x(4) } else { plot };
     let mut config = plot.get_config().clone();
     config.margins = ruviz::core::config::MarginConfig::fixed(
         0.48,
-        if rotated { 0.12 } else { 0.70 },
+        if rotated { 0.12 } else { 0.85 },
         0.12,
         0.42,
     );

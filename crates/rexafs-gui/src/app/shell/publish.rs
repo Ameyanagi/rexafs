@@ -9,9 +9,12 @@ use gpui::{Context, Entity};
 use std::sync::Arc;
 #[derive(Default)]
 pub(crate) struct PublishState {
+    /// True while the report bundle is being written.
     pub running: bool,
-    pub(super) format: ExportFormat,
+    /// Folder of the last published report bundle in this session.
     pub destination: Option<std::path::PathBuf>,
+    /// File of the last figure saved on its own (PNG, SVG or CSV).
+    pub(super) saved_figure: Option<std::path::PathBuf>,
     pub error: Option<String>,
     pub settings: FigureSettings,
     pub(super) source: Option<(usize, usize, usize, String)>,
@@ -24,41 +27,34 @@ pub(crate) struct PublishState {
     pub(super) preview: Option<Arc<RenderedFigure>>,
     pub(super) image: Option<Arc<gpui::Image>>,
 }
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub(super) enum ExportFormat {
-    #[default]
-    Png,
-    Svg,
-    Csv,
-    Folder,
-    Markdown,
+/// One-line scope of the report bundle: the current group, the marked groups
+/// added to it and the completed fits that the report will include.
+pub(super) fn report_title(group: &str, marked: usize, fits: usize) -> String {
+    format!(
+        "Report · {group} + {marked} marked · {}",
+        crate::text::plural(fits, "fit")
+    )
 }
-impl ExportFormat {
-    const ALL: [Self; 5] = [
-        Self::Png,
-        Self::Svg,
-        Self::Csv,
-        Self::Folder,
-        Self::Markdown,
-    ];
-    fn label(self) -> &'static str {
-        match self {
-            Self::Png => "PNG",
-            Self::Svg => "SVG",
-            Self::Csv => "CSV",
-            Self::Folder => "Analysis folder",
-            Self::Markdown => "Markdown",
+
+/// A `file://` URL for a local path. Bytes outside the unreserved URL set are
+/// percent-encoded so paths with spaces or non-ASCII names open correctly.
+pub(super) fn file_url(path: &std::path::Path) -> String {
+    let text = path.to_string_lossy().replace('\\', "/");
+    let mut url = String::from("file://");
+    if !text.starts_with('/') {
+        url.push('/');
+    }
+    for byte in text.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' | b':' => {
+                url.push(byte as char)
+            }
+            _ => url.push_str(&format!("%{byte:02X}")),
         }
     }
-    fn extension(self) -> Option<&'static str> {
-        match self {
-            Self::Png => Some("png"),
-            Self::Svg => Some("svg"),
-            Self::Csv => Some("csv"),
-            _ => None,
-        }
-    }
+    url
 }
+
 impl PublishState {
     pub(crate) fn load_settings(&mut self, settings: FigureSettings) {
         let preview_generation = self.preview_generation + 1;
@@ -121,6 +117,28 @@ impl StudioApp {
             Some("Selected group/revision must load successfully before export.".into());
         cx.notify();
         false
+    }
+
+    /// Completed fits the report includes: the history plus the latest result
+    /// when it is not in the history yet (the same rule as [`Self::analysis_snapshot`]).
+    fn report_fit_count(&self) -> usize {
+        let latest = self.fit_result.as_ref().is_some_and(|r| {
+            !self
+                .fit_history_results
+                .values()
+                .any(|v| std::sync::Arc::ptr_eq(v, r))
+        });
+        self.fit_history_results.len() + usize::from(latest)
+    }
+
+    /// Title line of the Publish stage, e.g. "Report · Cu foil + 2 marked · 1 fit".
+    pub(super) fn report_scope(&self) -> String {
+        let marked = self
+            .selection
+            .iter()
+            .filter(|&&ix| Some(ix) != self.selected)
+            .count();
+        report_title(&self.current_group_label(), marked, self.report_fit_count())
     }
     pub(crate) fn analysis_snapshot(&self) -> Snapshot {
         let mut indices = self.selection.clone();
@@ -247,12 +265,15 @@ impl StudioApp {
                     app.publish.running = false;
                     match result {
                         Ok(path) => {
-                            app.status = format!("Exported {}", path.display()).into();
+                            app.set_status(
+                                crate::app::StatusKind::Success,
+                                format!("Published to {}", path.display()),
+                            );
                             app.publish.destination = Some(path);
                         }
                         Err(e) => {
                             app.publish.error = Some(e.clone());
-                            app.record_job_error("Publish export", e);
+                            app.record_job_error("Publish report", e);
                         }
                     }
                     cx.notify();
@@ -271,6 +292,26 @@ mod tests {
         app::shell::tools::ToolTarget,
         params::{DerivedSpectrum, PipelineParams, Quantity},
     };
+
+    #[test]
+    fn report_title_and_file_url_are_readable() {
+        assert_eq!(
+            report_title("Cu foil", 2, 1),
+            "Report · Cu foil + 2 marked · 1 fit"
+        );
+        assert_eq!(
+            report_title("cu.xmu", 0, 0),
+            "Report · cu.xmu + 0 marked · 0 fits"
+        );
+        assert_eq!(
+            file_url(std::path::Path::new("/Users/me/My Report/report.html")),
+            "file:///Users/me/My%20Report/report.html"
+        );
+        assert_eq!(
+            file_url(std::path::Path::new("C:\\out\\report.html")),
+            "file:///C:/out/report.html"
+        );
+    }
 
     #[test]
     fn publication_failed_selection_cannot_relabel_retained_difference() {

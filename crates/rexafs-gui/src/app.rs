@@ -67,6 +67,7 @@ pub(crate) mod series_display;
 mod series_source;
 use series_source::OverviewSource;
 mod shell;
+pub(crate) use shell::controls::Tooltip;
 use shell::{Stage, StageView, handles::HandleState, thumbnails::ThumbData, tools::ToolState};
 
 /// Processed spectra kept in RAM. ~100-300 KB each, so 1024 ≈ a few hundred MB
@@ -828,6 +829,14 @@ impl JobError {
     }
 }
 
+/// Severity of the free-text status-bar message; see `StudioApp::set_status`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StatusKind {
+    Info,
+    Success,
+    Error,
+}
+
 fn push_problem(problems: &mut Vec<JobError>, problem: JobError) {
     // Browsing/reprocessing a cached source should not flood recent problems.
     if (problem.batch.is_some() || problem.severity == ProblemSeverity::Warning)
@@ -1326,6 +1335,9 @@ pub struct StudioApp {
     merge_gen: u64,
     merge_cancel: Option<Arc<AtomicBool>>,
     status: SharedString,
+    /// Severity of the message last written through `set_status`, with that
+    /// message; a later direct write to `status` reads as Info again.
+    status_kind: (StatusKind, SharedString),
     job_errors: Vec<JobError>,
     parser_evidence: BTreeMap<crate::group_identity::GroupId, crate::source_evidence::ParserRecord>,
     imports: crate::import_recipes::ProjectImports,
@@ -2972,10 +2984,13 @@ impl StudioApp {
             }
             true
         });
-        let theme = match crate::settings::env_var("THEME").ok().as_deref() {
-            Some("light") => Theme::light(),
-            _ => Theme::dark(),
-        };
+        // `REXAFS_THEME` wins for one launch; otherwise the saved preference.
+        let theme = crate::settings::env_var("THEME")
+            .ok()
+            .as_deref()
+            .and_then(crate::theme::ThemeMode::parse)
+            .or_else(|| crate::settings::UserSettings::load().theme)
+            .map_or_else(Theme::dark, Theme::for_mode);
         let params = PipelineParams::default();
         let param_fields = Self::build_param_fields(theme, cx);
         // Scripted launches (screenshots) can pick the initial stage.
@@ -3164,6 +3179,7 @@ impl StudioApp {
             merge_gen: 0,
             merge_cancel: None,
             status: "".into(),
+            status_kind: (StatusKind::Info, "".into()),
             job_errors: Vec::new(),
             parser_evidence: Default::default(),
             imports: Default::default(),
@@ -3201,14 +3217,14 @@ impl StudioApp {
                 FieldEvent::Changed(None) => {}
                 FieldEvent::InspectMixed => {}
                 FieldEvent::Invalid(message) => {
-                    this.status = message.clone();
+                    this.set_status(StatusKind::Error, message.clone());
                     cx.notify();
                 }
             };
         })
         .detach();
         app.view_offset_field = Some(offset_field);
-        let filter_input = cx.new(|cx| TextInput::new("filter… (* glob)", "", theme, cx));
+        let filter_input = cx.new(|cx| TextInput::new("filter… (* glob) · ⌘P", "", theme, cx));
         cx.subscribe(&filter_input, |this: &mut Self, _f, event, cx| {
             // Per-keystroke filtering (doc "Search-first"): Edited and
             // Committed both re-run the (background) match.
@@ -3251,6 +3267,47 @@ impl StudioApp {
             app.route_paths(vec![path], false, cx);
         }
         app
+    }
+
+    /// Write the status-bar message with its severity. Errors are drawn in the
+    /// theme's error colour; plain progress notes may still assign `status`
+    /// directly and count as Info.
+    pub(crate) fn set_status(&mut self, kind: StatusKind, text: impl Into<SharedString>) {
+        self.status = text.into();
+        self.status_kind = (kind, self.status.clone());
+    }
+
+    fn status_kind(&self) -> StatusKind {
+        if self.status_kind.1 == self.status {
+            self.status_kind.0
+        } else {
+            StatusKind::Info
+        }
+    }
+
+    /// Problem rows name their source: the group label and file name when the
+    /// label is a path to an imported (or project-embedded) file, with the full
+    /// path returned separately for a tooltip.
+    fn problem_source(&self, label: &str) -> (String, Option<String>) {
+        let path = std::path::Path::new(label);
+        if !path.is_absolute() {
+            return (label.to_string(), None);
+        }
+        let file = path
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_else(|| label.to_string());
+        let group = self
+            .parser_evidence
+            .iter()
+            .find(|(_, record)| record.path == path)
+            .and_then(|(id, _)| self.menu_index(id))
+            .map(|ix| self.entry_label(ix));
+        let title = match group {
+            Some(group) if group != file => format!("{group} · {file}"),
+            _ => file,
+        };
+        (title, Some(label.to_string()))
     }
 
     pub(crate) fn record_job_error(
@@ -4161,7 +4218,7 @@ impl StudioApp {
                             cx.notify();
                         }
                         FieldEvent::Invalid(message) => {
-                            this.status = message.clone();
+                            this.set_status(StatusKind::Error, message.clone());
                             cx.notify();
                         }
                     },
@@ -4216,7 +4273,7 @@ impl StudioApp {
             }
             result => {
                 if let Err(error) = result {
-                    self.status = error.to_string().into();
+                    self.set_status(StatusKind::Error, error.to_string());
                 }
                 self.restore_param_field_text(cx);
             }
@@ -4258,7 +4315,7 @@ impl StudioApp {
             ParamKey::AlignTarget => p.align_target = value,
             ParamKey::EnergyOffset => {
                 if let Err(error) = p.set_energy_offset(value.unwrap_or(0.0)) {
-                    self.status = error.into();
+                    self.set_status(StatusKind::Error, error);
                     self.restore_param_field_text(cx);
                     cx.notify();
                     return;
@@ -4835,7 +4892,10 @@ impl StudioApp {
                         }
                     }
                     Err(e) => {
-                        app.status = format!("failed to process {label}: {e}").into();
+                        app.set_status(
+                            StatusKind::Error,
+                            format!("failed to process {label}: {e}"),
+                        );
                         app.record_source_error(
                             intake_origin.as_ref(),
                             label.to_string(),
@@ -5321,13 +5381,13 @@ impl StudioApp {
             &trend_snapshot.values,
             &trend_snapshot.frames,
             &trend_snapshot.name,
+            self.series_tick_count(303),
             &self.theme,
         )
         .size_px(
             self.card_px.get(&303).map_or(700, |v| v.0),
             self.card_px.get(&303).map_or(420, |v| v.1),
-        )
-        .major_ticks_x(self.series_tick_count(303));
+        );
         match &mut self.operando_plots {
             Some(plots) => {
                 if plots.source == source
@@ -5429,13 +5489,13 @@ impl StudioApp {
             &snapshot.values,
             &snapshot.frames,
             &snapshot.name,
+            self.series_tick_count(303),
             &self.theme,
         )
         .size_px(
             self.card_px.get(&303).map_or(700, |v| v.0),
             self.card_px.get(&303).map_or(420, |v| v.1),
-        )
-        .major_ticks_x(self.series_tick_count(303));
+        );
         let plots = self
             .operando_plots
             .as_mut()
@@ -6097,6 +6157,10 @@ impl StudioApp {
     fn toggle_theme(&mut self, cx: &mut Context<Self>) {
         self.theme = self.theme.toggled();
         let theme = self.theme;
+        self.structure.settings.theme = Some(theme.mode);
+        if let Err(error) = self.structure.settings.save() {
+            self.record_job_error("theme setting", error);
+        }
         for (_, field) in &self.param_fields {
             field.update(cx, |f, cx| f.set_theme(theme, cx));
         }
@@ -6133,11 +6197,17 @@ impl StudioApp {
         if let Some(input) = &self.filter_input {
             input.update(cx, |f, cx| f.set_theme(theme, cx));
         }
+        // The wavelet fields keep their own theme copy; rebuilding them from
+        // the current definition restyles them without losing any value.
+        if let Ok(definition) = self.wavelet_definition(cx) {
+            self.set_wavelet_fields(&definition, cx);
+        }
         self.invalidate_explore_plots(cx);
         self.rebuild_operando_plots(cx);
         self.rebuild_fit_plots(cx);
         self.rebuild_fit_preview_plots(cx, false);
         self.restyle_rmc(cx);
+        self.restyle_wavelet(cx);
         cx.notify();
     }
 
@@ -6485,7 +6555,7 @@ impl StudioApp {
                         }
                         ScanEvent::Error(e) => {
                             app.catalog.scanning = false;
-                            app.status = format!("scan failed: {e}").into();
+                            app.set_status(StatusKind::Error, format!("scan failed: {e}"));
                             app.record_job_error("catalog scan", e);
                         }
                     }
@@ -6835,18 +6905,20 @@ impl StudioApp {
                         FieldEvent::Changed(value) => value,
                         FieldEvent::InspectMixed => return,
                         FieldEvent::Invalid(message) => {
-                            this.status = message.clone();
+                            this.set_status(StatusKind::Error, message.clone());
                             cx.notify();
                             return;
                         }
                     };
                     if let Some(v) = value {
                         if matches!(key, RangeKey::Rmin) && *v < this.fit_background_floor(None) {
-                            this.status = format!(
-                                "Fit R min must be at least Rbkg ({:.4} Å).",
-                                this.fit_background_floor(None)
-                            )
-                            .into();
+                            this.set_status(
+                                StatusKind::Error,
+                                format!(
+                                    "Fit R min must be at least Rbkg ({:.4} Å).",
+                                    this.fit_background_floor(None)
+                                ),
+                            );
                             this.sync_range_fields(cx);
                             cx.notify();
                             return;
@@ -6925,11 +6997,13 @@ impl StudioApp {
             match text.parse::<f64>() {
                 Ok(value) if value.is_finite() => Some(value),
                 _ => {
-                    self.status = format!(
-                        "invalid {} bound for {name}",
-                        if is_min { "min" } else { "max" }
-                    )
-                    .into();
+                    self.set_status(
+                        StatusKind::Error,
+                        format!(
+                            "invalid {} bound for {name}",
+                            if is_min { "min" } else { "max" }
+                        ),
+                    );
                     cx.notify();
                     return;
                 }
@@ -7314,7 +7388,7 @@ impl StudioApp {
                     }
                     Err(e) => {
                         app.fit_error = Some(e.to_string());
-                        app.status = format!("fit failed: {e}").into();
+                        app.set_status(StatusKind::Error, format!("fit failed: {e}"));
                         app.record_job_error(format!("fit: {}", provenance.label), e.to_string());
                     }
                 }
@@ -7884,7 +7958,7 @@ impl StudioApp {
             return;
         };
         if let Err(error) = self.tools.sync_range(cx) {
-            self.status = error.into();
+            self.set_status(StatusKind::Error, error);
             cx.notify();
             return;
         }
@@ -8404,7 +8478,10 @@ impl StudioApp {
                 self.set_fit_step(shell::fit_workspace::FitStep::Calculate, cx);
             }
             Err(e) => {
-                self.status = format!("failed to create feff workspace: {e}").into();
+                self.set_status(
+                    StatusKind::Error,
+                    format!("failed to create feff workspace: {e}"),
+                );
                 self.record_job_error("FEFF workspace", e.to_string());
             }
         }
@@ -8469,7 +8546,10 @@ impl StudioApp {
                 self.set_feff_workspace(Some(workspace.clone()));
             }
             Err(e) => {
-                self.status = format!("Could not copy calculation input: {e}").into();
+                self.set_status(
+                    StatusKind::Error,
+                    format!("Could not copy calculation input: {e}"),
+                );
                 cx.notify();
                 return;
             }
@@ -8561,7 +8641,7 @@ impl StudioApp {
                         .into();
                     }
                     Err(e) => {
-                        app.status = format!("Path calculation failed: {e}").into();
+                        app.set_status(StatusKind::Error, format!("Path calculation failed: {e}"));
                         app.record_job_error("FEFF10", e.to_string());
                     }
                 }
@@ -8751,11 +8831,14 @@ impl StudioApp {
                                     app.assistant_history.prune_for_save();
                                 }
                             }
-                            app.status = format!("Saved {}", path.display()).into();
+                            app.set_status(
+                                StatusKind::Success,
+                                format!("Saved {}", path.display()),
+                            );
                             app.remember_project(path.clone());
                         }
                         Err(error) => {
-                            app.status = format!("Save failed: {error}").into();
+                            app.set_status(StatusKind::Error, format!("Save failed: {error}"));
                             app.record_job_error("save project", error);
                         }
                     }
@@ -8836,7 +8919,7 @@ impl StudioApp {
                         app.finish_routed_import(cx);
                     }
                     Err(error) => {
-                        app.status = format!("Open failed: {error}").into();
+                        app.set_status(StatusKind::Error, format!("Open failed: {error}"));
                         app.record_job_error("open project", error);
                         crate::settings::remove_recent(
                             &mut app.structure.settings.recent_projects,
@@ -9605,12 +9688,18 @@ impl StudioApp {
             }
         }
         let shown_sources = source_count.saturating_sub(start).min(PAGE_SIZE);
-        for error in visible
+        for (row, error) in visible
             .iter()
             .rev()
             .skip(start.saturating_sub(source_count))
             .take(PAGE_SIZE - shown_sources)
+            .enumerate()
         {
+            let (source, full_path) = self.problem_source(&error.label);
+            let path_tip = full_path.map(|path| shell::controls::Tooltip {
+                label: path.into(),
+                theme: t,
+            });
             list = list.child(
                 div()
                     .px_3()
@@ -9620,19 +9709,22 @@ impl StudioApp {
                     .text_xs()
                     .child(
                         div()
+                            .id(("problem-source", row))
                             .text_color(if error.severity == ProblemSeverity::Error {
                                 t.error
                             } else {
                                 t.text_muted
                             })
+                            .when_some(path_tip, |d, tip| {
+                                d.tooltip(move |_, cx| cx.new(|_| tip.clone()).into())
+                            })
                             .child(SharedString::from(format!(
-                                "{}: {}",
+                                "{}: {source}",
                                 if error.severity == ProblemSeverity::Error {
                                     "Error"
                                 } else {
                                     "Warning"
-                                },
-                                error.label
+                                }
                             ))),
                     )
                     .child(
@@ -9663,12 +9755,15 @@ impl StudioApp {
                     .border_color(t.border)
                     .text_xs()
                     .text_color(t.text)
+                    .gap_2()
                     .child(div().flex_1().child(format!(
-                        "{} · {errors} errors · {warnings} warnings",
+                        "{} · {} · {}",
                         self.problems_batch.map_or_else(
                             || "Recent problems".into(),
                             |id| format!("Import #{} details", id + 1)
-                        )
+                        ),
+                        crate::text::plural(errors, "error"),
+                        crate::text::plural(warnings, "warning")
                     )))
                     .when(pages > 1, |header| {
                         header
@@ -9689,18 +9784,28 @@ impl StudioApp {
                             ))
                     })
                     .child(
-                        div()
-                            .id("clear-problems")
-                            .px_2()
-                            .rounded_sm()
-                            .cursor_pointer()
-                            .hover(|d| d.bg(t.raised))
+                        shell::button(&t, "clear-problems", "Clear", false)
+                            .description("Remove the recent problems; import details are kept")
                             .on_click(cx.listener(|this, _: &ClickEvent, _window, cx| {
                                 this.job_errors.retain(|p| p.batch.is_some());
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        shell::controls::icon_button(
+                            &t,
+                            "close-problems",
+                            crate::icons::Icon::Close,
+                            "Close",
+                            false,
+                        )
+                        .size(px(24.))
+                        .on_click(cx.listener(
+                            |this, _: &ClickEvent, _window, cx| {
                                 this.problems_open = false;
                                 cx.notify();
-                            }))
-                            .child("Clear recent / close"),
+                            },
+                        )),
                     ),
             )
             .child(list)
@@ -9751,8 +9856,21 @@ impl StudioApp {
 
     fn status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
-        let jobs = self.running_job_count();
         let (errors, warnings) = problem_counts(&self.job_errors);
+        let status_color = match self.status_kind() {
+            StatusKind::Error => t.error,
+            StatusKind::Success => t.success,
+            StatusKind::Info => t.text_muted,
+        };
+        // Job and cache counters are developer metrics (REXAFS_DEBUG_STATS=1).
+        let debug = crate::debug_stats::enabled().then(|| {
+            format!(
+                "jobs:{} cache:{}/{}",
+                self.running_job_count(),
+                self.cache.len(),
+                PROCESSED_CACHE_CAPACITY
+            )
+        });
         let mut bar = div()
             .h(px(28.))
             .w_full()
@@ -9773,14 +9891,11 @@ impl StudioApp {
                     .min_w_0()
                     .overflow_hidden()
                     .whitespace_nowrap()
+                    .text_ellipsis()
+                    .text_color(status_color)
                     .child(self.status.clone()),
             )
-            .child(format!("jobs:{jobs}"))
-            .child(format!(
-                "cache:{}/{}",
-                self.cache.len(),
-                PROCESSED_CACHE_CAPACITY
-            ))
+            .children(debug)
             .child(
                 div()
                     .id("problems-toggle")
@@ -9796,7 +9911,11 @@ impl StudioApp {
                         this.problems_open = !this.problems_open;
                         cx.notify();
                     }))
-                    .child(format!("{errors} errors · {warnings} warnings")),
+                    .child(format!(
+                        "{} · {}",
+                        crate::text::plural(errors, "error"),
+                        crate::text::plural(warnings, "warning")
+                    )),
             );
         if self.catalog.scanning
             || self.verify_running

@@ -112,7 +112,7 @@ impl StudioApp {
                         .px_2()
                         .pt_2()
                         .pb_1()
-                        .text_size(px(10.5))
+                        .text_size(px(11.))
                         .text_color(t.text_muted)
                         .child(if i == 0 { "Color cycles" } else { "Gradients" }),
                 );
@@ -172,7 +172,7 @@ impl StudioApp {
                         app.apply_spectrum_palette(Some(palette), cx);
                     } else { cx.notify(); }
                 }))))
-            .child(div().px_2().py_2().text_size(px(10.5)).text_color(t.text_muted)
+            .child(div().px_2().py_2().text_size(px(11.)).text_color(t.text_muted)
                 .child("Assigned in group order. Colors stay with each group. Use Marked to color an overlay."))
             .child(chip(&t, "reset-spectrum-colors", "Reset group colors", false)
                 .on_click(cx.listener(|app, _, _, cx| app.apply_spectrum_palette(None, cx))))

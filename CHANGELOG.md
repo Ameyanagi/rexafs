@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Publish: one **Publish report…** action writes the complete analysis folder,
+  followed by **Open report** and **Show folder**; per-figure PNG/SVG/CSV saves
+  sit beside the preview; add Single column / Double column / Slide presets and
+  **Apply style to all figures**.
+- Fit: rename the two "Fit mode" controls to **Method** and **Spectra**, show the
+  blocking reason under the disabled action, offer **Run fit again** for stale
+  results, print fit warnings as sentences, and keep path identities in tooltips.
+- RMC: disable result actions until a run exists, move setting explanations into
+  tooltips, present run details as label/value rows, and correct field labels.
+- Shell: persist the theme, rebuild wavelet panels on theme change, raise the
+  text floor to 11 px, darken light-theme muted text, keep the group name on its
+  own inspector row, hide developer counters unless `REXAFS_DEBUG_STATS` is set,
+  colour error and success status text, rank palette matches by title, and use
+  correct plurals throughout.
+- Normalize: MBACK pre-fills the absorber and edge from the spectrum's E₀ when
+  the source declares none.
+- Plots and Series: integer frame and component ticks, grouped Transform toolbar,
+  a first-run range-handle hint, and a one-line Series definition.
+
 ## 0.2.12 (release preparation)
 
 - Preserve the complete signed macOS app bundle when launching the update

@@ -88,6 +88,13 @@ impl StudioApp {
         self.wavelet.group == self.current_group_index().and_then(|i| self.group_id(i))
             && self.wavelet.source_settings.as_ref() == Some(self.ui_params())
     }
+    /// Redraw the cached map, marginals and slices with the current theme.
+    pub(crate) fn restyle_wavelet(&mut self, cx: &mut Context<Self>) {
+        if self.wavelet.record.is_some() {
+            // Also rebuilds the slices.
+            self.rebuild_wavelet_plots(cx);
+        }
+    }
     pub(crate) fn open_wavelet(&mut self, cx: &mut Context<Self>) {
         self.ui.sections.insert("Wavelet settings");
         self.set_stage(super::Stage::Transform, cx);
@@ -186,8 +193,16 @@ impl StudioApp {
             } else {
                 FieldKind::Float
             };
+            let description = match i {
+                4 => Some(
+                    "Order of the Cauchy wavelet. A larger order narrows the frequency response and broadens the localization in k.",
+                ),
+                6 => Some("Spacing of the R rows. Blank chooses the step automatically."),
+                7 => Some("Width of the cosine taper at both k limits. 0 applies no taper."),
+                _ => None,
+            };
             let field = cx.new(|cx| {
-                NumericField::new(
+                let field = NumericField::new(
                     label,
                     if i == 6 { "auto" } else { "required" },
                     value,
@@ -199,7 +214,11 @@ impl StudioApp {
                     0 | 1 | 3 | 7 => 0.1,
                     5 | 6 => 0.01,
                     _ => 1.,
-                })
+                });
+                match description {
+                    Some(text) => field.with_description(text),
+                    None => field,
+                }
             });
             cx.subscribe(&field, |app, _, event, cx| {
                 if matches!(event, FieldEvent::Changed(_)) {

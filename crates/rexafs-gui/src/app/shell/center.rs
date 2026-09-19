@@ -10,6 +10,7 @@ use super::{
     BkgView, EQuantity, MONO, PlotScope, Stage, StageStatus, TfView, chip, segment, segmented,
 };
 use crate::app::{ParamKey, StudioApp};
+use crate::theme::Theme;
 
 /// Quadrant slots in `StudioApp::quadrants` (built by `build_quadrant_specs`).
 pub const PLOT_MU: usize = 0;
@@ -23,6 +24,11 @@ fn current_label(
     entry_label: impl FnOnce(usize) -> String,
 ) -> SharedString {
     entry_label(selected.unwrap_or(crate::app::NO_ENTRY)).into()
+}
+
+/// A 1 px vertical rule between clusters of controls in a plot bar.
+fn bar_divider(t: &Theme) -> gpui::Div {
+    div().flex_none().w(px(1.)).h(px(16.)).bg(t.border)
 }
 
 impl StudioApp {
@@ -191,8 +197,25 @@ impl StudioApp {
                     .child(div().flex_1().min_h_0().min_w_0().child(plot)),
             );
         }
-        for (index, title) in plots {
+        // First-run caption: it disappears for good after the first handle drag.
+        let range_hint = !self.handles.hidden
+            && !self.structure.settings.range_hint_seen
+            && matches!(
+                self.stage,
+                Stage::Normalize | Stage::Background | Stage::Transform
+            );
+        for (position, (index, title)) in plots.into_iter().enumerate() {
             area = area.child(self.plot_card(index, title, cx));
+            if position == 0 && range_hint {
+                area = area.child(
+                    div()
+                        .flex_none()
+                        .px_3()
+                        .text_size(px(11.))
+                        .text_color(t.text_muted)
+                        .child("Drag the blue tabs to change the range"),
+                );
+            }
         }
         if self.stage == Stage::Data
             && let Some(plot) = self.analysis.plot.clone()
@@ -206,8 +229,8 @@ impl StudioApp {
                     .as_ref()
                     .map(|m| {
                         format!(
-                            "PCA · {} spectra · {}",
-                            m.n_spectra(),
+                            "PCA · {} · {}",
+                            crate::text::plural(m.n_spectra(), "spectrum"),
                             if m.centered {
                                 "mean subtracted"
                             } else {
@@ -291,7 +314,7 @@ impl StudioApp {
         let mut row = div().px_3().py_1().flex().flex_wrap().gap_1();
         if matches!(tool, Tool::Mcr | Tool::Lcf) {
             row = row.child(
-                chip(&t, "analysis-to-groups", "Add to Groups", false).on_click(
+                chip(&t, "analysis-to-groups", "Add to groups", false).on_click(
                     cx.listener(move |this, _, _, cx| this.add_analysis_groups(tool, cx)),
                 ),
             );
@@ -562,51 +585,22 @@ impl StudioApp {
         )
     }
 
-    fn plot_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    /// Compare toggle, its overlay options and the colour menu: one cluster on
+    /// every stage's plot bar.
+    fn compare_cluster(&self, cx: &mut Context<Self>) -> gpui::Div {
         use super::controls::{Menu, icon_button};
         use crate::icons::Icon;
         let t = self.theme;
         let v = self.stage_view;
-        let mut bar = div()
-            .min_h(px(36.))
-            .min_w_0()
-            .w_full()
-            .flex_none()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap_1()
-            .px_2()
-            .py_1()
-            .bg(t.surface)
-            .border_b_1()
-            .border_color(t.border);
-        if self.stage == Stage::Data
-            && self.tools.open == Some(super::tools::Tool::Align)
-            && self.tool_preview_current(cx)
-        {
-            return bar
-                .child(div().text_color(t.text).child("Alignment · dμ/dE"))
-                .child(div().text_color(t.text_muted).child("XANES"));
-        }
-        if self.stage == Stage::Transform {
-            bar = bar.child(self.transform_view_selector(cx));
-            if self.wavelet.open {
-                return bar
-                    .child(self.wavelet_view_selector(cx))
-                    .child(div().flex_1())
-                    .child(self.wavelet_toolbar_actions(cx));
-            }
-        }
-        bar = bar.child(
+        let mut cluster = div().flex().flex_wrap().items_center().gap_1().child(
             icon_button(
                 &t,
                 "plot-compare",
                 Icon::Layers,
                 format!(
-                    "Compare current + {} marked · {} spectra",
+                    "Compare current + {} marked · {}",
                     self.selection.len(),
-                    self.compare_count()
+                    crate::text::plural(self.compare_count(), "spectrum")
                 ),
                 v.scope == PlotScope::Marked,
             )
@@ -624,7 +618,7 @@ impl StudioApp {
             })),
         );
         if v.scope == PlotScope::Marked {
-            bar = bar
+            cluster = cluster
                 .child(
                     chip(&t, "plot-preview", "Preview 12", self.view.sample_overlay).on_click(
                         cx.listener(|app, _, _, cx| {
@@ -656,12 +650,67 @@ impl StudioApp {
                     ),
                 );
         }
+        cluster.child(
+            chip(
+                &t,
+                "spectrum-colors",
+                "Colors",
+                self.ui.menu == Some(Menu::Colors),
+            )
+            .on_click(cx.listener(|app, event, window, cx| {
+                app.open_chrome_menu(Menu::Colors, event, window, cx);
+            })),
+        )
+    }
+
+    /// The plot bar in three clusters separated by rules: the view segments,
+    /// the overlay toggles (and range presets), and the comparison controls.
+    fn plot_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        use super::controls::{Menu, icon_button};
+        use crate::icons::Icon;
+        let t = self.theme;
+        let v = self.stage_view;
+        let mut bar = div()
+            .min_h(px(36.))
+            .min_w_0()
+            .w_full()
+            .flex_none()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_1()
+            .px_2()
+            .py_1()
+            .bg(t.surface)
+            .border_b_1()
+            .border_color(t.border);
+        if self.stage == Stage::Data
+            && self.tools.open == Some(super::tools::Tool::Align)
+            && self.tool_preview_current(cx)
+        {
+            return bar
+                .child(div().text_color(t.text).child("Alignment · dμ/dE"))
+                .child(div().text_color(t.text_muted).child("XANES"));
+        }
+        if self.stage == Stage::Transform {
+            bar = bar.child(self.transform_view_selector(cx));
+            if self.wavelet.open {
+                return bar
+                    .child(bar_divider(&t))
+                    .child(self.wavelet_view_selector(cx))
+                    .child(div().flex_1())
+                    .child(self.wavelet_toolbar_actions(cx));
+            }
+        }
         if self.stage.is_processing()
             && (!self.spectrum_quantity.supports_exafs()
                 || (matches!(self.stage, Stage::Data | Stage::Normalize)
                     && self.processing_plot_quantity().prepared_space().is_some()))
         {
-            return bar.child(self.spectrum_quantity.label());
+            return bar
+                .child(self.spectrum_quantity.label())
+                .child(bar_divider(&t))
+                .child(self.compare_cluster(cx));
         }
         let mut choices = segmented(&t).flex_none();
         match self.stage {
@@ -714,6 +763,7 @@ impl StudioApp {
         if self.stage != Stage::Transform {
             bar = bar.child(choices);
         }
+        bar = bar.child(bar_divider(&t));
         match self.stage {
             Stage::Data | Stage::Normalize => {
                 bar =
@@ -793,6 +843,7 @@ impl StudioApp {
             _ => {}
         }
         if matches!(self.stage, Stage::Data | Stage::Normalize) {
+            bar = bar.child(bar_divider(&t));
             for (i, label, range) in [
                 (0, "XANES", Some((-20., 80.))),
                 (1, "−200…+800", Some((-200., 800.))),
@@ -816,19 +867,9 @@ impl StudioApp {
                 );
             }
         }
-        bar = bar
+        bar.child(bar_divider(&t))
+            .child(self.compare_cluster(cx))
             .child(div().flex_1())
-            .child(
-                chip(
-                    &t,
-                    "spectrum-colors",
-                    "Colors",
-                    self.ui.menu == Some(Menu::Colors),
-                )
-                .on_click(cx.listener(|app, event, window, cx| {
-                    app.open_chrome_menu(Menu::Colors, event, window, cx);
-                })),
-            )
             .child(self.plot_ranges_button(cx))
             .child(
                 icon_button(
@@ -854,8 +895,7 @@ impl StudioApp {
                 .on_click(cx.listener(|app, event, window, cx| {
                     app.open_chrome_menu(Menu::Plot, event, window, cx)
                 })),
-            );
-        bar
+            )
     }
 
     pub(crate) fn plot_options(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -962,13 +1002,16 @@ impl StudioApp {
         row
     }
 
-    /// One main plot with its title, the handle overlay, and a hover hint.
+    /// One main plot with its title, a reset-view button, the handle overlay,
+    /// and a hover hint.
     fn plot_card(
         &mut self,
         index: usize,
         title: SharedString,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
+        use super::controls::icon_button;
+        use crate::icons::Icon;
         let t = self.theme;
         let plot = self.quadrants[index].1.clone();
         let label = self.current_group_label();
@@ -1010,6 +1053,20 @@ impl StudioApp {
                             .child(label),
                     )
                     .child(div().flex_1())
+                    .child(
+                        icon_button(
+                            &t,
+                            SharedString::from(format!("plot-reset-{index}")),
+                            Icon::Undo,
+                            "Reset view (undo zoom and pan)",
+                            false,
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some((_, plot)) = this.quadrants.get(index) {
+                                plot.update(cx, |plot, cx| plot.reset_view(cx));
+                            }
+                        })),
+                    )
                     .child(self.plot_export_button(
                         format!("plot-export-{index}"),
                         super::plot_export::Target::Quadrant(index),
@@ -1116,7 +1173,7 @@ impl StudioApp {
                             .flex()
                             .items_center()
                             .gap_1p5()
-                            .text_size(px(10.5))
+                            .text_size(px(11.))
                             .text_color(t.text_muted)
                             .child(div().w(px(6.)).h(px(6.)).rounded_full().bg(dot))
                             .child(caption),

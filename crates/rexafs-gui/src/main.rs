@@ -42,6 +42,7 @@ mod source_evidence;
 mod spectrum_colors;
 mod spectrum_interest;
 mod structure;
+mod text;
 mod theme;
 mod updates;
 mod wavelet_history;

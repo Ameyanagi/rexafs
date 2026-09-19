@@ -98,18 +98,30 @@ impl Tool {
         }
     }
 
+    /// One-sentence description shown as the first line of the open tool form
+    /// and as the tooltip of its disclosure.
     pub fn hint(self) -> &'static str {
         match self {
-            Tool::Align => "shift onto a named alignment standard",
-            Tool::Calibrate => "apply the named standard’s measured energy shift",
-            Tool::Deglitch => "remove the points inside an energy range",
-            Tool::Truncate => "keep the points between two energies",
-            Tool::Rebin => "Athena grid: 10 eV · 0.5 eV · 0.05 Å⁻¹",
-            Tool::Smooth => "Gaussian convolution of μ(E)",
-            Tool::Difference => "target − named baseline (normalized μ)",
-            Tool::Lcf => "current as a mix of the marked standards",
-            Tool::Pca => "components of the marked groups",
-            Tool::Mcr => "Estimate component spectra and fractions from all marked groups",
+            Tool::Align => "Shift onto a named alignment standard.",
+            Tool::Calibrate => "Apply the named standard’s measured energy shift.",
+            Tool::Deglitch => "Remove the points inside an energy range.",
+            Tool::Truncate => "Keep the points between two energies.",
+            Tool::Rebin => "Rebin onto a 10 eV / 0.5 eV / 0.05 Å⁻¹ grid.",
+            Tool::Smooth => "Smooth μ(E) with a Gaussian convolution.",
+            Tool::Difference => "Subtract a named baseline from the normalized target.",
+            Tool::Lcf => "Fit the current group as a mix of the marked standards.",
+            Tool::Pca => "Principal components of the marked groups.",
+            Tool::Mcr => "Estimate component spectra and fractions from the marked groups.",
+        }
+    }
+
+    /// What applying the tool does to the group list; Align is the only tool
+    /// that changes the current group in place.
+    pub fn effect(self) -> &'static str {
+        match self {
+            Tool::Align => "Edits the current group",
+            Tool::Lcf | Tool::Pca | Tool::Mcr => "Shows a result below",
+            _ => "Creates a new group",
         }
     }
 
@@ -142,10 +154,21 @@ impl Tool {
         match self {
             Tool::Align => "Apply offset",
             Tool::Lcf => "Fit",
-            Tool::Pca => "Train + target transform",
+            Tool::Pca => "Run PCA",
             Tool::Mcr => "Resolve components",
-            _ => "Apply → new group",
+            _ => "Create group",
         }
+    }
+}
+
+/// Why MCR-ALS stopped, in plain words for the result table and status line.
+fn mcr_termination_label(termination: rexafs::prelude::McrTermination) -> &'static str {
+    use rexafs::prelude::McrTermination;
+    match termination {
+        McrTermination::Converged => "Converged",
+        McrTermination::IterationLimit => "Iteration limit reached",
+        McrTermination::Cancelled => "Cancelled",
+        McrTermination::Stalled => "Stalled",
     }
 }
 
@@ -232,24 +255,24 @@ impl ToolField {
 
     fn spec(self) -> (&'static str, &'static str, Option<f64>) {
         match self {
-            ToolField::WinLo => ("window start (eV rel. E₀)", "-50", Some(-50.0)),
-            ToolField::WinHi => ("window end (eV rel. E₀)", "100", Some(100.0)),
-            ToolField::ManualShift => ("manual shift (eV)", "0", Some(0.0)),
-            ToolField::Target => ("target E₀ (eV)", "e.g. 22117", None),
-            ToolField::ELo => ("from (eV)", "energy", None),
-            ToolField::EHi => ("to (eV)", "energy", None),
-            ToolField::Before => ("keep from (eV)", "auto (start)", None),
-            ToolField::After => ("keep to (eV)", "auto (end)", None),
-            ToolField::PreStep => ("pre-edge step (eV)", "10", Some(10.0)),
+            ToolField::WinLo => ("Window start (eV rel. E₀)", "-50", Some(-50.0)),
+            ToolField::WinHi => ("Window end (eV rel. E₀)", "100", Some(100.0)),
+            ToolField::ManualShift => ("Manual shift (eV)", "0", Some(0.0)),
+            ToolField::Target => ("Target E₀ (eV)", "e.g. 22117", None),
+            ToolField::ELo => ("From (eV)", "energy", None),
+            ToolField::EHi => ("To (eV)", "energy", None),
+            ToolField::Before => ("Keep from (eV)", "auto (start)", None),
+            ToolField::After => ("Keep to (eV)", "auto (end)", None),
+            ToolField::PreStep => ("Pre-edge step (eV)", "10", Some(10.0)),
             ToolField::XanesStep => ("XANES step (eV)", "0.5", Some(0.5)),
             ToolField::KStep => ("EXAFS step (Å⁻¹)", "0.05", Some(0.05)),
-            ToolField::Sigma => ("sigma (eV)", "1.0", Some(1.0)),
-            ToolField::RangeLo => ("range start (rel. E₀)", "auto (−20)", None),
-            ToolField::RangeHi => ("range end (rel. E₀)", "auto (+30)", None),
-            ToolField::Components => ("components", "2", Some(2.0)),
-            ToolField::McrIterations => ("maximum iterations", "500", Some(500.0)),
-            ToolField::McrSeed => ("initialization seed", "0", Some(0.0)),
-            ToolField::McrComponents => ("components", "3", Some(3.0)),
+            ToolField::Sigma => ("Sigma (eV)", "1.0", Some(1.0)),
+            ToolField::RangeLo => ("Range start (rel. E₀)", "auto (−20)", None),
+            ToolField::RangeHi => ("Range end (rel. E₀)", "auto (+30)", None),
+            ToolField::Components => ("Components", "2", Some(2.0)),
+            ToolField::McrIterations => ("Maximum iterations", "500", Some(500.0)),
+            ToolField::McrSeed => ("Initialization seed", "0", Some(0.0)),
+            ToolField::McrComponents => ("Components", "3", Some(3.0)),
         }
     }
 }
@@ -366,7 +389,7 @@ fn process_tool(
                 format!("align: {name} → {ref_name} ({shift:+.2} eV)")
             }
             Tool::Calibrate => {
-                let target = value(ToolField::Target).ok_or("enter the target E₀")?;
+                let target = value(ToolField::Target).ok_or("Enter the target E₀")?;
                 let (ref_name, reference) = standard.ok_or("Choose a standard")?;
                 let shift = calibrate_from_standard(&mut sp, reference, target)?;
                 operation.parameters = serde_json::json!({"expected_energy_ev": target, "measured_energy_ev": target - shift, "feature": "DerivativeMax"});
@@ -374,8 +397,8 @@ fn process_tool(
                 format!("calibrate: {name} via {ref_name} → {target:.1} eV ({shift:+.2})")
             }
             Tool::Deglitch => {
-                let lo = value(ToolField::ELo).ok_or("enter a range")?;
-                let hi = value(ToolField::EHi).ok_or("enter a range")?;
+                let lo = value(ToolField::ELo).ok_or("Enter a range")?;
+                let hi = value(ToolField::EHi).ok_or("Enter a range")?;
                 let n = sp.deglitch_range(lo, hi).map_err(|e| e.to_string())?;
                 operation.parameters =
                     serde_json::json!({"range_ev": [lo, hi], "removed_points": n});
@@ -627,7 +650,7 @@ fn materialize_tool_output(
     operation: Operation,
 ) -> Result<DerivedSpectrum, String> {
     let (Some(energy), Some(mu)) = (&sp.energy, &sp.mu) else {
-        return Err("tool produced no data".into());
+        return Err("Tool produced no data".into());
     };
     let inherited = params.for_materialized(operation.applied_energy_shift_ev);
     Ok(DerivedSpectrum {
@@ -864,7 +887,7 @@ impl StudioApp {
         self.tools.standard_picker_open = false;
         self.tools.standard_filter_request += 1;
         self.tools.standard_matches = None;
-        let input = cx.new(|cx| TextInput::new("filter standards… (* glob)", "", self.theme, cx));
+        let input = cx.new(|cx| TextInput::new("Filter standards… (* glob)", "", self.theme, cx));
         cx.subscribe(&input, |this, _, event, cx| {
             if let InputEvent::Edited(text) = event {
                 this.filter_tool_standards(text, cx);
@@ -921,9 +944,9 @@ impl StudioApp {
             return self.start_mcr(cx);
         }
         let Some(unknown) = self.spectrum.clone() else {
-            self.tools.message = "no current group".into();
+            self.tools.message = "No current group".into();
             cx.notify();
-            return Err("no current group".into());
+            return Err("No current group".into());
         };
         self.tools.sync_range(cx)?;
         if self.prepare_analysis_collection(tool, cx)? {
@@ -945,7 +968,7 @@ impl StudioApp {
         let outcome: Result<String, String> = match tool {
             Tool::Lcf => {
                 if spectra.len() < 2 {
-                    Err("mark at least two standards (other than the current group); their spectra load when marked".into())
+                    Err("Mark at least two standards (other than the current group); their spectra load when marked".into())
                 } else if self.tools.lcf_all_combinations {
                     rexafs::prelude::lcf_combinatorial(&unknown, &spectra, &cfg, 4)
                         .map_err(|e| e.to_string())
@@ -957,7 +980,10 @@ impl StudioApp {
                             let n = ranked.len();
                             self.analysis.ranked = ranked;
                             self.analysis.lcf = best;
-                            format!("{n} combinations ranked by R-factor")
+                            format!(
+                                "{} ranked by R-factor",
+                                crate::text::plural(n, "combination")
+                            )
                         })
                 } else {
                     rexafs::prelude::lcf(&unknown, &spectra, &cfg)
@@ -973,7 +999,7 @@ impl StudioApp {
             }
             Tool::Pca => {
                 if spectra.len() < 2 {
-                    Err("mark at least two groups to train on".into())
+                    Err("Mark at least two groups to train on".into())
                 } else {
                     let mut pcfg = self.tools.pca_config();
                     pcfg.space = cfg.space;
@@ -986,8 +1012,8 @@ impl StudioApp {
                                 .target_transform(&unknown, n)
                                 .map_err(|e| e.to_string())?;
                             let msg = format!(
-                                "{} components explain {:.2} % · target R {:.2e}",
-                                n,
+                                "{} explain {:.2} % · target R {:.2e}",
+                                crate::text::plural(n, "component"),
                                 model.cumulative_variance.get(n - 1).copied().unwrap_or(0.0)
                                     * 100.0,
                                 fit.r_factor
@@ -998,7 +1024,7 @@ impl StudioApp {
                         })
                 }
             }
-            _ => Err("not an analysis tool".into()),
+            _ => Err("Not an analysis tool".into()),
         };
         match &outcome {
             Ok(msg) => {
@@ -1467,7 +1493,7 @@ impl StudioApp {
             return;
         }
         let Some(source) = self.spectrum.clone() else {
-            self.tools.message = "no current group".into();
+            self.tools.message = "No current group".into();
             cx.notify();
             return;
         };
@@ -1669,7 +1695,23 @@ impl StudioApp {
                     .border_color(t.border)
                     .bg(t.bg)
                     .flex()
-                    .flex_col();
+                    .flex_col()
+                    .child(
+                        div()
+                            .px_3()
+                            .pt_1()
+                            .text_size(px(11.))
+                            .text_color(t.text_muted)
+                            .child(tool.hint()),
+                    )
+                    .child(
+                        div()
+                            .px_3()
+                            .pb_1()
+                            .text_size(px(11.))
+                            .text_color(t.accent)
+                            .child(tool.effect()),
+                    );
                 if tool != Tool::Mcr {
                     form = form.child(div().px_3().py_1().text_size(px(11.)).child(format!(
                         "Target: {}",
@@ -1687,19 +1729,6 @@ impl StudioApp {
                     form = form
                         .child(self.analysis_operands(tool, cx))
                         .child(self.analysis_options(tool, cx));
-                } else {
-                    form = form.child(
-                        div()
-                            .px_3()
-                            .py_1()
-                            .text_size(px(11.))
-                            .text_color(t.text_muted)
-                            .child(if tool == Tool::Align {
-                                "Adjust current spectrum · original data retained"
-                            } else {
-                                "1 target → 1 new group"
-                            }),
-                    );
                 }
                 for field in tool.fields() {
                     if let Some((_, entity)) = self.tools.fields.iter().find(|(f, _)| f == field) {
@@ -2195,7 +2224,7 @@ impl StudioApp {
                     ));
                     out.push(row("R-factor".into(), format!("{:.3e}", r.r_factor), false));
                     out.push(row(
-                        "reduced χ²".into(),
+                        "Reduced χ²".into(),
                         format!("{:.3e}", r.reduced_chi_square),
                         false,
                     ));
@@ -2228,7 +2257,11 @@ impl StudioApp {
                         false,
                     ));
                     if let Some((count, basis)) = suggestion {
-                        out.push(row(format!("Try {count} components"), basis.into(), false));
+                        out.push(row(
+                            format!("Try {}", crate::text::plural(count, "component")),
+                            basis.into(),
+                            false,
+                        ));
                     } else {
                         out.push(row(
                             "Component count".into(),
@@ -2272,7 +2305,7 @@ impl StudioApp {
                 }
                 if let Some(f) = &self.analysis.pca_fit {
                     out.push(row(
-                        format!("target transform ({} comp.)", f.n_components),
+                        format!("Target transform ({} comp.)", f.n_components),
                         format!("R {:.2e}", f.r_factor),
                         f.r_factor > 1e-2,
                     ));
@@ -2288,7 +2321,11 @@ impl StudioApp {
                     ));
                     out.push(row(
                         "Stopped".into(),
-                        format!("{:?} · {} iterations", r.termination, r.iterations),
+                        format!(
+                            "{} · {}",
+                            mcr_termination_label(r.termination),
+                            crate::text::plural(r.iterations, "iteration")
+                        ),
                         r.termination != rexafs::prelude::McrTermination::Converged,
                     ));
                     out.push(row(

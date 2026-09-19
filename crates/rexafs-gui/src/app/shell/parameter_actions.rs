@@ -395,7 +395,7 @@ impl StudioApp {
             div()
                 .id(SharedString::from(format!("mixed-{scope:?}")))
                 .px_1()
-                .text_size(px(10.))
+                .text_size(px(11.))
                 .text_color(t.warn)
                 .cursor_pointer()
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {

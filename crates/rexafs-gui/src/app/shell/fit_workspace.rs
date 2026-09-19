@@ -145,7 +145,7 @@ impl StudioApp {
         }
         if self.joint.config.enabled {
             return Some(
-                "Batch fits spectra independently. Select Single spectrum in Model & fit to run a batch.",
+                "Batch fits spectra independently. Select Single under Spectra in Model & fit to run a batch.",
             );
         }
         if self
@@ -225,6 +225,8 @@ impl StudioApp {
             );
         }
         nav = nav.child(div().flex_1()).child(self.fit_mode_picker(cx));
+        // A stale result offers to rerun the fit instead of sending the user back to the model.
+        let rerun = step == FitStep::Results && self.fit_result.is_some() && self.fit_is_stale();
         let (_title, description, action, enabled) = match step {
             FitStep::Structure => (
                 "Start with a structure",
@@ -262,12 +264,20 @@ impl StudioApp {
             FitStep::Results => (
                 "Review the fit",
                 "Inspect uncertainties and correlations, restore a fit, or fit multiple spectra.",
-                "Edit model →",
-                true,
+                if rerun && self.fit_running {
+                    "Fitting…"
+                } else if rerun {
+                    "Run fit again"
+                } else {
+                    "Edit model →"
+                },
+                !rerun || self.fit_blocker().is_none(),
             ),
         };
+        // The reason an action is unavailable sits under its button and in the tooltip.
         let blocker = match step {
             FitStep::Model => self.fit_blocker(),
+            FitStep::Results if rerun => self.fit_blocker(),
             FitStep::Structure if !enabled => Some("Choose a structure"),
             FitStep::Calculate if !enabled && !self.feff_running => {
                 Some("Choose a structure or FEFF input")
@@ -275,22 +285,15 @@ impl StudioApp {
             FitStep::Paths if selected == 0 => Some("Select at least one path"),
             _ => None,
         };
+        let tip: &'static str = blocker.unwrap_or(description);
         let header = div()
             .flex_none()
             .px_3()
             .py_2()
             .flex()
-            .items_center()
-            .flex_wrap()
+            .items_start()
+            .justify_end()
             .gap_2()
-            .child(
-                div()
-                    .flex_1()
-                    .min_w(px(140.))
-                    .text_size(px(11.5))
-                    .text_color(t.warn)
-                    .when_some(blocker, |d, reason| d.child(reason)),
-            )
             .child(
                 icon_button(
                     &t,
@@ -305,36 +308,53 @@ impl StudioApp {
                 })),
             )
             .child(
-                button(&t, "fit-workflow-action", action, enabled)
-                    .tooltip(move |_, cx| {
-                        cx.new(|_| Tooltip {
-                            label: description.into(),
-                            theme: t,
-                        })
-                        .into()
-                    })
-                    .when(!enabled, |d| {
-                        d.disabled(true).opacity(0.45).cursor_default()
-                    })
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
-                        if !enabled {
-                            return;
-                        }
-                        match step {
-                            FitStep::Structure => this.set_fit_step(FitStep::Calculate, cx),
-                            FitStep::Calculate => {
-                                if this.structure.summary.is_some() {
-                                    this.structure_generate_paths(cx)
-                                } else {
-                                    this.run_feff10_now(cx)
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_end()
+                    .gap_1()
+                    .child(
+                        button(&t, "fit-workflow-action", action, enabled)
+                            .tooltip(move |_, cx| {
+                                cx.new(|_| Tooltip {
+                                    label: tip.into(),
+                                    theme: t,
+                                })
+                                .into()
+                            })
+                            .when(!enabled, |d| {
+                                d.disabled(true).opacity(0.45).cursor_default()
+                            })
+                            .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
+                                if !enabled {
+                                    return;
                                 }
-                            }
-                            FitStep::Paths | FitStep::Results => {
-                                this.set_fit_step(FitStep::Model, cx)
-                            }
-                            FitStep::Model => this.run_fit_now(cx),
-                        }
-                    })),
+                                match step {
+                                    FitStep::Structure => this.set_fit_step(FitStep::Calculate, cx),
+                                    FitStep::Calculate => {
+                                        if this.structure.summary.is_some() {
+                                            this.structure_generate_paths(cx)
+                                        } else {
+                                            this.run_feff10_now(cx)
+                                        }
+                                    }
+                                    FitStep::Paths => this.set_fit_step(FitStep::Model, cx),
+                                    FitStep::Results if rerun => this.run_fit_now(cx),
+                                    FitStep::Results => this.set_fit_step(FitStep::Model, cx),
+                                    FitStep::Model => this.run_fit_now(cx),
+                                }
+                            })),
+                    )
+                    .when_some(blocker, |d, reason| {
+                        d.child(
+                            div()
+                                .max_w(px(360.))
+                                .text_size(px(11.))
+                                .text_color(t.warn)
+                                .text_right()
+                                .child(reason),
+                        )
+                    }),
             );
         let available = self.viewport_w
             - if self.data_panel_open { 260. } else { 0. }

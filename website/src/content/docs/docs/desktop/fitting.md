@@ -75,7 +75,8 @@ For shared variables across spectra, continue with
 
 ## RMC fitting mode
 
-Version 0.2.10 adds **Fit mode: RMC** at the upper right of Fitting.
+Version 0.2.10 adds **Fit mode: RMC** at the upper right of Fitting (labelled
+**Method: RMC** in the unreleased development build).
 Choose a structure, edit its supercell with a live 3D preview, inspect the initial exact ReFEFF
 calculation and run coordinate refinement against the processed spectrum.
 The initial objective is R real plus imaginary, with R minimum at or above

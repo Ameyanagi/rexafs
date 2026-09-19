@@ -63,6 +63,52 @@ pub struct PaletteState {
     _subscription: gpui::Subscription,
 }
 
+/// Match quality, lower is better: the whole label, a label prefix, a word
+/// prefix, a substring, then the fuzzy match.
+fn match_rank(query: &str, label: &str) -> Option<u8> {
+    let query = query.to_lowercase();
+    let label = label.to_lowercase();
+    if label == query {
+        Some(0)
+    } else if label.starts_with(&query) {
+        Some(1)
+    } else if label
+        .split(|c: char| !c.is_alphanumeric())
+        .any(|word| !word.is_empty() && word.starts_with(&query))
+    {
+        Some(2)
+    } else if label.contains(&query) {
+        Some(3)
+    } else if fuzzy(&query, &label) {
+        Some(4)
+    } else {
+        None
+    }
+}
+
+/// State-changing commands sort after navigation, analysis and tool items of
+/// the same match rank.
+fn category_rank(category: &str) -> u8 {
+    u8::from(matches!(category, "params" | "export"))
+}
+
+/// Keep the items matching `query`, best match first; ties keep catalog order.
+fn rank_items(query: &str, items: Vec<PaletteItem>) -> Vec<PaletteItem> {
+    if query.is_empty() {
+        return items;
+    }
+    let mut ranked: Vec<_> = items
+        .into_iter()
+        .enumerate()
+        .filter_map(|(order, item)| {
+            match_rank(query, &item.label)
+                .map(|rank| (rank, category_rank(item.category), order, item))
+        })
+        .collect();
+    ranked.sort_by_key(|(rank, category, order, _)| (*rank, *category, *order));
+    ranked.into_iter().map(|(_, _, _, item)| item).collect()
+}
+
 /// Every query character must appear in order (a light fuzzy match).
 fn fuzzy(query: &str, text: &str) -> bool {
     let mut chars = query
@@ -160,7 +206,7 @@ impl StudioApp {
                     Stage::Transform => "⌘4",
                     Stage::Fit => "⌘5",
                     Stage::Series => "⌘6",
-                    Stage::Publish => "",
+                    Stage::Publish => "⌘7",
                 },
                 cmd: PaletteCmd::Stage(stage),
             });
@@ -199,7 +245,7 @@ impl StudioApp {
             ("Save project…", "file", "", PaletteCmd::SaveProject),
             ("Open project…", "file", "⌘O", PaletteCmd::OpenProject),
             ("Import…", "file", "⇧⌘O", PaletteCmd::OpenFolder),
-            ("Toggle theme", "view", "", PaletteCmd::Theme),
+            ("Switch theme", "view", "", PaletteCmd::Theme),
             (
                 "Check for updates · Stable / Nightly",
                 "app",
@@ -261,10 +307,8 @@ impl StudioApp {
     }
 
     fn palette_matches(&self, query: &str) -> Vec<PaletteItem> {
-        let query = query.trim();
-        self.palette_items()
+        rank_items(query.trim(), self.palette_items())
             .into_iter()
-            .filter(|item| query.is_empty() || fuzzy(query, &item.label))
             .take(14)
             .collect()
     }
@@ -458,7 +502,7 @@ impl StudioApp {
                         div()
                             .w(px(64.))
                             .flex_none()
-                            .text_size(px(10.5))
+                            .text_size(px(11.))
                             .text_color(t.text_muted)
                             .child(item.category),
                     )
@@ -475,7 +519,7 @@ impl StudioApp {
                     .child(
                         div()
                             .font_family(MONO)
-                            .text_size(px(10.5))
+                            .text_size(px(11.))
                             .text_color(t.text_muted)
                             .child(item.keys),
                     ),
@@ -540,7 +584,7 @@ impl StudioApp {
                                 .py_1()
                                 .flex()
                                 .gap_3()
-                                .text_size(px(10.5))
+                                .text_size(px(11.))
                                 .text_color(t.text_muted)
                                 .child("↑↓ move")
                                 .child("↩ run")
@@ -672,6 +716,45 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn label_matches_outrank_fuzzy_hits_and_state_changing_commands() {
+        let item = |label: &str, category| PaletteItem {
+            label: label.into(),
+            category,
+            keys: "",
+            cmd: PaletteCmd::Help,
+        };
+        let ranked = rank_items(
+            "linear",
+            vec![
+                item("Apply all processing settings to marked groups", "params"),
+                item("Linear combination fit…", "analysis"),
+                item("Go to Fit", "stage"),
+            ],
+        );
+        assert_eq!(
+            ranked.iter().map(|i| i.label.as_str()).collect::<Vec<_>>(),
+            [
+                "Linear combination fit…",
+                "Apply all processing settings to marked groups"
+            ]
+        );
+        let ranked = rank_items(
+            "fit",
+            vec![
+                item("Export batch-fit results as CSV", "export"),
+                item("Fit the current group", "fit"),
+                item("Go to Fit", "stage"),
+            ],
+        );
+        assert_eq!(
+            ranked.iter().map(|i| i.category).collect::<Vec<_>>(),
+            ["fit", "stage", "export"]
+        );
+        assert!(rank_items("zzz", vec![item("Help", "app")]).is_empty());
+        assert_eq!(rank_items("", vec![item("Help", "app")]).len(), 1);
+    }
 
     #[test]
     fn reset_palette_entry_only_exists_for_processing_stages() {

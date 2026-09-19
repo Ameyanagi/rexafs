@@ -7,10 +7,24 @@ use gpui::{
     ClickEvent, Context, IntoElement, ParentElement, Styled, div, prelude::*, px, uniform_list,
 };
 
-use super::{MONO, PlotScope, button};
+use super::{MONO, PlotScope, button, controls::icon};
 use crate::app::group_rows::{self, Row};
 use crate::app::{DERIVED_BASE, NavDown, NavExtendDown, NavExtendUp, NavUp, StudioApp};
+use crate::icons::Icon;
 use crate::plotting::{middle_truncate, trace_rgba};
+
+/// Merge reasons read "<group label>: <message>". When the label already ends
+/// with the message's opening phrase (the label carries "· quantity unconfirmed"
+/// and the message opens with "Quantity unconfirmed:"), show the phrase once.
+fn dedupe_reason(reason: &str) -> String {
+    if let Some((label, message)) = reason.split_once(": ")
+        && let Some((phrase, rest)) = message.split_once(':')
+        && label.to_lowercase().ends_with(&phrase.to_lowercase())
+    {
+        return format!("{label}:{rest}");
+    }
+    reason.to_string()
+}
 
 /// Stable group colour, also used by its plot trace and legend.
 fn swatch(color: gpui::Rgba) -> impl IntoElement {
@@ -35,12 +49,7 @@ fn checkbox(t: &crate::theme::Theme, on: bool) -> impl IntoElement {
         .justify_center()
         .when(on, |d| d.bg(t.accent).border_color(t.accent))
         .when(!on, |d| d.bg(t.raised).border_color(t.border))
-        .child(
-            div()
-                .text_size(px(10.))
-                .text_color(t.bg)
-                .child(if on { "✓" } else { "" }),
-        )
+        .children(on.then(|| icon(t, Icon::Check).size(px(11.)).text_color(t.bg)))
 }
 
 #[derive(Clone)]
@@ -656,9 +665,9 @@ impl StudioApp {
                     .flex_none()
                     .px_2()
                     .pb_1()
-                    .text_size(px(10.))
+                    .text_size(px(11.))
                     .text_color(t.warn)
-                    .child(reason)
+                    .child(dedupe_reason(&reason))
             }))
             .child(
                 div()
@@ -820,6 +829,10 @@ impl StudioApp {
             text: detail,
             theme: t,
         };
+        let more_tip = RowTooltip {
+            text: "More actions".into(),
+            theme: t,
+        };
         let tag = if child { "" } else { tag };
         let marked_children = if extra > 0 && !expanded {
             self.derived
@@ -836,7 +849,7 @@ impl StudioApp {
             0
         };
         let suffix = if marked_children > 0 {
-            format!("+{extra} · {marked_children}✓")
+            format!("+{extra} · {marked_children} marked")
         } else if extra > 0 && !expanded {
             format!("+{extra}")
         } else {
@@ -923,13 +936,17 @@ impl StudioApp {
                     cx.notify();
                 }
             }))
-            .child(if extra == 0 {
-                ""
-            } else if expanded {
-                "▾"
-            } else {
-                "▸"
-            }),
+            .children((extra > 0).then(|| {
+                icon(
+                    &t,
+                    if expanded {
+                        Icon::ChevronDown
+                    } else {
+                        Icon::ChevronRight
+                    },
+                )
+                .size(px(12.))
+            })),
         )
         .child(
             crate::accessibility::Control::new(
@@ -955,42 +972,58 @@ impl StudioApp {
         .child(
             div()
                 .flex_none()
-                .text_size(px(10.5))
+                .text_size(px(11.))
                 .text_color(t.text_muted)
                 .child(suffix),
         )
         .child(
             div()
                 .flex_none()
-                .text_size(px(10.5))
+                .text_size(px(11.))
                 .text_color(t.text_muted)
                 .child(tag),
         )
         .when(has_problems, |d| {
-            d.child(
-                div()
-                    .flex_none()
-                    .text_color(if error { t.error } else { t.warn })
-                    .child(if error { "!" } else { "⚠" }),
-            )
+            d.child(icon(&t, Icon::Warning).size(px(13.)).text_color(if error {
+                t.error
+            } else {
+                t.warn
+            }))
         })
-        .when(locked, |d| {
-            d.child(div().flex_none().text_size(px(11.)).child("🔒"))
-        })
+        .when(locked, |d| d.child(icon(&t, Icon::Lock).size(px(12.))))
         .child(
-            div()
-                .id("group-more")
-                .w(px(12.))
-                .flex_none()
-                .child("⋯")
-                .on_mouse_down(
-                    gpui::MouseButton::Left,
-                    cx.listener(move |this, ev: &gpui::MouseDownEvent, window, cx| {
-                        cx.stop_propagation();
-                        this.open_group_menu(ix, ev.position, window, cx);
-                    }),
-                )
-                .on_click(|_, _, cx| cx.stop_propagation()),
+            crate::accessibility::Control::new(
+                div().id("group-more"),
+                "More actions",
+                accesskit::Role::Button,
+            )
+            .size(px(16.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded_sm()
+            .cursor_pointer()
+            .hover(|d| d.bg(t.raised))
+            .tooltip(move |_, cx| cx.new(|_| more_tip.clone()).into())
+            .child(icon(&t, Icon::More).size(px(14.)))
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(move |this, ev: &gpui::MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    this.open_group_menu(ix, ev.position, window, cx);
+                }),
+            )
+            .on_click(cx.listener(
+                move |this, event: &gpui::ClickEvent, window, cx| {
+                    cx.stop_propagation();
+                    // The pointer path opens on mouse down; keyboard and
+                    // assistive activation arrive here.
+                    if let gpui::ClickEvent::Keyboard(key) = event {
+                        this.open_group_menu(ix, key.bounds.origin, window, cx);
+                    }
+                },
+            )),
         )
     }
 }
@@ -1001,6 +1034,26 @@ mod tests {
     use crate::group_identity::{GroupId, GroupRegistry};
     use crate::params::DetectionMode;
     use std::{collections::BTreeMap, path::PathBuf};
+
+    #[test]
+    fn merge_reason_shows_a_repeated_phrase_once() {
+        assert_eq!(
+            dedupe_reason(
+                "Synthetic average · quantity unconfirmed: Quantity unconfirmed: confirm the quantity before normalization/AUTOBK; plotting/export available."
+            ),
+            "Synthetic average · quantity unconfirmed: confirm the quantity before normalization/AUTOBK; plotting/export available."
+        );
+        assert_eq!(
+            dedupe_reason(
+                "scan_1: χ(k): normalization/AUTOBK disabled; plotting/export available."
+            ),
+            "scan_1: χ(k): normalization/AUTOBK disabled; plotting/export available."
+        );
+        assert_eq!(
+            dedupe_reason("A merge is already running."),
+            "A merge is already running."
+        );
+    }
 
     #[test]
     fn standalone_lock_survives_capture_restore_migration_and_unlock() {

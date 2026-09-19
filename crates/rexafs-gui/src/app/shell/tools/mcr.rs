@@ -292,7 +292,11 @@ impl StudioApp {
         let generation = self.analysis.mcr_generation;
         let cancel = Arc::new(AtomicBool::new(false));
         self.analysis.mcr_cancel = Some(cancel.clone());
-        self.tools.message = format!("Preparing {} spectra…", inputs.len()).into();
+        self.tools.message = format!(
+            "Preparing {}…",
+            crate::text::plural(inputs.len(), "spectrum")
+        )
+        .into();
         let message = self.tools.message.to_string();
         let names: Vec<_> = sources.iter().map(|s| s.label.clone()).collect();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
@@ -373,9 +377,9 @@ impl StudioApp {
                 match result {
                     Ok(result) => {
                         let message = format!(
-                            "MCR {:?} · {} spectra · residual {:.2e}",
-                            result.termination,
-                            result.labels.len(),
+                            "MCR {} · {} · residual {:.2e}",
+                            super::mcr_termination_label(result.termination).to_lowercase(),
+                            crate::text::plural(result.labels.len(), "spectrum"),
                             result.relative_error
                         );
                         app.analysis.mcr = Some(crate::project::McrAnalysis {

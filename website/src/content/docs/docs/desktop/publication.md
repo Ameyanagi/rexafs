@@ -4,9 +4,15 @@ description: "Create figures, captions, data tables and reproducible analysis ex
 audience: user
 ---
 
-Open **Publish** after processing or fitting. Select a figure, adjust its
-controls, and save **PNG** or **SVG**. The preview preserves the aspect ratio
-and uses the same PNG bytes as the individual save.
+Open **Publish** after processing or fitting. The header names the report
+scope. **Publish report…** (unreleased; 0.2.11 offers a format selector with
+**Export…**) writes the complete analysis folder listed below, then **Open
+report** opens `report.html` and **Show folder** reveals the directory.
+**Copy analysis record** copies the Markdown record.
+
+Select a figure, adjust its style, and use **Save figure** **PNG**, **SVG** or
+**CSV** beside the preview to save that figure alone. The preview preserves the
+aspect ratio and uses the same PNG bytes as the individual save.
 
 **CSV** saves an x/y column pair for each visible curve with data, including
 its name and axis label. Curves keep their own grids and full arrays; blank
@@ -17,6 +23,9 @@ The separate batch-results table contains fitted values and reported errors.
 
 ## Figure size and content
 
+The **Single column**, **Double column** and **Slide** presets set size,
+resolution and font (rexafs choices, not journal specifications), and **Apply
+style to all figures** copies the selected figure's style to every figure type.
 Blank size controls use ruviz's 6.4 × 4.8 inch canvas. rexafs explicitly sets the
 default raster resolution to **300 DPI**, producing **1920 × 1440 pixels**.
 Width and height use inches; font and line widths use points. Set DPI to the
@@ -50,7 +59,8 @@ requirements before using an export in a paper.
 
 ## Analysis folder contents
 
-Choose **Analysis folder** in Publish to export to a new directory:
+**Publish report…** (0.2.11: **Analysis folder** then **Export…**) exports to a
+new directory:
 
 | Asset | Contents |
 |---|---|

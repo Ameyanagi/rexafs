@@ -148,7 +148,7 @@ pub(crate) fn disclosure(
     .when(active && !open, |d| {
         d.child(
             div()
-                .text_size(px(10.5))
+                .text_size(px(11.))
                 .text_color(t.accent)
                 .child("Modified"),
         )
