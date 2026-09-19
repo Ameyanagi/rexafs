@@ -180,6 +180,12 @@ captures demonstrate controls and persistence, not a calibrated or converged Cu
 structure. The existing scientific reference tests provide separate numerical
 evidence.
 
+The updated website passed Astro diagnostics with zero errors, warnings or hints,
+eight generator tests, 23 content/runtime tests and 25 browser tests. Stable
+Rust reference pages were regenerated from the checksum-verified published
+crate; Python and TypeScript pages retain the exact released declarations.
+Computer use verified the rendered RMC guide and new screenshot captions.
+
 Experimental research inputs, derived results and detailed timing records stay
 outside the repository. Windows/Linux preview and physical-convergence limits
 remain explicit in the release notes.
