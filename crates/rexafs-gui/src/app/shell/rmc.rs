@@ -811,6 +811,9 @@ impl StudioApp {
                             .id("rmc-library")
                             .w(px(350.))
                             .min_h_0()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
                             .overflow_y_scroll()
                             .child(library)
                             .child(
@@ -834,6 +837,19 @@ impl StudioApp {
                 .flex()
                 .flex_col()
                 .gap_3();
+            // Label on the left, control starting at the value column of the
+            // NumericField rows (98 px input + 14 px stepper + 22 px unit + gaps).
+            let row = |label: &'static str, control: gpui::Div| {
+                div()
+                    .flex()
+                    .items_center()
+                    .px_3()
+                    .gap_1p5()
+                    .child(div().flex_1().min_w_0().child(label))
+                    .child(div().w(px(140.)).flex_none().flex().child(control))
+            };
+            // Natural-width action instead of a stretched full-width bar.
+            let action = |control: Control| div().flex().px_3().child(control);
             if is_cell {
                 panel = panel.child(section_label(&t, "Periodic supercell")).child(with_tip(
                     &t,
@@ -841,10 +857,10 @@ impl StudioApp {
                     "Edit the repeats to update the 3D preview. Scattering starts only when you prepare or run.",
                     div().flex().flex_col().gap_3().children(self.rmc.fields[..3].iter().cloned()),
                 ));
-                panel = panel.child(
+                panel = panel.child(action(
                     button(&t, "rmc-supercell", "Use suggested size", false)
                         .on_click(cx.listener(|app, _, _, cx| app.suggest_rmc_supercell(cx))),
-                );
+                ));
                 if self.rmc.builder_busy {
                     panel = panel.child(hint(&t, "Updating preview…"));
                 }
@@ -896,15 +912,7 @@ impl StudioApp {
                             )),
                         );
                     }
-                    panel = panel.child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .items_center()
-                            .gap_2()
-                            .child("Absorber")
-                            .child(choices),
-                    );
+                    panel = panel.child(row("Absorber", choices));
                 }
                 let mut edges = segmented(&t);
                 for (i, edge) in [Edge::K, Edge::L1, Edge::L2, Edge::L3]
@@ -925,14 +933,7 @@ impl StudioApp {
                         })),
                     );
                 }
-                panel = panel.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child("Edge")
-                        .child(edges),
-                );
+                panel = panel.child(row("Edge", edges));
             } else {
                 let auto_moves = self.rmc.project.draft.auto_moves;
                 panel = panel.child(section_label(&t, "Run budget"))
@@ -943,7 +944,7 @@ impl StudioApp {
                         format!("{} available · absorbers are distributed first", plural(engine::available_workers(), "CPU")),
                         self.rmc.fields[27].clone(),
                     ))
-                    .child(div().flex().items_center().gap_2().child("Moves").child(segmented(&t)
+                    .child(row("Moves", segmented(&t)
                         .child(describe(&t, segment(&t, "rmc-auto-moves", "Auto", auto_moves, true),
                             "Adjusts the starting move size during the run and cools toward improvements only.")
                             .on_click(cx.listener(|app, _, _, cx| {
@@ -977,12 +978,12 @@ impl StudioApp {
                     panel = panel.child(div().text_color(t.warn).child(warning));
                 }
                 let refine_energy = self.rmc.project.draft.refine_energy;
-                panel = panel.child(describe(&t, button(&t, "rmc-spectrum-ranges", "Use spectrum ranges", false),
+                panel = panel.child(action(describe(&t, button(&t, "rmc-spectrum-ranges", "Use spectrum ranges", false),
                     "Copies Transform windows and sampling. ReFEFF k coverage expands automatically.")
-                    .on_click(cx.listener(|app, _, _, cx| app.use_rmc_spectrum_ranges(cx))))
+                    .on_click(cx.listener(|app, _, _, cx| app.use_rmc_spectrum_ranges(cx)))))
                     .child(section_label(&t, "Amplitude and energy"))
                     .child(self.rmc.fields[12].clone())
-                    .child(div().flex().items_center().gap_2().child("ΔE₀").child(segmented(&t)
+                    .child(row("ΔE₀", segmented(&t)
                         .child(describe(&t, segment(&t, "rmc-energy-fixed", "Fixed", !refine_energy, true),
                             "S₀² and ΔE₀ stay fixed during RMC.")
                             .on_click(cx.listener(|app, _, _, cx| {
@@ -996,7 +997,7 @@ impl StudioApp {
                     .child(self.rmc.fields[13].clone());
                 if self.rmc.diagnostic.is_some() {
                     panel = panel
-                        .child(
+                        .child(action(
                             button(&t, "rmc-cancel-calibration", "Cancel preview", false).on_click(
                                 cx.listener(|app, _, _, cx| {
                                     app.rmc.diagnostic_generation += 1;
@@ -1005,16 +1006,16 @@ impl StudioApp {
                                     cx.notify();
                                 }),
                             ),
-                        )
+                        ))
                         .child(hint(&t, "Estimating from the starting structure…"));
                 } else {
-                    panel = panel.child(
+                    panel = panel.child(action(
                         button(&t, "rmc-calibrate", "Estimate calibration…", false)
                             .disabled(self.rmc.control.is_some())
                             .on_click(
                                 cx.listener(|app, _, _, cx| app.estimate_rmc_calibration(cx)),
                             ),
-                    );
+                    ));
                 }
                 if let Some(preview) = &self.rmc.project.calibration {
                     let b = &preview.result.best;

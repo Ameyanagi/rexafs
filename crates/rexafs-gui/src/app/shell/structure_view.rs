@@ -2206,7 +2206,7 @@ impl StudioApp {
 
     // ---- inspector: structure panel ------------------------------------------
 
-    fn spectrum_interest(&self) -> Option<crate::spectrum_interest::SpectrumInterest> {
+    pub(crate) fn spectrum_interest(&self) -> Option<crate::spectrum_interest::SpectrumInterest> {
         let header = self.import_preview.as_ref().and_then(|p| p.xdi.as_ref());
         let e0 = (self.spectrum_path == self.current_path)
             .then(|| self.spectrum.as_ref().and_then(|s| s.e0()))
@@ -2309,6 +2309,7 @@ impl StudioApp {
                         .child(
                             div()
                                 .flex()
+                                .flex_none()
                                 .flex_wrap()
                                 .gap_1()
                                 .child(
@@ -2341,7 +2342,7 @@ impl StudioApp {
                                 ),
                         );
                 }
-                let mut categories = div().flex().flex_wrap().gap_1();
+                let mut categories = div().flex().flex_none().flex_wrap().gap_1();
                 for (category, label) in [
                     (None, "All types"),
                     (Some("metal"), "Metals"),

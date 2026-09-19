@@ -126,6 +126,16 @@ impl StudioApp {
                 model.element = declared.element;
                 model.edge = declared.edge;
                 self.normalization.identity_hint = "Suggested by source header · editable".into();
+            } else if let Some(guess) = self.spectrum_interest() {
+                // Nearest tabulated absorption edge to the spectrum's E₀ (xraydb
+                // guess_edge, within 100 eV); the user can still edit both fields.
+                model.element = guess.element;
+                model.edge = guess.edge.unwrap_or_else(|| "K".into());
+                self.normalization.identity_hint = if guess.estimated {
+                    "Estimated from E₀ · editable".into()
+                } else {
+                    "Suggested by source header · editable".into()
+                };
             }
         }
         self.normalization.erfc = model.erfc.is_some();

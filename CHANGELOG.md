@@ -16,6 +16,8 @@
   own inspector row, hide developer counters unless `REXAFS_DEBUG_STATS` is set,
   colour error and success status text, rank palette matches by title, and use
   correct plurals throughout.
+- Normalize: MBACK pre-fills the absorber and edge from the spectrum's E₀ when
+  the source declares none.
 - Plots and Series: integer frame and component ticks, grouped Transform toolbar,
   a first-run range-handle hint, and a one-line Series definition.
 
