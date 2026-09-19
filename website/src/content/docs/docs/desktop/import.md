@@ -30,12 +30,12 @@ establish the units or detector arithmetic.
    groups are added. Each signal becomes a separate spectrum, the Data view
    starts on raw μ(E), and one undo removes the entire import.
 
-[![rexafs 0.2.10 import preview with the stored Cu absorption selected](/screenshots/0.2.10/import-preview.jpg)](/screenshots/0.2.10/import-preview.jpg)
+[![rexafs 0.2.11 import preview with the stored Cu absorption selected](/screenshots/0.2.11/import-preview.jpg)](/screenshots/0.2.11/import-preview.jpg)
 
-Captured through computer use from the tagged 0.2.10 macOS CI build.
-This public Cu measurement contains 612 points and a stored `mutrans` signal;
+Captured through computer use from the signed 0.2.11 macOS release.
+This public Cu measurement contains 408 points and a stored `mutrans` signal;
 it does not need detector arithmetic. See
-[data and capture provenance](/licenses/#desktop-0210-workflow-captures).
+[data and capture provenance](/licenses/#desktop-0211-workflow-captures).
 
 For transmission, rexafs computes `ln(I0 / It)` from incident and transmitted
 intensities in matching units. Reference uses `ln(It / Ir)`, with `Ir` measured
@@ -105,10 +105,11 @@ Saved projects retain its skipped status and original review evidence.
 The **× on the import summary bar** only hides that summary. It does not skip
 pending files. Use the row's × or the Skip menu to remove them from the queue.
 
-[![Skip pending files individually or by extension](/screenshots/next/pending-import-skip.jpg)](/screenshots/next/pending-import-skip.jpg)
+[![Skip pending files individually or by extension in rexafs 0.2.11](/screenshots/0.2.11/pending-import-skip.jpg)](/screenshots/0.2.11/pending-import-skip.jpg)
 
-This historical development capture was checked through computer use on 2026-09-17 using
-generated software-test signals. The screenshot contains no experimental data.
+Captured through computer use from the signed 0.2.11 Mac app. The three pending
+files contain generated software-test signals; the background plot is the public
+Cu example. Skipping `.dat` left the `.txt` entry pending; **Undo skip** restored both `.dat` files.
 
 <a id="import-a-whole-project-unreleased"></a>
 
@@ -126,9 +127,9 @@ selected; a project group appears as a scan in the preview.
 3. Choose **Import N spectra** to add every checked output from the selected
    scans. The number counts spectra, so one scan can contribute several signals.
 
-[![rexafs 0.2.9 import dialog with all four Athena project records selected](/screenshots/0.2.9/import-project-scans.jpg)](/screenshots/0.2.9/import-project-scans.jpg)
+[![rexafs 0.2.11 import dialog with all four Athena project records selected](/screenshots/0.2.11/import-project-scans.jpg)](/screenshots/0.2.11/import-project-scans.jpg)
 
-Captured through computer use from the signed 0.2.9 Mac app. All four records
+Captured through computer use from the signed 0.2.11 Mac app. All four records
 were imported together successfully. This example uses Larch's
 MIT-distributed `json_unzipped.prj`; see the [screenshot attribution](/licenses/#documentation-screenshots).
 

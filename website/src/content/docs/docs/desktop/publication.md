@@ -87,6 +87,6 @@ replacement/backup behavior of `.rxs` saves. See the [folder
 exporter](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/publication.rs#L248).
 
 
-[![Full publication editor showing a vector Cu fit figure and output controls](/screenshots/publication.jpg)](/screenshots/publication.jpg)
+[![Full publication editor showing a vector Cu fit figure and output controls](/screenshots/0.2.11/publication.jpg)](/screenshots/0.2.11/publication.jpg)
 
-*Publication editor. Full window, rexafs 0.2.4 on macOS; select to enlarge.*
+*Publication editor. Full window, rexafs 0.2.11 on macOS; select to enlarge.*

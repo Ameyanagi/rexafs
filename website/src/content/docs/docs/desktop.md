@@ -67,6 +67,6 @@ Cmd/Ctrl+Shift+A clears marks. **Help** opens the bundled Cu example, the offlin
 license reader and Updates. Undo history belongs to the current session; save a
 project or export an analysis record before closing it.
 
-[![The complete Data stage displaying the measured Cu absorption spectrum](/screenshots/data.jpg)](/screenshots/data.jpg)
+[![The complete Data stage displaying the measured Cu absorption spectrum](/screenshots/0.2.11/data.jpg)](/screenshots/0.2.11/data.jpg)
 
-*Data stage with the selected Cu spectrum. rexafs 0.2.4 on macOS; select any screenshot for full resolution.*
+*Data stage with the selected Cu spectrum. rexafs 0.2.11 on macOS; select any screenshot for full resolution.*
