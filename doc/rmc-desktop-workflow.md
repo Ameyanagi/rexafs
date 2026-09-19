@@ -1,6 +1,6 @@
-# Desktop RMC workflow (0.2.10)
+# Desktop RMC workflow (0.2.11)
 
-## Unreleased corrections after 0.2.10
+## Setup and range corrections in 0.2.11
 
 The next action stays at the upper right, matching ordinary path fitting:
 **Use structure →**, **Next: fit settings →**, **Run RMC →**, then **Edit settings →**.
@@ -8,7 +8,7 @@ The next action stays at the upper right, matching ordinary path fitting:
 these actions, above the scrollable controls; advancing does not require scrolling
 to a footer. Run controls still prevent duplicate jobs and reject invalid inputs.
 
-The source checkout copies the spectrum's forward Transform k bounds, k weight,
+Version 0.2.11 copies the spectrum's forward Transform k bounds, k weight,
 window, `dk`/`dk high`, FFT length and spacing when initializing RMC or choosing
 **Use spectrum ranges**. Explicit Back FT R bounds, window and widths are copied
 as well. Without explicit R bounds, RMC starts at Rbkg + 0.15 Å and ends at
@@ -62,11 +62,11 @@ reports the number of electronic preparations and shared contexts. See the
 [startup profiling method](rmc-startup-profiling.md) for reproducible timing and
 spectral-agreement checks; startup speed does not establish fit convergence.
 
-These corrections are not part of the published 0.2.10 binary. Implementation:
+These corrections were introduced in 0.2.11. Implementation:
 [`Draft::use_spectrum_ranges`, `Request::new` and the worker settings](../crates/rexafs-gui/src/rmc_fitting.rs),
 with [core resource checks](../crates/rexafs/src/xafs/rmc/accelerated.rs).
 
-## Unreleased CPU controls
+## CPU controls (0.2.11)
 
 **Fit settings → CPU workers** selects the total thread budget. New drafts use
 **Auto**, which detects available logical CPUs up to 64. Enter 1–64 to override
@@ -84,7 +84,9 @@ backend's internal thread setting remains one by default. See the
 [core parallelism guide](rmc.md#unreleased-absorber-first-cpu-parallelism) for the
 scope, deterministic reductions and resource limits.
 
-## Unreleased fitting controls
+<a id="unreleased-fitting-controls"></a>
+
+## Fitting controls (0.2.11)
 
 New jobs start with **Auto moves** and a 0.05 Å Cartesian move width. The width
 adapts within 0.1–2 times its starting value, freezes after 80% of the original
@@ -378,7 +380,7 @@ and the newer precision-preserving display formatting. The native screenshots
 above document the pre-integration RMC review; automated checks also cover the
 combined branch.
 
-## Interpreting an improving but poor fit (unreleased clarification)
+## Interpreting an improving but poor fit
 
 The percentage reduction compares the current best objective with the initial
 objective; it is not the percentage of the experimental signal explained. A very

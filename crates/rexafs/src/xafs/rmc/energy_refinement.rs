@@ -1,7 +1,7 @@
 //! Bounded, fixed-amplitude energy searches between RMC coordinate blocks.
 use super::*;
 
-/// Unreleased: optional theoretical ΔE₀ optimization in [`RmcSession`].
+/// Since 0.2.11: optional theoretical ΔE₀ optimization in [`RmcSession`].
 ///
 /// S₀² remains fixed at each input dataset's value. Each dataset has one independent
 /// shift shared by all its absorbers and mixture components. Measured energies,
@@ -98,7 +98,7 @@ impl EnergyRefinement {
     }
 }
 
-/// Audit of one fixed-geometry energy update (unreleased). Includes unsuccessful
+/// Audit of one fixed-geometry energy update (since 0.2.11). Includes unsuccessful
 /// searches; `before == after` means the verified objective did not improve.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EnergyUpdate {

@@ -5,6 +5,15 @@ with a merge commit before tagging. Nightly desktop builds follow `dev`; they
 do not substitute for the qualified stable tag build below. See the
 [development branch workflow](development-branches.md).
 
+## Preparing 0.2.11
+
+The [0.2.11 notes](release-notes-0.2.11.md) and
+[qualification record](validation/2026-09-19-release-0.2.11/review.md) track the
+RMC setup, CPU controls and fixed-amplitude energy-refinement release.
+Publication requires green feature and promotion PRs, a successful manual build
+of the immutable tag, signed Mac outputs and verified registry/desktop bytes.
+Stable website metadata remains on 0.2.10 until publication is verified.
+
 ## Published 0.2.10
 
 The [0.2.10 notes](release-notes-0.2.10.md) and

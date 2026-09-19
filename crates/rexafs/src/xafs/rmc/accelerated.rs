@@ -58,7 +58,7 @@ pub struct AccelerationSettings {
     /// spare threads also evaluate paths within a smaller absorber batch. Both
     /// levels share this one pool; their thread counts do not multiply.
     pub workers: usize,
-    /// Unreleased: use spare workers for paths when a batch has fewer absorbers
+    /// Since 0.2.11: use spare workers for paths when a batch has fewer absorbers
     /// than workers. Default false retains historical scheduling. Recommended
     /// with multiple workers, especially for a single absorbing site. Path sums
     /// retain catalogue order, including cached/rejected trials. Electronic
@@ -69,7 +69,7 @@ pub struct AccelerationSettings {
     /// 256. Shared datasets with the same combinations reuse contexts. Set this
     /// explicitly for larger calculations; sites are never silently sampled.
     pub max_contexts: usize,
-    /// Unreleased: share immutable electronic setup when complete FEFF inputs
+    /// Since 0.2.11: share immutable electronic setup when complete FEFF inputs
     /// match after sorting scatterer rows at the existing 12-decimal precision.
     /// Recommended for new periodic jobs; no sites, paths or species are merged.
     /// Defaults to false to preserve historical input ordering and checkpoint

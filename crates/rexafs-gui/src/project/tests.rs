@@ -518,6 +518,14 @@ fn write_release_compatibility_fixtures() {
         },
     );
     add_synthetic_collection_results(&mut project);
+    // Retain explicit 0.2.11 RMC controls without presenting a synthetic saved
+    // refinement as an experimental result. Native worker tests cover checkpoints.
+    project.rmc.draft.auto_moves = true;
+    project.rmc.draft.workers = Some(4);
+    project.rmc.draft.parallel_paths = true;
+    project.rmc.draft.refine_energy = true;
+    project.rmc.draft.energy_refinement.bounds = [-10., 10.];
+    project.rmc.draft.energy_refinement.interval = 100;
     for (suffix, mode) in [
         ("links", DataStorage::Paths),
         ("embedded", DataStorage::Embedded),

@@ -2,7 +2,7 @@
 use super::*;
 use std::ops::ControlFlow;
 
-/// Unreleased: controls for deterministic local refinement after RMC exploration.
+/// Since 0.2.11: controls for deterministic local refinement after RMC exploration.
 /// This uses numerical derivatives, not automatic differentiation. Each block is
 /// one movable atom's three Cartesian coordinates; all selected absorbers still
 /// contribute. Full calculator evaluations include geometry-dependent amplitudes

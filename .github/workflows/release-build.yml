@@ -340,10 +340,10 @@ jobs:
           # inherit it so the extracted bundle proves its own helper works.
           REXAFS_FEFF10_EXECUTABLE: ${{ runner.os == 'Windows' && format('{0}\target\feff10-helper\feff10-rs.exe', github.workspace) || '' }}
         run: cargo test --locked --release -p rexafs-gui --no-default-features --features ${{ matrix.features }}
-      - name: Embedded FEFF runner and fitting integration
+      - name: Embedded FEFF runner, RMC parallelism and fitting integration
         env:
           REXAFS_FEFF10_EXECUTABLE: ${{ runner.os == 'Windows' && format('{0}\target\feff10-helper\feff10-rs.exe', github.workspace) || '' }}
-        run: cargo test --locked --release -p rexafs --features refeff-runner,feff10-runner --test refeff_runner --test feff10_s02k_parity
+        run: cargo test --locked --release -p rexafs --features refeff-runner,feff10-runner --test refeff_runner --test rmc_refeff --test feff10_s02k_parity
       - name: Archive regression checks
         run: python scripts/test-release-archive.py
       - run: cargo build --locked --release -p rexafs-gui --no-default-features --features ${{ matrix.features }}

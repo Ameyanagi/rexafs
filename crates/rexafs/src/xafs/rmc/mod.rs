@@ -214,7 +214,7 @@ pub struct ExafsDataset {
     /// Fixed positive amplitude reduction S₀², usually calibrated independently.
     pub s02: f64,
     /// Initial theoretical energy shift in eV. Positive values sample theory at
-    /// smaller k. Fixed by default; unreleased [`EnergyRefinement`] optionally
+    /// smaller k. Fixed by default; since 0.2.11, [`EnergyRefinement`] optionally
     /// optimizes it in a session without changing this input value.
     pub delta_e0: f64,
 }

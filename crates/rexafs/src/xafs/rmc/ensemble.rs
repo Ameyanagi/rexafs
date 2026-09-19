@@ -147,7 +147,7 @@ pub struct AbsorberPaths {
 /// scattering calculation; a coordinate move recalculates only its component.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EnsembleState {
-    /// Unreleased: theoretical ΔE₀ for each dataset, in eV. Populated when energy
+    /// Since 0.2.11: theoretical ΔE₀ for each dataset, in eV. Populated when energy
     /// refinement is enabled. Empty historical/fixed states use the input values;
     /// prefer [`Self::energy_shifts`] to resolve either representation.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

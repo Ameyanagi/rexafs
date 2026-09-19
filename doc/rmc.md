@@ -16,9 +16,9 @@ implementation; the [new validation and performance record](rmc-performance.md)
 describes this extension. These capabilities do not establish EVAX numerical
 parity or experimental accuracy.
 
-## Unreleased: refine theoretical ΔE₀ with fixed S₀²
+## Refine theoretical ΔE₀ with fixed S₀² (0.2.11)
 
-The source checkout adds optional energy refinement to `RmcSession`. Existing
+Version 0.2.11 adds optional energy refinement to `RmcSession`. Existing
 jobs retain fixed energy shifts. For a new job:
 
 ```rust
@@ -68,9 +68,12 @@ The desktop expands requested ReFEFF k support to cover the configured bounds.
 Implementation: [energy search](../crates/rexafs/src/xafs/rmc/energy_refinement.rs),
 [transactional session and state evaluation](../crates/rexafs/src/xafs/rmc/session.rs),
 [state representation](../crates/rexafs/src/xafs/rmc/ensemble.rs).
-These additions are not part of published 0.2.10 or its Python/TypeScript APIs.
+These additions are available from 0.2.11 in Rust and the native desktop.
+Python and TypeScript do not yet expose RMC.
 
-## Unreleased: absorber-first CPU parallelism
+<a id="unreleased-absorber-first-cpu-parallelism"></a>
+
+## Absorber-first CPU parallelism (0.2.11)
 
 The prepared calculator has one bounded Rayon pool. Its `workers` setting is the
 total CPU thread budget, not a process count. Independent absorbers run concurrently

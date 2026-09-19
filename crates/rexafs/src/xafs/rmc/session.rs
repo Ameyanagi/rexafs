@@ -34,7 +34,7 @@ pub struct SessionSettings {
     pub stopping: StoppingSettings,
     /// Optional acceptance-based coordinate widths; disabled by default (since 0.2.10).
     pub adaptation: Option<StepAdaptation>,
-    /// Unreleased: bounded theoretical ΔE₀ searches before the first move and
+    /// Since 0.2.11: bounded theoretical ΔE₀ searches before the first move and
     /// between coordinate blocks. None (default) keeps shifts fixed. S₀² and
     /// experimental preprocessing always stay fixed. See [`EnergyRefinement`].
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -61,7 +61,7 @@ impl Default for SessionSettings {
 }
 
 impl SessionSettings {
-    /// Unreleased: refine each dataset's theoretical ΔE₀ with S₀² fixed.
+    /// Since 0.2.11: refine each dataset's theoretical ΔE₀ with S₀² fixed.
     /// The inclusive bounds are in eV. Uses the documented [`EnergyRefinement`]
     /// defaults (250 attempts between updates, 0.1 eV local grid). Review bounds
     /// and timing for your experiment; validation occurs at session creation.
@@ -79,7 +79,7 @@ impl SessionSettings {
         self
     }
 
-    /// Unreleased: enable bounded move-size feedback and cooling for optimization.
+    /// Since 0.2.11: enable bounded move-size feedback and cooling for optimization.
     ///
     /// Starts at `moves.step_size` Å per Cartesian coordinate, adjusts every 100
     /// coordinate attempts, and bounds all proposal widths to 0.1–2 times their
@@ -146,7 +146,7 @@ pub enum EnsembleMove {
 /// Completed move. Calculator failures produce no record and consume no RNG state.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SessionStep {
-    /// Unreleased: optional energy search following this coordinate/weight attempt.
+    /// Since 0.2.11: optional energy search following this coordinate/weight attempt.
     /// `accepted` still describes the coordinate/weight move; `score` and
     /// `best_score` include any verified energy improvement. No RNG draws are used.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -654,7 +654,7 @@ pub fn evaluate_ensemble<C: ExafsCalculator + ?Sized>(
 }
 
 impl RmcSession {
-    /// Unreleased: improve the best RMC state with constrained numerical gradients.
+    /// Since 0.2.11: improve the best RMC state with constrained numerical gradients.
     ///
     /// Uses full calculator evaluations and the original displacement reference.
     /// Does not mutate this session, its random stream, calibration or checkpoint.
@@ -1014,7 +1014,7 @@ impl RmcSession {
     pub fn best(&self) -> &EnsembleState {
         &self.checkpoint.best
     }
-    /// Unreleased: initial fixed-geometry energy-search audit, when enabled.
+    /// Since 0.2.11: initial fixed-geometry energy-search audit, when enabled.
     pub fn initial_energy(&self) -> Option<&EnergyUpdate> {
         self.checkpoint.initial_energy.as_ref()
     }
