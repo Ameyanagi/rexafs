@@ -1,0 +1,440 @@
+[
+  {
+    "file": "01-empty-workspace.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "cce27d2289b2b925947814035dd6c85a903d8c503d9b1a71340275151904a6b2"
+  },
+  {
+    "file": "02-command-palette.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "bb7447777c72f168854a880311a51615af49dbce1ea473b62147bb562d314ce6"
+  },
+  {
+    "file": "03-command-palette-fit.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "c8ef145fc3be57f8a1c7f70ec0b962cb7a0ae28cc8d025ad3efdfa983fcc016c"
+  },
+  {
+    "file": "04-import-attempt-main-window.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "d898206428df7672b91d13e878ae36f69b13dc96179f89a8a02589497ceaa296"
+  },
+  {
+    "file": "05-import-native-dialog.png",
+    "width": 6016,
+    "height": 3384,
+    "sha256": "c8c55894df5545c32d34f9cebbb07f17bdd0f55bfe74764ae651ca972747664a"
+  },
+  {
+    "file": "06-import-native-dialog-window.png",
+    "width": 1760,
+    "height": 896,
+    "sha256": "84f22f89772b34d2eb0c75bc5968fac1330cac8e669d4a0ce7af9d01cc61d53e"
+  },
+  {
+    "file": "07-import-path-not-yet-applied.png",
+    "width": 1760,
+    "height": 896,
+    "sha256": "9792e0a300f4e98ff0c03fc4ee813cbedcf7ac3500901594d075a47a96c3ca7e"
+  },
+  {
+    "file": "08-native-dialog-navigation-attempt.png",
+    "width": 1760,
+    "height": 896,
+    "sha256": "9792e0a300f4e98ff0c03fc4ee813cbedcf7ac3500901594d075a47a96c3ca7e"
+  },
+  {
+    "file": "09-import-path-entry.png",
+    "width": 1760,
+    "height": 896,
+    "sha256": "23774f8d4b18489b8c2c67fb52cee2dc7b00bde1c824b7c41f4ee5cc741e07b0"
+  },
+  {
+    "file": "10-import-fixture-selected.png",
+    "width": 1760,
+    "height": 896,
+    "sha256": "d87ab6271b62132857b5c62d83ba9ce25f9e1b3feae39dfaced7847b8a276310"
+  },
+  {
+    "file": "11-import-confirm-attempt-main-window.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "d898206428df7672b91d13e878ae36f69b13dc96179f89a8a02589497ceaa296"
+  },
+  {
+    "file": "12-import-mapping-preview.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "2aa8dc58ce41fdfe7802c84b65da9e43344b38da9952a99c85384cdb3c46fdf7"
+  },
+  {
+    "file": "13-import-confirmed.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "e94faef3bde0317b5df70a7c4572bf4ddfc13d399fd1d4fbb948e5dbc7dc8749"
+  },
+  {
+    "file": "14-project-open.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "b683a36427472737309ce171be32137d88b451f382634b40d1bdf68099143395"
+  },
+  {
+    "file": "15-normalize.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "065ff065cd2dc78805c60aaeb5bcb077f19e29bae27bb3cf557551c4151502ba"
+  },
+  {
+    "file": "16-background.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "cd5dba5df3db30929fbaedde6e5bf2ea6c846cee697b275a20e2e34f2e9863d2"
+  },
+  {
+    "file": "17-transform.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "f7ce3dc5756bf5f3e1749a9a96ea5a0ae6590d946606eada9504ca786fd7824f"
+  },
+  {
+    "file": "18-transform-wavelet.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "0821a273ea7e5e6cfc8de9cabc062f02484de9c6e0c16ea7d9e81ccafdc6ea36"
+  },
+  {
+    "file": "19-fit-initial.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "254601d7b2131df5fbd4e59579981d5fbe44ec59cdfff6b6601edfc2f268ad51"
+  },
+  {
+    "file": "20-fit-structure.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "141907c35d9c459acc88f4c6f6c9832e317f1491fcfbcdd9bd787f4abb8e4221"
+  },
+  {
+    "file": "21-fit-calculate.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "627cebdf493bbb59551ce1913259f317b6b7ab1426add692bba3e6e93b65163d"
+  },
+  {
+    "file": "22-fit-paths.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "500a86080ab2b071f298a802fec0654189d377714190bc1ce0ad3a21ab2f7fdf"
+  },
+  {
+    "file": "23-fit-model.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "14f30a45c08d9137931f2e2bd08538a3939cb520a1eab66ad6cd18a02b2d5536"
+  },
+  {
+    "file": "24-fit-results.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "7568bb4fb42c8383d6bd3abe5f2fe37023d9314a71daa99ae2d14805dc82cd07"
+  },
+  {
+    "file": "25-fit-mode-menu.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "80a2d3fcf6f772299f07ab5384631b5c49d35ef225942388786bf11b9134e1e7"
+  },
+  {
+    "file": "26-rmc-structure.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "8e8a78b9e0805fc3995a6d76b05460fa9a60575616d02f100c7af593c0fb29b5"
+  },
+  {
+    "file": "27-rmc-supercell.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "c6524734e2dc0498dc1d6ca9abf17975bab9f849dc4e16a918f02207d3a36bac"
+  },
+  {
+    "file": "28-rmc-fit-settings.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "838e71f1e3ae9400d82939b5819c5b3d6d5b1d786d76c447fff18c0bc7260cd4"
+  },
+  {
+    "file": "29-rmc-results.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "ba477f027a60674108cdd608c9e668ef1a72cf2a6f4af365bdf4681c146aac89"
+  },
+  {
+    "file": "30-rmc-run-details.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "59be24469f9086f7d65bfd728c82610e0634d2c756b2826eda716a549c9f4265"
+  },
+  {
+    "file": "31-series.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "18608712d55dcc129fff483898d49f49aae9509bd6eca1f398e160c586bc3aa1"
+  },
+  {
+    "file": "32-publish.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "52fbfaa5d20a441a419982cd3257361f7fcff017abe985f57f67d16a7b369038"
+  },
+  {
+    "file": "33-toggle-cmd-b.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "ec8f4986bd06a2c5d1f2b70baa629d85d48a5621113b8e6a0887f31bf4255692"
+  },
+  {
+    "file": "34-toggle-cmd-j.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "76f906906c2603be579c97b8207cd6d173731c35be8048632a79ae9db4107744"
+  },
+  {
+    "file": "35-toggle-cmd-p.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "32ec781c895278cdc9ea7534aff5da951c1b5917e2ed6607d5f13e51fc5781bc"
+  },
+  {
+    "file": "36-toggle-cmd-i.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "268966bfbe6a7b62310faca8ad6e33e626f6efea47f9c7970f6eae7ea666a2d5"
+  },
+  {
+    "file": "37-toggle-cmd-shift-j.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "a54a2a2cdc91f66db79e596c9bf2d595f8228c9950917a424fa08dff8ac1e0f5"
+  },
+  {
+    "file": "38-assistant-panel.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "c6070f0660beec646dfcac5e4a728741db4ee6c2c40540e3ae18131976d5d41c"
+  },
+  {
+    "file": "39-assistant-model-menu.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "be65fc3bc158dcafb79fa25bf462adcb6152a9c0225dc7fe13e793bb84346f37"
+  },
+  {
+    "file": "40-assistant-effort-menu.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "00eb045e59e48b9f7577d2d94ef10f64c16c64ca9260eed8c8b27d15f7f65640"
+  },
+  {
+    "file": "41-assistant-mode-menu.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "0837d54e0a79589628bc628c417763a50fb790d15557eec8feccc4105e54b299"
+  },
+  {
+    "file": "42-group-context-menu.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "6e2e5ee4565082a2277f5db0d820fcfeba6482f2ec9806b41c36bfd00825db9e"
+  },
+  {
+    "file": "43-group-rename-editor.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "30c64f1b517e299831f89b256ba4800e6cfaa1d841a1d64f692013c4945f2e06"
+  },
+  {
+    "file": "44-group-actions-menu.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "515d0ef077849ed508bb3be3bc72c17e6daa97f8484d44e4739969ff34219f7d"
+  },
+  {
+    "file": "45-tools-palette-lcf.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "57945176b8ccc3f916a1fbd455fd25932ebbec68756660f95329db2f84a5a29f"
+  },
+  {
+    "file": "46-lcf-tool-form.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "cdc2e0374815e5e77c8b1db8e9b0b1f416bdaa5ffb2e901dad0d9ee7c2a6bd9a"
+  },
+  {
+    "file": "47-pca-tool-form.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "b7a8b77a9856618a745d9bc2b5dc94e74788b310af7524b77383c98f4e2aa7a6"
+  },
+  {
+    "file": "48-app-menu-bar.png",
+    "width": 6016,
+    "height": 3384,
+    "sha256": "9659a62017f5ae04d3ba189b8f87f74f11b8c0bc2d37d879007fb64845508eb8"
+  },
+  {
+    "file": "49-about-opens-help-menu.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "d96c764654c4fef11a3e7fac58a221d20efde21a40c4406c3df357a321dbe55a"
+  },
+  {
+    "file": "50-preferences-shortcut-check.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "b7a8b77a9856618a745d9bc2b5dc94e74788b310af7524b77383c98f4e2aa7a6"
+  },
+  {
+    "file": "51-updates-view.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "3a2d24361717e4c37ff90ba12ac0ce83070b93195236a7f9ce81d3e9b37a1719"
+  },
+  {
+    "file": "52-update-preferences.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "a977eb6d9941e8938c2215173911b178ea59dcd4ab13270fb0b69ff12ebd5b01"
+  },
+  {
+    "file": "53-light-data.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "b2535cc4ead123cac1c745bc4045a118b75b8edd21abf063723848d13d2047f0"
+  },
+  {
+    "file": "54-light-transform-wavelet.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "82b68584ca24cd886a90ecb2e8d4ad9ae6f564a263978508b57be9131b5d3871"
+  },
+  {
+    "file": "55-light-transform-fourier.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "7c49c5b5759cd979c627156b60fedf802f214dddde3e2e58ca12db644921cdd5"
+  },
+  {
+    "file": "56-light-fit-rmc.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "d12be0b445ed7479268dc0683d09e120819a58ca67b481334c4333732ce776d1"
+  },
+  {
+    "file": "57-light-fit-mode-menu.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "63081ceeef43549747175a68f54e6993a38ac2e26d4b320082a88974db0c3be8"
+  },
+  {
+    "file": "58-light-fit-model.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "116450fe330d4e290ddc4e51dc28356d6f9cf3b00e62f2e71ca1817f833033e2"
+  },
+  {
+    "file": "59-narrow-fit.png",
+    "width": 2200,
+    "height": 1400,
+    "sha256": "64715aed84221cac54e2b0abc8000004dcd623f8f62eeea870cace8fa6536795"
+  },
+  {
+    "file": "60-narrow-data.png",
+    "width": 2200,
+    "height": 1400,
+    "sha256": "378613f82b6a263853dd8fa987f9a71e3e5b6c778fc4e7362cb168eba6111a69"
+  },
+  {
+    "file": "61-journal-click-attempt.png",
+    "width": 2200,
+    "height": 1400,
+    "sha256": "2eee2877d948e71b3d11803f392e91c531f4120f340ad8eb473bf00ce9895607"
+  },
+  {
+    "file": "62-problems-panel.png",
+    "width": 2200,
+    "height": 1400,
+    "sha256": "fc4c2b43d877c9ddf31f0e80486309e779cfa1f7f985261d48002d6384798d03"
+  },
+  {
+    "file": "63-pending-import-resolution.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "bb9ed06d59f9452ebcef3282d04f627885d6b4a713a443fd2582dcbd40d7b7cf"
+  },
+  {
+    "file": "64-series-selection.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "72e545e913b0f6e654f613eec6d7dcb63f65cbb176ae5110bcd9177886c50a5b"
+  },
+  {
+    "file": "65-series-data.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "32c0a7af83d2221550dcc840997231369d1af139e7a7bcc24cecff86299e8ef9"
+  },
+  {
+    "file": "66-series-export-menu.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "e04b9f916599ec996325d574dc473166a3e024fc71b66ab57c55ded8411a3501"
+  },
+  {
+    "file": "67-series-results.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "334d60ac9b625cbb04ce84c41aa04c0da57f1e36df758b3a178af305a5bb4bb9"
+  },
+  {
+    "file": "68-publish-csv.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "e1aa0b1b2e48557c0356d4be07270adef8193d7a463420fcec7bdd656a6388f1"
+  },
+  {
+    "file": "69-publish-analysis-folder.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "1632dab367a88d97c9fb9d78e401fac1567f7af21e1b30c3c904a139e003d574"
+  },
+  {
+    "file": "70-publish-markdown.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "940d5e49fffd29dab6d2b319004a816a52f48c8c840ff15c382c75ca17285612"
+  },
+  {
+    "file": "71-wavelet-heading-click-attempt.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "a6929622b15f565d1b1b76e244b0327f887d1550d6b3a7cf5f25d6064314f465"
+  },
+  {
+    "file": "72-wavelet-settings.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "6037b7ff5c4562912fb0981f26cf892ca4d84591d7dce88fc1bc5d69b3581d1e"
+  },
+  {
+    "file": "73-rmc-settings-lower.png",
+    "width": 2880,
+    "height": 1864,
+    "sha256": "8dbd5d6dcef12226bfcc62be0ee0e69ffc10b468b4e8f7905ef14815b0bf778e"
+  }
+]

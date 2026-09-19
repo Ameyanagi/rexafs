@@ -70,6 +70,7 @@ Start with the [project README](../README.md), [API guide](api.md),
 These records describe the implementation at their stated dates. Validation counts
 and benchmark timings are historical, not assertions about the current build.
 
+- [Desktop UI/UX review of 0.2.11 (2026-09-19)](ux-review-0.2.11.md): proposals with retained captures
 - [Fitting workspace redesign](fitting-workspace-redesign.md)
 - [Structure database design](structure-db-design.md)
 - [GUI design](gui-ux-design.md) and [v2 proposal](gui-ux-design-v2.md)

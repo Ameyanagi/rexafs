@@ -1,0 +1,23 @@
+[
+  {
+    "source": "crates/rexafs-gui/tests/fixtures/projects/rexafs-0.2.11-embedded.rxs",
+    "copy": "<artifact directory>/rexafs-0.2.11-embedded.rxs",
+    "source_sha256": "12afd916cd3c2e12f4d10e4cae93bbde6ddeaaf1a17ea776a16513b971c431f1",
+    "copy_sha256": "12afd916cd3c2e12f4d10e4cae93bbde6ddeaaf1a17ea776a16513b971c431f1",
+    "identical": true
+  },
+  {
+    "source": "crates/rexafs/tests/testfiles/xraylarch_d867/xafsdata/cu_150k.xmu",
+    "copy": "<artifact directory>/cu_150k.xmu",
+    "source_sha256": "c309e53ec6b681024718d5c25694c6426818725974afd7b124a2f076be618cf2",
+    "copy_sha256": "c309e53ec6b681024718d5c25694c6426818725974afd7b124a2f076be618cf2",
+    "identical": true
+  },
+  {
+    "source": "crates/rexafs/tests/fixtures/xas/samples/aps/13-id-c/xasdatalibrary/cu_metal_rt.xdi",
+    "copy": "<artifact directory>/cu_metal_rt.xdi",
+    "source_sha256": "17b7076f1c3b5eccfa76dc6a7b3d26ea1fd388fa27f621a058779f70b71351d6",
+    "copy_sha256": "17b7076f1c3b5eccfa76dc6a7b3d26ea1fd388fa27f621a058779f70b71351d6",
+    "identical": true
+  }
+]
