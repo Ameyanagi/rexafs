@@ -9,11 +9,11 @@ signed-in account. Use **Retry** or the login controls if needed. rexafs stores
 no separate model API key. The Assistant remains experimental; review scientific
 choices and results before relying on them.
 
-[![rexafs 0.2.10 showing the Assistant composer beside the Cu spectrum and Parameters panel](/screenshots/0.2.10/assistant.jpg)](/screenshots/0.2.10/assistant.jpg)
+[![rexafs 0.2.11 showing the Assistant composer beside the Cu spectrum and Parameters panel](/screenshots/0.2.11/assistant.jpg)](/screenshots/0.2.11/assistant.jpg)
 
-Captured through computer use from the tagged **0.2.10 macOS CI build**, using a
+Captured through computer use from the signed **0.2.11 macOS release**, using a
 public experimental Cu foil spectrum. See
-[screenshot provenance](/licenses/#desktop-0210-workflow-captures).
+[screenshot provenance](/licenses/#desktop-0211-workflow-captures).
 No Assistant message was sent and no access permission was changed for these
 three captures. The available
 models and reasoning levels depend on the connected Codex installation.
@@ -29,7 +29,7 @@ Write your request in the message field. The footer has three menus:
   the selected model, or select one of its supported levels.
 - **Access** selects what the Assistant may do in the analysis.
 
-[![Model menu in the rexafs 0.2.10 Assistant](/screenshots/0.2.10/assistant-model.jpg)](/screenshots/0.2.10/assistant-model.jpg)
+[![Model menu in the rexafs 0.2.11 Assistant](/screenshots/0.2.11/assistant-model.jpg)](/screenshots/0.2.11/assistant-model.jpg)
 
 Use arrow keys to browse a menu, Enter or Space to choose, and Escape to close.
 **Enter** in the message field sends; **Shift+Enter** inserts a newline. The arrow
@@ -38,7 +38,7 @@ turn; an analysis calculation already running can finish independently.
 
 ## Choose access
 
-[![Access menu in the rexafs 0.2.10 Assistant showing Review, Edit analysis and Workspace commands](/screenshots/0.2.10/assistant-access.jpg)](/screenshots/0.2.10/assistant-access.jpg)
+[![Access menu in the rexafs 0.2.11 Assistant showing Review, Edit analysis and Workspace commands](/screenshots/0.2.11/assistant-access.jpg)](/screenshots/0.2.11/assistant-access.jpg)
 
 **Review** permits inspection and navigation. **Edit analysis** also permits
 supported parameter changes and calculations. App-authored receipts describe
@@ -87,23 +87,21 @@ plots appear in the main workspace. The Assistant checks current processing
 for every requested operand before running these operations. See the
 [analysis guide](/docs/science/analysis/) for assumptions and interpretation.
 
-[![Unreleased rexafs Assistant completing LCF of a synthetic mixture, with its weights and residual visible](/screenshots/next/assistant-lcf.jpg)](/screenshots/next/assistant-lcf.jpg)
-
 Example request: “Fit Synthetic mixture 1 using components A, B and C in
 normalized μ, from −20 to +80 eV relative to E₀. Keep the processing settings,
 constrain weights to sum to one, and inspect the fit and residual.” This
 controlled example recovers the known 20%, 30% and 50% weights.
-
-[![Unreleased rexafs Assistant comparing two- and three-component PCA reconstructions of synthetic spectra](/screenshots/next/assistant-pca.jpg)](/screenshots/next/assistant-pca.jpg)
 
 Example request: “Train PCA on mixtures 2–6 and reconstruct mixture 1 over the
 same interval. Compare two and three retained components, then show the
 three-component residual.” Here three components reproduce the known synthetic
 signal. This example does not establish a component count for experimental data.
 
-Both captures show an unreleased macOS source build tested through computer use
-on 15 September 2026. The inputs are generated mathematical signals, not measured
-Cu oxidation-state standards. See [screenshot provenance](/licenses/).
+The archived [LCF capture](/screenshots/next/assistant-lcf.jpg) and
+[PCA capture](/screenshots/next/assistant-pca.jpg) record these historical tests
+on an unreleased 15 September 2026 build. Their inputs are mathematical signals,
+not measured Cu oxidation-state standards. Current result views appear in the
+[analysis guide](/docs/science/analysis/#collection-workflow). See [provenance](/licenses/).
 
 Changing an input marks its earlier analysis result as stale in the Assistant's
 state; stale results are not supplied as current analysis plots. Use

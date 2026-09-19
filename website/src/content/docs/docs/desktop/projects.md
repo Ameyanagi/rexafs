@@ -96,6 +96,6 @@ backup is on the same disk; keep separate archival copies of valuable experiment
 
 
 
-[![Full save-project dialog with embedded source files selected](/screenshots/save-project.jpg)](/screenshots/save-project.jpg)
+[![Full save-project dialog with embedded source files selected](/screenshots/0.2.11/save-project.jpg)](/screenshots/0.2.11/save-project.jpg)
 
-*Saving embedded sources. Full window, rexafs 0.2.4 on macOS; select to enlarge.*
+*Saving embedded sources. Full window, rexafs 0.2.11 on macOS; select to enlarge.*
