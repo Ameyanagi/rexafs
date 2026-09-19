@@ -5,6 +5,15 @@ with a merge commit before tagging. Nightly desktop builds follow `dev`; they
 do not substitute for the qualified stable tag build below. See the
 [development branch workflow](development-branches.md).
 
+## Signed updater qualification (source correction)
+
+The Mac signing and installed-DMG checks now run `--self-check-updater`. It must
+copy and launch the helper with the signed Info.plist and resources intact; a
+successful app launch alone does not qualify the updater. The
+[updater record](validation/2026-09-19-updater/review.md) documents the reproduced
+0.2.10/0.2.11 failure and the source correction. Do not reuse the older qualification
+as evidence that signed in-app updates work.
+
 ## Published 0.2.11
 
 The [0.2.11 notes](release-notes-0.2.11.md) and

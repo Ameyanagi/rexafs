@@ -91,19 +91,23 @@ fn replace_and_launch(
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
-pub(crate) use macos::{finish_update, prepare};
+pub(crate) use macos::{check_helper, finish_update, prepare};
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 pub(crate) use portable::{finish_update, installed_app, prepare};
 
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
-pub(crate) fn can_install(release: &crate::updates::AvailableRelease) -> bool {
-    #[cfg(target_os = "windows")]
-    if release.installer.is_none()
-        && installed_app().is_ok_and(|target| windows::registered_install(&target).unwrap_or(true))
-    {
-        return false;
+pub(crate) fn check_install(release: &crate::updates::AvailableRelease) -> Result<(), String> {
+    if release.asset.is_none() {
+        return Err("No verified update archive is available for this platform.".into());
     }
-    release.asset.is_some() && installed_app().is_ok()
+    let target = installed_app()?;
+    #[cfg(target_os = "windows")]
+    if release.installer.is_none() && windows::registered_install(&target)? {
+        return Err("This Windows installation needs a matching update installer.".into());
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = target;
+    Ok(())
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
