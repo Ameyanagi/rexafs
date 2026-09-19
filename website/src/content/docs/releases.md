@@ -8,9 +8,37 @@ Published changes and migration notes are listed below. Back up projects before
 updating. Source-checkout APIs are documented in the [Next API
 reference](/docs/reference/).
 
-## Stable 0.2.10
+## Stable 0.2.11
 
-[Download 0.2.10](/download/) or read the
+[Download 0.2.11](/download/) or read the
+[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.11).
+
+- [RMC fitting](/docs/desktop/rmc/) inherits Transform ranges and expands theory
+  coverage for the window and energy shift. Larger cells retain every selected
+  absorber, with electronic preparation shared only for identical inputs.
+- **CPU workers** allocates available logical CPUs for new desktop jobs. Absorbers
+  run concurrently first; optional **Parallel paths** uses spare workers within
+  the same bounded pool. Saved runs retain their captured settings.
+- Calibration preview, bounded automatic moves and optional local coordinate
+  refinement help assess and improve the starting fit. **ΔE₀ → Refine** updates
+  the theoretical energy shift periodically while S₀² stays fixed. These controls
+  do not establish a unique structure or physical convergence.
+- FEFF10 0.2.4 corrects intermittent native array-header failures. Every desktop
+  package uses the corrected library or matching Windows helper, with generated
+  headers checked during qualification.
+
+Rust, Python, npm and all six desktop targets share version 0.2.11. Mac downloads
+are signed and notarized; Windows and Linux remain previews. RMC is available in
+Rust and the desktop; Python and TypeScript RMC bindings remain planned.
+Historical project fixtures are retained. See the
+[release notes](https://github.com/Ameyanagi/rexafs/blob/main/doc/release-notes-0.2.11.md)
+and [qualification record](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-09-19-release-0.2.11/review.md).
+
+<span id="stable-0210"></span>
+
+## Previous stable 0.2.10
+
+[Download 0.2.10](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.10) or read the
 [published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.10).
 
 - [RMC fitting](/docs/desktop/rmc/) adds guided structure/supercell setup, exact
@@ -136,7 +164,7 @@ was not promoted. Version 0.2.9 includes those updater and import-discovery chan
   browser Worker, with generated FEFF files and a provenance record.
 
 These follow website deployment, separately from the versioned npm API. Native
-rexafs 0.2.10 also uses ReFEFF 0.4.0. See [WASM scope](/docs/libraries/webassembly/).
+rexafs 0.2.11 also uses ReFEFF 0.4.0. See [WASM scope](/docs/libraries/webassembly/).
 
 ## Earlier releases
 

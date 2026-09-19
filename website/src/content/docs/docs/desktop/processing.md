@@ -4,7 +4,7 @@ description: "Use normalization, AUTOBK, forward and inverse transforms."
 audience: user
 ---
 
-This guide describes **rexafs 0.2.10**. The screenshots show its tagged macOS
+This guide describes **rexafs 0.2.11**. The screenshots show the tagged 0.2.10 macOS
 CI build, captured before signing through computer use with public Cu measurements. They are
 full, unedited windows; select an image for full resolution. See
 [capture provenance](/licenses/#desktop-0210-workflow-captures) and

@@ -170,29 +170,33 @@ path fitting remains the default for older projects. This workflow is introduced
    entries such as `Cu-O=1.5, Cu-Cu=2.0`, in Å. **Preview initial fit** to inspect
    its curves before starting moves, or select **Run RMC** directly.
 
-On first entering RMC with a processed spectrum, starting fit ranges use its
-Transform k bounds, clipped to measured and calculator support including the
-native taper, and R minimum is saved Rbkg + 0.15 Å. **Use spectrum ranges** applies
-these suggestions again explicitly without changing S₀² or ΔE₀. The numbered pages guide Structure → Supercell → Fit settings → Results.
-The Supercell page offers a **Next: fit settings** action, and the Fit settings
-page keeps preparation/run actions visible below its scrolling form. Advanced
-controls are collapsed initially. Field-specific input errors and missing
-prerequisites appear next to the run actions. Structure choices support keyboard
-activation and expose their material names to assistive technology.
+On first entering RMC with a processed spectrum, starting fit ranges copy its
+Transform settings, including explicit Back FT bounds, as described above.
+Without an explicit lower R bound, R minimum starts at saved Rbkg + 0.15 Å.
+**Use spectrum ranges** copies these settings again without changing S₀² or ΔE₀.
+The numbered pages guide Structure → Supercell → Fit settings → Results.
+The Supercell page offers **Next: fit settings** at the upper right; Fit settings
+keeps preview/run actions above its scrolling form. Advanced controls are
+collapsed initially. Field-specific input errors and missing prerequisites appear
+next to the run actions. Structure choices support keyboard activation and expose
+their material names to assistive technology.
 
-Starting controls
-use 10,000 attempts, 0.03 Å moves, numerical tolerance 0.001, 0.2 Å displacement,
-a 1 Å minimum distance and a fixed anchor at atom 0. These are visible starting
-values; calibration, constraints, cell size and convergence need sample-specific
-assessment. Larger suggested cells can substantially increase computation cost.
+New 0.2.11 jobs use 10,000 attempts, Auto moves starting at 0.05 Å, numerical
+tolerance 0.001, a 0.2 Å displacement envelope, a 1 Å minimum distance and a fixed
+anchor at atom 0. These are starting values; calibration, constraints, cell size
+and convergence need sample-specific assessment. Larger suggested cells can
+substantially increase computation cost. Historically, 0.2.10 started with fixed
+0.03 Å moves and placed run actions below the form. Older saved runs retain their
+captured move policy.
 
 The initial desktop objective is the native R-space **real plus imaginary**
 residual, normalized by experimental power, with any configured structural penalty
 added separately. The k/R magnitude plots are diagnostics. R minimum must be at
 least the saved AUTOBK Rbkg: the adapter rejects an incompatible range rather than
 quietly changing it. One integer k weight from 0 through 3 is supported. Automatic
-noise estimation and multiple k weights are not connected here. S₀² and ΔE₀ remain
-fixed during coordinate moves; the form shows their actual values.
+noise estimation and multiple k weights are not connected here. S₀² remains
+fixed. ΔE₀ stays fixed during each coordinate move and can be updated between
+moves when **Refine** is selected; each saved state's value matches its curves.
 
 ## Live results, pause and recovery
 

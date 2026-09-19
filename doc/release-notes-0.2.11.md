@@ -7,9 +7,9 @@
 | Linux · x64 preview | — | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.11/rexafs-0.2.11-x86_64-unknown-linux-gnu.tar.gz) |
 | Linux · ARM64 preview | — | [Archive](https://github.com/Ameyanagi/rexafs/releases/download/v0.2.11/rexafs-0.2.11-aarch64-unknown-linux-gnu.tar.gz) |
 
-**Release preparation:** these links become available after qualification and
-publication. The [qualification record](validation/2026-09-19-release-0.2.11/review.md)
-tracks the exact source, build, signing and public-artifact checks.
+Released on September 19, 2026. macOS downloads are signed and notarized.
+The [qualification record](validation/2026-09-19-release-0.2.11/review.md)
+records the source, build, signing and public-artifact checks.
 
 <details>
 <summary>RMC fitting improvements</summary>
@@ -77,10 +77,16 @@ through Windows 11 x64 emulation. Adaptive RMC remains experimental and opt-in.
 <details>
 <summary>Qualification</summary>
 
-Publication requires the reviewed dev → main merge, a successful manual build of
-the immutable v0.2.11 tag, registry package verification and signed/notarized Mac
-archives. Pull-request and nightly artifacts are not stable release inputs.
-The qualification record distinguishes completed checks from pending work.
+The dev → main promotion passed all 67 checks. All 37 jobs in the
+[immutable-tag build](https://github.com/Ameyanagi/rexafs/actions/runs/35415279391)
+succeeded. Both Mac architectures passed signing, notarization and installation
+checks. All seven public registry packages match the qualified build; all 27
+desktop asset digests match the final signed manifest.
+
+A computer-use check of the signed Apple Silicon app verified inherited fit
+ranges, two CPU workers, periodic ΔE₀ updates with fixed S₀², and saved-result
+reload using public Cu data. This ten-attempt software check is not a converged
+scientific fit.
 No unpublished experimental data, derived research results or private timing
 artifacts are included in the release source.
 

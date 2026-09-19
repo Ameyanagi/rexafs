@@ -4,7 +4,7 @@ description: "Map detector signals, confirm energy units and organize spectra."
 audience: user
 ---
 
-This guide describes **rexafs 0.2.10**, including confirmation for matching
+This guide describes **rexafs 0.2.11**, including confirmation for matching
 files and dismissal of pending imports. Screenshot captions identify their
 actual versions and capture builds.
 
