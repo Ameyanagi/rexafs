@@ -55,6 +55,12 @@ pub struct UserSettings {
     pub assistant_docked: bool,
     pub assistant_panel_width: f32,
     pub assistant_history_limit: u32,
+    /// Theme chosen with "Switch theme". None uses the dark preset;
+    /// `REXAFS_THEME` overrides the saved value for one launch.
+    pub theme: Option<crate::theme::ThemeMode>,
+    /// Set after the first range handle drag; the "Drag the blue tabs" caption
+    /// under the plots is shown until then.
+    pub range_hint_seen: bool,
 }
 
 impl Default for UserSettings {
@@ -76,6 +82,8 @@ impl Default for UserSettings {
             assistant_docked: true,
             assistant_panel_width: 380.,
             assistant_history_limit: crate::project::assistant::DEFAULT_HISTORY_LIMIT,
+            theme: None,
+            range_hint_seen: false,
         }
     }
 }
@@ -421,6 +429,8 @@ mod tests {
             groups_panel_width: Some(347.),
             recent_projects: vec!["/tmp/project.rxs".into()],
             recent_import_folders: vec!["/tmp/data".into()],
+            theme: Some(crate::theme::ThemeMode::Light),
+            range_hint_seen: true,
         };
         s.save_to(&path).unwrap();
         assert_eq!(UserSettings::load_from(&path).unwrap(), s);

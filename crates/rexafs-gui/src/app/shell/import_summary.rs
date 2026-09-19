@@ -32,7 +32,7 @@ fn action(
 impl StudioApp {
     pub(crate) fn import_summary(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
-        let open = !self.ui.sections.contains("source-details-closed");
+        let open = self.ui.sections.contains("source-details-open");
         let warning_count = self
             .import_preview
             .as_ref()
@@ -44,12 +44,12 @@ impl StudioApp {
                     d.child(
                         div()
                             .text_color(t.warn)
-                            .child(format!("{warning_count} warnings")),
+                            .child(crate::text::plural(warning_count, "warning")),
                     )
                 })
                 .on_click(cx.listener(|app, _, _, cx| {
-                    if !app.ui.sections.remove("source-details-closed") {
-                        app.ui.sections.insert("source-details-closed");
+                    if !app.ui.sections.remove("source-details-open") {
+                        app.ui.sections.insert("source-details-open");
                     }
                     cx.notify();
                 })),

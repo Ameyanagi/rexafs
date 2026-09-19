@@ -834,7 +834,7 @@ impl StudioApp {
                     .children(
                         entry
                             .reason
-                            .map(|reason| div().text_size(px(10.)).child(reason)),
+                            .map(|reason| div().text_size(px(11.)).child(reason)),
                     ),
             );
         }

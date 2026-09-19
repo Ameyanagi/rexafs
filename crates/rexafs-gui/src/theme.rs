@@ -2,6 +2,7 @@
 //! (publication-style) presets. See doc/gui-ux-design.md "Visual design".
 
 use gpui::{Rgba, rgb};
+use serde::{Deserialize, Serialize};
 
 /// Use a native monospace family so numeric columns align on every desktop.
 #[cfg(target_os = "macos")]
@@ -11,10 +12,24 @@ pub const MONO: &str = "Consolas";
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub const MONO: &str = "DejaVu Sans Mono";
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// The two presets. Serialized in lowercase ("dark" / "light") so the value in
+/// `settings.json` matches the `REXAFS_THEME` environment variable.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ThemeMode {
     Dark,
     Light,
+}
+
+impl ThemeMode {
+    /// Parse the `REXAFS_THEME` value; anything other than "light" or "dark" is None.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "light" => Some(Self::Light),
+            "dark" => Some(Self::Dark),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -64,11 +79,20 @@ impl Theme {
             raised: rgb(0xffffff),
             border: rgb(0xd9dce1),
             text: rgb(0x24292f),
-            text_muted: rgb(0x6e7681),
+            // 5.8:1 on `surface`, so 11 px captions pass WCAG AA (4.5:1).
+            text_muted: rgb(0x5c636d),
             accent: rgb(0x1f6feb),
             success: rgb(0x1a7f37),
             warn: rgb(0x9a6700),
             error: rgb(0xcf222e),
+        }
+    }
+
+    /// The preset for a mode.
+    pub fn for_mode(mode: ThemeMode) -> Self {
+        match mode {
+            ThemeMode::Dark => Self::dark(),
+            ThemeMode::Light => Self::light(),
         }
     }
 
@@ -85,5 +109,25 @@ impl Theme {
             ThemeMode::Dark => ruviz::render::Theme::dark(),
             ThemeMode::Light => ruviz::render::Theme::light(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn theme_mode_round_trips_through_settings_json() {
+        assert_eq!(
+            serde_json::to_string(&ThemeMode::Light).unwrap(),
+            "\"light\""
+        );
+        assert_eq!(
+            serde_json::from_str::<ThemeMode>("\"dark\"").unwrap(),
+            ThemeMode::Dark
+        );
+        assert_eq!(ThemeMode::parse("Light"), Some(ThemeMode::Light));
+        assert_eq!(ThemeMode::parse("auto"), None);
+        assert_eq!(Theme::for_mode(ThemeMode::Light).mode, ThemeMode::Light);
     }
 }

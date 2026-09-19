@@ -1,5 +1,5 @@
 //! Joint fit setup: every spectrum owns an explicit list of path identities.
-use super::{chip, fit_workspace::FitStep};
+use super::{chip, fit_workspace::FitStep, segment, segmented};
 use crate::{
     app::{FitProvenance, StudioApp},
     fitting::{FitHistoryEntry, FitPathSpec, FitVarSpec},
@@ -330,36 +330,39 @@ impl StudioApp {
             .px_4()
             .pb_2()
             .text_size(px(11.))
-            .child("Fit mode")
+            .child("Spectra")
             .child(
-                chip(&t, "fit-single", "Single spectrum", !enabled).on_click(cx.listener(
-                    |this, _, _, cx| {
-                        this.joint.config.enabled = false;
-                        this.fit_model_changed(cx);
-                        cx.notify();
-                    },
-                )),
-            )
-            .child(
-                chip(&t, "fit-joint", "Fit multiple spectra", enabled).on_click(cx.listener(
-                    |this, _, _, cx| {
-                        this.joint.config.enabled = true;
-                        this.joint.setup = true;
-                        if this.joint.config.datasets.is_empty() {
-                            for p in this.fit_paths.iter().filter(|p| p.spec.enabled) {
-                                for expr in [&p.spec.deltar, &p.spec.sigma2] {
-                                    this.joint
-                                        .config
-                                        .local
-                                        .extend(crate::fitting::expr_identifiers(expr));
+                segmented(&t)
+                    .child(
+                        segment(&t, "fit-single", "Single", !enabled, true)
+                            .description("Fit the active spectrum on its own.")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.joint.config.enabled = false;
+                                this.fit_model_changed(cx);
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        segment(&t, "fit-joint", "Multiple", enabled, false)
+                            .description("Fit several spectra together with shared variables.")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.joint.config.enabled = true;
+                                this.joint.setup = true;
+                                if this.joint.config.datasets.is_empty() {
+                                    for p in this.fit_paths.iter().filter(|p| p.spec.enabled) {
+                                        for expr in [&p.spec.deltar, &p.spec.sigma2] {
+                                            this.joint
+                                                .config
+                                                .local
+                                                .extend(crate::fitting::expr_identifiers(expr));
+                                        }
+                                    }
+                                    this.add_joint_current(cx);
                                 }
-                            }
-                            this.add_joint_current(cx);
-                        }
-                        this.fit_model_changed(cx);
-                        cx.notify();
-                    },
-                )),
+                                this.fit_model_changed(cx);
+                                cx.notify();
+                            })),
+                    ),
             )
             .when(enabled, |d| {
                 d.child(

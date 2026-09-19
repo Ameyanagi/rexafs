@@ -1,12 +1,20 @@
 # Preparing publication output
 
-Open **Publish** after processing a spectrum or completing a fit. Select a figure,
-adjust its controls, and save **PNG** or **SVG**. The preview preserves the image's
-aspect ratio and uses the same rendered PNG bytes as the individual PNG save.
+Open **Publish** after processing a spectrum or completing a fit. The header
+names the report scope (the current group, the marked groups and the recorded
+fits). **Publish report…** (unreleased; the 0.2.11 control is a format selector
+with **Export…**) writes the complete analysis folder described in
+[publication export](publication-export.md): `report.html`, the analysis record,
+every figure as PNG, SVG and CSV, tables, captions, resolved data and the
+project. After publishing, **Open report** opens `report.html` and **Show
+folder** reveals the directory. **Copy analysis record** copies the Markdown
+record to the clipboard.
 
-The format selector also offers **CSV**, **Analysis folder** and **Markdown**.
-CSV exports one x/y column pair for each selected visible curve, including its
-name and axis label. Different curves keep their own grids and full arrays;
+Select a figure in the left column, adjust its style, and use **Save figure**
+**PNG**, **SVG** or **CSV** beside the preview to save that figure alone. The
+preview preserves the image's aspect ratio and uses the same rendered PNG bytes
+as the PNG save. CSV exports one x/y column pair for each selected visible
+curve, including its name and axis label. Different curves keep their own grids and full arrays;
 blank cells pad shorter curves. Changing the plot limits does not crop the CSV,
 and hidden curves are omitted. At least one visible curve with data is required.
 This behavior is defined by the [figure CSV
@@ -14,6 +22,12 @@ exporter](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/
 It is separate from the batch-results table, which contains fitted values and
 their reported errors.
 
+The **Single column** (3.5 × 2.6 in, 600 DPI, 8 pt), **Double column** (7.0 ×
+4.8 in, 300 DPI, 9 pt) and **Slide** (10 × 5.6 in, 200 DPI, 14 pt) presets set
+the size, resolution and font of the selected figure; they are rexafs choices,
+not journal specifications, so check the target journal's figure guide.
+**Apply style to all figures** copies the selected figure's size, resolution,
+font, line width, legend, grid and guide settings to every figure type.
 Blank size controls use ruviz's 6.4 × 4.8 inch canvas. rexafs explicitly sets the
 default raster resolution to **300 DPI**, producing **1920 × 1440 pixels**.
 Width and height use inches; font and line widths use points. Set DPI to the

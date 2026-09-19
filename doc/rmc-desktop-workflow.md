@@ -139,7 +139,7 @@ and requires no automatic-differentiation toolchain.
 ## Released workflow
 
 The first desktop implementation adds **Fit mode: Path fitting / RMC** at the
-upper right of Fitting. It supports one processed spectrum and one explicit
+upper right of Fitting (renamed **Method** after 0.2.11). It supports one processed spectrum and one explicit
 periodic structure. The numerical engine is the existing `RmcSession`; ordinary
 path fitting remains the default for older projects. This workflow is introduced in 0.2.10; it is absent from 0.2.9.
 

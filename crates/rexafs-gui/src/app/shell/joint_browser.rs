@@ -1,5 +1,6 @@
 //! Spectrum → path editor. Fields always address an explicit dataset/path.
-use super::{button, chip, fit_workspace::FitStep};
+use super::{button, chip, controls::Tooltip, fit_workspace::FitStep};
+use crate::text::plural;
 use crate::{
     app::StudioApp,
     fitting::{FitPathSpec, FitSpaceSpec, expr_identifiers},
@@ -178,7 +179,7 @@ impl StudioApp {
                     .w(px(73.))
                     .child(
                         div()
-                            .text_size(px(10.))
+                            .text_size(px(11.))
                             .text_color(t.text_muted)
                             .child(label),
                     )
@@ -281,7 +282,7 @@ impl StudioApp {
                     .child("Fit range")
                     .child(
                         div()
-                            .text_size(px(10.))
+                            .text_size(px(11.))
                             .text_color(t.text_muted)
                             .child("k: Å⁻¹ · R: Å"),
                     ),
@@ -311,12 +312,18 @@ impl StudioApp {
             .iter()
             .find(|r| r.spec.file == p.file)
             .and_then(|r| r.meta);
+        // The calculation folder is a hash; keep it out of the label.
         let source = p
             .file
             .parent()
             .and_then(|p| p.file_name())
             .unwrap_or_default()
-            .to_string_lossy();
+            .to_string_lossy()
+            .to_string();
+        let geometry = meta
+            .map(|m| format!("{:.3} Å · {}", m.reff, plural(m.nleg, "leg")))
+            .unwrap_or_else(|| source.clone());
+        let source_tip = format!("Calculation folder: {source}");
         let mut card = div()
             .flex()
             .flex_col()
@@ -334,13 +341,17 @@ impl StudioApp {
                     .child(p.label.clone())
                     .child(
                         div()
+                            .id(gpui::SharedString::from(format!("joint-path-meta-{key}")))
                             .text_size(px(11.))
                             .text_color(t.text_muted)
-                            .child(format!(
-                                "{source}{}",
-                                meta.map(|m| format!(" · {:.3} Å · {} legs", m.reff, m.nleg))
-                                    .unwrap_or_default()
-                            )),
+                            .tooltip(move |_, cx| {
+                                cx.new(|_| Tooltip {
+                                    label: source_tip.clone().into(),
+                                    theme: t,
+                                })
+                                .into()
+                            })
+                            .child(geometry),
                     ),
             );
         let mut names = BTreeSet::new();
@@ -367,7 +378,7 @@ impl StudioApp {
             div()
                 .flex()
                 .gap_2()
-                .text_size(px(10.))
+                .text_size(px(11.))
                 .text_color(t.text_muted)
                 .child(div().w(px(84.)).child("Parameter"))
                 .child(div().w(px(70.)).child("Initial value"))
@@ -428,7 +439,7 @@ impl StudioApp {
                         .when(physical.is_some(), |d| {
                             d.child(
                                 div()
-                                    .text_size(px(10.))
+                                    .text_size(px(11.))
                                     .text_color(t.text_muted)
                                     .child(name.clone()),
                             )
@@ -529,7 +540,13 @@ impl StudioApp {
                         .text_size(px(11.))
                         .child(div().w(px(84.)).child(TERMS[i]))
                         .child(div().w(px(70.)).child(field))
-                        .child(div().w(px(26.)).text_color(t.text_muted).child("Fixed"))
+                        .child(
+                            div()
+                                .min_w(px(26.))
+                                .whitespace_nowrap()
+                                .text_color(t.text_muted)
+                                .child("Fixed"),
+                        )
                         .child(
                             button(
                                 &t,

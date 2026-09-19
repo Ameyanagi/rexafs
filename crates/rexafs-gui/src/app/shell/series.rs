@@ -87,7 +87,11 @@ impl StudioApp {
                 button(
                     &t,
                     ("select-overview-series", index),
-                    format!("{} · {} frames", series.name, series.frames.len()),
+                    format!(
+                        "{} · {}",
+                        series.name,
+                        crate::text::plural(series.frames.len(), "frame")
+                    ),
                     false,
                 )
                 .w_full()
@@ -108,7 +112,7 @@ impl StudioApp {
                     .child(
                         div()
                             .text_color(t.text_muted)
-                            .child(format!("{} frames", scan.len)),
+                            .child(crate::text::plural(scan.len, "frame")),
                     )
                     .when(!available, |d| {
                         d.disabled(true)
@@ -175,9 +179,9 @@ impl StudioApp {
     ) -> impl IntoElement + use<> {
         let t = self.theme;
         let label: SharedString = format!(
-            "{} · {} frames",
+            "{} · {}",
             self.overview_label(),
-            self.operando_scan_len().unwrap_or(0)
+            crate::text::plural(self.operando_scan_len().unwrap_or(0), "frame")
         )
         .into();
         div()
@@ -253,36 +257,51 @@ impl StudioApp {
                         .justify_center()
                         .gap_3()
                         .child(
-                            button(&t, "series-live-empty", "Live acquisition…", false)
-                                .on_click(cx.listener(|app, _, _, cx| app.open_live(cx))),
+                            div()
+                                .max_w(px(420.))
+                                .text_center()
+                                .text_size(px(12.))
+                                .text_color(t.text_muted)
+                                .child("A series is an ordered set of marked spectra, such as a temperature or time scan."),
                         )
                         .when(running, |d| d.child("Building overview…"))
                         .when(!running, |d| {
                             d.child(
-                                button(
-                                    &t,
-                                    "series-select-scan",
-                                    if can_select {
-                                        "Select series or scan"
-                                    } else if has_groups {
-                                        "Use loaded groups"
-                                    } else {
-                                        "Import frames…"
-                                    },
-                                    true,
-                                )
-                                .on_click(cx.listener(
-                                    move |app, _, _, cx| {
-                                        if can_select {
-                                            app.ui.scan_picker = true;
-                                            cx.notify();
-                                        } else if has_groups {
-                                            app.create_overview_from_groups(cx);
-                                        } else {
-                                            app.open_folder(cx);
-                                        }
-                                    },
-                                )),
+                                div()
+                                    .flex()
+                                    .flex_wrap()
+                                    .justify_center()
+                                    .gap_2()
+                                    .child(
+                                        button(
+                                            &t,
+                                            "series-select-scan",
+                                            if can_select {
+                                                "Select series or scan"
+                                            } else if has_groups {
+                                                "Use loaded groups"
+                                            } else {
+                                                "Import frames…"
+                                            },
+                                            true,
+                                        )
+                                        .on_click(cx.listener(move |app, _, _, cx| {
+                                            if can_select {
+                                                app.ui.scan_picker = true;
+                                                cx.notify();
+                                            } else if has_groups {
+                                                app.create_overview_from_groups(cx);
+                                            } else {
+                                                app.open_folder(cx);
+                                            }
+                                        })),
+                                    )
+                                    .child(
+                                        button(&t, "series-live-empty", "Live acquisition…", false)
+                                            .on_click(
+                                                cx.listener(|app, _, _, cx| app.open_live(cx)),
+                                            ),
+                                    ),
                             )
                         })
                         .when(has_scan && !running, |d| {
@@ -298,7 +317,7 @@ impl StudioApp {
                 .into_any_element();
         };
         let frames = self.operando_scan_len().unwrap_or(0);
-        let frame_label: SharedString = format!("frame {} / {frames}", self.time_pos + 1).into();
+        let frame_label: SharedString = format!("Frame {} / {frames}", self.time_pos + 1).into();
         let mut space_label: SharedString = match self.stage_view.series_space {
             SeriesSpace::Energy => "normalized μ(E)".into(),
             SeriesSpace::Flat => "flattened μ(E)".into(),
@@ -319,7 +338,17 @@ impl StudioApp {
             .flex_wrap()
             .items_center()
             .gap_2()
-            .child(div().flex_1().child("Heatmap"))
+            .child(div().flex_none().child("Heatmap"))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
+                    .text_color(t.text_muted)
+                    .child(space_label.clone()),
+            )
             .child(self.series_appearance_buttons(cx))
             .child(self.plot_export_button(
                 "series-map-export",
@@ -415,7 +444,7 @@ impl StudioApp {
                                     .px_3()
                                     .pb_1()
                                     .font_family(MONO)
-                                    .text_size(px(10.5))
+                                    .text_size(px(11.))
                                     .text_color(t.text_muted)
                                     .child(frame_label),
                             ),
@@ -435,7 +464,7 @@ impl StudioApp {
                                         .items_center()
                                         .gap_2()
                                         .child(div().flex_1().child(format!(
-                                            "frame {} · {space_label}",
+                                            "Frame {} · {space_label}",
                                             self.time_pos + 1
                                         )))
                                         .child(self.plot_export_button(
@@ -813,7 +842,7 @@ impl StudioApp {
                 )
                 .child(
                     div()
-                        .text_size(px(10.5))
+                        .text_size(px(11.))
                         .text_color(if ready { t.text_muted } else { t.warn })
                         .child(origin),
                 )
@@ -831,9 +860,9 @@ impl StudioApp {
             .child(div().flex_1())
             .child(
                 div()
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
-                    .child("click to plot"),
+                    .child("Click to plot"),
             );
         div()
             .flex()
@@ -943,9 +972,9 @@ impl StudioApp {
                     .text_size(px(11.))
                     .text_color(t.text_muted)
                     .child(format!(
-                        "{} / {} frames{}",
+                        "{} / {}{}",
                         lcf.rows.len(),
-                        lcf.total,
+                        crate::text::plural(lcf.total, "frame"),
                         if lcf.cancelled { " · cancelled" } else { "" }
                     ))
                     .into_any_element(),

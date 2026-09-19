@@ -53,7 +53,7 @@ impl StudioApp {
                         .text_size(px(11.))
                         .text_color(t.warn)
                         .child(format!(
-                            "showing the fit of {} — the group, its parameters or the model changed since; press Fit to refresh",
+                            "Showing the fit of {} — the group, its parameters or the model changed since. Run the fit again to refresh.",
                             provenance.label
                         )),
                 );
@@ -306,7 +306,7 @@ impl StudioApp {
                             .flex_none()
                             .px_3()
                             .pt_1()
-                            .text_size(px(10.5))
+                            .text_size(px(11.))
                             .text_color(t.text_muted)
                             .child("residual"),
                     )
@@ -480,7 +480,7 @@ impl StudioApp {
                 .px_1()
                 .flex()
                 .items_center()
-                .text_size(px(10.5))
+                .text_size(px(11.))
                 .text_color(t.text_muted)
                 .cursor_pointer()
                 .hover(|d| d.text_color(t.text))
@@ -570,7 +570,7 @@ impl StudioApp {
                                     .border_1()
                                     .border_color(color)
                                     .font_family(MONO)
-                                    .text_size(px(10.))
+                                    .text_size(px(11.))
                                     .text_color(color)
                                     .cursor_pointer()
                                     .hover(|d| d.bg(t.raised))
@@ -585,7 +585,7 @@ impl StudioApp {
                                     .w(px(58.))
                                     .flex_none()
                                     .font_family(MONO)
-                                    .text_size(px(10.5))
+                                    .text_size(px(11.))
                                     .text_color(t.text_muted)
                                     .overflow_hidden()
                                     .whitespace_nowrap()
@@ -601,14 +601,14 @@ impl StudioApp {
                             .gap_1()
                             .child(
                                 div()
-                                    .text_size(px(10.5))
+                                    .text_size(px(11.))
                                     .text_color(t.text_muted)
                                     .child("min"),
                             )
                             .child(div().w(px(56.)).child(var.min_field.clone()))
                             .child(
                                 div()
-                                    .text_size(px(10.5))
+                                    .text_size(px(11.))
                                     .text_color(t.text_muted)
                                     .child("max"),
                             )
@@ -630,7 +630,7 @@ impl StudioApp {
             .child(
                 div()
                     .font_family(MONO)
-                    .text_size(px(10.))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
                     .child("vary · fixed · expression"),
             );
@@ -714,7 +714,7 @@ impl StudioApp {
             )
             .child(
                 div()
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
                     .child(match self.fit_template {
                         ParameterTemplate::PerShell=>"Paths in the same shell share ΔR and σ². S₀² and E₀ are shared within each structure. Multiple-scattering paths follow their constituent shells.",
@@ -739,14 +739,14 @@ impl StudioApp {
             && shells.len() == 1
             && self.path_sources().len() == 1
         {
-            col=col.child(div().text_size(px(10.5)).text_color(t.text_muted).child(if self.joint.config.enabled {
+            col=col.child(div().text_size(px(11.)).text_color(t.text_muted).child(if self.joint.config.enabled {
                 "Four base parameters: S₀², E₀, ΔR and σ². Shared / Per spectrum scopes determine the total number of fitted values."
             } else { "One shell = 4 variables: S₀² + E₀ + ΔR + σ². Selecting another shell adds two variables." }));
         }
         for note in &self.fit_template_notes {
             col = col.child(
                 div()
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
                     .child(SharedString::from(note.clone())),
             );
@@ -754,9 +754,9 @@ impl StudioApp {
         if dirty {
             col = col.child(
                 div()
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.warn)
-                    .child("edited by hand — the template no longer follows the selection; Apply template to regenerate"),
+                    .child("Edited by hand: the template no longer follows the selection. Apply the template to regenerate."),
             );
         }
         col
@@ -1130,13 +1130,18 @@ impl StudioApp {
             );
         }
         for warning in &result.warnings {
+            let text = if warning.symbol.is_empty() {
+                format!("⚠ {}", warning.message)
+            } else {
+                format!("⚠ {}: {}", warning.symbol, warning.message)
+            };
             rows.push(
                 div()
                     .mx_3()
                     .mt_1()
                     .text_size(px(11.))
                     .text_color(t.warn)
-                    .child(format!("⚠ {warning:?}"))
+                    .child(text)
                     .into_any_element(),
             );
         }
@@ -1161,7 +1166,7 @@ impl StudioApp {
             .child(
                 div()
                     .font_family(MONO)
-                    .text_size(px(10.))
+                    .text_size(px(11.))
                     .px_1p5()
                     .rounded_full()
                     .border_1()
@@ -1265,7 +1270,7 @@ impl StudioApp {
                     )),
             );
         }
-        details.child(div().text_size(px(10.)).text_color(t.text_muted).child("± one standard error, propagated from the fit covariance. FEFF reference geometry is treated as exact."))
+        details.child(div().text_size(px(11.)).text_color(t.text_muted).child("± one standard error, propagated from the fit covariance. FEFF reference geometry is treated as exact."))
     }
 
     pub(super) fn fit_history_section(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -1325,7 +1330,7 @@ impl StudioApp {
                     .child(
                         div()
                             .font_family(MONO)
-                            .text_size(px(10.))
+                            .text_size(px(11.))
                             .text_color(t.text_muted)
                             .overflow_hidden()
                             .whitespace_nowrap()
@@ -1335,7 +1340,7 @@ impl StudioApp {
                     .when_some(entry.solver_report.as_ref(), |d, report| {
                         d.child(
                             div()
-                                .text_size(px(10.))
+                                .text_size(px(11.))
                                 .text_color(if report.converged {
                                     t.text_muted
                                 } else {

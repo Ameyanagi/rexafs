@@ -101,6 +101,90 @@ impl FigureSettings {
     pub fn options(&self, key: &str) -> FigureOptions {
         self.figures.get(key).cloned().unwrap_or_default()
     }
+
+    /// Copy the appearance of figure type `source` (canvas size, DPI, font and
+    /// line width, legend, grid and guides) to every figure type in `keys` and
+    /// to every type that already has stored options. Titles, labels, captions,
+    /// axis limits and curve visibility stay per figure, because they depend on
+    /// the plotted quantity.
+    pub fn apply_style_to_all<'a>(
+        &mut self,
+        source: &str,
+        keys: impl IntoIterator<Item = &'a str>,
+    ) {
+        let style = self.options(source);
+        let targets: BTreeSet<String> = keys
+            .into_iter()
+            .map(str::to_string)
+            .chain(self.figures.keys().cloned())
+            .collect();
+        for key in targets {
+            let options = self.figures.entry(key).or_default();
+            options.width = style.width;
+            options.height = style.height;
+            options.dpi = style.dpi;
+            options.font_size = style.font_size;
+            options.line_width = style.line_width;
+            options.legend = style.legend;
+            options.grid = style.grid;
+            options.guides = style.guides;
+        }
+    }
+}
+
+/// Page-layout presets that set a figure's canvas size, raster resolution and
+/// font size together. Labels, axis limits and curve visibility are untouched.
+/// The values are rexafs choices that fit common journal column widths and a
+/// 16:9 slide; check the target journal's figure guidelines before submission.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StylePreset {
+    /// One journal column: 3.5 × 2.6 in at 600 DPI with 8 pt text.
+    SingleColumn,
+    /// Two journal columns: 7.0 × 4.8 in at 300 DPI with 9 pt text.
+    DoubleColumn,
+    /// Presentation slide: 10 × 5.6 in at 200 DPI with 14 pt text.
+    Slide,
+}
+
+impl StylePreset {
+    /// Every preset in display order.
+    pub const ALL: [Self; 3] = [Self::SingleColumn, Self::DoubleColumn, Self::Slide];
+
+    /// Short chip label in sentence case.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::SingleColumn => "Single column",
+            Self::DoubleColumn => "Double column",
+            Self::Slide => "Slide",
+        }
+    }
+
+    /// Width and height in inches, raster DPI and font size in points.
+    pub fn values(self) -> (f64, f64, f64, f64) {
+        match self {
+            Self::SingleColumn => (3.5, 2.6, 600., 8.),
+            Self::DoubleColumn => (7.0, 4.8, 300., 9.),
+            Self::Slide => (10., 5.6, 200., 14.),
+        }
+    }
+
+    /// Set this preset's size, DPI and font size on `options`.
+    pub fn apply(self, options: &mut FigureOptions) {
+        let (width, height, dpi, font_size) = self.values();
+        options.width = Some(width);
+        options.height = Some(height);
+        options.dpi = Some(dpi);
+        options.font_size = Some(font_size);
+    }
+
+    /// True when `options` carries exactly this preset's size, DPI and font size.
+    pub fn matches(self, options: &FigureOptions) -> bool {
+        let (width, height, dpi, font_size) = self.values();
+        options.width == Some(width)
+            && options.height == Some(height)
+            && options.dpi == Some(dpi)
+            && options.font_size == Some(font_size)
+    }
 }
 
 impl FigureOptions {
@@ -1095,6 +1179,36 @@ mod tests {
         assert!(rendered.svg.contains("data-ruviz-text-engine=\"typst\""));
         assert!(rendered.svg.contains("class=\"typst-doc\""));
         assert!(rendered.svg.contains("Photon energy"));
+    }
+    #[test]
+    fn style_presets_and_apply_to_all_copy_only_appearance_fields() {
+        let mut settings = FigureSettings::default();
+        let source = settings.figures.entry("xanes".into()).or_default();
+        StylePreset::SingleColumn.apply(source);
+        source.title = Some("Copper".into());
+        source.xmin = Some(1.);
+        source.xmax = Some(2.);
+        source.legend = false;
+        source.guides = true;
+        assert!(StylePreset::SingleColumn.matches(source));
+        assert!(!StylePreset::Slide.matches(source));
+        assert!(source.validate().is_ok());
+        settings.figures.entry("chik".into()).or_default().ylabel = Some("kept".into());
+        settings.apply_style_to_all("xanes", ["chir"]);
+        for key in ["chik", "chir"] {
+            let copied = settings.options(key);
+            assert_eq!(copied.width, Some(3.5));
+            assert_eq!(copied.dpi, Some(600.));
+            assert_eq!(copied.font_size, Some(8.));
+            assert!(!copied.legend && copied.guides);
+            assert!(copied.title.is_none() && copied.xmin.is_none());
+        }
+        assert_eq!(settings.options("chik").ylabel.as_deref(), Some("kept"));
+        for preset in StylePreset::ALL {
+            let mut options = FigureOptions::default();
+            preset.apply(&mut options);
+            assert!(options.validate().is_ok(), "{}", preset.label());
+        }
     }
     #[test]
     fn invalid_output_dimensions_and_limits_are_rejected_before_rendering() {

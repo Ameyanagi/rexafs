@@ -64,6 +64,8 @@ pub struct NumericField {
     error_epoch: u64,
     mixed: bool,
     display_decimals: Option<usize>,
+    /// Longer explanation shown as a tooltip on the label.
+    description: Option<SharedString>,
 }
 
 /// "pre-edge start (eV)" → ("pre-edge start", "eV").
@@ -94,11 +96,33 @@ impl EventEmitter<FieldEvent> for NumericField {}
 pub(crate) struct FieldPreview;
 impl EventEmitter<FieldPreview> for NumericField {}
 
+/// Significant figures shown when a field has no fixed decimal count. Six
+/// covers every value the pipeline displays (energies in eV, k in Å⁻¹, R in Å)
+/// without exposing binary round-off such as `1.349999999`.
+const DISPLAY_SIGNIFICANT: usize = 6;
+
+/// Shortest text for `value` with at most `significant` significant figures
+/// and no trailing zeros: 1.349999999 → "1.35", 8979 → "8979", 0.05 → "0.05".
+/// Integers wider than `significant` digits keep all their digits.
+fn format_significant(value: f64, significant: usize) -> String {
+    if value == 0.0 || !value.is_finite() {
+        return format!("{value}");
+    }
+    let magnitude = value.abs().log10().floor() as i64;
+    let decimals = (significant as i64 - 1 - magnitude).max(0) as usize;
+    let text = format!("{value:.decimals$}");
+    if text.contains('.') {
+        text.trim_end_matches('0').trim_end_matches('.').to_string()
+    } else {
+        text
+    }
+}
+
 fn format_value(value: Option<f64>, decimals: Option<usize>) -> String {
     value
         .map(|v| match decimals {
             Some(d) => format!("{v:.d$}"),
-            None => format!("{v}"),
+            None => format_significant(v, DISPLAY_SIGNIFICANT),
         })
         .unwrap_or_default()
 }
@@ -111,7 +135,7 @@ fn parse_displayed(
 ) -> Result<Option<f64>, ()> {
     // Focusing and submitting an unchanged rounded display must not alter the
     // calculation. Newly entered text still uses the full numeric parser.
-    if decimals.is_some() && text.trim() == format_value(value, decimals) {
+    if value.is_some() && text.trim() == format_value(value, decimals) {
         Ok(value)
     } else {
         parse_commit(text, kind)
@@ -165,7 +189,7 @@ impl NumericField {
                 }
                 Err(()) => {
                     let message: SharedString = format!(
-                        "invalid value for {}: '{}' — expected a number or 'auto'",
+                        "Invalid value for {}: '{}' — expected a number or 'auto'",
                         this.label,
                         text.trim()
                     )
@@ -211,7 +235,15 @@ impl NumericField {
             error_epoch: 0,
             mixed: false,
             display_decimals: None,
+            description: None,
         }
+    }
+
+    /// Attach a one-sentence explanation, shown as a tooltip when the label is
+    /// hovered. Keeps the visible label short.
+    pub fn with_description(mut self, description: impl Into<SharedString>) -> Self {
+        self.description = Some(description.into());
+        self
     }
 
     /// Increment used by the steppers and ↑/↓.
@@ -341,6 +373,7 @@ impl Render for NumericField {
             .gap_1p5()
             .child(
                 div()
+                    .id("field-label")
                     .flex_1()
                     .min_w_0()
                     .overflow_hidden()
@@ -348,6 +381,15 @@ impl Render for NumericField {
                     .text_ellipsis()
                     .text_size(px(12.))
                     .text_color(t.text_muted)
+                    .when_some(self.description.clone(), |d, description| {
+                        d.tooltip(move |_, cx| {
+                            cx.new(|_| crate::app::Tooltip {
+                                label: description.clone(),
+                                theme: t,
+                            })
+                            .into()
+                        })
+                    })
                     .child(self.label.clone()),
             )
             .child(
@@ -355,7 +397,7 @@ impl Render for NumericField {
                     .id("reset-auto")
                     .flex_none()
                     .w(px(16.))
-                    .text_size(px(10.))
+                    .text_size(px(11.))
                     .text_color(if self.mixed {
                         t.warn
                     } else if can_reset {
@@ -406,7 +448,7 @@ impl Render for NumericField {
                     .flex_none()
                     .w(px(22.))
                     .font_family(crate::theme::MONO)
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
                     .child(self.unit.clone()),
             )
@@ -434,6 +476,29 @@ mod tests {
             Ok(Some(3.4856))
         );
         assert!(super::parse_displayed("NaN", value, FieldKind::Float, Some(2)).is_err());
+    }
+
+    #[test]
+    fn auto_display_uses_six_significant_figures() {
+        for (value, text) in [
+            (1.349999999, "1.35"),
+            (8979.0, "8979"),
+            (0.05, "0.05"),
+            (12000.0, "12000"),
+            (-200.0, "-200"),
+            (0.0, "0"),
+            (8978.987654321, "8978.99"),
+            (1234567.0, "1234567"),
+        ] {
+            assert_eq!(super::format_value(Some(value), None), text);
+        }
+        assert_eq!(super::format_value(None, None), "");
+        // Resubmitting the rounded text keeps the stored value exactly.
+        let value = Some(1.349999999);
+        assert_eq!(
+            super::parse_displayed("1.35", value, FieldKind::Float, None),
+            Ok(value)
+        );
     }
 
     #[test]

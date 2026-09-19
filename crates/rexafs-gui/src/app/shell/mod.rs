@@ -247,7 +247,7 @@ pub use crate::theme::MONO;
 /// Uppercase, letter-spaced section label used by every panel.
 pub fn section_label(t: &Theme, text: impl Into<SharedString>) -> impl IntoElement {
     div()
-        .text_size(px(10.5))
+        .text_size(px(11.))
         .text_color(t.text_muted)
         .font_weight(gpui::FontWeight::SEMIBOLD)
         .child(text.into().to_uppercase())
@@ -656,13 +656,29 @@ impl StudioApp {
             .when(
                 self.updates.result.as_ref().is_some_and(|r| r.available),
                 |d| {
-                    d.child(action(
-                        "updates",
-                        Icon::Download,
-                        "Update available",
-                        true,
-                        |a, c| a.open_updates(c),
-                    ))
+                    // A badge dot, not the "panel on" style, so the notice is
+                    // not confused with an active toggle.
+                    d.child(
+                        action(
+                            "updates",
+                            Icon::Download,
+                            "Update available · open Updates",
+                            false,
+                            |a, c| a.open_updates(c),
+                        )
+                        .relative()
+                        .child(
+                            div()
+                                .absolute()
+                                .top(px(5.))
+                                .right(px(5.))
+                                .size(px(7.))
+                                .rounded_full()
+                                .bg(t.accent)
+                                .border_1()
+                                .border_color(t.surface),
+                        ),
+                    )
                 },
             )
             .child(action("help", Icon::Help, "Help", false, |a, c| {

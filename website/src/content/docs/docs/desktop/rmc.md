@@ -5,7 +5,7 @@ audience: user
 ---
 
 In **rexafs 0.2.11**, choose **Fit → Fit mode: RMC** at the upper right of the
-fitting workspace. Reverse Monte Carlo (RMC) proposes random coordinate moves,
+fitting workspace (the unreleased development build labels it **Method: RMC**). Reverse Monte Carlo (RMC) proposes random coordinate moves,
 calculates their spectra and accepts or rejects them against the measured data
 and configured constraints. It refines a periodic structure rather than the
 path parameters used by ordinary EXAFS fitting.

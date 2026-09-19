@@ -5,6 +5,16 @@ use crate::app::{
 use gpui::{IntoElement, ParentElement, Styled, div, prelude::*, px};
 
 impl StudioApp {
+    /// The primary "Add trend…" button of the Results page.
+    fn add_trend_button(&self, cx: &mut Context<Self>) -> crate::accessibility::Control {
+        button(&self.theme, "results-add-trend", "Add trend…", true).on_click(cx.listener(
+            |app, _, window, cx| {
+                app.begin_series_trend(cx);
+                app.operando_focus.focus(window, cx);
+            },
+        ))
+    }
+
     pub(crate) fn series_stage_center(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
         if self.live.open {
             return self.live_center(cx);
@@ -50,7 +60,13 @@ impl StudioApp {
             .measurements
             .selected_series
             .and_then(|i| self.measurements.archive.series.get(i))
-            .map(|s| format!("{} · {} frames", s.name, s.frames.len()))
+            .map(|s| {
+                format!(
+                    "{} · {}",
+                    s.name,
+                    crate::text::plural(s.frames.len(), "frame")
+                )
+            })
             .unwrap_or_default();
         let bar = div()
             .flex_none()
@@ -150,8 +166,12 @@ impl StudioApp {
             if self.measurements.selected_run.is_none() {
                 body = body.child(
                     div()
-                        .text_color(t.text_muted)
-                        .child("No saved trends. Choose Add trend to start."),
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_3()
+                        .child(div().text_color(t.text_muted).child("No saved trends."))
+                        .child(self.add_trend_button(cx)),
                 );
             }
             let mut history = div().flex().flex_wrap().gap_2();
@@ -342,7 +362,11 @@ impl StudioApp {
                                         cx.notify();
                                     })),
                             )
-                            .child(format!("{}–{end} / {} rows", begin + 1, run.rows.len()))
+                            .child(format!(
+                                "{}–{end} / {}",
+                                begin + 1,
+                                crate::text::plural(run.rows.len(), "row")
+                            ))
                             .child(
                                 button(&t, "measurement-page-next", "Next rows", false).on_click(
                                     cx.listener(move |app, _, _, cx| {
@@ -357,28 +381,23 @@ impl StudioApp {
                     .child(table);
             }
 
-            let mut actions = div().flex().gap_2().child(
-                button(&t, "results-add-trend", "Add trend…", true).on_click(cx.listener(
-                    |app, _, window, cx| {
-                        app.begin_series_trend(cx);
-                        app.operando_focus.focus(window, cx);
-                    },
-                )),
-            );
-            if let Some(index) = self.measurements.selected_run {
-                if self.measurement_trend_matches(index) {
-                    actions = actions.child(
-                        button(&t, "results-show-trend", "Show in Series", false).on_click(
-                            cx.listener(move |app, _, _, cx| app.show_measurement_trend(index, cx)),
-                        ),
-                    );
-                }
-                if !running && self.measurements.archive.runs[index].cancelled {
-                    actions =
-                        actions.child(button(&t, "results-resume", "Resume", false).on_click(
-                            cx.listener(|app, _, _, cx| app.start_measurements(true, cx)),
-                        ));
-                }
+            // Without a saved run the empty area above already offers Add trend.
+            let Some(index) = self.measurements.selected_run else {
+                return body.into_any_element();
+            };
+            let mut actions = div().flex().gap_2().child(self.add_trend_button(cx));
+            if self.measurement_trend_matches(index) {
+                actions = actions.child(
+                    button(&t, "results-show-trend", "Show in Series", false).on_click(
+                        cx.listener(move |app, _, _, cx| app.show_measurement_trend(index, cx)),
+                    ),
+                );
+            }
+            if !running && self.measurements.archive.runs[index].cancelled {
+                actions = actions.child(
+                    button(&t, "results-resume", "Resume", false)
+                        .on_click(cx.listener(|app, _, _, cx| app.start_measurements(true, cx))),
+                );
             }
             return div()
                 .flex_1()
@@ -577,7 +596,7 @@ impl StudioApp {
                 button(
                     &t,
                     "measurement-run",
-                    format!("Calculate all {count} frames"),
+                    format!("Calculate all {}", crate::text::plural(count, "frame")),
                     true,
                 )
                 .when(self.measurement_definition(cx).is_err(), |d| {

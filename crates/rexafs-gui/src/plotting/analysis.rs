@@ -165,9 +165,12 @@ pub(crate) fn build_pca_diagnostic(
                 .scatter(&x, &y)
                 .color(trace_color(theme, 0))
                 .into();
+            let (ticks, (lo, hi)) = super::integer_axis(1, count);
             p.xlabel("Principal component")
                 .ylabel(format!("{fraction_label} fraction"))
                 .yscale(scale.axis())
+                .xlim(lo, hi)
+                .major_ticks_x(ticks)
         }
         PcaView::Cumulative => {
             let y: Vec<_> = model
@@ -182,9 +185,12 @@ pub(crate) fn build_pca_diagnostic(
                 .scatter(&x, &y)
                 .color(trace_color(theme, 0))
                 .into();
+            let (ticks, (lo, hi)) = super::integer_axis(1, count);
             p.xlabel("Retained components")
                 .ylabel(format!("Cumulative {fraction_label} (%)"))
                 .ylim(0.0, 100.1)
+                .xlim(lo, hi)
+                .major_ticks_x(ticks)
         }
         PcaView::Indicator => {
             let x: Vec<_> = (1..=count.min(model.ind.len().saturating_sub(1)))
@@ -201,9 +207,13 @@ pub(crate) fn build_pca_diagnostic(
                 .scatter(&x, &y)
                 .color(trace_color(theme, 0))
                 .into();
+            let (ticks, (lo, hi)) =
+                super::integer_axis(1, x.last().map_or(1, |&k| k.round() as usize));
             p.xlabel("Retained components k")
                 .ylabel("Malinowski IND(k)")
                 .yscale(scale.axis())
+                .xlim(lo, hi)
+                .major_ticks_x(ticks)
         }
         PcaView::Scores12 | PcaView::Scores13 | PcaView::Scores23 => {
             let (a, b) = match view {
