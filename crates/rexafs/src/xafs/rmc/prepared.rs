@@ -7,6 +7,7 @@ use ndarray::{Array1, Array2, Array3};
 use num_complex::Complex64;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 fn backend(e: impl std::fmt::Display) -> RmcError {
     RmcError::Calculator(e.to_string())
@@ -132,6 +133,9 @@ pub struct PreparedRefeffContext {
     reference: Configuration,
     absorber: usize,
     options: RefeffOptions,
+    electronic: Arc<ElectronicContext>,
+}
+struct ElectronicContext {
     genfmt: io::GenfmtInput,
     global: io::GlobalInput,
     phase: io::PhaseBinData,
@@ -172,11 +176,65 @@ impl PreparedRefeffContext {
         options: RefeffOptions,
         cancellation: ::refeff::CancellationToken,
     ) -> Result<Self, RmcError> {
-        let mut calculator = RefeffCalculator::new(options.clone())?;
-        calculator.set_cancellation(cancellation);
-        let input = calculator
+        let input = RefeffCalculator::new(options.clone())?
             .input_for(&reference, absorber, edge)?
             .replace("CONTROL 1 1 1 1 1 1", "CONTROL 1 1 1 0 0 0");
+        Self::prepare_input(reference, absorber, options, input, cancellation)
+    }
+
+    /// Canonicalize only the scatterer row order, at the existing 12-decimal
+    /// input precision. Keep the absorbing atom first and all other cards exact.
+    /// No rotations, distance bins or approximate environment matching are used.
+    /// ReFEFF subsequently sorts by distance. This changes its tie ordering and
+    /// can change the representative atom for a potential with tied nearest sites;
+    /// callers therefore record this mode in the scientific calculator identity.
+    pub(super) fn canonical_input(
+        reference: &Configuration,
+        absorber: usize,
+        edge: Edge,
+        options: &RefeffOptions,
+    ) -> Result<String, RmcError> {
+        let input = RefeffCalculator::new(options.clone())?
+            .input_for(reference, absorber, edge)?
+            .replace("CONTROL 1 1 1 1 1 1", "CONTROL 1 1 1 0 0 0");
+        let (cards, atoms) = input
+            .split_once("ATOMS\n")
+            .ok_or_else(|| backend("missing ATOMS"))?;
+        let mut rows = atoms.lines();
+        let central = rows.next().ok_or_else(|| backend("missing absorber"))?;
+        let mut scatterers: Vec<_> = rows.take_while(|row| *row != "END").collect();
+        scatterers.sort_unstable();
+        Ok(format!(
+            "{cards}ATOMS\n{central}\n{}\nEND\n",
+            scatterers.join("\n")
+        ))
+    }
+
+    /// The caller must have matched the complete canonical input and options.
+    /// Keep this site's topology for path validation; share only immutable data.
+    pub(super) fn with_equivalent_input(
+        &self,
+        reference: Configuration,
+        absorber: usize,
+        options: RefeffOptions,
+    ) -> Self {
+        Self {
+            reference,
+            absorber,
+            options,
+            electronic: Arc::clone(&self.electronic),
+        }
+    }
+
+    pub(super) fn prepare_input(
+        reference: Configuration,
+        absorber: usize,
+        options: RefeffOptions,
+        input: String,
+        cancellation: ::refeff::CancellationToken,
+    ) -> Result<Self, RmcError> {
+        let mut calculator = RefeffCalculator::new(options.clone())?;
+        calculator.set_cancellation(cancellation);
         let selected = ["phase.bin", "global.inp", "genfmt.inp", "ff2x.inp"];
         let result = calculator.run_pipeline(
             input,
@@ -242,28 +300,30 @@ impl PreparedRefeffContext {
             reference,
             absorber,
             options,
-            genfmt,
-            global,
-            phase,
-            tables,
-            setup,
-            bmatrix,
-            angular_momenta,
-            radial,
-            legendre,
-            edge_start,
-            potentials,
-            identity,
-            stats,
+            electronic: Arc::new(ElectronicContext {
+                genfmt,
+                global,
+                phase,
+                tables,
+                setup,
+                bmatrix,
+                angular_momenta,
+                radial,
+                legendre,
+                edge_start,
+                potentials,
+                identity,
+                stats,
+            }),
         })
     }
     /// Fixed phase/polarization identity for safe sharing of numerical path tables.
     pub fn identity(&self) -> &str {
-        &self.identity
+        &self.electronic.identity
     }
     /// Work and stage timings for the single electronic setup.
     pub fn setup_stats(&self) -> &RefeffCacheStats {
-        &self.stats
+        &self.electronic.stats
     }
     /// Borrow the fixed electronic reference geometry.
     pub fn reference(&self) -> &Configuration {
@@ -304,6 +364,7 @@ impl PreparedRefeffContext {
                 0
             } else {
                 *self
+                    .electronic
                     .potentials
                     .get(&c.atoms[vertex.atom].atomic_number)
                     .ok_or_else(|| backend("path species absent from prepared potentials"))?
@@ -361,14 +422,14 @@ impl PreparedRefeffContext {
                 atom_positions: positions.view(),
                 path_indices: &indices,
                 atom_potentials: &potentials,
-                polarization: self.global.control.ipol,
-                spin: if self.phase.spin_count > 1 {
-                    self.global.control.ispin.abs()
+                polarization: self.electronic.global.control.ipol,
+                spin: if self.electronic.phase.spin_count > 1 {
+                    self.electronic.global.control.ispin.abs()
                 } else {
-                    self.global.control.ispin
+                    self.electronic.global.control.ispin
                 },
-                electric_vector: self.global.evec,
-                incident_vector: self.global.xivec,
+                electric_vector: self.electronic.global.evec,
+                incident_vector: self.electronic.global.xivec,
                 symmetry_case_override: None,
                 force_no_symmetry: false,
             })
@@ -390,40 +451,40 @@ impl PreparedRefeffContext {
     ) -> Result<PathScattering, RmcError> {
         let paths = [path_data];
         let setups = io::genfmt_ordinary_path_setups_from_handoffs(
-            &self.genfmt,
-            &self.global,
-            &self.phase,
+            &self.electronic.genfmt,
+            &self.electronic.global,
+            &self.electronic.phase,
             &paths,
         )
         .map_err(backend)?;
         let transitions = io::genfmt_ordinary_transition_matrices_from_handoff_setups(
-            &self.global,
-            &self.phase,
+            &self.electronic.global,
+            &self.electronic.phase,
             &setups,
-            &self.bmatrix,
+            &self.electronic.bmatrix,
         )
         .map_err(backend)?;
         let output = core::genfmt_ordinary_path_evaluation_from_driver_setup(
             core::GenfmtOrdinaryPathEvaluationFromDriverSetupInput {
                 energy_grid: core::GenfmtOrdinaryPathEnergyGridFromDriverSetupInput {
-                    driver_setup: &self.setup,
+                    driver_setup: &self.electronic.setup,
                     path_setup: &setups[0],
                     path_potential_indices: paths[0].potential_indices.view(),
-                    angular_limits: self.tables.angular_limits.view(),
-                    spin_phase_shifts: self.tables.spin_phase_shifts.view(),
-                    signed_angular_offset: self.tables.signed_angular_offset,
+                    angular_limits: self.electronic.tables.angular_limits.view(),
+                    spin_phase_shifts: self.electronic.tables.spin_phase_shifts.view(),
+                    signed_angular_offset: self.electronic.tables.signed_angular_offset,
                     momentum_zero_epsilon: 1e-16,
-                    xnlm: self.legendre.view(),
-                    transition_angular_momenta: self.angular_momenta.view(),
-                    spin_radial_factors: self.radial.view(),
+                    xnlm: self.electronic.legendre.view(),
+                    transition_angular_momenta: self.electronic.angular_momenta.view(),
+                    spin_radial_factors: self.electronic.radial.view(),
                     transition_matrices: transitions[0].matrices.view(),
                     transition_magnetic_offset: (transitions[0].matrices.shape()[1] - 1) / 2,
                 },
                 path_index: 1,
                 print_level: 0,
                 curved_wave_criterion_percent: 0.,
-                edge_start_index: self.edge_start,
-                active_energy_count: self.phase.main_energy_count,
+                edge_start_index: self.electronic.edge_start,
+                active_energy_count: self.electronic.phase.main_energy_count,
                 degeneracy: 1.,
                 current_normalization: -1.,
                 positions: paths[0].positions_bohr.view(),
@@ -436,7 +497,7 @@ impl PreparedRefeffContext {
             .output_decision
             .retained_output
             .ok_or_else(|| backend("unscreened ReFEFF path was not retained"))?;
-        let grid = &self.setup.header.wave_numbers;
+        let grid = &self.electronic.setup.header.wave_numbers;
         let n = grid
             .windows(2)
             .into_iter()
@@ -463,6 +524,47 @@ impl PreparedRefeffContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn canonical_electronic_inputs_keep_chemistry_and_orientation() {
+        use std::collections::BTreeSet;
+        let library = crate::structure::BuiltinLibrary::get().unwrap();
+        for name in ["cu", "cu2o_cuprite", "cuo_tenorite"] {
+            let c =
+                Configuration::from_structure(&library.structure(name).unwrap(), [2; 3]).unwrap();
+            let options = RefeffOptions {
+                path_criteria: [0., 0.],
+                ..Default::default()
+            };
+            let inputs: BTreeSet<_> = c
+                .atoms
+                .iter()
+                .enumerate()
+                .filter(|(_, a)| a.atomic_number == 29)
+                .map(|(i, _)| {
+                    PreparedRefeffContext::canonical_input(&c, i, Edge::K, &options).unwrap()
+                })
+                .collect();
+            assert!(
+                inputs.len() < c.atoms.iter().filter(|a| a.atomic_number == 29).count(),
+                "{name}: no translational reuse"
+            );
+            let first = c.atoms.iter().position(|a| a.atomic_number == 29).unwrap();
+            let original =
+                PreparedRefeffContext::canonical_input(&c, first, Edge::K, &options).unwrap();
+            assert!(!inputs.contains(
+                &PreparedRefeffContext::canonical_input(&c, first, Edge::L3, &options).unwrap()
+            ));
+            let polarized = RefeffOptions {
+                polarization: Some([1., 0., 0.]),
+                ..options.clone()
+            };
+            assert_ne!(
+                original,
+                PreparedRefeffContext::canonical_input(&c, first, Edge::K, &polarized).unwrap()
+            );
+        }
+    }
+
     #[test]
     fn typed_cuprite_path_records_match_pipeline_without_file_roundtrips() {
         let library = crate::structure::BuiltinLibrary::get().unwrap();
@@ -495,7 +597,7 @@ mod tests {
         for p in &records.paths {
             let table = context
                 .scattering_data(
-                    p.to_genfmt_path(context.phase.potential_count() - 1)
+                    p.to_genfmt_path(context.electronic.phase.potential_count() - 1)
                         .unwrap(),
                 )
                 .unwrap();
@@ -555,7 +657,7 @@ mod tests {
         let mut expected = std::collections::BTreeMap::new();
         for p in &records.paths {
             let data = p
-                .to_genfmt_path(context.phase.potential_count() - 1)
+                .to_genfmt_path(context.electronic.phase.potential_count() - 1)
                 .unwrap();
             let values = context
                 .scattering_data(data.clone())
@@ -593,7 +695,7 @@ mod tests {
                             if v.atom == absorber && v.image == [0; 3] {
                                 0
                             } else {
-                                context.potentials[&c.atoms[v.atom].atomic_number]
+                                context.electronic.potentials[&c.atoms[v.atom].atomic_number]
                             }
                         })
                         .chain(std::iter::once(0)),

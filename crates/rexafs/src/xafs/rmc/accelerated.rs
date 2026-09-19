@@ -53,10 +53,31 @@ pub struct AccelerationSettings {
     /// Exact affected-path caching by default. Frozen representatives are an
     /// experimental approximation and require explicit opt-in.
     pub basis: ScatteringBasis,
-    /// Bounded Rayon worker pool; default 1, accepted range 1..=64.
+    /// Total CPU thread budget for absorber calculations; default 1, range 1..=64.
+    /// Independent absorber requests run first. With [`Self::parallel_paths`],
+    /// spare threads also evaluate paths within a smaller absorber batch. Both
+    /// levels share this one pool; their thread counts do not multiply.
     pub workers: usize,
-    /// Maximum prepared absorber/edge/settings contexts; default 128.
+    /// Unreleased: use spare workers for paths when a batch has fewer absorbers
+    /// than workers. Default false retains historical scheduling. Recommended
+    /// with multiple workers, especially for a single absorbing site. Path sums
+    /// retain catalogue order, including cached/rejected trials. Electronic
+    /// preparation remains serial; this does not create backend thread pools.
+    pub parallel_paths: bool,
+    /// Maximum prepared structure/absorber/edge/settings contexts; default 128.
+    /// A 256-site single-element cell averaged over every site needs at least
+    /// 256. Shared datasets with the same combinations reuse contexts. Set this
+    /// explicitly for larger calculations; sites are never silently sampled.
     pub max_contexts: usize,
+    /// Unreleased: share immutable electronic setup when complete FEFF inputs
+    /// match after sorting scatterer rows at the existing 12-decimal precision.
+    /// Recommended for new periodic jobs; no sites, paths or species are merged.
+    /// Defaults to false to preserve historical input ordering and checkpoint
+    /// identity. Sorting can change numerical summation and FEFF's representative
+    /// atom when several atoms of one potential tie for nearest distance. It is
+    /// not guaranteed to reproduce legacy results bit for bit; compare both modes
+    /// for order-sensitive environments. The mode cannot change on saved-run resume.
+    pub reuse_electronic_inputs: bool,
     /// Maximum catalogue paths across all contexts; default one million.
     pub max_total_paths: usize,
     /// Approximate numerical payload budget for last-geometry path spectra;
@@ -86,7 +107,9 @@ impl Default for AccelerationSettings {
             catalogue: Default::default(),
             basis: ScatteringBasis::Exact,
             workers: 1,
+            parallel_paths: false,
             max_contexts: 128,
+            reuse_electronic_inputs: false,
             max_total_paths: 1_000_000,
             cache_bytes: 256 * 1024 * 1024,
             snapshots_per_context: 1,
@@ -105,7 +128,8 @@ pub struct PreparedRefeffStats {
     /// Fresh electronic preparations in this calculator (since 0.2.10).
     #[serde(default)]
     pub electronic_preparations: usize,
-    /// Contexts reused from an immutable stage or exact audit (since 0.2.10).
+    /// Contexts reused from an immutable stage, exact audit, or matching canonical
+    /// electronic input. All absorber-specific catalogues remain separate.
     #[serde(default)]
     pub shared_electronic_contexts: usize,
     /// Directed concrete paths, including paths reserved by the displacement envelope.
@@ -246,6 +270,7 @@ pub struct PreparedRefeffCalculator {
     pool: rayon::ThreadPool,
     contexts: HashMap<String, PreparedAbsorber>,
     shared_contexts: HashMap<String, (Arc<PathCatalogue>, Arc<PreparedRefeffContext>)>,
+    electronic_inputs: HashMap<String, Arc<PreparedRefeffContext>>,
     snapshots: HashMap<String, Vec<Snapshot>>,
     stats: PreparedRefeffStats,
     tick: u64,
@@ -320,6 +345,12 @@ impl PreparedRefeffCalculator {
         if settings.adaptive.is_none() {
             settings_bytes = settings_bytes.replace(",\"adaptive\":null", "");
         }
+        if !settings.reuse_electronic_inputs {
+            settings_bytes = settings_bytes.replace(",\"reuse_electronic_inputs\":false", "");
+        }
+        if !settings.parallel_paths {
+            settings_bytes = settings_bytes.replace(",\"parallel_paths\":false", "");
+        }
         let bytes = format!(
             "[{},{},{}]",
             serde_json::to_string(&options).unwrap(),
@@ -344,6 +375,7 @@ impl PreparedRefeffCalculator {
             pool,
             contexts: HashMap::new(),
             shared_contexts: HashMap::new(),
+            electronic_inputs: HashMap::new(),
             snapshots: HashMap::new(),
             stats: Default::default(),
             tick: 0,
@@ -395,7 +427,7 @@ impl PreparedRefeffCalculator {
         }
         require(
             self.contexts.len() < self.settings.max_contexts,
-            "prepared calculator exceeds max_contexts",
+            format!("Prepared RMC needs more than {} absorber contexts (structure, atom, edge and settings combinations). Increase AccelerationSettings.max_contexts or explicitly select fewer absorbing sites.", self.settings.max_contexts),
         )?;
         let start = Instant::now();
         let deadline = start
@@ -403,6 +435,7 @@ impl PreparedRefeffCalculator {
         check_control(Some((&self.cancellation, deadline)))?;
         let options = request.options.unwrap_or(&self.options).clone();
         let shared = self.shared_contexts.get(key).cloned();
+        let mut reused_electronic = shared.is_some();
         let (catalogue, context) = if let Some(shared) = shared {
             shared
         } else {
@@ -418,15 +451,45 @@ impl PreparedRefeffCalculator {
                     .catalogue_paths
                     .saturating_add(catalogue.paths().len())
                     <= self.settings.max_total_paths,
-                "prepared calculator exceeds max_total_paths",
+                format!("Prepared RMC needs {} catalogue paths; the limit is {}. Reduce path radius, scattering order or the selected absorbing sites, or explicitly increase AccelerationSettings.max_total_paths.", self.stats.catalogue_paths.saturating_add(catalogue.paths().len()), self.settings.max_total_paths),
             )?;
-            let context = Arc::new(PreparedRefeffContext::prepare_controlled(
-                reference,
-                request.absorber,
-                request.edge,
-                options.clone(),
-                self.cancellation.clone(),
-            )?);
+            let context = if self.settings.reuse_electronic_inputs {
+                let input = PreparedRefeffContext::canonical_input(
+                    &reference,
+                    request.absorber,
+                    request.edge,
+                    &options,
+                )?;
+                // Retain exact strings rather than a lossy geometric signature.
+                let input_key = format!("{}\n{input}", serde_json::to_string(&options).unwrap());
+                if let Some(shared) = self.electronic_inputs.get(&input_key) {
+                    reused_electronic = true;
+                    Arc::new(shared.with_equivalent_input(
+                        reference,
+                        request.absorber,
+                        options.clone(),
+                    ))
+                } else {
+                    let context = Arc::new(PreparedRefeffContext::prepare_input(
+                        reference,
+                        request.absorber,
+                        options.clone(),
+                        input,
+                        self.cancellation.clone(),
+                    )?);
+                    self.electronic_inputs
+                        .insert(input_key, Arc::clone(&context));
+                    context
+                }
+            } else {
+                Arc::new(PreparedRefeffContext::prepare_controlled(
+                    reference,
+                    request.absorber,
+                    request.edge,
+                    options.clone(),
+                    self.cancellation.clone(),
+                )?)
+            };
             (catalogue, context)
         };
         catalogue.validate(request.configuration)?;
@@ -435,7 +498,7 @@ impl PreparedRefeffCalculator {
                 .catalogue_paths
                 .saturating_add(catalogue.paths().len())
                 <= self.settings.max_total_paths,
-            "prepared calculator exceeds max_total_paths",
+            format!("Prepared RMC needs {} catalogue paths; the limit is {}. Reduce path radius, scattering order or the selected absorbing sites, or explicitly increase AccelerationSettings.max_total_paths.", self.stats.catalogue_paths.saturating_add(catalogue.paths().len()), self.settings.max_total_paths),
         )?;
         let mut bases = Vec::new();
         let mut basis_groups = Vec::new();
@@ -482,7 +545,7 @@ impl PreparedRefeffCalculator {
             None
         };
         self.stats.contexts += 1;
-        if self.shared_contexts.contains_key(key) {
+        if reused_electronic {
             self.stats.shared_electronic_contexts += 1;
         } else {
             self.stats.electronic_preparations += 1;
@@ -555,6 +618,7 @@ impl PreparedRefeffCalculator {
     fn with_shared_contexts(&self, settings: AccelerationSettings) -> Result<Self, RmcError> {
         let mut next = Self::new(self.options.clone(), self.references.clone(), settings)?;
         next.shared_contexts = self.shared_contexts.clone();
+        next.electronic_inputs = self.electronic_inputs.clone();
         for (key, prepared) in &self.contexts {
             next.shared_contexts.insert(
                 key.clone(),
@@ -683,6 +747,7 @@ impl PreparedRefeffCalculator {
             &ScatteringBasis::Exact,
             None,
             Some((&self.cancellation, deadline)),
+            false,
         )?;
         let reference = work.spectrum.chi;
         Ok(accuracy(model, reference))
@@ -771,6 +836,7 @@ impl PreparedAbsorber {
         basis: &ScatteringBasis,
         moments: Option<&MomentSettings>,
         control: Option<(&CancellationToken, Instant)>,
+        parallel_paths: bool,
     ) -> Result<Work, RmcError> {
         check_control(control)?;
         let moments = moments.filter(|_| !request.paths);
@@ -800,27 +866,20 @@ impl PreparedAbsorber {
             }
         }
         let mut paths = previous.map_or_else(|| vec![None; count], |p| p.paths.clone());
-        let mut exact = 0;
-        let mut fast = 0;
-        let mut reused = 0;
-        let mut reused_active = 0;
-        let mut outside_radius = 0;
-        for (i, path) in self.catalogue.paths().iter().enumerate() {
+        let update_path = |(i, cached): (usize, &mut Option<CachedPath>)| {
             check_control(control)?;
             if !changed[i] {
-                reused += 1;
-                reused_active += u64::from(paths[i].is_some());
-                continue;
+                return Ok([0, 0, 1, u64::from(cached.is_some()), 0]);
             }
+            let path = &self.catalogue.paths()[i];
             let length = path.half_length(request.configuration)?;
             if length > self.catalogue.settings().radius {
-                paths[i] = None;
-                outside_radius += 1;
-                continue;
+                *cached = None;
+                return Ok([0, 0, 0, 0, 1]);
             }
             let (table, selected_group) = self.table(i, request, basis)?;
+            let fast = u64::from(table.is_some());
             let (chi, group) = if let Some(table) = table {
-                fast += 1;
                 (
                     if moments.is_none() {
                         Some(Arc::new(table.sample(request.k, length)?))
@@ -830,7 +889,6 @@ impl PreparedAbsorber {
                     selected_group,
                 )
             } else {
-                exact += 1;
                 (
                     Some(Arc::new(
                         self.context
@@ -840,12 +898,30 @@ impl PreparedAbsorber {
                     None,
                 )
             };
-            paths[i] = Some(CachedPath {
+            *cached = Some(CachedPath {
                 length,
                 chi,
                 basis: group,
             });
-        }
+            Ok::<_, RmcError>([1 - fast, fast, 0, 0, 0])
+        };
+        let add_counts =
+            |a: [u64; 5], b: [u64; 5]| Ok::<_, RmcError>(std::array::from_fn(|i| a[i] + b[i]));
+        // Only called from the calculator's bounded pool. Parallelize independent
+        // path evaluations, then sum floating-point spectra below in index order.
+        let [exact, fast, reused, reused_active, outside_radius] = if parallel_paths {
+            paths
+                .par_iter_mut()
+                .enumerate()
+                .map(update_path)
+                .try_reduce(|| [0; 5], add_counts)?
+        } else {
+            paths
+                .iter_mut()
+                .enumerate()
+                .map(update_path)
+                .try_fold([0; 5], |counts, result| add_counts(counts, result?))?
+        };
         // Fixed index order ensures cache history/parallel scheduling cannot change reductions.
         let mut chi = vec![0.; request.k.len()];
         let mut contributions = Vec::new();
@@ -966,6 +1042,7 @@ impl ExafsCalculator for PreparedRefeffCalculator {
                                         r.options.unwrap_or(&self.options).timeout_seconds,
                                     ),
                             )),
+                            self.settings.parallel_paths && chunk.len() < self.settings.workers,
                         )
                     })
                     .collect::<Result<Vec<_>, _>>()

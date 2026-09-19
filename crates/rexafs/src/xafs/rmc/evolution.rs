@@ -197,6 +197,10 @@ impl EvolutionSession {
         settings: &EvolutionSettings,
         calculator: &mut C,
     ) -> Result<Self, RmcError> {
+        require(
+            session.energy_refinement.is_none(),
+            "ΔE₀ refinement currently requires RmcSession",
+        )?;
         validate(settings)?;
         let mut problem = problem.clone();
         normalize(&mut problem.structures)?;
@@ -552,6 +556,10 @@ impl EvolutionSession {
         checkpoint: EvolutionCheckpoint,
         calculator: &mut C,
     ) -> Result<Self, RmcError> {
+        require(
+            checkpoint.session.energy_refinement.is_none(),
+            "ΔE₀ refinement currently requires RmcSession",
+        )?;
         require(
             checkpoint.version == 1 && checkpoint.calculator == calculator.identity(),
             "evolution checkpoint version or calculator differs",

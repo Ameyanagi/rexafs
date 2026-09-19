@@ -643,6 +643,7 @@ fn residual_trend_requires_recent_best_and_mean_stability_and_enough_history() {
             .map(|step| {
                 let (score, best_score) = f(step);
                 SessionStep {
+                    energy: None,
                     step,
                     proposal: EnsembleMove::Atom {
                         structure: 0,
@@ -1115,3 +1116,146 @@ fn identical_population_mean_does_not_round_below_its_best() {
         ResidualTrendStatus::ResidualPlateau
     );
 }
+
+#[test]
+fn auto_move_policy_grows_shrinks_freezes_and_resumes_exactly() {
+    let mut policy = settings();
+    policy.moves.steps = 600;
+    policy.moves.max_displacement = Some(1e-12);
+    policy.moves.temperature = 0.001;
+    let policy = policy.with_auto_moves();
+    let mut calc = Toy::default();
+    let mut full = RmcSession::new(&problem(), &policy, &mut calc).unwrap();
+    full.run(&mut calc).unwrap();
+    assert!(full.adaptation().scale < 1.);
+    assert_eq!(full.adaptation().updates, 4);
+    assert_eq!(policy.cooling.temperature(0.001, 600).unwrap(), 0.);
+    let mut split = RmcSession::new(&problem(), &policy, &mut calc).unwrap();
+    for _ in 0..230 {
+        split.step(&mut calc).unwrap();
+    }
+    let cp = serde_json::from_value(serde_json::to_value(split.checkpoint()).unwrap()).unwrap();
+    let mut resumed = RmcSession::resume(cp, &mut calc).unwrap();
+    resumed.run(&mut calc).unwrap();
+    assert_eq!(
+        serde_json::to_value(full.checkpoint()).unwrap(),
+        serde_json::to_value(resumed.checkpoint()).unwrap()
+    );
+    let scale = resumed.adaptation().scale;
+    resumed.set_step_limit(610).unwrap();
+    resumed.run(&mut calc).unwrap();
+    assert_eq!(scale, resumed.adaptation().scale);
+    assert_eq!(resumed.history().last().unwrap().temperature, 0.);
+
+    struct Flat;
+    impl ExafsCalculator for Flat {
+        fn name(&self) -> &str {
+            "constant spectrum"
+        }
+        fn calculate(
+            &mut self,
+            _: &Configuration,
+            _: usize,
+            _: Edge,
+            k: &[f64],
+        ) -> Result<Vec<f64>, RmcError> {
+            Ok(vec![0.; k.len()])
+        }
+    }
+    let mut policy = settings().with_auto_moves();
+    policy.moves.steps = 500;
+    policy.moves.max_displacement = Some(100.);
+    policy.moves.min_distance = 0.01;
+    policy.adaptation.as_mut().unwrap().freeze_after = Some(500);
+    let mut run = RmcSession::new(&problem(), &policy, &mut Flat).unwrap();
+    run.run(&mut Flat).unwrap();
+    assert_eq!(run.adaptation().scale, 2.);
+}
+
+#[test]
+fn local_gradient_refinement_reduces_full_spectrum_and_preserves_checkpoint() {
+    let mut calc = Toy::default();
+    let run = RmcSession::new(&problem(), &settings(), &mut calc).unwrap();
+    let cp = serde_json::to_value(run.checkpoint()).unwrap();
+    let options = LocalRefinementSettings {
+        sweeps: 12,
+        ..Default::default()
+    };
+    let result = run.refine_best(&options, &mut calc).unwrap();
+    assert!(result.best.evaluation.score < result.initial.evaluation.score * 1e-6);
+    assert!(!result.history.is_empty());
+    assert!(result
+        .history
+        .iter()
+        .all(|h| h.after < h.before && h.displacement <= options.maximum_step));
+    assert_eq!(
+        result.best.structures[0].configuration.atoms[0],
+        result.initial.structures[0].configuration.atoms[0]
+    );
+    assert_eq!(serde_json::to_value(run.checkpoint()).unwrap(), cp);
+    let mut p = result.problem.clone();
+    p.structures = result.best.structures.clone();
+    let independent = evaluate_ensemble(&p, &settings(), &mut calc).unwrap();
+    assert_eq!(result.best.evaluation.score, independent.evaluation.score);
+    let serialized = serde_json::to_value(&result).unwrap();
+    let reloaded: LocalRefinementResult = serde_json::from_value(serialized).unwrap();
+    assert_eq!(reloaded.best, result.best);
+}
+
+#[test]
+fn local_refinement_respects_original_bounds_budget_cancellation_and_failure() {
+    let mut s = settings();
+    s.moves.max_displacement = Some(0.04);
+    let mut calc = Toy::default();
+    let run = RmcSession::new(&problem(), &s, &mut calc).unwrap();
+    let cp = serde_json::to_value(run.checkpoint()).unwrap();
+    let result = run
+        .refine_best(
+            &LocalRefinementSettings {
+                sweeps: 20,
+                ..Default::default()
+            },
+            &mut calc,
+        )
+        .unwrap();
+    assert!(result.best.structures[0].configuration.atoms[1].position[0] >= 2.56 - 1e-12);
+    assert!(result.best.evaluation.score < result.initial.evaluation.score);
+    let result = run
+        .refine_best(
+            &LocalRefinementSettings {
+                evaluations: 3,
+                ..Default::default()
+            },
+            &mut calc,
+        )
+        .unwrap();
+    assert_eq!(result.evaluations, 3);
+    assert_eq!(result.stop, LocalRefinementStop::EvaluationLimit);
+    let cancelled = run
+        .refine_best_with_progress(&LocalRefinementSettings::default(), &mut calc, |_| {
+            std::ops::ControlFlow::Break(())
+        })
+        .unwrap();
+    assert_eq!(cancelled.stop, LocalRefinementStop::Cancelled);
+    assert_eq!(cancelled.best, cancelled.initial);
+    calc.fail_at = Some(calc.calls + 3);
+    assert!(run
+        .refine_best(&LocalRefinementSettings::default(), &mut calc)
+        .is_err());
+    assert_eq!(serde_json::to_value(run.checkpoint()).unwrap(), cp);
+    for bad in [
+        LocalRefinementSettings {
+            difference_step: f64::NAN,
+            ..Default::default()
+        },
+        LocalRefinementSettings {
+            evaluations: 0,
+            ..Default::default()
+        },
+    ] {
+        assert!(run.refine_best(&bad, &mut calc).is_err());
+    }
+}
+
+#[path = "rmc_session/energy.rs"]
+mod energy;

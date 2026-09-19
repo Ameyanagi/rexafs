@@ -1,5 +1,141 @@
 # Desktop RMC workflow (0.2.10)
 
+## Unreleased corrections after 0.2.10
+
+The next action stays at the upper right, matching ordinary path fitting:
+**Use structure →**, **Next: fit settings →**, **Run RMC →**, then **Edit settings →**.
+**Preview initial fit** sits beside Run RMC. Validation messages remain beside
+these actions, above the scrollable controls; advancing does not require scrolling
+to a footer. Run controls still prevent duplicate jobs and reject invalid inputs.
+
+The source checkout copies the spectrum's forward Transform k bounds, k weight,
+window, `dk`/`dk high`, FFT length and spacing when initializing RMC or choosing
+**Use spectrum ranges**. Explicit Back FT R bounds, window and widths are copied
+as well. Without explicit R bounds, RMC starts at Rbkg + 0.15 Å and ends at
+max(4 Å, Rbkg + 1.15 Å). The forward **R max out** is a plotting extent, not a fit
+bound. RMC still rejects R minimum below Rbkg and R maximum above its supported
+10 Å output extent. Fit transforms retain the native fitting convention of a
+uniform grid starting at zero; the processing plot's Input/Larch grid selector
+does not select a different RMC objective.
+
+The copied bounds remain editable. This action copies settings once; subsequent
+processing edits require **Use spectrum ranges** again. It never changes fixed
+S₀² or ΔE₀, and saved/running jobs retain their original transform and inputs.
+Historical projects keep their original fit-window defaults until explicitly
+reset. k bounds are clipped to measured support; they are no longer shortened to
+fit the default ReFEFF calculation extent.
+
+ReFEFF calculation coverage expands to include the measured Fourier taper and
+the theoretical wave numbers needed after ΔE₀. The required upper bound is
+rounded upward to a whole Å⁻¹, with a minimum of the configured calculator limit.
+The rexafs adapter allows at most 30 Å⁻¹ and also checks the actual returned
+scattering tables. It never extrapolates missing theory. The previous desktop
+used a fixed 16 Å⁻¹ calculation limit and the fitting default `dk = 4` instead of
+the spectrum's window; this could reject or shorten otherwise usable ranges.
+
+Desktop preparation now reserves a context for every distinct combination of
+structure, absorbing atom, edge and ReFEFF settings. All selected absorbers are
+still averaged; none are silently sampled. This fixes the previous 128-context
+ceiling for a 256-absorber cell. The one-million-path catalogue budget, per-site
+search limits and 256 MiB numerical cache budget remain in force. The cache
+budget does not bound total process memory: phase tensors and catalogues also
+consume memory. Resource errors identify the required count and relevant limit.
+Core API callers can set `AccelerationSettings.max_contexts` explicitly; its
+default remains 128.
+
+New desktop jobs also reuse electronic setup for matching local inputs. Scatterer
+rows are sorted at the existing twelve-decimal FEFF input precision, retaining the
+absorber first. Only complete, identical input cards and options share immutable
+potentials and phase tables. Each absorber keeps its own atom identities, path
+catalogue and coordinate updates. Different orientations, species, edges and
+polarizations remain distinct; no approximate geometry matching or site sampling
+is introduced. Larger disordered inputs may offer little reuse.
+
+Rust callers enable this with `AccelerationSettings { reuse_electronic_inputs:
+true, ..Default::default() }`. The core default remains false for historical
+checkpoint compatibility. New desktop requests record true; old saved requests
+keep false, their original ordering and the original 128-context minimum. Sorting
+can change numerical summation and which atom represents a potential when nearest
+sites tie. Bitwise agreement with the old ordering is not guaranteed; the selected
+mode is part of calculator identity. Do not switch it during resume. **Run details**
+reports the number of electronic preparations and shared contexts. See the
+[startup profiling method](rmc-startup-profiling.md) for reproducible timing and
+spectral-agreement checks; startup speed does not establish fit convergence.
+
+These corrections are not part of the published 0.2.10 binary. Implementation:
+[`Draft::use_spectrum_ranges`, `Request::new` and the worker settings](../crates/rexafs-gui/src/rmc_fitting.rs),
+with [core resource checks](../crates/rexafs/src/xafs/rmc/accelerated.rs).
+
+## Unreleased CPU controls
+
+**Fit settings → CPU workers** selects the total thread budget. New drafts use
+**Auto**, which detects available logical CPUs up to 64. Enter 1–64 to override
+it, or clear the field to return to Auto. The adjacent label shows available CPUs.
+Parallel execution first distributes absorbing sites. **Advanced settings →
+Parallel paths** lets spare workers evaluate paths within an absorber, using the
+same bounded pool. It is enabled for new drafts and also benefits single-site jobs.
+
+Older drafts keep one worker and their historical path scheduling until explicitly
+changed. Existing saved/running jobs retain their captured settings. **Run details**
+shows the actual saved worker count, path fallback and backend preparation threads.
+Checkpoint and exported job settings retain these choices; form edits apply to a
+new run. Backend electronic preparation remains serial across contexts, and the
+backend's internal thread setting remains one by default. See the
+[core parallelism guide](rmc.md#unreleased-absorber-first-cpu-parallelism) for the
+scope, deterministic reductions and resource limits.
+
+## Unreleased fitting controls
+
+New jobs start with **Auto moves** and a 0.05 Å Cartesian move width. The width
+adapts within 0.1–2 times its starting value, freezes after 80% of the original
+attempt budget, and the numerical Metropolis tolerance cools linearly to zero.
+**Fixed moves** retains manual control. Existing checkpoints and older saved
+drafts keep their historical policy. These are starting heuristics, not an
+optimal step size for every material. Continuing a run does not restart cooling.
+
+**Estimate calibration…** searches theoretical ΔE₀ and bounded S₀² with the
+starting geometry held fixed. Inspect the estimate and any bound warning, then
+choose **Use calibration** explicitly. Changed inputs invalidate the preview.
+Advanced settings exposes the search interval (default −15…+15 eV in 0.5 eV
+increments) and amplitude bounds (default 0.5…1.2). A poor structural reference
+can bias either value. S₀² remains fixed; ΔE₀ stays fixed unless refinement is selected.
+
+**ΔE₀: Fixed / Refine** selects optional energy refinement for a new run. **Fixed**
+is the default and preserves existing projects. **Refine** keeps S₀² fixed,
+searches ΔE₀ before the first coordinate move and then updates it periodically.
+**Advanced → Energy refinement** exposes inclusive bounds in eV and the update
+interval (250 attempts initially). The initial grid uses 0.5 eV spacing; subsequent
+local grids cover ±1 eV at 0.1 eV spacing. These are numerical settings, not
+uncertainties. Bounds must preserve the full Fourier taper. The measured spectrum's
+energy alignment and normalization E₀ are unchanged.
+
+Results display the best structure's matching ΔE₀ and fixed S₀², with a warning if
+the shift touches a bound. Only decreases verified by the full objective are kept.
+Each state, energy-update record and sampled trajectory retains its own shifts;
+failed searches leave the checkpoint and random sequence unchanged. **Export
+result…** includes `fit-parameters.json` with initial/best shifts, fixed amplitudes
+and the refinement policy, matching the exported curves and structures. Full
+checkpoints preserve all current/best values for exact continuation.
+
+After pausing or finishing, **Refine best…** performs a bounded local search using
+numerical coordinate derivatives of the full configured scattering calculator.
+Reference electronic potentials, calibration and mixture fractions remain fixed.
+All trials obey the original displacement and distance constraints; only fully
+verified decreases are accepted. Defaults are three passes, 0.001 Å derivative
+probes, at most 0.02 Å trial moves and 5,000 geometry evaluations. This work can
+be cancelled and does not change the RMC checkpoint or its random sequence.
+**Refinement** compares experiment, the previous best and the refined result.
+**Export result…** adds `local-refinement.json`, `refined.xyz` and
+`refined-fit-k.csv` alongside the original run. The JSON retains the constraints,
+calibration, preprocessing, coordinates, arrays and accepted-step history.
+
+Local descent is not proof of structural uniqueness or convergence. The
+[refinement design and Rust API](rmc-refinement-plan.md) explain the policy,
+scientific assumptions and validation. Local refinement uses numerical derivatives
+and requires no automatic-differentiation toolchain.
+
+## Released workflow
+
 The first desktop implementation adds **Fit mode: Path fitting / RMC** at the
 upper right of Fitting. It supports one processed spectrum and one explicit
 periodic structure. The numerical engine is the existing `RmcSession`; ordinary
@@ -158,7 +294,7 @@ Implementation and regression evidence are in:
 
 - [Desktop adapter and worker](../crates/rexafs-gui/src/rmc_fitting.rs).
 - [RMC workspace](../crates/rexafs-gui/src/app/shell/rmc.rs).
-- [Wavelet view adapter](../crates/rexafs-gui/src/wavelet.rs).
+- [Wavelet view adapter](../crates/rexafs-gui/src/app/shell/wavelet.rs).
 - [Shared transform](../crates/rexafs/src/xafs/transform/local_spectrum.rs).
 - [Transform compatibility tests](../crates/rexafs/tests/rmc_transforms.rs).
 - [Original plan and later slices](rmc-desktop-workflow-plan.md).
@@ -241,3 +377,25 @@ Rust numerical API is unchanged. Numeric fields retain both live-preview events
 and the newer precision-preserving display formatting. The native screenshots
 above document the pre-integration RMC review; automated checks also cover the
 combined branch.
+
+## Interpreting an improving but poor fit (unreleased clarification)
+
+The percentage reduction compares the current best objective with the initial
+objective; it is not the percentage of the experimental signal explained. A very
+poor initial model can improve by 99% and still have a large residual. Inspect
+the best objective, complex-R curves and residual trend together. The desktop
+now labels this metric **Reduction from initial**.
+
+The setup and result views flag an R fit upper bound beyond the scattering-path
+radius. Review the path catalogue before interpreting outer-shell discrepancies.
+Fourier R includes scattering phase shifts and is not an exact bond distance, so
+absence of this message does not establish adequate model coverage. Increasing
+the path radius can substantially increase calculation cost.
+
+S₀² and theoretical ΔE₀ remain fixed during coordinate-only RMC. Calibrate them
+with an appropriate reference or a justified path fit before structural
+refinement; the core calibration workflows are described in
+[the search guide](rmc-search-upgrade.md#four-parameter-first-shell-calibration).
+A completed attempt budget or numerical plateau does not establish physical
+accuracy or a unique structure. These messages are display changes; existing
+runs retain their captured settings and numerical objective.
