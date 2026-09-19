@@ -1,0 +1,366 @@
+{
+  "captured_date": "2026-09-19",
+  "build": {
+    "version": "0.2.11",
+    "channel": "stable",
+    "release_tag": "v0.2.11",
+    "commit": "70f61e81262f9ac593f813c895ed843aa23ee640",
+    "features": [
+      "refeff-runner",
+      "feff10-runner"
+    ]
+  },
+  "distribution": "Signed and notarized ARM64 release installed from the qualified DMG.",
+  "workflow": "https://github.com/Ameyanagi/rexafs/actions/runs/35415279391",
+  "signing_workflow": "https://github.com/Ameyanagi/rexafs/actions/runs/35418251336",
+  "archive": {
+    "file": "rexafs-0.2.11-aarch64-apple-darwin.dmg",
+    "sha256": "c448695e973a2a9c9b503d81582cf18ce15ea7b488d47aaec95ff8d8b9cbf1ee",
+    "checksum_verified": true
+  },
+  "executable_sha256": "970e72651b78a740cfdda24086baa286654fcd7896493a9c429f2ced6bcbd162",
+  "platform": {
+    "os": "macOS",
+    "version": "26.5.1",
+    "architecture": "arm64"
+  },
+  "capture": {
+    "method": "Native app controls and original window captures through cua_repl.",
+    "pixel_dimensions": [
+      1192,
+      768
+    ],
+    "edited": false,
+    "scope": "Separate signed-release app with isolated settings; original full-window screenshots captured through cua_repl. No cropping, resizing, annotations or replacement plots. Public measurements and explicitly identified synthetic test data only."
+  },
+  "inputs": {
+    "cu_room_temperature": {
+      "path": "crates/rexafs/tests/fixtures/xas/samples/aps/13-id-c/xasdatalibrary/cu_metal_rt.xdi",
+      "sha256": "17b7076f1c3b5eccfa76dc6a7b3d26ea1fd388fa27f621a058779f70b71351d6",
+      "license": "CC0-1.0",
+      "source": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi",
+      "license_evidence": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst",
+      "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+      "changes": "None; original measurement bytes retained."
+    },
+    "cu_10k": {
+      "path": "crates/rexafs/tests/fixtures/xas/samples/nsls/x11a/xasdatalibrary/cu_metal_10K.xdi",
+      "sha256": "6fd3823892d218e576b27674f3faff998ffdf4de261e9ac92ea40a42e6f1ba88",
+      "license": "CC0-1.0",
+      "source": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_10K.xdi",
+      "license_evidence": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst",
+      "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+      "changes": "None; original measurement bytes retained."
+    },
+    "synthetic_cu": {
+      "path": "crates/rexafs/tests/fixtures/analysis/cu-mixtures/README.md",
+      "manifest_sha256": "d3403e8dfc5eebf1daa6a8f3a1c0743147585f8612f0d55488cdb358f6725228",
+      "permission": "User-authorized academic test fixtures. Original acquisition author and redistribution license unestablished; not MIT/Apache data. Original private Athena project is not redistributed.",
+      "scope": "100 noise-free synthetic mixtures plus prepared Cu foil, Cu2O and CuO references. Saved PCA/MCR calculated in 0.2.9 and reopened in 0.2.11. Derived-group processing, reference comparison and LCF checked again in 0.2.11."
+    },
+    "athena_project": {
+      "path": "crates/rexafs/tests/fixtures/xas/samples/unspecified/unspecified/xraylarch/json_unzipped.prj",
+      "sha256": "14a47fbcdb997ac6a6141837d60d83ad7c32ea80e339483d14c9d9374cd5310f",
+      "attribution_record": "SPDX-License-Identifier: MIT\nLicense-File: LICENSES/xraypy--xraylarch--LICENSE\nLicense-Basis: repository-distribution-license\nLicense-Scope: repository distribution license; bundled examples/test fixtures\nLicense-Evidence: https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/LICENSE\nTest-Eligibility: documented-license\nSource: https://github.com/xraypy/xraylarch/blob/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/json_unzipped.prj\nDownload: https://raw.githubusercontent.com/xraypy/xraylarch/e3c93284fed358c2c8979cba4c139430527433c6/examples/xafsdata/AthenaProjectFiles/json_unzipped.prj\nCitation: Matthew Newville, Mauro Rovezzi, Bruce Ravel, Margaret Koker, Ryuichi Shimogawa and contributors. Larch. https://doi.org/10.1088/1742-6596/430/1/012007\nSHA256: 14a47fbcdb997ac6a6141837d60d83ad7c32ea80e339483d14c9d9374cd5310f\nModifications: None; original downloaded measurement bytes retained.\n",
+      "changes": "None; original source bytes retained."
+    },
+    "qas_mo": {
+      "path": "crates/rexafs/tests/fixtures/xas/samples/nsls-ii/7-bm-qas/xasref/Mo foil 0001-r0003.dat",
+      "sha256": "280452e66ffd87d41bfa0d3609e51512aa9264e66bed65ad0fb4942cf20bb135",
+      "attribution_record": "SPDX-License-Identifier: MIT\nLicense-File: LICENSES/Ameyanagi--xasref--LICENSE\nLicense-Basis: repository-distribution-license\nLicense-Scope: repository distribution license; bundled examples/test fixtures\nLicense-Evidence: https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/LICENSE\nTest-Eligibility: documented-license\nSource: https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo%20foil%200001-r0003.dat\nDownload: https://raw.githubusercontent.com/Ameyanagi/xasref/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo%20foil%200001-r0003.dat\nCitation: Ryuichi Shimogawa and contributors. xasref: reference XAS spectra. https://github.com/Ameyanagi/xasref\nSHA256: 280452e66ffd87d41bfa0d3609e51512aa9264e66bed65ad0fb4942cf20bb135\nModifications: None; original downloaded measurement bytes retained.\n",
+      "changes": "None; original source bytes retained."
+    },
+    "ex3_pbte": {
+      "path": "crates/rexafs/tests/fixtures/xas/samples/spring-8/bl14b2/mdr-3c5953dc/Pb-L1_PbTe_Si311_50ms_210210.ex3",
+      "sha256": "48e9f600223ddc60333161b085f42c47ba96716c201aa5eedf949d56cb8791b8",
+      "attribution_record": "SPDX-License-Identifier: CC-BY-4.0\nLicense-File: LICENSES/CC-BY-4.0.txt\nLicense-Basis: explicit-data-license\nLicense-Scope: individual dataset license\nLicense-Evidence: https://mdr.nims.go.jp/datasets/3c5953dc-1faa-47a7-a3f0-8211703adb58\nTest-Eligibility: documented-license\nSource: https://mdr.nims.go.jp/datasets/3c5953dc-1faa-47a7-a3f0-8211703adb58\nDownload: https://mdr.nims.go.jp/filesets/fde0b719-5a68-48cf-a11d-c53dae041bab/download\nCitation: Masashi Ishii; Industrial Application and Partnership Division. XAFS spectrum of Lead telluride. https://doi.org/10.48505/nims.3178\nSHA256: 48e9f600223ddc60333161b085f42c47ba96716c201aa5eedf949d56cb8791b8\nModifications: None; original downloaded measurement bytes retained.\nLocal-License-Evidence: provenance/mdr/3c5953dc-1faa-47a7-a3f0-8211703adb58/record.json\n",
+      "changes": "None; original source bytes retained."
+    },
+    "pending_software_example": {
+      "files": [
+        "scan_001.dat",
+        "scan_002.dat",
+        "notes.txt"
+      ],
+      "scope": "Generated software-only tables, not experimental data.",
+      "recipe": "For integer i=0..100, energy=7000+i, detector_a=1+0.1*sin(i/10), detector_b=2+0.2*cos(i/10), printed to 6 decimal places. The header names energy/detector_a/detector_b without declaring units, so the batch review requests confirmation."
+    }
+  },
+  "scientific_scope": "Workflow documentation. Public experimental Cu for processing and path fitting; two separate acquisitions for Series, not a controlled temperature comparison. PCA/MCR are saved noise-free synthetic-mixture tests, not unique chemical identification. No private original project is published.",
+  "observations": [
+    "Stored Cu mutrans imported with 408 points and eV axis. Polynomial/MBACK switched in Normalize; Cu/K automatically suggested. Fit overlay and single AUTOBK spline inspected.",
+    "Fourier k max set to 12 inverse angstrom. Wavelet displays linked R and k spectra with settings in the Transform sidebar.",
+    "Assistant opened alongside Groups and Parameters. Model and Access menus inspected without sending a prompt or changing permissions.",
+    "Cu ReFEFF: 8 angstrom cluster, 62 computed paths, first single-scattering path selected, four free variables. Fit k=2..12, R=1..3, weight 2, noise scale 1. Eight optimizer iterations, R-factor displayed 0.00330. No unique-structure claim.",
+    "Portable save options and SVG publication preview inspected. Separate temporary projects retained locally.",
+    "Series: two public Cu measurements, Flat maximum 0..30 eV, wavelet integral k=4..10 inverse angstrom and R=1..3 angstrom. Both frames calculated. Difference reference 1 retained while Right selected frame 2.",
+    "Saved 0.2.9 PCA/MCR results reopened. PCA linear Error vs count shown; MCR components compared with marked references. Add to Groups created three further components, then a component was processed in Transform.",
+    "LCF rerun with All frames on the 100-mixture scan and three marked standards. Coefficient trend populated; clicked heatmap and pressed Right, selecting frame 52.",
+    "Athena/Larch json_unzipped.prj preview showed all four checked records and Import 4 spectra. Import completed.",
+    "Pending synthetic tables: Skip .dat removed two pending entries while notes.txt remained. Undo skip restored both entries. Original files unchanged.",
+    "QAS Mo: all three detected signals remained selected while Reference was previewed as ln(it/ir). EX3: stored mu preview and original header expanded."
+  ],
+  "images": [
+    {
+      "file": "import-preview.jpg",
+      "description": "408-point public room-temperature Cu XDI import preview.",
+      "sha256": "665675a57bf2ec3ac6b3e7ac12014cae607b3d97a2928188d65f533711a2e6aa",
+      "bytes": 91294,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:20:01.499Z"
+    },
+    {
+      "file": "data.jpg",
+      "description": "Data view, raw Cu absorption and source/energy correction controls.",
+      "sha256": "0c990b8c8ad0290a4c86500eed76a1482cd49ff8b894e6b64d47e79ac39d8c83",
+      "bytes": 123405,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:20:25.802Z"
+    },
+    {
+      "file": "polynomial.jpg",
+      "description": "Polynomial normalization with Pre/post fits and shaded ranges.",
+      "sha256": "e459ff25304684cdf2458e87d4e349ef2014a62e081bf9dc6520d7c4d458e2e0",
+      "bytes": 132093,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:20:47.666Z"
+    },
+    {
+      "file": "mback.jpg",
+      "description": "MBACK Cu K edge with complete fitted model overlay.",
+      "sha256": "0c2d721e9cb9682dc83af2e826d866b58cbd386ea808157a7b01b98c6499ac43",
+      "bytes": 135849,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:21:03.139Z"
+    },
+    {
+      "file": "background.jpg",
+      "description": "Raw absorption with one AUTOBK spline and Fourier magnitude below.",
+      "sha256": "436e149a9edfaface6a964dc65bdee19075f9130a3cb243ac223a846fb6fee97",
+      "bytes": 130307,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:21:11.745Z"
+    },
+    {
+      "file": "transform.jpg",
+      "description": "Weighted chi(k) and Fourier magnitude; k max 12 inverse angstrom.",
+      "sha256": "b50c647445fc53fde947e145bf2f763dbe51f57a0164908b4f65fa96d0544a48",
+      "bytes": 136336,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:21:27.683Z"
+    },
+    {
+      "file": "wavelet.jpg",
+      "description": "Wavelet magnitude with linked R and k spectra and integrated settings.",
+      "sha256": "7a9789718a157016c948563f525beb0068fe2b35a59d113bf3710f3a860eb541",
+      "bytes": 133724,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:21:36.583Z"
+    },
+    {
+      "file": "assistant.jpg",
+      "description": "Connected Assistant beside Normalize and Parameters; Review access.",
+      "sha256": "f6a26cbb0810590ddc65687c8212cd8c3106b035e0a4c714dcfce960f02a09e0",
+      "bytes": 136761,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:21:46.142Z"
+    },
+    {
+      "file": "assistant-model.jpg",
+      "description": "Model choices opened; Automatic retained.",
+      "sha256": "162398e4b0d22b107950183b83393d722ff3fb4e26660923255900d0727c44bb",
+      "bytes": 140243,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:22:03.887Z"
+    },
+    {
+      "file": "assistant-access.jpg",
+      "description": "Access menu opened; Review retained, Workspace commands off.",
+      "sha256": "470dda836cb9e1d852de9e34c8bac7449f446d538b1ff2cead42497ffdf99af8",
+      "bytes": 142486,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:22:11.744Z"
+    },
+    {
+      "file": "structure.jpg",
+      "description": "Built-in Cu structure, 8 angstrom cluster.",
+      "sha256": "0060e6baa22c31c9b4faf617c4f607939560d465cd9b745d8954707ed9482f6d",
+      "bytes": 135543,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:22:22.537Z"
+    },
+    {
+      "file": "paths.jpg",
+      "description": "One first-shell path selected from the ReFEFF calculation.",
+      "sha256": "e455b8639d0eb01934be1e976952d6b78c47520eb4ff5704fa7cbd0191988306",
+      "bytes": 154683,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:23:23.367Z"
+    },
+    {
+      "file": "fit-ranges.jpg",
+      "description": "R-space first-shell fit limits, k=2..12 and R=1..3.",
+      "sha256": "5bc9078813a2a592a1fe870d33402373d46dd85233cc15d26b1dc049085bddce",
+      "bytes": 136021,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:23:38.681Z"
+    },
+    {
+      "file": "fit-result.jpg",
+      "description": "Cu first-shell fitted curves, residuals and statistics.",
+      "sha256": "42d4aa33c52be4dd1eca7281264fdd39454ea36414b883a5421ab8eef2ff6583",
+      "bytes": 168580,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:23:43.903Z"
+    },
+    {
+      "file": "publication.jpg",
+      "description": "SVG publication preview of Cu Fourier fit.",
+      "sha256": "db331187e11cfb6498cb8544b559f8bcaee5eba43a578328455370cc218e50b7",
+      "bytes": 131966,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:23:53.047Z"
+    },
+    {
+      "file": "save-project.jpg",
+      "description": "Include source files selected in portable save dialog.",
+      "sha256": "411aeddd143025ccfd8c25cf2a82eede95ff50d6b1e8aed6d45b734d4a5f0c1e",
+      "bytes": 110259,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:24:00.123Z"
+    },
+    {
+      "file": "series-trend.jpg",
+      "description": "Flat maximum over 0..30 eV; second Cu acquisition previewed.",
+      "sha256": "615060c04aff89bf6f8a6f5b34a1fe869d468908c6ce6b84080d98646d5290b4",
+      "bytes": 104659,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:26:02.151Z"
+    },
+    {
+      "file": "series-wavelet.jpg",
+      "description": "Wavelet magnitude integral over k=4..10 and R=1..3.",
+      "sha256": "1170c8f1d1ea749e68c37f7265fb9b3c0e22a4dadaa7429a0ac7cd2a1a5163ff",
+      "bytes": 109377,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:25:43.529Z"
+    },
+    {
+      "file": "series-difference.jpg",
+      "description": "Second Cu acquisition minus fixed reference frame 1; saved integral trend.",
+      "sha256": "14a9e3f4558a6c533d55df9db7f7c0c5b201c7921283f189264463cf907e1439",
+      "bytes": 136842,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:25:59.392Z"
+    },
+    {
+      "file": "pca-error-linear.jpg",
+      "description": "Saved centered PCA result for 100 synthetic mixtures, linear error-versus-count axis.",
+      "sha256": "579e6cd4a9becf734297b157b060b0aa7812af4f4dfec999553e13801a056a33",
+      "bytes": 128261,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:33:05.982Z"
+    },
+    {
+      "file": "mcr-components.jpg",
+      "description": "Saved MCR component spectra from 100 synthetic mixtures.",
+      "sha256": "2c1c4f4c1e06ef7b7f33ffa34cb53938d243ec17c766c94dba217287b365fcdb",
+      "bytes": 132090,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:32:16.018Z"
+    },
+    {
+      "file": "mcr-reference-comparison.jpg",
+      "description": "Recovered MCR components and matched standard overlays, without refitting.",
+      "sha256": "38864aa613dbab283344678fc970bd4cb98ff6834fdc3f7928f874b27518c17a",
+      "bytes": 135189,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:32:16.721Z"
+    },
+    {
+      "file": "mcr-component-fft.jpg",
+      "description": "Recovered component group processed into chi(k) and chi(R).",
+      "sha256": "f0d0795d3c350b5e5c2a1124142a9cfc3e251343e80f9904dfb6891cc7403850",
+      "bytes": 151641,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:32:40.593Z"
+    },
+    {
+      "file": "series-lcf.jpg",
+      "description": "All-frame LCF coefficient trend with frame 52 selected.",
+      "sha256": "99caca8e0585b70c9364744cbebfc94d560880209a7a0c3537fe6c1ce7c8ea4c",
+      "bytes": 171588,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:34:03.647Z"
+    },
+    {
+      "file": "import-project-scans.jpg",
+      "description": "All four Athena/Larch project records checked.",
+      "sha256": "322e0d87807a21ffc75b8c1fbd92c094a15194e541b874ffe2e8bd5dd955d1c9",
+      "bytes": 133888,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:34:39.044Z"
+    },
+    {
+      "file": "pending-import-skip.jpg",
+      "description": "Type-specific pending-file dismissal for generated .dat/.txt files.",
+      "sha256": "79841d87b4f425ad1a9a22fad0e1c157798008f66b81df33105daf23c93e3ee3",
+      "bytes": 112442,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:35:55.168Z"
+    },
+    {
+      "file": "import-signals.jpg",
+      "description": "QAS Mo foil Reference preview with all three outputs checked.",
+      "sha256": "61ca2a4eae0645ec6d851a74308d6c1a80401758c6ecdda7879d3bf3d02158c0",
+      "bytes": 111241,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:37:43.059Z"
+    },
+    {
+      "file": "import-ex3.jpg",
+      "description": "PbTe EX3 stored absorption preview.",
+      "sha256": "3658203ef5430b3f61421766dc2b4a160195505f08247f49e4a1721873644de8",
+      "bytes": 108380,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:37:57.186Z"
+    },
+    {
+      "file": "import-source-details.jpg",
+      "description": "PbTe EX3 original header visible beneath preview.",
+      "sha256": "b819c13e7fac9970ffd89ce555b7dba15985aae8cd2601201448fc9b573443df",
+      "bytes": 110039,
+      "width": 1192,
+      "height": 768,
+      "captured_at": "2026-09-19T04:37:57.880Z"
+    }
+  ]
+}

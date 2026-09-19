@@ -44,6 +44,35 @@ numerical changes from the XrayLarch example collection at revision
 
 ## Documentation screenshots
 
+<a id="desktop-0211-workflow-captures"></a>
+
+### Desktop 0.2.11 workflow captures
+
+The homepage and current guides use 29 full, unedited **1192 × 768** window
+captures made through `cua_repl` on **19 September 2026**, using the signed and
+notarized macOS ARM64 **0.2.11** release. The
+[workflow capture manifest](/screenshots/0.2.11/workflow-capture.json) records
+the release, executable checksum, input provenance, settings and image hashes.
+The original historical captures and attribution below remain available.
+
+Import, processing, fitting and the two-frame Series use the public
+room-temperature and 10 K Cu foils credited below under CC0. The
+[downloadable walkthrough input](/examples/cu_metal_rt.xdi) retains its original
+bytes and [source/license record](/examples/cu_metal_rt.xdi.license).
+The two acquisitions do not constitute a controlled temperature experiment.
+The one-shell ReFEFF fit uses an 8 Å Cu cluster, k = 2–12 Å⁻¹, R = 1–3 Å
+and weight 2; it illustrates the workflow rather than a unique structural model.
+
+Collection views reopen the saved 0.2.9 PCA/MCR results for the previously
+authorized 100 synthetic Cu mixtures. Their limited academic-use provenance
+is retained below; no unrestricted license is asserted for the source standards.
+Reference comparison, component-to-group Fourier processing and all-frame LCF
+were checked in 0.2.11. No original private project is distributed. The import
+examples use Larch's MIT-distributed Athena project, the MIT-noticed xasref Mo
+foil and the CC BY 4.0 PbTe measurement credited below. Three generated numeric
+tables demonstrate pending-file dismissal; they are not measurements.
+No Assistant message was sent and no access permission was changed.
+
 ### Desktop 0.2.11 RMC captures
 
 The RMC guide includes three original, unedited **1192 × 768** JPEG window
@@ -65,7 +94,7 @@ No unpublished measurements or private project is included.
 
 ### Desktop 0.2.10 workflow captures
 
-The import, processing, Assistant and Series guides include eleven full, unedited
+The historical 0.2.10 set retains eleven full, unedited
 **2880 × 1800** JPEG window captures made through native macOS accessibility
 controls and window capture on **18 September 2026**. They show the ARM64
 **v0.2.10 tagged CI build**, commit `0b3aca3331e38ac4a34364824a74e96271f5ca1d`,
@@ -121,8 +150,8 @@ with the Cu example and built-in Cu structure. The fitting
 walkthrough uses ReFEFF, an 8 Å cluster and one first-shell path. Values in these
 screenshots describe that demonstration, not a benchmark or universal fit result.
 
-The [Next measurement reader guide](/docs/reference/next/measurement-reading/)
-adds full, unedited 1187 × 768 captures made through computer use on
+The historical Next measurement reader set retains
+full, unedited 1187 × 768 captures made through computer use on
 14 September 2026 from an unreleased macOS ARM64 source build on
 `test/beamline-fixtures`. These images show the EX3 import preview and original
 header. The source measurement is Masashi Ishii and the Industrial Application
@@ -135,7 +164,7 @@ and absorption, without additional import corrections. The
 identifies the input and executable by checksum. These images describe unreleased
 behavior and do not replace the versioned release screenshots above.
 
-The current Next guide also shows the multiple-signal import controls in a full,
+The historical Next set also retains the multiple-signal import controls in a full,
 unedited 1187 × 768 capture from 14 September 2026. Its 651-point
 `Mo foil 0001-r0003.dat` input comes from Ryuichi Shimogawa and contributors'
 [xasref collection](https://github.com/Ameyanagi/xasref/blob/74d1e795855055c7731da406b276bd50b27aafff/foil_QAS_sample_position/Mo%20foil%200001-r0003.dat),
@@ -155,7 +184,7 @@ identifies the original release build, signed executable and image checksums.
 The Cu measurement retains the source attribution above; its original bytes are
 unchanged. Older screenshots retain their original version labels.
 
-The Assistant guide also includes two full, unedited 1187 × 768 JPEG captures
+The Assistant guide links to two historical, unedited 1187 × 768 JPEG captures
 from an unreleased macOS ARM64 source build on `fix/assistant-context-size`,
 captured through computer use on 15 September 2026. They show actual in-app AI
 LCF and PCA calculations with generated mathematical spectra. No experimental

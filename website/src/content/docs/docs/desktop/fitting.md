@@ -19,9 +19,9 @@ Every 0.2.11 desktop package offers ReFEFF and FEFF10; see the
 Record the engine used.
 
 
-[![Full structure and calculation setup for the built-in Cu model](/screenshots/structure.jpg)](/screenshots/structure.jpg)
+[![Full structure and calculation setup for the built-in Cu model](/screenshots/0.2.11/structure.jpg)](/screenshots/0.2.11/structure.jpg)
 
-*Cu scattering setup. Full window, rexafs 0.2.4 on macOS; select to enlarge.*
+*Cu scattering setup. Full window, rexafs 0.2.11 on macOS; select to enlarge.*
 
 
 ## 2. Select a model
@@ -31,9 +31,9 @@ the first Cu–Cu single-scattering path. The calculated reference distance and 
 degeneracy describe the reference structure, not fitted results.
 
 
-[![Full Paths stage with first-shell Cu scattering selected](/screenshots/paths.jpg)](/screenshots/paths.jpg)
+[![Full Paths stage with first-shell Cu scattering selected](/screenshots/0.2.11/paths.jpg)](/screenshots/0.2.11/paths.jpg)
 
-*First-shell Cu path. Full window, rexafs 0.2.4 on macOS; select to enlarge.*
+*First-shell Cu path. Full window, rexafs 0.2.11 on macOS; select to enlarge.*
 
 
 Inspect the model's amplitude, energy shift, distance change and disorder
@@ -44,9 +44,9 @@ weight is 2. The fit is in R space; the visible k-space curves can extend beyond
 the selected fitting range.
 
 
-[![Full model view with k and R fitting limits](/screenshots/fit-ranges.jpg)](/screenshots/fit-ranges.jpg)
+[![Full model view with k and R fitting limits](/screenshots/0.2.11/fit-ranges.jpg)](/screenshots/0.2.11/fit-ranges.jpg)
 
-*R-space fit limits. Full window, rexafs 0.2.4 on macOS; select to enlarge.*
+*R-space fit limits. Full window, rexafs 0.2.11 on macOS; select to enlarge.*
 
 
 ## 3. Run and inspect
@@ -57,9 +57,9 @@ A small R-factor and a converged optimizer do not establish that the model is un
 or physically complete.
 
 
-[![Full Cu first-shell fit result with curves, residuals, parameters and statistics](/screenshots/fit-result.jpg)](/screenshots/fit-result.jpg)
+[![Full Cu first-shell fit result with curves, residuals, parameters and statistics](/screenshots/0.2.11/fit-result.jpg)](/screenshots/0.2.11/fit-result.jpg)
 
-*ReFEFF first-shell fit; higher shells lie outside the selected R range. Full window, rexafs 0.2.4 on macOS; select to enlarge.*
+*ReFEFF first-shell fit; higher shells lie outside the selected R range. Full window, rexafs 0.2.11 on macOS; select to enlarge.*
 
 
 The screenshot's noise scale is 1. Its uncertainties therefore depend on that

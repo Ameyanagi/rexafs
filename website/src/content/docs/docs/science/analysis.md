@@ -173,9 +173,9 @@ uses a display-only floor of 10⁻³²; Linear preserves zeros. Cumulative
 contribution remains linear. Switching scales does not recalculate PCA or
 change exported values.
 
-[![PCA reconstruction error versus retained component count, with a linear axis in rexafs 0.2.9](/screenshots/0.2.9/pca-error-linear.jpg)](/screenshots/0.2.9/pca-error-linear.jpg)
+[![Saved PCA reconstruction error versus retained component count, displayed on a linear axis in rexafs 0.2.11](/screenshots/0.2.11/pca-error-linear.jpg)](/screenshots/0.2.11/pca-error-linear.jpg)
 
-This signed-release capture uses all 100 synthetic Cu mixtures in **flat**, with
+This 0.2.11 capture reopens a saved 0.2.9 analysis of all 100 synthetic Cu mixtures in **flat**, with
 mean subtraction enabled and a −29 to +171 eV interval relative to E₀. Two
 varying directions explain 75.91% and 24.09% of the centered squared signal.
 The mean retains the shared part of the three-standard mixture; two directions
@@ -192,7 +192,7 @@ does not establish unique chemical factors. See the
 [Rust API](/api/rust/rexafs/xafs/analysis/mcr/index.html) for
 rexafs's independent implementation, defaults and error conditions.
 
-[![Three MCR component spectra from 100 flattened Cu mixtures in rexafs 0.2.9](/screenshots/0.2.9/mcr-components.jpg)](/screenshots/0.2.9/mcr-components.jpg)
+[![Saved MCR component spectra from 100 flattened Cu mixtures, displayed in rexafs 0.2.11](/screenshots/0.2.11/mcr-components.jpg)](/screenshots/0.2.11/mcr-components.jpg)
 
 This run uses the common full interval, 8780.2–9768.2 eV, three components,
 coefficient closure, seed zero and at most 2,000 iterations. Spectral
@@ -201,7 +201,14 @@ after 870 iterations. These are estimated factors, not independently identified
 pure compounds; reference comparison is still necessary.
 
 After fitting, mark standards and use **Compare marked standards** for a matched
-spectral overlay without rescaling. **Add to Groups** retains each MCR component,
+spectral overlay without rescaling.
+
+[![Recovered MCR components overlaid with their matched Cu foil, Cu₂O and CuO reference spectra](/screenshots/0.2.11/mcr-reference-comparison.jpg)](/screenshots/0.2.11/mcr-reference-comparison.jpg)
+
+*Solid curves are recovered factors; dashed curves are the matched references.
+Matching labels the comparison and does not change the blind fit.*
+
+**Add to Groups** retains each MCR component,
 or an LCF fit, residual and weighted contributions, as calculated norm/flat
 groups. They can be compared with references using the usual group plot without
 normalizing the calculated arrays again. Operation metadata records the source
@@ -221,12 +228,14 @@ over wider measured coverage before doing broad-range EXAFS fitting. The Rust
 `McrResult::component_spectrum(index)` method provides this conversion; these
 analysis APIs are not yet exposed by the Python or TypeScript bindings.
 
-[![A recovered MCR component processed through background subtraction and Fourier transformation in rexafs 0.2.9](/screenshots/0.2.9/mcr-component-fft.jpg)](/screenshots/0.2.9/mcr-component-fft.jpg)
+[![A recovered MCR component processed through background subtraction and Fourier transformation in rexafs 0.2.11](/screenshots/0.2.11/mcr-component-fft.jpg)](/screenshots/0.2.11/mcr-component-fft.jpg)
 
 The component was added with **Add to Groups** and opened in **Transform**.
 The plots demonstrate subsequent processing over its retained coverage; they
 do not establish a physically unique component or validate a structural model.
-All three captures were made through computer use from the signed 0.2.9 Mac app.
+These captures were made through computer use from the signed 0.2.11 Mac app.
+PCA and MCR show retained results from the earlier project; the reference overlay
+and component-to-group processing were checked again in 0.2.11.
 See [input and screenshot provenance](/licenses/#documentation-screenshots).
 
 The Series view separately offers norm and flat absorption, with flat initially
