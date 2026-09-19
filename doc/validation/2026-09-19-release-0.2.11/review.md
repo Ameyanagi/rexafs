@@ -150,6 +150,22 @@ size matched the staged signed release and GitHub metadata. The final
 `SHA256SUMS` covers the other 26 assets, including sidecars and signing evidence.
 No source tag was moved and no binary was rebuilt during signing or publication.
 
+## Post-publication updater check
+
+A later computer-use check attempted the real 0.2.10 → 0.2.11 update from a
+separate signed ARM64 app with public Cu data. **Update and restart** appeared,
+and downloading, signature checks and recovery saving succeeded. The helper
+then exited with signal 9 before acknowledging readiness; the original app
+remained open and unchanged. `codesign --verify --strict` on the bare copied
+helper reported an invalid Info.plist. The existing implementation copies the
+executable out of its signed bundle. The same layout remains in 0.2.11.
+
+The prior signing and installer checks did not exercise this signed helper
+handoff. A full-bundle helper fix and a signed-package regression check are in
+progress. This finding limits macOS in-app updating, not the verified standalone
+installers. Windows/Linux helpers have separate packaged replacement/recovery
+checks; their behavior must not be inferred from this Mac failure.
+
 ## Signed desktop and documentation captures
 
 Computer use controlled a separate process installed from the signed ARM64 DMG,

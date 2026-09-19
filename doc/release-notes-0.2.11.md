@@ -50,6 +50,11 @@ a starting heuristic. The [RMC guide](rmc.md) explains units and assumptions.
 
 </details>
 
+**Known macOS updater issue:** a real signed 0.2.10 → 0.2.11 check found that the
+update helper stops before replacement. The same helper layout remains in
+0.2.11; the existing app and analysis stay intact. A fix is in progress.
+Standalone signed installers remain usable. Windows/Linux use separate helpers.
+
 <details>
 <summary>Packages and compatibility</summary>
 
