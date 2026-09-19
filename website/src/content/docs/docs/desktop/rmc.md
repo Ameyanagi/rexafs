@@ -4,7 +4,7 @@ description: "Refine atomic coordinates with exact cached ReFEFF, inspect live f
 audience: user
 ---
 
-In **rexafs 0.2.10**, choose **Fit → Fit mode: RMC** at the upper right of the
+In **rexafs 0.2.11**, choose **Fit → Fit mode: RMC** at the upper right of the
 fitting workspace. Reverse Monte Carlo (RMC) proposes random coordinate moves,
 calculates their spectra and accepts or rejects them against the measured data
 and configured constraints. It refines a periodic structure rather than the
@@ -34,29 +34,32 @@ the desktop, and RMC is not exposed by the Python or TypeScript bindings.
    attempt budget. Select **Preview initial fit** and compare its curves with
    experiment before choosing **Run RMC**.
 
-Starting values are 10,000 attempts, 0.03 Å moves, numerical Metropolis tolerance
-0.001, a 0.2 Å displacement envelope, 1 Å global minimum distance and atom 0 as
-an anchor. These are editable starting values, not a physical model or a
-convergence guarantee. S₀² and ΔE₀ require sample-specific calibration and stay
-fixed during coordinate moves. The Metropolis tolerance controls acceptance of
-worse trial scores; it is not a measured thermodynamic temperature.
+New jobs start with 10,000 attempts, automatic moves beginning at 0.05 Å,
+numerical Metropolis tolerance 0.001, a 0.2 Å displacement envelope, 1 Å global
+minimum distance and atom 0 as an anchor. These are editable starting values,
+not a physical model or a convergence guarantee. S₀² stays fixed during RMC;
+ΔE₀ can remain fixed or be refined periodically. Calibrate both for the sample.
+The Metropolis tolerance controls acceptance of worse trial scores; it is not a
+measured thermodynamic temperature. Older saved runs retain their settings.
+
+<figure>
+  <img src="/screenshots/0.2.11/rmc-settings.jpg" alt="RMC fit settings with inherited k and R ranges, Auto CPU workers and automatic coordinate moves" loading="lazy" width="1192" height="768" />
+  <figcaption>Signed 0.2.11 release: k = 2–12 Å⁻¹ and R = 1.5–3.5 Å copied from Transform; Auto resolves to ten workers on this machine. This is a public Cu workflow example.</figcaption>
+</figure>
 
 ## Fit ranges and the background
 
-:::note[Unreleased correction]
 The next action stays at the upper right on each RMC page, matching path fitting.
 Fit settings places **Preview initial fit** beside **Run RMC →**.
 
-The source checkout now copies Transform windows, widths and forward sampling
-as well as k bounds and weight. Explicit Back FT R bounds are used; otherwise the
-starting R range remains Rbkg + 0.15 Å to max(4 Å, Rbkg + 1.15 Å). **Use spectrum
-ranges** copies these settings again after processing edits. It does not retarget
-a saved run. ReFEFF coverage expands for the fit window and ΔE₀, up to the
-adapter's 30 Å⁻¹ limit, with actual returned support checked. The released 0.2.10
-desktop instead uses a fixed 16 Å⁻¹ calculator limit and the fitting default
-window width. See the [source-checkout workflow](https://github.com/Ameyanagi/rexafs/blob/dev/doc/rmc-desktop-workflow.md)
-for details once merged to `dev`.
-:::
+New jobs copy Transform windows, widths and forward sampling as well as k bounds
+and weight. Explicit Back FT R bounds are used; otherwise the starting R range
+is Rbkg + 0.15 Å to max(4 Å, Rbkg + 1.15 Å). **Use spectrum ranges** copies these
+settings again after processing edits. It does not retarget a saved run. ReFEFF
+coverage expands for the fit window and ΔE₀, up to the adapter's 30 Å⁻¹ limit,
+with actual returned support checked. Missing theory is rejected rather than
+extrapolated. The [workflow guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.11/doc/rmc-desktop-workflow.md)
+explains these settings.
 
 The default objective minimizes the normalized sum of squared **real and
 imaginary R-space residuals**, using the same Fourier mapping as native path
@@ -64,9 +67,10 @@ fitting. The magnitude plot is a diagnostic; matching magnitude alone is not
 the objective. Configured structural penalties are added separately.
 
 Starting k limits follow the spectrum's Transform settings within valid measured
-and calculator support, including the window. R minimum starts **0.15 Å above
-the saved AUTOBK Rbkg**. The desktop rejects R minimum below Rbkg, where background
-removal can produce artifacts. **Use spectrum ranges** reapplies the suggested
+and calculator support, including the window. Without an explicit Back FT lower
+bound, R minimum starts **0.15 Å above the saved AUTOBK Rbkg**. The desktop
+rejects R minimum below Rbkg, where background removal can produce artifacts.
+**Use spectrum ranges** reapplies the suggested
 ranges without changing S₀² or ΔE₀. One integer k weight from 0 through 3 is
 supported; automatic noise estimation and multiple k weights are not connected.
 
@@ -76,25 +80,26 @@ can be reused. This does not recalculate the electronic potential after every
 move. Adaptive scattering remains experimental, opt-in in Rust, and absent from
 these desktop controls.
 
-The 0.2.10 prepared calculator allows 128 absorber contexts by default. Selecting
-all 256 absorbing atoms in a cell can exceed this resource limit; it is unrelated
-to Assistant message length. The unreleased desktop sizes the context count from
-the selected sites, edges and settings without discarding absorbers. Independent
-path-count and memory-related limits still apply, and larger cells cost more.
+The desktop allocates a prepared context for every selected absorbing site,
+edge and setting. This removes the previous 128-context default limit for larger
+cells without discarding absorbers. Independent path-count and memory-related
+limits still apply, and larger cells cost more.
 
-New source-checkout runs also share electronic preparation for identical local
-inputs after deterministic ordering of the scatterer rows. All absorbing sites
+New runs also share electronic preparation for identical local inputs after
+deterministic ordering of the scatterer rows. All absorbing sites
 and their explicit paths are retained. **Run details** shows calculated and shared
 electronic contexts. Sorting can change numerical summation and the representative
 atom for a potential when nearest sites tie. Old checkpoints retain their original
 ordering; restarting a new job opts into the improved preparation. See the
-[startup profiling method](https://github.com/Ameyanagi/rexafs/blob/dev/doc/rmc-startup-profiling.md)
-for reproducible timing and numerical-agreement checks once merged to `dev`.
+[startup profiling method](https://github.com/Ameyanagi/rexafs/blob/v0.2.11/doc/rmc-startup-profiling.md)
+for reproducible timing and numerical-agreement checks.
 
 
-## CPU workers in the source checkout
+<span id="cpu-workers-in-the-source-checkout"></span>
 
-This option is unreleased. **Fit settings → CPU workers** starts at **Auto** for
+## CPU workers
+
+**Fit settings → CPU workers** starts at **Auto** for
 new jobs, using available logical CPUs up to 64. Enter a count from 1 to 64 to
 override it, or clear the field to restore Auto. Independent absorbers run first.
 **Advanced settings → Parallel paths**, enabled for new jobs, uses spare workers
@@ -104,9 +109,16 @@ Older projects keep their existing scheduling. **Run details** shows the capture
 worker count; saved jobs resume with that count. Changing the form affects a new
 run. More workers may use more temporary memory and are not always faster.
 
-## Energy refinement in the source checkout
+<span id="energy-refinement-in-the-source-checkout"></span>
 
-This option is unreleased. In **Fit settings**, choose **ΔE₀ → Refine** to update
+<figure>
+  <img src="/screenshots/0.2.11/rmc-run-details.jpg" alt="Saved RMC run details showing two CPU workers and one calculated plus 31 shared electronic preparations" loading="lazy" width="1192" height="768" />
+  <figcaption>The short check used two workers and retained all 32 absorbing sites. Displayed timings describe this one software check, not a performance benchmark.</figcaption>
+</figure>
+
+## Energy refinement
+
+In **Fit settings**, choose **ΔE₀ → Refine** to update
 the theoretical energy shift while keeping S₀² fixed. **Fixed** remains the default,
 including for older projects. Set S₀² from an appropriate reference calibration.
 
@@ -122,9 +134,10 @@ runs keep each structure's matching shift; exports include these values in
 preprocessing stay unchanged. This is alternating structural/energy optimization;
 a small residual alone does not establish a unique structure.
 
-## Calibration and local refinement in the source checkout
+<span id="calibration-and-local-refinement-in-the-source-checkout"></span>
 
-:::note[Unreleased]
+## Calibration and local refinement
+
 New jobs offer **Auto moves** (starting at 0.05 Å) and **Fixed moves**. Auto adjusts
 the width during the early part of the original budget and cools the numerical
 tolerance to zero. Existing saved runs keep their settings.
@@ -140,7 +153,6 @@ and the original constraints. It preserves the RMC checkpoint. **Refinement**
 compares the previous and refined spectra; **Export result…** includes both,
 refined XYZ coordinates and a separate JSON audit. A smaller residual does not
 establish a unique structure. Local refinement uses numerical derivatives.
-:::
 
 ## Read the live results
 
@@ -154,6 +166,11 @@ The statistics separate best score, improvement, acceptance, hard-constraint
 rejections and residual diagnosis. **Run details** includes timing, cache
 statistics and saved-input provenance. Updates arrive between completed
 calculations; one long scattering evaluation can delay the display or a pause.
+
+<figure>
+  <img src="/screenshots/0.2.11/rmc-results.jpg" alt="Reopened ten-attempt Cu RMC result with fixed amplitude, an energy-bound warning and convergence not assessed" loading="lazy" width="1192" height="768" />
+  <figcaption>Saved results reopened in 0.2.11. This ten-attempt check used ±1 eV bounds and energy updates every five attempts. It reached +1 eV and is not a calibrated or converged scientific fit. <a href="/licenses/#desktop-0211-rmc-captures">Capture and input provenance</a>.</figcaption>
+</figure>
 
 ## Pause, save and resume
 
@@ -194,8 +211,8 @@ history. A plateau does not stop the run automatically or prove a unique,
 physically complete structure. Inspect both spectral components, constraints and
 structural distributions, and compare independent seeds when drawing conclusions.
 
-The [workflow and implementation record](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/rmc-desktop-workflow.md)
+The [workflow and implementation record](https://github.com/Ameyanagi/rexafs/blob/v0.2.11/doc/rmc-desktop-workflow.md)
 explains persistence, numerical conventions and software checks. Its short Cu₂O
 verification run remained **StillChanging**, not converged. The
-[Rust guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/rmc.md) covers
+[Rust guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.11/doc/rmc.md) covers
 Spectrum inputs and the broader RMC and evolutionary APIs.

@@ -4,7 +4,7 @@ description: "Analyze collections while keeping preprocessing assumptions explic
 audience: user
 ---
 
-This guide describes **rexafs 0.2.10**; older figures retain their capture versions.
+This guide describes **rexafs 0.2.11**; older figures retain their capture versions.
 LCF, PCA and native MCR-ALS are available in the desktop and Rust. Python and
 TypeScript expose spectrum processing; their collection-analysis bindings remain
 planned. In the desktop, use **Data → Parameters** or action search.

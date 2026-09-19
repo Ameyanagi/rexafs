@@ -4,7 +4,7 @@ description: "Browse scan frames and distinguish sampled overviews from complete
 audience: user
 ---
 
-This guide describes **rexafs 0.2.10**. The new screenshots were captured
+This guide describes **rexafs 0.2.11**. The retained 0.2.10 screenshots were captured
 through computer use from its tagged macOS CI build before signing, using two
 public Cu foil measurements. These are a small workflow example, **not a time series** or a
 controlled temperature experiment. See

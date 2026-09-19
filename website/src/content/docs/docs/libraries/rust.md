@@ -9,7 +9,7 @@ audience: user
 Add the stable crate:
 
 ```sh
-cargo add rexafs@0.2.10
+cargo add rexafs@0.2.11
 ```
 
 ```rust
@@ -34,10 +34,10 @@ after direct edits to legacy public fields, call `invalidate_derived()`.
 
 ## Full API reference
 
-The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.10 crate
+The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.11 crate
 with the default nalgebra backend and optional features. It excludes the legacy
 `ndarray-compat` backend, which replaces parts of that API and has different
-defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.10/rexafs/) is also available.
+defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.11/rexafs/) is also available.
 
 The [Next reference](/api/rust-next/rexafs/index.html) uses the checkout with the
 same features. Use it when working from source.
@@ -69,7 +69,7 @@ automatic choices, units, angle conversion and supported containers.
 | `materials-project`, `cod` | HTTP structure-source integrations |
 | `ndarray-compat` | Legacy ndarray compatibility backend |
 
-For example, `cargo add rexafs@0.2.10 --features plotting,refeff-runner` enables
+For example, `cargo add rexafs@0.2.11 --features plotting,refeff-runner` enables
 plotting and ReFEFF. Backend availability depends on the platform; see
 [WebAssembly support](/docs/libraries/webassembly/) for browser limits.
 
@@ -117,11 +117,18 @@ the desktop's backup, migration or atomic replacement behavior.
 
 ## RMC from a processed Spectrum
 
-Enable `refeff-runner` to use the RMC API in 0.2.10. Construct a dataset from
+Enable `refeff-runner` to use the RMC API in 0.2.11. Construct a dataset from
 `Spectrum` so its normalization, background and Fourier settings are retained,
 then prepare a structure and an exact cached ReFEFF session. The
-[RMC guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.10/doc/rmc.md) provides
+[RMC guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.11/doc/rmc.md) provides
 runnable examples, checkpoint/resume and evolutionary search. The
 [desktop workflow](/docs/desktop/rmc/) explains the shared background-range
 guard and residual-trend interpretation. Adaptive scattering remains experimental
 and explicitly opt-in.
+
+Since 0.2.11, `AccelerationSettings` supports a shared worker budget for absorber
+and path calculations. Set `workers` from 1 to 64 and enable `parallel_paths`
+to use spare workers within an absorber. Rust defaults remain one worker and
+path parallelism disabled; new desktop jobs select an automatic CPU budget.
+`EnergyRefinement` configures optional periodic theoretical ΔE₀ searches with
+fixed S₀². See the RMC guide for setup, bounds, saved-state behavior and limits.

@@ -40,7 +40,7 @@ construction](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/
 
 ## Calculate and select paths
 
-Choose the engine and cluster radius, then **Calculate paths**. Every 0.2.10
+Choose the engine and cluster radius, then **Calculate paths**. Every 0.2.11
 desktop package offers ReFEFF and FEFF10; see the
 [Windows ARM64 requirement](/docs/getting-started/install/#arm64-availability).
 Record the engine and settings in your methods.

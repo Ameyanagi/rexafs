@@ -1,0 +1,121 @@
+{
+  "captured_date": "2026-09-19",
+  "build": {
+    "version": "0.2.11",
+    "channel": "stable",
+    "release_tag": "v0.2.11",
+    "commit": "70f61e81262f9ac593f813c895ed843aa23ee640",
+    "features": [
+      "refeff-runner",
+      "feff10-runner"
+    ]
+  },
+  "distribution": "Signed and notarized ARM64 release installed from the qualified DMG.",
+  "workflow": "https://github.com/Ameyanagi/rexafs/actions/runs/35415279391",
+  "signing_workflow": "https://github.com/Ameyanagi/rexafs/actions/runs/35418251336",
+  "archive": {
+    "file": "rexafs-0.2.11-aarch64-apple-darwin.dmg",
+    "sha256": "c448695e973a2a9c9b503d81582cf18ce15ea7b488d47aaec95ff8d8b9cbf1ee",
+    "checksum_verified": true
+  },
+  "executable_sha256": "970e72651b78a740cfdda24086baa286654fcd7896493a9c429f2ced6bcbd162",
+  "platform": {
+    "os": "macOS",
+    "version": "26.5.1",
+    "architecture": "arm64"
+  },
+  "capture": {
+    "method": "Native app controls and original window captures through cua_repl.",
+    "pixel_dimensions": [
+      1192,
+      768
+    ],
+    "edited": false,
+    "scope": "Separate signed-release process with isolated settings; no cropping, resizing, annotation or synthetic plots."
+  },
+  "inputs": {
+    "cu_room_temperature": {
+      "path": "crates/rexafs/tests/fixtures/xas/samples/aps/13-id-c/xasdatalibrary/cu_metal_rt.xdi",
+      "sha256": "17b7076f1c3b5eccfa76dc6a7b3d26ea1fd388fa27f621a058779f70b71351d6",
+      "license": "CC0-1.0",
+      "source": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi",
+      "license_evidence": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst",
+      "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+      "changes": "None; original measurement bytes retained."
+    }
+  },
+  "scientific_scope": "Ten-attempt software and persistence check, not a calibrated or converged Cu structure; narrow energy bound reached, amplitude mismatch remains.",
+  "run": {
+    "structure": "Built-in curated fcc Cu, 2 x 2 x 2 supercell, 32 atoms",
+    "k_range_inverse_angstrom": [
+      2,
+      12
+    ],
+    "r_range_angstrom": [
+      1.5,
+      3.5
+    ],
+    "k_weight": 2,
+    "workers": 2,
+    "parallel_paths": true,
+    "auto_move_initial_angstrom": 0.05,
+    "attempts": 10,
+    "s02_fixed": 1,
+    "delta_e0_bounds_ev": [
+      -1,
+      1
+    ],
+    "energy_update_interval": 5,
+    "best_delta_e0_ev": 1,
+    "initial_objective": 6.4641092,
+    "best_objective": 5.0267694,
+    "convergence": "Not assessed yet",
+    "calculated_electronic_contexts": 1,
+    "shared_electronic_contexts": 31
+  },
+  "observations": [
+    "Imported stored mutrans; 408 measurement points retained.",
+    "RMC inherited the explicit Transform ranges; new job defaults displayed Auto = 10 CPU workers.",
+    "Default ±15 eV refinement bounds correctly blocked k minimum 2 inverse angstrom because the Fourier taper would be lost.",
+    "Two-worker, ten-attempt run completed with periodic energy updates and fixed S02.",
+    "Saved portable project reopened with matching result curves, worker settings and energy values; no calculation started automatically."
+  ],
+  "images": [
+    {
+      "file": "rmc-settings.jpg",
+      "sha256": "3cc7578aa1372554d22c908d0c366b7257976c595332ecf3f7b4119b3580f426",
+      "bytes": 112102,
+      "width": 1192,
+      "height": 768,
+      "saved_at": "2026-09-19T03:29:52.717699+00:00",
+      "inputs": [
+        "cu_room_temperature"
+      ],
+      "description": "New-job defaults and inherited ranges before the short check: Auto 10 workers, 10000 attempts and Fixed energy."
+    },
+    {
+      "file": "rmc-results.jpg",
+      "sha256": "5309de70e43a98ad39fe0ab7b294e8fc3e55c2d0a9a3f795239fe3ced0cd90fc",
+      "bytes": 149241,
+      "width": 1192,
+      "height": 768,
+      "saved_at": "2026-09-19T03:37:03.188080+00:00",
+      "inputs": [
+        "cu_room_temperature"
+      ],
+      "description": "Reopened completed ten-attempt result, fixed S02 = 1, best delta E0 +1 eV at bound; convergence not assessed."
+    },
+    {
+      "file": "rmc-run-details.jpg",
+      "sha256": "25b7c6d6e3cfad1815b295143b4cd4b60afa02320a58911e6da0f943861520fe",
+      "bytes": 129746,
+      "width": 1192,
+      "height": 768,
+      "saved_at": "2026-09-19T03:37:13.347407+00:00",
+      "inputs": [
+        "cu_room_temperature"
+      ],
+      "description": "Reopened checkpoint statistics: two workers, parallel paths and one calculated plus 31 shared preparations."
+    }
+  ]
+}

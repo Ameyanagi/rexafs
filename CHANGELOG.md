@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.2.11 (release preparation)
+## 0.2.11 — 2026-09-19
 
 - Copy RMC fit ranges from the spectrum’s Transform settings and expand ReFEFF
   coverage for the Fourier taper and theoretical energy shift.
