@@ -20,7 +20,7 @@ pub(super) fn panel_plot(theme: &crate::theme::Theme, size: (u32, u32), rotated:
     let mut config = plot.get_config().clone();
     config.margins = ruviz::core::config::MarginConfig::fixed(
         0.48,
-        if rotated { 0.12 } else { 0.70 },
+        if rotated { 0.12 } else { 0.85 },
         0.12,
         0.42,
     );
