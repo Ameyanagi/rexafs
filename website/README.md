@@ -179,19 +179,17 @@ follow the vendor README and preserve the original notice bytes.
   entry-point declaration, Wasm help and the Rust core's public documentation.
 - `public/` contains only selected public assets. Application screenshots are
   full, unedited captures made with computer use. `screenshots/0.2.11/` contains
-  three original 1192 × 768 RMC captures from the signed ARM64 release installed
-  from its DMG. Its manifest records public CC0 Cu input, source and image hashes,
-  inherited ranges, CPU controls, periodic energy refinement and saved-result
-  reload. The ten-attempt example is explicitly not a converged fit.
-  `screenshots/0.2.10/` contains
-  eleven original 2880 × 1800 Retina window captures from the tagged ARM64 CI
-  build, before release signing/publication. Its `capture.json` records the build,
-  public CC0 Cu inputs, checksums and observed workflows. Native macOS accessibility
-  controls were used because the computer-use connector was unavailable.
-  The retained 0.2.9 examples use eight 1192 × 768 JPEG captures from
-  the signed macOS ARM64 0.2.9 release in `screenshots/0.2.9/`. Other guides retain
-  1192 × 768 captures from the official macOS ARM64 0.2.4 release; Next import
-  documentation uses separate 1187 × 768 source-build captures in `screenshots/next/`.
+  three RMC captures and 29 refreshed workflow captures from the signed ARM64
+  0.2.11 release installed from its DMG. All are original 1192 × 768 windows
+  captured through `cua_repl`; no cropping, resizing or replacement plots.
+  `capture.json` retains the RMC record, and `workflow-capture.json` records the
+  import, processing, Assistant, fitting, Series and collection-analysis images.
+  The homepage and current guides use these versioned images. PCA/MCR reopen
+  saved 0.2.9 calculations; LCF and component processing were checked in 0.2.11.
+  The original inputs, permissions, numerical scope and image hashes are recorded
+  explicitly. The ten-attempt RMC example does not establish convergence.
+  Older captures remain as historical evidence: 0.2.10 tagged CI images,
+  0.2.9 and 0.2.4 release images, and source-build images in `screenshots/next/`.
   Keep their version, input and capture provenance in
   the public licenses page. Do not crop them or replace plots with mockups.
 

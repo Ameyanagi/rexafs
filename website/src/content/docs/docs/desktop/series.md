@@ -4,11 +4,11 @@ description: "Browse scan frames and distinguish sampled overviews from complete
 audience: user
 ---
 
-This guide describes **rexafs 0.2.11**. The retained 0.2.10 screenshots were captured
-through computer use from its tagged macOS CI build before signing, using two
+This guide describes **rexafs 0.2.11**. The 0.2.11 screenshots were captured
+through computer use from the signed macOS release, using two
 public Cu foil measurements. These are a small workflow example, **not a time series** or a
 controlled temperature experiment. See
-[data and capture provenance](/licenses/#desktop-0210-workflow-captures).
+[data and capture provenance](/licenses/#desktop-0211-workflow-captures).
 
 ## Start with the overview
 
@@ -30,7 +30,7 @@ vertical limits; large glitches remain visible.
    to show or hide these handles without changing the interval.
 4. Review several frames with **Left/Right**, then choose **Calculate all N frames**.
 
-[![Add trend showing flattened Cu absorption and draggable interval boundaries](/screenshots/0.2.10/series-trend.jpg)](/screenshots/0.2.10/series-trend.jpg)
+[![Add trend showing flattened Cu absorption and draggable interval boundaries](/screenshots/0.2.11/series-trend.jpg)](/screenshots/0.2.11/series-trend.jpg)
 
 *Maximum over 0–30 eV from E₀. Changing the preview frame does not change the
 interval. Arrow keys in a focused numeric field still edit that field.*
@@ -47,7 +47,7 @@ then open **Series → Add trend… → Wavelet**. Choose **Use Transform settin
 to copy that setup. Select **Integral**, **Maximum** or **Mean**, then drag the
 k–R rectangle or enter its four bounds. k is in Å⁻¹ and R is in Å.
 
-[![Series wavelet integral with a selected k–R rectangle and Calculate all frames](/screenshots/0.2.10/series-wavelet.jpg)](/screenshots/0.2.10/series-wavelet.jpg)
+[![Series wavelet integral with a selected k–R rectangle and Calculate all frames](/screenshots/0.2.11/series-wavelet.jpg)](/screenshots/0.2.11/series-wavelet.jpg)
 
 *The example integrates wavelet magnitude over k = 4–10 Å⁻¹ and R = 1–3 Å.
 Both frames completed. A saved trend retains the transform settings and rectangle.*
@@ -65,7 +65,7 @@ spectrum. **Reference… / Ref: N ▾** chooses it. **Colors ▾** selects a pal
 reverses it; Auto uses blue–red with a scale centered on zero for differences.
 These display controls leave original groups and saved calculations unchanged.
 
-[![Difference heatmap and selected frame beside the unchanged saved wavelet integral trend](/screenshots/0.2.10/series-difference.jpg)](/screenshots/0.2.10/series-difference.jpg)
+[![Difference heatmap and selected frame beside the unchanged saved wavelet integral trend](/screenshots/0.2.11/series-difference.jpg)](/screenshots/0.2.11/series-difference.jpg)
 
 *Frame 2 minus frame 1 in flattened absorption. The saved wavelet trend remains
 the original per-frame integral. The two inputs have different acquisition
@@ -137,13 +137,13 @@ rows, so check completion status and per-frame errors before treating an exporte
 trend as the whole scan. Project saves retain the batch coefficients and settings;
 publication exports include `data/lcf-series.csv` and JSON.
 
-[![All 100 Cu-mixture LCF results and the selected frame 51 in rexafs 0.2.9](/screenshots/0.2.9/series-lcf.jpg)](/screenshots/0.2.9/series-lcf.jpg)
+[![All 100 Cu-mixture LCF results and the selected frame 52 in rexafs 0.2.11](/screenshots/0.2.11/series-lcf.jpg)](/screenshots/0.2.11/series-lcf.jpg)
 
-Captured through computer use from the signed 0.2.9 Mac app after all 100
+Captured through computer use from the signed 0.2.11 Mac app after all 100
 synthetic mixtures completed LCF against the Cu foil, Cu₂O and CuO references.
 The plot uses flattened absorption. Selecting the heatmap and pressing Right
 changed the selected frame, spectrum and trend cursor together; the capture
-shows frame 51. See [data and capture provenance](/licenses/#documentation-screenshots).
+shows frame 52. See [data and capture provenance](/licenses/#documentation-screenshots).
 
 Inspect a subset before a complete calculation, then review failures and
 per-frame uncertainties. See [multiple spectra and batches](/docs/desktop/multiple-spectra/)

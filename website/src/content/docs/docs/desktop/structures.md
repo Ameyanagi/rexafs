@@ -61,9 +61,9 @@ sources.
 See the [path presets](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/app/shell/path_picker.rs#L60).
 
 
-[![Full path selection view showing Cu geometry and shell-grouped scattering paths](/screenshots/paths.jpg)](/screenshots/paths.jpg)
+[![Full path selection view showing Cu geometry and shell-grouped scattering paths](/screenshots/0.2.11/paths.jpg)](/screenshots/0.2.11/paths.jpg)
 
-*First-shell path selection. Full window, rexafs 0.2.4 on macOS; select to enlarge.*
+*First-shell path selection. Full window, rexafs 0.2.11 on macOS; select to enlarge.*
 
 
 ## Path parameters

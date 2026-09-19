@@ -11,3 +11,10 @@ Metal foil validation uses the original, unmodified measured data and headers:
 - Ni: `ni_metal_rt.xdi`, standard foil (Joe Wong boxed set), room temperature,
   APS 13-ID-C (2001-06-26). Columns are energy in eV, precomputed mutrans, and I0.
   Added from the same pinned upstream commit above; no numeric transformation.
+
+Public Cu walkthrough added for the 0.2.11 documentation:
+- cu_metal_rt.xdi: original room-temperature Cu foil at APS 13-ID-C.
+- Source: XraySpectroscopy/XASDataLibrary, commit 284edcc1752ede0dd41c7e66eb2dbf6cf9589980, data/Cu/cu_metal_rt.xdi.
+- License: CC0-1.0; see cu_metal_rt.xdi.license and LICENSES/XraySpectroscopy--XASDataLibrary--license.rst.
+- SHA-256: 17b7076f1c3b5eccfa76dc6a7b3d26ea1fd388fa27f621a058779f70b71351d6.
+- Changes: none; the original header and numerical bytes are retained.
