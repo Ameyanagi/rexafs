@@ -4,18 +4,17 @@ description: "Refine atomic coordinates with exact cached ReFEFF, inspect live f
 audience: user
 ---
 
-In **rexafs 0.2.11**, choose **Fit → Fit mode: RMC** at the upper right of the
-fitting workspace (the unreleased development build labels it **Method: RMC**). Reverse Monte Carlo (RMC) proposes random coordinate moves,
+In **rexafs 0.2.12**, choose **Fit → Method: RMC** at the upper right of the
+fitting workspace. Reverse Monte Carlo (RMC) proposes random coordinate moves,
 calculates their spectra and accepts or rejects them against the measured data
 and configured constraints. It refines a periodic structure rather than the
 path parameters used by ordinary EXAFS fitting.
 
-The stable desktop uses one processed spectrum and one structure. The
-[Rust API](/api/rust/rexafs/xafs/rmc/index.html) additionally supports evolutionary
-search, weighted structures and joint datasets. Those controls are not yet in
-the 0.2.11 desktop, and RMC is not exposed by the Python or TypeScript bindings.
-The upcoming 0.2.12 desktop adds genetic and hybrid search, resource controls and
-structural history as described [below](#new-in-the-0212-release-candidate).
+The desktop uses one processed spectrum and one starting structure, with ordinary
+RMC, genetic and hybrid search. The [Rust API](/api/rust/rexafs/xafs/rmc/index.html)
+also supports weighted structures and joint datasets. RMC is not exposed by the
+Python or TypeScript bindings. Resource controls and structural history are
+described [below](#new-in-0212).
 
 ## Prepare the spectrum and structure
 
@@ -44,9 +43,10 @@ not a physical model or a convergence guarantee. S₀² stays fixed during RMC;
 The Metropolis tolerance controls acceptance of worse trial scores; it is not a
 measured thermodynamic temperature. Older saved runs retain their settings.
 
-[![RMC fit settings with inherited k and R ranges, Auto CPU workers and automatic coordinate moves](/screenshots/0.2.11/rmc-settings.jpg)](/screenshots/0.2.11/rmc-settings.jpg)
-
-*Signed 0.2.11 release: k = 2–12 Å⁻¹ and R = 1.5–3.5 Å copied from Transform; Auto resolves to ten workers on this machine. This is a public Cu workflow example.*
+The signed-release example below uses public room-temperature Cu data,
+32 periodic Cu sites, k = 2–12 Å⁻¹ and R = 1.5–3.5 Å. Auto resolves to ten
+workers on the capture machine. Its short run tests the workflow; it does not
+establish a calibrated structure.
 
 ## Fit ranges and the background
 
@@ -59,7 +59,7 @@ is Rbkg + 0.15 Å to max(4 Å, Rbkg + 1.15 Å). **Use spectrum ranges** copies t
 settings again after processing edits. It does not retarget a saved run. ReFEFF
 coverage expands for the fit window and ΔE₀, up to the adapter's 30 Å⁻¹ limit,
 with actual returned support checked. Missing theory is rejected rather than
-extrapolated. The [workflow guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.11/doc/rmc-desktop-workflow.md)
+extrapolated. The [workflow guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/doc/rmc-desktop-workflow.md)
 explains these settings.
 
 The default objective minimizes the normalized sum of squared **real and
@@ -92,7 +92,7 @@ and their explicit paths are retained. **Run details** shows calculated and shar
 electronic contexts. Sorting can change numerical summation and the representative
 atom for a potential when nearest sites tie. Old checkpoints retain their original
 ordering; restarting a new job opts into the improved preparation. See the
-[startup profiling method](https://github.com/Ameyanagi/rexafs/blob/v0.2.11/doc/rmc-startup-profiling.md)
+[startup profiling method](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/doc/rmc-startup-profiling.md)
 for reproducible timing and numerical-agreement checks.
 
 
@@ -112,9 +112,11 @@ run. More workers may use more temporary memory and are not always faster.
 
 <span id="energy-refinement-in-the-source-checkout"></span>
 
-[![Saved RMC run details showing two CPU workers and one calculated plus 31 shared electronic preparations](/screenshots/0.2.11/rmc-run-details.jpg)](/screenshots/0.2.11/rmc-run-details.jpg)
+[![Saved RMC cache details showing 32 snapshots, 320 hits, 32 cold misses and no repeat misses](/screenshots/0.2.12/rmc-run-details.jpg)](/screenshots/0.2.12/rmc-run-details.jpg)
 
-*The short check used two workers and retained all 32 absorbing sites. Displayed timings describe this one software check, not a performance benchmark.*
+*Signed 0.2.12 release: all 32 absorber snapshots were retained, with no repeated
+misses or evictions. One electronic preparation was shared with 31 other contexts.
+The ten-attempt check used ten workers; its timings are not a performance benchmark.*
 
 ## Energy refinement
 
@@ -167,9 +169,12 @@ rejections and residual diagnosis. **Run details** includes timing, cache
 statistics and saved-input provenance. Updates arrive between completed
 calculations; one long scattering evaluation can delay the display or a pause.
 
-[![Reopened ten-attempt Cu RMC result with fixed amplitude, an energy-bound warning and convergence not assessed](/screenshots/0.2.11/rmc-results.jpg)](/screenshots/0.2.11/rmc-results.jpg)
+[![Reopened ten-attempt Cu RMC result with fixed amplitude and energy and convergence not assessed](/screenshots/0.2.12/rmc-results.jpg)](/screenshots/0.2.12/rmc-results.jpg)
 
-*Saved results reopened in 0.2.11. This ten-attempt check used ±1 eV bounds and energy updates every five attempts. It reached +1 eV and is not a calibrated or converged scientific fit. [Capture and input provenance](/licenses/#desktop-0211-rmc-captures).*
+*Signed 0.2.12 result reopened from its saved project. This ten-attempt check kept
+S₀² = 1 and ΔE₀ = 0 eV fixed. The objective fell from 6.4641 to 5.3341, but amplitude
+mismatch remains and convergence is not assessed. It is a software check, not a
+calibrated scientific fit. [Capture and input provenance](/licenses/#desktop-0212-release-captures).*
 
 ## Pause, save and resume
 
@@ -210,17 +215,18 @@ history. A plateau does not stop the run automatically or prove a unique,
 physically complete structure. Inspect both spectral components, constraints and
 structural distributions, and compare independent seeds when drawing conclusions.
 
-The [workflow and implementation record](https://github.com/Ameyanagi/rexafs/blob/v0.2.11/doc/rmc-desktop-workflow.md)
+The [workflow and implementation record](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/doc/rmc-desktop-workflow.md)
 explains persistence, numerical conventions and software checks. Its short Cu₂O
 verification run remained **StillChanging**, not converged. The
-[Rust guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.11/doc/rmc.md) covers
+[Rust guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/doc/rmc.md) covers
 Spectrum inputs and the broader RMC and evolutionary APIs.
 
-## New in the 0.2.12 release candidate
+<span id="new-in-the-0212-release-candidate"></span>
 
-These controls are being prepared for 0.2.12. Stable downloads remain on 0.2.11
-until publication. The new selector is **Method: RMC**. Existing checkpoints keep
-their saved scientific settings; editing the new-run form does not retarget them.
+## New in 0.2.12
+
+The selector is **Method: RMC**. Existing checkpoints keep their saved scientific
+settings; editing the new-run form does not retarget them.
 
 ### Cache memory and large path catalogues
 
@@ -253,13 +259,13 @@ path radius, maximum legs or absorbing sites changes the calculation. All
 selected absorbers remain explicit; the program does not silently sample them.
 The memory fractions and path-size allowance are empirical resource policies,
 not allocation guarantees. See the
-[policy and implementation](https://github.com/Ameyanagi/rexafs/blob/dev/doc/rmc-structural-evolution.md#cache-memory-and-responsive-preparation).
+[policy and implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/doc/rmc-structural-evolution.md#cache-memory-and-responsive-preparation).
 
-[![Genetic and hybrid search choices beside Auto memory and catalogue controls](/screenshots/next/0.2.12/rmc-search-memory.jpg)](/screenshots/next/0.2.12/rmc-search-memory.jpg)
+[![Genetic and hybrid search choices beside Auto memory and catalogue controls](/screenshots/0.2.12/rmc-search-memory.jpg)](/screenshots/0.2.12/rmc-search-memory.jpg)
 
-*0.2.12 source candidate, full unedited window. This synthetic two-atom project
-demonstrates controls and input validation; it is not an experimental refinement.
-[Capture provenance](/licenses/#desktop-0212-candidate-captures).*
+*Signed 0.2.12 release, full unedited window. The public Cu example uses automatic
+cache memory and catalogue capacity. All three search choices are visible; this
+run uses ordinary RMC. [Capture provenance](/licenses/#desktop-0212-release-captures).*
 
 ### Structural evolution
 
@@ -292,15 +298,20 @@ Select a shell-specific interval before interpreting these as first-shell
 quantities. Radii above half the smallest cell-plane spacing repeat cell
 correlations; finite-cluster boundaries reduce neighbor counts. These histories
 are not an equilibrium ensemble, a uniqueness test or an uncertainty estimate.
-The [analysis implementation](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs/src/xafs/rmc/analysis.rs)
+The [analysis implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/crates/rexafs/src/xafs/rmc/analysis.rs)
 defines the counting conventions.
 
-[![Initial, current and best Cu–O neighbor-count curves from a synthetic finite cluster](/screenshots/next/0.2.12/structural-overlays.jpg)](/screenshots/next/0.2.12/structural-overlays.jpg)
+[![Initial, current and best normalized Cu–Cu pair distributions from the periodic Cu example](/screenshots/0.2.12/structural-overlays.jpg)](/screenshots/0.2.12/structural-overlays.jpg)
 
-[![Cu–O distance-versus-generation heatmap with samples at their actual generations](/screenshots/next/0.2.12/structural-heatmap.jpg)](/screenshots/next/0.2.12/structural-heatmap.jpg)
+[![Cu–Cu distance-versus-attempt heatmap with eleven samples from attempt zero through ten](/screenshots/0.2.12/structural-heatmap.jpg)](/screenshots/0.2.12/structural-heatmap.jpg)
 
-*Full unedited 0.2.12 candidate captures of a synthetic finite Cu–O checkpoint.
-The vertical line represents one neighbor; it does not demonstrate bulk g(r),
+[![Cu–Cu distance variance in square angstroms over ten RMC attempts](/screenshots/0.2.12/structural-variance.jpg)](/screenshots/0.2.12/structural-variance.jpg)
+
+*Full unedited signed 0.2.12 windows, reopened from the same ten-attempt Cu run.
+The [0, 3.5) Å interval has 70 bins and is sampled every attempt. Initial fcc Cu
+has 12 neighbors at 2.55646 Å; periodic curves use full-cell density and shell
+normalization. All eleven samples were retained. The variance describes the
+selected distances in Å², not fit uncertainty. These plots do not establish
 experimental agreement or convergence.*
 
 **Export result…** includes `structural-evolution.json`, `structural-curves.csv`
@@ -326,4 +337,4 @@ compares population mean and best objective; the single-chain plateau diagnostic
 does not apply. Structural Current and Best both show the best member of the
 current elitist population, not averaged coordinates. The Initial curve remains
 the input structure. See the
-[search description and implementation](https://github.com/Ameyanagi/rexafs/blob/dev/doc/rmc-structural-evolution.md#genetic-and-hybrid-search).
+[search description and implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/doc/rmc-structural-evolution.md#genetic-and-hybrid-search).

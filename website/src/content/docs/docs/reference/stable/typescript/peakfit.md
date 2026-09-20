@@ -5,11 +5,11 @@ audience: user
 pagefind: true
 ---
 
-**Stable 0.2.11.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
+**Stable 0.2.12.** These signatures match the released npm package. Explanations are maintained in source JSDoc and reviewed against this release.
 
 [Installation and version guide](/docs/reference/) · [TypeScript tutorial](/docs/libraries/typescript/)
 
-[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.11/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
+[Declaration source](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/js-rexafs/types.d.ts) · [JSDoc source](https://github.com/Ameyanagi/rexafs/blob/main/js-rexafs/types.d.ts)
 
 Immutable composite XANES peak definition (since 0.2.10).
 Start with new PeakFit([-20, 40]).gaussian("p1", { center: 5, area: 2, fwhm: 3 }).linear_baseline().

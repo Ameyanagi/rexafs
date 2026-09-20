@@ -12,14 +12,13 @@ analysis project. rexafs supports CPython 3.10–3.14; this example uses 3.12:
 ```sh
 uv init --python 3.12 rexafs-analysis
 cd rexafs-analysis
-uv add rexafs==0.2.11 numpy
+uv add rexafs==0.2.12 numpy
 uv run python -c "import rexafs; print(rexafs.__version__)"
 ```
 
-Version 0.2.11 provides four stable-ABI wheels for Linux x64, Windows x64, and
-macOS x64/ARM64. Starting with **0.2.12**, macOS wheels support **Apple Silicon
-only**, reducing the inventory to three wheels. Intel Mac wheels remain available
-for 0.2.11; new Intel source builds are not qualified.
+Three stable-ABI wheels cover Linux x64, Windows x64 and Apple Silicon macOS.
+From **0.2.12**, macOS wheels support **Apple Silicon only**. Intel Mac wheels
+remain available for 0.2.11; new Intel source builds are not qualified.
 Each platform wheel supports GIL-enabled CPython 3.10–3.14; free-threaded Python
 is not qualified. NumPy is installed separately for the selected interpreter. For other
 architectures, see [source builds](https://github.com/Ameyanagi/rexafs/tree/main/py-rexafs#build-from-source).
