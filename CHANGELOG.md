@@ -4,6 +4,9 @@
 
 ## 0.2.12 (release preparation)
 
+- Platforms: require Apple Silicon for macOS desktop releases and Python wheels.
+  Remove Intel Mac build, runtime and signing jobs. Historical 0.2.11 downloads
+  and their original validation requirements remain available.
 - RMC: choose cache memory and catalogue capacity from available memory; expose
   manual limits, preparation progress and repeated-cache-miss warnings.
 - RMC: add element-pair structural overlays, distance/step heatmaps,

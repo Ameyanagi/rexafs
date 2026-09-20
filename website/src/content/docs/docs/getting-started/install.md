@@ -13,11 +13,15 @@ Use the [download page](/download/) to select your operating system and processo
 | Platform | Install | Support |
 |---|---|---|
 | macOS Apple Silicon | Open the ARM64 DMG and drag rexafs into Applications | Signed and notarized |
-| macOS Intel | Open the Intel DMG and drag rexafs into Applications | Signed and notarized |
+| macOS Intel (0.2.11 only) | Use the archived [0.2.11 Intel DMG](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.11) | Last supported Intel version |
 | Windows x64 | Run the setup EXE; launch rexafs from the Start menu | Preview; Windows 10 2004 or newer / Windows 11 |
 | Windows ARM64 | Run the ARM64 setup EXE; launch rexafs from the Start menu | Preview; Windows 11 |
 | Linux x64 | Extract the archive; run `./rexafs` inside its folder | Preview; Ubuntu 24.04 runtime baseline |
 | Linux ARM64 | Extract the ARM64 archive; run `./rexafs` inside its folder | Preview; Ubuntu 24.04 runtime baseline |
+
+Starting with **0.2.12**, macOS desktop downloads and Python wheels support
+**Apple Silicon only**. Intel builds and Intel source-build qualification are
+discontinued. Existing 0.2.11 downloads remain available.
 
 Keep portable folders together, including their resources, examples and licenses.
 Save your project and close the application before replacing it.

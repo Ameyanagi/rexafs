@@ -14,6 +14,7 @@ import tempfile
 from zipfile import ZipFile
 from desktop_channels import app_name
 from macos_installer import build_installer, include_notices, installer_name, verify_installation
+from release_downloads import targets_for_version
 
 
 def digest(path):
@@ -31,6 +32,8 @@ def check_source(archive, manifest, version, commit, run_id, target, channel="st
     separately verifies the GitHub run before these artifacts are downloaded.
     """
     app_name(channel)
+    if not target.endswith("apple-darwin") or target not in targets_for_version(version):
+        raise ValueError("Mac target is not supported by this release version")
     expected_name = f"rexafs-{version}-{target}.zip"
     if archive.name != expected_name:
         raise ValueError("Unexpected desktop archive name")

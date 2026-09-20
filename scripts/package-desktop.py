@@ -15,6 +15,7 @@ from feff10_worker import install_helper
 from macos_installer import include_notices
 from windows_installer import stage_runtime
 from update_manifest import write_manifest
+from release_downloads import targets_for_version
 
 root = Path(__file__).resolve().parents[1]
 metadata = json.loads(subprocess.check_output(
@@ -26,6 +27,8 @@ application_name = app_name(build_identity["channel"])
 target = subprocess.check_output(["rustc", "-vV"], text=True).split("host: ")[1].splitlines()[0]
 system = platform.system()
 validate_desktop_target(target, system, os.environ.get("REXAFS_EXPECTED_TARGET"))
+if target not in targets_for_version(version):
+    raise SystemExit(f"Desktop target {target} is not supported in rexafs {version}")
 engines = engine_execution(target)
 stem = f"rexafs-{version}-{target}"
 out = root / "target/distributions"

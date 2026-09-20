@@ -13,6 +13,8 @@ reference](/docs/reference/).
 The next release is being checked; the download page continues to identify the
 published stable version until package and desktop verification completes.
 
+- Apple Silicon only on macOS for desktop downloads and Python wheels. Version
+  0.2.11 remains the last Intel Mac release; new nightlies also require Apple Silicon.
 - RMC Auto memory and catalogue capacity, preparation progress and cache warnings.
 - Element-pair structural distributions and histories, with saved/exported data.
 - Desktop genetic and hybrid EA–RMC search with population checkpoint recovery.

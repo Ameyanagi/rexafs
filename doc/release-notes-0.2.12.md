@@ -3,6 +3,22 @@
 This patch is being qualified and is not yet published. The public downloads
 remain on 0.2.11 until the exact-tag builds, signing and package checks complete.
 
+## Platform support
+
+Starting with 0.2.12, macOS desktop releases and Python wheels require **Apple
+Silicon (ARM64)**. Intel Macs are no longer supported by the desktop, Python
+release matrix or Nightly channel. The
+[0.2.11 release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.11)
+remains the last stable release with Intel Mac downloads; its existing desktop
+assets and Python wheels are preserved. Source builds on Intel Macs are not
+qualified by the new release matrix.
+
+The current matrix has five desktop targets: Apple Silicon macOS, Windows
+x64/ARM64 and Linux x64/ARM64. Python ships three ABI3 wheels for Apple Silicon
+macOS, Linux x64 and Windows x64, each tested on CPython 3.10–3.14. Windows and
+Linux desktop packages remain previews. The Rust source and npm/WebAssembly
+package channels are unchanged.
+
 ## In-app updates
 
 On macOS, the updater now stages its helper as a complete signed app bundle.

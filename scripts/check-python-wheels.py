@@ -1,4 +1,4 @@
-"""Check ABI3 wheel identity, the four-platform inventory, or an installed wheel."""
+"""Check ABI3 wheel identity, the version's platform inventory, or installed bytes."""
 
 import argparse
 import json

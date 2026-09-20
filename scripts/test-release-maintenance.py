@@ -25,6 +25,24 @@ licenses = module("check-python-sdist")
 
 
 class ReleaseMaintenanceTests(unittest.TestCase):
+    def test_signing_preserves_historical_intel_but_rejects_new_intel_releases(self):
+        for version in ("0.2.11", "0.2.12", "0.2.12-rc.1"):
+            for target in ("aarch64-apple-darwin", "x86_64-apple-darwin"):
+                with self.subTest(version=version, target=target), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    archive = root / f"rexafs-{version}-{target}.zip"
+                    with ZipFile(archive, "w") as zipped:
+                        zipped.writestr(archive.stem + "/build.json", json.dumps(dict(
+                            version=version, target=target, commit="abc", github_run_id="123",
+                            dirty=False, signed=False, notarized=False)))
+                    manifest = root / "SHA256SUMS"
+                    manifest.write_text(f"{macos.digest(archive)}  {archive.name}\n")
+                    if target.startswith("x86_64") and version != "0.2.11":
+                        with self.assertRaisesRegex(ValueError, "not supported"):
+                            macos.check_source(archive, manifest, version, "abc", "123", target)
+                    else:
+                        macos.check_source(archive, manifest, version, "abc", "123", target)
+
     def test_pull_request_or_other_commit_cannot_be_promoted(self):
         run = dict(conclusion="success", head_sha="abc", head_branch="v0.1.0",
                    event="workflow_dispatch", path=".github/workflows/release-build.yml")

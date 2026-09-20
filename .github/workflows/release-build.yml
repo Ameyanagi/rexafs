@@ -127,7 +127,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, macos-15-intel, windows-2025]
+        os: [ubuntu-24.04, macos-15, windows-2025]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -159,9 +159,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, macos-15-intel, windows-2025]
+        os: [ubuntu-24.04, macos-15, windows-2025]
         # Earliest NumPy wheel release for each supported CPython minor on all
-        # four platforms. Latest NumPy is tested separately in the same job.
+        # three platforms. Latest NumPy is tested separately in the same job.
         runtime:
           - {python: '3.10', numpy: '1.23.0'}
           - {python: '3.11', numpy: '1.23.4'}
@@ -279,9 +279,6 @@ jobs:
         include:
           - os: macos-15
             target: aarch64-apple-darwin
-            features: refeff-runner,feff10-runner
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
             features: refeff-runner,feff10-runner
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu

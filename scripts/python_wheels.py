@@ -1,8 +1,10 @@
-"""Validate the unreleased four-wheel CPython stable-ABI distribution contract.
+"""Validate version-specific CPython stable-ABI distribution contracts.
 
 The stable ABI shares one native binary across GIL-enabled CPython 3.10–3.14;
 NumPy compatibility is tested independently. This module uses Python 3.10's
 standard library so the same checks run on every supported interpreter.
+Version 0.2.12 ships three wheels; older ABI3 releases retain their four-wheel
+inventory, including Intel macOS.
 """
 
 import hashlib
@@ -39,6 +41,19 @@ def source_version():
     return json.loads((root / "js-rexafs/package.json").read_text())["version"]
 
 
+def platforms_for_version(version):
+    """Return required wheel platforms, preserving historical ABI3 inventories.
+
+    Intel macOS is supported through 0.2.11. Version 0.2.12 and later require
+    Apple Silicon macOS, Linux x64 and Windows x64. Prereleases use their numeric
+    release version. Invalid version strings raise ValueError.
+    """
+    python_version(version)
+    numeric = tuple(int(part) for part in version.split("-", 1)[0].split("."))
+    return {runner: tags for runner, tags in PLATFORMS.items()
+            if runner != "macos-15-intel" or numeric < (0, 2, 12)}
+
+
 def identity(name, version):
     """Return the runner and expanded tags for one supported cp310-abi3 wheel.
 
@@ -52,17 +67,18 @@ def identity(name, version):
     platforms = name[len(prefix):-4].split(".")
     if len(platforms) != len(set(platforms)):
         raise ValueError("Repeated wheel platform tag")
-    for runner, expected in PLATFORMS.items():
+    for runner, expected in platforms_for_version(version).items():
         if set(platforms) == expected:
             return runner, {f"cp310-abi3-{platform}" for platform in platforms}
     raise ValueError(f"Unsupported wheel platform tags: {name}")
 
 
 def inventory(names, version):
-    """Require exactly one ABI3 wheel for each of the four release platforms."""
+    """Require exactly one ABI3 wheel per platform supported by this version."""
     runners = [identity(name, version)[0] for name in names]
-    if len(runners) != len(PLATFORMS) or set(runners) != set(PLATFORMS):
-        raise ValueError("Expected exactly four ABI3 wheels, one per release platform")
+    platforms = platforms_for_version(version)
+    if len(runners) != len(platforms) or set(runners) != set(platforms):
+        raise ValueError(f"Expected exactly {len(platforms)} ABI3 wheels, one per release platform")
 
 
 def check_wheel(path, version, platform=None):

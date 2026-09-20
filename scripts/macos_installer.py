@@ -12,6 +12,7 @@ import tempfile
 from zipfile import ZipFile
 
 from desktop_channels import app_name
+from release_downloads import targets_for_version
 
 TARGETS = {"aarch64-apple-darwin", "x86_64-apple-darwin"}
 NOTICES = ("LICENSE-MIT", "LICENSE-APACHE", "dependencies.json", "licenses")
@@ -25,15 +26,17 @@ def sha256(path):
 def installer_name(metadata):
     """Return the version/architecture DMG filename after validating both fields.
 
-    metadata must identify a stable or nightly channel and one of the two Mac
-    targets. The filename uses the library version for both channels; channel
+    metadata must identify a stable or nightly channel and a supported Mac
+    target. Intel Mac installers are historical, through 0.2.11 only.
+    The filename uses the library version for both channels; channel
     identity is retained in the app name and build evidence. Invalid metadata
     raises ValueError.
     """
     channel = metadata.get("channel", "stable")
     app_name(channel)
     version, target = metadata["version"], metadata["target"]
-    if not re.fullmatch(r"\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?", version) or target not in TARGETS:
+    if (not re.fullmatch(r"\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?", version)
+            or target not in TARGETS or target not in targets_for_version(version)):
         raise ValueError("Unsupported installer version or target")
     return f"rexafs-{version}-{target}.dmg"
 

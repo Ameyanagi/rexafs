@@ -12,6 +12,17 @@ from desktop_channels import app_name
 
 
 class MacInstallerTests(unittest.TestCase):
+    def test_intel_installer_names_are_supported_only_for_historical_releases(self):
+        for version in ("0.2.11", "0.2.12", "0.2.12-rc.1", "0.3.0"):
+            metadata = dict(version=version, target="aarch64-apple-darwin")
+            self.assertEqual(installer.installer_name(metadata), f"rexafs-{version}-aarch64-apple-darwin.dmg")
+            metadata["target"] = "x86_64-apple-darwin"
+            if version == "0.2.11":
+                self.assertEqual(installer.installer_name(metadata), "rexafs-0.2.11-x86_64-apple-darwin.dmg")
+            else:
+                with self.assertRaises(ValueError):
+                    installer.installer_name(metadata)
+
     def test_app_only_install_retains_notices_and_channel_identity(self):
         for channel in ("stable", "nightly"):
             with self.subTest(channel=channel), tempfile.TemporaryDirectory() as temporary:

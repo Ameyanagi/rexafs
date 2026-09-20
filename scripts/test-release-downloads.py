@@ -62,7 +62,7 @@ class ReleaseDownloadsTests(unittest.TestCase):
                 self.assertFalse((root / "desktop").exists())
 
     def test_next_release_requires_both_arm64_archives_and_windows_installer(self):
-        for version in ["0.2.5", "0.2.5-rc.1", "0.3.0"]:
+        for version in ["0.2.5", "0.2.5-rc.1", "0.2.11"]:
             with self.subTest(version=version), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
                 artifacts, manifest = self.fixture(root, version)
@@ -91,6 +91,27 @@ class ReleaseDownloadsTests(unittest.TestCase):
             self.assertEqual(stage(artifacts, manifest, root / "desktop", "0.2.4"), 18)
             self.assertFalse(any("aarch64-pc-windows" in path.name or "aarch64-unknown-linux" in path.name
                                  for path in (root / "desktop").iterdir()))
+
+    def test_0_2_12_drops_intel_mac_without_weakening_other_targets(self):
+        for version in ("0.2.12", "0.2.12-rc.1", "0.3.0"):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                artifacts, manifest = self.fixture(root, version)
+                output = root / "desktop"
+                self.assertEqual(stage(artifacts, manifest, output, version), 21)
+                self.assertFalse(any("x86_64-apple-darwin" in path.name for path in output.iterdir()))
+                self.assertEqual(set(targets_for_version(version)), {
+                    "aarch64-apple-darwin", "x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc",
+                    "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"})
+                original = manifest.read_text()
+                for target in targets_for_version(version):
+                    manifest.write_text("".join(line for line in original.splitlines(keepends=True)
+                                                if f"rexafs-{version}-{target}." not in line))
+                    with self.subTest(missing=target), self.assertRaises(ValueError):
+                        stage(artifacts, manifest, root / "incomplete", version)
+                manifest.write_text(original + f"{'0' * 64}  rexafs-{version}-x86_64-apple-darwin.zip\n")
+                with self.assertRaisesRegex(ValueError, "target not supported"):
+                    stage(artifacts, manifest, root / "retired", version)
 
 
 if __name__ == "__main__":

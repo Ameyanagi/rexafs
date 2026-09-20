@@ -28,6 +28,13 @@ The [RMC source review](../2026-09-20-rmc-followup/review.md) retains the measur
 cache comparison and its numerical scope. A separate 256-site native check
 prepared 2,246,144 paths and evaluated four k points; it did not assess fit quality.
 
+On 20 September, the release scope was further updated to remove Intel Mac
+desktop packages, Python wheels and nightly builds. The final release must qualify
+five desktop targets and three Python wheels across 15 CPython runtime
+combinations. Historical 0.2.11 downloads and evidence retain their original
+platform inventories. Earlier checks with Intel Mac entries are historical and
+do not replace qualification of the revised source.
+
 Completed locally: coordinated version validation and its seven regression tests;
 new linked/embedded projects written and reopened through the optimized 0.2.12
 writer; all 46 retained fixture hashes verified; 29 project tests passed (the
@@ -38,8 +45,8 @@ do not substitute for the target-specific release matrix.
   dev to main after its selected checks pass.
 - Build the immutable version tag using the release workflow; require every
   package, desktop, installer and runtime qualification to pass.
-- Sign and notarize both Mac architectures. Check the new helper self-test in
-  each signed ZIP and installed DMG, then exercise the signed ARM64 app locally.
+- Sign and notarize the Apple Silicon Mac package. Check the new helper self-test
+  in the signed ZIP and installed DMG, then exercise that signed app locally.
 - Verify registry package bytes and final desktop asset hashes before announcing
   publication or advancing the website's stable release metadata.
 

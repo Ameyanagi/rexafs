@@ -7,7 +7,7 @@ Historical full-build timings appear below.
 |---|---|
 | `website/**` | Complete Website build, generators, content/browser tests; lightweight Rust and release selectors |
 | `doc/documentation-audience.csv` or allowed root/doc presentation files | Lightweight selectors; Website runs when its declared inputs change |
-| Native code, dependencies, packages, fixtures, licenses, assets, scripts, CI or unknown paths | Full Rust checks and release qualification, including four Python wheels, 20 Python runtime environments and six desktops |
+| Native code, dependencies, packages, fixtures, licenses, assets, scripts, CI or unknown paths | Full Rust checks and release qualification, including three Python wheels, 15 Python runtime environments and five desktops |
 | Manual release or reusable workflow | Full qualification by default; manual releases always remain full |
 
 The [selector](../scripts/ci_scope.py) checks immutable commits: pull requests
@@ -51,12 +51,13 @@ file hashes and replace public output completely. Missing, altered or extra
 files cause regeneration. Copy-only edits can reuse both references; the full
 website content, browser and accessibility checks still run.
 
-The source workflow builds one ABI3 wheel for each of the four supported Python
+The source workflow builds one ABI3 wheel for each of the three supported Python
 platforms. [ABI3 is CPython's stable binary interface](https://pyo3.rs/v0.29.2/building-and-distribution.html#py_limited_apiabi3abi3t):
-the same platform wheel can serve Python 3.10–3.14. All 20 platform/interpreter
+the same platform wheel can serve Python 3.10–3.14. All 15 platform/interpreter
 combinations verify the installed wheel's bytes and run the API checks against
-both the minimum and latest compatible NumPy. These changes apply to future
-releases; the published 0.2.5 wheels retain their original per-interpreter ABI.
+both the minimum and latest compatible NumPy. From 0.2.12, macOS desktop and
+Python builds support Apple Silicon only. The published 0.2.6–0.2.11 inventories
+retain four wheels, including Intel macOS; 0.2.5 retains its per-interpreter ABI.
 
 On 2026-09-13, [PR build 34751534452](https://github.com/Ameyanagi/rexafs/actions/runs/34751534452)
 took **73m29s**. Intel macOS desktop queued **30m05s**, then ran **43m05s**.
