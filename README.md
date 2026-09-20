@@ -299,3 +299,9 @@ backend when reporting scientific results.
 All project-authored guides, examples and API help follow the
 [documentation baseline](CONTRIBUTING.md): clear English, explained equations,
 defined units and assumptions, verified citations, and documented defaults.
+
+## Support rexafs
+
+If rexafs is useful to you, [star the repository on GitHub](https://github.com/Ameyanagi/rexafs)
+or [sponsor development through GitHub Sponsors](https://github.com/sponsors/Ameyanagi).
+Sponsorship supports ongoing development and maintenance; stars help others discover the project.
