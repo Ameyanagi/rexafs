@@ -1469,12 +1469,16 @@ fn short_duration(duration: Duration) -> String {
     }
 }
 
-/// Map ruviz's full-scan data-space y coordinate to the nearest frame.
+/// Map a one-based displayed frame coordinate to its zero-based storage index.
 fn frame_from_data_y(y: f64, scan_len: usize) -> Option<usize> {
     if scan_len == 0 || !y.is_finite() {
         return None;
     }
-    Some(y.round().clamp(0.0, scan_len.saturating_sub(1) as f64) as usize)
+    Some(
+        (y - 1.0)
+            .round()
+            .clamp(0.0, scan_len.saturating_sub(1) as f64) as usize,
+    )
 }
 
 /// Resolve a click inside the heatmap's data extent. This intentionally does
@@ -1503,7 +1507,7 @@ fn frame_from_heatmap_position(
         1.0
     };
     let half_step = row_step / 2.0;
-    if y < -half_step || y > last_frame + half_step {
+    if y < 1.0 - half_step || y > last_frame + 1.0 + half_step {
         return None;
     }
     frame_from_data_y(y, scan_len)
@@ -1519,11 +1523,21 @@ fn cursor_color(theme: &Theme) -> PlotColor {
 }
 
 fn heatmap_cursor_annotation(frame: usize, theme: &Theme) -> Annotation {
-    Annotation::hline_styled(frame as f64, cursor_color(theme), 2.0, LineStyle::Solid)
+    Annotation::hline_styled(
+        (frame + 1) as f64,
+        cursor_color(theme),
+        2.0,
+        LineStyle::Solid,
+    )
 }
 
 fn trend_cursor_annotation(frame: usize, theme: &Theme) -> Annotation {
-    Annotation::vline_styled(frame as f64, cursor_color(theme), 2.0, LineStyle::Solid)
+    Annotation::vline_styled(
+        (frame + 1) as f64,
+        cursor_color(theme),
+        2.0,
+        LineStyle::Solid,
+    )
 }
 
 fn set_cursor_annotation(
@@ -1632,10 +1646,10 @@ mod thin_tests {
 
     #[test]
     fn heatmap_data_coordinates_map_to_full_scan_frames() {
-        assert_eq!(frame_from_data_y(0.0, 1_000), Some(0));
-        assert_eq!(frame_from_data_y(500.49, 1_000), Some(500));
-        assert_eq!(frame_from_data_y(500.5, 1_000), Some(501));
-        assert_eq!(frame_from_data_y(999.0, 1_000), Some(999));
+        assert_eq!(frame_from_data_y(1.0, 1_000), Some(0));
+        assert_eq!(frame_from_data_y(501.49, 1_000), Some(500));
+        assert_eq!(frame_from_data_y(501.5, 1_000), Some(501));
+        assert_eq!(frame_from_data_y(1000.0, 1_000), Some(999));
         assert_eq!(frame_from_data_y(-20.0, 1_000), Some(0));
         assert_eq!(frame_from_data_y(2_000.0, 1_000), Some(999));
     }
@@ -1651,7 +1665,7 @@ mod thin_tests {
     fn heatmap_position_maps_masked_rows_but_rejects_blank_space() {
         let grid = [2.0, 8.0];
         assert_eq!(
-            frame_from_heatmap_position(5.0, 500.0, &grid, 1_000, 192),
+            frame_from_heatmap_position(5.0, 501.0, &grid, 1_000, 192),
             Some(500)
         );
         assert_eq!(
@@ -6165,6 +6179,12 @@ impl StudioApp {
             field.update(cx, |f, cx| f.set_theme(theme, cx));
         }
         self.tools.set_theme(theme, cx);
+        if let Some(field) = &self.series_display.frame_field {
+            field.update(cx, |f, cx| f.set_theme(theme, cx));
+        }
+        if let Some(field) = &self.series_display.reference_field {
+            field.update(cx, |f, cx| f.set_theme(theme, cx));
+        }
         for (_, field) in &self.fit_range_fields {
             field.update(cx, |f, cx| f.set_theme(theme, cx));
         }

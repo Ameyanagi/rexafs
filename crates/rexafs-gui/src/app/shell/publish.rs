@@ -13,6 +13,9 @@ pub(crate) struct PublishState {
     pub running: bool,
     /// Folder of the last published report bundle in this session.
     pub destination: Option<std::path::PathBuf>,
+    /// Exact editor/source revision captured when the last successful export began.
+    pub(super) published_revision: Option<Vec<u8>>,
+    pub(super) published_at: Option<String>,
     /// File of the last figure saved on its own (PNG, SVG or CSV).
     pub(super) saved_figure: Option<std::path::PathBuf>,
     pub error: Option<String>,
@@ -56,6 +59,12 @@ pub(super) fn file_url(path: &std::path::Path) -> String {
 }
 
 impl PublishState {
+    fn changed_since_publish(&self, current: &[u8]) -> bool {
+        self.published_revision
+            .as_deref()
+            .is_some_and(|saved| saved != current)
+    }
+
     pub(crate) fn load_settings(&mut self, settings: FigureSettings) {
         let preview_generation = self.preview_generation + 1;
         *self = Self {
@@ -242,13 +251,56 @@ impl StudioApp {
             screen: serde_json::json!({"stage":self.stage.name(),"fit_step":format!("{:?}",self.stage_view.fit_step),"fit_view":format!("{:?}",self.stage_view.fit_view),"current":self.current_group_label().to_string(),"model_selection":self.joint.selected,"result_dataset_index":self.joint.result_index,"file_browser":self.data_panel_open,"inspector":self.context_panel_open,"plot_scope":format!("{:?}",self.stage_view.scope)}),
         }
     }
+    /// Compare report inputs without serializing the raw spectral arrays or
+    /// transient UI state. Returning to the same settings restores the clean state.
+    fn publication_revision(&self) -> Vec<u8> {
+        let mut indices = self.selection.clone();
+        indices.extend(self.selected);
+        let groups: Vec<_> = indices
+            .into_iter()
+            .filter_map(|ix| self.tool_target(ix))
+            .map(|target| format!("{target:?}"))
+            .collect();
+        serde_json::to_vec(&serde_json::json!({
+            "project": self.project_generation,
+            "groups": groups,
+            "current": self.selected,
+            "settings": self.publish.settings,
+            "params": self.params,
+            "overrides": self.overrides,
+            "fit_paths": self.fit_paths.iter().map(|p| &p.spec).collect::<Vec<_>>(),
+            "fit_vars": self.fit_vars.iter().map(|v| &v.spec).collect::<Vec<_>>(),
+            "fit_ranges": self.fit_ranges,
+            "joint": self.joint.config,
+            "fit_history": self.fit_history,
+            "latest_fit": self.fit_result.as_ref().map(|r| Arc::as_ptr(r) as usize),
+            "analysis": {"lcf": self.analysis.lcf, "ranked": self.analysis.ranked,
+                "pca": self.analysis.pca, "pca_fit": self.analysis.pca_fit,
+                "mcr": self.analysis.mcr, "lcf_series": self.analysis.lcf_series},
+            "batch_stale": self.batch_fit_is_stale(),
+            "journal": self.journal.entries.iter().map(|e| &e.text).collect::<Vec<_>>()
+        }))
+        .expect("report revision contains serializable inputs")
+    }
+
     pub(crate) fn export_publication(&mut self, cx: &mut Context<Self>) {
         if self.publish.running || !self.require_publication_source(cx) {
             return;
         }
         let snapshot = self.analysis_snapshot();
+        let revision = self.publication_revision();
+        let project_generation = self.project_generation;
         let home = crate::settings::home_dir().unwrap_or_else(std::env::temp_dir);
-        let rx = cx.prompt_for_new_path(std::path::Path::new(&home), Some("rexafs-publication"));
+        let previous = self.publish.destination.as_deref();
+        let parent = previous
+            .and_then(|path| path.parent())
+            .unwrap_or(std::path::Path::new(&home));
+        let name = if previous.is_some() {
+            "rexafs-publication-updated"
+        } else {
+            "rexafs-publication"
+        };
+        let rx = cx.prompt_for_new_path(parent, Some(name));
         cx.spawn(async move |this, cx| {
             if let Ok(Ok(Some(path))) = rx.await {
                 this.update(cx, |app, cx| {
@@ -262,6 +314,9 @@ impl StudioApp {
                     .spawn(async move { crate::publication::export(snapshot, &path) })
                     .await;
                 this.update(cx, |app, cx| {
+                    if app.project_generation != project_generation {
+                        return;
+                    }
                     app.publish.running = false;
                     match result {
                         Ok(path) => {
@@ -270,6 +325,9 @@ impl StudioApp {
                                 format!("Published to {}", path.display()),
                             );
                             app.publish.destination = Some(path);
+                            app.publish.published_revision = Some(revision);
+                            app.publish.published_at =
+                                Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
                         }
                         Err(e) => {
                             app.publish.error = Some(e.clone());
@@ -292,6 +350,32 @@ mod tests {
         app::shell::tools::ToolTarget,
         params::{DerivedSpectrum, PipelineParams, Quantity},
     };
+
+    #[test]
+    fn publication_stamp_tracks_the_exported_revision_not_later_edits() {
+        let revision = |settings: &FigureSettings| serde_json::to_vec(settings).unwrap();
+        let mut state = PublishState::default();
+        assert!(!state.changed_since_publish(&revision(&state.settings)));
+        let exported = revision(&state.settings);
+        state.published_revision = Some(exported.clone());
+        assert!(!state.changed_since_publish(&exported));
+        crate::publication::figures::StylePreset::SingleColumn
+            .apply(state.settings.figures.entry("xanes".into()).or_default());
+        assert!(state.changed_since_publish(&revision(&state.settings)));
+        // A late successful export still represents the revision captured at
+        // its start, even if the user has edited settings while it was running.
+        state.published_revision = Some(exported);
+        assert!(state.changed_since_publish(&revision(&state.settings)));
+        state.published_revision = Some(revision(&state.settings));
+        assert!(!state.changed_since_publish(&revision(&state.settings)));
+        state
+            .settings
+            .table_captions
+            .insert("processing".into(), "Revised caption".into());
+        assert!(state.changed_since_publish(&revision(&state.settings)));
+        state.load_settings(FigureSettings::default());
+        assert!(state.published_revision.is_none());
+    }
 
     #[test]
     fn report_title_and_file_url_are_readable() {

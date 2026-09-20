@@ -993,13 +993,13 @@ fn heatmap_y_extent(scan_len: usize, row_count: usize) -> (f64, f64) {
         1.0
     };
     let half_step = row_step / 2.0;
-    (-half_step, last_frame + half_step)
+    (1.0 - half_step, last_frame + 1.0 + half_step)
 }
 
 /// Operando heatmap in physical units: x in k (1/Angstrom) from the resample
-/// grid, y = frame index over the FULL scan (rows are the evenly sampled
+/// grid, y = one-based frame number over the FULL scan (rows are the evenly sampled
 /// overview). Rows remain in chronological order; the lower heatmap origin maps
-/// row 0 to frame 0, while the displayed y axis is reversed so frame 0 appears
+/// row 0 to frame 1, while the displayed y axis is reversed so frame 1 appears
 /// at the top and tick values remain truthful. Frame ticks are whole numbers
 /// (see [`integer_axis`]).
 pub fn build_heatmap(
@@ -1013,7 +1013,7 @@ pub fn build_heatmap(
     let kmin = grid.first().copied().unwrap_or(0.0);
     let kmax = grid.last().copied().unwrap_or(1.0).max(kmin + 1e-9);
     let (ymin, ymax) = heatmap_y_extent(scan_len, matrix.len());
-    let (frame_ticks, (view_min, view_max)) = integer_axis(0, scan_len.saturating_sub(1));
+    let (frame_ticks, (view_min, view_max)) = integer_axis(1, scan_len.max(1));
     let mut config = HeatmapConfig::new()
         .colorbar(true)
         .cmap(display.palette().map(display.reversed))
@@ -1417,7 +1417,8 @@ pub fn build_pca_plot(
         .ylabel(ylabel)
 }
 
-/// Parameter-vs-frame trend. The moving cursor is a dynamic annotation owned
+/// Parameter-vs-frame trend. Input frame indices are zero-based; plotted frame
+/// numbers start at one. The moving cursor is a dynamic annotation owned
 /// by the interactive plot session, so scrubbing does not rebuild this data.
 /// The frame axis is ticked at whole frames using at most `max_ticks` ticks
 /// (see [`integer_axis_max`]); the caller derives the ceiling from the panel
@@ -1446,7 +1447,7 @@ pub fn build_trend(
             end += 1;
         }
         if start < end {
-            let xs: Vec<f64> = frames[start..end].to_vec();
+            let xs: Vec<f64> = frames[start..end].iter().map(|frame| frame + 1.0).collect();
             let ys: Vec<f64> = values[start..end].to_vec();
             plot = if end - start == 1 {
                 plot.scatter(&xs, &ys).color(trace_color(theme, 0)).into()
@@ -1460,7 +1461,7 @@ pub fn build_trend(
         return plot;
     }
     let last = frames[..n].iter().copied().fold(0.0f64, f64::max);
-    let (ticks, (lo, hi)) = integer_axis_max(0, last.round() as usize, max_ticks);
+    let (ticks, (lo, hi)) = integer_axis_max(1, last.round() as usize + 1, max_ticks);
     plot.xlim(lo, hi).major_ticks_x(ticks)
 }
 
@@ -1786,15 +1787,15 @@ mod tests {
         let (ymin, ymax) = heatmap_y_extent(scan_len, row_count);
         let row_step = (ymax - ymin) / row_count as f64;
 
-        assert!((ymin + row_step / 2.0).abs() < 1e-12);
-        assert!((ymax - row_step / 2.0 - 999.0).abs() < 1e-12);
+        assert!((ymin + row_step / 2.0 - 1.0).abs() < 1e-12);
+        assert!((ymax - row_step / 2.0 - 1000.0).abs() < 1e-12);
     }
 
     #[test]
     fn heatmap_extent_handles_short_and_degenerate_inputs() {
-        assert_eq!(heatmap_y_extent(3, 3), (-0.5, 2.5));
-        assert_eq!(heatmap_y_extent(1, 1), (-0.5, 0.5));
-        assert_eq!(heatmap_y_extent(0, 0), (-0.5, 0.5));
+        assert_eq!(heatmap_y_extent(3, 3), (0.5, 3.5));
+        assert_eq!(heatmap_y_extent(1, 1), (0.5, 1.5));
+        assert_eq!(heatmap_y_extent(0, 0), (0.5, 1.5));
     }
 
     #[test]
