@@ -14,6 +14,12 @@ Start with the [project README](../README.md), [API guide](api.md),
 [Rust guide](../crates/rexafs/README.md), [Python guide](../py-rexafs/README.md) or
 [JavaScript guide](../js-rexafs/README.md).
 
+## Support rexafs
+
+If rexafs is useful to you, [star the repository on GitHub](https://github.com/Ameyanagi/rexafs)
+or [sponsor development through GitHub Sponsors](https://github.com/sponsors/Ameyanagi).
+Sponsorship supports ongoing development and maintenance; stars help others discover the project.
+
 ## Scientific explanations and documentation standards
 
 - [How processing works](processing-theory.md): transmission, normalization,
