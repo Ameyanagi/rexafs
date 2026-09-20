@@ -44,10 +44,9 @@ not a physical model or a convergence guarantee. S₀² stays fixed during RMC;
 The Metropolis tolerance controls acceptance of worse trial scores; it is not a
 measured thermodynamic temperature. Older saved runs retain their settings.
 
-<figure>
-  <img src="/screenshots/0.2.11/rmc-settings.jpg" alt="RMC fit settings with inherited k and R ranges, Auto CPU workers and automatic coordinate moves" loading="lazy" width="1192" height="768" />
-  <figcaption>Signed 0.2.11 release: k = 2–12 Å⁻¹ and R = 1.5–3.5 Å copied from Transform; Auto resolves to ten workers on this machine. This is a public Cu workflow example.</figcaption>
-</figure>
+[![RMC fit settings with inherited k and R ranges, Auto CPU workers and automatic coordinate moves](/screenshots/0.2.11/rmc-settings.jpg)](/screenshots/0.2.11/rmc-settings.jpg)
+
+*Signed 0.2.11 release: k = 2–12 Å⁻¹ and R = 1.5–3.5 Å copied from Transform; Auto resolves to ten workers on this machine. This is a public Cu workflow example.*
 
 ## Fit ranges and the background
 
@@ -113,10 +112,9 @@ run. More workers may use more temporary memory and are not always faster.
 
 <span id="energy-refinement-in-the-source-checkout"></span>
 
-<figure>
-  <img src="/screenshots/0.2.11/rmc-run-details.jpg" alt="Saved RMC run details showing two CPU workers and one calculated plus 31 shared electronic preparations" loading="lazy" width="1192" height="768" />
-  <figcaption>The short check used two workers and retained all 32 absorbing sites. Displayed timings describe this one software check, not a performance benchmark.</figcaption>
-</figure>
+[![Saved RMC run details showing two CPU workers and one calculated plus 31 shared electronic preparations](/screenshots/0.2.11/rmc-run-details.jpg)](/screenshots/0.2.11/rmc-run-details.jpg)
+
+*The short check used two workers and retained all 32 absorbing sites. Displayed timings describe this one software check, not a performance benchmark.*
 
 ## Energy refinement
 
@@ -169,10 +167,9 @@ rejections and residual diagnosis. **Run details** includes timing, cache
 statistics and saved-input provenance. Updates arrive between completed
 calculations; one long scattering evaluation can delay the display or a pause.
 
-<figure>
-  <img src="/screenshots/0.2.11/rmc-results.jpg" alt="Reopened ten-attempt Cu RMC result with fixed amplitude, an energy-bound warning and convergence not assessed" loading="lazy" width="1192" height="768" />
-  <figcaption>Saved results reopened in 0.2.11. This ten-attempt check used ±1 eV bounds and energy updates every five attempts. It reached +1 eV and is not a calibrated or converged scientific fit. <a href="/licenses/#desktop-0211-rmc-captures">Capture and input provenance</a>.</figcaption>
-</figure>
+[![Reopened ten-attempt Cu RMC result with fixed amplitude, an energy-bound warning and convergence not assessed](/screenshots/0.2.11/rmc-results.jpg)](/screenshots/0.2.11/rmc-results.jpg)
+
+*Saved results reopened in 0.2.11. This ten-attempt check used ±1 eV bounds and energy updates every five attempts. It reached +1 eV and is not a calibrated or converged scientific fit. [Capture and input provenance](/licenses/#desktop-0211-rmc-captures).*
 
 ## Pause, save and resume
 
