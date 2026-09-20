@@ -114,7 +114,7 @@ pub struct PathCatalogue {
     by_atom: Vec<Vec<usize>>,
 }
 
-/// Unreleased: progress through deterministic geometric path enumeration.
+/// Since 0.2.12: progress through deterministic geometric path enumeration.
 /// Counts describe work, not a completion percentage or spectral importance.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PathSearchProgress {
@@ -136,7 +136,7 @@ impl PathCatalogue {
         Self::new_with_progress(reference, absorber, settings, |_| Ok(()))
     }
 
-    /// Unreleased: enumerate the same paths as [`Self::new`] while reporting
+    /// Since 0.2.12: enumerate the same paths as [`Self::new`] while reporting
     /// bounded progress and allowing cooperative cancellation. The callback runs
     /// before setup, at most every 4096 search extensions, during construction of
     /// the atom-to-path map, and on completion. Return an error to stop without a

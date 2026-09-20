@@ -1,4 +1,4 @@
-//! Unreleased structural diagnostics, sampled separately from scattering.
+//! Structural diagnostics introduced in 0.2.12, sampled separately from scattering.
 //! Optimization steps are not physical time or an uncertainty ensemble.
 use rexafs::rmc::{Configuration, RadialDistribution, radial_distribution};
 use serde::{Deserialize, Serialize};

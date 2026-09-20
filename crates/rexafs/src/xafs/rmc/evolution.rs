@@ -56,7 +56,7 @@ impl Default for EvolutionSettings {
     }
 }
 impl EvolutionSettings {
-    /// Unreleased: validate population, mutation and local-work limits without
+    /// Since 0.2.12: validate population, mutation and local-work limits without
     /// evaluating scattering. The defaults in [`Self::default`] are recommended
     /// starting values; larger populations and local budgets multiply work.
     pub fn validate(&self) -> Result<(), RmcError> {
@@ -495,7 +495,7 @@ impl EvolutionSession {
     pub fn completed(&self) -> usize {
         self.checkpoint.completed
     }
-    /// Unreleased: extend or reduce the total generation limit without changing
+    /// Since 0.2.12: extend or reduce the total generation limit without changing
     /// the population, RNG or scientific settings. The limit cannot precede
     /// completed generations; checked local-work arithmetic must remain valid.
     pub fn set_generation_limit(&mut self, total: usize) -> Result<(), RmcError> {
@@ -510,7 +510,7 @@ impl EvolutionSession {
         Ok(())
     }
 
-    /// Unreleased: locally refine the best individual while preserving this
+    /// Since 0.2.12: locally refine the best individual while preserving this
     /// population and its RNG. Uses the bounded coordinate-descent algorithm and
     /// Å/evaluation defaults documented by [`RmcSession::refine_best`]. The audit's
     /// `source_attempt` denotes a generation here. The callback can cancel at an

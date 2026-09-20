@@ -84,13 +84,13 @@ pub struct AccelerationSettings {
     /// Maximum catalogue paths across all contexts; default one million.
     /// Independent of the scattering-cache byte budget. Exceeding the count
     /// fails without returning a partial catalogue or sampling any paths.
-    /// Unreleased: checked during enumeration, before electronic preparation;
+    /// Since 0.2.12: checked during enumeration, before electronic preparation;
     /// an error reports only the lower bound found before search stopped.
     pub max_total_paths: usize,
     /// Approximate numerical payload budget for last-geometry path spectra;
     /// default 256 MiB. Oversized results are evaluated but not cached. This
     /// excludes immutable phase tensors, catalogues, and transient batch results.
-    /// This constructor value retains historical identity hashing. Unreleased:
+    /// This constructor value retains historical identity hashing. Since 0.2.12:
     /// use [`PreparedRefeffCalculator::monitor`] for identity-preserving runtime
     /// resizing instead of changing the constructor when resuming a checkpoint.
     pub cache_bytes: usize,
@@ -176,27 +176,27 @@ pub struct PreparedRefeffStats {
     pub evaluation_seconds: f64,
     /// Retained last-geometry numerical payload estimate, in bytes.
     pub cached_bytes: usize,
-    /// Unreleased: current runtime cache-payload limit, in bytes.
+    /// Since 0.2.12: current runtime cache-payload limit, in bytes.
     #[serde(default)]
     pub cache_limit_bytes: usize,
-    /// Unreleased: estimated bytes for one last-observed snapshot per context.
+    /// Since 0.2.12: estimated bytes for one last-observed snapshot per context.
     /// This excludes extra population snapshots and non-cache process memory.
     #[serde(default)]
     pub minimum_cache_bytes: usize,
-    /// Unreleased: requests with a matching-grid snapshot available before work.
+    /// Since 0.2.12: requests with a matching-grid snapshot available before work.
     #[serde(default)]
     pub snapshot_hits: u64,
-    /// Unreleased: requests before a matching grid has been observed for a context.
+    /// Since 0.2.12: requests before a matching grid has been observed for a context.
     #[serde(default)]
     pub cold_misses: u64,
-    /// Unreleased: previously observed context/grid requests without a snapshot.
+    /// Since 0.2.12: previously observed context/grid requests without a snapshot.
     /// Compare with eviction/oversize counters before attributing these to memory.
     #[serde(default)]
     pub repeat_misses: u64,
-    /// Unreleased: snapshots evicted to satisfy the runtime byte budget.
+    /// Since 0.2.12: snapshots evicted to satisfy the runtime byte budget.
     #[serde(default)]
     pub budget_evictions: u64,
-    /// Unreleased: results larger than the runtime budget and therefore not cached.
+    /// Since 0.2.12: results larger than the runtime budget and therefore not cached.
     #[serde(default)]
     pub oversized_snapshots: u64,
 }
@@ -702,7 +702,7 @@ impl PreparedRefeffCalculator {
         stats.cache_limit_bytes = self.monitor.cache_bytes();
         stats
     }
-    /// Unreleased: obtain a live progress and runtime-memory handle. Observations
+    /// Since 0.2.12: obtain a live progress and runtime-memory handle. Observations
     /// are inexpensive and may be polled on another thread during preparation or
     /// a long move. Changing its byte budget preserves historical checkpoint
     /// identity; unlike constructor settings, the runtime budget is not hashed.

@@ -62,10 +62,10 @@ pub struct Draft {
     /// Let spare workers evaluate independent paths in a smaller absorber batch.
     #[serde(default)]
     pub parallel_paths: bool,
-    /// Unreleased: None adapts the runtime cache budget to available memory.
+    /// Since 0.2.12: None adapts the runtime cache budget to available memory.
     /// Some(mib) is a fixed payload limit; electronic tables are separate.
     pub cache_mib: Option<usize>,
-    /// Unreleased: None resolves a path-count guard from available RAM at new-run
+    /// Since 0.2.12: None resolves a path-count guard from available RAM at new-run
     /// submission. An explicit count overrides it; existing runs keep their limit.
     pub max_total_paths: Option<usize>,
     /// Structural diagnostics use a fixed radial interval and bounded sample history.
@@ -80,7 +80,7 @@ pub struct Draft {
     pub absorber_atoms: String,
     pub s02: f64,
     pub delta_e0: f64,
-    /// Unreleased: opt in to fixed-S₀² energy refinement. Old projects stay fixed.
+    /// Since 0.2.11: opt in to fixed-S₀² energy refinement. Old projects stay fixed.
     pub refine_energy: bool,
     pub energy_refinement: EnergyRefinement,
     pub calibration_range: [f64; 2],
