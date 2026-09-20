@@ -13,6 +13,7 @@ pub struct CalibrationPreview {
 pub fn input_key(request: &Request) -> Result<String, String> {
     let mut scientific = request.clone();
     scientific.cache_mib = None;
+    scientific.max_total_paths = None;
     scientific.structural = None;
     scientific.evolution = None;
     serde_json::to_vec(&scientific)

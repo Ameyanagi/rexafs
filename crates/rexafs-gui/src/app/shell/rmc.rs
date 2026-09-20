@@ -845,12 +845,22 @@ impl StudioApp {
                 div()
                     .px_3()
                     .py_2()
+                    .w_full()
+                    .min_w_0()
+                    .flex_shrink_0()
                     .flex()
                     .items_center()
                     .gap_2()
                     .bg(t.raised)
-                    .child(div().flex_1().text_color(t.warn).child(error.clone()))
-                    .child(button(&t, "rmc-dismiss-error", "Dismiss", false).on_click(
+                    .child(div().flex_1().min_w_0().whitespace_normal().text_color(t.warn)
+                        .child(error.replace("explicitly increase AccelerationSettings.max_total_paths", "increase Catalogue path limit in Fit settings and start a new run. Cache memory is a separate limit")))
+                    .when(error.contains("max_total_paths"), |bar| bar.child(
+                        button(&t, "rmc-path-settings", "Path limit…", false).flex_shrink_0()
+                            .on_click(cx.listener(|app, _, _, cx| {
+                                app.stage_view.fit_step = FitStep::Model;
+                                cx.notify();
+                            }))))
+                    .child(button(&t, "rmc-dismiss-error", "Dismiss", false).flex_shrink_0().on_click(
                         cx.listener(|app, _, _, cx| {
                             app.rmc.error = None;
                             cx.notify();
@@ -1033,6 +1043,11 @@ impl StudioApp {
                     .child(with_tip(&t, "rmc-cache-memory",
                         "Auto adapts the scattering-cache limit to available physical memory while leaving headroom. This is a payload limit, not total app memory. A fixed MiB limit applies to new runs and cold resumes; live resumes keep the current policy.",
                         self.rmc.fields[28].clone()))
+                    .child(with_tip(&t, "rmc-catalogue-limit",
+                        "Auto resolves a total path-count guard from available memory when starting a new run. This is separate from the scattering cache. An explicit count overrides Auto; saved runs retain their captured limit. Increasing capacity does not omit or sample any paths.",
+                        self.rmc.fields[38].clone()))
+                    .child(hint(&t, format!("New run capacity: {} paths", count(engine::memory::catalogue_limit(
+                        self.rmc.project.draft.max_total_paths, engine::memory::available_memory())))))
                     .child(disclosure(&t, "rmc-structural-settings", "Structural tracking", self.rmc.structural_settings, false)
                         .on_click(cx.listener(|app, _, _, cx| { app.rmc.structural_settings = !app.rmc.structural_settings; cx.notify(); })))
                     .when(self.rmc.structural_settings, |panel| panel.child(div().flex().flex_col().gap_2()
@@ -1363,6 +1378,10 @@ impl StudioApp {
                 draft.cache_mib = value.map(|v| v as usize);
                 continue;
             }
+            if index == 38 {
+                draft.max_total_paths = value.map(|v| v as usize);
+                continue;
+            }
             let value = value
                 .ok_or_else(|| format!("{} requires an explicit value.", FIELD_LABELS[index]))?;
             set_draft_field(&mut draft, index, value);
@@ -1467,9 +1486,13 @@ impl StudioApp {
             ("Generation budget", d.evolution.generations as f64),
             ("Elite survivors", d.evolution.elite as f64),
             ("Local attempts per child", d.evolution.local_steps as f64),
+            (
+                "Catalogue path limit",
+                d.max_total_paths.unwrap_or(1_000_000) as f64,
+            ),
         ];
         for (index, (label, value)) in specs.into_iter().enumerate() {
-            let kind = if matches!(index, 27 | 28 | 31..=37) {
+            let kind = if matches!(index, 27 | 28 | 31..=38) {
                 FieldKind::Integer { min: Some(1) }
             } else if matches!(index, 0..=2 | 5 | 8 | 11 | 18 | 26) {
                 FieldKind::Integer { min: Some(0) }
@@ -1484,6 +1507,7 @@ impl StudioApp {
                 19..=21 | 24..=25 => 0.5,
                 26 => 50.,
                 28 => 64.,
+                38 => 1_000_000.,
                 22..=23 => 0.05,
                 3 | 4 | 6 | 7 | 13..=17 => 0.1,
                 _ => 1.,
@@ -1491,7 +1515,7 @@ impl StudioApp {
             let field = cx.new(|cx| {
                 let placeholder = if index == 27 {
                     format!("auto ({})", engine::available_workers())
-                } else if index == 28 {
+                } else if matches!(index, 28 | 38) {
                     "auto (available memory)".into()
                 } else {
                     "required".into()
@@ -1500,6 +1524,8 @@ impl StudioApp {
                     d.workers.map(|v| v as f64)
                 } else if index == 28 {
                     d.cache_mib.map(|v| v as f64)
+                } else if index == 38 {
+                    d.max_total_paths.map(|v| v as f64)
                 } else {
                     Some(value)
                 };
@@ -1522,6 +1548,11 @@ impl StudioApp {
                     }
                     if index == 28 {
                         app.rmc.project.draft.cache_mib = value.map(|v| v as usize);
+                        cx.notify();
+                        return;
+                    }
+                    if index == 38 {
+                        app.rmc.project.draft.max_total_paths = value.map(|v| v as usize);
                         cx.notify();
                         return;
                     }
@@ -2085,6 +2116,11 @@ impl StudioApp {
                 .when_some(self.rmc.request.as_ref(), |details, request| {
                     details
                         .child(detail_row(&t, "CPU workers", request.workers.to_string()))
+                        .child(detail_row(
+                            &t,
+                            "Catalogue path limit",
+                            count(request.max_total_paths.unwrap_or(1_000_000)),
+                        ))
                         .child(detail_row(
                             &t,
                             "Parallel paths",
@@ -2729,7 +2765,7 @@ impl StudioApp {
         .detach();
     }
 }
-const FIELD_LABELS: [&str; 38] = [
+const FIELD_LABELS: [&str; 39] = [
     "Repeat a",
     "Repeat b",
     "Repeat c",
@@ -2768,6 +2804,7 @@ const FIELD_LABELS: [&str; 38] = [
     "Generation budget",
     "Elite survivors",
     "Local attempts per child",
+    "Catalogue path limit",
 ];
 fn hint(t: &crate::theme::Theme, text: impl Into<gpui::SharedString>) -> gpui::Div {
     div()
@@ -2899,6 +2936,7 @@ fn set_draft_field(d: &mut engine::Draft, index: usize, v: f64) {
         35 => d.evolution.generations = v as usize,
         36 => d.evolution.elite = v as usize,
         37 => d.evolution.local_steps = v as usize,
+        38 => d.max_total_paths = Some(v as usize),
         _ => unreachable!("unknown RMC field"),
     }
 }

@@ -62,6 +62,40 @@ requesting a monitor activates progress instrumentation. See
 [monitor API](../crates/rexafs/src/xafs/rmc/prepared_monitor.rs), and
 [desktop memory policy](../crates/rexafs-gui/src/rmc_fitting/memory.rs).
 
+### Catalogue path capacity
+
+**Fit settings → Catalogue path limit** controls the total number of retained
+geometric paths across all absorber contexts. This is separate from **Cache
+memory**, which stores calculated spectra for those paths. Increasing cache
+memory does not raise the catalogue guard. The core API still defaults to one
+million paths; earlier desktop builds used that fixed limit even for large cells.
+
+For new desktop runs, **Auto** resolves the guard once from available memory.
+It takes the cache-budget formula above with `C = 0`, caps that byte allowance
+at 2 GiB, divides by an empirical allowance of 512 bytes per path, and rounds
+down to an integer of at least one. This reserves a separate quarter of the
+available pool for path identities and atom-to-path indices. The allowance is
+a rexafs capacity heuristic, not a measured bound on resident memory; electronic
+tables, temporary work and allocator overhead still need headroom. If the memory
+query fails, the guard remains one million paths.
+
+Enter an explicit count (1–100,000,000) to override Auto, or clear the field to
+restore it. The resolved count is saved with the request and does not change on
+resume; older requests preserve their historical guard and calculator identity.
+Changing this field applies to a **new run**. A larger guard permits more paths
+but allocates none immediately, changes no scattering approximation and never
+samples absorbing sites. Per-absorber path and search-work guards still apply.
+
+When preparation exceeds the guard, the reported count is a **lower bound found
+so far**, not the final size of the unfinished catalogue. The desktop wraps the
+message and offers **Path limit…** to return to Fit settings. Reduce the path
+radius, maximum path legs or explicitly selected absorbers, or choose an adequate
+path limit and start a new run. Changing radius, order or absorbing sites changes
+the modeled calculation; increasing capacity alone does not. Implementation:
+[request capture](../crates/rexafs-gui/src/rmc_fitting.rs),
+[capacity policy](../crates/rexafs-gui/src/rmc_fitting/memory.rs), and
+[enumeration guard](../crates/rexafs/src/xafs/rmc/accelerated.rs).
+
 ## Structural evolution
 
 Choose **Results → Structural evolution** and an element pair, for example Cu–O

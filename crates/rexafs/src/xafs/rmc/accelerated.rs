@@ -82,6 +82,10 @@ pub struct AccelerationSettings {
     /// for order-sensitive environments. The mode cannot change on saved-run resume.
     pub reuse_electronic_inputs: bool,
     /// Maximum catalogue paths across all contexts; default one million.
+    /// Independent of the scattering-cache byte budget. Exceeding the count
+    /// fails without returning a partial catalogue or sampling any paths.
+    /// Unreleased: checked during enumeration, before electronic preparation;
+    /// an error reports only the lower bound found before search stopped.
     pub max_total_paths: usize,
     /// Approximate numerical payload budget for last-geometry path spectra;
     /// default 256 MiB. Oversized results are evaluated but not cached. This
@@ -455,6 +459,13 @@ impl PreparedRefeffCalculator {
             serde_json::to_string(options).unwrap()
         ))
     }
+    fn check_path_capacity(&self, additional: usize) -> Result<(), RmcError> {
+        let needed = self.stats.catalogue_paths.saturating_add(additional);
+        require(
+            needed <= self.settings.max_total_paths,
+            format!("Prepared RMC has found at least {needed} catalogue paths so far; the limit is {}. Reduce path radius, scattering order or the selected absorbing sites, or explicitly increase AccelerationSettings.max_total_paths.", self.settings.max_total_paths),
+        )
+    }
     fn ensure(&mut self, key: &str, request: CalculationRequest<'_>) -> Result<(), RmcError> {
         if self.contexts.contains_key(key) {
             return Ok(());
@@ -483,17 +494,12 @@ impl PreparedRefeffCalculator {
                 |progress| {
                     check_control(Some((&self.cancellation, deadline)))?;
                     self.monitor.search(progress);
+                    self.check_path_capacity(progress.paths)?;
                     Ok(())
                 },
             )?);
             catalogue.validate(request.configuration)?;
-            require(
-                self.stats
-                    .catalogue_paths
-                    .saturating_add(catalogue.paths().len())
-                    <= self.settings.max_total_paths,
-                format!("Prepared RMC needs {} catalogue paths; the limit is {}. Reduce path radius, scattering order or the selected absorbing sites, or explicitly increase AccelerationSettings.max_total_paths.", self.stats.catalogue_paths.saturating_add(catalogue.paths().len()), self.settings.max_total_paths),
-            )?;
+            self.check_path_capacity(catalogue.paths().len())?;
             self.monitor
                 .stage(PreparedStage::Electronics, Some(request.absorber));
             let context = if self.settings.reuse_electronic_inputs {
@@ -536,13 +542,7 @@ impl PreparedRefeffCalculator {
             (catalogue, context)
         };
         catalogue.validate(request.configuration)?;
-        require(
-            self.stats
-                .catalogue_paths
-                .saturating_add(catalogue.paths().len())
-                <= self.settings.max_total_paths,
-            format!("Prepared RMC needs {} catalogue paths; the limit is {}. Reduce path radius, scattering order or the selected absorbing sites, or explicitly increase AccelerationSettings.max_total_paths.", self.stats.catalogue_paths.saturating_add(catalogue.paths().len()), self.settings.max_total_paths),
-        )?;
+        self.check_path_capacity(catalogue.paths().len())?;
         let mut bases = Vec::new();
         let mut basis_groups = Vec::new();
         let mut reference_shape = Vec::new();
