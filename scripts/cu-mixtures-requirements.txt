@@ -1,5 +1,5 @@
 # Reproduction environment only; not application or package dependencies.
-rexafs==0.2.8
+rexafs==0.2.9
 numpy==2.5.3
 scipy==1.18.1
 pymcr==0.5.1
