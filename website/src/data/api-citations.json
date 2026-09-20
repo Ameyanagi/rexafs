@@ -249,6 +249,12 @@
     ]
   },
   {
+    "url": "https://manual.gromacs.org/current/onlinehelp/gmx-rdf.html",
+    "sources": [
+      "crates/rexafs/src/xafs/rmc/analysis.rs"
+    ]
+  },
+  {
     "url": "https://netlib.org/cephes/doubldoc.html#chbevl",
     "sources": [
       "crates/rexafs/src/xafs/bessel_i0.rs"

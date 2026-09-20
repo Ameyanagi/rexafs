@@ -62,6 +62,10 @@ by the desktop, including their transitive dependency search directory.
   exact evolutionary population/random-state recovery with a changed memory limit.
 - Default core suite: 475 passed, 3 ignored, including documentation tests.
 - Strict core Clippy passed with warnings denied.
+- Strict Rust API documentation passed with broken links and missing public
+  documentation denied, using the website's optional-feature policy. All eight
+  reference-generator tests passed, and the website type/content check reported
+  no errors or warnings. The generated citation index includes the g(r) reference.
 - ReFEFF/FEFF10 focused tests: 47 passed across path/cache, radial distributions,
   session/evolutionary continuation and acceleration regressions.
 - All repository pre-commit checks passed, including release tooling and fixture
