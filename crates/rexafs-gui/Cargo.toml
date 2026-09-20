@@ -57,7 +57,7 @@ unicode-segmentation = "1"
 nalgebra = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 # Project persistence must recover every stored f64 exactly, including subnormals.
-serde_json = { workspace = true, features = ["float_roundtrip"] }
+serde_json = { workspace = true, features = ["float_roundtrip", "raw_value"] }
 
 [features]
 default = ["refeff-runner", "feff10-runner"]

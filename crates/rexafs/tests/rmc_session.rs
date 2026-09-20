@@ -1203,6 +1203,45 @@ fn local_gradient_refinement_reduces_full_spectrum_and_preserves_checkpoint() {
 }
 
 #[test]
+fn evolutionary_local_refinement_preserves_population_and_original_bounds() {
+    let mut s = settings();
+    s.moves.max_displacement = Some(0.04);
+    let mut calc = Toy::default();
+    let mut run = EvolutionSession::new(
+        &problem(),
+        &s,
+        &EvolutionSettings {
+            population: 3,
+            elite: 1,
+            generations: 1,
+            ..Default::default()
+        },
+        &mut calc,
+    )
+    .unwrap();
+    run.run(&mut calc).unwrap();
+    let checkpoint = serde_json::to_value(run.checkpoint()).unwrap();
+    let result = run
+        .refine_best_with_progress(
+            &LocalRefinementSettings {
+                sweeps: 20,
+                ..Default::default()
+            },
+            &mut calc,
+            |_| std::ops::ControlFlow::Continue(()),
+        )
+        .unwrap();
+    assert_eq!(result.source_attempt, 1);
+    assert!(result.best.evaluation.score <= result.initial.evaluation.score);
+    assert!(result.best.structures[0].configuration.atoms[1].position[0] >= 2.56 - 1e-12);
+    assert_eq!(serde_json::to_value(run.checkpoint()).unwrap(), checkpoint);
+    assert!(run.set_generation_limit(0).is_err());
+    run.set_generation_limit(2).unwrap();
+    run.run(&mut calc).unwrap();
+    assert_eq!(run.completed(), 2);
+}
+
+#[test]
 fn local_refinement_respects_original_bounds_budget_cancellation_and_failure() {
     let mut s = settings();
     s.moves.max_displacement = Some(0.04);

@@ -55,6 +55,14 @@ impl Default for EvolutionSettings {
         }
     }
 }
+impl EvolutionSettings {
+    /// Unreleased: validate population, mutation and local-work limits without
+    /// evaluating scattering. The defaults in [`Self::default`] are recommended
+    /// starting values; larger populations and local budgets multiply work.
+    pub fn validate(&self) -> Result<(), RmcError> {
+        validate(self)
+    }
+}
 /// One completed generation's diagnostics.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EvolutionGeneration {
@@ -486,6 +494,50 @@ impl EvolutionSession {
     /// Completed generation count.
     pub fn completed(&self) -> usize {
         self.checkpoint.completed
+    }
+    /// Unreleased: extend or reduce the total generation limit without changing
+    /// the population, RNG or scientific settings. The limit cannot precede
+    /// completed generations; checked local-work arithmetic must remain valid.
+    pub fn set_generation_limit(&mut self, total: usize) -> Result<(), RmcError> {
+        require(
+            total >= self.completed(),
+            "generation limit cannot precede completed generations",
+        )?;
+        let mut settings = self.checkpoint.settings.clone();
+        settings.generations = total;
+        validate(&settings)?;
+        self.checkpoint.settings = settings;
+        Ok(())
+    }
+
+    /// Unreleased: locally refine the best individual while preserving this
+    /// population and its RNG. Uses the bounded coordinate-descent algorithm and
+    /// Å/evaluation defaults documented by [`RmcSession::refine_best`]. The audit's
+    /// `source_attempt` denotes a generation here. The callback can cancel at an
+    /// evaluation boundary; the returned audit retains the best verified state.
+    pub fn refine_best_with_progress<C, F>(
+        &self,
+        settings: &LocalRefinementSettings,
+        calculator: &mut C,
+        progress: F,
+    ) -> Result<LocalRefinementResult, RmcError>
+    where
+        C: ExafsCalculator + ?Sized,
+        F: FnMut(&LocalRefinementProgress) -> std::ops::ControlFlow<()>,
+    {
+        require(
+            self.checkpoint.calculator == calculator.identity(),
+            "local refinement calculator differs from the saved evolutionary model",
+        )?;
+        super::local_refinement::refine_local(
+            &self.checkpoint.problem,
+            &self.checkpoint.session,
+            self.best(),
+            self.completed(),
+            settings,
+            calculator,
+            progress,
+        )
     }
     /// Since 0.2.10: explicitly rescore every individual with a new calculator
     /// identity, then sort by the new objective. RNG, original displacement bounds,
