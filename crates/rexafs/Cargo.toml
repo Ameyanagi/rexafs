@@ -69,7 +69,7 @@ regex = "1"
 # Pin interpolation and the embedded atomic dataset as a processing-version input.
 xraydb = "=0.4.1"
 rand = { version = "0.10", default-features = false, features = ["std"] }
-rand_chacha = { version = "0.9", features = ["serde"] }
+rand_chacha = { version = "0.10", features = ["serde"] }
 sha2 = "0.11"
 
 [features]
