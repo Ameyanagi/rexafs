@@ -10,10 +10,12 @@ calculates their spectra and accepts or rejects them against the measured data
 and configured constraints. It refines a periodic structure rather than the
 path parameters used by ordinary EXAFS fitting.
 
-The desktop uses one processed spectrum and one structure. The
+The stable desktop uses one processed spectrum and one structure. The
 [Rust API](/api/rust/rexafs/xafs/rmc/index.html) additionally supports evolutionary
 search, weighted structures and joint datasets. Those controls are not yet in
-the desktop, and RMC is not exposed by the Python or TypeScript bindings.
+the 0.2.11 desktop, and RMC is not exposed by the Python or TypeScript bindings.
+The upcoming 0.2.12 desktop adds genetic and hybrid search, resource controls and
+structural history as described [below](#new-in-the-0212-release-candidate).
 
 ## Prepare the spectrum and structure
 
@@ -216,3 +218,115 @@ explains persistence, numerical conventions and software checks. Its short Cu₂
 verification run remained **StillChanging**, not converged. The
 [Rust guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.11/doc/rmc.md) covers
 Spectrum inputs and the broader RMC and evolutionary APIs.
+
+## New in the 0.2.12 release candidate
+
+These controls are being prepared for 0.2.12. Stable downloads remain on 0.2.11
+until publication. The new selector is **Method: RMC**. Existing checkpoints keep
+their saved scientific settings; editing the new-run form does not retarget them.
+
+### Cache memory and large path catalogues
+
+Start with **Fit settings → Cache memory (MiB) → Auto**. The desktop estimates
+available physical memory, leaves headroom, and reassesses the scattering-cache
+budget every two seconds. Enter a fixed MiB value to override it; clear the field
+to restore Auto. One MiB is 1,048,576 bytes. The policy applies to new runs and
+cold resumes; a paused worker keeps its current policy. It bounds retained
+scattering snapshots, not total application memory. Electronic tables, path
+catalogues and temporary worker results need additional memory.
+
+Preparation reports path enumeration, electronic preparation and scattering.
+**Run details** shows the budget, estimated snapshot requirement, hits, cold and
+repeated misses, evictions and oversized snapshots. Cold misses are normal on
+first use. Repeated misses mean previously calculated snapshots must be rebuilt.
+The warning clears after a budget increase or 30 seconds without another repeated
+miss. If a fixed limit is too small, try Auto or a larger limit when memory allows.
+Neither a larger cache nor more workers guarantees faster initialization.
+
+**Catalogue path limit** controls a different resource: the total retained
+geometric paths. Auto chooses and saves a capacity once when a new run starts;
+older runs retain their historical limit. The core API still defaults to one
+million paths. Enter 1–100,000,000 to override the desktop capacity. Increasing
+cache memory alone cannot clear a path-limit error.
+
+When enumeration exceeds the guard, **Path limit…** opens the relevant settings.
+The reported count is a lower bound found before stopping, not the final number
+of paths. Increasing capacity leaves the modeled scattering unchanged. Reducing
+path radius, maximum legs or absorbing sites changes the calculation. All
+selected absorbers remain explicit; the program does not silently sample them.
+The memory fractions and path-size allowance are empirical resource policies,
+not allocation guarantees. See the
+[policy and implementation](https://github.com/Ameyanagi/rexafs/blob/dev/doc/rmc-structural-evolution.md#cache-memory-and-responsive-preparation).
+
+[![Genetic and hybrid search choices beside Auto memory and catalogue controls](/screenshots/next/0.2.12/rmc-search-memory.jpg)](/screenshots/next/0.2.12/rmc-search-memory.jpg)
+
+*0.2.12 source candidate, full unedited window. This synthetic two-atom project
+demonstrates controls and input validation; it is not an experimental refinement.
+[Capture provenance](/licenses/#desktop-0212-candidate-captures).*
+
+### Structural evolution
+
+Choose **Results → Structural evolution**, an element pair and a view:
+**Distributions**, **Distance vs step**, **Coordination**, **Mean distance** or
+**Variance**. Initial/current/best overlays share the same bins. The heatmap
+records actual completed attempts or generations; blank gaps are unsampled,
+with no interpolation. Steps are optimization progress, not physical time.
+
+Before a new run, **Structural tracking** sets the radial interval and bins.
+Defaults are [0, 8) Å, 160 bins, every 100 RMC attempts and at most 256 history
+samples. Population searches sample each generation; completion and checkpoint
+boundaries can add samples. A bounded background worker can skip intermediate
+updates, and the view reports skipped and removed samples. Old checkpoints do
+not acquire invented historical distributions.
+
+For periodic cells, the displayed dimensionless pair distribution is
+$g_{AB,i}=H_{AB,i}/(\rho_B V_i)$. Here $H_{AB,i}$ is the number of B neighbors per
+selected A absorber in bin $i$, $\rho_B=N_B/V_{\mathrm{cell}}$ is the full-cell
+species density in Å⁻³, and $V_i=4\pi(r_{i+1}^3-r_i^3)/3$ is the shell volume
+in Å³. This uses center, density and shell normalization; see the
+[GROMACS normalization reference](https://manual.gromacs.org/current/onlinehelp/gmx-rdf.html).
+rexafs uses full-cell density, excludes the central self image, includes other
+periodic images and applies no finite-N correction. Finite clusters have no
+assumed bulk density and show **Neighbors per absorber per bin** instead.
+
+Coordination sums raw neighbors over the chosen interval. Mean distance is in Å
+and population variance in Å²; empty intervals have no mean or variance.
+Select a shell-specific interval before interpreting these as first-shell
+quantities. Radii above half the smallest cell-plane spacing repeat cell
+correlations; finite-cluster boundaries reduce neighbor counts. These histories
+are not an equilibrium ensemble, a uniqueness test or an uncertainty estimate.
+The [analysis implementation](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs/src/xafs/rmc/analysis.rs)
+defines the counting conventions.
+
+[![Initial, current and best Cu–O neighbor-count curves from a synthetic finite cluster](/screenshots/next/0.2.12/structural-overlays.jpg)](/screenshots/next/0.2.12/structural-overlays.jpg)
+
+[![Cu–O distance-versus-generation heatmap with samples at their actual generations](/screenshots/next/0.2.12/structural-heatmap.jpg)](/screenshots/next/0.2.12/structural-heatmap.jpg)
+
+*Full unedited 0.2.12 candidate captures of a synthetic finite Cu–O checkpoint.
+The vertical line represents one neighbor; it does not demonstrate bulk g(r),
+experimental agreement or convergence.*
+
+**Export result…** includes `structural-evolution.json`, `structural-curves.csv`
+and `structural-history.csv`, with pair identities, actual steps, bounds and
+units. These retain histograms and moments, not every historical coordinate set.
+
+### Genetic and hybrid search
+
+**Fit settings → Search method** offers **RMC**, **Genetic / EA** and
+**Hybrid EA–RMC**. The evolutionary algorithm (EA) uses selection, atom-wise
+crossover, mutation and elite survivors. Start with 12 individuals, 50 generations
+and two elites. Pure genetic search has no local Metropolis attempts; hybrid
+starts with one per nonelite child. These are editable rexafs defaults.
+
+Both population modes require fixed ΔE₀; selecting them with energy refinement
+enabled shows an error instead of changing calibration silently. They still pay
+the scattering cost. Initializing the population can take longer than ordinary
+RMC, and larger populations or local budgets increase work and cache pressure.
+
+Pause completes a generation. Stop preserves the last committed population.
+Checkpoints retain all individuals and the random state. The convergence view
+compares population mean and best objective; the single-chain plateau diagnostic
+does not apply. Structural Current and Best both show the best member of the
+current elitist population, not averaged coordinates. The Initial curve remains
+the input structure. See the
+[search description and implementation](https://github.com/Ameyanagi/rexafs/blob/dev/doc/rmc-structural-evolution.md#genetic-and-hybrid-search).

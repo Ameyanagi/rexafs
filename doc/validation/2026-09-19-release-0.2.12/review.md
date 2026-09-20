@@ -18,6 +18,16 @@ scientific scope. No private original measurement project is included.
 
 ## Required publication gates
 
+The release scope was expanded on 20 September to include PRs #103–#106:
+desktop workflow corrections, adaptive RMC resources, structural history,
+population search and the catalogue-capacity fix. Dev commit
+`6b1af79c568472af8d2ee3b7bad5033e970dbcd2` passed its Rust, Website and
+[Nightly desktop](https://github.com/Ameyanagi/rexafs/actions/runs/35495161287)
+workflows. These development checks do not replace the exact-tag release build.
+The [RMC source review](../2026-09-20-rmc-followup/review.md) retains the measured
+cache comparison and its numerical scope. A separate 256-site native check
+prepared 2,246,144 paths and evaluated four k points; it did not assess fit quality.
+
 Completed locally: coordinated version validation and its seven regression tests;
 new linked/embedded projects written and reopened through the optimized 0.2.12
 writer; all 46 retained fixture hashes verified; 29 project tests passed (the
