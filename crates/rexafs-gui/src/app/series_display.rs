@@ -100,6 +100,9 @@ pub(crate) struct SeriesDisplay {
     pub colors_open: bool,
     pub reference_open: bool,
     pub reference_field: Option<Entity<NumericField>>,
+    pub frame_field: Option<Entity<crate::widgets::text_input::TextInput>>,
+    pub frame_field_position: usize,
+    pub frame_error: Option<String>,
     pub menu_position: gpui::Point<gpui::Pixels>,
     pub menu_focus: Option<gpui::FocusHandle>,
 }

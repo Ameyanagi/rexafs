@@ -1,0 +1,34 @@
+{
+  "numeric-validation.jpg": {
+    "sha256": "a325a88ada1bcb31bcd9bb6229bfd68adf08bc87692228ba20c787c4bcb4eb7f",
+    "source_capture": "02-invalid-inline.jpg"
+  },
+  "publish-changes.jpg": {
+    "sha256": "13c14746b0acded1506181ad36e9b022f0999287f285aacf198ce34821c550e6",
+    "source_capture": "08-unpublished-changes.jpg"
+  },
+  "publish-updated.jpg": {
+    "sha256": "cd173188553ba275d9fca6c1f902e527d6404b0db0331070acee094ee359f47f",
+    "source_capture": "09-republished.jpg"
+  },
+  "frame-navigation.jpg": {
+    "sha256": "c9a793e236f9f4d2afadfe7bcc1ae719e57a97c36a642835cd82eb4548f501e0",
+    "source_capture": "13-frame-entry-verified.jpg"
+  },
+  "series-small.jpg": {
+    "sha256": "7a508b41ca295ea0aea72129b3bad263b388fb26858210e1c675119600f117eb",
+    "source_capture": "16-series-small-final.jpg"
+  },
+  "numeric-auto.jpg": {
+    "sha256": "9b2ad9997137731e9f910a75bbf8959541768a6f5975a64ffaacbb14c8eb355d",
+    "source_capture": "17-numeric-auto-small.jpg"
+  },
+  "numeric-range.jpg": {
+    "sha256": "3304b5a252aa49865147bf8f073b3b29feb2ea09732d9bac3d3bc2f40c7b30d5",
+    "source_capture": "18-numeric-range-small.jpg"
+  },
+  "series-trend.csv": {
+    "sha256": "0785c0f6f22265241442b17138d4249f65c1dda297a1f6218e1f44dd8de72284",
+    "source_capture": "series-trend.csv"
+  }
+}

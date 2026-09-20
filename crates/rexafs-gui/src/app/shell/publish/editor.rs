@@ -378,6 +378,10 @@ impl StudioApp {
             .map(|f| self.publish.settings.options(f.key))
             .unwrap_or_default();
         let ready = self.publication_ready() && !self.publish.running;
+        let changed = self.publish.destination.is_some()
+            && self
+                .publish
+                .changed_since_publish(&self.publication_revision());
         let header = div()
             .flex_none()
             .flex()
@@ -425,13 +429,15 @@ impl StudioApp {
                                     "publish-report",
                                     if self.publish.running {
                                         "Publishing…"
+                                    } else if changed {
+                                        "Publish changes…"
                                     } else {
                                         "Publish report…"
                                     },
                                     true,
                                 ),
                                 &t,
-                                "Writes report.html, analysis.md, every figure as PNG, SVG and CSV, tables, captions, resolved data and the project file to a new folder.",
+                                "Publish the current report to a new folder, preserving previous exports. Includes report.html, analysis.md, PNG/SVG/CSV figures, tables, captions, resolved data and the project file.",
                             ),
                             ready,
                         )
@@ -459,10 +465,15 @@ impl StudioApp {
                                 .text_ellipsis()
                                 .text_size(px(11.))
                                 .text_color(t.text_muted)
-                                .child(format!("Published to {}", folder.display())),
+                                .child(if changed {
+                                    format!("Changes since last publish · {}", self.publish.published_at.as_deref().unwrap_or(""))
+                                } else {
+                                    format!("Published {} · {}", self.publish.published_at.as_deref().unwrap_or(""), folder.display())
+                                })
+                                .when(changed, |d| d.text_color(t.warn)),
                         )
                         .child(
-                            button(&t, "open-report", "Open report", false)
+                            button(&t, "open-report", "Open last published report", false)
                                 .on_click(cx.listener(move |_, _, _, cx| cx.open_url(&url))),
                         )
                         .child(
@@ -619,6 +630,55 @@ impl StudioApp {
                 );
             }
             controls = controls.child(presets);
+            controls = controls.child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child("Editing this figure type · all report spectra"),
+            );
+            controls = controls.child(
+                div()
+                    .mt_1()
+                    .flex()
+                    .flex_wrap()
+                    .gap_1()
+                    .child(
+                        with_tip(
+                            button(
+                                &t,
+                                "publication-apply-style",
+                                "Apply style to all figures",
+                                false,
+                            ),
+                            &t,
+                            "Copy size, DPI, font size, line width, legend, grid and guides from this figure to every figure in the report.",
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let keys: Vec<&'static str> =
+                                this.publish.figures.iter().map(|f| f.key).collect();
+                            if let Some(source) =
+                                this.publish.figures.get(this.publish.selected).map(|f| f.key)
+                            {
+                                this.publish.settings.apply_style_to_all(source, keys);
+                            }
+                            cx.notify();
+                        })),
+                    )
+                    .child(
+                        with_tip(
+                            button(&t, "publication-reset", "Reset", false),
+                            &t,
+                            "Return this figure type to its defaults. Figure settings are saved with the project and used for every spectrum in the report.",
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(f) = this.publish.figures.get(this.publish.selected) {
+                                this.publish.settings.figures.remove(f.key);
+                            }
+                            this.publication_fields(cx);
+                            this.refresh_publication_preview(cx);
+                        })),
+                    ),
+            );
             for field in self.publish.numbers.iter().take(5) {
                 controls = controls.child(field.clone());
             }
@@ -726,49 +786,6 @@ impl StudioApp {
                 }
                 controls = controls.child(curves);
             }
-            controls = controls.child(
-                div()
-                    .mt_1()
-                    .flex()
-                    .flex_wrap()
-                    .gap_1()
-                    .child(
-                        with_tip(
-                            button(
-                                &t,
-                                "publication-apply-style",
-                                "Apply style to all figures",
-                                false,
-                            ),
-                            &t,
-                            "Copy size, DPI, font size, line width, legend, grid and guides from this figure to every figure in the report.",
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            let keys: Vec<&'static str> =
-                                this.publish.figures.iter().map(|f| f.key).collect();
-                            if let Some(source) =
-                                this.publish.figures.get(this.publish.selected).map(|f| f.key)
-                            {
-                                this.publish.settings.apply_style_to_all(source, keys);
-                            }
-                            cx.notify();
-                        })),
-                    )
-                    .child(
-                        with_tip(
-                            button(&t, "publication-reset", "Reset", false),
-                            &t,
-                            "Return this figure type to its defaults. Figure settings are saved with the project and used for every spectrum in the report.",
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            if let Some(f) = this.publish.figures.get(this.publish.selected) {
-                                this.publish.settings.figures.remove(f.key);
-                            }
-                            this.publication_fields(cx);
-                            this.refresh_publication_preview(cx);
-                        })),
-                    ),
-            );
         }
         controls = controls.child(
             disclosure(

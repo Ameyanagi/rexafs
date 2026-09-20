@@ -1,4 +1,4 @@
-//! Heatmap controls keep fixed positions; their menus overlay the workspace.
+//! Heatmap controls wrap to fit the card; their menus overlay the workspace.
 use super::*;
 use crate::app::series_display::HeatmapPalette;
 use crate::widgets::numeric_field::{FieldKind, NumericField};
@@ -56,7 +56,8 @@ impl StudioApp {
             .or(self.series_display.pending_frame);
         div()
             .flex()
-            .flex_none()
+            .flex_wrap()
+            .min_w_0()
             .items_center()
             .gap_1()
             .child(

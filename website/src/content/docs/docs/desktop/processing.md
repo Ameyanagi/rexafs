@@ -23,6 +23,14 @@ defaults. Copying all processing settings does not also copy column mappings or
 reference calibration; copying a column mapping is a separate guarded action.
 An Auto request is copied as Auto, so its resolved value can differ by spectrum.
 
+In the unreleased desktop, automatic values appear below their input boxes, with
+units, so the full value or range description remains readable. Invalid numeric
+input stays editable and shows an explanation beside the field. The last
+committed value remains in use until a valid entry is committed. Choose
+**Restore previous value** to cancel the edit, or **Use Auto** when an automatic
+value is available. This behavior is shared by the
+[numeric field widget](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/widgets/numeric_field.rs).
+
 ## Alignment
 
 In **Data → Align to reference**, choose a standard. The preview shows dμ/dE

@@ -217,10 +217,6 @@ impl TextInput {
         &self.content
     }
 
-    pub fn placeholder_text(&self) -> &str {
-        &self.placeholder
-    }
-
     pub fn set_text(&mut self, text: impl Into<SharedString>, cx: &mut Context<Self>) {
         self.content = text.into();
         if self.style.multiline {
