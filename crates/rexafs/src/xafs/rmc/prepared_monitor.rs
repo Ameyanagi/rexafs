@@ -6,7 +6,7 @@ use std::sync::{
     Arc, Mutex,
 };
 
-/// Unreleased: current prepared-scattering operation. A stage is not a percentage.
+/// Since 0.2.12: current prepared-scattering operation. A stage is not a percentage.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PreparedStage {
     /// No calculation is currently in progress.
@@ -20,7 +20,7 @@ pub enum PreparedStage {
     Scattering,
 }
 
-/// Unreleased: inexpensive progress snapshot for another thread to display.
+/// Since 0.2.12: inexpensive progress snapshot for another thread to display.
 /// Counters can advance during an attempted move that is later rejected or fails.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct PreparedProgress {
@@ -43,7 +43,7 @@ struct Inner {
     progress: Mutex<PreparedProgress>,
 }
 
-/// Unreleased: thread-safe progress and cache-budget handle. Read [`Self::snapshot`]
+/// Since 0.2.12: thread-safe progress and cache-budget handle. Read [`Self::snapshot`]
 /// periodically; it never runs scattering. Set [`Self::set_cache_bytes`] to adjust
 /// memory without changing spectra, random streams, or checkpoint identity.
 #[derive(Clone)]

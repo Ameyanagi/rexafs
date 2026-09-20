@@ -94,7 +94,7 @@ pub fn distance_distribution(
     })
 }
 
-/// Unreleased radial distribution with an explicit normalization convention.
+/// Radial distribution (since 0.2.12) with an explicit normalization convention.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RadialDistribution {
     /// Raw neighbors per center per bin and moments over the supplied interval.
@@ -108,7 +108,7 @@ pub struct RadialDistribution {
     pub independent_radius: Option<f64>,
 }
 
-/// Unreleased: compute a species-resolved radial distribution around explicit
+/// Since 0.2.12: compute a species-resolved radial distribution around explicit
 /// centers. Inputs and self exclusion follow [`distance_distribution`].
 ///
 /// Periodic cells use `g_i = H_i / (rho * V_i)`, where H_i is the neighbor count

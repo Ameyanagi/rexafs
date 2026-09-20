@@ -1,4 +1,4 @@
-//! Unreleased desktop cache policy. These are resource heuristics, not physics.
+//! Desktop cache policy introduced in 0.2.12. These are resource heuristics, not physics.
 use serde::{Deserialize, Serialize};
 
 pub const MIB: usize = 1024 * 1024;
