@@ -1,5 +1,5 @@
 use super::*;
-use rand::Rng;
+use rand::RngExt;
 
 /// Predetermined numerical tolerance schedule, indexed by completed attempts.
 /// This is optimizer annealing, not a physical temperature or equilibrium
@@ -159,7 +159,7 @@ impl ProposalSettings {
         movable: &[(usize, usize)],
         scale: f64,
         multiplier: f64,
-        rng: &mut impl Rng,
+        rng: &mut impl RngExt,
     ) -> EnsembleMove {
         let selected = if self.elements.is_empty() && self.collective.is_empty() {
             Some(movable[rng.random_range(0..movable.len())])

@@ -14,6 +14,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      rmc-random-streams:
+        # These crates share traits and persisted RMC random-stream state.
+        patterns: ["rand", "rand_chacha"]
     ignore:
       # Published levenberg-marquardt 0.15 exposes nalgebra 0.34 types.
       # Revisit this exclusion when a compatible solver release is published.
@@ -31,3 +35,6 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Preserve the recorded Cu-mixture experiment; its generator requires 0.2.8.
+    exclude-paths:
+      - scripts/cu-mixtures-requirements.txt
