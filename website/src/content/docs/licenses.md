@@ -44,6 +44,27 @@ numerical changes from the XrayLarch example collection at revision
 
 ## Documentation screenshots
 
+<span id="desktop-0212-candidate-captures"></span>
+
+### 0.2.12 candidate controls
+
+The images in `screenshots/next/0.2.12/` are full, unedited computer-use captures
+from the optimized source candidate containing PRs #103–#106, captured on
+20 September 2026. They are not captures of a published signed 0.2.12 package.
+The [manifest](/screenshots/next/0.2.12/capture.json) records the source identity,
+executable and input hashes, dimensions and scope. No images were cropped,
+resized, annotated or replaced with simulated plots.
+
+Publication and normalization show the bundled Cu measurement described above.
+The surrounding copied review project includes explicitly labeled synthetic
+groups. Structural plots reopen a four-generation synthetic finite Cu–O hybrid
+checkpoint. Those neighbor counts illustrate the controls; they are not bulk
+g(r), an experimental fit, physical time or evidence of convergence. The active
+Cu spectrum differs from the saved synthetic problem, so the app correctly
+displays its saved-input warning. The source measurements were not changed or
+newly redistributed for these captures. Earlier release captures retain their
+original provenance below.
+
 <a id="desktop-0211-workflow-captures"></a>
 
 ### Desktop 0.2.11 workflow captures

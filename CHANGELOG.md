@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.2.12 (release preparation)
+
+- RMC: choose cache memory and catalogue capacity from available memory; expose
+  manual limits, preparation progress and repeated-cache-miss warnings.
+- RMC: add element-pair structural overlays, distance/step heatmaps,
+  coordination and distance histories with checkpoint and CSV/JSON export.
+- RMC: expose genetic and hybrid EA–RMC search with saved population recovery.
+- Series: add one-based frame navigation and responsive stacked plots.
+- Numeric controls: show resolved Auto values and recoverable validation errors.
 - Publish: one **Publish report…** action writes the complete analysis folder,
   followed by **Open report** and **Show folder**; per-figure PNG/SVG/CSV saves
   sit beside the preview; add Single column / Double column / Slide presets and
@@ -21,14 +30,13 @@
 - Plots and Series: integer frame and component ticks, grouped Transform toolbar,
   a first-run range-handle hint, and a one-line Series definition.
 
-## 0.2.12 (release preparation)
-
 - Preserve the complete signed macOS app bundle when launching the update
   helper, correcting the startup failure in 0.2.10 and 0.2.11.
 - Keep **Update and restart** available after a download completes on macOS,
   Windows and Linux, with a reason when the installation cannot be updated.
 - Qualify the Mac helper from both signed ZIP and installed DMG outputs.
-- Refresh desktop documentation with 29 unedited 0.2.11 workflow captures.
+- Refresh desktop documentation and screenshots with explicit build and input
+  provenance; retain historical signed 0.2.11 workflow captures.
 
 See the [release notes](doc/release-notes-0.2.12.md) and
 [qualification record](doc/validation/2026-09-19-release-0.2.12/review.md).

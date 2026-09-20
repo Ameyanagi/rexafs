@@ -1,0 +1,61 @@
+{
+  "captured_utc": "2026-09-20T10:21:09.223409+00:00",
+  "version": "0.2.12 source candidate",
+  "source_commit": "d1fe38f0ae36cd2fa8d69e518ae5ab3fbcc22099",
+  "equivalent_dev_tree": "6b1af79c568472af8d2ee3b7bad5033e970dbcd2",
+  "distribution": "Local optimized build; ad hoc signed isolated capture bundle, not the final signed release.",
+  "executable_sha256": "b41e0d87e2dc56913599b39deba3b2deeb99452a5e924202f6ec206da3004849",
+  "capture": {
+    "method": "Computer Use get_app_state native window image bytes",
+    "edited": false,
+    "window_points": [
+      1192,
+      768
+    ],
+    "scope": "No cropping, resizing, annotations or replacement plots; independent app with copied project and settings."
+  },
+  "input": {
+    "project": "Synthetic structural-review.rxs from desktop follow-up qualification",
+    "sha256": "4612af0767387d3869969c4d62a34b3c2808ebefa940dd60b699abd0bfdd1f9f",
+    "experimental_source": "Bundled XrayLarch cu_150k.xmu; see /licenses/#cu-example",
+    "structural_source": "Synthetic finite two-atom Cu-O hybrid checkpoint with four completed generations; not an experimental fit.",
+    "scope": "Saved-input mismatch and invalid new-run draft are shown without changing the saved calculation. No optimization started during capture."
+  },
+  "images": [
+    {
+      "file": "numeric-auto.jpg",
+      "sha256": "dc393cf109daaa9d2da7c9f321189db94baaf26101210c3a40970b394f249309",
+      "bytes": 138508,
+      "width": 1192,
+      "height": 768
+    },
+    {
+      "file": "publication.jpg",
+      "sha256": "ac1384096c8d2ef9a800baf032e9353b0b585c0d60e2ad882c2c410edbad9d6f",
+      "bytes": 130039,
+      "width": 1192,
+      "height": 768
+    },
+    {
+      "file": "rmc-search-memory.jpg",
+      "sha256": "468fa42504cde9037d65284999fc4bca6cdeb69a2c173c1bebea75c2e9350e6b",
+      "bytes": 102823,
+      "width": 1192,
+      "height": 768
+    },
+    {
+      "file": "structural-heatmap.jpg",
+      "sha256": "3e1b4b006a5ea9513d6ac769f39515b781a9b7e9e89809bf4b1d8b046093d58f",
+      "bytes": 117378,
+      "width": 1192,
+      "height": 768
+    },
+    {
+      "file": "structural-overlays.jpg",
+      "sha256": "9018f350074792d856548f97c6e6c4276c0dc283c28be9390ba16eea2d311cc7",
+      "bytes": 114571,
+      "width": 1192,
+      "height": 768
+    }
+  ]
+}

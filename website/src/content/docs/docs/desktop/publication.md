@@ -31,13 +31,22 @@ The separate batch-results table contains fitted values and reported errors.
 
 ## Figure size and content
 
-The **Single column**, **Double column** and **Slide** presets set size,
+In the 0.2.12 candidate, three compact icons represent **Single column**,
+**Double column** and **Slide**; hover to see the preset name and dimensions.
+The selected preset remains highlighted, and each icon retains an accessible
+name. These presets set size,
 resolution and font (rexafs choices, not journal specifications), and **Apply
 style to all figures** copies the selected figure's style to every figure type.
 In the unreleased editor, that action sits beside the presets. The scope label
 explains that edits apply to the selected figure type across the report's spectra.
 Copying style preserves each figure's axis limits, labels, captions and curve
 visibility; see [FigureSettings](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures.rs).
+
+[![Publication editor with three compact preset icons, per-figure saves and Publish report](/screenshots/next/0.2.12/publication.jpg)](/screenshots/next/0.2.12/publication.jpg)
+
+*Full unedited 0.2.12 source-candidate window using the bundled Cu example.
+[Build and input provenance](/licenses/#desktop-0212-candidate-captures).*
+
 Blank size controls use ruviz's 6.4 × 4.8 inch canvas. rexafs explicitly sets the
 default raster resolution to **300 DPI**, producing **1920 × 1440 pixels**.
 Width and height use inches; font and line widths use points. Set DPI to the

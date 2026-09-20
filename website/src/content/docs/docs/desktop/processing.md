@@ -31,6 +31,12 @@ committed value remains in use until a valid entry is committed. Choose
 value is available. This behavior is shared by the
 [numeric field widget](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/widgets/numeric_field.rs).
 
+[![Normalization controls with full automatic values displayed below their fields](/screenshots/next/0.2.12/numeric-auto.jpg)](/screenshots/next/0.2.12/numeric-auto.jpg)
+
+*0.2.12 source candidate: automatic range values remain readable beside the
+bundled Cu example. Full unedited window;
+[capture provenance](/licenses/#desktop-0212-candidate-captures).*
+
 ## Alignment
 
 In **Data → Align to reference**, choose a standard. The preview shows dμ/dE
