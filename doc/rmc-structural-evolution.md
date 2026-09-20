@@ -1,6 +1,6 @@
 # Adaptive memory and structural evolution in desktop RMC
 
-These features are included in the **0.2.12 release candidate**. They extend the
+These features are included in the **0.2.12 release**. They extend the
 [0.2.11 desktop workflow](rmc-desktop-workflow.md) without changing the exact
 scattering model. Historical checkpoints keep their scientific settings.
 

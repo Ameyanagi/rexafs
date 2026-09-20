@@ -2,7 +2,7 @@
 
 Open **Publish** after processing a spectrum or completing a fit. The header
 names the report scope (the current group, the marked groups and the recorded
-fits). **Publish report…** (unreleased; the 0.2.11 control is a format selector
+fits). **Publish report…** (since 0.2.12; the 0.2.11 control is a format selector
 with **Export…**) writes the complete analysis folder described in
 [publication export](publication-export.md): `report.html`, the analysis record,
 every figure as PNG, SVG and CSV, tables, captions, resolved data and the

@@ -1,6 +1,6 @@
 # Desktop updates and release channels
 
-## Next desktop build (unreleased)
+## Update and restart (0.2.12)
 
 On macOS, Windows and Linux, **Update and restart** downloads the selected
 current-channel release, verifies its SHA-256 and size, checks the architecture
@@ -46,11 +46,16 @@ No administrator helper is installed. Source builds, read-only disk images,
 translocated apps, unwritable folders and channel changes retain manual
 installation. System-managed Linux installations should use their package
 manager. Automatic updates require a published matching asset; nightlies that
-publish only macOS assets do not offer a Windows/Linux update. Install 0.2.8
-once using the existing manual workflow; its updater handles subsequent releases.
-Released versions through 0.2.7 behave as below.
+publish only macOS assets do not offer a Windows/Linux update. From 0.2.12,
+macOS releases require Apple Silicon. The signed 0.2.10/0.2.11 Mac helper cannot
+start because it loses its bundle layout: install 0.2.12 manually once. The
+corrected helper retains the full signed bundle and is checked in both signed
+ZIP and installed-DMG qualification. Intel Mac users can retain 0.2.11.
 
-## Released download workflow
+Desktop versions through 0.2.7 need one manual installation to acquire the updater;
+their historical download workflow is described below.
+
+## Historical download workflow (through 0.2.7)
 
 Open **Help → Updates**, or search for **Check for updates** with Cmd+K
 on macOS or Ctrl+K on Windows/Linux.

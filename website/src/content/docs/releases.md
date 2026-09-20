@@ -8,10 +8,12 @@ Published changes and migration notes are listed below. Back up projects before
 updating. Source-checkout APIs are documented in the [Next API
 reference](/docs/reference/).
 
-## Preparing 0.2.12
+<span id="preparing-0212"></span>
 
-The next release is being checked; the download page continues to identify the
-published stable version until package and desktop verification completes.
+## Stable 0.2.12
+
+[Download 0.2.12](/download/) or read the
+[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.12).
 
 - Apple Silicon only on macOS for desktop downloads and Python wheels. Version
   0.2.11 remains the last Intel Mac release; new nightlies also require Apple Silicon.
@@ -23,13 +25,21 @@ published stable version until package and desktop verification completes.
 - The signed macOS updater-helper correction. Affected 0.2.10/0.2.11 Mac apps
   require one manual installation of the corrected app before later in-app updates.
 
-See the [new RMC controls](/docs/desktop/rmc/#new-in-the-0212-release-candidate)
+See the [new RMC controls](/docs/desktop/rmc/#new-in-0212)
 and [publication workflow](/docs/desktop/publication/). Windows and Linux remain
 desktop previews. Short software checks do not establish RMC convergence.
 
-## Stable 0.2.11
+All package channels share version 0.2.12. Mac downloads are signed and notarized.
+Historical projects retain their scientific settings; the file format remains 1.
+The [release notes](https://github.com/Ameyanagi/rexafs/blob/main/doc/release-notes-0.2.12.md)
+and [qualification record](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-09-19-release-0.2.12/review.md)
+identify the immutable source, build and public packages.
 
-[Download 0.2.11](/download/) or read the
+<span id="stable-0211"></span>
+
+## Previous stable 0.2.11
+
+[Download 0.2.11](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.11) or read the
 [published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.11).
 
 - [RMC fitting](/docs/desktop/rmc/) inherits Transform ranges and expands theory
@@ -183,7 +193,7 @@ was not promoted. Version 0.2.9 includes those updater and import-discovery chan
   browser Worker, with generated FEFF files and a provenance record.
 
 These follow website deployment, separately from the versioned npm API. Native
-rexafs 0.2.11 also uses ReFEFF 0.4.0. See [WASM scope](/docs/libraries/webassembly/).
+rexafs 0.2.12 also uses ReFEFF 0.4.0. See [WASM scope](/docs/libraries/webassembly/).
 
 ## Earlier releases
 

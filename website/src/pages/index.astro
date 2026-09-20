@@ -5,10 +5,10 @@ import release from '../data/release.json';
 const canonical=new URL(url(),Astro.site).href;
 const ogImage=new URL(url('brand/rexafs-og.jpg'),Astro.site).href;
 const tour=[
-  ['polynomial','Normalize','Check the baseline fits against your measured spectrum.','docs/getting-started/first-analysis/#2-inspect-normalization'],
-  ['background','Background','Adjust background removal and inspect the resulting oscillations.','docs/desktop/processing/#background'],
-  ['paths','Structures and paths','Choose scattering paths beside the 3D atomic cluster.','docs/desktop/structures/'],
-  ['publication','Publish','Export figures, data and a complete analysis folder.','docs/desktop/publication/'],
+  ['0.2.11','polynomial','Normalize','Check the baseline fits against your measured spectrum.','docs/getting-started/first-analysis/#2-inspect-normalization'],
+  ['0.2.11','background','Background','Adjust background removal and inspect the resulting oscillations.','docs/desktop/processing/#background'],
+  ['0.2.11','paths','Structures and paths','Choose scattering paths beside the 3D atomic cluster.','docs/desktop/structures/'],
+  ['0.2.12','publication','Publish','Export figures, data and a complete analysis folder.','docs/desktop/publication/'],
 ];
 ---
 <!doctype html>
@@ -63,9 +63,9 @@ const tour=[
   </section>
 
   <section class="tour" aria-labelledby="tour-title">
-    <div class="section-intro"><p class="eyebrow">A LOOK INSIDE</p><h2 id="tour-title">Explore the desktop.</h2><p>rexafs 0.2.11 on macOS, using a public Cu foil measurement. Each screenshot opens its guide.</p></div>
+    <div class="section-intro"><p class="eyebrow">A LOOK INSIDE</p><h2 id="tour-title">Explore the desktop.</h2><p>Signed macOS releases using a public Cu foil measurement. Each screenshot opens its guide and identifies its version.</p></div>
     <div class="tour-grid">
-      {tour.map(([file,title,text,href])=><figure><a href={url(href)}><img src={url(`screenshots/0.2.11/${file}.jpg`)} width="1192" height="768" loading="lazy" alt={`Complete rexafs 0.2.11 window at the ${title} stage`}/></a><figcaption><strong>{title}</strong><span>{text}</span></figcaption></figure>)}
+      {tour.map(([version,file,title,text,href])=><figure><a href={url(href)}><img src={url(`screenshots/${version}/${file}.jpg`)} width="1192" height="768" loading="lazy" alt={`Complete rexafs ${version} window at the ${title} stage`}/></a><figcaption><strong>{title}</strong><span>{text} · {version}</span></figcaption></figure>)}
     </div>
   </section>
 

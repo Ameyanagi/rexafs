@@ -4,8 +4,8 @@ description: "Use normalization, AUTOBK, forward and inverse transforms."
 audience: user
 ---
 
-This guide describes **rexafs 0.2.11**. The screenshots show the signed 0.2.11 macOS
-release, captured through computer use with a public Cu measurement. They are
+This guide describes **rexafs 0.2.12**. Screenshots identify the version that
+produced them and use public Cu measurements. They are
 full, unedited windows; select an image for full resolution. See
 [capture provenance](/licenses/#desktop-0211-workflow-captures) and
 [available downloads](/docs/getting-started/install/).
@@ -23,19 +23,19 @@ defaults. Copying all processing settings does not also copy column mappings or
 reference calibration; copying a column mapping is a separate guarded action.
 An Auto request is copied as Auto, so its resolved value can differ by spectrum.
 
-In the unreleased desktop, automatic values appear below their input boxes, with
+Since 0.2.12, automatic values appear below their input boxes, with
 units, so the full value or range description remains readable. Invalid numeric
 input stays editable and shows an explanation beside the field. The last
 committed value remains in use until a valid entry is committed. Choose
 **Restore previous value** to cancel the edit, or **Use Auto** when an automatic
 value is available. This behavior is shared by the
-[numeric field widget](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/widgets/numeric_field.rs).
+[numeric field widget](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/crates/rexafs-gui/src/widgets/numeric_field.rs).
 
-[![Normalization controls with full automatic values displayed below their fields](/screenshots/next/0.2.12/numeric-auto.jpg)](/screenshots/next/0.2.12/numeric-auto.jpg)
+[![Normalization controls with full automatic values displayed below their fields](/screenshots/0.2.12/numeric-auto.jpg)](/screenshots/0.2.12/numeric-auto.jpg)
 
-*0.2.12 source candidate: automatic range values remain readable beside the
-bundled Cu example. Full unedited window;
-[capture provenance](/licenses/#desktop-0212-candidate-captures).*
+*Signed 0.2.12 release: automatic range values remain readable below their fields.
+This full unedited window uses the public room-temperature Cu measurement;
+[capture provenance](/licenses/#desktop-0212-release-captures).*
 
 ## Alignment
 
@@ -126,7 +126,7 @@ the pre-edge line and divides by the edge step; **flat** also removes the fitted
 post-edge trend. Inspect the curve rather than treating automatic settings as
 proof of a valid baseline.
 
-Blank fields select Auto; placeholders show the resolved values. New
+Blank fields select Auto; resolved values appear below the input boxes. New
 desktop analyses start with these choices:
 
 | Setting | Starting value |

@@ -44,6 +44,30 @@ numerical changes from the XrayLarch example collection at revision
 
 ## Documentation screenshots
 
+<span id="desktop-0212-release-captures"></span>
+
+### Desktop 0.2.12 release captures
+
+The eight images in `screenshots/0.2.12/` are full, unedited **1192 × 768**
+computer-use windows from the signed and notarized Apple Silicon **0.2.12**
+release installed from its DMG on 20 September 2026. The
+[capture manifest](/screenshots/0.2.12/capture.json) records source, signing,
+artifact, executable, input and image identities. No cropping, resizing or
+replacement plots were applied.
+
+All views use the unchanged public room-temperature Cu measurement from the
+[X-ray Absorption Data Library](https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi),
+released under [CC0-1.0](https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst).
+Attribution: International X-ray Absorption Society and the credited data
+contributors. RMC uses the built-in fcc Cu structure with 32 periodic sites and
+ten attempts, fixed S₀² = 1 and ΔE₀ = 0 eV. It is a fresh software and persistence
+check with amplitude mismatch remaining, not a calibrated or converged fit.
+The Cu–Cu curves use periodic density and shell normalization; variance is not
+uncertainty. No private measurement project is included.
+
+The earlier source-candidate and historical release captures below retain
+their original provenance.
+
 <span id="desktop-0212-candidate-captures"></span>
 
 ### 0.2.12 candidate controls
