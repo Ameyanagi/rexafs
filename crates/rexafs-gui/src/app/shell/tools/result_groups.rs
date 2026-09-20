@@ -221,7 +221,12 @@ impl StudioApp {
         }
         self.group_registry.append_derived(&self.derived, first);
         self.rekey_after_catalog_change();
-        self.tools.message=format!("Added {count} calculated groups with analysis metadata. Mark them with references to compare.").into();
+        self.tools.message = format!(
+            "Added {} calculated {} with analysis metadata. Mark them with references to compare.",
+            count,
+            crate::text::noun_for(count, "group")
+        )
+        .into();
         cx.notify();
     }
 }

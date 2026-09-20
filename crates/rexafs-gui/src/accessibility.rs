@@ -15,7 +15,7 @@ use gpui::{
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
     rc::Rc,
@@ -344,7 +344,9 @@ pub(crate) struct Control {
     role: Role,
     selected: Option<bool>,
     expanded: Option<bool>,
-    disabled: bool,
+    /// Shared with the mouse click handler so `.disabled(true)` silences it
+    /// whichever order the builder calls arrive in.
+    disabled: Rc<Cell<bool>>,
     focus: Option<FocusHandle>,
     click: Option<Click>,
     request: Option<Request>,
@@ -363,7 +365,7 @@ impl Control {
             role,
             selected: None,
             expanded: None,
-            disabled: false,
+            disabled: Rc::new(Cell::new(false)),
             focus: None,
             click: None,
             request: None,
@@ -393,8 +395,10 @@ impl Control {
         self.expanded = Some(value);
         self
     }
-    pub(crate) fn disabled(mut self, value: bool) -> Self {
-        self.disabled = value;
+    /// A disabled control ignores mouse clicks and drops its native actions;
+    /// callers still grey it out themselves.
+    pub(crate) fn disabled(self, value: bool) -> Self {
+        self.disabled.set(value);
         self
     }
     pub(crate) fn modal(mut self) -> Self {
@@ -437,9 +441,12 @@ impl Control {
     ) -> Self {
         let listener: Click = Rc::new(listener);
         self.click = Some(listener.clone());
-        self.inner = self
-            .inner
-            .on_click(move |event, window, cx| listener(event, window, cx));
+        let disabled = self.disabled.clone();
+        self.inner = self.inner.on_click(move |event, window, cx| {
+            if !disabled.get() {
+                listener(event, window, cx)
+            }
+        });
         self
     }
 }
@@ -486,7 +493,7 @@ impl Element for Control {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        if !self.disabled
+        if !self.disabled.get()
             && matches!(
                 self.role,
                 Role::Button
@@ -518,7 +525,7 @@ impl Element for Control {
                     std::mem::replace(&mut self.inner, div().id("accessibility-placeholder"));
                 self.inner = inner.track_focus(&focus).tab_index(0);
             }
-        } else if self.disabled {
+        } else if self.disabled.get() {
             let inner = std::mem::replace(&mut self.inner, div().id("accessibility-placeholder"));
             self.inner = inner.tab_stop(false);
         }
@@ -572,7 +579,8 @@ impl Element for Control {
             if let Some(expanded) = self.expanded {
                 node.set_expanded(expanded);
             }
-            if self.disabled {
+            let disabled = self.disabled.get();
+            if disabled {
                 node.set_disabled();
             } else {
                 if self.focus.is_some() {
@@ -592,9 +600,9 @@ impl Element for Control {
             let mut state = state.borrow_mut();
             let parent = *state.parents.last().unwrap_or(&ROOT);
             let handler = Handler {
-                focus: self.focus.clone().filter(|_| !self.disabled),
-                click: self.click.clone().filter(|_| !self.disabled),
-                request: self.request.clone().filter(|_| !self.disabled),
+                focus: self.focus.clone().filter(|_| !disabled),
+                click: self.click.clone().filter(|_| !disabled),
+                request: self.request.clone().filter(|_| !disabled),
                 bounds,
                 expanded: self.expanded,
             };

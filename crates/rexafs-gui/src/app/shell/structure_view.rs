@@ -33,6 +33,7 @@ use crate::structure::{
     Cluster, PathGeometry, SourceConfig, StructureHit, StructureSourceKind, StructureSummary,
     cpk_color, import_cif, load_cluster, load_path_geometry, normalise_importance, provider_for,
 };
+use crate::text::plural;
 use crate::theme::Theme;
 use crate::widgets::text_input::{InputEvent, InputStyle, TextInput};
 use gpui::PathPromptOptions;
@@ -1278,9 +1279,9 @@ impl StudioApp {
         if self.viewing_candidate() {
             let c = self.structure.preview_cluster.as_ref()?;
             return Some(format!(
-                "Preview: {} atoms · {} shells · {:.1} Å cutoff",
-                c.atoms.len(),
-                c.shells.len().saturating_sub(1),
+                "Preview: {} · {} · {:.1} Å cutoff",
+                plural(c.atoms.len(), "atom"),
+                plural(c.shells.len().saturating_sub(1), "shell"),
                 self.structure.preview_radius
             ));
         }
@@ -1296,15 +1297,15 @@ impl StudioApp {
             })
             .unwrap_or_default();
         Some(format!(
-            "cluster: {} atoms · {} shells within {:.1} Å{}{}",
-            c.atoms.len(),
-            shells.len().saturating_sub(1),
+            "Cluster: {} · {} within {:.1} Å{}{}",
+            plural(c.atoms.len(), "atom"),
+            plural(shells.len().saturating_sub(1), "shell"),
             c.radius,
             nearest,
             if c.warnings.is_empty() {
                 String::new()
             } else {
-                format!(" · {} warning(s)", c.warnings.len())
+                format!(" · {}", plural(c.warnings.len(), "warning"))
             }
         ))
     }
@@ -1346,6 +1347,15 @@ impl StudioApp {
                         .overflow_hidden()
                         .child(self.molecule_canvas(cx))
                         .child(self.structure_legend(cluster))
+                        .child(
+                            div()
+                                .absolute()
+                                .bottom_2()
+                                .right_3()
+                                .text_size(px(11.))
+                                .text_color(t.text_muted)
+                                .child("Drag rotates · scroll zooms"),
+                        )
                         .children(self.structure_pick_card(cluster)),
                 );
                 if self.structure.show_shell_hist
@@ -1904,14 +1914,33 @@ impl StudioApp {
                         )),
                     )
                     .child(div().flex_1())
-                    .child(
-                        div()
-                            .text_size(px(11.))
-                            .text_color(t.text_muted)
-                            .whitespace_nowrap()
-                            .child("Drag rotates · wheel zooms · click inspects"),
-                    ),
+                    .when(self.structure.depth.options.depth_cue, |d| {
+                        d.child(self.depth_cue_key())
+                    }),
             )
+    }
+
+    /// Legend for the depth cue: dot shades from the farthest to the nearest
+    /// atom. Shown in the display popup rather than over the canvas.
+    fn depth_cue_key(&self) -> impl IntoElement + use<> {
+        let t = self.theme;
+        let mut key = div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .text_size(px(11.))
+            .text_color(t.text_muted)
+            .whitespace_nowrap()
+            .child("Depth: back");
+        for fog in [0.72, 0.54, 0.36, 0.18, 0.] {
+            key = key.child(
+                div()
+                    .size(px(7.))
+                    .rounded_full()
+                    .bg(super::molecule_view::depth_cue_color(t.text, t.raised, fog)),
+            );
+        }
+        key.child("front · follows rotation")
     }
 
     fn structure_legend(&self, cluster: &Cluster) -> impl IntoElement + use<> {
@@ -1961,18 +1990,6 @@ impl StudioApp {
         legend = legend.child(swatches);
         if let Some(frame) = self.structure_depth_frame() {
             use super::structure_depth::{FadeMode, SliceMode};
-            if frame.options.depth_cue {
-                let mut key = div().flex().items_center().gap_1().child("Depth: back");
-                for fog in [0.72, 0.54, 0.36, 0.18, 0.] {
-                    key = key.child(
-                        div()
-                            .size(px(7.))
-                            .rounded_full()
-                            .bg(super::molecule_view::depth_cue_color(t.text, t.raised, fog)),
-                    );
-                }
-                legend = legend.child(key.child("front · follows rotation"));
-            }
             if frame.options.slice != SliceMode::Off {
                 let [lo, hi] = frame.limits();
                 let counts = self
@@ -2049,9 +2066,9 @@ impl StudioApp {
                 AtomStyle::BallStick | AtomStyle::Wireframe
             ) {
                 legend = legend.child(format!(
-                    "{} · {} displayed bonds",
+                    "{} · {}",
                     self.structure.bond_mode.label(),
-                    scene.bonds.len()
+                    plural(scene.bonds.len(), "displayed bond")
                 ));
             }
             if self.structure.highlight_absorber
@@ -2080,9 +2097,9 @@ impl StudioApp {
             if self.structure.molecule_only && scene.message.is_none() {
                 legend = legend
                     .child(format!(
-                        "Complete molecule · {} displayed atoms · {} bonds",
-                        scene.atoms.len(),
-                        scene.bonds.len()
+                        "Complete molecule · {} · {}",
+                        plural(scene.atoms.len(), "displayed atom"),
+                        plural(scene.bonds.len(), "bond")
                     ))
                     .child("Hydrogen display does not change the FEFF cluster.");
             }
@@ -2096,9 +2113,9 @@ impl StudioApp {
             }
         }
         legend.child(div().mt_1().child(SharedString::from(format!(
-            "FEFF cluster · {} atoms · {} shells · {} {:.1} Å",
-            cluster.atoms.len(),
-            cluster.shells.len().saturating_sub(1),
+            "FEFF cluster · {} · {} · {} {:.1} Å",
+            plural(cluster.atoms.len(), "atom"),
+            plural(cluster.shells.len().saturating_sub(1), "shell"),
             if context.is_some() { "cutoff" } else { "outermost atom" },
             self.structure.scene.as_ref().map(|s|s.radius).unwrap_or(0.)
         ))))
@@ -2189,7 +2206,7 @@ impl StudioApp {
 
     // ---- inspector: structure panel ------------------------------------------
 
-    fn spectrum_interest(&self) -> Option<crate::spectrum_interest::SpectrumInterest> {
+    pub(crate) fn spectrum_interest(&self) -> Option<crate::spectrum_interest::SpectrumInterest> {
         let header = self.import_preview.as_ref().and_then(|p| p.xdi.as_ref());
         let e0 = (self.spectrum_path == self.current_path)
             .then(|| self.spectrum.as_ref().and_then(|s| s.e0()))
@@ -2292,6 +2309,7 @@ impl StudioApp {
                         .child(
                             div()
                                 .flex()
+                                .flex_none()
                                 .flex_wrap()
                                 .gap_1()
                                 .child(
@@ -2324,7 +2342,7 @@ impl StudioApp {
                                 ),
                         );
                 }
-                let mut categories = div().flex().flex_wrap().gap_1();
+                let mut categories = div().flex().flex_none().flex_wrap().gap_1();
                 for (category, label) in [
                     (None, "All types"),
                     (Some("metal"), "Metals"),
@@ -2606,7 +2624,7 @@ impl StudioApp {
                                 .rounded_sm()
                                 .border_1()
                                 .border_color(t.border)
-                                .text_size(px(10.))
+                                .text_size(px(11.))
                                 .text_color(t.text_muted)
                                 .child(hit.source.badge()),
                         ),
@@ -2624,7 +2642,7 @@ impl StudioApp {
             }
             panel = panel.child(list).child(
                 div()
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
                     .child(SharedString::from(count)),
             );
@@ -2746,7 +2764,7 @@ impl StudioApp {
                                     .rounded_sm()
                                     .border_1()
                                     .border_color(t.border)
-                                    .text_size(px(10.))
+                                    .text_size(px(11.))
                                     .text_color(t.text_muted)
                                     .child(s.hit.source.badge()),
                             ),
@@ -2881,7 +2899,7 @@ impl StudioApp {
         if let Some(summary) = self.structure_cluster_summary() {
             panel = panel.child(
                 div()
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
                     .overflow_hidden()
                     .whitespace_nowrap()
@@ -2891,7 +2909,7 @@ impl StudioApp {
         }
         panel = panel.child(
             div()
-                .text_size(px(10.5))
+                .text_size(px(11.))
                 .text_color(t.text_muted)
                 .overflow_hidden()
                 .whitespace_nowrap()
@@ -2966,7 +2984,7 @@ fn mirror_host(url: &str) -> String {
 /// One-line attribution shown under an online source.
 fn credit_line(t: &Theme, text: &'static str) -> gpui::Div {
     div()
-        .text_size(px(10.5))
+        .text_size(px(11.))
         .text_color(t.text_muted)
         .child(SharedString::from(text))
 }

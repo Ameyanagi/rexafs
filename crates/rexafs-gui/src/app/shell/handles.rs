@@ -1029,6 +1029,12 @@ impl StudioApp {
     fn end_handle_drag(&mut self, cx: &mut Context<Self>) {
         if let Some((_, key)) = self.handles.dragging.take() {
             self.handles.armed = None;
+            if !self.structure.settings.range_hint_seen {
+                self.structure.settings.range_hint_seen = true;
+                if let Err(error) = self.structure.settings.save() {
+                    self.record_job_error("range hint setting", error);
+                }
+            }
             // Trailing run: the final pointer position may have landed
             // between throttle ticks (a cache hit when it did not).
             if key.param().is_some() {

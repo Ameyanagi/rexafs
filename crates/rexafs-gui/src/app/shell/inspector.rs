@@ -210,65 +210,66 @@ impl StudioApp {
         let targets = self.copy_targets(ParamScope::Stage(self.stage));
         let marked = targets.indices.len();
         let hint = copy_scope.and_then(|_| apply_hint(marked, targets.locked));
-        let mut header = div()
+        // The group name keeps its own row so a long name is never squeezed by
+        // the Apply button; Apply and its hint sit on a second row.
+        let mut name_row = div().flex().items_center().gap_2().child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis()
+                .text_size(px(11.5))
+                .text_color(t.text)
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .child(label),
+        );
+        if self.stage.is_processing() {
+            name_row = name_row.child(
+                icon_button(
+                    &t,
+                    "reset-params",
+                    Icon::Undo,
+                    format!("Reset {} for the current group", self.stage.name()),
+                    false,
+                )
+                .on_click(cx.listener(|app, _, _, cx| app.reset_params(cx))),
+            );
+        }
+        let apply_row =
+            (self.stage.is_processing() && copy_scope.is_some() && marked > 0).then(|| {
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        button(&t, "apply-marked", format!("Apply to {marked}"), false).on_click(
+                            cx.listener(|this, _: &ClickEvent, _w, cx| {
+                                this.apply_params_to_marked(cx);
+                            }),
+                        ),
+                    )
+                    .when_some(hint.clone(), |row, hint| {
+                        row.child(
+                            div()
+                                .text_size(px(11.))
+                                .text_color(t.text_muted)
+                                .whitespace_nowrap()
+                                .child(hint),
+                        )
+                    })
+            });
+        let header = div()
             .flex_none()
             .px_3()
             .py_2()
             .flex()
-            .items_center()
-            .flex_wrap()
-            .gap_2()
+            .flex_col()
+            .gap_1()
             .border_b_1()
             .border_color(t.border)
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_ellipsis()
-                    .text_size(px(11.5))
-                    .text_color(t.text_muted)
-                    .child(
-                        div().flex().gap_1().child(
-                            div()
-                                .text_color(t.text)
-                                .font_weight(gpui::FontWeight::MEDIUM)
-                                .child(label),
-                        ),
-                    ),
-            );
-        if self.stage.is_processing() {
-            header = header
-                .when(copy_scope.is_some() && marked > 0, |header| {
-                    header
-                        .child(
-                            button(&t, "apply-marked", format!("Apply to {marked}"), false)
-                                .on_click(cx.listener(|this, _: &ClickEvent, _w, cx| {
-                                    this.apply_params_to_marked(cx);
-                                })),
-                        )
-                        .when_some(hint.clone(), |header, hint| {
-                            header.child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(t.text_muted)
-                                    .whitespace_nowrap()
-                                    .child(hint),
-                            )
-                        })
-                })
-                .child(
-                    icon_button(
-                        &t,
-                        "reset-params",
-                        Icon::Undo,
-                        format!("Reset {} for the current group", self.stage.name()),
-                        false,
-                    )
-                    .on_click(cx.listener(|app, _, _, cx| app.reset_params(cx))),
-                );
-        }
+            .child(name_row)
+            .children(apply_row);
         let count = self
             .differing_settings(super::parameter_actions::ParamScope::Stage(self.stage))
             .len();
@@ -283,7 +284,7 @@ impl StudioApp {
                     div()
                         .px_3()
                         .py_1()
-                        .text_size(px(10.))
+                        .text_size(px(11.))
                         .text_color(t.text_muted)
                         .child(hint),
                 )
@@ -499,7 +500,7 @@ impl StudioApp {
             |d| {
                 d.child(
                     div()
-                        .text_size(px(10.))
+                        .text_size(px(11.))
                         .text_color(t.accent)
                         .child("Modified"),
                 )

@@ -11,7 +11,7 @@ import tomllib
 from zipfile import ZipFile
 from macos_installer import qualify_installer
 
-TARGETS = {"aarch64-apple-darwin", "x86_64-apple-darwin"}
+TARGETS = {"aarch64-apple-darwin"}
 REPOSITORY = "Ameyanagi/rexafs"
 
 
@@ -48,7 +48,7 @@ def build_plan(run, version, commit, run_id):
 
 
 def qualify(archives, version, commit, run_id, tag):
-    """Return hashes only when both Mac architectures have complete evidence.
+    """Return hashes only when the Apple Silicon Mac package has complete evidence.
 
     Require matching source/signing metadata, checksums, the Nightly app name
     and qualified DMG sidecars for each ZIP. This reads files and evidence;
@@ -85,7 +85,7 @@ def qualify(archives, version, commit, run_id, tag):
         hashes[sidecar.name] = sha256(sidecar)
         hashes.update(qualify_installer(archive.with_suffix(".dmg"), metadata, archive))
     if targets != TARGETS:
-        raise ValueError("Both qualified Mac architectures are required")
+        raise ValueError("The qualified Apple Silicon Mac package is required")
     return hashes
 
 
@@ -142,7 +142,7 @@ def publish(directory, version, commit, run_id, tag):
 
 These prerelease builds include the newest changes on dev. They pass automated core/desktop regression tests and package self-checks; they do not receive a separate manual graphical audit every night.
 
-Both Mac apps and DMG installers are signed with Developer ID, notarized, stapled and checked with Gatekeeper. Open the DMG, drag `rexafs Nightly.app` onto Applications, and eject the disk image. Nightly can coexist with Stable. Save your project before switching builds. ZIP archives remain available for the existing updater.
+The Apple Silicon Mac app and DMG installer are signed with Developer ID, notarized, stapled and checked with Gatekeeper. Intel Macs are no longer supported. Open the DMG, drag `rexafs Nightly.app` onto Applications, and eject the disk image. Nightly can coexist with Stable. Save your project before switching builds. A ZIP archive remains available for the existing updater.
 
 Use Updates → Nightly in the application to discover this channel. Stable remains the default. This run does not publish nightly packages to crates.io, PyPI or npm.
 

@@ -275,8 +275,10 @@ impl StudioApp {
                                 app.measurements.archive.series[index] = series;
                                 app.open_series_editor(cx);
                                 app.series_edited(cx);
-                                app.measurements.message =
-                                    format!("Imported coordinates for {count} frames.");
+                                app.measurements.message = format!(
+                                    "Imported coordinates for {}.",
+                                    crate::text::plural(count, "frame")
+                                );
                             }
                             Ok(_) => {
                                 app.measurements.message =

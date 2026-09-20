@@ -70,8 +70,11 @@ In **Normalize**, choose **Polynomial** or **MBACK** at the top of the parameter
 sidebar. Selecting MBACK replaces the method-specific controls in that same
 sidebar; it keeps the ordinary normalization plot and range handles visible.
 A declared absorber and edge in the source header supply editable starting
-values and allow MBACK to run immediately. Without them, enter the absorber and
-edge explicitly, then choose **Apply**. The desktop does not infer a compound
+values and allow MBACK to run immediately. Without them, the desktop fills the
+fields with the nearest tabulated edge to the spectrum's E₀ (xraydb
+`guess_edge`, within 100 eV; unreleased) and labels the hint "Estimated from
+E₀ · editable"; check the guess, correct it if the edge is ambiguous, then
+choose **Apply**. The desktop does not infer a compound
 formula from the absorber. Changed identity or erfc settings also use **Apply**;
 a failed calculation leaves the active pipeline unchanged. Switching spectra,
 undoing a method change or resetting settings refreshes the method controls.

@@ -16,21 +16,25 @@ TARGETS = {
 }
 LEGACY_TARGETS = {target: extension for target, extension in TARGETS.items()
                   if target not in {"aarch64-pc-windows-msvc", "aarch64-unknown-linux-gnu"}}
+CURRENT_TARGETS = {target: extension for target, extension in TARGETS.items()
+                   if target != "x86_64-apple-darwin"}
 
 
 def targets_for_version(version):
     """Return the required desktop targets, preserving historical releases.
 
-    Releases through 0.2.4 had four desktop targets. Subsequent coordinated
-    versions require native ARM64 Windows and Linux archives too. This policy
-    permits checks of old release evidence without weakening the next release's
-    six-target gate. Prereleases use their numeric release version.
+    Releases through 0.2.4 had four desktop targets; 0.2.5–0.2.11 had six.
+    Version 0.2.12 removes Intel macOS and requires the remaining five targets,
+    including native ARM64 Windows and Linux. Historical manifests retain their
+    original requirements. Prereleases use their numeric release version.
     """
     match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-(?:alpha|beta|rc)\.\d+)?", version)
     if not match:
         raise ValueError("Expected a coordinated release version")
     numeric = tuple(int(part) for part in match.groups())
-    return LEGACY_TARGETS if numeric <= (0, 2, 4) else TARGETS
+    if numeric <= (0, 2, 4):
+        return LEGACY_TARGETS
+    return TARGETS if numeric < (0, 2, 12) else CURRENT_TARGETS
 
 
 def desktop_names(entries, version):
@@ -41,10 +45,14 @@ def desktop_names(entries, version):
     Mac DMGs are optional at this
     staging step, but a DMG, its checksum and its evidence must appear together.
     This checks naming/completeness, not signing evidence or file contents.
-    Invalid versions or incomplete sets raise ValueError.
+    Invalid versions, retired desktop targets or incomplete sets raise ValueError.
     """
     required, allowed = set(), set()
-    for target, extension in targets_for_version(version).items():
+    targets = targets_for_version(version)
+    for target in TARGETS.keys() - targets.keys():
+        if any(name.startswith(f"rexafs-{version}-{target}.") for name in entries):
+            raise ValueError("Desktop manifest contains a target not supported by this version")
+    for target, extension in targets.items():
         stem = f"rexafs-{version}-{target}"
         required.update((stem + extension, stem + extension + ".sha256"))
         if target.endswith("windows-msvc"):

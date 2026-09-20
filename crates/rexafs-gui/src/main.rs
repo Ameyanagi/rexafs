@@ -42,6 +42,7 @@ mod source_evidence;
 mod spectrum_colors;
 mod spectrum_interest;
 mod structure;
+mod text;
 mod theme;
 mod updates;
 mod wavelet_history;
@@ -92,6 +93,15 @@ fn main() {
                 eprintln!("rexafs package check failed: {error}");
                 std::process::exit(1);
             }
+            return;
+        }
+        #[cfg(target_os = "macos")]
+        Some("--self-check-updater") => {
+            if let Err(error) = updates::install::check_helper() {
+                eprintln!("rexafs updater check failed: {error}");
+                std::process::exit(1);
+            }
+            println!("rexafs signed updater helper check passed");
             return;
         }
         Some("--self-check-feff") => {

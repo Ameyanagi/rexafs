@@ -29,7 +29,8 @@ def required_names(channel, version, entries, python_abi="per-interpreter"):
 
     Cargo and npm require one source crate or tarball. PyPI requires the source
     archive and every wheel in the qualified manifest. The ABI3 source profile
-    additionally requires exactly four platform wheels; historical source tags
+    additionally requires the version's exact platform inventory: three wheels
+    from 0.2.12, four for earlier ABI3 releases. Historical per-interpreter tags
     retain their manifest-defined inventory. Cargo alpha/beta/rc suffixes become Python's
     a/b/rc spelling. Unsupported versions/channels or missing assets raise
     ValueError. The input manifest is left unchanged.

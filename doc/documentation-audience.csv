@@ -1,5 +1,8 @@
 path,audience,website_action,proposed_route,notes
 doc/rmc-cu2o-demo.md,developer,exclude,,Unreleased experimental Cu2O RMC run recipe and interpretation limits; local user measurement is not redistributed.
+doc/rmc-desktop-followup-plan.md,developer,exclude,,Unreleased implementation acceptance criteria and local performance evidence.
+doc/rmc-structural-evolution.md,mixed,exclude,,Unreleased adaptive memory and structural evolution conventions; keep outside the stable manual.
+doc/validation/2026-09-20-rmc-followup/review.md,developer,exclude,,Local RMC qualification and unedited computer-use evidence; not experimental convergence evidence.
 .github/pull_request_template.md,developer,exclude,,Contribution review template.
 AGENTS.md,developer,exclude,,Repository assistant instructions.
 CHANGELOG.md,mixed,split,/releases/,Publish released user-visible changes; omit Unreleased and withheld 0.2.2 download claims from stable documentation.

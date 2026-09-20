@@ -6,7 +6,11 @@ use crate::icons::Icon;
 impl StudioApp {
     fn skip_import_targets(&mut self, targets: &[PendingTarget], cx: &mut Context<Self>) {
         let count = self.intake.skip_pending(targets);
-        self.status = format!("Skipped {count} pending files").into();
+        self.status = format!(
+            "Skipped {count} pending {}",
+            crate::text::noun_for(count, "file")
+        )
+        .into();
         cx.notify();
     }
 
@@ -33,7 +37,11 @@ impl StudioApp {
             header = header.child(button(&t, "undo-import-skip", "Undo skip", false).on_click(
                 cx.listener(|app, _, _, cx| {
                     let restored = app.intake.undo_pending_skip();
-                    app.status = format!("Restored {restored} pending files").into();
+                    app.status = format!(
+                        "Restored {restored} pending {}",
+                        crate::text::noun_for(restored, "file")
+                    )
+                    .into();
                     cx.notify();
                 }),
             ));

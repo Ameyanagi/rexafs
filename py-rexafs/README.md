@@ -17,7 +17,7 @@ package:
 ```bash
 uv init --python 3.12 rexafs-analysis
 cd rexafs-analysis
-uv add rexafs==0.2.5 numpy
+uv add rexafs==0.2.11 numpy
 uv run python -c "import rexafs; print(rexafs.__version__)"
 ```
 
@@ -28,7 +28,10 @@ analysis, and leave `.venv` out of version control. NumPy is listed explicitly
 because the examples import it. See [uv's project guide](https://docs.astral.sh/uv/guides/projects/).
 
 [PyPI](https://pypi.org/project/rexafs/) provides platform wheels. Rust is needed
-only when building rexafs from source.
+only when building rexafs from source. Starting with 0.2.12, macOS wheels
+support Apple Silicon only; Linux x64 and Windows x64 wheels remain available.
+Intel Mac users can retain 0.2.11. New Intel wheels and Intel source-build
+qualification are discontinued.
 
 **Version note:** keyword constructors, direct configuration setters and
 `XrayFFTR` were added in 0.2.5. The basic example also works in 0.2.4.

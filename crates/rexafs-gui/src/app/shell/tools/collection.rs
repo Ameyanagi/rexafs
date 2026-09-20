@@ -28,7 +28,8 @@ impl StudioApp {
         let required = indices.len() + usize::from(tool == Tool::Lcf);
         if required > self.cache.cap().get() {
             return Err(format!(
-                "This analysis needs {required} spectra in memory; the current limit is {}. Select fewer inputs.",
+                "This analysis needs {} in memory; the current limit is {}. Select fewer inputs.",
+                crate::text::plural(required, "spectrum"),
                 self.cache.cap()
             ));
         }
@@ -71,7 +72,12 @@ impl StudioApp {
         self.analysis.collection_generation += 1;
         let generation = self.analysis.collection_generation;
         self.analysis.collection_loading = true;
-        self.tools.message = format!("Loading {} selected spectra…", pending.len()).into();
+        self.tools.message = format!(
+            "Loading {} selected {}…",
+            pending.len(),
+            crate::text::noun_for(pending.len(), "spectrum")
+        )
+        .into();
         let job = cx.background_executor().spawn(async move {
             pending
                 .into_iter()

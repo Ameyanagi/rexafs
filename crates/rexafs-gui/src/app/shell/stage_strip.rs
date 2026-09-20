@@ -125,7 +125,7 @@ impl StudioApp {
                         "eV",
                     ),
                 );
-                add("Import", format!("{:?}", p.import.mode));
+                add("Import", p.import.mode.label().into());
                 add("Marked", self.selection.len().to_string());
             }
             Stage::Normalize => {
@@ -264,7 +264,7 @@ impl StudioApp {
                     )
                 };
                 let r = r.resolved(weight);
-                add("Fit in", format!("{:?}", r.fitspace));
+                add("Fit in", r.fitspace.label().into());
                 add("k range", range_value(Some(r.kmin), Some(r.kmax), "Å⁻¹"));
                 add("R range", range_value(Some(r.rmin), Some(r.rmax), "Å"));
                 add(
@@ -322,7 +322,7 @@ impl StudioApp {
                 } else {
                     StageStatus::Idle
                 };
-                (status, format!("{groups} groups"))
+                (status, crate::text::plural(groups, "group"))
             }
             Stage::Normalize => {
                 let Some(sp) = sp else {
@@ -371,18 +371,25 @@ impl StudioApp {
                 match &self.fit_result {
                     Some(r) => (
                         StageStatus::Ok,
-                        format!("{paths} paths · R {:.4}", r.r_factor),
+                        format!(
+                            "{} · R {:.4}",
+                            crate::text::plural(paths, "path"),
+                            r.r_factor
+                        ),
                     ),
-                    None if paths > 0 => (StageStatus::Attention, format!("{paths} paths · unfit")),
+                    None if paths > 0 => (
+                        StageStatus::Attention,
+                        format!("{} · unfit", crate::text::plural(paths, "path")),
+                    ),
                     None => (StageStatus::Idle, "no paths".into()),
                 }
             }
-            Stage::Publish => (StageStatus::Idle, "Figures · Markdown".into()),
+            Stage::Publish => (StageStatus::Idle, "Report".into()),
             Stage::Series => match self.operando_scan_len() {
-                Some(n) => (StageStatus::Ok, format!("{n} frames")),
+                Some(n) => (StageStatus::Ok, crate::text::plural(n, "frame")),
                 None if !self.catalog.scans.is_empty() => (
                     StageStatus::Idle,
-                    format!("{} scans", self.catalog.scans.len()),
+                    crate::text::plural(self.catalog.scans.len(), "scan"),
                 ),
                 None => (StageStatus::Idle, "no scan".into()),
             },
@@ -476,14 +483,14 @@ impl gpui::Render for StageTooltip {
                         d.child(
                             div()
                                 .text_color(t.warn)
-                                .text_size(px(10.))
+                                .text_size(px(11.))
                                 .child("Updating…"),
                         )
                     }),
             )
             .child(
                 div()
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
                     .overflow_hidden()
                     .text_ellipsis()

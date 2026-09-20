@@ -69,13 +69,31 @@ class WheelTests(unittest.TestCase):
     def test_all_platforms_and_prerelease_metadata(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            for version in ("0.2.6", "0.2.6-rc.1"):
+            for version in ("0.2.6", "0.2.6-rc.1", "0.2.11", "0.2.12", "0.2.12-rc.1", "0.3.0"):
                 names = []
-                for runner in wheels.PLATFORMS:
+                for runner in wheels.platforms_for_version(version):
                     path = make_wheel(root, runner, version)
                     self.assertEqual(wheels.check_wheel(path, version, runner), hashlib.sha256(path.read_bytes()).hexdigest())
                     names.append(path.name)
                 wheels.inventory(names, version)
+
+    def test_intel_mac_is_historical_and_each_remaining_platform_is_required(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            historical = make_wheel(root, "macos-15-intel", "0.2.11")
+            wheels.check_wheel(historical, "0.2.11", "macos-15-intel")
+            for version in ("0.2.12", "0.2.12-rc.1", "0.3.0"):
+                names = [make_wheel(root, runner, version).name
+                         for runner in ("ubuntu-24.04", "macos-15", "windows-2025")]
+                wheels.inventory(names, version)
+                for missing in names:
+                    with self.subTest(version=version, missing=missing), self.assertRaises(ValueError):
+                        wheels.inventory([name for name in names if name != missing], version)
+                intel = make_wheel(root, "macos-15-intel", version)
+                with self.assertRaisesRegex(ValueError, "Unsupported wheel platform"):
+                    wheels.check_wheel(intel, version)
+                with self.assertRaises(ValueError):
+                    wheels.inventory(names + [intel.name], version)
 
     def test_incomplete_duplicate_or_mixed_inventory_fails(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -188,6 +206,30 @@ class WheelTests(unittest.TestCase):
             paths[0].write_bytes(paths[0].read_bytes() + b"modified bytes")
             with self.assertRaises(ValueError):
                 registry.verify("pypi", artifacts, manifest, "0.2.6", "abi3-py310")
+
+    def test_0_2_12_publication_requires_three_wheels_and_source_archive(self):
+        spec = importlib.util.spec_from_file_location("registry", Path(__file__).with_name("check-registry-artifacts.py"))
+        registry = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(registry)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            artifacts = root / "artifacts"
+            artifacts.mkdir()
+            paths = [make_wheel(artifacts, runner, "0.2.12")
+                     for runner in ("ubuntu-24.04", "macos-15", "windows-2025")]
+            sdist = artifacts / "rexafs-0.2.12.tar.gz"
+            sdist.write_bytes(b"source archive fixture")
+            manifest = root / "SHA256SUMS"
+            manifest.write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
+                                        for path in [*paths, sdist]))
+            self.assertEqual(registry.verify("pypi", artifacts, manifest, "0.2.12", "abi3-py310"), 4)
+            intel = make_wheel(artifacts, "macos-15-intel", "0.2.12")
+            with self.assertRaises(ValueError):
+                registry.verify("pypi", artifacts, manifest, "0.2.12", "abi3-py310")
+            with manifest.open("a") as output:
+                output.write(f"{hashlib.sha256(intel.read_bytes()).hexdigest()}  {intel.name}\n")
+            with self.assertRaises(ValueError):
+                registry.verify("pypi", artifacts, manifest, "0.2.12", "abi3-py310")
 
 
 if __name__ == "__main__":

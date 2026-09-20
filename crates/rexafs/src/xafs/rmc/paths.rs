@@ -113,6 +113,17 @@ pub struct PathCatalogue {
     paths: Vec<ScatteringPath>,
     by_atom: Vec<Vec<usize>>,
 }
+
+/// Since 0.2.12: progress through deterministic geometric path enumeration.
+/// Counts describe work, not a completion percentage or spectral importance.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PathSearchProgress {
+    /// Candidate walk extensions examined, including rejected extensions.
+    pub extensions: usize,
+    /// Directed paths retained inside the displacement envelope.
+    pub paths: usize,
+}
+
 impl PathCatalogue {
     /// Enumerate paths once in deterministic atom/image order. Uses a conservative
     /// search radius `radius + max_legs * displacement` (Å): each leg can shorten
@@ -122,6 +133,21 @@ impl PathCatalogue {
         absorber: usize,
         settings: PathCatalogueSettings,
     ) -> Result<Self, RmcError> {
+        Self::new_with_progress(reference, absorber, settings, |_| Ok(()))
+    }
+
+    /// Since 0.2.12: enumerate the same paths as [`Self::new`] while reporting
+    /// bounded progress and allowing cooperative cancellation. The callback runs
+    /// before setup, at most every 4096 search extensions, during construction of
+    /// the atom-to-path map, and on completion. Return an error to stop without a
+    /// partial catalogue. Observing progress does not change enumeration order.
+    pub fn new_with_progress(
+        reference: Configuration,
+        absorber: usize,
+        settings: PathCatalogueSettings,
+        mut progress: impl FnMut(PathSearchProgress) -> Result<(), RmcError>,
+    ) -> Result<Self, RmcError> {
+        progress(PathSearchProgress::default())?;
         reference.validate()?;
         require(
             absorber < reference.atoms.len(),
@@ -161,6 +187,7 @@ impl PathCatalogue {
             settings: &'a PathCatalogueSettings,
             paths: Vec<ScatteringPath>,
             extensions: usize,
+            progress: &'a mut dyn FnMut(PathSearchProgress) -> Result<(), RmcError>,
         }
         impl Search<'_> {
             fn extend(
@@ -172,6 +199,12 @@ impl PathCatalogue {
                 for i in 0..self.positions.len() {
                     let pos = self.positions[i];
                     self.extensions += 1;
+                    if self.extensions.is_multiple_of(4096) {
+                        (self.progress)(PathSearchProgress {
+                            extensions: self.extensions,
+                            paths: self.paths.len(),
+                        })?;
+                    }
                     require(
                         self.extensions <= self.settings.max_extensions,
                         "path search exceeds max_extensions",
@@ -229,11 +262,19 @@ impl PathCatalogue {
             settings: &settings,
             paths: Vec::new(),
             extensions: 0,
+            progress: &mut progress,
         };
         search.extend(origin, 0., &mut Vec::new())?;
+        let completed = PathSearchProgress {
+            extensions: search.extensions,
+            paths: search.paths.len(),
+        };
         let paths = search.paths;
         let mut by_atom = vec![Vec::new(); reference.atoms.len()];
         for (i, path) in paths.iter().enumerate() {
+            if i.is_multiple_of(4096) {
+                progress(completed)?;
+            }
             let atoms: std::collections::BTreeSet<_> = std::iter::once(absorber)
                 .chain(path.scatterers.iter().map(|v| v.atom))
                 .collect();
@@ -241,6 +282,7 @@ impl PathCatalogue {
                 by_atom[atom].push(i);
             }
         }
+        progress(completed)?;
         Ok(Self {
             reference,
             settings,

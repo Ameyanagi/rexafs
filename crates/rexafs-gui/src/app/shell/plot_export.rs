@@ -299,9 +299,9 @@ impl StudioApp {
                 let trend = self.trend_snapshot();
                 Ok(vec![Curve {
                     label: trend.name.clone(),
-                    x_label: "Frame (zero-based)".into(),
+                    x_label: "Frame (one-based)".into(),
                     y_label: trend.name,
-                    x: trend.frames,
+                    x: trend.frames.into_iter().map(|frame| frame + 1.0).collect(),
                     y: trend.values,
                 }])
             }

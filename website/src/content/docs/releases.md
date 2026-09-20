@@ -8,6 +8,25 @@ Published changes and migration notes are listed below. Back up projects before
 updating. Source-checkout APIs are documented in the [Next API
 reference](/docs/reference/).
 
+## Preparing 0.2.12
+
+The next release is being checked; the download page continues to identify the
+published stable version until package and desktop verification completes.
+
+- Apple Silicon only on macOS for desktop downloads and Python wheels. Version
+  0.2.11 remains the last Intel Mac release; new nightlies also require Apple Silicon.
+- RMC Auto memory and catalogue capacity, preparation progress and cache warnings.
+- Element-pair structural distributions and histories, with saved/exported data.
+- Desktop genetic and hybrid EA–RMC search with population checkpoint recovery.
+- Compact publication presets, complete report publishing and change tracking.
+- Readable Auto fields, recoverable numeric edits and direct Series navigation.
+- The signed macOS updater-helper correction. Affected 0.2.10/0.2.11 Mac apps
+  require one manual installation of the corrected app before later in-app updates.
+
+See the [new RMC controls](/docs/desktop/rmc/#new-in-the-0212-release-candidate)
+and [publication workflow](/docs/desktop/publication/). Windows and Linux remain
+desktop previews. Short software checks do not establish RMC convergence.
+
 ## Stable 0.2.11
 
 [Download 0.2.11](/download/) or read the

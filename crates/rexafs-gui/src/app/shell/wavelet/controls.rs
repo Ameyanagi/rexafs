@@ -114,10 +114,7 @@ impl StudioApp {
                 .map(|f| {
                     format!(
                         "Original χ · Fourier {} window",
-                        f.window
-                            .as_ref()
-                            .map(|w| format!("{w:?}"))
-                            .unwrap_or_else(|| "default".into())
+                        crate::params::window_label(f.window)
                     )
                 })
                 .unwrap_or_else(|| "Click the map to inspect slices".into())
@@ -179,7 +176,6 @@ impl StudioApp {
             for field in self.wavelet.fields.iter().skip(4) {
                 body = body.child(field.clone());
             }
-            body=body.child(div().text_size(px(11.)).text_color(t.text_muted).child("R step: blank = auto. Taper: 0 = none. Larger order narrows frequency response and broadens localization in k."));
         }
         if let Some(record) = &self.wavelet.record {
             body = body.child(

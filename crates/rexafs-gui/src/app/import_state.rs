@@ -73,9 +73,27 @@ impl SourceOutcome {
             clauses.push(reason.clone());
         }
         if !self.warnings.is_empty() {
-            clauses.push(format!("{} warnings", self.warnings.len()));
+            clauses.push(crate::text::plural(self.warnings.len(), "warning"));
         }
         clauses.join(" · ")
+    }
+}
+
+/// "1 duplicate skipped" / "3 duplicates skipped": a label starting with
+/// `*` counts a noun that takes a plural; other labels are fixed phrases
+/// ("2 needs mapping").
+fn count_clause(count: usize, label: &str) -> String {
+    match label.strip_prefix('*') {
+        Some(counted) => {
+            let (noun, rest) = counted.split_once(' ').unwrap_or((counted, ""));
+            let mut clause = crate::text::plural(count, noun);
+            if !rest.is_empty() {
+                clause.push(' ');
+                clause.push_str(rest);
+            }
+            clause
+        }
+        None => format!("{count} {label}"),
     }
 }
 
@@ -101,7 +119,11 @@ impl IntakeBatch {
             .count();
         let groups: usize = self.sources.values().map(|s| s.created.len()).sum();
         if files > 0 {
-            clauses.push(format!("Added {files} files → {groups} groups"));
+            clauses.push(format!(
+                "Added {} → {}",
+                crate::text::plural(files, "file"),
+                crate::text::plural(groups, "group")
+            ));
         }
         for (count, label) in [
             (
@@ -116,11 +138,11 @@ impl IntakeBatch {
                     .values()
                     .filter(|s| !s.existing.is_empty() && !s.changed)
                     .count(),
-                "duplicates skipped",
+                "*duplicate skipped",
             ),
             (
                 self.sources.values().filter(|s| s.changed).count(),
-                "source changed",
+                "*source changed",
             ),
             (
                 self.sources
@@ -135,7 +157,7 @@ impl IntakeBatch {
             ),
             (
                 self.sources.values().map(|s| s.warnings.len()).sum(),
-                "warnings",
+                "*warning",
             ),
             (
                 self.sources
@@ -144,10 +166,10 @@ impl IntakeBatch {
                     .count(),
                 "skipped",
             ),
-            (self.dropped_queue, "queued imports dropped"),
+            (self.dropped_queue, "*queued import dropped"),
         ] {
             if count > 0 {
-                clauses.push(format!("{count} {label}"));
+                clauses.push(count_clause(count, label));
             }
         }
         if clauses.is_empty() {
@@ -632,7 +654,7 @@ mod tests {
         assert_eq!(state.history[n].dropped_queue, 1);
         assert_eq!(
             state.history[n].receipt(),
-            "Import stopped · Added 1 files → 1 groups · 1 failed · 1 skipped · 1 queued imports dropped"
+            "Import stopped · Added 1 file → 1 group · 1 failed · 1 skipped · 1 queued import dropped"
         );
         state.receipt = None;
         state.finish(n);
@@ -669,7 +691,7 @@ mod tests {
         );
         assert_eq!(
             b.receipt(),
-            "Added 1 files → 2 groups · 1 duplicates skipped · 1 failed · 1 warnings"
+            "Added 1 file → 2 groups · 1 duplicate skipped · 1 failed · 1 warning"
         );
         b.stopped = true;
         assert!(b.receipt().starts_with("Import stopped · Added"));

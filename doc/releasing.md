@@ -5,6 +5,25 @@ with a merge commit before tagging. Nightly desktop builds follow `dev`; they
 do not substitute for the qualified stable tag build below. See the
 [development branch workflow](development-branches.md).
 
+## Signed updater qualification (source correction)
+
+The Mac signing and installed-DMG checks now run `--self-check-updater`. It must
+copy and launch the helper with the signed Info.plist and resources intact; a
+successful app launch alone does not qualify the updater. The
+[updater record](validation/2026-09-19-updater/review.md) documents the reproduced
+0.2.10/0.2.11 failure and the source correction. Do not reuse the older qualification
+as evidence that signed in-app updates work.
+
+## Preparing 0.2.12
+
+The [0.2.12 notes](release-notes-0.2.12.md) and
+[qualification record](validation/2026-09-19-release-0.2.12/review.md) track the
+updater correction, RMC resource and structural-history controls, and desktop
+workflow improvements. Starting with this version, macOS desktop and Python
+distributions support Apple Silicon only. This version is not published yet.
+Require the new signed helper checks before announcing that the Mac update path
+is qualified.
+
 ## Published 0.2.11
 
 The [0.2.11 notes](release-notes-0.2.11.md) and
@@ -283,8 +302,10 @@ a graphical session, GTK 3, fontconfig, xkbcommon and a Vulkan-capable driver. W
 uses its native MSVC/Windows SDK toolchain. Test the actual minimum OS before
 advertising compatibility beyond the runner image.
 
-The build matrix produces unsigned archives. `sign-macos.yml` signs the two macOS
-archives from an existing qualified build, without rebuilding their executables.
+The build matrix produces unsigned archives. From 0.2.12, `sign-macos.yml` signs
+the Apple Silicon macOS archive from an existing qualified build, without
+rebuilding its executable. Intel Mac desktop packages and Python wheels are no
+longer built or qualified; 0.2.11 remains the last release for Intel Macs.
 It checks source-run identity, original checksums and bundle metadata before using
 the signing identity. It applies Developer ID signing with Hardened Runtime and a
 timestamp, requires an accepted Apple notarization submission, staples the app,
@@ -309,8 +330,8 @@ gh workflow run sign-macos.yml --ref main -f release_tag=v0.1.0 -f build_run_id=
 
 The signing run records its own run ID, signing-tools commit, original build
 commit/run ID, unsigned archive hash and Apple submission ID inside `build.json`.
-When preparing a GitHub draft, replace both original macOS ZIPs and their checksum
-files with the signing run's outputs and regenerate `SHA256SUMS`. Record both build
+When preparing a GitHub draft, replace the original macOS ZIP and its checksum
+file with the signing run's outputs and regenerate `SHA256SUMS`. Record both build
 and signing runs in the release notes. Do not promote the unsigned matrix ZIPs as
 the signed downloads.
 
@@ -343,12 +364,12 @@ It builds and tests:
 - the non-GPL dependency license policy across all features and platform branches,
   plus the Apache sum_tree patch's upstream tests;
 - the Rust source crate on Ubuntu;
-- four `cp310-abi3` wheels on Ubuntu x64, Apple Silicon macOS, Intel macOS and
-  Windows x64, with all 20 CPython 3.10–3.14 runtime combinations testing the
+- three `cp310-abi3` wheels on Ubuntu x64, Apple Silicon macOS and Windows x64,
+  with all 15 CPython 3.10–3.14 runtime combinations testing the
   downloaded wheel against minimum and latest compatible NumPy;
 - the Python sdist, including an installation rebuilt from that source archive;
 - the npm tarball, Node/browser numerical tests and an installed TypeScript consumer;
-- desktop archives on macOS 15 ARM64/Intel, Ubuntu 24.04 x64/ARM64 and Windows
+- five desktop archives on macOS 15 ARM64, Ubuntu 24.04 x64/ARM64 and Windows
   x64/ARM64, using the native `ubuntu-24.04-arm` and `windows-11-arm` runners for
   the new targets. These labels are listed in the official
   [GitHub runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
@@ -359,17 +380,19 @@ the extracted archive. Linux GUI evidence uses a separate archive per target so
 its image/log filenames cannot collide in the flat release manifest. Python's
 wheel matrix remains separate; adding a desktop target does not add a wheel.
 
-The four-wheel ABI3 profile is published in **0.2.6**; 0.2.5 retains its 20
-published per-interpreter wheels. PyO3's `abi3-py310` feature selects the CPython stable
+The four-wheel ABI3 profile was introduced in **0.2.6**; 0.2.5 retains its 20
+published per-interpreter wheels. **0.2.12** removes the Intel macOS wheel and
+requires three wheels. PyO3's `abi3-py310` feature selects the CPython stable
 binary interface with a 3.10 minimum. This qualification covers GIL-enabled
 interpreters only; see [PyO3's ABI documentation](https://pyo3.rs/v0.29.2/building-and-distribution.html#py_limited_apiabi3abi3t).
 The workflow verifies wheel names, metadata, platform baselines and installed
 package bytes, preserves the Linux 3.12 editor check, and checks that the sdist
 retains the stable-ABI feature before rebuilding and testing it. Publication
-selects the ABI profile from the immutable source tag: new ABI3 releases require
-exactly four wheels, while historical tags retain their original manifest
-inventory. Every subsequent version must qualify its own wheel bytes before upload; do
-not replace or relabel 0.2.5 assets.
+selects the ABI profile from the immutable source tag. The version-specific
+inventory requires exactly three wheels from 0.2.12 and four for 0.2.6–0.2.11;
+historical per-interpreter tags retain their original manifest inventory. Every
+subsequent version must qualify its own wheel bytes before upload. Do not replace
+or relabel historical assets. Intel Mac source builds are no longer qualified.
 
 The final manifest job requires **every** build and runtime job to succeed. `SHA256SUMS` uses
 flat asset names so it also works after downloading all GitHub Release assets into
@@ -401,9 +424,10 @@ requires the complete artifact set. A desktop artifact transfer failure therefor
 cannot block publication of already-qualified registry packages.
 
 GitHub's public download list is desktop-only. `release_downloads.py` requires
-all six platform archives, both Windows installers and their qualification
-records for versions after 0.2.4. Historical versions through 0.2.4 retain their
-four-target requirement. Checksums and available Mac installer evidence are
+all five platform archives, both Windows installers and their qualification
+records from 0.2.12; it rejects Intel Mac assets for those versions. Historical
+versions 0.2.5–0.2.11 retain six targets, and versions through 0.2.4 retain four.
+Checksums and available Mac installer evidence are
 staged after verifying the original build hashes. Registry artifacts stay in
 the successful build and their registries. The staged `SHA256SUMS` covers only
 the files being uploaded; retain the original complete build manifest separately.

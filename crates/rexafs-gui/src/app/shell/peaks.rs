@@ -9,7 +9,9 @@ use crate::{
     },
 };
 use gpui::{AppContext, Entity};
-use rexafs::prelude::{Measurement, MeasurementSpace, PeakFit, PeakRole, PeakShape};
+use rexafs::prelude::{
+    Measurement, MeasurementSpace, PeakFit, PeakRole, PeakShape, PeakTermination,
+};
 use ruviz_gpui::{RuvizPlot, plot_builder};
 use std::sync::{
     Arc,
@@ -17,6 +19,41 @@ use std::sync::{
 };
 
 pub(crate) const PLOT_PEAKS: usize = 410;
+
+/// Axis label for the signal a peak model is fitted to.
+fn space_label(space: MeasurementSpace) -> &'static str {
+    match space {
+        MeasurementSpace::Mu => "μ(E)",
+        MeasurementSpace::Norm => "Normalized μ(E)",
+        MeasurementSpace::Flat => "Flattened μ(E)",
+        MeasurementSpace::Chi { .. } => "Weighted χ(k)",
+        MeasurementSpace::Fourier => "Fourier magnitude",
+    }
+}
+
+/// Shape name as listed in the Add menu.
+fn shape_label(shape: PeakShape) -> &'static str {
+    match shape {
+        PeakShape::Gaussian => "Gaussian",
+        PeakShape::Lorentzian => "Lorentzian",
+        PeakShape::PseudoVoigt => "Pseudo-Voigt",
+        PeakShape::Voigt => "Voigt",
+        PeakShape::ErfStep => "Erf step",
+        PeakShape::ArctanStep => "Arctan step",
+        PeakShape::Constant => "Constant baseline",
+        PeakShape::Linear => "Linear baseline",
+    }
+}
+
+/// Why the peak solver stopped, in plain words.
+fn termination_label(termination: &PeakTermination) -> &'static str {
+    match termination {
+        PeakTermination::FixedModel => "Fixed model evaluated",
+        PeakTermination::Converged => "Converged",
+        PeakTermination::NotConverged => "Not converged",
+        PeakTermination::Cancelled => "Cancelled",
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum View {
@@ -854,7 +891,7 @@ impl StudioApp {
                 }
                 plot = plot
                     .xlabel("Energy (eV)")
-                    .ylabel(format!("{:?} μ(E)", r.definition.space))
+                    .ylabel(space_label(r.definition.space))
                     .legend_position(LegendPosition::UpperRight);
                 let p: Plot = peak_curve(
                     base().size(9., 1.7),
@@ -898,7 +935,7 @@ impl StudioApp {
                     );
                     plot = plot
                         .xlabel("Energy (eV)")
-                        .ylabel(format!("{:?} μ(E)", self.peaks.model.space))
+                        .ylabel(space_label(self.peaks.model.space))
                         .xlim(preview.origin + lo - padding, preview.origin + hi + padding)
                         .legend_position(LegendPosition::UpperRight);
                 }
@@ -1072,7 +1109,14 @@ impl StudioApp {
                 .archive
                 .runs
                 .iter()
-                .map(|r| format!("{} · {} · {} frames", r.name, r.created, r.rows.len()))
+                .map(|r| {
+                    format!(
+                        "{} · {} · {}",
+                        r.name,
+                        r.created,
+                        crate::text::plural(r.rows.len(), "frame")
+                    )
+                })
                 .collect(),
             Menu::Models => self
                 .peaks
@@ -1411,8 +1455,12 @@ impl StudioApp {
         if let Some(record) = &self.peaks.record {
             let r = &record.result;
             body = body.child(div().text_size(px(12.)).child(format!(
-                "{:?} · objective {:.5} · {} points · {} free parameters",
-                r.termination, r.objective, r.points, r.free_parameters
+                "{} · objective {:.5} · {} · {} free {}",
+                termination_label(&r.termination),
+                r.objective,
+                crate::text::plural(r.points, "point"),
+                r.free_parameters,
+                crate::text::noun_for(r.free_parameters, "parameter")
             )));
             if self.peaks.view == View::Correlation {
                 body = body.child(
@@ -1623,11 +1671,11 @@ impl StudioApp {
                         .flex()
                         .items_center()
                         .gap_2()
-                        .child(
-                            div()
-                                .flex_1()
-                                .child(format!("{} · {:?}", component.name, component.shape)),
-                        )
+                        .child(div().flex_1().child(format!(
+                            "{} · {}",
+                            component.name,
+                            shape_label(component.shape)
+                        )))
                         .child(
                             button(
                                 &t,

@@ -12,6 +12,7 @@ import tempfile
 from zipfile import ZipFile
 
 from desktop_channels import app_name
+from release_downloads import targets_for_version
 
 TARGETS = {"aarch64-apple-darwin", "x86_64-apple-darwin"}
 NOTICES = ("LICENSE-MIT", "LICENSE-APACHE", "dependencies.json", "licenses")
@@ -25,15 +26,17 @@ def sha256(path):
 def installer_name(metadata):
     """Return the version/architecture DMG filename after validating both fields.
 
-    metadata must identify a stable or nightly channel and one of the two Mac
-    targets. The filename uses the library version for both channels; channel
+    metadata must identify a stable or nightly channel and a supported Mac
+    target. Intel Mac installers are historical, through 0.2.11 only.
+    The filename uses the library version for both channels; channel
     identity is retained in the app name and build evidence. Invalid metadata
     raises ValueError.
     """
     channel = metadata.get("channel", "stable")
     app_name(channel)
     version, target = metadata["version"], metadata["target"]
-    if not re.fullmatch(r"\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?", version) or target not in TARGETS:
+    if (not re.fullmatch(r"\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?", version)
+            or target not in TARGETS or target not in targets_for_version(version)):
         raise ValueError("Unsupported installer version or target")
     return f"rexafs-{version}-{target}.dmg"
 
@@ -142,7 +145,7 @@ def verify_installation(image, metadata, verify_app=None):
     """Mount the DMG and exercise an installed copy in a temporary directory.
 
     Verify payload/build identity, signatures, architecture and calculation
-    self-checks, then return the copied executable's SHA-256 digest. verify_app
+    self-checks and the copied updater helper, then return the executable's SHA-256 digest. verify_app
     optionally supplies Developer ID/notarization checks; otherwise codesign
     validates the preview's signature. The FEFF self-check runs when the recorded
     features include feff10-runner. This does not launch or validate the GUI.
@@ -174,6 +177,7 @@ def verify_installation(image, metadata, verify_app=None):
             subprocess.run(["lipo", str(executable), "-verify_arch",
                             "arm64" if metadata["target"] == "aarch64-apple-darwin" else "x86_64"], check=True)
             subprocess.run([str(executable), "--self-check"], cwd=temporary, check=True)
+            subprocess.run([str(executable), "--self-check-updater"], cwd=temporary, check=True, timeout=120)
             if "feff10-runner" in metadata.get("features", []):
                 if actual.get("features") != metadata["features"]:
                     raise ValueError("Installed binary has incorrect calculation engines")

@@ -77,13 +77,16 @@ class DesktopChannels(unittest.TestCase):
         Path(str(image) + ".sha256").write_text(f"{nightly.sha256(image)}  {image.name}\n")
         return file
 
-    def test_publication_requires_both_signed_architectures_and_matching_run(self):
+    def test_publication_requires_signed_apple_silicon_and_matching_run(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             files = [self.archive(root, target) for target in sorted(nightly.TARGETS)]
-            self.assertEqual(len(nightly.qualify(files, "0.1.2", "abc", "123", TAG)), 10)
+            self.assertEqual(len(nightly.qualify(files, "0.1.2", "abc", "123", TAG)), 5)
             with self.assertRaises(ValueError):
-                nightly.qualify(files[:1], "0.1.2", "abc", "123", TAG)
+                nightly.qualify([], "0.1.2", "abc", "123", TAG)
+            for invalid in (files * 2, files + [self.archive(root, "x86_64-apple-darwin")]):
+                with self.assertRaises(ValueError):
+                    nightly.qualify(invalid, "0.1.2", "abc", "123", TAG)
             for overrides in [dict(signed=False), dict(notarized=False), dict(dirty=True), dict(commit="wrong"),
                               dict(signing_tools_commit="wrong"), dict(release_tag="nightly-20260906-123"),
                               dict(channel="stable"), dict(github_run_id="122"), dict(notarization_id="")]:

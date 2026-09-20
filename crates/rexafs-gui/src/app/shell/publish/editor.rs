@@ -1,13 +1,98 @@
 use super::*;
+use crate::accessibility::Control;
 use crate::app::shell::{
     button, chip,
-    controls::{disclosure, icon_button},
+    controls::{Tooltip, disclosure, icon_button},
+    segment, segmented,
 };
 use crate::icons::Icon;
-use crate::publication::figures::{fit_figures, render_figure};
+use crate::publication::figures::{StylePreset, fit_figures, render_figure};
+use crate::theme::Theme;
 use crate::widgets::numeric_field::{FieldEvent, FieldKind};
 use crate::widgets::text_input::InputEvent;
-use gpui::{ImageFormat, IntoElement, ObjectFit, SharedString, Styled, div, img, prelude::*, px};
+use gpui::{
+    FontWeight, ImageFormat, IntoElement, ObjectFit, SharedString, Styled, div, img, prelude::*, px,
+};
+
+/// Small layout previews retain full accessible names without visible labels.
+fn preset_icon(t: &Theme, index: usize, preset: StylePreset, selected: bool) -> Control {
+    let color = if selected { t.accent } else { t.text_muted };
+    let mut preview = div()
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap(px(2.))
+        .w(px(24.))
+        .h(px(18.))
+        .border_1()
+        .border_color(color)
+        .rounded_sm();
+    match preset {
+        StylePreset::SingleColumn => {
+            preview = preview.child(div().w(px(7.)).h(px(11.)).border_1().border_color(color));
+        }
+        StylePreset::DoubleColumn => {
+            for _ in 0..2 {
+                preview = preview.child(div().w(px(7.)).h(px(11.)).border_1().border_color(color));
+            }
+        }
+        StylePreset::Slide => {
+            preview = preview
+                .h(px(14.))
+                .child(div().w(px(16.)).h(px(7.)).border_1().border_color(color));
+        }
+    }
+    Control::new(
+        div().id(("publication-preset", index)),
+        preset.label(),
+        accesskit::Role::Button,
+    )
+    .selected(selected)
+    .tab_index(0)
+    .key_context("Control")
+    .w(px(36.))
+    .h(px(32.))
+    .flex_none()
+    .flex()
+    .items_center()
+    .justify_center()
+    .rounded_md()
+    .border_1()
+    .border_color(if selected { t.accent } else { t.border })
+    .when(selected, |d| d.bg(t.raised))
+    .cursor_pointer()
+    .hover(|d| d.bg(t.raised))
+    .focus(|d| d.border_color(t.accent))
+    .child(preview)
+}
+
+/// Attach a hover tooltip and matching accessibility description to a control,
+/// so explanations live on the control instead of as text under it.
+fn with_tip(control: Control, t: &Theme, text: impl Into<SharedString>) -> Control {
+    let tip = Tooltip {
+        label: text.into(),
+        theme: *t,
+    };
+    control
+        .description(tip.label.to_string())
+        .tooltip(move |_, cx| cx.new(|_| tip.clone()).into())
+}
+
+/// Grey out a control and ignore its clicks while `enabled` is false.
+fn enabled_when(control: Control, enabled: bool) -> Control {
+    control.when(!enabled, |d| {
+        d.disabled(true).opacity(0.45).cursor_default()
+    })
+}
+
+/// Muted 12 px heading above a group of fields.
+fn heading(t: &Theme, text: &'static str) -> gpui::Div {
+    div()
+        .mt_1()
+        .text_size(px(12.))
+        .text_color(t.text_muted)
+        .child(text)
+}
 
 impl StudioApp {
     fn refresh_publication_source(&mut self, cx: &mut Context<Self>) {
@@ -320,8 +405,11 @@ impl StudioApp {
                 this.update(cx, |app, cx| {
                     match result {
                         Ok(path) => {
-                            app.status = format!("Saved {}", path.display()).into();
-                            app.publish.destination = Some(path);
+                            app.set_status(
+                                crate::app::StatusKind::Success,
+                                format!("Saved {}", path.display()),
+                            );
+                            app.publish.saved_figure = Some(path);
                         }
                         Err(error) => app.publish.error = Some(error),
                     }
@@ -336,42 +424,16 @@ impl StudioApp {
     pub(crate) fn publish_panel(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
         self.refresh_publication_source(cx);
         let t = self.theme;
-        let options = self
-            .publish
-            .figures
-            .get(self.publish.selected)
+        let figure = self.publish.figures.get(self.publish.selected).cloned();
+        let options = figure
+            .as_ref()
             .map(|f| self.publish.settings.options(f.key))
             .unwrap_or_default();
-        let format = self.publish.format;
-        let ready = self.publication_ready()
-            && !self.publish.running
-            && match format {
-                ExportFormat::Png | ExportFormat::Svg => {
-                    self.publish.preview.is_some() && !self.publish.preview_running
-                }
-                ExportFormat::Csv => !self.publish.figures.is_empty(),
-                _ => true,
-            };
-        let scope = if matches!(format, ExportFormat::Folder | ExportFormat::Markdown) {
-            format!(
-                "Current + {} marked + {} joint-fit inputs",
-                self.selection.len(),
-                self.joint.config.datasets.len()
-            )
-        } else {
-            format!("Current: {}", self.current_group_label())
-        };
-        let mut formats = div().flex().flex_wrap().gap_1();
-        for (i, choice) in ExportFormat::ALL.into_iter().enumerate() {
-            formats = formats.child(
-                chip(&t, ("export-format", i), choice.label(), choice == format).on_click(
-                    cx.listener(move |this, _, _, cx| {
-                        this.publish.format = choice;
-                        cx.notify();
-                    }),
-                ),
-            );
-        }
+        let ready = self.publication_ready() && !self.publish.running;
+        let changed = self.publish.destination.is_some()
+            && self
+                .publish
+                .changed_since_publish(&self.publication_revision());
         let header = div()
             .flex_none()
             .flex()
@@ -383,63 +445,67 @@ impl StudioApp {
                     .flex_wrap()
                     .items_center()
                     .gap_2()
-                    .child(formats)
-                    .child(div().flex_1())
                     .child(
-                        button(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(self.report_scope()),
+                    )
+                    .child(
+                        with_tip(
+                            button(&t, "copy-analysis-record", "Copy analysis record", false),
                             &t,
-                            "publish-export",
-                            if self.publish.running {
-                                "Exporting…"
-                            } else if format == ExportFormat::Markdown {
-                                "Copy"
-                            } else {
-                                "Export…"
-                            },
+                            "Copy the Markdown analysis record (analysis.md) to the clipboard.",
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                this.analysis_snapshot().markdown(),
+                            ));
+                            this.set_status(
+                                crate::app::StatusKind::Success,
+                                "Analysis record copied",
+                            );
+                            cx.notify();
+                        })),
+                    )
+                    .child(
+                        enabled_when(
+                            with_tip(
+                                button(
+                                    &t,
+                                    "publish-report",
+                                    if self.publish.running {
+                                        "Publishing…"
+                                    } else if changed {
+                                        "Publish changes…"
+                                    } else {
+                                        "Publish report…"
+                                    },
+                                    true,
+                                ),
+                                &t,
+                                "Publish the current report to a new folder, preserving previous exports. Includes report.html, analysis.md, PNG/SVG/CSV figures, tables, captions, resolved data and the project file.",
+                            ),
                             ready,
                         )
-                        .when(!ready, |d| d.disabled(true).opacity(0.45).cursor_default())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            if !ready {
-                                return;
-                            }
-                            if let Some(extension) = format.extension() {
-                                this.save_publication_figure(extension, cx);
-                            } else if format == ExportFormat::Folder {
+                            if ready {
                                 this.export_publication(cx);
-                            } else {
-                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                    this.analysis_snapshot().markdown(),
-                                ));
-                                this.status = "Analysis record copied".into();
-                                cx.notify();
                             }
                         })),
                     ),
             )
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap_2()
-                    .text_size(px(11.5))
-                    .text_color(t.text_muted)
-                    .child(scope)
-                    .when(format == ExportFormat::Csv, |d| {
-                        d.child("Visible curves · full data grids · axis limits do not crop CSV")
-                    })
-                    .when(format == ExportFormat::Folder, |d| {
-                        d.child("Figures, tables, report, project & arrays")
-                    })
-                    .when(format != ExportFormat::Markdown, |d| {
-                        d.child("Choose destination on export")
-                    }),
-            )
-            .when_some(self.publish.destination.clone(), |d, path| {
+            .when_some(self.publish.destination.clone(), |d, folder| {
+                let url = file_url(&folder.join("report.html"));
                 d.child(
                     div()
                         .flex()
+                        .flex_wrap()
                         .items_center()
                         .gap_2()
                         .child(
@@ -451,17 +517,21 @@ impl StudioApp {
                                 .text_ellipsis()
                                 .text_size(px(11.))
                                 .text_color(t.text_muted)
-                                .child(format!("Saved: {}", path.display())),
+                                .child(if changed {
+                                    format!("Changes since last publish · {}", self.publish.published_at.as_deref().unwrap_or(""))
+                                } else {
+                                    format!("Published {} · {}", self.publish.published_at.as_deref().unwrap_or(""), folder.display())
+                                })
+                                .when(changed, |d| d.text_color(t.warn)),
                         )
                         .child(
-                            icon_button(
-                                &t,
-                                "open-publication",
-                                Icon::Folder,
-                                "Show saved output",
-                                false,
-                            )
-                            .on_click(cx.listener(move |_, _, _, cx| cx.reveal_path(&path))),
+                            button(&t, "open-report", "Open last published report", false)
+                                .on_click(cx.listener(move |_, _, _, cx| cx.open_url(&url))),
+                        )
+                        .child(
+                            button(&t, "show-report-folder", "Show folder", false).on_click(
+                                cx.listener(move |_, _, _, cx| cx.reveal_path(&folder)),
+                            ),
                         ),
                 )
             });
@@ -477,12 +547,7 @@ impl StudioApp {
             .flex_col()
             .gap_2()
             .pr_3();
-        controls = controls.child(
-            div()
-                .text_color(t.text_muted)
-                .text_size(px(12.))
-                .child("Figure · current spectrum / fit"),
-        );
+        controls = controls.child(heading(&t, "Figures"));
         let more_figures = self.ui.sections.contains("Publication more figures");
         for common in [true, false] {
             if !common {
@@ -527,20 +592,22 @@ impl StudioApp {
                 );
             }
         }
-        if self
-            .publish
-            .figures
-            .get(self.publish.selected)
+        if figure
+            .as_ref()
             .is_some_and(|f| f.normalized_series.is_some())
         {
-            let mut modes = div().flex().flex_wrap().gap_1();
-            for (normalized, label) in [(false, "Flattened"), (true, "Normalized")] {
+            let mut modes = segmented(&t);
+            for (i, (normalized, label)) in [(false, "Flattened"), (true, "Normalized")]
+                .into_iter()
+                .enumerate()
+            {
                 modes = modes.child(
-                    chip(
+                    segment(
                         &t,
-                        SharedString::from(format!("publication-energy-{normalized}")),
+                        ("publication-energy", i),
                         label,
                         options.normalized == normalized,
+                        i == 0,
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(f) = this.publish.figures.get(this.publish.selected) {
@@ -556,7 +623,7 @@ impl StudioApp {
                     })),
                 );
             }
-            controls = controls.child(modes);
+            controls = controls.child(div().flex().child(modes));
         }
         controls = controls.child(
             disclosure(
@@ -585,6 +652,83 @@ impl StudioApp {
             })),
         );
         if style_open {
+            let mut presets = div().flex().flex_wrap().gap_1();
+            for (i, preset) in StylePreset::ALL.into_iter().enumerate() {
+                let (width, height, dpi, font) = preset.values();
+                presets = presets.child(
+                    with_tip(
+                        preset_icon(&t, i, preset, preset.matches(&options)),
+                        &t,
+                        format!(
+                            "{} · {width} × {height} in, {dpi} DPI, {font} pt text",
+                            preset.label()
+                        ),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(f) = this.publish.figures.get(this.publish.selected) {
+                            preset.apply(
+                                this.publish
+                                    .settings
+                                    .figures
+                                    .entry(f.key.into())
+                                    .or_default(),
+                            );
+                            this.publication_fields(cx);
+                            this.refresh_publication_preview(cx);
+                        }
+                    })),
+                );
+            }
+            controls = controls.child(presets);
+            controls = controls.child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child("Editing this figure type · all report spectra"),
+            );
+            controls = controls.child(
+                div()
+                    .mt_1()
+                    .flex()
+                    .flex_wrap()
+                    .gap_1()
+                    .child(
+                        with_tip(
+                            button(
+                                &t,
+                                "publication-apply-style",
+                                "Apply style to all figures",
+                                false,
+                            ),
+                            &t,
+                            "Copy size, DPI, font size, line width, legend, grid and guides from this figure to every figure in the report.",
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let keys: Vec<&'static str> =
+                                this.publish.figures.iter().map(|f| f.key).collect();
+                            if let Some(source) =
+                                this.publish.figures.get(this.publish.selected).map(|f| f.key)
+                            {
+                                this.publish.settings.apply_style_to_all(source, keys);
+                            }
+                            cx.notify();
+                        })),
+                    )
+                    .child(
+                        with_tip(
+                            button(&t, "publication-reset", "Reset", false),
+                            &t,
+                            "Return this figure type to its defaults. Figure settings are saved with the project and used for every spectrum in the report.",
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(f) = this.publish.figures.get(this.publish.selected) {
+                                this.publish.settings.figures.remove(f.key);
+                            }
+                            this.publication_fields(cx);
+                            this.refresh_publication_preview(cx);
+                        })),
+                    ),
+            );
             for field in self.publish.numbers.iter().take(5) {
                 controls = controls.child(field.clone());
             }
@@ -641,47 +785,29 @@ impl StudioApp {
                         ),
                     ),
             );
-            for (label, field) in ["Title · Typst", "X label · Typst", "Y label · Typst"]
+            for (label, field) in ["Title", "X label", "Y label"]
                 .into_iter()
                 .zip(self.publish.labels.iter().take(3))
             {
-                controls = controls
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(t.text_muted)
-                            .child(label),
-                    )
-                    .child(field.clone());
+                controls = controls.child(heading(&t, label)).child(field.clone());
             }
             controls = controls.child(
                 div()
                     .text_size(px(11.))
                     .text_color(t.text_muted)
-                    .child("Use $…$ for math, e.g. $k^2 chi(k)$."),
+                    .child("Typst math: $k^2 chi(k)$"),
             );
-            controls = controls.child(
-                div()
-                    .mt_2()
-                    .text_size(px(12.))
-                    .text_color(t.text_muted)
-                    .child("Axis limits · set or clear each pair"),
-            );
+            controls = controls.child(heading(&t, "Axis limits"));
             for field in self.publish.numbers.iter().skip(5) {
                 controls = controls.child(field.clone());
             }
-            controls = controls.child(
-                div()
-                    .mt_2()
-                    .text_size(px(12.))
-                    .text_color(t.text_muted)
-                    .child("Visible curves"),
-            );
-            if let Some(figure) = self.publish.figures.get(self.publish.selected) {
+            controls = controls.child(heading(&t, "Curves"));
+            if let Some(figure) = &figure {
+                let mut curves = div().flex().flex_wrap().gap_1();
                 for series in figure.series(&options) {
                     let key = series.key.clone();
                     let visible = series.visible(&options);
-                    controls = controls.child(
+                    curves = curves.child(
                         chip(
                             &t,
                             SharedString::from(format!("publication-series-{key}")),
@@ -708,11 +834,8 @@ impl StudioApp {
                         })),
                     );
                 }
+                controls = controls.child(curves);
             }
-            controls=controls.child(button(&t,"publication-reset","Reset figure to defaults",false).on_click(cx.listener(|this,_,_,cx| {
-            if let Some(f)=this.publish.figures.get(this.publish.selected) { this.publish.settings.figures.remove(f.key); }
-            this.publication_fields(cx);this.refresh_publication_preview(cx);
-        }))).child(div().text_size(px(11.)).text_color(t.text_muted).child("Settings apply to this figure type in the export folder and are saved with the project."));
         }
         controls = controls.child(
             disclosure(
@@ -739,18 +862,63 @@ impl StudioApp {
             .into_iter()
             .zip(self.publish.labels.iter().skip(3))
             {
-                controls = controls
-                    .child(
-                        div()
-                            .mt_1()
-                            .text_size(px(12.))
-                            .text_color(t.text_muted)
-                            .child(label),
-                    )
-                    .child(field.clone());
+                controls = controls.child(heading(&t, label)).child(field.clone());
             }
         }
         let (width, height, dpi) = options.dimensions();
+        let preview_ready = self.publish.preview.is_some() && !self.publish.preview_running;
+        let mut save = div().flex().items_center().gap_1().child(
+            div()
+                .text_size(px(11.5))
+                .text_color(t.text_muted)
+                .child("Save figure"),
+        );
+        let formats: [(&'static str, &'static str, bool, &'static str); 3] = [
+            (
+                "png",
+                "PNG",
+                preview_ready,
+                "Save this figure as a PNG image at the size and DPI above.",
+            ),
+            (
+                "svg",
+                "SVG",
+                preview_ready,
+                "Save this figure as an SVG vector image.",
+            ),
+            (
+                "csv",
+                "CSV",
+                figure.is_some(),
+                "Save the visible curves as CSV. Axis limits do not crop the data.",
+            ),
+        ];
+        for (i, (extension, label, enabled, tip)) in formats.into_iter().enumerate() {
+            let enabled = enabled && ready;
+            save = save.child(
+                enabled_when(
+                    with_tip(button(&t, ("save-figure", i), label, false), &t, tip),
+                    enabled,
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if enabled {
+                        this.save_publication_figure(extension, cx);
+                    }
+                })),
+            );
+        }
+        if let Some(path) = self.publish.saved_figure.clone() {
+            save = save.child(
+                icon_button(
+                    &t,
+                    "show-saved-figure",
+                    Icon::Folder,
+                    "Show saved figure",
+                    false,
+                )
+                .on_click(cx.listener(move |_, _, _, cx| cx.reveal_path(&path))),
+            );
+        }
         let mut preview = div()
             .flex_1()
             .min_w_0()
@@ -760,11 +928,18 @@ impl StudioApp {
             .gap_2()
             .child(
                 div()
-                    .text_size(px(12.))
-                    .text_color(t.text_muted)
-                    .child(format!(
-                        "{width:.2} × {height:.2} in · {dpi:.0} DPI · preview scaled to fit"
-                    )),
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_size(px(12.))
+                            .text_color(t.text_muted)
+                            .child(format!("{width:.2} × {height:.2} in · {dpi:.0} DPI")),
+                    )
+                    .child(save),
             );
         let mut canvas = div()
             .flex_1()
@@ -795,7 +970,7 @@ impl StudioApp {
             ));
         }
         preview = preview.child(canvas);
-        if let Some(figure) = self.publish.figures.get(self.publish.selected) {
+        if let Some(figure) = &figure {
             preview = preview.when(caption_open, |d| {
                 d.child(div().text_size(px(12.)).child(figure.caption(&options)))
             });
@@ -828,9 +1003,13 @@ impl StudioApp {
             .p_3()
             .gap_2()
             .child(header)
-            .when(self.fit_result.is_some() && self.fit_is_stale(), |d| d.child(
-                div().text_size(px(12.)).text_color(t.warn)
-                    .child("Fit figures show a previous result. The spectrum or fit settings have changed; rerun the fit to update them.")))
+            .when(self.fit_result.is_some() && self.fit_is_stale(), |d| {
+                d.child(
+                    div().text_size(px(12.)).text_color(t.warn).child(
+                        "Fit figures show the previous result; rerun the fit to update them.",
+                    ),
+                )
+            })
             .child(
                 div()
                     .flex_1()

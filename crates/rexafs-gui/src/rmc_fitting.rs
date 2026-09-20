@@ -1,6 +1,11 @@
 //! Desktop RMC input snapshots, incremental execution and durable recovery.
 //! The numerical algorithm remains in rexafs::rmc.
 pub mod diagnostics;
+pub mod memory;
+#[cfg(feature = "refeff-runner")]
+mod monitor;
+pub mod search;
+pub mod structural;
 use crate::{
     fitting::{FitRanges, FitSpaceSpec},
     group_identity::GroupId,
@@ -44,6 +49,8 @@ impl FitMode {
 pub struct Draft {
     pub repeats: [usize; 3],
     pub steps: usize,
+    pub search: search::Mode,
+    pub evolution: EvolutionSettings,
     pub step_size: f64,
     /// New drafts use bounded feedback and cooling; old projects stay fixed.
     #[serde(default)]
@@ -55,6 +62,14 @@ pub struct Draft {
     /// Let spare workers evaluate independent paths in a smaller absorber batch.
     #[serde(default)]
     pub parallel_paths: bool,
+    /// Since 0.2.12: None adapts the runtime cache budget to available memory.
+    /// Some(mib) is a fixed payload limit; electronic tables are separate.
+    pub cache_mib: Option<usize>,
+    /// Since 0.2.12: None resolves a path-count guard from available RAM at new-run
+    /// submission. An explicit count overrides it; existing runs keep their limit.
+    pub max_total_paths: Option<usize>,
+    /// Structural diagnostics use a fixed radial interval and bounded sample history.
+    pub structural: structural::Settings,
     pub temperature: f64,
     pub max_displacement: f64,
     pub min_distance: f64,
@@ -65,7 +80,7 @@ pub struct Draft {
     pub absorber_atoms: String,
     pub s02: f64,
     pub delta_e0: f64,
-    /// Unreleased: opt in to fixed-S₀² energy refinement. Old projects stay fixed.
+    /// Since 0.2.11: opt in to fixed-S₀² energy refinement. Old projects stay fixed.
     pub refine_energy: bool,
     pub energy_refinement: EnergyRefinement,
     pub calibration_range: [f64; 2],
@@ -83,10 +98,18 @@ impl Default for Draft {
         Self {
             repeats: [2; 3],
             steps: 10_000,
+            search: search::Mode::Rmc,
+            evolution: EvolutionSettings {
+                local_steps: 1,
+                ..Default::default()
+            },
             step_size: 0.05,
             auto_moves: true,
             workers: None,
             parallel_paths: true,
+            cache_mib: None,
+            max_total_paths: None,
+            structural: structural::Settings::default(),
             temperature: 0.001,
             max_displacement: 0.2,
             min_distance: 1.,
@@ -117,6 +140,25 @@ impl Default for Draft {
     }
 }
 impl Draft {
+    pub fn evolution_settings(&self) -> Result<Option<EvolutionSettings>, String> {
+        if self.search == search::Mode::Rmc {
+            return Ok(None);
+        }
+        if self.refine_energy {
+            return Err("Genetic and hybrid search currently require fixed ΔE₀. Disable energy refinement or select RMC.".into());
+        }
+        let mut settings = self.evolution.clone();
+        if self.search == search::Mode::Genetic {
+            settings.local_steps = 0;
+        } else if settings.local_steps == 0 {
+            return Err("Hybrid search needs at least one local attempt per child.".into());
+        }
+        settings.validate().map_err(|e| e.to_string())?;
+        if settings.generations == 0 || settings.generations > 1_000_000_000 {
+            return Err("Choose 1–1,000,000,000 generations.".into());
+        }
+        Ok(Some(settings))
+    }
     pub fn resolved_workers(&self) -> Result<usize, String> {
         let workers = self.workers.unwrap_or_else(available_workers);
         if !(1..=64).contains(&workers) {
@@ -148,6 +190,10 @@ impl Draft {
         configuration: &Configuration,
     ) -> Result<(), String> {
         self.resolved_workers()?;
+        memory::validate_manual(self.cache_mib)?;
+        memory::validate_catalogue_limit(self.max_total_paths)?;
+        self.structural.validate()?;
+        self.evolution_settings()?;
         if spectrum.k().is_none() || spectrum.chi().is_none() {
             return Err("Prepare χ(k) in Background before starting RMC.".into());
         }
@@ -358,6 +404,18 @@ pub struct Request {
     pub workers: usize,
     #[serde(default)]
     pub parallel_paths: bool,
+    /// Runtime resource policy, excluded from scientific calculator identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_mib: Option<usize>,
+    /// Resolved catalogue guard captured at submission. None preserves the
+    /// historical one-million-path limit and calculator identity on old resumes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_total_paths: Option<usize>,
+    /// None preserves historical runs without structural sampling.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structural: Option<structural::Settings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evolution: Option<EvolutionSettings>,
     pub source: Source,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -373,13 +431,52 @@ pub struct CacheStats {
     pub electronic_preparations: usize,
     #[serde(default)]
     pub shared_electronic_contexts: usize,
+    #[serde(default)]
+    pub limit_bytes: usize,
+    #[serde(default)]
+    pub minimum_bytes: usize,
+    #[serde(default)]
+    pub snapshot_hits: u64,
+    #[serde(default)]
+    pub cold_misses: u64,
+    #[serde(default)]
+    pub repeat_misses: u64,
+    #[serde(default)]
+    pub evictions: u64,
+    #[serde(default)]
+    pub oversized: u64,
+    #[serde(default)]
+    pub snapshots: usize,
+    #[serde(default)]
+    pub contexts: usize,
 }
 impl CacheStats {
+    /// Warn about current capacity, not normal cold preparation or low reuse
+    /// caused by moving many atoms. Historical misses remain visible in details.
+    pub fn warning(&self) -> Option<String> {
+        (self.minimum_bytes > self.limit_bytes).then(|| format!(
+            "Cache capacity is too small to retain one snapshot per absorber: {:.0} MiB limit, about {:.0} MiB needed. {} repeated cache misses have required recalculation. Use Auto or raise the memory limit if memory is available.",
+            self.limit_bytes as f64 / memory::MIB as f64,
+            self.minimum_bytes as f64 / memory::MIB as f64,
+            self.repeat_misses,
+        ))
+    }
     pub fn active_reuse(&self) -> Option<f64> {
         let total = self.exact + self.reused_active;
         (total > 0).then(|| self.reused_active as f64 / total as f64)
     }
 }
+
+#[derive(Clone)]
+pub struct CalculationProgress {
+    pub description: String,
+    pub elapsed_seconds: f64,
+    pub cache: CacheStats,
+    pub budget: memory::CacheBudget,
+    /// Recent capacity misses; normal cold preparation never triggers this.
+    pub cache_warning: Option<String>,
+}
+type Telemetry = Arc<Mutex<Option<CalculationProgress>>>;
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Progress {
     pub initial: Arc<EnsembleState>,
@@ -398,12 +495,20 @@ pub struct Progress {
     pub move_scale: Option<f64>,
     #[serde(default)]
     pub recent_acceptance: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structural: Option<Arc<structural::History>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structural_error: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evolution_history: Vec<EvolutionGeneration>,
+    #[serde(default)]
+    pub local_attempts: usize,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SavedRun {
     pub version: u32,
     pub request: Request,
-    pub checkpoint: RmcCheckpoint,
+    pub checkpoint: search::Checkpoint,
     pub progress: Progress,
     pub status: String,
 }
@@ -411,11 +516,44 @@ impl SavedRun {
     /// Check result dimensions before displaying/exporting untrusted project files.
     /// Numerical checkpoint validation is also performed by RmcSession::resume.
     pub fn validate(&self) -> Result<(), String> {
-        if self.version != 1 {
+        memory::validate_manual(self.request.cache_mib)?;
+        memory::validate_catalogue_limit(self.request.max_total_paths)?;
+        let evolutionary = self.request.evolution.is_some();
+        if self.version != if evolutionary { 2 } else { 1 }
+            || evolutionary != matches!(self.checkpoint, search::Checkpoint::Evolution { .. })
+        {
             return Err("Unsupported desktop RMC checkpoint version.".into());
         }
         validate_progress(&self.progress, &self.request)?;
-        let checkpoint = serde_json::to_value(&self.checkpoint).map_err(|e| e.to_string())?;
+        let checkpoint = self.checkpoint.numerical_value()?;
+        if evolutionary {
+            let settings = self.request.evolution.as_ref().unwrap();
+            settings.validate().map_err(|e| e.to_string())?;
+            if self.request.settings.energy_refinement.is_some() {
+                return Err("Evolutionary checkpoints require fixed ΔE₀.".into());
+            }
+            let mut settings = serde_json::to_value(settings).map_err(|e| e.to_string())?;
+            settings["generations"] = checkpoint["settings"]["generations"].clone();
+            if checkpoint["settings"] != settings
+                || checkpoint["session"]
+                    != serde_json::to_value(&self.request.settings).map_err(|e| e.to_string())?
+                || checkpoint["problem"]
+                    != serde_json::to_value(&self.request.problem).map_err(|e| e.to_string())?
+                || checkpoint["population"][0]
+                    != serde_json::to_value(&self.progress.best).map_err(|e| e.to_string())?
+                || checkpoint["completed"] != serde_json::json!(self.progress.completed)
+                || checkpoint["local_completed"] != serde_json::json!(self.progress.local_attempts)
+                || checkpoint["history"]
+                    != serde_json::to_value(&self.progress.evolution_history)
+                        .map_err(|e| e.to_string())?
+                || self.progress.initial.structures != self.request.problem.structures
+            {
+                return Err(
+                    "Saved evolutionary results differ from their numerical checkpoint.".into(),
+                );
+            }
+            return Ok(());
+        }
         for (key, value) in [
             ("problem", serde_json::to_value(&self.request.problem)),
             ("initial", serde_json::to_value(&self.progress.initial)),
@@ -440,6 +578,14 @@ impl SavedRun {
 }
 pub fn validate_progress(p: &Progress, request: &Request) -> Result<(), String> {
     let problem = &request.problem;
+    if let Some(settings) = &request.structural {
+        settings.validate()?;
+        if settings.generations != request.evolution.is_some()
+            || (settings.generations && settings.stride != 1)
+        {
+            return Err("Structural sampling units differ from the search method.".into());
+        }
+    }
     if problem.datasets.len() != 1 || problem.structures.len() != 1 {
         return Err("The desktop RMC viewer requires one spectrum and one structure.".into());
     }
@@ -489,9 +635,34 @@ pub fn validate_progress(p: &Progress, request: &Request) -> Result<(), String> 
             .validate()
             .map_err(|e| e.to_string())?;
     }
+    if let Some(history) = &p.structural {
+        let centers = data
+            .absorbers_by_structure
+            .first()
+            .unwrap_or(&data.exafs.absorbers);
+        if request.structural.as_ref() != Some(&history.settings) || &history.centers != centers {
+            return Err(
+                "Structural history differs from the saved sampling settings or centers.".into(),
+            );
+        }
+        history.validate(&problem.structures[0].configuration, p.completed)?;
+    }
+    let attempts = if request.evolution.is_some() {
+        p.local_attempts
+    } else {
+        p.completed
+    };
+    if p.evolution_history.iter().any(|g| {
+        g.generation > p.completed
+            || !g.best_score.is_finite()
+            || g.mean_score.is_some_and(|v| !v.is_finite())
+            || !g.diversity.is_finite()
+    }) {
+        return Err("Invalid saved evolutionary progress.".into());
+    }
     if p.completed > p.limit
-        || p.accepted > p.completed
-        || p.constraint_rejected > p.completed
+        || p.accepted > attempts
+        || p.constraint_rejected > attempts
         || !p.current_score.is_finite()
         || !p.elapsed_seconds.is_finite()
         || p.elapsed_seconds < 0.
@@ -520,6 +691,8 @@ pub enum Event {
     Progress(Box<Progress>),
     Saved(Box<SavedRun>),
     Paused,
+    /// An explicit stop interrupted preparation before a new state was committed.
+    Stopped,
     Finished(Box<SavedRun>),
     Error(String),
 }
@@ -533,8 +706,12 @@ pub struct Control {
     tx: mpsc::Sender<Command>,
     interrupt: Interrupt,
     stopping: Arc<AtomicBool>,
+    telemetry: Telemetry,
 }
 impl Control {
+    pub fn calculation_progress(&self) -> Option<CalculationProgress> {
+        self.telemetry.lock().ok().and_then(|p| p.clone())
+    }
     pub fn pause(&self) {
         let _ = self.tx.send(Command::Pause);
     }
@@ -695,15 +872,57 @@ impl Request {
             reuse_electronic_inputs: true,
             workers: draft.resolved_workers()?,
             parallel_paths: draft.parallel_paths,
+            cache_mib: draft.cache_mib,
+            max_total_paths: Some(memory::catalogue_limit(
+                draft.max_total_paths,
+                memory::available_memory(),
+            )),
+            structural: Some(structural::Settings {
+                stride: if draft.search == search::Mode::Rmc {
+                    draft.structural.stride
+                } else {
+                    1
+                },
+                generations: draft.search != search::Mode::Rmc,
+                ..draft.structural.clone()
+            }),
+            evolution: draft.evolution_settings()?,
             source,
         })
     }
 
+    pub fn limit(&self) -> usize {
+        self.evolution
+            .as_ref()
+            .map_or(self.settings.moves.steps, |s| s.generations)
+    }
+    pub fn set_limit(&mut self, total: usize) {
+        if let Some(settings) = &mut self.evolution {
+            settings.generations = total;
+        } else {
+            self.settings.moves.steps = total;
+        }
+    }
+    pub fn mode(&self) -> search::Mode {
+        match &self.evolution {
+            None => search::Mode::Rmc,
+            Some(s) if s.local_steps == 0 => search::Mode::Genetic,
+            Some(_) => search::Mode::Hybrid,
+        }
+    }
+    pub fn unit(&self) -> &'static str {
+        if self.evolution.is_some() {
+            "generations"
+        } else {
+            "attempts"
+        }
+    }
     /// Allocate one context slot for each requested structure, absorber, edge
     /// and settings combination. This is a resource choice, not site sampling.
     /// Path-count and byte budgets remain independently enforced by the core.
     #[cfg(feature = "refeff-runner")]
     fn acceleration_settings(&self) -> Result<AccelerationSettings, String> {
+        memory::validate_catalogue_limit(self.max_total_paths)?;
         let mut contexts = std::collections::BTreeSet::new();
         for dataset in &self.problem.datasets {
             let options =
@@ -736,6 +955,13 @@ impl Request {
                 .len()
                 .max(AccelerationSettings::default().max_contexts),
             reuse_electronic_inputs: self.reuse_electronic_inputs,
+            max_total_paths: self
+                .max_total_paths
+                .unwrap_or(AccelerationSettings::default().max_total_paths),
+            snapshots_per_context: self
+                .evolution
+                .as_ref()
+                .map_or(1, |s| s.population.saturating_add(1).min(1024)),
             ..Default::default()
         })
     }
@@ -797,10 +1023,16 @@ pub fn spawn(
     let stopping = Arc::new(AtomicBool::new(false));
     let worker_interrupt = interrupt.clone();
     let worker_stopping = stopping.clone();
+    let telemetry: Telemetry = Default::default();
+    let worker_telemetry = telemetry.clone();
     std::thread::spawn(move || {
         let result = (|| -> Result<(), String> {
             if let Some(saved) = &resume {
                 saved.validate()?;
+                // Preserve the last durable result before cold reconstruction,
+                // including when preparation is cancelled or its backend fails.
+                save_run(&path, saved)?;
+                let _ = events.send(Event::Saved(saved.clone()));
             }
             let settings = request.acceleration_settings()?;
             let mut calculator = PreparedRefeffCalculator::new(
@@ -822,6 +1054,8 @@ pub fn spawn(
             if worker_stopping.load(Ordering::Relaxed) {
                 return Err("Stopped before preparation.".into());
             }
+            memory::validate_manual(request.cache_mib)?;
+            let _monitor = monitor::MonitorGuard::start(&request, &calculator, worker_telemetry);
             drive(
                 request,
                 resume,
@@ -834,7 +1068,14 @@ pub fn spawn(
             )
         })();
         if let Err(e) = result {
-            let _ = events.send(Event::Error(e));
+            let event = if worker_stopping.load(Ordering::Relaxed)
+                && (e == "Stopped before preparation." || e.contains("cancelled"))
+            {
+                Event::Stopped
+            } else {
+                Event::Error(e)
+            };
+            let _ = events.send(event);
         }
     });
     (
@@ -842,6 +1083,7 @@ pub fn spawn(
             tx,
             interrupt,
             stopping,
+            telemetry,
         },
         rx,
     )
@@ -861,6 +1103,7 @@ pub fn spawn(
             tx,
             interrupt: Default::default(),
             stopping: Default::default(),
+            telemetry: Default::default(),
         },
         rx,
     )
@@ -868,7 +1111,10 @@ pub fn spawn(
 
 #[cfg(feature = "refeff-runner")]
 fn cache(calculator: &PreparedRefeffCalculator) -> CacheStats {
-    let s = calculator.stats();
+    cache_stats(&calculator.stats())
+}
+#[cfg(feature = "refeff-runner")]
+fn cache_stats(s: &PreparedRefeffStats) -> CacheStats {
     CacheStats {
         exact: s.exact_paths,
         reused_active: s.reused_active_paths,
@@ -879,6 +1125,15 @@ fn cache(calculator: &PreparedRefeffCalculator) -> CacheStats {
         evaluation_seconds: s.evaluation_seconds,
         electronic_preparations: s.electronic_preparations,
         shared_electronic_contexts: s.shared_electronic_contexts,
+        limit_bytes: s.cache_limit_bytes,
+        minimum_bytes: s.minimum_cache_bytes,
+        snapshot_hits: s.snapshot_hits,
+        cold_misses: s.cold_misses,
+        repeat_misses: s.repeat_misses,
+        evictions: s.budget_evictions,
+        oversized: s.oversized_snapshots,
+        snapshots: s.cached_snapshots,
+        contexts: s.contexts,
     }
 }
 #[cfg(feature = "refeff-runner")]
@@ -894,6 +1149,7 @@ fn drive(
     stopping: &AtomicBool,
 ) -> Result<(), String> {
     let started = Instant::now();
+    let prior_structural = resume.as_ref().and_then(|s| s.progress.structural.clone());
     let (mut session, prior_elapsed, mut accepted, mut rejected) = if let Some(saved) = resume {
         // A saved request supplies the original reference and calculator settings.
         if serde_json::to_value(&request.problem).map_err(|e| e.to_string())?
@@ -902,30 +1158,60 @@ fn drive(
             return Err("Resume inputs differ from the saved problem.".into());
         }
         (
-            RmcSession::resume(saved.checkpoint, calculator).map_err(|e| e.to_string())?,
+            search::Session::resume(&saved, calculator).map_err(|e| e.to_string())?,
             saved.progress.elapsed_seconds,
             saved.progress.accepted,
             saved.progress.constraint_rejected,
         )
     } else {
         (
-            RmcSession::new(&request.problem, &request.settings, calculator)
-                .map_err(|e| e.to_string())?,
+            search::Session::new(&request, calculator).map_err(|e| e.to_string())?,
             0.,
             0,
             0,
         )
     };
     session
-        .set_step_limit(request.settings.moves.steps)
+        .set_step_limit(request.limit())
         .map_err(|e| e.to_string())?;
+    let structural = request
+        .structural
+        .as_ref()
+        .map(|settings| {
+            let data = &request.problem.datasets[0];
+            let centers = data
+                .absorbers_by_structure
+                .first()
+                .unwrap_or(&data.exafs.absorbers)
+                .clone();
+            structural::Worker::new(
+                settings.clone(),
+                centers,
+                session.initial().structures[0].configuration.clone(),
+                prior_structural,
+            )
+        })
+        .transpose()?;
+    let sample_structure = |session: &search::Session, flush| {
+        if let Some(worker) = &structural {
+            // A diagnostic error is shown separately; scattering and checkpoints remain usable.
+            let _ = worker.submit(
+                session.completed(),
+                &session.current().structures[0].configuration,
+                &session.best().structures[0].configuration,
+                flush,
+            );
+        }
+    };
+    sample_structure(&session, true);
     let setup_seconds = started.elapsed().as_secs_f64();
     let mut paused = prepare_only;
     let mut last_update = Instant::now();
     let mut last_save = Instant::now();
     let mut working_seconds = setup_seconds;
     let mut active_started = Instant::now();
-    let make_progress = |session: &RmcSession,
+    let auto_moves = request.settings.adaptation.is_some();
+    let make_progress = |session: &search::Session,
                          calculator: &PreparedRefeffCalculator,
                          accepted,
                          rejected,
@@ -946,12 +1232,16 @@ fn drive(
             cache: cache(calculator),
             setup_seconds,
             elapsed_seconds: prior_elapsed + elapsed,
-            move_scale: request
-                .settings
-                .adaptation
-                .as_ref()
-                .map(|_| session.adaptation().scale),
+            move_scale: auto_moves.then_some(session.adaptation().scale),
             recent_acceptance: session.adaptation().last_acceptance,
+            evolution_history: session.evolution_history().to_vec(),
+            local_attempts: session.local_attempts(),
+            structural: structural
+                .as_ref()
+                .and_then(|worker| worker.snapshot().ok().flatten()),
+            structural_error: structural
+                .as_ref()
+                .and_then(|worker| worker.snapshot().err()),
         })
     };
     let initial = make_progress(
@@ -960,10 +1250,10 @@ fn drive(
         accepted,
         rejected,
         working_seconds,
-        request.settings.moves.steps,
+        request.limit(),
     )?;
     let saved = SavedRun {
-        version: 1,
+        version: session.version(),
         request: request.clone(),
         checkpoint: session.checkpoint(),
         progress: initial.clone(),
@@ -995,7 +1285,7 @@ fn drive(
                 }
                 Command::Resume(total) => {
                     session.set_step_limit(total).map_err(|e| e.to_string())?;
-                    request.settings.moves.steps = total;
+                    request.set_limit(total);
                     if paused {
                         active_started = Instant::now();
                         paused = false;
@@ -1003,17 +1293,18 @@ fn drive(
                 }
             }
             if paused && !stopping.load(Ordering::Relaxed) {
+                sample_structure(&session, true);
                 let mut p = make_progress(
                     &session,
                     calculator,
                     accepted,
                     rejected,
                     working_seconds,
-                    request.settings.moves.steps,
+                    request.limit(),
                 )?;
-                p.limit = request.settings.moves.steps;
+                p.limit = request.limit();
                 let saved = SavedRun {
-                    version: 1,
+                    version: session.version(),
                     request: request.clone(),
                     checkpoint: session.checkpoint(),
                     progress: p,
@@ -1035,8 +1326,15 @@ fn drive(
         if !done {
             match session.step(calculator) {
                 Ok(Some(step)) => {
-                    accepted += usize::from(step.accepted);
-                    rejected += usize::from(step.constraint_rejected);
+                    accepted += step.0;
+                    rejected += step.1;
+                    if request
+                        .structural
+                        .as_ref()
+                        .is_some_and(|s| session.completed() % s.stride == 0)
+                    {
+                        sample_structure(&session, false);
+                    }
                 }
                 Ok(None) => done = true,
                 Err(e) => {
@@ -1057,15 +1355,18 @@ fn drive(
             || last_update.elapsed() >= Duration::from_millis(500)
             || last_save.elapsed() >= Duration::from_secs(30)
         {
+            if done || last_save.elapsed() >= Duration::from_secs(30) {
+                sample_structure(&session, true);
+            }
             let mut progress = make_progress(
                 &session,
                 calculator,
                 accepted,
                 rejected,
                 elapsed,
-                request.settings.moves.steps,
+                request.limit(),
             )?;
-            progress.limit = request.settings.moves.steps;
+            progress.limit = request.limit();
             if done || last_save.elapsed() >= Duration::from_secs(30) {
                 let status = if failure.is_some() {
                     "Failed"
@@ -1077,13 +1378,14 @@ fn drive(
                         Some(StopReason::TargetScore) => "Target score reached",
                         Some(StopReason::Stagnation) => "Stagnation stopping rule",
                         Some(StopReason::LowAcceptance) => "Low-acceptance stopping rule",
+                        None if request.evolution.is_some() => "Generation limit reached",
                         None => "Finished",
                     }
                 } else {
                     "Running"
                 };
                 let saved = SavedRun {
-                    version: 1,
+                    version: session.version(),
                     request: request.clone(),
                     checkpoint: session.checkpoint(),
                     progress: progress.clone(),
@@ -1239,8 +1541,10 @@ pub fn export(parent: &Path, saved: &SavedRun) -> Result<PathBuf, String> {
     )
     .map_err(|e| e.to_string())?;
     let p = &saved.progress;
+    let unit = saved.request.unit();
+    let method = saved.request.mode().label();
     let mut report = format!(
-        "# RMC result\n\nSource: {}\n\nTermination: {}. Residual trend: {:?}.\n\nInitial objective: {:.10}. Best objective: {:.10}. Structural penalty: {:.10}.\n\nCompleted attempts: {} / {}. Accepted: {}. Constraint rejected: {}.\n\nActive elapsed time: {:.3} s. Current-session setup: {:.3} s.\n\nThe objective is the normalized squared real-plus-imaginary R residual plus configured structural penalties. A completed budget does not establish convergence or structural uniqueness. Exact ReFEFF path updates use fixed reference electronic potentials.\n\nThe checkpoint contains the original processing snapshot, job settings, RNG and best/current states. Configuration JSON preserves the periodic cell; ordinary XYZ does not.\n",
+        "# {method} result\n\nSource: {}\n\nTermination: {}. Residual trend: {:?}.\n\nInitial objective: {:.10}. Best objective: {:.10}. Structural penalty: {:.10}.\n\nCompleted {unit}: {} / {}. Accepted local/MC moves: {}. Local/MC constraint rejections: {}.\n\nActive elapsed time: {:.3} s. Current-session setup: {:.3} s.\n\nThe objective is the normalized squared real-plus-imaginary R residual plus configured structural penalties. A completed budget does not establish convergence or structural uniqueness. Exact ReFEFF path updates use fixed reference electronic potentials.\n\nThe checkpoint contains the original processing snapshot, job settings, RNG and best/current states. Configuration JSON preserves the periodic cell; ordinary XYZ does not.\n",
         saved.request.source.label,
         saved.status,
         p.trend.status,
@@ -1257,6 +1561,19 @@ pub fn export(parent: &Path, saved: &SavedRun) -> Result<PathBuf, String> {
     report.push_str(&format!("\nFixed S₀²: {:.6}. Initial theoretical ΔE₀: {:+.6} eV. Best theoretical ΔE₀: {:+.6} eV. These parameters match the exported initial/best curves and structures; full precision is in fit-parameters.json. Experimental energy alignment is unchanged.\n",
         data.exafs.s02, saved.progress.initial.energy_shifts(&saved.request.problem).map_err(|e| e.to_string())?[0],
         saved.progress.best.energy_shifts(&saved.request.problem).map_err(|e| e.to_string())?[0]));
+    if let Some(settings) = &saved.request.evolution {
+        std::fs::write(
+            directory.join("evolution-generations.json"),
+            serde_json::to_vec_pretty(&saved.progress.evolution_history)
+                .map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
+        report.push_str(&format!("\nEvolutionary population: {} individuals, {} elite survivors, {} local RMC attempts per nonelite child. Total local attempts: {}. Current structural diagnostics show the best individual, not a population-averaged structure. Full population and RNG are retained in the checkpoint.\n", settings.population, settings.elite, settings.local_steps, saved.progress.local_attempts));
+    }
+    if let Some(history) = &saved.progress.structural {
+        history.export(&directory)?;
+        report.push_str("\nStructural diagnostics: structural-curves.csv contains initial/current/best and retained samples; structural-history.csv contains moments over the declared radial interval. Periodic g(r) uses species density and exact spherical shell volumes. Finite clusters have neighbor counts only. Steps denote optimizer iterations (attempts or generations as specified in the JSON settings), not physical time. Sampling settings and gaps are retained in structural-evolution.json.\n");
+    }
     std::fs::write(directory.join("REPORT.md"), report).map_err(|e| e.to_string())?;
     Ok(directory)
 }
@@ -1320,6 +1637,96 @@ pub(crate) mod tests {
         )
         .unwrap()
     }
+    #[cfg(feature = "refeff-runner")]
+    #[test]
+    fn evolutionary_and_hybrid_workers_resume_the_exact_population_and_rng() {
+        fn run(request: Request, previous: Option<Box<SavedRun>>, path: PathBuf) -> Box<SavedRun> {
+            let (control, events) = spawn(request, previous, path, false);
+            loop {
+                match events.recv_timeout(Duration::from_secs(60)).unwrap() {
+                    Event::Finished(saved) => {
+                        drop(control);
+                        saved.validate().unwrap();
+                        return saved;
+                    }
+                    Event::Error(error) => panic!("{error}"),
+                    _ => {}
+                }
+            }
+        }
+        let directory = tempfile::tempdir().unwrap();
+        for local_steps in [0, 1] {
+            let mut request = request();
+            request.evolution = Some(EvolutionSettings {
+                population: 3,
+                elite: 1,
+                generations: 4,
+                local_steps,
+                ..Default::default()
+            });
+            request.structural.as_mut().unwrap().stride = 1;
+            request.structural.as_mut().unwrap().generations = true;
+            let all = run(request.clone(), None, directory.path().join("all.json"));
+            let mut partial = request.clone();
+            partial.set_limit(2);
+            let first = run(partial, None, directory.path().join("first.json"));
+            assert_eq!(first.progress.completed, 2);
+            assert_eq!(first.progress.local_attempts, 2 * 2 * local_steps);
+            let restored = load_run(&directory.path().join("first.json")).unwrap();
+            let mut continuation = restored.request.clone();
+            continuation.set_limit(4);
+            continuation.cache_mib = Some(128);
+            let resumed = run(
+                continuation,
+                Some(Box::new(restored)),
+                directory.path().join("resumed.json"),
+            );
+            let project_roundtrip: SavedRun =
+                serde_json::from_value(serde_json::to_value(&resumed).unwrap()).unwrap();
+            project_roundtrip.validate().unwrap();
+            assert_eq!(resumed.progress.completed, 4);
+            assert_eq!(resumed.progress.local_attempts, 4 * 2 * local_steps);
+            assert_eq!(
+                serde_json::to_value(&all.checkpoint).unwrap(),
+                serde_json::to_value(&resumed.checkpoint).unwrap()
+            );
+            assert_eq!(all.progress.best.as_ref(), resumed.progress.best.as_ref());
+            assert_eq!(
+                resumed.progress.structural.as_ref().unwrap().current.step,
+                4
+            );
+            let exported = export(directory.path(), &resumed).unwrap();
+            assert!(exported.join("structural-history.csv").exists());
+            if let Some(capture) = std::env::var_os("REXAFS_TEST_CAPTURE_DIR") {
+                save_run(
+                    &PathBuf::from(capture)
+                        .join(format!("synthetic-evolution-local-{local_steps}.json")),
+                    &resumed,
+                )
+                .unwrap();
+            }
+            let mut corrupted = (*resumed).clone();
+            corrupted.progress.local_attempts += 1;
+            assert!(corrupted.validate().is_err());
+            let mut corrupted = (*resumed).clone();
+            corrupted.request.structural.as_mut().unwrap().generations = false;
+            assert!(corrupted.validate().is_err());
+            let mut corrupted = (*resumed).clone();
+            let history = Arc::make_mut(corrupted.progress.structural.as_mut().unwrap());
+            history.centers = vec![1];
+            assert!(corrupted.validate().is_err());
+        }
+        let mut draft = Draft::default();
+        draft.search = search::Mode::Hybrid;
+        draft.refine_energy = true;
+        assert!(
+            draft
+                .evolution_settings()
+                .unwrap_err()
+                .contains("fixed ΔE₀")
+        );
+    }
+
     #[test]
     fn energy_refinement_is_optional_and_checks_full_shifted_coverage() {
         let spectrum = spectrum();
@@ -1434,7 +1841,7 @@ pub(crate) mod tests {
             loaded.request.acceleration_settings().unwrap(),
         )
         .unwrap();
-        let resumed = RmcSession::resume(loaded.checkpoint.clone(), &mut calc).unwrap();
+        let resumed = search::Session::resume(&loaded, &mut calc).unwrap();
         assert_eq!(resumed.best(), loaded.progress.best.as_ref());
     }
 
@@ -1764,12 +2171,95 @@ pub(crate) mod tests {
             .push(request.problem.datasets[0].clone());
         let settings = request.acceleration_settings().unwrap();
         assert_eq!(settings.max_contexts, 256);
-        assert_eq!(
-            settings.max_total_paths,
-            AccelerationSettings::default().max_total_paths
-        );
+        assert_eq!(settings.max_total_paths, request.max_total_paths.unwrap());
         request.problem.datasets[1].exafs.edge = Edge::L3;
         assert_eq!(request.acceleration_settings().unwrap().max_contexts, 512);
+    }
+
+    #[cfg(feature = "refeff-runner")]
+    #[test]
+    fn catalogue_limits_roundtrip_and_legacy_requests_keep_their_identity() {
+        let mut request = request();
+        request.max_total_paths = Some(3_000_000);
+        let encoded = serde_json::to_value(&request).unwrap();
+        let restored: Request = serde_json::from_value(encoded.clone()).unwrap();
+        assert_eq!(
+            restored.acceleration_settings().unwrap().max_total_paths,
+            3_000_000
+        );
+        let key = diagnostics::input_key(&request).unwrap();
+        request.max_total_paths = Some(4_000_000);
+        assert_eq!(diagnostics::input_key(&request).unwrap(), key);
+        let mut old = encoded;
+        old.as_object_mut().unwrap().remove("max_total_paths");
+        let legacy: Request = serde_json::from_value(old.clone()).unwrap();
+        assert_eq!(
+            legacy.acceleration_settings().unwrap().max_total_paths,
+            1_000_000
+        );
+        assert_eq!(serde_json::to_value(legacy).unwrap(), old);
+        request.max_total_paths = Some(0);
+        assert!(request.acceleration_settings().is_err());
+    }
+
+    #[cfg(feature = "refeff-runner")]
+    #[test]
+    #[ignore = "manual native qualification: 256 Cu absorbers, 8 Å cluster, 6 Å paths, four legs"]
+    fn native_256_site_large_catalogue_uses_auto_capacity() {
+        let structure = rexafs::structure::BuiltinLibrary::get()
+            .unwrap()
+            .structure("cu")
+            .unwrap();
+        let configuration = build_preview(&structure, [4; 3]).unwrap();
+        let mut request = request();
+        request.problem.structures[0].configuration = configuration.clone();
+        request.problem.datasets[0].exafs.absorbers = (0..256).collect();
+        request.calculator.cluster_radius = 8.;
+        request.calculator.path_radius = 6.;
+        request.calculator.max_legs = 4;
+        request.calculator.kmax = 20.;
+        request.catalogue.radius = 6.;
+        request.catalogue.max_legs = 4;
+        request.max_total_paths = Some(memory::catalogue_limit(
+            None,
+            Some(memory::MemorySnapshot {
+                total: 32 * 1024 * memory::MIB,
+                available: 9 * 1024 * memory::MIB,
+            }),
+        ));
+        let mut calculator = PreparedRefeffCalculator::new(
+            request.calculator.clone(),
+            vec![configuration.clone()],
+            request.acceleration_settings().unwrap(),
+        )
+        .unwrap();
+        let requests: Vec<_> = (0..256)
+            .map(|absorber| CalculationRequest {
+                structure: 0,
+                configuration: &configuration,
+                absorber,
+                edge: Edge::K,
+                k: &[3., 10., 16., 18.],
+                options: None,
+                paths: false,
+            })
+            .collect();
+        let results = calculator.calculate_batch(&requests).unwrap();
+        assert_eq!(results.len(), 256);
+        assert!(
+            results
+                .iter()
+                .all(|r| r.chi.len() == 4 && r.chi.iter().all(|v| v.is_finite()))
+        );
+        assert_eq!(calculator.stats().contexts, 256);
+        assert!(calculator.stats().catalogue_paths > 1_000_000);
+        assert!(calculator.stats().catalogue_paths <= request.max_total_paths.unwrap());
+        eprintln!(
+            "Prepared {} paths for {} absorbers; limit {}.",
+            calculator.stats().catalogue_paths,
+            calculator.stats().contexts,
+            request.max_total_paths.unwrap()
+        );
     }
 
     #[cfg(feature = "refeff-runner")]
@@ -1914,6 +2404,34 @@ pub(crate) mod tests {
         assert!(exported.join("fit-r.csv").is_file());
         // Shape and provenance errors are rejected before display or resume.
         let good = restored.rmc.saved.as_ref().unwrap();
+        let stopped_path = directory.path().join("cancelled-cold-resume.json");
+        let (control, events) = spawn(
+            good.request.clone(),
+            Some(good.clone()),
+            stopped_path.clone(),
+            true,
+        );
+        control.stop();
+        let mut retained_before_preparation = false;
+        loop {
+            match events.recv_timeout(Duration::from_secs(60)).unwrap() {
+                Event::Saved(saved) => {
+                    assert_eq!(saved.progress.best.as_ref(), good.progress.best.as_ref());
+                    retained_before_preparation = true;
+                }
+                Event::Stopped | Event::Finished(_) => break,
+                Event::Error(error) => {
+                    panic!("An explicit stop must not be a backend error: {error}")
+                }
+                _ => {}
+            }
+        }
+        assert!(retained_before_preparation);
+        assert_eq!(
+            serde_json::to_value(load_run(&stopped_path).unwrap().checkpoint).unwrap(),
+            serde_json::to_value(&good.checkpoint).unwrap(),
+        );
+        drop(control);
         let original = serde_json::to_value(uninterrupted.checkpoint()).unwrap();
         let local = uninterrupted
             .refine_best(

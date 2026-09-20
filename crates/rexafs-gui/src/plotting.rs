@@ -284,7 +284,12 @@ impl PlotCoverage {
         if self.plotted == self.total {
             return None;
         }
-        let mut text = format!("{} of {} spectra plotted", self.plotted, self.total);
+        let mut text = format!(
+            "{} of {} {} plotted",
+            self.plotted,
+            self.total,
+            crate::text::noun_for(self.total, "spectrum")
+        );
         for (count, reason) in [
             (self.sampled_out, "omitted by sampling"),
             (self.incompatible, "without data for this plot"),
@@ -938,6 +943,48 @@ pub fn build_quadrant_specs(
     [mu_e, norm, chi_k, chi_r, chi_q]
 }
 
+/// Tick count and axis limits that make ruviz label an integer axis (frame
+/// numbers, component numbers) with whole numbers only, with at most ten ticks.
+///
+/// See [`integer_axis_max`]; ten is the ceiling ruviz allows a linear axis.
+pub(crate) fn integer_axis(first: usize, last: usize) -> (usize, (f64, f64)) {
+    integer_axis_max(first, last, 10)
+}
+
+/// Tick count and axis limits that make ruviz label an integer axis with whole
+/// numbers only, using at most `max_ticks` ticks (clamped to 3..=10, the range
+/// ruviz honours; a narrow panel passes a lower ceiling so its labels fit).
+///
+/// `first..=last` are the integer positions on the axis; at least two are kept
+/// so a one-frame axis still reads "0 1". The limits pad each end by half a
+/// unit so ticks sit on the values and heatmap rows are not cropped. ruviz's
+/// tick locator (matplotlib's `MaxNLocator`) treats the count as a ceiling and
+/// keeps the densest "nice" step (1, 2, 2.5 or 5 × 10ⁿ) that fits, so the count
+/// is exactly the number of ticks the finest integer step (1, 2, 5, 10, 20,
+/// 50, …) with at most `max_ticks` ticks produces: the next finer rung about
+/// doubles the count and is rejected, and the 2.5 rung only fits beside a
+/// rounder step with more ticks, which the locator prefers. The count must be
+/// the plot's final `major_ticks_x`; a later override with a width-only count
+/// lets the 2.5 rung back in. ruviz also never accepts a ceiling below three,
+/// so when the fitting step would leave only two ticks (0 and 5 of seven
+/// frames), the previous, denser integer step is kept: a slightly crowded
+/// axis beats a fractional one.
+pub(crate) fn integer_axis_max(first: usize, last: usize, max_ticks: usize) -> (usize, (f64, f64)) {
+    let last = last.max(first + 1);
+    let max_ticks = max_ticks.clamp(3, 10);
+    let mut previous = None;
+    let mut count = 2;
+    for step in (0..).flat_map(|exponent| [1, 2, 5].map(|m| m * 10usize.pow(exponent))) {
+        let n = last / step + 1 - first.div_ceil(step);
+        if n <= max_ticks {
+            count = if n >= 3 { n } else { previous.unwrap_or(n) };
+            break;
+        }
+        previous = Some(n);
+    }
+    (count, (first as f64 - 0.5, last as f64 + 0.5))
+}
+
 fn heatmap_y_extent(scan_len: usize, row_count: usize) -> (f64, f64) {
     let last_frame = scan_len.saturating_sub(1) as f64;
     let row_step = if row_count > 1 {
@@ -946,14 +993,15 @@ fn heatmap_y_extent(scan_len: usize, row_count: usize) -> (f64, f64) {
         1.0
     };
     let half_step = row_step / 2.0;
-    (-half_step, last_frame + half_step)
+    (1.0 - half_step, last_frame + 1.0 + half_step)
 }
 
 /// Operando heatmap in physical units: x in k (1/Angstrom) from the resample
-/// grid, y = frame index over the FULL scan (rows are the evenly sampled
+/// grid, y = one-based frame number over the FULL scan (rows are the evenly sampled
 /// overview). Rows remain in chronological order; the lower heatmap origin maps
-/// row 0 to frame 0, while the displayed y axis is reversed so frame 0 appears
-/// at the top and tick values remain truthful.
+/// row 0 to frame 1, while the displayed y axis is reversed so frame 1 appears
+/// at the top and tick values remain truthful. Frame ticks are whole numbers
+/// (see [`integer_axis`]).
 pub fn build_heatmap(
     matrix: &[Vec<f64>],
     grid: &[f64],
@@ -964,13 +1012,8 @@ pub fn build_heatmap(
 ) -> Plot {
     let kmin = grid.first().copied().unwrap_or(0.0);
     let kmax = grid.last().copied().unwrap_or(1.0).max(kmin + 1e-9);
-    let last_frame = scan_len.saturating_sub(1) as f64;
     let (ymin, ymax) = heatmap_y_extent(scan_len, matrix.len());
-    let (view_max, view_min) = if scan_len <= 1 {
-        (ymax, ymin)
-    } else {
-        (last_frame, 0.0)
-    };
+    let (frame_ticks, (view_min, view_max)) = integer_axis(1, scan_len.max(1));
     let mut config = HeatmapConfig::new()
         .colorbar(true)
         .cmap(display.palette().map(display.reversed))
@@ -980,13 +1023,14 @@ pub fn build_heatmap(
         let (lo, hi) = symmetric_y_limits(matrix.iter().flat_map(|row| row.iter().copied()));
         config = config.vmin(lo).vmax(hi);
     }
-    Plot::new()
+    let plot: Plot = Plot::new()
         .theme(theme.plot_theme())
         .xlabel(xlabel)
-        .ylabel("frame")
+        .ylabel("Frame")
         .heatmap_with(matrix, config)
         .ylim(view_max, view_min)
-        .into()
+        .into();
+    plot.major_ticks_y(frame_ticks)
 }
 
 /// Source-backed energy or R-space cursor frame. Replacing the observable
@@ -1361,7 +1405,7 @@ pub fn build_pca_plot(
         .line(&x, &recon)
         .color(FIT_COLOR)
         .line_width(1.6)
-        .label(format!("{} components", fit.n_components))
+        .label(crate::text::plural(fit.n_components, "component"))
         .line(&xs, &rs)
         .color(Color::from_gray(150))
         .line_width(1.0)
@@ -1373,12 +1417,22 @@ pub fn build_pca_plot(
         .ylabel(ylabel)
 }
 
-/// Parameter-vs-frame trend. The moving cursor is a dynamic annotation owned
+/// Parameter-vs-frame trend. Input frame indices are zero-based; plotted frame
+/// numbers start at one. The moving cursor is a dynamic annotation owned
 /// by the interactive plot session, so scrubbing does not rebuild this data.
-pub fn build_trend(values: &[f64], frames: &[f64], ylabel: &str, theme: &Theme) -> Plot {
+/// The frame axis is ticked at whole frames using at most `max_ticks` ticks
+/// (see [`integer_axis_max`]); the caller derives the ceiling from the panel
+/// width, so callers must not override `major_ticks_x` afterwards.
+pub fn build_trend(
+    values: &[f64],
+    frames: &[f64],
+    ylabel: &str,
+    max_ticks: usize,
+    theme: &Theme,
+) -> Plot {
     let mut plot = Plot::new()
         .theme(theme.plot_theme())
-        .xlabel("frame")
+        .xlabel("Frame")
         .ylabel(ylabel);
     // Missing/failed frames remain real gaps: each contiguous finite run is
     // its own series, located at its true frame position.
@@ -1393,7 +1447,7 @@ pub fn build_trend(values: &[f64], frames: &[f64], ylabel: &str, theme: &Theme) 
             end += 1;
         }
         if start < end {
-            let xs: Vec<f64> = frames[start..end].to_vec();
+            let xs: Vec<f64> = frames[start..end].iter().map(|frame| frame + 1.0).collect();
             let ys: Vec<f64> = values[start..end].to_vec();
             plot = if end - start == 1 {
                 plot.scatter(&xs, &ys).color(trace_color(theme, 0)).into()
@@ -1403,8 +1457,12 @@ pub fn build_trend(values: &[f64], frames: &[f64], ylabel: &str, theme: &Theme) 
         }
         start = end.saturating_add(1);
     }
-    let xmax = frames.iter().copied().fold(0.0f64, f64::max).max(1.0);
-    if n == 0 { plot } else { plot.xlim(0.0, xmax) }
+    if n == 0 {
+        return plot;
+    }
+    let last = frames[..n].iter().copied().fold(0.0f64, f64::max);
+    let (ticks, (lo, hi)) = integer_axis_max(1, last.round() as usize + 1, max_ticks);
+    plot.xlim(lo, hi).major_ticks_x(ticks)
 }
 
 #[cfg(test)]
@@ -1729,15 +1787,65 @@ mod tests {
         let (ymin, ymax) = heatmap_y_extent(scan_len, row_count);
         let row_step = (ymax - ymin) / row_count as f64;
 
-        assert!((ymin + row_step / 2.0).abs() < 1e-12);
-        assert!((ymax - row_step / 2.0 - 999.0).abs() < 1e-12);
+        assert!((ymin + row_step / 2.0 - 1.0).abs() < 1e-12);
+        assert!((ymax - row_step / 2.0 - 1000.0).abs() < 1e-12);
     }
 
     #[test]
     fn heatmap_extent_handles_short_and_degenerate_inputs() {
-        assert_eq!(heatmap_y_extent(3, 3), (-0.5, 2.5));
-        assert_eq!(heatmap_y_extent(1, 1), (-0.5, 0.5));
-        assert_eq!(heatmap_y_extent(0, 0), (-0.5, 0.5));
+        assert_eq!(heatmap_y_extent(3, 3), (0.5, 3.5));
+        assert_eq!(heatmap_y_extent(1, 1), (0.5, 1.5));
+        assert_eq!(heatmap_y_extent(0, 0), (0.5, 1.5));
+    }
+
+    #[test]
+    fn integer_axis_picks_the_finest_integer_step_with_at_most_ten_ticks() {
+        use super::integer_axis;
+        assert_eq!(integer_axis(0, 0), (2, (-0.5, 1.5)));
+        assert_eq!(integer_axis(0, 1), (2, (-0.5, 1.5)));
+        assert_eq!(integer_axis(0, 9), (10, (-0.5, 9.5)));
+        assert_eq!(integer_axis(0, 11), (6, (-0.5, 11.5)));
+        assert_eq!(integer_axis(1, 12), (6, (0.5, 12.5)));
+        assert_eq!(integer_axis(0, 999), (10, (-0.5, 999.5)));
+    }
+
+    #[test]
+    fn integer_axis_max_coarsens_the_step_for_narrow_panels() {
+        use super::integer_axis_max;
+        use ruviz::axes::generate_ticks;
+        // Seven frames on a trend panel with room for five labels: step 2.
+        let (count, (lo, hi)) = integer_axis_max(0, 6, 5);
+        assert_eq!(count, 4);
+        assert_eq!(generate_ticks(lo, hi, count), vec![0.0, 2.0, 4.0, 6.0]);
+        // With room for three labels no integer step fits (step 5 leaves two,
+        // which ruviz's floor of three would turn into 0 / 2.5 / 5), so the
+        // step-2 axis is kept.
+        assert_eq!(integer_axis_max(0, 6, 3), (4, (-0.5, 6.5)));
+        assert_eq!(integer_axis_max(0, 6, 1), integer_axis_max(0, 6, 3));
+    }
+
+    #[test]
+    fn integer_axis_ticks_are_whole_numbers_in_ruviz() {
+        use super::integer_axis_max;
+        use ruviz::axes::generate_ticks;
+        for max_ticks in 3..=10 {
+            for first in [0, 1] {
+                for last in first..=3_000 {
+                    let (count, (lo, hi)) = integer_axis_max(first, last, max_ticks);
+                    // The ceiling is exceeded only to keep three or more ticks.
+                    assert!(
+                        count <= max_ticks || count <= 2 * max_ticks + 1,
+                        "{first}..={last}: {count} ticks for a ceiling of {max_ticks}"
+                    );
+                    let ticks = generate_ticks(lo, hi, count);
+                    assert!(ticks.len() >= 2, "{first}..={last}: {ticks:?}");
+                    assert!(
+                        ticks.iter().all(|t| t.fract() == 0.0),
+                        "{first}..={last} with {count} of {max_ticks} ticks: {ticks:?}"
+                    );
+                }
+            }
+        }
     }
 }
 

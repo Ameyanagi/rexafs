@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+## 0.2.12 (release preparation)
+
+- Platforms: require Apple Silicon for macOS desktop releases and Python wheels.
+  Remove Intel Mac build, runtime and signing jobs. Historical 0.2.11 downloads
+  and their original validation requirements remain available.
+- RMC: choose cache memory and catalogue capacity from available memory; expose
+  manual limits, preparation progress and repeated-cache-miss warnings.
+- RMC: add element-pair structural overlays, distance/step heatmaps,
+  coordination and distance histories with checkpoint and CSV/JSON export.
+- RMC: expose genetic and hybrid EA–RMC search with saved population recovery.
+- Series: add one-based frame navigation and responsive stacked plots.
+- Numeric controls: show resolved Auto values and recoverable validation errors.
+- Publish: one **Publish report…** action writes the complete analysis folder,
+  followed by **Open report** and **Show folder**; per-figure PNG/SVG/CSV saves
+  sit beside the preview; add Single column / Double column / Slide presets and
+  **Apply style to all figures**.
+- Fit: rename the two "Fit mode" controls to **Method** and **Spectra**, show the
+  blocking reason under the disabled action, offer **Run fit again** for stale
+  results, print fit warnings as sentences, and keep path identities in tooltips.
+- RMC: disable result actions until a run exists, move setting explanations into
+  tooltips, present run details as label/value rows, and correct field labels.
+- Shell: persist the theme, rebuild wavelet panels on theme change, raise the
+  text floor to 11 px, darken light-theme muted text, keep the group name on its
+  own inspector row, hide developer counters unless `REXAFS_DEBUG_STATS` is set,
+  colour error and success status text, rank palette matches by title, and use
+  correct plurals throughout.
+- Normalize: MBACK pre-fills the absorber and edge from the spectrum's E₀ when
+  the source declares none.
+- Plots and Series: integer frame and component ticks, grouped Transform toolbar,
+  a first-run range-handle hint, and a one-line Series definition.
+
+- Preserve the complete signed macOS app bundle when launching the update
+  helper, correcting the startup failure in 0.2.10 and 0.2.11.
+- Keep **Update and restart** available after a download completes on macOS,
+  Windows and Linux, with a reason when the installation cannot be updated.
+- Qualify the Mac helper from both signed ZIP and installed DMG outputs.
+- Refresh desktop documentation and screenshots with explicit build and input
+  provenance; retain historical signed 0.2.11 workflow captures.
+
+See the [release notes](doc/release-notes-0.2.12.md) and
+[qualification record](doc/validation/2026-09-19-release-0.2.12/review.md).
+
 ## 0.2.11 — 2026-09-19
 
 - Copy RMC fit ranges from the spectrum’s Transform settings and expand ReFEFF

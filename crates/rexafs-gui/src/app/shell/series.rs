@@ -19,6 +19,16 @@ use crate::app::{
 };
 use crate::icons::Icon;
 
+/// Validate a displayed frame number without silently rounding or clamping it.
+fn frame_number(text: &str, frames: usize) -> Result<usize, String> {
+    text.trim()
+        .parse::<usize>()
+        .ok()
+        .filter(|n| (1..=frames).contains(n))
+        .map(|n| n - 1)
+        .ok_or_else(|| format!("Enter a whole frame number from 1 to {frames}."))
+}
+
 impl StudioApp {
     /// Display the source directory recorded by a portable project, rather than
     /// the private extraction-cache directory used to read its files.
@@ -87,7 +97,11 @@ impl StudioApp {
                 button(
                     &t,
                     ("select-overview-series", index),
-                    format!("{} · {} frames", series.name, series.frames.len()),
+                    format!(
+                        "{} · {}",
+                        series.name,
+                        crate::text::plural(series.frames.len(), "frame")
+                    ),
                     false,
                 )
                 .w_full()
@@ -108,7 +122,7 @@ impl StudioApp {
                     .child(
                         div()
                             .text_color(t.text_muted)
-                            .child(format!("{} frames", scan.len)),
+                            .child(crate::text::plural(scan.len, "frame")),
                     )
                     .when(!available, |d| {
                         d.disabled(true)
@@ -175,9 +189,9 @@ impl StudioApp {
     ) -> impl IntoElement + use<> {
         let t = self.theme;
         let label: SharedString = format!(
-            "{} · {} frames",
+            "{} · {}",
             self.overview_label(),
-            self.operando_scan_len().unwrap_or(0)
+            crate::text::plural(self.operando_scan_len().unwrap_or(0), "frame")
         )
         .into();
         div()
@@ -253,36 +267,51 @@ impl StudioApp {
                         .justify_center()
                         .gap_3()
                         .child(
-                            button(&t, "series-live-empty", "Live acquisition…", false)
-                                .on_click(cx.listener(|app, _, _, cx| app.open_live(cx))),
+                            div()
+                                .max_w(px(420.))
+                                .text_center()
+                                .text_size(px(12.))
+                                .text_color(t.text_muted)
+                                .child("A series is an ordered set of marked spectra, such as a temperature or time scan."),
                         )
                         .when(running, |d| d.child("Building overview…"))
                         .when(!running, |d| {
                             d.child(
-                                button(
-                                    &t,
-                                    "series-select-scan",
-                                    if can_select {
-                                        "Select series or scan"
-                                    } else if has_groups {
-                                        "Use loaded groups"
-                                    } else {
-                                        "Import frames…"
-                                    },
-                                    true,
-                                )
-                                .on_click(cx.listener(
-                                    move |app, _, _, cx| {
-                                        if can_select {
-                                            app.ui.scan_picker = true;
-                                            cx.notify();
-                                        } else if has_groups {
-                                            app.create_overview_from_groups(cx);
-                                        } else {
-                                            app.open_folder(cx);
-                                        }
-                                    },
-                                )),
+                                div()
+                                    .flex()
+                                    .flex_wrap()
+                                    .justify_center()
+                                    .gap_2()
+                                    .child(
+                                        button(
+                                            &t,
+                                            "series-select-scan",
+                                            if can_select {
+                                                "Select series or scan"
+                                            } else if has_groups {
+                                                "Use loaded groups"
+                                            } else {
+                                                "Import frames…"
+                                            },
+                                            true,
+                                        )
+                                        .on_click(cx.listener(move |app, _, _, cx| {
+                                            if can_select {
+                                                app.ui.scan_picker = true;
+                                                cx.notify();
+                                            } else if has_groups {
+                                                app.create_overview_from_groups(cx);
+                                            } else {
+                                                app.open_folder(cx);
+                                            }
+                                        })),
+                                    )
+                                    .child(
+                                        button(&t, "series-live-empty", "Live acquisition…", false)
+                                            .on_click(
+                                                cx.listener(|app, _, _, cx| app.open_live(cx)),
+                                            ),
+                                    ),
                             )
                         })
                         .when(has_scan && !running, |d| {
@@ -297,8 +326,20 @@ impl StudioApp {
                 )
                 .into_any_element();
         };
-        let frames = self.operando_scan_len().unwrap_or(0);
-        let frame_label: SharedString = format!("frame {} / {frames}", self.time_pos + 1).into();
+        let available = self.viewport_w
+            - if self.data_panel_open {
+                self.structure.settings.groups_panel_width()
+            } else {
+                0.
+            }
+            - if self.context_panel_open { 312. } else { 0. }
+            - if self.assistant_host == super::assistant_shell::AssistantHost::Docked {
+                self.structure.settings.assistant_panel_width
+            } else {
+                0.
+            };
+        let stacked = available < 700.;
+        let navigation = self.series_frame_navigation(cx);
         let mut space_label: SharedString = match self.stage_view.series_space {
             SeriesSpace::Energy => "normalized μ(E)".into(),
             SeriesSpace::Flat => "flattened μ(E)".into(),
@@ -319,7 +360,17 @@ impl StudioApp {
             .flex_wrap()
             .items_center()
             .gap_2()
-            .child(div().flex_1().child("Heatmap"))
+            .child(div().flex_none().child("Heatmap"))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
+                    .text_color(t.text_muted)
+                    .child(space_label.clone()),
+            )
             .child(self.series_appearance_buttons(cx))
             .child(self.plot_export_button(
                 "series-map-export",
@@ -388,10 +439,12 @@ impl StudioApp {
             .child(bar)
             .child(
                 div()
+                    .id("series-plots")
                     .flex_1()
                     .min_h_0()
                     .min_w_0()
                     .flex()
+                    .when(stacked, |d| d.flex_col().overflow_y_scroll())
                     .gap_2()
                     .px_3()
                     .pt_2()
@@ -399,6 +452,9 @@ impl StudioApp {
                     .child(
                         card(heatmap_heading)
                             .flex_1()
+                            .when(stacked, |d| {
+                                d.flex_none().flex_basis(px(360.)).h(px(360.)).w_full()
+                            })
                             .child(
                                 div()
                                     .flex_1()
@@ -415,9 +471,9 @@ impl StudioApp {
                                     .px_3()
                                     .pb_1()
                                     .font_family(MONO)
-                                    .text_size(px(10.5))
+                                    .text_size(px(11.))
                                     .text_color(t.text_muted)
-                                    .child(frame_label),
+                                    .child(navigation),
                             ),
                     )
                     .child(
@@ -428,6 +484,9 @@ impl StudioApp {
                             .flex()
                             .flex_col()
                             .gap_2()
+                            .when(stacked, |d| {
+                                d.flex_none().flex_basis(px(560.)).h(px(560.)).w_full()
+                            })
                             .child(
                                 card(
                                     div()
@@ -435,7 +494,7 @@ impl StudioApp {
                                         .items_center()
                                         .gap_2()
                                         .child(div().flex_1().child(format!(
-                                            "frame {} · {space_label}",
+                                            "Frame {} · {space_label}",
                                             self.time_pos + 1
                                         )))
                                         .child(self.plot_export_button(
@@ -487,6 +546,87 @@ impl StudioApp {
                             ),
                     ),
             )
+            .into_any_element()
+    }
+
+    /// Mouse and keyboard entry use the same one-based numbering as the plots.
+    fn series_frame_navigation(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        use crate::widgets::text_input::{InputEvent, TextInput};
+        let t = self.theme;
+        let frames = self.operando_scan_len().unwrap_or(0);
+        if self.series_display.frame_field.is_none() {
+            let field = cx.new(|cx| {
+                let mut field = TextInput::new("Frame", (self.time_pos + 1).to_string(), t, cx);
+                field.set_accessible_name("Go to frame");
+                field
+            });
+            cx.subscribe(&field, |this, field, event, cx| {
+                if let InputEvent::Committed(text) = event {
+                    let frames = this.operando_scan_len().unwrap_or(0);
+                    match frame_number(text, frames) {
+                        Ok(position) => {
+                            this.series_display.frame_error = None;
+                            field.update(cx, |field, cx| field.set_error(false, cx));
+                            this.set_time_pos(position, cx);
+                        }
+                        Err(error) => {
+                            this.series_display.frame_error = Some(error);
+                            field.update(cx, |field, cx| field.set_error(true, cx));
+                            cx.notify();
+                        }
+                    }
+                }
+            })
+            .detach();
+            self.series_display.frame_field = Some(field);
+            self.series_display.frame_field_position = self.time_pos;
+        }
+        let field = self.series_display.frame_field.clone().unwrap();
+        if self.series_display.frame_field_position != self.time_pos {
+            self.series_display.frame_field_position = self.time_pos;
+            self.series_display.frame_error = None;
+            field.update(cx, |field, cx| {
+                field.set_text((self.time_pos + 1).to_string(), cx);
+                field.set_error(false, cx);
+            });
+        }
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        button(&t, "series-previous-frame", "Previous", false)
+                            .disabled(self.time_pos == 0)
+                            .when(self.time_pos == 0, |d| d.opacity(0.45))
+                            .on_click(cx.listener(|this, _, _, cx| this.step_time(-1, cx))),
+                    )
+                    .child(div().text_size(px(11.)).child("Frame"))
+                    .child(
+                        div()
+                            .id("series-frame-entry")
+                            .w(px(58.))
+                            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
+                                cx.stop_propagation()
+                            })
+                            .child(field),
+                    )
+                    .child(div().text_size(px(11.)).child(format!("/ {frames}")))
+                    .child(
+                        button(&t, "series-next-frame", "Next", false)
+                            .disabled(self.time_pos + 1 >= frames)
+                            .when(self.time_pos + 1 >= frames, |d| d.opacity(0.45))
+                            .on_click(cx.listener(|this, _, _, cx| this.step_time(1, cx))),
+                    ),
+            )
+            .when_some(self.series_display.frame_error.clone(), |d, error| {
+                d.child(div().text_size(px(11.)).text_color(t.error).child(error))
+            })
             .into_any_element()
     }
 
@@ -813,7 +953,7 @@ impl StudioApp {
                 )
                 .child(
                     div()
-                        .text_size(px(10.5))
+                        .text_size(px(11.))
                         .text_color(if ready { t.text_muted } else { t.warn })
                         .child(origin),
                 )
@@ -831,9 +971,9 @@ impl StudioApp {
             .child(div().flex_1())
             .child(
                 div()
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
-                    .child("click to plot"),
+                    .child("Click to plot"),
             );
         div()
             .flex()
@@ -943,9 +1083,9 @@ impl StudioApp {
                     .text_size(px(11.))
                     .text_color(t.text_muted)
                     .child(format!(
-                        "{} / {} frames{}",
+                        "{} / {}{}",
                         lcf.rows.len(),
-                        lcf.total,
+                        crate::text::plural(lcf.total, "frame"),
                         if lcf.cancelled { " · cancelled" } else { "" }
                     ))
                     .into_any_element(),
@@ -1060,5 +1200,29 @@ impl StudioApp {
             );
         }
         self.section("Batch fit", None, rows, cx)
+    }
+}
+
+#[cfg(test)]
+mod navigation_tests {
+    use super::frame_number;
+
+    #[test]
+    fn frame_entry_rejects_invalid_or_out_of_bounds_indices() {
+        assert_eq!(frame_number("1", 5), Ok(0));
+        assert_eq!(frame_number(" 5 ", 5), Ok(4));
+        for text in [
+            "",
+            "auto",
+            "0",
+            "6",
+            "-1",
+            "2.5",
+            "NaN",
+            "184467440737095516160",
+        ] {
+            assert!(frame_number(text, 5).is_err(), "{text}");
+        }
+        assert!(frame_number("1", 0).is_err());
     }
 }

@@ -45,7 +45,8 @@ def main():
         with (output / "desktop.log").open("w") as log:
             process = subprocess.Popen(
                 [str(binary), str(copied)], cwd=temporary,
-                env={**os.environ, "REXAFS_DEBUG_STATS": "1"},
+                env={**os.environ, "REXAFS_DEBUG_STATS": "1",
+                     "REXAFS_SETTINGS": str(Path(temporary) / "settings.json")},
                 stdout=log, stderr=subprocess.STDOUT,
             )
             try:
@@ -70,11 +71,13 @@ def main():
                 assert int(geometry["HEIGHT"]) <= int(desktop[1]), geometry
                 checks.append("window-fits-display")
                 # Select Normalize, then its raw μ(E) tab. The diagnostics report
-                # this first plot's renderer. Coordinates are window-relative
-                # at the X11 smoke session's unscaled laptop resolution.
+                # this first plot's renderer. The quantity tabs precede the
+                # comparison controls, just after the default 280 px Groups
+                # panel. Coordinates are window-relative at the X11 smoke
+                # session's unscaled laptop resolution.
                 command("xdotool", "key", "--clearmodifiers", "--delay", "100", "ctrl+2")
                 time.sleep(0.5)
-                command("xdotool", "mousemove", "--window", window, "410", "132", "click", "1")
+                command("xdotool", "mousemove", "--window", window, "310", "132", "click", "1")
                 # Wait for restored data and plot construction, not just the
                 # first empty frame. Diagnostics explicitly distinguish these.
                 while time.monotonic() < deadline:
@@ -122,6 +125,13 @@ def main():
                         "key", "--clearmodifiers", "ctrl+q")
                 assert process.wait(timeout=15) == 0
                 checks.append("quit-shortcut")
+            except Exception:
+                # Preserve the visible state even when plot readiness fails,
+                # before the normal screenshot sequence has started.
+                if window is not None and process.poll() is None:
+                    command("import", "-window", window,
+                            str(output / "failure.png"), check=False)
+                raise
             finally:
                 if process.poll() is None:
                     process.terminate()

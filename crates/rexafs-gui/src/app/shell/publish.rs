@@ -9,9 +9,15 @@ use gpui::{Context, Entity};
 use std::sync::Arc;
 #[derive(Default)]
 pub(crate) struct PublishState {
+    /// True while the report bundle is being written.
     pub running: bool,
-    pub(super) format: ExportFormat,
+    /// Folder of the last published report bundle in this session.
     pub destination: Option<std::path::PathBuf>,
+    /// Exact editor/source revision captured when the last successful export began.
+    pub(super) published_revision: Option<Vec<u8>>,
+    pub(super) published_at: Option<String>,
+    /// File of the last figure saved on its own (PNG, SVG or CSV).
+    pub(super) saved_figure: Option<std::path::PathBuf>,
     pub error: Option<String>,
     pub settings: FigureSettings,
     pub(super) source: Option<(usize, usize, usize, String)>,
@@ -24,42 +30,41 @@ pub(crate) struct PublishState {
     pub(super) preview: Option<Arc<RenderedFigure>>,
     pub(super) image: Option<Arc<gpui::Image>>,
 }
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub(super) enum ExportFormat {
-    #[default]
-    Png,
-    Svg,
-    Csv,
-    Folder,
-    Markdown,
+/// One-line scope of the report bundle: the current group, the marked groups
+/// added to it and the completed fits that the report will include.
+pub(super) fn report_title(group: &str, marked: usize, fits: usize) -> String {
+    format!(
+        "Report · {group} + {marked} marked · {}",
+        crate::text::plural(fits, "fit")
+    )
 }
-impl ExportFormat {
-    const ALL: [Self; 5] = [
-        Self::Png,
-        Self::Svg,
-        Self::Csv,
-        Self::Folder,
-        Self::Markdown,
-    ];
-    fn label(self) -> &'static str {
-        match self {
-            Self::Png => "PNG",
-            Self::Svg => "SVG",
-            Self::Csv => "CSV",
-            Self::Folder => "Analysis folder",
-            Self::Markdown => "Markdown",
+
+/// A `file://` URL for a local path. Bytes outside the unreserved URL set are
+/// percent-encoded so paths with spaces or non-ASCII names open correctly.
+pub(super) fn file_url(path: &std::path::Path) -> String {
+    let text = path.to_string_lossy().replace('\\', "/");
+    let mut url = String::from("file://");
+    if !text.starts_with('/') {
+        url.push('/');
+    }
+    for byte in text.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' | b':' => {
+                url.push(byte as char)
+            }
+            _ => url.push_str(&format!("%{byte:02X}")),
         }
     }
-    fn extension(self) -> Option<&'static str> {
-        match self {
-            Self::Png => Some("png"),
-            Self::Svg => Some("svg"),
-            Self::Csv => Some("csv"),
-            _ => None,
-        }
-    }
+    url
 }
+
 impl PublishState {
+    fn changed_since_publish(&self, current: &[u8]) -> bool {
+        self.published_revision
+            .as_deref()
+            .is_some_and(|saved| saved != current)
+    }
+
     pub(crate) fn load_settings(&mut self, settings: FigureSettings) {
         let preview_generation = self.preview_generation + 1;
         *self = Self {
@@ -121,6 +126,28 @@ impl StudioApp {
             Some("Selected group/revision must load successfully before export.".into());
         cx.notify();
         false
+    }
+
+    /// Completed fits the report includes: the history plus the latest result
+    /// when it is not in the history yet (the same rule as [`Self::analysis_snapshot`]).
+    fn report_fit_count(&self) -> usize {
+        let latest = self.fit_result.as_ref().is_some_and(|r| {
+            !self
+                .fit_history_results
+                .values()
+                .any(|v| std::sync::Arc::ptr_eq(v, r))
+        });
+        self.fit_history_results.len() + usize::from(latest)
+    }
+
+    /// Title line of the Publish stage, e.g. "Report · Cu foil + 2 marked · 1 fit".
+    pub(super) fn report_scope(&self) -> String {
+        let marked = self
+            .selection
+            .iter()
+            .filter(|&&ix| Some(ix) != self.selected)
+            .count();
+        report_title(&self.current_group_label(), marked, self.report_fit_count())
     }
     pub(crate) fn analysis_snapshot(&self) -> Snapshot {
         let mut indices = self.selection.clone();
@@ -224,13 +251,56 @@ impl StudioApp {
             screen: serde_json::json!({"stage":self.stage.name(),"fit_step":format!("{:?}",self.stage_view.fit_step),"fit_view":format!("{:?}",self.stage_view.fit_view),"current":self.current_group_label().to_string(),"model_selection":self.joint.selected,"result_dataset_index":self.joint.result_index,"file_browser":self.data_panel_open,"inspector":self.context_panel_open,"plot_scope":format!("{:?}",self.stage_view.scope)}),
         }
     }
+    /// Compare report inputs without serializing the raw spectral arrays or
+    /// transient UI state. Returning to the same settings restores the clean state.
+    fn publication_revision(&self) -> Vec<u8> {
+        let mut indices = self.selection.clone();
+        indices.extend(self.selected);
+        let groups: Vec<_> = indices
+            .into_iter()
+            .filter_map(|ix| self.tool_target(ix))
+            .map(|target| format!("{target:?}"))
+            .collect();
+        serde_json::to_vec(&serde_json::json!({
+            "project": self.project_generation,
+            "groups": groups,
+            "current": self.selected,
+            "settings": self.publish.settings,
+            "params": self.params,
+            "overrides": self.overrides,
+            "fit_paths": self.fit_paths.iter().map(|p| &p.spec).collect::<Vec<_>>(),
+            "fit_vars": self.fit_vars.iter().map(|v| &v.spec).collect::<Vec<_>>(),
+            "fit_ranges": self.fit_ranges,
+            "joint": self.joint.config,
+            "fit_history": self.fit_history,
+            "latest_fit": self.fit_result.as_ref().map(|r| Arc::as_ptr(r) as usize),
+            "analysis": {"lcf": self.analysis.lcf, "ranked": self.analysis.ranked,
+                "pca": self.analysis.pca, "pca_fit": self.analysis.pca_fit,
+                "mcr": self.analysis.mcr, "lcf_series": self.analysis.lcf_series},
+            "batch_stale": self.batch_fit_is_stale(),
+            "journal": self.journal.entries.iter().map(|e| &e.text).collect::<Vec<_>>()
+        }))
+        .expect("report revision contains serializable inputs")
+    }
+
     pub(crate) fn export_publication(&mut self, cx: &mut Context<Self>) {
         if self.publish.running || !self.require_publication_source(cx) {
             return;
         }
         let snapshot = self.analysis_snapshot();
+        let revision = self.publication_revision();
+        let project_generation = self.project_generation;
         let home = crate::settings::home_dir().unwrap_or_else(std::env::temp_dir);
-        let rx = cx.prompt_for_new_path(std::path::Path::new(&home), Some("rexafs-publication"));
+        let previous = self.publish.destination.as_deref();
+        let parent = previous
+            .and_then(|path| path.parent())
+            .unwrap_or(std::path::Path::new(&home));
+        let name = if previous.is_some() {
+            "rexafs-publication-updated"
+        } else {
+            "rexafs-publication"
+        };
+        let rx = cx.prompt_for_new_path(parent, Some(name));
         cx.spawn(async move |this, cx| {
             if let Ok(Ok(Some(path))) = rx.await {
                 this.update(cx, |app, cx| {
@@ -244,15 +314,24 @@ impl StudioApp {
                     .spawn(async move { crate::publication::export(snapshot, &path) })
                     .await;
                 this.update(cx, |app, cx| {
+                    if app.project_generation != project_generation {
+                        return;
+                    }
                     app.publish.running = false;
                     match result {
                         Ok(path) => {
-                            app.status = format!("Exported {}", path.display()).into();
+                            app.set_status(
+                                crate::app::StatusKind::Success,
+                                format!("Published to {}", path.display()),
+                            );
                             app.publish.destination = Some(path);
+                            app.publish.published_revision = Some(revision);
+                            app.publish.published_at =
+                                Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
                         }
                         Err(e) => {
                             app.publish.error = Some(e.clone());
-                            app.record_job_error("Publish export", e);
+                            app.record_job_error("Publish report", e);
                         }
                     }
                     cx.notify();
@@ -271,6 +350,52 @@ mod tests {
         app::shell::tools::ToolTarget,
         params::{DerivedSpectrum, PipelineParams, Quantity},
     };
+
+    #[test]
+    fn publication_stamp_tracks_the_exported_revision_not_later_edits() {
+        let revision = |settings: &FigureSettings| serde_json::to_vec(settings).unwrap();
+        let mut state = PublishState::default();
+        assert!(!state.changed_since_publish(&revision(&state.settings)));
+        let exported = revision(&state.settings);
+        state.published_revision = Some(exported.clone());
+        assert!(!state.changed_since_publish(&exported));
+        crate::publication::figures::StylePreset::SingleColumn
+            .apply(state.settings.figures.entry("xanes".into()).or_default());
+        assert!(state.changed_since_publish(&revision(&state.settings)));
+        // A late successful export still represents the revision captured at
+        // its start, even if the user has edited settings while it was running.
+        state.published_revision = Some(exported);
+        assert!(state.changed_since_publish(&revision(&state.settings)));
+        state.published_revision = Some(revision(&state.settings));
+        assert!(!state.changed_since_publish(&revision(&state.settings)));
+        state
+            .settings
+            .table_captions
+            .insert("processing".into(), "Revised caption".into());
+        assert!(state.changed_since_publish(&revision(&state.settings)));
+        state.load_settings(FigureSettings::default());
+        assert!(state.published_revision.is_none());
+    }
+
+    #[test]
+    fn report_title_and_file_url_are_readable() {
+        assert_eq!(
+            report_title("Cu foil", 2, 1),
+            "Report · Cu foil + 2 marked · 1 fit"
+        );
+        assert_eq!(
+            report_title("cu.xmu", 0, 0),
+            "Report · cu.xmu + 0 marked · 0 fits"
+        );
+        assert_eq!(
+            file_url(std::path::Path::new("/Users/me/My Report/report.html")),
+            "file:///Users/me/My%20Report/report.html"
+        );
+        assert_eq!(
+            file_url(std::path::Path::new("C:\\out\\report.html")),
+            "file:///C:/out/report.html"
+        );
+    }
 
     #[test]
     fn publication_failed_selection_cannot_relabel_retained_difference() {

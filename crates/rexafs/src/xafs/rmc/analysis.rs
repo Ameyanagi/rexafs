@@ -94,6 +94,92 @@ pub fn distance_distribution(
     })
 }
 
+/// Radial distribution (since 0.2.12) with an explicit normalization convention.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RadialDistribution {
+    /// Raw neighbors per center per bin and moments over the supplied interval.
+    pub neighbors: DistanceDistribution,
+    /// Dimensionless bulk g(r), or None for a finite cluster without a density.
+    pub g_r: Option<Vec<f64>>,
+    /// Selected species number density in Å⁻³, or None for a finite cluster.
+    pub density: Option<f64>,
+    /// Half the smallest cell-plane spacing in Å, or None for a finite cluster.
+    /// Radii above this conservative limit probe repeated-cell correlations.
+    pub independent_radius: Option<f64>,
+}
+
+/// Since 0.2.12: compute a species-resolved radial distribution around explicit
+/// centers. Inputs and self exclusion follow [`distance_distribution`].
+///
+/// Periodic cells use `g_i = H_i / (rho * V_i)`, where H_i is the neighbor count
+/// per center, rho = N_B / V_cell is the selected neighbor species density in
+/// Å⁻³ (all species when None), and V_i = 4π/3 (r_outer³ − r_inner³) is the
+/// spherical bin volume in Å³. Thus g_i is dimensionless. This follows the
+/// center/shell/density normalization described by
+/// [GROMACS](https://manual.gromacs.org/current/onlinehelp/gmx-rdf.html), using
+/// the entire explicit cell density rather than a local-density estimate.
+/// Same-species density includes all N_B atoms; the central self image is
+/// excluded from counts and no finite-N correction is applied. All other
+/// periodic images inside the range contribute. Radii beyond half the smallest
+/// cell-plane spacing remain allowed but are not independent-cell information.
+///
+/// Finite clusters return only labeled neighbor counts, since no bulk volume is
+/// defined. An absent neighbor species in a periodic cell is an error (zero
+/// density cannot normalize g). Returns owned arrays; inputs remain unchanged.
+/// Choose bins and a radial interval explicitly; moments describe that entire
+/// interval and do not identify a coordination shell automatically.
+pub fn radial_distribution(
+    configuration: &Configuration,
+    centers: &[usize],
+    neighbor_element: Option<u8>,
+    edges: &[f64],
+) -> Result<RadialDistribution, RmcError> {
+    let neighbors = distance_distribution(configuration, centers, neighbor_element, edges)?;
+    let (g_r, density, independent_radius) = if let Some(lattice) = configuration.lattice()? {
+        let count = configuration
+            .atoms
+            .iter()
+            .filter(|atom| neighbor_element.is_none_or(|z| atom.atomic_number == z))
+            .count();
+        require(
+            count > 0,
+            "radial distribution needs a nonzero neighbor-species density",
+        )?;
+        let density = count as f64 / lattice.volume();
+        require(
+            density.is_finite() && density > 0.,
+            "invalid periodic species density",
+        )?;
+        require(
+            edges.windows(2).all(|r| {
+                let shell = (4. * std::f64::consts::PI / 3.) * (r[1].powi(3) - r[0].powi(3));
+                shell.is_finite() && shell > 0.
+            }),
+            "spherical shell volumes must be finite and positive",
+        )?;
+        let values = neighbors
+            .counts_per_absorber
+            .iter()
+            .zip(edges.windows(2))
+            .map(|(count, r)| {
+                count / (density * (4. * std::f64::consts::PI / 3.) * (r[1].powi(3) - r[0].powi(3)))
+            })
+            .collect();
+        let radius = (0..3)
+            .map(|i| lattice.interplanar_spacing(i) / 2.)
+            .fold(f64::INFINITY, f64::min);
+        (Some(values), Some(density), Some(radius))
+    } else {
+        (None, None, None)
+    };
+    Ok(RadialDistribution {
+        neighbors,
+        g_r,
+        density,
+        independent_radius,
+    })
+}
+
 // Enumerate all images inside a cutoff, including skew cells. Callback false
 // stops early; fractional rounding only recenters the enumeration, never selects
 // a purported nearest image.

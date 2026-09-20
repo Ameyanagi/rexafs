@@ -1,10 +1,8 @@
 //! Labeled numeric parameter field. Empty / "auto" commits as `None`
 //! (= auto-determined by the core); a number commits as `Some(v)`.
 //! Integer-kind fields round (and clamp) on commit so the display always
-//! matches the value the pipeline uses. Rejected input reverts to the last
-//! committed value with a brief error flash + [`FieldEvent::Invalid`].
-
-use std::time::Duration;
+//! matches the value the pipeline uses. Rejected input remains editable with
+//! an inline explanation; the last committed calculation value is unchanged.
 
 use gpui::{
     ClickEvent, Context, Entity, EventEmitter, IntoElement, ParentElement, Render, SharedString,
@@ -13,9 +11,6 @@ use gpui::{
 
 use crate::theme::Theme;
 use crate::widgets::text_input::{InputEvent, InputStyle, TextInput};
-
-/// How long the rejected-input border stays lit.
-const ERROR_FLASH: Duration = Duration::from_millis(1400);
 
 /// Value domain of a field; integers round on commit, optionally clamped
 /// to a lower bound (e.g. column indices are >= 0).
@@ -59,11 +54,13 @@ pub struct NumericField {
     theme: Theme,
     /// Increment of the ▲▼ steppers and the ↑/↓ keys.
     step: f64,
-    /// Bumped per rejected commit so an old flash-clear timer never
-    /// extinguishes a newer error.
-    error_epoch: u64,
+    /// Full automatic-value hint, kept outside the compact input box.
+    automatic_hint: SharedString,
+    error: Option<SharedString>,
     mixed: bool,
     display_decimals: Option<usize>,
+    /// Longer explanation shown as a tooltip on the label.
+    description: Option<SharedString>,
 }
 
 /// "pre-edge start (eV)" → ("pre-edge start", "eV").
@@ -94,11 +91,33 @@ impl EventEmitter<FieldEvent> for NumericField {}
 pub(crate) struct FieldPreview;
 impl EventEmitter<FieldPreview> for NumericField {}
 
+/// Significant figures shown when a field has no fixed decimal count. Six
+/// covers every value the pipeline displays (energies in eV, k in Å⁻¹, R in Å)
+/// without exposing binary round-off such as `1.349999999`.
+const DISPLAY_SIGNIFICANT: usize = 6;
+
+/// Shortest text for `value` with at most `significant` significant figures
+/// and no trailing zeros: 1.349999999 → "1.35", 8979 → "8979", 0.05 → "0.05".
+/// Integers wider than `significant` digits keep all their digits.
+fn format_significant(value: f64, significant: usize) -> String {
+    if value == 0.0 || !value.is_finite() {
+        return format!("{value}");
+    }
+    let magnitude = value.abs().log10().floor() as i64;
+    let decimals = (significant as i64 - 1 - magnitude).max(0) as usize;
+    let text = format!("{value:.decimals$}");
+    if text.contains('.') {
+        text.trim_end_matches('0').trim_end_matches('.').to_string()
+    } else {
+        text
+    }
+}
+
 fn format_value(value: Option<f64>, decimals: Option<usize>) -> String {
     value
         .map(|v| match decimals {
             Some(d) => format!("{v:.d$}"),
-            None => format!("{v}"),
+            None => format_significant(v, DISPLAY_SIGNIFICANT),
         })
         .unwrap_or_default()
 }
@@ -111,11 +130,26 @@ fn parse_displayed(
 ) -> Result<Option<f64>, ()> {
     // Focusing and submitting an unchanged rounded display must not alter the
     // calculation. Newly entered text still uses the full numeric parser.
-    if decimals.is_some() && text.trim() == format_value(value, decimals) {
+    if value.is_some() && text.trim() == format_value(value, decimals) {
         Ok(value)
     } else {
         parse_commit(text, kind)
     }
+}
+
+/// Keep the editing affordance short; the resolved automatic value is rendered
+/// separately so it remains readable even in narrow inspectors.
+fn compact_placeholder(hint: &str) -> SharedString {
+    if hint.to_ascii_lowercase().starts_with("auto") {
+        "Auto".into()
+    } else {
+        hint.to_string().into()
+    }
+}
+
+fn automatic_detail(hint: &str) -> Option<String> {
+    let (_, detail) = hint.split_once('(')?;
+    Some(detail.strip_suffix(')')?.to_string())
 }
 
 impl NumericField {
@@ -127,6 +161,8 @@ impl NumericField {
         theme: Theme,
         cx: &mut Context<Self>,
     ) -> Self {
+        let automatic_hint = placeholder.into();
+        let placeholder = compact_placeholder(&automatic_hint);
         let input = cx.new(|cx| {
             TextInput::new(placeholder, format_value(value, None), theme, cx).with_style(
                 InputStyle {
@@ -140,9 +176,12 @@ impl NumericField {
         cx.subscribe(&input, |this: &mut Self, input, event, cx| {
             let text = match event {
                 InputEvent::Committed(text) => text,
-                InputEvent::Edited(_) => {
-                    // typing resumed — stop flashing a previous rejection
-                    input.update(cx, |i, cx| i.set_error(false, cx));
+                InputEvent::Edited(text) => {
+                    if this.error.is_some() && parse_commit(text, this.kind).is_ok() {
+                        this.error = None;
+                        input.update(cx, |i, cx| i.set_error(false, cx));
+                    }
+                    cx.notify();
                     cx.emit(FieldPreview);
                     return;
                 }
@@ -153,6 +192,8 @@ impl NumericField {
             };
             match parse_displayed(text, this.value, this.kind, this.display_decimals) {
                 Ok(value) => {
+                    this.error = None;
+                    cx.notify();
                     input.update(cx, |i, cx| {
                         i.set_error(false, cx);
                         // normalized display (e.g. "2.7" -> "3" for integers)
@@ -165,30 +206,15 @@ impl NumericField {
                 }
                 Err(()) => {
                     let message: SharedString = format!(
-                        "invalid value for {}: '{}' — expected a number or 'auto'",
+                        "Invalid value for {}: '{}' — expected a number or 'auto'",
                         this.label,
                         text.trim()
                     )
                     .into();
-                    let value = this.value;
-                    input.update(cx, |i, cx| {
-                        i.set_error(true, cx);
-                        i.set_text(format_value(value, this.display_decimals), cx);
-                    });
-                    this.error_epoch += 1;
-                    let epoch = this.error_epoch;
-                    let timer = cx.background_executor().timer(ERROR_FLASH);
-                    let input = input.clone();
-                    cx.spawn(async move |this, cx| {
-                        timer.await;
-                        this.update(cx, |this, cx| {
-                            if this.error_epoch == epoch {
-                                input.update(cx, |i, cx| i.set_error(false, cx));
-                            }
-                        })
-                        .ok();
-                    })
-                    .detach();
+                    this.error =
+                        Some("Enter a number or auto. The previous value is still in use.".into());
+                    input.update(cx, |i, cx| i.set_error(true, cx));
+                    cx.notify();
                     cx.emit(FieldEvent::Invalid(message));
                 }
             }
@@ -208,10 +234,19 @@ impl NumericField {
                 FieldKind::Float => 1.0,
                 FieldKind::Integer { .. } => 1.0,
             },
-            error_epoch: 0,
+            automatic_hint,
+            error: None,
             mixed: false,
             display_decimals: None,
+            description: None,
         }
+    }
+
+    /// Attach a one-sentence explanation, shown as a tooltip when the label is
+    /// hovered. Keeps the visible label short.
+    pub fn with_description(mut self, description: impl Into<SharedString>) -> Self {
+        self.description = Some(description.into());
+        self
     }
 
     /// Increment used by the steppers and ↑/↓.
@@ -247,8 +282,8 @@ impl NumericField {
     }
 
     /// The number inside an "auto (−200)" placeholder, if any.
-    fn placeholder_value(&self, cx: &Context<Self>) -> Option<f64> {
-        let text = self.input.read(cx).placeholder_text();
+    fn placeholder_value(&self, _cx: &Context<Self>) -> Option<f64> {
+        let text = &self.automatic_hint;
         let open = text.find('(')?;
         let close = text[open..].find(')')? + open;
         text[open + 1..close]
@@ -269,8 +304,11 @@ impl NumericField {
         placeholder: impl Into<SharedString>,
         cx: &mut Context<Self>,
     ) {
+        self.automatic_hint = placeholder.into();
+        let compact = compact_placeholder(&self.automatic_hint);
         self.input
-            .update(cx, |i, cx| i.set_placeholder(placeholder, cx));
+            .update(cx, |i, cx| i.set_placeholder(compact, cx));
+        cx.notify();
     }
 
     pub fn set_mixed(&mut self, mixed: bool, cx: &mut Context<Self>) {
@@ -300,7 +338,9 @@ impl NumericField {
     /// Programmatically set value (None = auto/empty); does not emit.
     pub fn set_value(&mut self, value: Option<f64>, cx: &mut Context<Self>) {
         self.value = value;
+        self.error = None;
         self.input.update(cx, |i, cx| {
+            i.set_error(false, cx);
             i.set_text(format_value(value, self.display_decimals), cx)
         });
         cx.notify();
@@ -313,8 +353,7 @@ impl Render for NumericField {
         let overridden = self.value.is_some();
         // `↺ auto` only makes sense for fields that have an automatic value
         // (an "auto (…)" placeholder); plain numeric fields have none.
-        let has_auto = self.placeholder_value(cx).is_some()
-            || self.input.read(cx).placeholder_text().contains("auto");
+        let has_auto = self.automatic_hint.to_ascii_lowercase().starts_with("auto");
         let can_reset = overridden && has_auto;
         let stepper = |id: &'static str, glyph: &'static str, dir: i32| {
             div()
@@ -333,14 +372,13 @@ impl Render for NumericField {
                 }))
                 .child(glyph)
         };
-        div()
-            .px_3()
-            .py_0p5()
+        let row = div()
             .flex()
             .items_center()
             .gap_1p5()
             .child(
                 div()
+                    .id("field-label")
                     .flex_1()
                     .min_w_0()
                     .overflow_hidden()
@@ -348,6 +386,15 @@ impl Render for NumericField {
                     .text_ellipsis()
                     .text_size(px(12.))
                     .text_color(t.text_muted)
+                    .when_some(self.description.clone(), |d, description| {
+                        d.tooltip(move |_, cx| {
+                            cx.new(|_| crate::app::Tooltip {
+                                label: description.clone(),
+                                theme: t,
+                            })
+                            .into()
+                        })
+                    })
                     .child(self.label.clone()),
             )
             .child(
@@ -355,7 +402,7 @@ impl Render for NumericField {
                     .id("reset-auto")
                     .flex_none()
                     .w(px(16.))
-                    .text_size(px(10.))
+                    .text_size(px(11.))
                     .text_color(if self.mixed {
                         t.warn
                     } else if can_reset {
@@ -406,16 +453,86 @@ impl Render for NumericField {
                     .flex_none()
                     .w(px(22.))
                     .font_family(crate::theme::MONO)
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
                     .child(self.unit.clone()),
-            )
+            );
+        div()
+            .px_3()
+            .py_0p5()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(row)
+            .when(!overridden && self.error.is_none() && has_auto, |d| {
+                d.when_some(automatic_detail(&self.automatic_hint), |d, detail| {
+                    d.child(
+                        div().text_size(px(11.)).text_color(t.text_muted).child(
+                            format!(
+                                "Automatic: {detail} {}",
+                                if detail.parse::<f64>().is_ok() {
+                                    self.unit.as_ref()
+                                } else {
+                                    ""
+                                }
+                            )
+                            .trim()
+                            .to_string(),
+                        ),
+                    )
+                })
+            })
+            .when_some(self.error.clone(), |d, error| {
+                let action = |id, label: &'static str| {
+                    crate::accessibility::Control::new(
+                        div()
+                            .id(id)
+                            .cursor_pointer()
+                            .text_size(px(11.))
+                            .text_color(t.accent)
+                            .child(label),
+                        label,
+                        accesskit::Role::Button,
+                    )
+                };
+                d.child(div().text_size(px(11.)).text_color(t.error).child(error))
+                    .child(
+                        div()
+                            .flex()
+                            .gap_3()
+                            .child(action("restore-value", "Restore previous value").on_click(
+                                cx.listener(|this, _, _, cx| this.set_value(this.value, cx)),
+                            ))
+                            .when(has_auto, |d| {
+                                d.child(action("use-auto", "Use Auto").on_click(cx.listener(
+                                    |this, _, _, cx| {
+                                        this.set_value(None, cx);
+                                        cx.emit(FieldEvent::Changed(None));
+                                    },
+                                )))
+                            }),
+                    )
+            })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{FieldKind, parse_commit};
+
+    #[test]
+    fn automatic_hints_keep_resolved_values_outside_the_input() {
+        for (hint, detail) in [
+            ("auto (8977.5)", "8977.5"),
+            ("Auto (8957.49)", "8957.49"),
+            ("auto (spectrum end)", "spectrum end"),
+        ] {
+            assert_eq!(super::compact_placeholder(hint).as_ref(), "Auto");
+            assert_eq!(super::automatic_detail(hint).as_deref(), Some(detail));
+        }
+        assert!(super::automatic_detail("Auto").is_none());
+        assert_eq!(super::compact_placeholder("required").as_ref(), "required");
+    }
 
     #[test]
     fn rounded_display_does_not_round_the_calculation_on_submit() {
@@ -434,6 +551,29 @@ mod tests {
             Ok(Some(3.4856))
         );
         assert!(super::parse_displayed("NaN", value, FieldKind::Float, Some(2)).is_err());
+    }
+
+    #[test]
+    fn auto_display_uses_six_significant_figures() {
+        for (value, text) in [
+            (1.349999999, "1.35"),
+            (8979.0, "8979"),
+            (0.05, "0.05"),
+            (12000.0, "12000"),
+            (-200.0, "-200"),
+            (0.0, "0"),
+            (8978.987654321, "8978.99"),
+            (1234567.0, "1234567"),
+        ] {
+            assert_eq!(super::format_value(Some(value), None), text);
+        }
+        assert_eq!(super::format_value(None, None), "");
+        // Resubmitting the rounded text keeps the stored value exactly.
+        let value = Some(1.349999999);
+        assert_eq!(
+            super::parse_displayed("1.35", value, FieldKind::Float, None),
+            Ok(value)
+        );
     }
 
     #[test]

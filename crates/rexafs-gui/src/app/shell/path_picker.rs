@@ -8,8 +8,9 @@ use gpui::{
 };
 use rexafs::xafs::structure::{ShellInfo, select_by, shells_of};
 
-use super::{MONO, button, chip, section_label};
+use super::{MONO, button, chip, controls::icon, section_label};
 use crate::app::StudioApp;
+use crate::icons::Icon;
 
 /// Selection presets shown above the picker.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -176,14 +177,14 @@ impl StudioApp {
             .flex()
             .items_center()
             .gap_1()
-            .text_size(px(10.5))
+            .text_size(px(11.))
             .text_color(t.text_muted)
             .child(div().w(px(16.)))
-            .child(div().flex_1().child("path"))
-            .child(div().w(px(52.)).child("Reff"))
+            .child(div().flex_1().child("Path"))
+            .child(div().w(px(52.)).child("R_eff"))
             .child(div().w(px(26.)).child("N"))
-            .child(div().w(px(30.)).child("legs"))
-            .child(div().w(px(56.)).child("amp"));
+            .child(div().w(px(30.)).child("Legs"))
+            .child(div().w(px(56.)).child("Amp"));
 
         let mut list = div()
             .flex_1()
@@ -202,7 +203,7 @@ impl StudioApp {
                     .p_2()
                     .text_size(px(11.))
                     .text_color(t.text_muted)
-                    .child("no paths yet — generate them from a structure"),
+                    .child("No paths yet. Calculate them from a structure."),
             );
         }
 
@@ -286,7 +287,7 @@ impl StudioApp {
                     .child(
                         div()
                             .w(px(56.))
-                            .text_size(px(10.))
+                            .text_size(px(11.))
                             .text_color(t.text_muted)
                             .child(SharedString::from(format!(
                                 "{} SS · {} MS",
@@ -318,7 +319,7 @@ impl StudioApp {
                         .flex()
                         .items_center()
                         .gap_1()
-                        .text_size(px(10.5))
+                        .text_size(px(11.))
                         .text_color(t.text_muted)
                         .cursor_pointer()
                         .hover(|d| d.bg(t.raised))
@@ -360,7 +361,7 @@ impl StudioApp {
                     .mt_1()
                     .flex()
                     .items_center()
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
                     .bg(t.surface)
                     .border_b_1()
@@ -381,11 +382,11 @@ impl StudioApp {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(section_label(&t, "paths"))
-                    .child(div().text_size(px(10.5)).text_color(t.text_muted).child(
+                    .child(section_label(&t, "Paths"))
+                    .child(div().text_size(px(11.)).text_color(t.text_muted).child(
                         SharedString::from(format!(
-                            "{n_sel} selected across {} sources · click a row to inspect",
-                            self.path_sources().len()
+                            "{n_sel} selected across {} · Click a row to inspect",
+                            crate::text::plural(self.path_sources().len(), "source")
                         )),
                     )),
             );
@@ -445,7 +446,7 @@ impl StudioApp {
             col = col.child(
                 div()
                     .px_2()
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
                     .child("Selected paths from all sources contribute to the fit."),
             );
@@ -508,17 +509,9 @@ impl StudioApp {
                 cx.stop_propagation();
                 f(this, cx);
             }))
-            .child(
-                div()
-                    .text_size(px(9.))
-                    .text_color(if on { t.bg } else { t.accent })
-                    .child(if on {
-                        "✓"
-                    } else if partial {
-                        "–"
-                    } else {
-                        ""
-                    }),
+            .children(on.then(|| icon(&t, Icon::Check).size(px(11.)).text_color(t.bg)))
+            .children(
+                (!on && partial).then(|| div().text_size(px(11.)).text_color(t.accent).child("–")),
             )
     }
 
@@ -590,7 +583,7 @@ impl StudioApp {
                     }))
                     .child(
                         div()
-                            .text_size(px(10.))
+                            .text_size(px(11.))
                             .text_color(t.text_muted)
                             .child(SharedString::from(format!("{:.0}", info.importance))),
                     ),

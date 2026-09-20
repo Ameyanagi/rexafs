@@ -1,14 +1,18 @@
 //! RMC mode in the existing Fitting workspace.
+#[path = "rmc/structural_view.rs"]
+mod structural_view;
 use super::{
     button, chip,
-    controls::Menu,
+    controls::{Menu, Tooltip, disclosure},
     fit_workspace::FitStep,
     molecule_view::{MoleculeScene, SceneAtom},
-    section_label,
+    section_label, segment, segmented,
 };
 use crate::{
+    accessibility::Control,
     app::StudioApp,
     rmc_fitting::{self as engine, Event, FitMode, Progress, Request, Source},
+    text::{noun_for, plural},
     widgets::{
         numeric_field::{FieldEvent, FieldKind, FieldPreview, NumericField},
         text_input::{InputEvent, TextInput},
@@ -44,6 +48,12 @@ pub(crate) struct RmcState {
     texts: Vec<Entity<TextInput>>,
     plots: Vec<Entity<RuvizPlot>>,
     plotted_best: Option<u64>,
+    structural_plots: Vec<Entity<RuvizPlot>>,
+    structural_key: Option<(usize, usize)>,
+    structural_source: Option<Arc<engine::structural::History>>,
+    structural_pair: usize,
+    structural_view: usize,
+    structural_settings: bool,
     plot_tab: usize,
     fit_plot_view: usize,
     hide_initial_curve: bool,
@@ -91,8 +101,8 @@ impl StudioApp {
         button(
             &self.theme,
             "fit-mode-picker",
-            format!("Fit mode: {} ▾", self.fit_mode.label()),
-            true,
+            format!("Method: {} ▾", self.fit_mode.label()),
+            false,
         )
         .on_click(cx.listener(|app, event, window, cx| {
             app.open_chrome_menu(Menu::FitMode, event, window, cx)
@@ -143,9 +153,15 @@ impl StudioApp {
         if self.rmc.control.is_none() {
             return div();
         }
+        let unit = self.rmc.request.as_ref().map_or("attempts", |r| r.unit());
         let paused = self.rmc.phase == "Paused";
         let pending =
             self.rmc.phase.starts_with("Pausing") || self.rmc.phase.starts_with("Stopping");
+        let calculation = self
+            .rmc
+            .control
+            .as_ref()
+            .and_then(|c| c.calculation_progress());
         let mut bar = div()
             .flex()
             .flex_wrap()
@@ -155,15 +171,44 @@ impl StudioApp {
             .py_2()
             .bg(self.theme.raised)
             .child(div().flex_1().min_w_0().flex().flex_col().gap_1()
-                .child(format!("RMC · {}", self.rmc.phase))
+                .child(format!("{} · {}", self.rmc.request.as_ref().map_or("RMC", |r| r.mode().label()), self.rmc.phase))
                 .child(div().text_size(px(11.)).text_color(self.theme.text_muted).child(
                     if let Some(p) = &self.rmc.live {
-                        format!("{} / {} attempts · {:.1}% of budget · {}", count(p.completed), count(p.limit),
+                        format!("{} / {} {unit} · {:.1}% of budget · {}", count(p.completed), count(p.limit),
                             100. * p.completed as f64 / p.limit.max(1) as f64,
-                            if paused { "Calculator retained for a fast resume" } else { "Updates after completed moves" })
+                            if paused { "Calculator retained for a fast resume" } else { "Updates at completed search steps" })
                     } else {
                         "Preparing potentials and exact scattering paths. This may take several minutes; you can stop safely.".into()
                     })));
+        if let Some(calculation) = calculation {
+            let mut detail = div().w_full().flex().flex_col().gap_1().text_size(px(11.));
+            if !paused {
+                detail = detail.child(format!(
+                    "{} · {:.0} s since worker start",
+                    calculation.description, calculation.elapsed_seconds
+                ));
+            }
+            detail = detail.child(format!(
+                "Scattering cache: {:.0} / {:.0} MiB · {} · {} snapshots retained",
+                calculation.cache.bytes as f64 / engine::memory::MIB as f64,
+                calculation.budget.bytes as f64 / engine::memory::MIB as f64,
+                if calculation.budget.automatic {
+                    "Auto"
+                } else {
+                    "Fixed limit"
+                },
+                calculation.cache.snapshots
+            ));
+            if calculation.budget.automatic && calculation.budget.memory.is_none() {
+                detail = detail.child(div().text_color(self.theme.warn).child(
+                    "Available memory could not be read; Auto is using the 256 MiB fallback.",
+                ));
+            }
+            if let Some(warning) = calculation.cache_warning {
+                detail = detail.child(div().text_color(self.theme.warn).child(warning));
+            }
+            bar = bar.child(detail);
+        }
         if paused {
             bar = bar.child(
                 button(
@@ -187,7 +232,7 @@ impl StudioApp {
                     .on_click(cx.listener(|app, _, _, cx| {
                         if let Some(c) = &app.rmc.control {
                             c.pause();
-                            app.rmc.phase = "Pausing after current move".into();
+                            app.rmc.phase = "Pausing after current attempt or generation".into();
                         }
                         cx.notify();
                     })),
@@ -297,7 +342,20 @@ impl StudioApp {
             }
         }
         let request = match &resume {
-            Some(saved) => saved.validate().map(|()| saved.request.clone()),
+            Some(saved) => saved.validate().and_then(|()| {
+                let mut request = saved.request.clone();
+                request.cache_mib = if let Some(field) = self.rmc.fields.get(28) {
+                    field
+                        .read(cx)
+                        .pending_value(cx)
+                        .map_err(|_| "Cache memory: enter a valid number or Auto.")?
+                        .map(|v| v as usize)
+                } else {
+                    self.rmc.project.draft.cache_mib
+                };
+                engine::memory::validate_manual(request.cache_mib)?;
+                Ok(request)
+            }),
             None => self.new_rmc_request(),
         };
         let request = match request {
@@ -386,6 +444,11 @@ impl StudioApp {
                                     app.rmc.phase = "Paused".into();
                                     app.rebuild_rmc_plots(cx);
                                 }
+                                Event::Stopped => {
+                                    app.rmc.phase = "Stopped".into();
+                                    app.rmc.control = None;
+                                    app.rmc.error = None;
+                                }
                                 Event::Finished(saved) => {
                                     app.rmc.phase = saved.status.clone();
                                     app.rmc.live = Some(saved.progress.clone());
@@ -429,19 +492,26 @@ impl StudioApp {
         let Some(p) = self.rmc.live.as_ref() else {
             return;
         };
-        let additional = self
+        let evolutionary = self
             .rmc
-            .continuation
+            .request
             .as_ref()
-            .map_or(Ok(Some(10_000.)), |field| field.read(cx).pending_value(cx));
+            .is_some_and(|r| r.evolution.is_some());
+        let unit = if evolutionary {
+            "generations"
+        } else {
+            "attempts"
+        };
+        let additional = self.rmc.continuation.as_ref().map_or(
+            Ok(Some(if evolutionary { 50. } else { 10_000. })),
+            |field| field.read(cx).pending_value(cx),
+        );
         let total = if p.completed < p.limit {
             Ok(p.limit)
         } else {
             additional
-                .map_err(|_| "Enter a valid number of additional attempts.".to_string())
-                .and_then(|v| {
-                    v.ok_or_else(|| "Enter the number of additional attempts.".to_string())
-                })
+                .map_err(|_| format!("Enter a valid number of additional {unit}."))
+                .and_then(|v| v.ok_or_else(|| format!("Enter the number of additional {unit}.")))
                 .and_then(|v| engine::continuation_limit(p.completed, p.limit, v as usize))
         };
         let total = match total {
@@ -466,7 +536,7 @@ impl StudioApp {
             cx.notify();
             return;
         };
-        saved.request.settings.moves.steps = total;
+        saved.request.set_limit(total);
         self.begin_rmc(false, Some(saved), cx);
     }
     fn rmc_checkpoint_dialog(&mut self, cx: &mut Context<Self>) {
@@ -775,12 +845,22 @@ impl StudioApp {
                 div()
                     .px_3()
                     .py_2()
+                    .w_full()
+                    .min_w_0()
+                    .flex_shrink_0()
                     .flex()
                     .items_center()
                     .gap_2()
                     .bg(t.raised)
-                    .child(div().flex_1().text_color(t.warn).child(error.clone()))
-                    .child(button(&t, "rmc-dismiss-error", "Dismiss", false).on_click(
+                    .child(div().flex_1().min_w_0().whitespace_normal().text_color(t.warn)
+                        .child(error.replace("explicitly increase AccelerationSettings.max_total_paths", "increase Catalogue path limit in Fit settings and start a new run. Cache memory is a separate limit")))
+                    .when(error.contains("max_total_paths"), |bar| bar.child(
+                        button(&t, "rmc-path-settings", "Path limit…", false).flex_shrink_0()
+                            .on_click(cx.listener(|app, _, _, cx| {
+                                app.stage_view.fit_step = FitStep::Model;
+                                cx.notify();
+                            }))))
+                    .child(button(&t, "rmc-dismiss-error", "Dismiss", false).flex_shrink_0().on_click(
                         cx.listener(|app, _, _, cx| {
                             app.rmc.error = None;
                             cx.notify();
@@ -809,6 +889,9 @@ impl StudioApp {
                             .id("rmc-library")
                             .w(px(350.))
                             .min_h_0()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
                             .overflow_y_scroll()
                             .child(library)
                             .child(
@@ -832,16 +915,30 @@ impl StudioApp {
                 .flex()
                 .flex_col()
                 .gap_3();
+            // Label on the left, control starting at the value column of the
+            // NumericField rows (98 px input + 14 px stepper + 22 px unit + gaps).
+            let row = |label: &'static str, control: gpui::Div| {
+                div()
+                    .flex()
+                    .items_center()
+                    .px_3()
+                    .gap_1p5()
+                    .child(div().flex_1().min_w_0().child(label))
+                    .child(div().w(px(140.)).flex_none().flex().child(control))
+            };
+            // Natural-width action instead of a stretched full-width bar.
+            let action = |control: Control| div().flex().px_3().child(control);
             if is_cell {
-                panel = panel.child(section_label(&t, "Periodic supercell"))
-                    .child(hint(&t, "Edit the repeats to update the 3D preview. Scattering starts only when you prepare or run."));
-                for i in 0..3 {
-                    panel = panel.child(self.rmc.fields[i].clone());
-                }
-                panel = panel.child(
+                panel = panel.child(section_label(&t, "Periodic supercell")).child(with_tip(
+                    &t,
+                    "rmc-repeats",
+                    "Edit the repeats to update the 3D preview. Scattering starts only when you prepare or run.",
+                    div().flex().flex_col().gap_3().children(self.rmc.fields[..3].iter().cloned()),
+                ));
+                panel = panel.child(action(
                     button(&t, "rmc-supercell", "Use suggested size", false)
                         .on_click(cx.listener(|app, _, _, cx| app.suggest_rmc_supercell(cx))),
-                );
+                ));
                 if self.rmc.builder_busy {
                     panel = panel.child(hint(&t, "Updating preview…"));
                 }
@@ -858,27 +955,31 @@ impl StudioApp {
                     if let Err(e) = &absorbers {
                         panel = panel.child(div().text_color(t.warn).child(e.clone()));
                     }
+                    let sites = absorbers.unwrap_or(0);
                     panel = panel.child(div().rounded_md().p_2().bg(t.raised).child(format!(
-                        "{} atoms · {} absorbing sites",
+                        "{} {} · {} absorbing {}",
                         count(c.atoms.len()),
-                        count(absorbers.unwrap_or(0))
+                        noun_for(c.atoms.len(), "atom"),
+                        count(sites),
+                        noun_for(sites, "site")
                     )));
                     let elements: std::collections::BTreeSet<_> =
                         c.atoms.iter().map(|a| a.atomic_number).collect();
-                    let mut row = div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_2()
-                        .child("Absorber");
-                    for z in elements {
+                    const ABSORBER_TIP: &str = "All sites of the selected element contribute to the average. Larger cells and more sites cost more.";
+                    let mut choices = segmented(&t);
+                    for (i, z) in elements.into_iter().enumerate() {
                         let label = Element::from_z(z).map_or("?", |e| e.symbol);
-                        row = row.child(
-                            chip(
+                        choices = choices.child(
+                            describe(
                                 &t,
-                                ("rmc-element", z as usize),
-                                label,
-                                z == self.rmc.project.draft.absorber,
+                                segment(
+                                    &t,
+                                    ("rmc-element", z as usize),
+                                    label,
+                                    z == self.rmc.project.draft.absorber,
+                                    i == 0,
+                                ),
+                                ABSORBER_TIP,
                             )
                             .on_click(cx.listener(
                                 move |app, _, _, cx| {
@@ -889,19 +990,20 @@ impl StudioApp {
                             )),
                         );
                     }
-                    panel = panel.child(row);
+                    panel = panel.child(row("Absorber", choices));
                 }
-                let mut edges = div().flex().items_center().gap_2().child("Edge");
+                let mut edges = segmented(&t);
                 for (i, edge) in [Edge::K, Edge::L1, Edge::L2, Edge::L3]
                     .into_iter()
                     .enumerate()
                 {
                     edges = edges.child(
-                        chip(
+                        segment(
                             &t,
                             ("rmc-edge", i),
-                            format!("{edge:?}"),
+                            edge.label(),
                             edge == self.rmc.project.draft.edge,
+                            i == 0,
                         )
                         .on_click(cx.listener(move |app, _, _, cx| {
                             app.rmc.project.draft.edge = edge;
@@ -909,29 +1011,76 @@ impl StudioApp {
                         })),
                     );
                 }
-                panel = panel.child(edges).child(hint(&t, "All sites of the selected element contribute to the average. Larger cells and more sites cost more."));
+                panel = panel.child(row("Edge", edges));
             } else {
-                panel = panel.child(section_label(&t, "Run budget"))
-                    .child(self.rmc.fields[8].clone())
-                    .child(self.rmc.fields[27].clone())
-                    .child(hint(&t, format!("{} CPUs available · absorbers first", engine::available_workers())))
-                    .child(div().flex().gap_2()
-                        .child(chip(&t, "rmc-auto-moves", "Auto moves", self.rmc.project.draft.auto_moves)
+                let auto_moves = self.rmc.project.draft.auto_moves;
+                let search = self.rmc.project.draft.search;
+                let evolutionary = search != engine::search::Mode::Rmc;
+                let mut search_modes = div().flex().flex_wrap().gap_1();
+                for (i, mode) in engine::search::Mode::ALL.into_iter().enumerate() {
+                    search_modes = search_modes.child(
+                        chip(&t, ("rmc-search", i), mode.label(), search == mode).on_click(
+                            cx.listener(move |app, _, _, cx| {
+                                app.rmc.project.draft.search = mode;
+                                cx.notify();
+                            }),
+                        ),
+                    );
+                }
+                panel = panel.child(section_label(&t, "Search method")).child(search_modes)
+                    .when(evolutionary, |panel| panel.child(hint(&t,
+                        "EA evaluates a population using selection, crossover and mutation. Hybrid adds local RMC moves per child. Both require fixed ΔE₀ and still pay the scattering cost.")))
+                    .child(section_label(&t, "Run budget"))
+                    .child(self.rmc.fields[if evolutionary { 35 } else { 8 }].clone())
+                    .when(evolutionary, |panel| panel.child(self.rmc.fields[34].clone()).child(self.rmc.fields[36].clone()))
+                    .when(search == engine::search::Mode::Hybrid, |panel| panel.child(self.rmc.fields[37].clone()))
+                    .child(with_tip(
+                        &t,
+                        "rmc-workers",
+                        format!("{} available · absorbers are distributed first", plural(engine::available_workers(), "CPU")),
+                        self.rmc.fields[27].clone(),
+                    ))
+                    .child(with_tip(&t, "rmc-cache-memory",
+                        "Auto adapts the scattering-cache limit to available physical memory while leaving headroom. This is a payload limit, not total app memory. A fixed MiB limit applies to new runs and cold resumes; live resumes keep the current policy.",
+                        self.rmc.fields[28].clone()))
+                    .child(with_tip(&t, "rmc-catalogue-limit",
+                        "Auto resolves a total path-count guard from available memory when starting a new run. This is separate from the scattering cache. An explicit count overrides Auto; saved runs retain their captured limit. Increasing capacity does not omit or sample any paths.",
+                        self.rmc.fields[38].clone()))
+                    .child(hint(&t, format!("New run capacity: {} paths", count(engine::memory::catalogue_limit(
+                        self.rmc.project.draft.max_total_paths, engine::memory::available_memory())))))
+                    .child(disclosure(&t, "rmc-structural-settings", "Structural tracking", self.rmc.structural_settings, false)
+                        .on_click(cx.listener(|app, _, _, cx| { app.rmc.structural_settings = !app.rmc.structural_settings; cx.notify(); })))
+                    .when(self.rmc.structural_settings, |panel| panel.child(div().flex().flex_col().gap_2()
+                        .child(hint(&t, "Moments cover this distance interval. Choose a shell interval for shell-specific coordination; settings apply to new runs."))
+                        .children(self.rmc.fields[29..32].iter().cloned())
+                        .when(!evolutionary, |panel| panel.child(self.rmc.fields[32].clone()))
+                        .when(evolutionary, |panel| panel.child(hint(&t, "Samples each completed generation; current means the best individual.")))
+                        .child(self.rmc.fields[33].clone())))
+                    .when(search != engine::search::Mode::Genetic, |panel| panel.child(row("Moves", segmented(&t)
+                        .child(describe(&t, segment(&t, "rmc-auto-moves", "Auto", auto_moves, true),
+                            "Adjusts the starting move size during the run and cools toward improvements only.")
                             .on_click(cx.listener(|app, _, _, cx| {
                                 app.rmc.project.draft.auto_moves = true;
                                 cx.notify();
                             })))
-                        .child(chip(&t, "rmc-fixed-moves", "Fixed moves", !self.rmc.project.draft.auto_moves)
+                        .child(describe(&t, segment(&t, "rmc-fixed-moves", "Fixed", !auto_moves, false),
+                            "Keeps the move size and Metropolis tolerance fixed throughout the run.")
                             .on_click(cx.listener(|app, _, _, cx| {
                                 app.rmc.project.draft.auto_moves = false;
                                 cx.notify();
-                            }))))
-                    .child(self.rmc.fields[9].clone())
-                    .child(hint(&t, if self.rmc.project.draft.auto_moves {
-                        "Auto adjusts the starting move size and cools toward improvements only."
-                    } else {
-                        "Fixed move size and Metropolis tolerance throughout the run."
-                    }))
+                            }))))))
+                    .child(with_tip(
+                        &t,
+                        "rmc-step-size",
+                        if search == engine::search::Mode::Genetic {
+                            "Base displacement for genetic mutation. Diversity and stagnation triggers can multiply this size."
+                        } else if auto_moves {
+                            "Move size at the start of the run. Auto moves adjust it as the run proceeds."
+                        } else {
+                            "Move size for the whole run."
+                        },
+                        self.rmc.fields[9].clone(),
+                    ))
                     .child(section_label(&t, "R-space objective"));
                 for i in 14..19 {
                     panel = panel.child(self.rmc.fields[i].clone());
@@ -942,27 +1091,27 @@ impl StudioApp {
                 {
                     panel = panel.child(div().text_color(t.warn).child(warning));
                 }
-                panel = panel.child(button(&t, "rmc-spectrum-ranges", "Use spectrum ranges", false)
-                    .on_click(cx.listener(|app, _, _, cx| app.use_rmc_spectrum_ranges(cx))))
-                    .child(hint(&t, "Copies Transform windows and sampling. ReFEFF k coverage expands automatically."))
+                let refine_energy = self.rmc.project.draft.refine_energy;
+                panel = panel.child(action(describe(&t, button(&t, "rmc-spectrum-ranges", "Use spectrum ranges", false),
+                    "Copies Transform windows and sampling. ReFEFF k coverage expands automatically.")
+                    .on_click(cx.listener(|app, _, _, cx| app.use_rmc_spectrum_ranges(cx)))))
                     .child(section_label(&t, "Amplitude and energy"))
                     .child(self.rmc.fields[12].clone())
-                    .child(div().flex().items_center().gap_2().child("ΔE₀")
-                        .child(chip(&t, "rmc-energy-fixed", "Fixed", !self.rmc.project.draft.refine_energy)
+                    .child(row("ΔE₀", segmented(&t)
+                        .child(describe(&t, segment(&t, "rmc-energy-fixed", "Fixed", !refine_energy, true),
+                            "S₀² and ΔE₀ stay fixed during RMC.")
                             .on_click(cx.listener(|app, _, _, cx| {
                                 app.rmc.project.draft.refine_energy = false; cx.notify();
                             })))
-                        .child(chip(&t, "rmc-energy-refine", "Refine", self.rmc.project.draft.refine_energy)
+                        .child(describe(&t, segment(&t, "rmc-energy-refine", "Refine", refine_energy, false),
+                            "Refines theory ΔE₀ with S₀² fixed. Bounds and interval are in Advanced settings.")
                             .on_click(cx.listener(|app, _, _, cx| {
                                 app.rmc.project.draft.refine_energy = true; cx.notify();
-                            }))))
-                    .child(self.rmc.fields[13].clone())
-                    .child(hint(&t, if self.rmc.project.draft.refine_energy {
-                        "Refines theory ΔE₀ with S₀² fixed. Bounds and interval are in Advanced."
-                    } else { "S₀² and ΔE₀ stay fixed during RMC." }));
+                            })))))
+                    .child(self.rmc.fields[13].clone());
                 if self.rmc.diagnostic.is_some() {
                     panel = panel
-                        .child(
+                        .child(action(
                             button(&t, "rmc-cancel-calibration", "Cancel preview", false).on_click(
                                 cx.listener(|app, _, _, cx| {
                                     app.rmc.diagnostic_generation += 1;
@@ -971,41 +1120,47 @@ impl StudioApp {
                                     cx.notify();
                                 }),
                             ),
-                        )
+                        ))
                         .child(hint(&t, "Estimating from the starting structure…"));
                 } else {
-                    panel = panel.child(
+                    panel = panel.child(action(
                         button(&t, "rmc-calibrate", "Estimate calibration…", false)
                             .disabled(self.rmc.control.is_some())
                             .on_click(
                                 cx.listener(|app, _, _, cx| app.estimate_rmc_calibration(cx)),
                             ),
-                    );
+                    ));
                 }
                 if let Some(preview) = &self.rmc.project.calibration {
                     let b = &preview.result.best;
-                    panel = panel.child(hint(&t, format!("Estimate: S₀² {:.3} · ΔE₀ {:+.2} eV · residual {:.5}", b.s02, b.delta_e0, b.score)))
-                        .child(hint(&t, "Fixed-structure estimate. Validate with a suitable reference before using it."));
+                    panel = panel.child(hint(
+                        &t,
+                        format!(
+                            "Estimate: S₀² {:.3} · ΔE₀ {:+.2} eV · residual {:.5}",
+                            b.s02, b.delta_e0, b.score
+                        ),
+                    ));
                     if let Some(warning) = engine::diagnostics::bound_warning(preview) {
                         panel = panel
                             .child(div().text_size(px(11.5)).text_color(t.warn).child(warning));
                     }
                     panel = panel.child(
-                        button(&t, "rmc-use-calibration", "Use calibration", false)
-                            .disabled(self.rmc.control.is_some() || self.rmc.diagnostic.is_some())
-                            .on_click(cx.listener(|app, _, _, cx| app.apply_rmc_calibration(cx))),
+                        describe(
+                            &t,
+                            button(&t, "rmc-use-calibration", "Use calibration", false),
+                            "Fixed-structure estimate. Validate with a suitable reference before using it.",
+                        )
+                        .disabled(self.rmc.control.is_some() || self.rmc.diagnostic.is_some())
+                        .on_click(cx.listener(|app, _, _, cx| app.apply_rmc_calibration(cx))),
                     );
                 }
             }
             panel = panel.child(
-                button(
+                disclosure(
                     &t,
                     "rmc-advanced",
-                    if self.rmc.advanced {
-                        "▾ Advanced settings"
-                    } else {
-                        "▸ Advanced settings"
-                    },
+                    "Advanced settings",
+                    self.rmc.advanced,
                     false,
                 )
                 .on_click(cx.listener(|app, _, _, cx| {
@@ -1015,43 +1170,73 @@ impl StudioApp {
             );
             if self.rmc.advanced {
                 if is_cell {
-                    panel = panel.child(section_label(&t, "Exact scattering"));
-                    for i in 3..6 {
-                        panel = panel.child(self.rmc.fields[i].clone());
-                    }
-                    panel = panel.child(hint(&t, "Exact cached paths with fixed reference potentials. Adaptive scattering is experimental and disabled."))
-                        .child(section_label(&t, "Physical bounds"));
-                    for i in 6..8 {
-                        panel = panel.child(self.rmc.fields[i].clone());
-                    }
-                    panel = panel.child(hint(&t, "Displacement is measured from the starting positions. Minimum distance rejects atomic overlaps."))
-                        .child("Absorbing atom indices (blank = all)").child(self.rmc.texts[0].clone())
-                        .child("Fixed atom indices").child(self.rmc.texts[1].clone())
-                        .child(hint(&t, "Indices start at 0. Atom 0 is fixed by default to anchor the structure."));
-                } else {
-                    panel = panel.child(self.rmc.fields[10].clone()).child(self.rmc.fields[11].clone())
-                        .child(hint(&t, "Tolerance controls acceptance of worse moves; zero accepts improvements only. It is numerical, not a physical temperature."))
-                        .child("Pair minimum distances (Å)").child(self.rmc.texts[2].clone())
-                        .child(hint(&t, "Optional: Cu-O=1.5, Cu-Cu=2.0. Choose physically justified bounds for your material."));
                     panel = panel
+                        .child(section_label(&t, "Exact scattering"))
+                        .child(with_tip(
+                            &t,
+                            "rmc-scattering",
+                            "Exact cached paths with fixed reference potentials. Adaptive scattering is experimental and disabled.",
+                            div().flex().flex_col().gap_3().children(self.rmc.fields[3..6].iter().cloned()),
+                        ))
+                        .child(section_label(&t, "Physical bounds"))
+                        .child(with_tip(
+                            &t,
+                            "rmc-bounds",
+                            "Displacement is measured from the starting positions. Minimum distance rejects atomic overlaps.",
+                            div().flex().flex_col().gap_3().children(self.rmc.fields[6..8].iter().cloned()),
+                        ))
+                        .child(with_tip(
+                            &t,
+                            "rmc-atom-indices",
+                            "Indices start at 0. Atom 0 is fixed by default to anchor the structure.",
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_3()
+                                .child("Absorbing atom indices (blank = all)")
+                                .child(self.rmc.texts[0].clone())
+                                .child("Fixed atom indices")
+                                .child(self.rmc.texts[1].clone()),
+                        ));
+                } else {
+                    panel = panel
+                        .child(with_tip(
+                            &t,
+                            "rmc-tolerance",
+                            "Tolerance controls acceptance of worse moves; zero accepts improvements only. It is numerical, not a physical temperature.",
+                            self.rmc.fields[10].clone(),
+                        ))
+                        .child(self.rmc.fields[11].clone())
+                        .child(with_tip(
+                            &t,
+                            "rmc-pair-distances",
+                            "Optional: Cu-O=1.5, Cu-Cu=2.0. Choose physically justified bounds for your material.",
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_3()
+                                .child("Pair minimum distances (Å)")
+                                .child(self.rmc.texts[2].clone()),
+                        ))
                         .child(section_label(&t, "Parallel calculation"))
                         .child(
-                            chip(
+                            describe(
                                 &t,
-                                "rmc-parallel-paths",
-                                "Parallel paths",
-                                self.rmc.project.draft.parallel_paths,
+                                chip(
+                                    &t,
+                                    "rmc-parallel-paths",
+                                    "Parallel paths",
+                                    self.rmc.project.draft.parallel_paths,
+                                )
+                                .role(accesskit::Role::CheckBox),
+                                "Use spare CPU workers for paths within an absorber.",
                             )
                             .on_click(cx.listener(|app, _, _, cx| {
                                 app.rmc.project.draft.parallel_paths =
                                     !app.rmc.project.draft.parallel_paths;
                                 cx.notify();
                             })),
-                        )
-                        .child(hint(
-                            &t,
-                            "Use spare CPU workers for paths within an absorber.",
-                        ));
+                        );
                     if self.rmc.project.draft.refine_energy {
                         panel = panel.child(section_label(&t, "Energy refinement"));
                         for i in 24..27 {
@@ -1118,7 +1303,14 @@ impl StudioApp {
                     None
                 },
             ),
-            FitStep::Model => ("Run RMC →", self.rmc_form_blocker(cx)),
+            FitStep::Model => (
+                match self.rmc.project.draft.search {
+                    engine::search::Mode::Rmc => "Run RMC →",
+                    engine::search::Mode::Genetic => "Run genetic search →",
+                    engine::search::Mode::Hybrid => "Run hybrid search →",
+                },
+                self.rmc_form_blocker(cx),
+            ),
             _ => ("Edit settings →", None),
         };
         let enabled = blocker.is_none();
@@ -1180,6 +1372,14 @@ impl StudioApp {
                 .map_err(|_| format!("{}: enter a valid number.", FIELD_LABELS[index]))?;
             if index == 27 {
                 draft.workers = value.map(|v| v as usize);
+                continue;
+            }
+            if index == 28 {
+                draft.cache_mib = value.map(|v| v as usize);
+                continue;
+            }
+            if index == 38 {
+                draft.max_total_paths = value.map(|v| v as usize);
                 continue;
             }
             let value = value
@@ -1254,7 +1454,7 @@ impl StudioApp {
             ("Maximum displacement (Å)", d.max_displacement),
             ("Minimum distance (Å)", d.min_distance),
             ("Attempt budget", d.steps as f64),
-            ("Move size (Å)", d.step_size),
+            ("Starting move size (Å)", d.step_size),
             ("Metropolis tolerance", d.temperature),
             ("Random seed", d.seed as f64),
             ("S₀²", d.s02),
@@ -1276,9 +1476,23 @@ impl StudioApp {
                 "CPU workers",
                 d.workers.unwrap_or_else(engine::available_workers) as f64,
             ),
+            ("Cache memory (MiB)", d.cache_mib.unwrap_or(256) as f64),
+            ("Distance min (Å)", d.structural.range[0]),
+            ("Distance max (Å)", d.structural.range[1]),
+            ("Distance bins", d.structural.bins as f64),
+            ("Sample every N attempts", d.structural.stride as f64),
+            ("Retain samples", d.structural.capacity as f64),
+            ("Population", d.evolution.population as f64),
+            ("Generation budget", d.evolution.generations as f64),
+            ("Elite survivors", d.evolution.elite as f64),
+            ("Local attempts per child", d.evolution.local_steps as f64),
+            (
+                "Catalogue path limit",
+                d.max_total_paths.unwrap_or(1_000_000) as f64,
+            ),
         ];
         for (index, (label, value)) in specs.into_iter().enumerate() {
-            let kind = if index == 27 {
+            let kind = if matches!(index, 27 | 28 | 31..=38) {
                 FieldKind::Integer { min: Some(1) }
             } else if matches!(index, 0..=2 | 5 | 8 | 11 | 18 | 26) {
                 FieldKind::Integer { min: Some(0) }
@@ -1292,6 +1506,8 @@ impl StudioApp {
                 12 => 0.01,
                 19..=21 | 24..=25 => 0.5,
                 26 => 50.,
+                28 => 64.,
+                38 => 1_000_000.,
                 22..=23 => 0.05,
                 3 | 4 | 6 | 7 | 13..=17 => 0.1,
                 _ => 1.,
@@ -1299,11 +1515,17 @@ impl StudioApp {
             let field = cx.new(|cx| {
                 let placeholder = if index == 27 {
                     format!("auto ({})", engine::available_workers())
+                } else if matches!(index, 28 | 38) {
+                    "auto (available memory)".into()
                 } else {
                     "required".into()
                 };
                 let value = if index == 27 {
                     d.workers.map(|v| v as f64)
+                } else if index == 28 {
+                    d.cache_mib.map(|v| v as f64)
+                } else if index == 38 {
+                    d.max_total_paths.map(|v| v as f64)
                 } else {
                     Some(value)
                 };
@@ -1321,6 +1543,16 @@ impl StudioApp {
                 if let FieldEvent::Changed(value) = event {
                     if index == 27 {
                         app.rmc.project.draft.workers = value.map(|v| v as usize);
+                        cx.notify();
+                        return;
+                    }
+                    if index == 28 {
+                        app.rmc.project.draft.cache_mib = value.map(|v| v as usize);
+                        cx.notify();
+                        return;
+                    }
+                    if index == 38 {
+                        app.rmc.project.draft.max_total_paths = value.map(|v| v as usize);
                         cx.notify();
                         return;
                     }
@@ -1410,6 +1642,8 @@ impl StudioApp {
         }
     }
     pub(crate) fn restore_rmc_plots(&mut self, cx: &mut Context<Self>) {
+        self.rmc.structural_key = None;
+        self.rmc.structural_source = None;
         self.rmc.plotted_best = None;
         self.rebuild_rmc_plots(cx);
     }
@@ -1457,8 +1691,16 @@ impl StudioApp {
     fn rmc_results(&mut self, cx: &mut Context<Self>) -> gpui::Div {
         let t = self.theme;
         let mut out = div().flex_1().min_h_0().min_w_0().flex().flex_col();
+        // Nothing to refine, reopen or export until a run exists.
+        let no_run = self.rmc.live.is_none() && self.rmc.project.saved.is_none();
+        let busy = self.rmc.control.is_some() || self.rmc.diagnostic.is_some();
         let export_disabled = self.rmc.project.saved.is_none()
             || (self.rmc.control.is_some() && self.rmc.phase != "Paused");
+        let refine_disabled = self.rmc.project.saved.is_none()
+            || (!self.rmc.refining
+                && (self.rmc.diagnostic.is_some()
+                    || (self.rmc.control.is_some() && self.rmc.phase != "Paused")));
+        let open_disabled = no_run || busy;
         let mut actions = div()
             .flex()
             .flex_wrap()
@@ -1472,6 +1714,7 @@ impl StudioApp {
             "Convergence",
             "Run details",
             "Refinement",
+            "Structural evolution",
         ]
         .into_iter()
         .enumerate()
@@ -1498,13 +1741,12 @@ impl StudioApp {
                     },
                     false,
                 )
-                .disabled(
-                    self.rmc.project.saved.is_none()
-                        || (!self.rmc.refining
-                            && (self.rmc.diagnostic.is_some()
-                                || (self.rmc.control.is_some() && self.rmc.phase != "Paused"))),
-                )
-                .on_click(cx.listener(|app, _, _, cx| {
+                .disabled(refine_disabled)
+                .when(refine_disabled, |d| d.opacity(0.45).cursor_default())
+                .on_click(cx.listener(move |app, _, _, cx| {
+                    if refine_disabled {
+                        return;
+                    }
                     if app.rmc.refining {
                         app.rmc.diagnostic_generation += 1;
                         app.rmc.diagnostic = None;
@@ -1517,20 +1759,28 @@ impl StudioApp {
             )
             .child(
                 button(&t, "rmc-open-run", "Open checkpoint…", false)
-                    .disabled(self.rmc.control.is_some() || self.rmc.diagnostic.is_some())
-                    .when(
-                        self.rmc.control.is_some() || self.rmc.diagnostic.is_some(),
-                        |d| d.opacity(0.45).cursor_default(),
-                    )
-                    .on_click(cx.listener(|app, _, _, cx| app.rmc_checkpoint_dialog(cx))),
+                    .disabled(open_disabled)
+                    .when(open_disabled, |d| d.opacity(0.45).cursor_default())
+                    .on_click(cx.listener(move |app, _, _, cx| {
+                        if !open_disabled {
+                            app.rmc_checkpoint_dialog(cx)
+                        }
+                    })),
             )
             .child(
                 button(&t, "rmc-export", "Export result…", false)
                     .disabled(export_disabled)
                     .when(export_disabled, |d| d.opacity(0.45).cursor_default())
-                    .on_click(cx.listener(|app, _, _, cx| app.export_rmc(cx))),
+                    .on_click(cx.listener(move |app, _, _, cx| {
+                        if !export_disabled {
+                            app.export_rmc(cx)
+                        }
+                    })),
             );
         out = out.child(actions);
+        if self.rmc.plot_tab == 5 {
+            return out.child(self.rmc_structural_view(cx));
+        }
         if self.rmc.plot_tab == 4 {
             return out.child(self.rmc_refinement_view(cx));
         }
@@ -1569,6 +1819,16 @@ impl StudioApp {
                 );
             }
         }
+        let evolutionary = self
+            .rmc
+            .request
+            .as_ref()
+            .is_some_and(|r| r.evolution.is_some());
+        let unit = if evolutionary {
+            "generations"
+        } else {
+            "attempts"
+        };
         let initial = p.initial.evaluation.score;
         let best = p.best.evaluation.score;
         let improvement = if initial > 0. {
@@ -1587,7 +1847,7 @@ impl StudioApp {
                 .py_2()
                 .bg(t.raised)
                 .child(div().flex_1().child(format!(
-                    "{} · {} completed attempts",
+                    "{} · {} completed {unit}",
                     self.rmc.phase,
                     count(p.completed)
                 )));
@@ -1595,9 +1855,13 @@ impl StudioApp {
                 let field = self.rmc.continuation.get_or_insert_with(|| {
                     cx.new(|cx| {
                         NumericField::new(
-                            "Additional attempts",
+                            if evolutionary {
+                                "Additional generations"
+                            } else {
+                                "Additional attempts"
+                            },
                             "required",
-                            Some(10_000.),
+                            Some(if evolutionary { 50. } else { 10_000. }),
                             FieldKind::Integer { min: Some(0) },
                             t,
                             cx,
@@ -1623,7 +1887,11 @@ impl StudioApp {
             );
             out = out.child(resume);
         }
-        let trend = trend_label(&p.trend.status);
+        let trend = if evolutionary {
+            "Inspect population trend"
+        } else {
+            trend_label(&p.trend.status)
+        };
         out = out.child(
             div()
                 .flex()
@@ -1646,16 +1914,20 @@ impl StudioApp {
                     &t,
                     "Convergence",
                     trend.into(),
-                    match p.trend.status {
-                        ResidualTrendStatus::InsufficientHistory => format!(
-                            "Need at least {} attempts",
-                            count(p.trend.settings.minimum_attempts)
-                        ),
-                        ResidualTrendStatus::StillChanging => {
-                            "Continue and monitor the trend".into()
-                        }
-                        ResidualTrendStatus::ResidualPlateau => {
-                            "Numerical plateau; inspect the fit".into()
+                    if evolutionary {
+                        "Generations do not use the RMC plateau diagnostic".into()
+                    } else {
+                        match p.trend.status {
+                            ResidualTrendStatus::InsufficientHistory => format!(
+                                "Need at least {} attempts",
+                                count(p.trend.settings.minimum_attempts)
+                            ),
+                            ResidualTrendStatus::StillChanging => {
+                                "Continue and monitor the trend".into()
+                            }
+                            ResidualTrendStatus::ResidualPlateau => {
+                                "Numerical plateau; inspect the fit".into()
+                            }
                         }
                     },
                 )),
@@ -1682,6 +1954,20 @@ impl StudioApp {
         }
         if self.rmc.plot_tab == 1 {
             return out.child(self.rmc_structure_panel(true, cx));
+        }
+        if self.rmc.plot_tab == 2 && evolutionary {
+            let mut diagnostic = div().p_3().flex().flex_col().gap_2()
+                .child(hint(&t, "Current curve: mean population objective. Best curve: elite individual. Neither a flat objective nor low diversity establishes a unique structure."));
+            if let Some(generation) = p.evolution_history.last() {
+                diagnostic = diagnostic.child(format!("Generation {} · diversity {:.5} Å · {} children retained their parent · {} local attempts ({} accepted)",
+                    generation.generation, generation.diversity, generation.constraint_fallbacks,
+                    generation.local_attempts, generation.local_accepted));
+            }
+            out = out.child(diagnostic);
+            if let Some(plot) = self.rmc.plots.get(4) {
+                out = out.child(div().flex_1().min_h_0().p_3().child(plot.clone()));
+            }
+            return out;
         }
         if self.rmc.plot_tab == 2 {
             let settings = &p.trend.settings;
@@ -1749,8 +2035,13 @@ impl StudioApp {
             return out;
         }
         if self.rmc.plot_tab == 3 {
-            let acceptance = if p.completed > 0 {
-                100. * p.accepted as f64 / p.completed as f64
+            let attempts = if evolutionary {
+                p.local_attempts
+            } else {
+                p.completed
+            };
+            let acceptance = if attempts > 0 {
+                100. * p.accepted as f64 / attempts as f64
             } else {
                 0.
             };
@@ -1760,36 +2051,159 @@ impl StudioApp {
                 .map(|v| format!("{:.1}%", 100. * v))
                 .unwrap_or_else(|| "—".into());
             let sec = if p.completed > 0 {
-                format!("{:.3} s/attempt", p.elapsed_seconds / p.completed as f64)
+                format!("{:.3} s inclusive", p.elapsed_seconds / p.completed as f64)
             } else {
                 "Awaiting moves".into()
             };
-            let mut details = div().id("rmc-run-details").flex_1().min_h_0().overflow_y_scroll().p_3().flex().flex_col().gap_3()
+            let about_open = self.ui.sections.contains("About these numbers");
+            let section = |label: &'static str| div().mt_2().child(section_label(&t, label));
+            let mut details = div()
+                .id("rmc-run-details")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .p_3()
+                .flex()
+                .flex_col()
+                .gap_1()
                 .child(section_label(&t, "Optimization"))
-                .child(format!("{} / {} attempts · accepted {acceptance:.1}% · constraint rejected {}", count(p.completed), count(p.limit), count(p.constraint_rejected)))
-                .child(format!("Active time {:.1} s · setup this session {:.1} s · {sec} inclusive", p.elapsed_seconds, p.setup_seconds))
-                .child(hint(&t, "Time includes preparation and calculation but excludes pauses. Inclusive time per attempt is not an isolated scattering benchmark."))
-                .child(section_label(&t, "Exact scattering cache"))
-                .when_some(self.rmc.request.as_ref(), |details, request| {
-                    details.child(format!(
-                        "{} CPU workers · parallel paths {} · {} backend preparation threads",
-                        request.workers,
-                        if request.parallel_paths { "on" } else { "off" },
-                        request.calculator.threads
-                    ))
+                .child(detail_row(
+                    &t,
+                    if evolutionary {
+                        "Generations"
+                    } else {
+                        "Attempts"
+                    },
+                    format!("{} / {}", count(p.completed), count(p.limit)),
+                ))
+                .child(detail_row(
+                    &t,
+                    if evolutionary {
+                        "Local moves accepted"
+                    } else {
+                        "Accepted"
+                    },
+                    format!("{acceptance:.1}% of {attempts} attempts"),
+                ))
+                .child(detail_row(
+                    &t,
+                    "Constraint rejected",
+                    count(p.constraint_rejected),
+                ))
+                .child(detail_row(
+                    &t,
+                    "Active time",
+                    format!("{:.1} s", p.elapsed_seconds),
+                ))
+                .child(detail_row(
+                    &t,
+                    "Setup this session",
+                    format!("{:.1} s", p.setup_seconds),
+                ))
+                .child(detail_row(
+                    &t,
+                    if evolutionary {
+                        "Time per generation"
+                    } else {
+                        "Time per attempt"
+                    },
+                    sec,
+                ))
+                .child(section("Exact scattering cache"))
+                .when_some(p.cache.warning(), |details, warning| {
+                    details.child(div().text_color(t.warn).child(warning))
                 })
-                .child(format!("Active path reuse {reuse} · {} exact path calculations · {:.1} MiB cached", count(p.cache.exact as usize), p.cache.bytes as f64 / 1048576.))
-                .child(format!("Electronic setup: {} calculated · {} shared", count(p.cache.electronic_preparations), count(p.cache.shared_electronic_contexts)))
-                .child(hint(&t, "Reuse = reused active paths / (reused active paths + exact calculations). Cache counters restart on a cold resume."))
-                .child(section_label(&t, "Objective"))
-                .child(hint(&t, "Normalized R-space real + imaginary residual plus a structural penalty. R magnitude and k-space curves are diagnostic views."));
+                .when_some(self.rmc.request.as_ref(), |details, request| {
+                    details
+                        .child(detail_row(&t, "CPU workers", request.workers.to_string()))
+                        .child(detail_row(
+                            &t,
+                            "Catalogue path limit",
+                            count(request.max_total_paths.unwrap_or(1_000_000)),
+                        ))
+                        .child(detail_row(
+                            &t,
+                            "Parallel paths",
+                            if request.parallel_paths { "On" } else { "Off" },
+                        ))
+                        .child(detail_row(
+                            &t,
+                            "Backend preparation threads",
+                            request.calculator.threads.to_string(),
+                        ))
+                })
+                .child(detail_row(&t, "Active path reuse", reuse))
+                .child(detail_row(
+                    &t,
+                    "Cache limit",
+                    format!(
+                        "{:.0} MiB",
+                        p.cache.limit_bytes as f64 / engine::memory::MIB as f64
+                    ),
+                ))
+                .child(detail_row(
+                    &t,
+                    "One snapshot per absorber",
+                    format!(
+                        "{:.0} MiB estimated",
+                        p.cache.minimum_bytes as f64 / engine::memory::MIB as f64
+                    ),
+                ))
+                .child(detail_row(
+                    &t,
+                    "Retained snapshots",
+                    format!(
+                        "{} · {} prepared contexts",
+                        p.cache.snapshots, p.cache.contexts
+                    ),
+                ))
+                .child(detail_row(
+                    &t,
+                    "Cache hits / cold misses / repeat misses",
+                    format!(
+                        "{} / {} / {}",
+                        p.cache.snapshot_hits, p.cache.cold_misses, p.cache.repeat_misses
+                    ),
+                ))
+                .child(detail_row(
+                    &t,
+                    "Memory evictions / oversized results",
+                    format!("{} / {}", p.cache.evictions, p.cache.oversized),
+                ))
+                .child(detail_row(
+                    &t,
+                    "Exact path calculations",
+                    count(p.cache.exact as usize),
+                ))
+                .child(detail_row(
+                    &t,
+                    "Cached",
+                    format!("{:.1} MiB", p.cache.bytes as f64 / 1048576.),
+                ))
+                .child(detail_row(
+                    &t,
+                    "Electronic setups",
+                    format!(
+                        "{} calculated · {} shared",
+                        count(p.cache.electronic_preparations),
+                        count(p.cache.shared_electronic_contexts)
+                    ),
+                ))
+                .child(section("Objective"));
             for fit in &p.best.evaluation.datasets {
-                details = details.child(format!(
-                    "Spectral residual {:.7} · structural penalty {:.7}",
-                    fit.score, p.best.penalty
-                ));
+                details = details
+                    .child(detail_row(
+                        &t,
+                        "Spectral residual",
+                        format!("{:.7}", fit.score),
+                    ))
+                    .child(detail_row(
+                        &t,
+                        "Structural penalty",
+                        format!("{:.7}", p.best.penalty),
+                    ));
             }
-            details = details.child(section_label(&t, "Recovery and provenance"));
+            details = details.child(section("Recovery and provenance"));
             if let Some(scale) = p.move_scale {
                 let step = self
                     .rmc
@@ -1797,25 +2211,59 @@ impl StudioApp {
                     .as_ref()
                     .map_or(0., |r| r.settings.moves.step_size)
                     * scale;
-                details = details.child(format!("Auto move size: {step:.4} Å per coordinate"));
+                details = details.child(detail_row(
+                    &t,
+                    "Auto move size",
+                    format!("{step:.4} Å per coordinate"),
+                ));
                 if let Some(acceptance) = p.recent_acceptance {
-                    details = details.child(format!(
-                        "Last feedback window: {:.1}% accepted",
-                        acceptance * 100.
+                    details = details.child(detail_row(
+                        &t,
+                        "Last feedback window",
+                        format!("{:.1}% accepted", acceptance * 100.),
                     ));
                 }
             }
             if let Some(saved) = &self.rmc.project.saved {
-                details = details.child(format!(
-                    "Checkpoint state: {} completed attempts",
-                    count(saved.progress.completed)
+                details = details.child(detail_row(
+                    &t,
+                    "Checkpoint state",
+                    format!(
+                        "{} completed {}",
+                        count(saved.progress.completed),
+                        saved.request.unit()
+                    ),
                 ));
             }
             if let Some(path) = &self.rmc.recovery {
-                details = details.child(format!("Recovery file: {}", path.display()));
+                details =
+                    details.child(detail_row(&t, "Recovery file", path.display().to_string()));
             }
-            details = details.child(hint(&t, "Saved after preparation, every 30 seconds at move boundaries, and on pause, stop or completion. Resume keeps the saved spectrum, preprocessing, structure, calibration and random sequence. Draft edits apply to a new run."))
-                .child(hint(&t, "Pause before exporting the latest completed state. Export includes checkpoint, initial/best structures, k/R curves and a convergence report."));
+            details = details
+                .child(div().mt_2().child(
+                    disclosure(&t, "rmc-about-numbers", "About these numbers", about_open, false).on_click(
+                        cx.listener(|app, _, _, cx| {
+                            if !app.ui.sections.remove("About these numbers") {
+                                app.ui.sections.insert("About these numbers");
+                            }
+                            cx.notify();
+                        }),
+                    ),
+                ))
+                .when(about_open, |d| {
+                    d.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .pl_2()
+                            .child(hint(&t, "Time includes preparation and calculation but excludes pauses. Inclusive time per attempt is not an isolated scattering benchmark."))
+                            .child(hint(&t, "Reuse = reused active paths / (reused active paths + exact calculations). Cache counters restart on a cold resume."))
+                            .child(hint(&t, "The objective is the normalized R-space real + imaginary residual plus a structural penalty. R magnitude and k-space curves are diagnostic views."))
+                            .child(hint(&t, "Checkpoints are saved after preparation, every 30 seconds at move boundaries, and on pause, stop or completion. Resume keeps the saved spectrum, preprocessing, structure, calibration and random sequence. Draft edits apply to a new run."))
+                            .child(hint(&t, "Pause before exporting the latest completed state. Export includes the checkpoint, initial/best structures, k/R curves and a convergence report.")),
+                    )
+                });
             return out.child(details);
         }
         let mut views = div().flex().flex_wrap().items_center().gap_2().px_3();
@@ -2317,7 +2765,7 @@ impl StudioApp {
         .detach();
     }
 }
-const FIELD_LABELS: [&str; 28] = [
+const FIELD_LABELS: [&str; 39] = [
     "Repeat a",
     "Repeat b",
     "Repeat c",
@@ -2327,7 +2775,7 @@ const FIELD_LABELS: [&str; 28] = [
     "Maximum displacement",
     "Minimum distance",
     "Attempt budget",
-    "Move size",
+    "Starting move size",
     "Metropolis tolerance",
     "Random seed",
     "S₀²",
@@ -2344,14 +2792,78 @@ const FIELD_LABELS: [&str; 28] = [
     "S₀² maximum",
     "ΔE₀ minimum",
     "ΔE₀ maximum",
-    "Update interval",
+    "Every N attempts",
     "CPU workers",
+    "Cache memory",
+    "Distance min",
+    "Distance max",
+    "Distance bins",
+    "Sample every N attempts",
+    "Retain samples",
+    "Population",
+    "Generation budget",
+    "Elite survivors",
+    "Local attempts per child",
+    "Catalogue path limit",
 ];
 fn hint(t: &crate::theme::Theme, text: impl Into<gpui::SharedString>) -> gpui::Div {
     div()
         .text_size(px(11.5))
         .text_color(t.text_muted)
         .child(text.into())
+}
+/// Wrap a control that has no tooltip of its own (a numeric field or a group
+/// of them) so its explanation appears on hover instead of as body text.
+fn with_tip(
+    t: &crate::theme::Theme,
+    id: impl Into<gpui::ElementId>,
+    text: impl Into<gpui::SharedString>,
+    child: impl IntoElement,
+) -> gpui::Stateful<gpui::Div> {
+    let theme = *t;
+    let label = text.into();
+    div()
+        .id(id)
+        .tooltip(move |_, cx| {
+            cx.new(|_| Tooltip {
+                label: label.clone(),
+                theme,
+            })
+            .into()
+        })
+        .child(child)
+}
+/// Attach one explanatory sentence to a control as both its accessible
+/// description and its hover tooltip.
+fn describe(t: &crate::theme::Theme, control: Control, text: &'static str) -> Control {
+    let theme = *t;
+    control.description(text).tooltip(move |_, cx| {
+        cx.new(|_| Tooltip {
+            label: text.into(),
+            theme,
+        })
+        .into()
+    })
+}
+/// One label/value line of the Run details table.
+fn detail_row(
+    t: &crate::theme::Theme,
+    label: &'static str,
+    value: impl Into<gpui::SharedString>,
+) -> gpui::Div {
+    div()
+        .flex()
+        .items_start()
+        .gap_3()
+        .text_size(px(11.5))
+        .child(
+            div()
+                .w(px(170.))
+                .flex_none()
+                .text_color(t.text_muted)
+                .child(label),
+        )
+        .child(div().flex_1().min_w_0().child(value.into()))
 }
 fn metric(t: &crate::theme::Theme, label: &str, value: String, detail: String) -> gpui::Div {
     div()
@@ -2415,6 +2927,16 @@ fn set_draft_field(d: &mut engine::Draft, index: usize, v: f64) {
         24..=25 => d.energy_refinement.bounds[index - 24] = v,
         26 => d.energy_refinement.interval = v as usize,
         27 => d.workers = Some(v as usize),
+        28 => d.cache_mib = Some(v as usize),
+        29..=30 => d.structural.range[index - 29] = v,
+        31 => d.structural.bins = v as usize,
+        32 => d.structural.stride = v as usize,
+        33 => d.structural.capacity = v as usize,
+        34 => d.evolution.population = v as usize,
+        35 => d.evolution.generations = v as usize,
+        36 => d.evolution.elite = v as usize,
+        37 => d.evolution.local_steps = v as usize,
+        38 => d.max_total_paths = Some(v as usize),
         _ => unreachable!("unknown RMC field"),
     }
 }
@@ -2589,6 +3111,19 @@ fn result_plots(
     let mut x: Vec<_> = history.iter().map(|s| s.step as f64).collect();
     let mut current: Vec<_> = history.iter().map(|s| s.score).collect();
     let mut best: Vec<_> = history.iter().map(|s| s.best_score).collect();
+    if request.evolution.is_some() {
+        x = p
+            .evolution_history
+            .iter()
+            .map(|g| g.generation as f64)
+            .collect();
+        current = p
+            .evolution_history
+            .iter()
+            .map(|g| g.mean_score.unwrap_or(g.best_score))
+            .collect();
+        best = p.evolution_history.iter().map(|g| g.best_score).collect();
+    }
     if x.is_empty() {
         x.push(p.completed as f64);
         current.push(p.current_score);
@@ -2596,7 +3131,11 @@ fn result_plots(
     }
     let trend = Plot::new()
         .theme(theme.plot_theme())
-        .xlabel("Completed attempts")
+        .xlabel(if request.evolution.is_some() {
+            "Completed generations"
+        } else {
+            "Completed attempts"
+        })
         .ylabel("Objective")
         .line(&x, &current)
         .label("Current")

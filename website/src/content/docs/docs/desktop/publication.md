@@ -4,9 +4,23 @@ description: "Create figures, captions, data tables and reproducible analysis ex
 audience: user
 ---
 
-Open **Publish** after processing or fitting. Select a figure, adjust its
-controls, and save **PNG** or **SVG**. The preview preserves the aspect ratio
-and uses the same PNG bytes as the individual save.
+Open **Publish** after processing or fitting. The header names the report
+scope. **Publish report…** (unreleased; 0.2.11 offers a format selector with
+**Export…**) writes the complete analysis folder listed below, then **Open last
+published report** opens `report.html` and **Show folder** reveals the directory.
+**Copy analysis record** copies the Markdown record.
+
+In the unreleased desktop, the header records when the last report was published.
+Changing figure settings, captions, report selection, processing or fit inputs
+shows **Changes since last publish**. **Publish changes…** exports the current
+report to a new folder; the previous folder remains available through **Open last
+published report** until another export succeeds. Edits made during an export
+remain unpublished. These controls are implemented in the
+[Publish stage](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/app/shell/publish.rs).
+
+Select a figure, adjust its style, and use **Save figure** **PNG**, **SVG** or
+**CSV** beside the preview to save that figure alone. The preview preserves the
+aspect ratio and uses the same PNG bytes as the individual save.
 
 **CSV** saves an x/y column pair for each visible curve with data, including
 its name and axis label. Curves keep their own grids and full arrays; blank
@@ -16,6 +30,22 @@ exporter](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/
 The separate batch-results table contains fitted values and reported errors.
 
 ## Figure size and content
+
+In the 0.2.12 candidate, three compact icons represent **Single column**,
+**Double column** and **Slide**; hover to see the preset name and dimensions.
+The selected preset remains highlighted, and each icon retains an accessible
+name. These presets set size,
+resolution and font (rexafs choices, not journal specifications), and **Apply
+style to all figures** copies the selected figure's style to every figure type.
+In the unreleased editor, that action sits beside the presets. The scope label
+explains that edits apply to the selected figure type across the report's spectra.
+Copying style preserves each figure's axis limits, labels, captions and curve
+visibility; see [FigureSettings](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures.rs).
+
+[![Publication editor with three compact preset icons, per-figure saves and Publish report](/screenshots/next/0.2.12/publication.jpg)](/screenshots/next/0.2.12/publication.jpg)
+
+*Full unedited 0.2.12 source-candidate window using the bundled Cu example.
+[Build and input provenance](/licenses/#desktop-0212-candidate-captures).*
 
 Blank size controls use ruviz's 6.4 × 4.8 inch canvas. rexafs explicitly sets the
 default raster resolution to **300 DPI**, producing **1920 × 1440 pixels**.
@@ -50,7 +80,8 @@ requirements before using an export in a paper.
 
 ## Analysis folder contents
 
-Choose **Analysis folder** in Publish to export to a new directory:
+**Publish report…** (0.2.11: **Analysis folder** then **Export…**) exports to a
+new directory:
 
 | Asset | Contents |
 |---|---|

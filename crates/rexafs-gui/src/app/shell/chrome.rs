@@ -102,7 +102,7 @@ impl StudioApp {
             .child(div().flex_1())
             .child(
                 div()
-                    .text_size(px(10.5))
+                    .text_size(px(11.))
                     .text_color(t.text_muted)
                     .child(keys),
             )
@@ -120,7 +120,7 @@ impl StudioApp {
             div().id("chrome-menu-body"),
             match menu {
                 Menu::Project => "Project",
-                Menu::FitMode => "Fit mode",
+                Menu::FitMode => "Fitting method",
                 Menu::Save => "Save project",
                 Menu::Plot => "Plot options",
                 Menu::Colors => "Spectrum colors",

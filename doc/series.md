@@ -85,3 +85,21 @@ does not validate a model.
 **Live…** watches completed files and applies a frozen processing and trend recipe.
 See [Live acquisition](live-acquisition.md) for the configurable quiet-file check,
 include-existing preview, review, pause/resume and recovery workflow.
+
+## Frame navigation and smaller windows (unreleased)
+
+The Series overview uses frame numbers starting at **1** in its heatmap, trend,
+cursor readout and trend CSV export. Internal array indices and saved project
+identities remain unchanged. Recorded physical coordinates, such as time or
+temperature in saved measured trends, retain their own labels and units.
+
+Use **Previous** and **Next**, enter a whole number in **Frame** and press Enter,
+or select a heatmap row. Out-of-range entries show an inline explanation without
+changing the selected frame. Arrow-key navigation still works when the plot has
+focus. The controls and plot-coordinate conversion are implemented in
+[Series](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/app/shell/series.rs)
+and [plotting](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/plotting.rs).
+
+When the central workspace is narrower than 700 logical pixels, the heatmap and
+detail plots stack vertically in a scrollable area. Heatmap controls wrap to keep
+Difference, Reference, Colors and Export accessible with the side panels open.

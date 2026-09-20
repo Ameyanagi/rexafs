@@ -14,6 +14,7 @@ import tempfile
 from zipfile import ZipFile
 from desktop_channels import app_name
 from macos_installer import build_installer, include_notices, installer_name, verify_installation
+from release_downloads import targets_for_version
 
 
 def digest(path):
@@ -31,6 +32,8 @@ def check_source(archive, manifest, version, commit, run_id, target, channel="st
     separately verifies the GitHub run before these artifacts are downloaded.
     """
     app_name(channel)
+    if not target.endswith("apple-darwin") or target not in targets_for_version(version):
+        raise ValueError("Mac target is not supported by this release version")
     expected_name = f"rexafs-{version}-{target}.zip"
     if archive.name != expected_name:
         raise ValueError("Unexpected desktop archive name")
@@ -225,11 +228,11 @@ def sign_archive(archive, output, metadata, keychain, directory, dmg=False):
     run(["ditto", "-x", "-k", final, fresh])
     extracted = fresh / archive.stem / application_name
     verify_app(extracted, team)
-    options = ["--version", "--self-check"]
+    options = ["--version", "--self-check", "--self-check-updater"]
     if "feff10-runner" in metadata.get("features", []):
         options.append("--self-check-feff")
     for option in options:
-        subprocess.run([str(extracted / "Contents/MacOS/rexafs"), option], cwd=fresh, check=True)
+        subprocess.run([str(extracted / "Contents/MacOS/rexafs"), option], cwd=fresh, check=True, timeout=600)
     Path(str(final) + ".sha256").write_text(f"{digest(final)}  {final.name}\n")
     if dmg:
         sign_installer(bundle, final, output, metadata, keychain, directory)
