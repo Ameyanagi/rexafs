@@ -71,6 +71,56 @@ fn catalogue_progress_preserves_paths_and_cancels_inside_the_search() {
         .contains("cancelled by observer"));
 }
 
+#[cfg(feature = "refeff-runner")]
+#[test]
+fn total_path_guard_stops_during_search_before_electronic_preparation() {
+    use rexafs::structure::Edge;
+    let configuration = Configuration {
+        atoms: (0..27)
+            .map(|i| Atom {
+                atomic_number: 29,
+                position: [
+                    (i % 3) as f64 * 1.5,
+                    ((i / 3) % 3) as f64 * 1.5,
+                    (i / 9) as f64 * 1.5,
+                ],
+            })
+            .collect(),
+        cell: None,
+    };
+    let mut calculator = PreparedRefeffCalculator::new(
+        RefeffOptions {
+            cluster_radius: 6.,
+            path_radius: 5.,
+            max_legs: 6,
+            path_criteria: [0., 0.],
+            ..Default::default()
+        },
+        vec![configuration.clone()],
+        AccelerationSettings {
+            max_total_paths: 10,
+            catalogue: PathCatalogueSettings {
+                radius: 5.,
+                max_legs: 6,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let monitor = calculator.monitor();
+    let error = calculator
+        .calculate(&configuration, 13, Edge::K, &[3., 4.])
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("at least") && error.contains("max_total_paths"));
+    assert_eq!(calculator.stats().electronic_preparations, 0);
+    assert_eq!(calculator.stats().contexts, 0);
+    assert_eq!(monitor.snapshot().stage, PreparedStage::Paths);
+    assert!(monitor.snapshot().search.paths > 10);
+    assert!(monitor.snapshot().search.extensions <= 4096);
+}
+
 #[test]
 fn catalogue_includes_paths_entering_radius_and_checks_envelope() {
     let mut c = pair();

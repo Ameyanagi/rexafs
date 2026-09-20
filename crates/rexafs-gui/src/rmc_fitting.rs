@@ -65,6 +65,9 @@ pub struct Draft {
     /// Unreleased: None adapts the runtime cache budget to available memory.
     /// Some(mib) is a fixed payload limit; electronic tables are separate.
     pub cache_mib: Option<usize>,
+    /// Unreleased: None resolves a path-count guard from available RAM at new-run
+    /// submission. An explicit count overrides it; existing runs keep their limit.
+    pub max_total_paths: Option<usize>,
     /// Structural diagnostics use a fixed radial interval and bounded sample history.
     pub structural: structural::Settings,
     pub temperature: f64,
@@ -105,6 +108,7 @@ impl Default for Draft {
             workers: None,
             parallel_paths: true,
             cache_mib: None,
+            max_total_paths: None,
             structural: structural::Settings::default(),
             temperature: 0.001,
             max_displacement: 0.2,
@@ -187,6 +191,7 @@ impl Draft {
     ) -> Result<(), String> {
         self.resolved_workers()?;
         memory::validate_manual(self.cache_mib)?;
+        memory::validate_catalogue_limit(self.max_total_paths)?;
         self.structural.validate()?;
         self.evolution_settings()?;
         if spectrum.k().is_none() || spectrum.chi().is_none() {
@@ -402,6 +407,10 @@ pub struct Request {
     /// Runtime resource policy, excluded from scientific calculator identity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_mib: Option<usize>,
+    /// Resolved catalogue guard captured at submission. None preserves the
+    /// historical one-million-path limit and calculator identity on old resumes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_total_paths: Option<usize>,
     /// None preserves historical runs without structural sampling.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub structural: Option<structural::Settings>,
@@ -508,6 +517,7 @@ impl SavedRun {
     /// Numerical checkpoint validation is also performed by RmcSession::resume.
     pub fn validate(&self) -> Result<(), String> {
         memory::validate_manual(self.request.cache_mib)?;
+        memory::validate_catalogue_limit(self.request.max_total_paths)?;
         let evolutionary = self.request.evolution.is_some();
         if self.version != if evolutionary { 2 } else { 1 }
             || evolutionary != matches!(self.checkpoint, search::Checkpoint::Evolution { .. })
@@ -863,6 +873,10 @@ impl Request {
             workers: draft.resolved_workers()?,
             parallel_paths: draft.parallel_paths,
             cache_mib: draft.cache_mib,
+            max_total_paths: Some(memory::catalogue_limit(
+                draft.max_total_paths,
+                memory::available_memory(),
+            )),
             structural: Some(structural::Settings {
                 stride: if draft.search == search::Mode::Rmc {
                     draft.structural.stride
@@ -908,6 +922,7 @@ impl Request {
     /// Path-count and byte budgets remain independently enforced by the core.
     #[cfg(feature = "refeff-runner")]
     fn acceleration_settings(&self) -> Result<AccelerationSettings, String> {
+        memory::validate_catalogue_limit(self.max_total_paths)?;
         let mut contexts = std::collections::BTreeSet::new();
         for dataset in &self.problem.datasets {
             let options =
@@ -940,6 +955,9 @@ impl Request {
                 .len()
                 .max(AccelerationSettings::default().max_contexts),
             reuse_electronic_inputs: self.reuse_electronic_inputs,
+            max_total_paths: self
+                .max_total_paths
+                .unwrap_or(AccelerationSettings::default().max_total_paths),
             snapshots_per_context: self
                 .evolution
                 .as_ref()
@@ -2153,12 +2171,95 @@ pub(crate) mod tests {
             .push(request.problem.datasets[0].clone());
         let settings = request.acceleration_settings().unwrap();
         assert_eq!(settings.max_contexts, 256);
-        assert_eq!(
-            settings.max_total_paths,
-            AccelerationSettings::default().max_total_paths
-        );
+        assert_eq!(settings.max_total_paths, request.max_total_paths.unwrap());
         request.problem.datasets[1].exafs.edge = Edge::L3;
         assert_eq!(request.acceleration_settings().unwrap().max_contexts, 512);
+    }
+
+    #[cfg(feature = "refeff-runner")]
+    #[test]
+    fn catalogue_limits_roundtrip_and_legacy_requests_keep_their_identity() {
+        let mut request = request();
+        request.max_total_paths = Some(3_000_000);
+        let encoded = serde_json::to_value(&request).unwrap();
+        let restored: Request = serde_json::from_value(encoded.clone()).unwrap();
+        assert_eq!(
+            restored.acceleration_settings().unwrap().max_total_paths,
+            3_000_000
+        );
+        let key = diagnostics::input_key(&request).unwrap();
+        request.max_total_paths = Some(4_000_000);
+        assert_eq!(diagnostics::input_key(&request).unwrap(), key);
+        let mut old = encoded;
+        old.as_object_mut().unwrap().remove("max_total_paths");
+        let legacy: Request = serde_json::from_value(old.clone()).unwrap();
+        assert_eq!(
+            legacy.acceleration_settings().unwrap().max_total_paths,
+            1_000_000
+        );
+        assert_eq!(serde_json::to_value(legacy).unwrap(), old);
+        request.max_total_paths = Some(0);
+        assert!(request.acceleration_settings().is_err());
+    }
+
+    #[cfg(feature = "refeff-runner")]
+    #[test]
+    #[ignore = "manual native qualification: 256 Cu absorbers, 8 Å cluster, 6 Å paths, four legs"]
+    fn native_256_site_large_catalogue_uses_auto_capacity() {
+        let structure = rexafs::structure::BuiltinLibrary::get()
+            .unwrap()
+            .structure("cu")
+            .unwrap();
+        let configuration = build_preview(&structure, [4; 3]).unwrap();
+        let mut request = request();
+        request.problem.structures[0].configuration = configuration.clone();
+        request.problem.datasets[0].exafs.absorbers = (0..256).collect();
+        request.calculator.cluster_radius = 8.;
+        request.calculator.path_radius = 6.;
+        request.calculator.max_legs = 4;
+        request.calculator.kmax = 20.;
+        request.catalogue.radius = 6.;
+        request.catalogue.max_legs = 4;
+        request.max_total_paths = Some(memory::catalogue_limit(
+            None,
+            Some(memory::MemorySnapshot {
+                total: 32 * 1024 * memory::MIB,
+                available: 9 * 1024 * memory::MIB,
+            }),
+        ));
+        let mut calculator = PreparedRefeffCalculator::new(
+            request.calculator.clone(),
+            vec![configuration.clone()],
+            request.acceleration_settings().unwrap(),
+        )
+        .unwrap();
+        let requests: Vec<_> = (0..256)
+            .map(|absorber| CalculationRequest {
+                structure: 0,
+                configuration: &configuration,
+                absorber,
+                edge: Edge::K,
+                k: &[3., 10., 16., 18.],
+                options: None,
+                paths: false,
+            })
+            .collect();
+        let results = calculator.calculate_batch(&requests).unwrap();
+        assert_eq!(results.len(), 256);
+        assert!(
+            results
+                .iter()
+                .all(|r| r.chi.len() == 4 && r.chi.iter().all(|v| v.is_finite()))
+        );
+        assert_eq!(calculator.stats().contexts, 256);
+        assert!(calculator.stats().catalogue_paths > 1_000_000);
+        assert!(calculator.stats().catalogue_paths <= request.max_total_paths.unwrap());
+        eprintln!(
+            "Prepared {} paths for {} absorbers; limit {}.",
+            calculator.stats().catalogue_paths,
+            calculator.stats().contexts,
+            request.max_total_paths.unwrap()
+        );
     }
 
     #[cfg(feature = "refeff-runner")]

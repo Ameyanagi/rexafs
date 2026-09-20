@@ -69,6 +69,32 @@ pub fn validate_manual(mib: Option<usize>) -> Result<(), String> {
     Ok(())
 }
 
+/// Resolve the path-count guard once when submitting a new run. Auto reserves
+/// the same quarter of available memory as the initial cache policy, separately
+/// capped at 2 GiB, and allows 512 bytes per path. This empirical allowance covers
+/// path identities and reverse atom indices, not electronic tables or total
+/// process memory. It is a capacity heuristic, not a measured allocation bound.
+/// Failed memory queries retain the historical one-million-path guard. The
+/// resolved value is saved with the request so resume does not change identity.
+pub fn catalogue_limit(manual: Option<usize>, memory: Option<MemorySnapshot>) -> usize {
+    manual.unwrap_or_else(|| {
+        if memory.is_none() {
+            1_000_000
+        } else {
+            (budget(None, memory, 0).bytes.min(2 * GIB) / 512).max(1)
+        }
+    })
+}
+
+pub fn validate_catalogue_limit(limit: Option<usize>) -> Result<(), String> {
+    if limit.is_some_and(|limit| !(1..=100_000_000).contains(&limit)) {
+        return Err(
+            "Choose 1–100,000,000 catalogue paths, or Auto. This limit applies to new runs.".into(),
+        );
+    }
+    Ok(())
+}
+
 fn checked(total: u64, available: u64) -> Option<MemorySnapshot> {
     let total = usize::try_from(total).ok()?;
     let available = usize::try_from(available).ok()?;
@@ -165,6 +191,34 @@ pub fn available_memory() -> Option<MemorySnapshot> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn catalogue_capacity_tracks_memory_without_removing_the_guard() {
+        let ample = Some(MemorySnapshot {
+            total: 32 * GIB,
+            available: 9 * GIB,
+        });
+        assert_eq!(catalogue_limit(None, ample), 4_194_304);
+        let constrained = Some(MemorySnapshot {
+            total: 8 * GIB,
+            available: 2 * GIB,
+        });
+        assert_eq!(catalogue_limit(None, constrained), 524_288);
+        assert_eq!(catalogue_limit(None, None), 1_000_000);
+        assert_eq!(catalogue_limit(Some(3_000_000), constrained), 3_000_000);
+        assert_eq!(
+            catalogue_limit(
+                None,
+                Some(MemorySnapshot {
+                    total: GIB,
+                    available: 0
+                })
+            ),
+            1
+        );
+        assert!(validate_catalogue_limit(Some(0)).is_err());
+        assert!(validate_catalogue_limit(Some(100_000_001)).is_err());
+    }
 
     #[test]
     fn automatic_budget_keeps_headroom_and_ignores_its_own_allocation() {
