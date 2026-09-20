@@ -80,3 +80,9 @@ before passing arrays to a library.
 The [processing guide](/docs/science/processing/) explains the equations and units.
 A Fourier peak is not automatically a phase-corrected bond distance. A converged
 fit still needs inspection of its residuals, parameter correlations and model.
+
+## Support rexafs
+
+If rexafs is useful to you, [star the repository on GitHub](https://github.com/Ameyanagi/rexafs)
+or [sponsor development through GitHub Sponsors](https://github.com/sponsors/Ameyanagi).
+Sponsorship supports ongoing development and maintenance; stars help others discover the project.
