@@ -1,7 +1,8 @@
-# rexafs 0.2.12 — release preparation
+# rexafs 0.2.12
 
-This patch is being qualified and is not yet published. The public downloads
-remain on 0.2.11 until the exact-tag builds, signing and package checks complete.
+Published on **20 September 2026**. Desktop downloads, crates.io, PyPI and npm
+were downloaded and verified against the qualified exact-tag artifacts.
+See [the release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.12).
 
 ## Platform support
 
@@ -84,9 +85,10 @@ for defaults, normalization, resource limits and implementation references.
 ## Documentation and compatibility
 
 The manual explains the new RMC controls and includes unedited computer-use
-captures identified by their actual build. Earlier signed 0.2.11 screenshots,
-public data attribution and historical records remain available. Synthetic
-structural examples demonstrate the controls, not a refined experimental model.
+captures from the signed 0.2.12 app: fresh public Cu RMC results, normalized
+Cu–Cu histories, cache diagnostics and publication controls. Earlier signed
+0.2.11 screenshots, source-candidate examples and attribution remain available.
+The short calculations demonstrate software behavior, not a converged structure.
 
 The exact-scattering model and existing saved scientific settings are preserved;
 new resource policies, structural analysis and desktop search choices are
@@ -96,4 +98,5 @@ coordinated. Qualification uses new linked and embedded projects written through
 the 0.2.12 writer; older fixtures retain their original bytes.
 
 The [qualification record](validation/2026-09-19-release-0.2.12/review.md)
-distinguishes completed checks from pending release gates.
+records the immutable source, all 30 exact-tag jobs, signing, installed-app
+checks and the 28 verified public files.

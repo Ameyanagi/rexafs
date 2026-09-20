@@ -81,7 +81,7 @@ forward Fourier transforms and CSV/JSON export.
 
 `/app/scattering/` runs the published ReFEFF 0.4.0 WASI engine through its browser
 Worker. It accepts a FEFF input, displays calculated EXAFS and offers generated
-files and a provenance record for download. Native rexafs 0.2.11 also uses
+files and a provenance record for download. Native rexafs 0.2.12 also uses
 ReFEFF 0.4.0; the two browser engines have separate manifests.
 
 `npm run dev` and `npm run build` first prepare both engines. Install `wasm-pack 0.15.0`
@@ -150,7 +150,7 @@ follow the vendor README and preserve the original notice bytes.
 - `src/content/docs/` owns the curated public manual. Every page requires
   `audience: user`; the collection schema rejects any other audience.
 - `doc/` retains source-checkout guides and historical records. Website guides
-  target published 0.2.11; source-checkout additions belong in Next. Desktop
+  target published 0.2.12; source-checkout additions belong in Next. Desktop
   screenshot captions preserve their actual build and capture provenance. Keep shared
   scientific explanations synchronized when the underlying method changes. Do not import `doc/` recursively.
 - `src/content/docs/docs/reference/{stable,next}/` is generated. Edit Python
@@ -178,7 +178,11 @@ follow the vendor README and preserve the original notice bytes.
   Extraction includes the Python declarations/native help, every TypeScript
   entry-point declaration, Wasm help and the Rust core's public documentation.
 - `public/` contains only selected public assets. Application screenshots are
-  full, unedited captures made with computer use. `screenshots/0.2.11/` contains
+  full, unedited captures made with computer use. `screenshots/0.2.12/` contains
+  eight original 1192 × 768 windows from the signed ARM64 0.2.12 DMG, including
+  fresh RMC calculations, structural histories, automatic values and publication
+  controls. Its `capture.json` records artifact, input and image hashes.
+  `screenshots/0.2.11/` contains
   three RMC captures and 29 refreshed workflow captures from the signed ARM64
   0.2.11 release installed from its DMG. All are original 1192 × 768 windows
   captured through `cua_repl`; no cropping, resizing or replacement plots.

@@ -4,12 +4,12 @@ description: "Generated signatures and source documentation for stable and upcom
 audience: user
 ---
 
-The tutorials and stable reference target **published 0.2.11**. Choose Next only
+The tutorials and stable reference target **published 0.2.12**. Choose Next only
 when working from the source checkout.
 
 ## Choose your language
 
-These links describe **stable 0.2.11**:
+These links describe **stable 0.2.12**:
 
 | Task | Python | TypeScript | Rust |
 |---|---|---|---|

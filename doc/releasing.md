@@ -14,15 +14,18 @@ successful app launch alone does not qualify the updater. The
 0.2.10/0.2.11 failure and the source correction. Do not reuse the older qualification
 as evidence that signed in-app updates work.
 
-## Preparing 0.2.12
+## Published 0.2.12
 
 The [0.2.12 notes](release-notes-0.2.12.md) and
 [qualification record](validation/2026-09-19-release-0.2.12/review.md) track the
 updater correction, RMC resource and structural-history controls, and desktop
 workflow improvements. Starting with this version, macOS desktop and Python
-distributions support Apple Silicon only. This version is not published yet.
-Require the new signed helper checks before announcing that the Mac update path
-is qualified.
+distributions support Apple Silicon only. Published on 20 September 2026 after
+all 30 exact-tag jobs, Developer ID signing and notarization, signed helper and
+installed-DMG checks. All 22 desktop files and six registry files were downloaded
+and hash-verified. Fresh native RMC and report-export checks passed. Earlier Mac
+apps still need one manual installation because their old helper cannot update
+itself.
 
 ## Published 0.2.11
 

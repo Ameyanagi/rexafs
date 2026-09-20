@@ -1,0 +1,263 @@
+{
+  "captured_date": "2026-09-20",
+  "build": {
+    "version": "0.2.12",
+    "target": "aarch64-apple-darwin",
+    "features": [
+      "refeff-runner",
+      "feff10-runner"
+    ],
+    "engine_execution": {
+      "refeff": {
+        "mode": "native",
+        "target": "aarch64-apple-darwin"
+      },
+      "feff10": {
+        "mode": "native-stage-workers",
+        "target": "aarch64-apple-darwin"
+      }
+    },
+    "channel": "stable",
+    "release_tag": "v0.2.12",
+    "built_at": null,
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "commit": "2c9ce950694dca25153ba248d5f4fe19c2a66735",
+    "dirty": false,
+    "github_run_id": "35514851752",
+    "signed": true,
+    "notarized": true,
+    "signing_identity": "Developer ID Application: Ryuichi Shimogawa (XXN44W8X56)",
+    "apple_team_id": "XXN44W8X56",
+    "notarization_id": "fdee4ded-b9dd-44f4-9345-1ff027a3d7ee",
+    "unsigned_archive_sha256": "069fb79052ed7e91aa74206ffac729e29a8f71f48ef555d95278be10dc13061f",
+    "signing_run_id": "35516779212",
+    "signing_tools_commit": "2c9ce950694dca25153ba248d5f4fe19c2a66735"
+  },
+  "distribution": "Signed and notarized Apple Silicon release installed from the exact-tag DMG.",
+  "workflow": "https://github.com/Ameyanagi/rexafs/actions/runs/35514851752",
+  "signing_workflow": "https://github.com/Ameyanagi/rexafs/actions/runs/35516779212",
+  "archive": {
+    "file": "rexafs-0.2.12-aarch64-apple-darwin.dmg",
+    "sha256": "99f92b0e910ab6e584d75e5228f7fcf7a1bfe0ee24c0b9160a95379271e42413",
+    "checksum_verified": true
+  },
+  "executable_sha256": "9ae7d57481f36ca0c43ae062fd355b8819d70abbf7e8d00183034d897f3f83c4",
+  "platform": {
+    "os": "macOS",
+    "version": "26.5.1",
+    "architecture": "arm64",
+    "machine": "Apple M4"
+  },
+  "capture": {
+    "method": "Native controls and original window bytes from the Computer Use connector.",
+    "pixel_dimensions": [
+      1192,
+      768
+    ],
+    "edited": false,
+    "scope": "Isolated settings; no cropping, resizing, annotation or replacement plots."
+  },
+  "inputs": {
+    "cu_room_temperature": {
+      "path": "crates/rexafs/tests/fixtures/xas/samples/aps/13-id-c/xasdatalibrary/cu_metal_rt.xdi",
+      "sha256": "17b7076f1c3b5eccfa76dc6a7b3d26ea1fd388fa27f621a058779f70b71351d6",
+      "license": "CC0-1.0",
+      "source": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/data/Cu/cu_metal_rt.xdi",
+      "license_evidence": "https://github.com/XraySpectroscopy/XASDataLibrary/blob/284edcc1752ede0dd41c7e66eb2dbf6cf9589980/doc/license.rst",
+      "citation": "International X-ray Absorption Society and the credited data contributors. X-ray Absorption Data Library. https://xaslib.xrayabsorption.org/",
+      "changes": "None; original measurement bytes retained."
+    }
+  },
+  "scientific_scope": "Fresh ten-attempt software and persistence check of public Cu data. S02 = 1 and delta E0 = 0 eV fixed; amplitude mismatch remains; neither calibrated nor converged. Histories are not uncertainty estimates.",
+  "run": {
+    "structure": "Built-in fcc Cu, a = 3.61538 angstrom, 2 x 2 x 2 periodic supercell, 32 atoms",
+    "seed": 20260918,
+    "k_range_inverse_angstrom": [
+      2,
+      12
+    ],
+    "r_range_angstrom": [
+      1.5,
+      3.5
+    ],
+    "k_weight": 2,
+    "workers": 10,
+    "cluster_radius_angstrom": 6,
+    "path_radius_angstrom": 4,
+    "maximum_legs": 4,
+    "s02_fixed": 1,
+    "delta_e0_fixed_ev": 0,
+    "structural_interval_angstrom": [
+      0,
+      3.5
+    ],
+    "structural_bins": 70,
+    "sampling_stride": 1,
+    "cache_and_catalogue": "Auto",
+    "verification": {
+      "scope": "Arguments: saved .rxs project, exported result folder, fresh evidence JSON path.\nThis is a ten-attempt software qualification, not a converged experimental fit.\nIt reads actual application outputs and does not create or alter those outputs.\n",
+      "project_sha256": "4a4e228a7b84d725b8990e93fbebac47245e7c1be9c483db9fe780551336463c",
+      "completed": 10,
+      "accepted": 10,
+      "initial_objective": 6.464109201196757,
+      "best_objective": 5.334100251381385,
+      "objective_decrease_percent": 17.481278775521968,
+      "setup_seconds": 1.024908209,
+      "elapsed_seconds": 2.10726775,
+      "structural_samples": 11,
+      "skipped_samples": 0,
+      "discarded_samples": 0,
+      "coordination": 12.0,
+      "initial_mean_angstrom": 2.5564597145662202,
+      "initial_peak_g_r": 34.027898443368095,
+      "cache": {
+        "exact": 3912,
+        "reused_active": 19320,
+        "requests": 352,
+        "geometry_hits": 0,
+        "bytes": 3998976,
+        "setup_seconds": 0.6814280809999999,
+        "evaluation_seconds": 1.226760628,
+        "electronic_preparations": 1,
+        "shared_electronic_contexts": 31,
+        "limit_bytes": 1322254336,
+        "minimum_bytes": 3998976,
+        "snapshot_hits": 320,
+        "cold_misses": 32,
+        "repeat_misses": 0,
+        "evictions": 0,
+        "oversized": 0,
+        "snapshots": 32,
+        "contexts": 32
+      },
+      "saved_export_checkpoint_equal": true,
+      "structural_json_equal": true,
+      "history_csv_rows": 14,
+      "curves_csv_rows": 980
+    }
+  },
+  "publication": {
+    "figures": 6,
+    "formats": [
+      "PNG",
+      "SVG",
+      "CSV"
+    ],
+    "embedded_checkpoint_matches": true,
+    "chi_k_inches": [
+      7,
+      4.8
+    ],
+    "chi_k_dpi": 300,
+    "chi_k_png_pixels": [
+      2100,
+      1440
+    ],
+    "change_status": "Observed after a grid edit; earlier exported files preserved."
+  },
+  "observations": [
+    "Ten-attempt calculation started through Run RMC in the installed signed app.",
+    "Saved project reopened without automatically starting a calculation.",
+    "Saved checkpoint and exported result agree, including all structural JSON and CSV values.",
+    "Independent fcc first-shell and shell-volume/density checks passed.",
+    "Coordination, mean-distance and variance histories rendered through native controls."
+  ],
+  "images": [
+    {
+      "file": "rmc-search-memory.jpg",
+      "captured_utc": "2026-09-20T14:40:24.909941+00:00",
+      "sha256": "9911a296887a0bb1d9bf899c65cff3d9ab0bcd79906bfb42ebe0f4e3dcb256e3",
+      "bytes": 108222,
+      "description": "Signed 0.2.12 new-run form with 32 Cu sites, ten attempts, Auto CPU/cache/catalogue controls and RMC/Genetic/Hybrid search buttons.",
+      "width": 1192,
+      "height": 768,
+      "inputs": [
+        "cu_room_temperature"
+      ]
+    },
+    {
+      "file": "rmc-results.jpg",
+      "captured_utc": "2026-09-20T14:44:40.562495+00:00",
+      "sha256": "0059dc84e91a4cc75727d094f718fc0904e7d779766409aa6b8a26488703d881",
+      "bytes": 147129,
+      "width": 1192,
+      "height": 768,
+      "description": "Reopened signed-release ten-attempt Cu RMC result; fixed S02=1 and delta E0=0; objective decreased 17.48 percent but convergence is not assessed.",
+      "inputs": [
+        "cu_room_temperature"
+      ]
+    },
+    {
+      "file": "rmc-run-details.jpg",
+      "captured_utc": "2026-09-20T14:45:48.494314+00:00",
+      "sha256": "a1172c86f3f2449190eae1126f5a8a465f97f046595b43db4dc3a6b8090e1b84",
+      "bytes": 112339,
+      "width": 1192,
+      "height": 768,
+      "description": "Saved signed-release cache diagnostics: ten workers, 32 snapshots, 320 hits, 32 cold misses, no repeated misses or evictions, and one calculated plus 31 shared electronic setups.",
+      "inputs": [
+        "cu_room_temperature"
+      ]
+    },
+    {
+      "file": "structural-overlays.jpg",
+      "captured_utc": "2026-09-20T14:46:06.594911+00:00",
+      "sha256": "cee38b124aaaaef54c2128094ac121ae284934078b9ce6ed9dde6254bd5dfed6",
+      "bytes": 106849,
+      "width": 1192,
+      "height": 768,
+      "description": "Reopened periodic Cu-Cu g(r) with density and shell-volume normalization, 32 centers, 70 bins over 0 to 3.5 angstrom, and initial/current/best overlays after ten attempts.",
+      "inputs": [
+        "cu_room_temperature"
+      ]
+    },
+    {
+      "file": "structural-heatmap.jpg",
+      "captured_utc": "2026-09-20T14:46:25.618878+00:00",
+      "sha256": "b7b9c8dadc2db63b7ec124b3acfda3bec1743dc6cae9fdee5959907e0f6de00e",
+      "bytes": 104185,
+      "width": 1192,
+      "height": 768,
+      "description": "Reopened distance-versus-attempt map of normalized Cu-Cu g(r): 11 actual samples from attempts 0 to 10, with no skipped or discarded samples.",
+      "inputs": [
+        "cu_room_temperature"
+      ]
+    },
+    {
+      "file": "structural-variance.jpg",
+      "captured_utc": "2026-09-20T14:46:57.644685+00:00",
+      "sha256": "d5dc1778a79bb578bc510e34410f93daf80c1749722463b82d618c002ec212ea",
+      "bytes": 103245,
+      "width": 1192,
+      "height": 768,
+      "description": "Reopened Cu-Cu distance variance over eleven sampled optimization states, in square angstrom; the selected interval is 0 to 3.5 angstrom and these samples are not an uncertainty estimate.",
+      "inputs": [
+        "cu_room_temperature"
+      ]
+    },
+    {
+      "file": "numeric-auto.jpg",
+      "captured_utc": "2026-09-20T14:47:17.503589+00:00",
+      "sha256": "3b8be0d7d954729114d2f5c77905fda515d40f3233ef5264d04e09aaf8f44491",
+      "bytes": 135112,
+      "width": 1192,
+      "height": 768,
+      "description": "Signed 0.2.12 normalization of the public room-temperature Cu measurement, showing automatic numeric values below the fields and the source ranges.",
+      "inputs": [
+        "cu_room_temperature"
+      ]
+    },
+    {
+      "file": "publication.jpg",
+      "captured_utc": "2026-09-20T14:53:05.428991+00:00",
+      "sha256": "891937715e0b8f25c59c54c64340944944ff8ed92346a1bee83daf9eafd4d272",
+      "bytes": 124623,
+      "width": 1192,
+      "height": 768,
+      "description": "Signed 0.2.12 Publish workspace: compact presets, double-column dimensions, and changes-since-publication status after a grid edit",
+      "inputs": [
+        "cu_room_temperature"
+      ]
+    }
+  ]
+}

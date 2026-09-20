@@ -12,8 +12,9 @@ const isArm64 = (arch: string) => /arm64|aarch64|apple silicon/i.test(arch);
 
 test('download inventory matches the release on desktop and mobile, including architecture requirements', async ({ page }) => {
   const [major, minor, patch] = release.version.split('.').map(Number);
-  const sixTargetRelease = major > 0 || minor > 2 || (minor === 2 && patch >= 5);
-  expect(release.platforms).toHaveLength(sixTargetRelease ? 6 : 4);
+  const windowsLinuxArm64 = major > 0 || minor > 2 || (minor === 2 && patch >= 5);
+  const appleSiliconOnly = major > 0 || minor > 2 || (minor === 2 && patch >= 12);
+  expect(release.platforms).toHaveLength(appleSiliconOnly ? 5 : windowsLinuxArm64 ? 6 : 4);
   expect(new Set(release.platforms.map(pkg => pkg.url)).size).toBe(release.platforms.length);
   expect(new Set(release.platforms.map(pkg => `${pkg.os}/${pkg.arch}`)).size).toBe(release.platforms.length);
 
@@ -29,7 +30,10 @@ test('download inventory matches the release on desktop and mobile, including ar
     for (const [index, os] of operatingSystems.entries()) {
       const card = cards.nth(index);
       const packages = release.platforms.filter(pkg => pkg.os === os);
-      if (sixTargetRelease || os === 'macOS') {
+      if (os === 'macOS' && appleSiliconOnly) {
+        expect(packages).toHaveLength(1);
+        expect(packages[0].arch).toBe('Apple Silicon');
+      } else if (windowsLinuxArm64 || os === 'macOS') {
         expect(packages).toHaveLength(2);
         expect(packages.filter(pkg => isArm64(pkg.arch))).toHaveLength(1);
       } else {
@@ -65,7 +69,7 @@ test('download inventory matches the release on desktop and mobile, including ar
       }
 
       const hasArm64 = packages.some(pkg => isArm64(pkg.arch));
-      if (sixTargetRelease) expect(hasArm64, `${os} must have an ARM64 package in ${release.version}`).toBe(true);
+      if (windowsLinuxArm64) expect(hasArm64, `${os} must have an ARM64 package in ${release.version}`).toBe(true);
       if (hasArm64) {
         await expect(card.locator('.unavailable')).toHaveCount(0);
       } else {
