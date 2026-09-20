@@ -11,7 +11,11 @@ pub struct CalibrationPreview {
 
 /// Scientific input identity used to reject stale calibration after form/source edits.
 pub fn input_key(request: &Request) -> Result<String, String> {
-    serde_json::to_vec(request)
+    let mut scientific = request.clone();
+    scientific.cache_mib = None;
+    scientific.structural = None;
+    scientific.evolution = None;
+    serde_json::to_vec(&scientific)
         .map(|bytes| {
             Sha256::digest(bytes)
                 .iter()
@@ -82,12 +86,17 @@ pub fn refinement_progress(
 ) -> Result<Progress, String> {
     saved.validate()?;
     result.validate().map_err(|e| e.to_string())?;
-    let checkpoint = serde_json::to_value(&saved.checkpoint).map_err(|e| e.to_string())?;
+    let checkpoint = saved.checkpoint.numerical_value()?;
+    let session_key = if saved.request.evolution.is_some() {
+        "session"
+    } else {
+        "settings"
+    };
     if serde_json::to_value(&result.problem).map_err(|e| e.to_string())?
         != serde_json::to_value(&saved.request.problem).map_err(|e| e.to_string())?
         || checkpoint["calculator"].as_str() != Some(result.calculator.as_str())
         || serde_json::to_value(&result.session_settings).map_err(|e| e.to_string())?
-            != checkpoint["settings"]
+            != checkpoint[session_key]
         || result.source_attempt != saved.progress.completed
         || result.initial.structures != saved.progress.best.structures
         || result.initial.delta_e0 != saved.progress.best.delta_e0
@@ -211,6 +220,7 @@ fn calculate_calibration(
         request.acceleration_settings()?,
     )
     .map_err(|e| e.to_string())?;
+    let _monitor = super::monitor::MonitorGuard::start(&request, &calculator, Default::default());
     let token = calculator.cancellation_token();
     *interrupt
         .lock()
@@ -272,6 +282,7 @@ fn calculate_refinement(
         request.acceleration_settings()?,
     )
     .map_err(|e| e.to_string())?;
+    let _monitor = super::monitor::MonitorGuard::start(&request, &calculator, Default::default());
     let token = calculator.cancellation_token();
     *interrupt
         .lock()
@@ -280,8 +291,7 @@ fn calculate_refinement(
     if stopping.load(Ordering::Relaxed) {
         return Err("Refinement cancelled.".into());
     }
-    let session =
-        RmcSession::resume(saved.checkpoint, &mut calculator).map_err(|e| e.to_string())?;
+    let session = search::Session::resume(&saved, &mut calculator).map_err(|e| e.to_string())?;
     session
         .refine_best_with_progress(&settings, &mut calculator, |_| {
             if stopping.load(Ordering::Relaxed) {

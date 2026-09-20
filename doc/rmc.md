@@ -115,7 +115,9 @@ Use `PreparedRefeffCalculator` with `AccelerationSettings::default()` for the
 recommended **exact caching** mode. Unchanged paths are reused and changed paths
 are recalculated with typed ReFEFF kernels at fixed reference electronic
 potentials. The default cache budget is 256 MiB; adaptive training and moment
-approximations are disabled. Omitted JSON settings use these same defaults.
+approximations are disabled. Omitted JSON settings use these same defaults. The unreleased desktop applies
+an [automatic runtime memory policy](rmc-structural-evolution.md#cache-memory-and-responsive-preparation)
+after construction; this is separate from experimental approximate basis training.
 
 **Adaptive mode is experimental and opt-in.** It requires an explicit frozen
 basis and `adaptive: Some(AdaptiveBasisSettings { ... })`. The
@@ -420,7 +422,10 @@ represent accepted state after the attempt, including repeated frames on rejecti
 `distance_distribution` computes neighbor counts per selected absorber in
 user-supplied Å bins, coordination within the selected histogram range, mean
 distance and population variance in Å². Periodic images are explicit. This is a
-count histogram, **not density-normalized g(r)**. `retain_paths=true` retains
+count histogram, **not density-normalized g(r)**. The unreleased
+`radial_distribution` adds explicit cell-density and spherical-shell-volume
+normalization for periodic cells, while preserving raw finite-cluster counts.
+See the [normalization and interpretation guide](rmc-structural-evolution.md#structural-evolution). `retain_paths=true` retains
 backend path index, leg count, degeneracy, half length and χ contribution per
 dataset/component/absorber. Contributions already include degeneracy; average
 absorbers, multiply mixture fractions and apply S₀² to reconstruct the model.

@@ -17,6 +17,61 @@ fn pair() -> Configuration {
 }
 
 #[test]
+fn catalogue_progress_preserves_paths_and_cancels_inside_the_search() {
+    let expected = PathCatalogue::new(pair(), 0, PathCatalogueSettings::default()).unwrap();
+    let mut reports = Vec::new();
+    let observed =
+        PathCatalogue::new_with_progress(pair(), 0, PathCatalogueSettings::default(), |p| {
+            reports.push(p);
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(observed, expected);
+    assert_eq!(reports.first().unwrap().extensions, 0);
+    assert_eq!(reports.last().unwrap().paths, expected.paths().len());
+    assert!(reports
+        .windows(2)
+        .all(|p| p[0].extensions <= p[1].extensions));
+
+    let dense = Configuration {
+        atoms: (0..27)
+            .map(|i| Atom {
+                atomic_number: 29,
+                position: [
+                    (i % 3) as f64 * 1.5,
+                    ((i / 3) % 3) as f64 * 1.5,
+                    (i / 9) as f64 * 1.5,
+                ],
+            })
+            .collect(),
+        cell: None,
+    };
+    let mut visited = 0;
+    let stopped = PathCatalogue::new_with_progress(
+        dense,
+        13,
+        PathCatalogueSettings {
+            radius: 5.,
+            max_legs: 6,
+            ..Default::default()
+        },
+        |p| {
+            visited = p.extensions;
+            if visited >= 4096 {
+                Err(RmcError::Calculator("cancelled by observer".into()))
+            } else {
+                Ok(())
+            }
+        },
+    );
+    assert_eq!(visited, 4096);
+    assert!(stopped
+        .unwrap_err()
+        .to_string()
+        .contains("cancelled by observer"));
+}
+
+#[test]
 fn catalogue_includes_paths_entering_radius_and_checks_envelope() {
     let mut c = pair();
     let catalogue = PathCatalogue::new(
@@ -192,6 +247,82 @@ fn structural_reports_and_priors_use_arithmetic_msd_and_explicit_images() {
     };
     let angles = angle_distribution(&cell, &[0], None, 2.1, &[0., 100., 181.]).unwrap();
     assert_eq!(angles.counts, vec![12, 3]);
+}
+
+#[cfg(feature = "refeff-runner")]
+#[test]
+fn runtime_cache_resize_preserves_identity_and_recovers_from_capacity_misses() {
+    use rexafs::structure::Edge;
+    let mut configuration = pair();
+    configuration.atoms[1].atomic_number = 29;
+    let options = RefeffOptions {
+        cluster_radius: 4.,
+        path_radius: 3.,
+        max_legs: 2,
+        path_criteria: [0., 0.],
+        kmax: 12.,
+        ..Default::default()
+    };
+    let mut calculator = PreparedRefeffCalculator::new(
+        options,
+        vec![configuration.clone()],
+        AccelerationSettings {
+            catalogue: PathCatalogueSettings {
+                radius: 3.,
+                max_legs: 2,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let identity = calculator.identity();
+    let monitor = calculator.monitor();
+    let k: Vec<_> = (0..20).map(|i| 3. + i as f64 * 0.2).collect();
+    let requests: Vec<_> = (0..2)
+        .map(|absorber| CalculationRequest {
+            structure: 0,
+            configuration: &configuration,
+            absorber,
+            edge: Edge::K,
+            k: &k,
+            options: None,
+            paths: false,
+        })
+        .collect();
+    let expected = calculator.calculate_batch(&requests).unwrap();
+    let working_set = calculator.stats().minimum_cache_bytes;
+    assert!(working_set > 0);
+    assert_eq!(calculator.stats().cached_snapshots, 2);
+    assert_eq!(calculator.stats().cold_misses, 2);
+    assert_eq!(calculator.stats().repeat_misses, 0);
+
+    monitor.set_cache_bytes(working_set / 2);
+    let pressured = calculator.calculate_batch(&requests).unwrap();
+    assert!(calculator.stats().repeat_misses >= 2);
+    assert!(calculator.stats().budget_evictions >= 2);
+    assert!(calculator.stats().cached_bytes <= working_set / 2);
+    monitor.set_cache_bytes(working_set * 2);
+    calculator.calculate_batch(&requests).unwrap();
+    let hits = calculator.stats().snapshot_hits;
+    let recovered = calculator.calculate_batch(&requests).unwrap();
+    assert_eq!(calculator.stats().snapshot_hits, hits + 2);
+    assert_eq!(calculator.stats().cached_snapshots, 2);
+    assert_eq!(calculator.identity(), identity);
+    for actual in [&pressured, &recovered] {
+        for (a, b) in actual.iter().zip(&expected) {
+            assert_eq!(
+                a.chi.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                b.chi.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+            );
+        }
+    }
+    monitor.set_cache_bytes(0);
+    calculator.calculate_batch(&requests).unwrap();
+    assert_eq!(calculator.stats().cached_bytes, 0);
+    assert_eq!(calculator.stats().oversized_snapshots, 2);
+    assert_eq!(monitor.snapshot().stats, calculator.stats());
+    assert_eq!(monitor.snapshot().stage, PreparedStage::Idle);
 }
 
 #[cfg(feature = "refeff-runner")]

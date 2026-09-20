@@ -1,5 +1,9 @@
 # Desktop RMC workflow (0.2.11)
 
+For the unreleased adaptive cache, Structural evolution view, and genetic/hybrid
+controls, see [the follow-up guide](rmc-structural-evolution.md). The versioned
+sections below describe their original 0.2.11 behavior.
+
 ## Setup and range corrections in 0.2.11
 
 The next action stays at the upper right, matching ordinary path fitting:

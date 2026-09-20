@@ -14,6 +14,58 @@ use gpui::{
     FontWeight, ImageFormat, IntoElement, ObjectFit, SharedString, Styled, div, img, prelude::*, px,
 };
 
+/// Small layout previews retain full accessible names without visible labels.
+fn preset_icon(t: &Theme, index: usize, preset: StylePreset, selected: bool) -> Control {
+    let color = if selected { t.accent } else { t.text_muted };
+    let mut preview = div()
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap(px(2.))
+        .w(px(24.))
+        .h(px(18.))
+        .border_1()
+        .border_color(color)
+        .rounded_sm();
+    match preset {
+        StylePreset::SingleColumn => {
+            preview = preview.child(div().w(px(7.)).h(px(11.)).border_1().border_color(color));
+        }
+        StylePreset::DoubleColumn => {
+            for _ in 0..2 {
+                preview = preview.child(div().w(px(7.)).h(px(11.)).border_1().border_color(color));
+            }
+        }
+        StylePreset::Slide => {
+            preview = preview
+                .h(px(14.))
+                .child(div().w(px(16.)).h(px(7.)).border_1().border_color(color));
+        }
+    }
+    Control::new(
+        div().id(("publication-preset", index)),
+        preset.label(),
+        accesskit::Role::Button,
+    )
+    .selected(selected)
+    .tab_index(0)
+    .key_context("Control")
+    .w(px(36.))
+    .h(px(32.))
+    .flex_none()
+    .flex()
+    .items_center()
+    .justify_center()
+    .rounded_md()
+    .border_1()
+    .border_color(if selected { t.accent } else { t.border })
+    .when(selected, |d| d.bg(t.raised))
+    .cursor_pointer()
+    .hover(|d| d.bg(t.raised))
+    .focus(|d| d.border_color(t.accent))
+    .child(preview)
+}
+
 /// Attach a hover tooltip and matching accessibility description to a control,
 /// so explanations live on the control instead of as text under it.
 fn with_tip(control: Control, t: &Theme, text: impl Into<SharedString>) -> Control {
@@ -605,14 +657,12 @@ impl StudioApp {
                 let (width, height, dpi, font) = preset.values();
                 presets = presets.child(
                     with_tip(
-                        chip(
-                            &t,
-                            ("publication-preset", i),
-                            preset.label(),
-                            preset.matches(&options),
-                        ),
+                        preset_icon(&t, i, preset, preset.matches(&options)),
                         &t,
-                        format!("{width} × {height} in, {dpi} DPI, {font} pt text"),
+                        format!(
+                            "{} · {width} × {height} in, {dpi} DPI, {font} pt text",
+                            preset.label()
+                        ),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(f) = this.publish.figures.get(this.publish.selected) {

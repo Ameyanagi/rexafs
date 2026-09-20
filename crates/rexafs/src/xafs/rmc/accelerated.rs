@@ -2,6 +2,8 @@
 mod adaptive_basis;
 #[path = "adaptive_control.rs"]
 mod adaptive_control;
+#[path = "prepared_monitor.rs"]
+mod prepared_monitor;
 use super::geometry::distance;
 use super::prepared::PathTable;
 use super::*;
@@ -9,6 +11,7 @@ use ::refeff::CancellationToken;
 use adaptive_basis::AdaptiveContext;
 pub use adaptive_basis::{AdaptiveBasisReport, AdaptiveBasisSettings};
 pub use adaptive_control::*;
+pub use prepared_monitor::*;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
@@ -83,6 +86,9 @@ pub struct AccelerationSettings {
     /// Approximate numerical payload budget for last-geometry path spectra;
     /// default 256 MiB. Oversized results are evaluated but not cached. This
     /// excludes immutable phase tensors, catalogues, and transient batch results.
+    /// This constructor value retains historical identity hashing. Unreleased:
+    /// use [`PreparedRefeffCalculator::monitor`] for identity-preserving runtime
+    /// resizing instead of changing the constructor when resuming a checkpoint.
     pub cache_bytes: usize,
     /// Since 0.2.10: retained geometries per electronic context, 1..=1024 (default 1).
     /// Population searches can use population size plus one. The nearest retained
@@ -166,6 +172,29 @@ pub struct PreparedRefeffStats {
     pub evaluation_seconds: f64,
     /// Retained last-geometry numerical payload estimate, in bytes.
     pub cached_bytes: usize,
+    /// Unreleased: current runtime cache-payload limit, in bytes.
+    #[serde(default)]
+    pub cache_limit_bytes: usize,
+    /// Unreleased: estimated bytes for one last-observed snapshot per context.
+    /// This excludes extra population snapshots and non-cache process memory.
+    #[serde(default)]
+    pub minimum_cache_bytes: usize,
+    /// Unreleased: requests with a matching-grid snapshot available before work.
+    #[serde(default)]
+    pub snapshot_hits: u64,
+    /// Unreleased: requests before a matching grid has been observed for a context.
+    #[serde(default)]
+    pub cold_misses: u64,
+    /// Unreleased: previously observed context/grid requests without a snapshot.
+    /// Compare with eviction/oversize counters before attributing these to memory.
+    #[serde(default)]
+    pub repeat_misses: u64,
+    /// Unreleased: snapshots evicted to satisfy the runtime byte budget.
+    #[serde(default)]
+    pub budget_evictions: u64,
+    /// Unreleased: results larger than the runtime budget and therefore not cached.
+    #[serde(default)]
+    pub oversized_snapshots: u64,
 }
 
 /// Spectrum comparison against direct typed paths with the same fixed potentials
@@ -272,9 +301,12 @@ pub struct PreparedRefeffCalculator {
     shared_contexts: HashMap<String, (Arc<PathCatalogue>, Arc<PreparedRefeffContext>)>,
     electronic_inputs: HashMap<String, Arc<PreparedRefeffContext>>,
     snapshots: HashMap<String, Vec<Snapshot>>,
+    /// Last grid and payload per context, even after its snapshot is evicted.
+    snapshot_demand: HashMap<String, (Vec<f64>, usize)>,
     stats: PreparedRefeffStats,
     tick: u64,
     cancellation: CancellationToken,
+    monitor: PreparedRefeffMonitor,
 }
 impl PreparedRefeffCalculator {
     /// Validate/copy settings and fixed mixture references. Electronic setup is
@@ -368,6 +400,7 @@ impl PreparedRefeffCalculator {
             .build()
             .map_err(|e| RmcError::Calculator(e.to_string()))?;
         let calculator = Self {
+            monitor: PreparedRefeffMonitor::new(settings.cache_bytes),
             options,
             references,
             settings,
@@ -377,6 +410,7 @@ impl PreparedRefeffCalculator {
             shared_contexts: HashMap::new(),
             electronic_inputs: HashMap::new(),
             snapshots: HashMap::new(),
+            snapshot_demand: HashMap::new(),
             stats: Default::default(),
             tick: 0,
             cancellation: CancellationToken::default(),
@@ -440,10 +474,17 @@ impl PreparedRefeffCalculator {
             shared
         } else {
             let reference = self.references[request.structure].clone();
-            let catalogue = Arc::new(PathCatalogue::new(
+            self.monitor
+                .stage(PreparedStage::Paths, Some(request.absorber));
+            let catalogue = Arc::new(PathCatalogue::new_with_progress(
                 reference.clone(),
                 request.absorber,
                 self.settings.catalogue.clone(),
+                |progress| {
+                    check_control(Some((&self.cancellation, deadline)))?;
+                    self.monitor.search(progress);
+                    Ok(())
+                },
             )?);
             catalogue.validate(request.configuration)?;
             require(
@@ -453,6 +494,8 @@ impl PreparedRefeffCalculator {
                     <= self.settings.max_total_paths,
                 format!("Prepared RMC needs {} catalogue paths; the limit is {}. Reduce path radius, scattering order or the selected absorbing sites, or explicitly increase AccelerationSettings.max_total_paths.", self.stats.catalogue_paths.saturating_add(catalogue.paths().len()), self.settings.max_total_paths),
             )?;
+            self.monitor
+                .stage(PreparedStage::Electronics, Some(request.absorber));
             let context = if self.settings.reuse_electronic_inputs {
                 let input = PreparedRefeffContext::canonical_input(
                     &reference,
@@ -555,6 +598,7 @@ impl PreparedRefeffCalculator {
             .as_ref()
             .map_or(representatives.len(), |a| a.report.representatives);
         self.stats.setup_seconds += start.elapsed().as_secs_f64();
+        self.monitor.publish(self.stats());
         self.contexts.insert(
             key.to_owned(),
             PreparedAbsorber {
@@ -629,6 +673,7 @@ impl PreparedRefeffCalculator {
             );
         }
         next.cancellation = self.cancellation.clone();
+        next.monitor.set_cache_bytes(self.monitor.cache_bytes());
         Ok(next)
     }
     /// Since 0.2.10: construct an exact typed-path calculator with the same pinned
@@ -653,7 +698,38 @@ impl PreparedRefeffCalculator {
     }
     /// Snapshot work counters and the current numerical cache payload.
     pub fn stats(&self) -> PreparedRefeffStats {
-        self.stats.clone()
+        let mut stats = self.stats.clone();
+        stats.cache_limit_bytes = self.monitor.cache_bytes();
+        stats
+    }
+    /// Unreleased: obtain a live progress and runtime-memory handle. Observations
+    /// are inexpensive and may be polled on another thread during preparation or
+    /// a long move. Changing its byte budget preserves historical checkpoint
+    /// identity; unlike constructor settings, the runtime budget is not hashed.
+    pub fn monitor(&self) -> PreparedRefeffMonitor {
+        self.monitor.observe();
+        self.monitor.publish(self.stats());
+        self.monitor.clone()
+    }
+    fn evict_oldest(&mut self) -> bool {
+        let Some((key, i)) = self
+            .snapshots
+            .iter()
+            .flat_map(|(key, entries)| {
+                entries
+                    .iter()
+                    .enumerate()
+                    .map(move |(i, p)| (key, i, p.tick))
+            })
+            .min_by_key(|(_, _, tick)| *tick)
+            .map(|(key, i, _)| (key.clone(), i))
+        else {
+            return false;
+        };
+        self.stats.cached_bytes -= self.snapshots.get_mut(&key).unwrap().remove(i).bytes();
+        self.stats.cached_snapshots -= 1;
+        self.stats.budget_evictions += 1;
+        true
     }
     /// Prepare this absorber if needed and borrow its stable path identities.
     /// Reported path number `i+1` corresponds to catalogue entry `i`. Preparation
@@ -673,6 +749,7 @@ impl PreparedRefeffCalculator {
         self.snapshots.clear();
         self.stats.cached_bytes = 0;
         self.stats.cached_snapshots = 0;
+        self.monitor.publish(self.stats());
     }
     /// Inspect active path membership, frozen-family labels and k-weighted
     /// importance without changing the model. `kweight` is 0..=3. If `check_exact`
@@ -748,6 +825,7 @@ impl PreparedRefeffCalculator {
             None,
             Some((&self.cancellation, deadline)),
             false,
+            &self.monitor,
         )?;
         let reference = work.spectrum.chi;
         Ok(accuracy(model, reference))
@@ -837,6 +915,7 @@ impl PreparedAbsorber {
         moments: Option<&MomentSettings>,
         control: Option<(&CancellationToken, Instant)>,
         parallel_paths: bool,
+        monitor: &PreparedRefeffMonitor,
     ) -> Result<Work, RmcError> {
         check_control(control)?;
         let moments = moments.filter(|_| !request.paths);
@@ -868,6 +947,7 @@ impl PreparedAbsorber {
         let mut paths = previous.map_or_else(|| vec![None; count], |p| p.paths.clone());
         let update_path = |(i, cached): (usize, &mut Option<CachedPath>)| {
             check_control(control)?;
+            monitor.path();
             if !changed[i] {
                 return Ok([0, 0, 1, u64::from(cached.is_some()), 0]);
             }
@@ -1018,12 +1098,25 @@ impl ExafsCalculator for PreparedRefeffCalculator {
         // Bound simultaneous transient results by processing at most one request per worker.
         let mut spectra = Vec::with_capacity(requests.len());
         for chunk in requests.chunks(self.settings.workers) {
+            let budget = self.monitor.cache_bytes();
+            while self.stats.cached_bytes > budget && self.evict_oldest() {}
             let mut keys = Vec::new();
             for &request in chunk {
                 let key = self.key(request)?;
                 self.ensure(&key, request)?;
                 keys.push(key);
             }
+            let cache_status: Vec<_> = chunk
+                .iter()
+                .zip(&keys)
+                .map(|(&r, key)| {
+                    (
+                        self.closest_snapshot(key, r).is_some(),
+                        self.snapshot_demand.get(key).is_some_and(|(k, _)| k == r.k),
+                    )
+                })
+                .collect();
+            self.monitor.stage(PreparedStage::Scattering, None);
             let start = Instant::now();
             let work: Vec<Work> = self.pool.install(|| {
                 chunk
@@ -1043,12 +1136,20 @@ impl ExafsCalculator for PreparedRefeffCalculator {
                                     ),
                             )),
                             self.settings.parallel_paths && chunk.len() < self.settings.workers,
+                            &self.monitor,
                         )
                     })
                     .collect::<Result<Vec<_>, _>>()
             })?;
             self.stats.evaluation_seconds += start.elapsed().as_secs_f64();
-            for (key, mut result) in keys.into_iter().zip(work) {
+            for ((key, mut result), (hit, repeat)) in keys.into_iter().zip(work).zip(cache_status) {
+                if hit {
+                    self.stats.snapshot_hits += 1;
+                } else if repeat {
+                    self.stats.repeat_misses += 1;
+                } else {
+                    self.stats.cold_misses += 1;
+                }
                 self.stats.requests += 1;
                 self.stats.exact_paths += result.exact;
                 self.stats.basis_paths += result.basis;
@@ -1061,6 +1162,12 @@ impl ExafsCalculator for PreparedRefeffCalculator {
                 self.tick += 1;
                 result.snapshot.tick = self.tick;
                 let bytes = result.snapshot.bytes();
+                self.snapshot_demand
+                    .insert(key.clone(), (result.snapshot.k.clone(), bytes));
+                self.stats.minimum_cache_bytes = self
+                    .snapshot_demand
+                    .values()
+                    .fold(0usize, |sum, (_, bytes)| sum.saturating_add(*bytes));
                 // Replace duplicates rather than letting repeated parent evaluation
                 // consume population slots. Eviction affects work only, never χ.
                 if let Some(entries) = self.snapshots.get_mut(&key) {
@@ -1081,31 +1188,22 @@ impl ExafsCalculator for PreparedRefeffCalculator {
                         self.stats.cached_snapshots -= 1;
                     }
                 }
-                if bytes <= self.settings.cache_bytes {
-                    while self.stats.cached_bytes.saturating_add(bytes) > self.settings.cache_bytes
-                    {
-                        let (oldest, i) = self
-                            .snapshots
-                            .iter()
-                            .flat_map(|(key, entries)| {
-                                entries
-                                    .iter()
-                                    .enumerate()
-                                    .map(move |(i, p)| (key, i, p.tick))
-                            })
-                            .min_by_key(|(_, _, tick)| *tick)
-                            .map(|(key, i, _)| (key.clone(), i))
-                            .unwrap();
-                        self.stats.cached_bytes -=
-                            self.snapshots.get_mut(&oldest).unwrap().remove(i).bytes();
-                        self.stats.cached_snapshots -= 1;
+                if bytes <= budget {
+                    while self.stats.cached_bytes.saturating_add(bytes) > budget {
+                        if !self.evict_oldest() {
+                            break;
+                        }
                     }
                     self.stats.cached_bytes += bytes;
                     self.stats.cached_snapshots += 1;
                     self.snapshots.entry(key).or_default().push(result.snapshot);
+                } else {
+                    self.stats.oversized_snapshots += 1;
                 }
+                self.monitor.publish(self.stats());
             }
         }
+        self.monitor.stage(PreparedStage::Idle, None);
         Ok(spectra)
     }
 }
