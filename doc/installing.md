@@ -1,7 +1,10 @@
 # Install rexafs
 
 This guide targets 0.2.11. The [download page](https://rexafs.com/download/) lists
-current packages and checksums.
+current packages and checksums. Starting with 0.2.12, macOS desktop and Python
+wheels support Apple Silicon only. Intel Mac users can retain the archived
+[0.2.11 release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.11);
+new Intel builds and source-build qualification are discontinued.
 
 ## Desktop
 
@@ -9,7 +12,7 @@ Choose your platform on the [latest release](https://github.com/Ameyanagi/rexafs
 
 | Platform | Install |
 |---|---|
-| macOS ARM64 / x86-64 | Open the DMG, drag rexafs to Applications, then eject the DMG. Choose Apple Silicon or Intel. |
+| macOS ARM64 | Open the Apple Silicon DMG, drag rexafs to Applications, then eject the DMG. |
 | Windows x86-64 / ARM64 preview | Run the matching setup executable, or extract its ZIP for a portable copy. |
 | Linux x86-64 / ARM64 preview | Extract the matching archive and run `./rexafs` from its folder. See the runtime requirements below. |
 

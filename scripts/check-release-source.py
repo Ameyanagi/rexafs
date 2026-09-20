@@ -18,8 +18,9 @@ def python_abi(cargo):
     """Select the wheel contract from the immutable source's PyO3 features.
 
     Historical tags retain their manifest-defined per-interpreter wheels.
-    Enabling abi3-py310 selects four shared wheels; other stable-ABI baselines
-    require an explicit qualification and publishing contract update.
+    Enabling abi3-py310 selects shared wheels; python_wheels enforces the source
+    version's platform inventory. Other stable-ABI baselines require an explicit
+    qualification and publishing contract update.
     """
     features = cargo["dependencies"]["pyo3"].get("features", [])
     stable = {feature for feature in features if feature.startswith("abi3")}

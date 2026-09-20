@@ -74,11 +74,14 @@ each new stable release automatically.
 | Platform | Architecture | Package and installation |
 |---|---|---|
 | macOS | Apple Silicon (ARM64) | Open the `aarch64-apple-darwin.dmg` installer and drag rexafs to Applications; a ZIP is also available. |
-| macOS | Intel (x86-64) | Open the `x86_64-apple-darwin.dmg` installer and drag rexafs to Applications; a ZIP is also available. |
 | Windows preview | Intel / AMD (x86-64) | Run the `x86_64-pc-windows-msvc-setup.exe` installer, or extract the portable ZIP. |
 | Windows preview | ARM64 | Run the `aarch64-pc-windows-msvc-setup.exe` installer, or extract the portable ZIP. Requires Windows 11. |
 | Linux preview | Intel / AMD (x86-64) | Extract the `x86_64-unknown-linux-gnu.tar.gz` archive and run `./rexafs` from its folder. |
 | Linux preview | ARM64 | Extract the `aarch64-unknown-linux-gnu.tar.gz` archive and run `./rexafs` from its folder. |
+
+From 0.2.12, macOS desktop releases and Python wheels require Apple Silicon.
+Intel Mac support ends with [0.2.11](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.11);
+those historical downloads remain available. Nightly also requires Apple Silicon.
 
 Asset names begin with `rexafs-` and the release version. Keep portable folders
 together: they contain the executable, resources, examples and licenses. The

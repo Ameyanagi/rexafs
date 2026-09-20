@@ -24,7 +24,7 @@ gh workflow run nightly.yml --ref dev
 The daily schedule is stored on `main`, GitHub's default branch. That small job
 dispatches `nightly.yml` on `dev`; it does not build the main-branch application.
 GitHub assigns the dispatched run its own immutable source commit. Core checks,
-both Mac builds, signing and publication all use that same run/commit identity.
+the Apple Silicon Mac build, signing and publication all use that same run/commit identity.
 Moving `dev` during a build cannot change its checked-out source. Reruns preserve
 the original source and dated release identity.
 
@@ -39,7 +39,9 @@ continues to require version tags. Nightly publication rejects main, feature
 branches, pull-request refs and mismatched source identities. No credential
 values need to be copied between branches.
 
-Nightly currently publishes signed/notarized Mac ARM64 and Intel apps and DMGs.
+Nightly currently publishes the signed/notarized Apple Silicon Mac app and DMG.
+Intel Mac nightly builds ended during 0.2.12 preparation; their existing releases
+remain available as historical downloads.
 It does not publish nightly Rust, Python or npm packages. `rexafs Nightly.app`
 coexists with the stable application; Nightly is an opt-in update channel.
 Windows and Linux remain covered by the pull-request/release qualification
