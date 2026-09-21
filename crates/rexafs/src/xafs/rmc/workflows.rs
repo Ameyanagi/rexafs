@@ -1,6 +1,6 @@
 //! Reproducible initialization, resource estimates and streaming analysis (since 0.2.10).
 use super::*;
-use rand::{seq::SliceRandom, Rng, SeedableRng};
+use rand::{seq::SliceRandom, RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::io::{BufRead, Read};
 use std::ops::ControlFlow;

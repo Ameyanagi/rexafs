@@ -1,6 +1,6 @@
 use super::objective::PreparedObjective;
 use super::*;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 

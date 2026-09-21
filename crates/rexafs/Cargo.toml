@@ -63,13 +63,13 @@ refeff = { workspace = true, optional = true }
 rusqlite = { version = "0.31", features = ["bundled"], optional = true }
 ureq = { version = "3", features = ["json"], optional = true }
 base64 = "0.23.1"
-hdf5-pure = "0.45.0"
+hdf5-pure = "0.46.1"
 encoding_rs = "0.8"
 regex = "1"
 # Pin interpolation and the embedded atomic dataset as a processing-version input.
 xraydb = "=0.4.1"
-rand = { version = "0.9", default-features = false, features = ["std"] }
-rand_chacha = { version = "0.9", features = ["serde"] }
+rand = { version = "0.10", default-features = false, features = ["std"] }
+rand_chacha = { version = "0.10", features = ["serde"] }
 sha2 = "0.11"
 
 [features]

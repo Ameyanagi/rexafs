@@ -1,5 +1,36 @@
 # Rust dependency update record
 
+## Post-0.2.12 source update — 21 September 2026
+
+The dependency PR review combines `rand 0.10.2` and `rand_chacha 0.10.0`.
+Upgrading either alone mixes incompatible random-number traits. RMC imports now
+use `RngExt`, following the [Rand migration guide](https://rust-random.github.io/book/update-0.10.html).
+The engine retains explicit `rand_chacha::ChaCha8Rng` with `serde`, including
+the saved seed, stream and word position; checkpoint formats are unchanged.
+
+A [retained reference](../crates/rexafs/tests/fixtures/rmc_rng/README.md), generated
+with the released 0.2.12 dependency versions (`rand 0.9.5`, `rand_chacha 0.9.0`),
+checks seed expansion, deserialization, cloned streams, integer/float/Boolean
+draws, shuffling and final serialized state. The four-seed reference and the
+existing RMC/EA session tests passed with the paired upgrade. This tests software
+continuation, not the physical accuracy or convergence of an RMC fit.
+
+The same review selects [hdf5-pure 0.46.1](https://github.com/CramBL/hdf5-pure/releases/tag/v0.46.1)
+and [ureq 3.4.2](https://github.com/algesten/ureq/blob/3.4.2/CHANGELOG.md), with
+`ureq-proto 0.6.4` in the lockfile. Full platform/package CI qualifies the combined
+change. These are source updates for the next release; published 0.2.12 artifacts
+and their immutable tag retain their original dependencies.
+
+Dependabot groups the two RNG packages so future updates can be qualified
+together. Its Python scan excludes only `scripts/cu-mixtures-requirements.txt`:
+that is the historical experiment environment, and `generate-cu-mixtures.py`
+explicitly requires rexafs 0.2.8. Updating that pin alone would break reproduction.
+Other Python dependencies remain in scope. See the
+[Dependabot options](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference)
+and [experiment record](validation/2026-09-16-cu-mixtures/README.md).
+
+## Original September 6 update
+
 The release uses **Rust 1.98.1**, the latest stable verified on 2026-09-06 with
 `rustup check` and the [Rust release announcements](https://blog.rust-lang.org/).
 `rust-toolchain.toml` pins that verified toolchain; update it together with release

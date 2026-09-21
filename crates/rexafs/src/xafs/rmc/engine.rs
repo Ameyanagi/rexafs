@@ -1,7 +1,7 @@
 use super::geometry::{distance, distances_allowed};
 use super::*;
 use crate::xafs::xafsutils::constants::ETOK;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 use std::ops::ControlFlow;

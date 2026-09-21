@@ -2,7 +2,7 @@ use super::session::{
     evaluate_candidates, evaluate_prepared, normalize, prepare, validate_state, PreparedEnsemble,
 };
 use super::*;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 /// Evolutionary optimization settings. Individuals contain complete mixtures;
