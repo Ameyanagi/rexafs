@@ -75,6 +75,8 @@ the earlier custom Helvetica typography, palette, line styles, marker shapes
 and hand-drawn legends were removed. Each panel now starts with `Plot::new()`.
 Only the 5.4 × 4.05 inch export canvas, 600 dpi resolution, scientific content,
 axis ranges, panel arrangement and automatic legend placement are specified.
+A subsequent review reduced comparison markers to 3 points; their shape and
+palette colors, and the PCA markers, remain unchanged.
 The smaller canvas keeps each PNG below the repository's 1 MiB file limit while
 preserving the default aspect ratio and all 50 frames. The numerical record and
 bundled project hashes above are unchanged. Both PCA panels retain linear scales.
@@ -105,7 +107,7 @@ the original run. No RMC implementation or timeout was changed for this work.
 The export helper was checked by comparing PNG decompressed filter/pixel streams
 and every non-image-data chunk before and after compression. All were identical.
 The nine downloadable figure files and the compact result record total about
-1.68 MiB; the website displays the SVGs. Browser checks passed again with all
+1.57 MiB; the website displays the SVGs. Browser checks passed again with all
 three final SVGs and all PDF/PNG download links.
 
 The page lives under **Next tutorials · unreleased** and is excluded from default

@@ -8,7 +8,8 @@
 //!
 //! Every panel uses `Plot::new()` styling, with a compact export canvas. Scientific
 //! content, axis ranges and panel arrangement are specified; labeled series use
-//! ruviz's automatic legend placement. Export resolution is 600 dpi.
+//! ruviz's automatic legend placement. Comparison markers are reduced to 3 points
+//! for readability. Export resolution is 600 dpi.
 
 #[cfg(not(feature = "plotting"))]
 fn main() {
@@ -89,9 +90,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Compare all 50 estimates with the recipe using ruviz's default visual styles.
+/// Compare all 50 estimates using default styles with smaller, 3-point markers.
 ///
-/// Grouping gives each species one automatic palette color for its recipe line
+/// Each species uses the same default palette color for its recipe line
 /// and recovered points. Both error panels use the same limits. No data are
 /// interpolated or decimated. Errors are measured after the approximate
 /// reference edge-step conversion to raw-absorption mixing weights.
@@ -104,6 +105,7 @@ fn comparison_figure(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (width, height) = panel_size_points();
     let names = ["CuO", "Cu2O", "Cu"];
+    let palette = figure_panel().get_theme();
     let mut panels = Vec::new();
     for (col, method) in ["MCR", "LCF"].iter().enumerate() {
         let result = &report["methods"][method];
@@ -135,16 +137,25 @@ fn comparison_figure(
             let recipe: Vec<f64> = truth.iter().map(|r| 100. * r[j]).collect();
             let recovered: Vec<f64> = estimated.iter().map(|r| 100. * r[j]).collect();
             let delta: Vec<f64> = recovered.iter().zip(&recipe).map(|(a, b)| a - b).collect();
-            fractions = fractions.group(|g| {
-                g.group_label(names[j])
-                    .line(&frames, &recipe)
-                    .scatter(&frames, &recovered)
-            });
-            errors = errors.group(|g| {
-                g.group_label(names[j])
-                    .line(&frames, &delta)
-                    .scatter(&frames, &delta)
-            });
+            // Pair each recipe line and estimate with the same default palette
+            // color. The grouped-series API does not expose scatter marker size.
+            let color = palette.get_color(j);
+            fractions = fractions
+                .line(frames, &recipe)
+                .color(color)
+                .label(names[j])
+                .scatter(&frames, &recovered)
+                .color(color)
+                .marker_size(3.)
+                .into();
+            errors = errors
+                .line(frames, &delta)
+                .color(color)
+                .label(names[j])
+                .scatter(&frames, &delta)
+                .color(color)
+                .marker_size(3.)
+                .into();
         }
         let mean = result["mean_absolute_error_pp"]
             .as_f64()

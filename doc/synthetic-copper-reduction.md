@@ -163,9 +163,10 @@ shifts. References were supplied to LCF and withheld from MCR.
 
 [![MCR and LCF fractions compared with the known recipe, with fraction errors below on matching axes](../website/public/figures/synthetic-copper/comparison.svg)](../website/public/figures/synthetic-copper/comparison.svg)
 
-*Generated with ruviz's default styling from the retained numerical results.
-In panels a–b, lines connect the raw recipe values; filled circles show the
-recovered fractions at all 50 frames after the approximate edge-step conversion.
+*Generated with ruviz defaults and smaller, 3-point markers from the retained
+numerical results. In panels a–b, lines connect the raw recipe values; filled
+circles show the recovered fractions at all 50 frames after the approximate
+edge-step conversion.
 The legend colors identify CuO, Cu₂O and Cu consistently across panels. Panels
 c–d show estimate minus recipe on identical vertical scales; connecting lines
 guide the eye. Summary errors cover all 150 coefficients. A percentage point
@@ -239,9 +240,10 @@ are retained with this tutorial; large spectral matrices remain local.
 The figure example uses **ruviz 0.14.2** and renders `recipe`, `pca`, and
 `comparison` as SVG and 600 dpi PNG. It reads retained numerical arrays and does
 not refit or smooth them. All panels use `Plot::new()` styling: default fonts,
-colors, lines, markers, grids, spines and margins. Ruviz places legends
-automatically. Each panel has a 5.4 × 4.05 inch export canvas; the code sets labels,
-scientific axis ranges, panel arrangement and resolution. The website displays
+colors, lines, marker shapes, grids, spines and margins. Comparison markers
+are reduced to 3 points; PCA markers keep their default size. Ruviz places
+legends automatically. Each panel has a 5.4 × 4.05 inch export canvas; the code
+sets labels, scientific axis ranges, panel arrangement and resolution. The website displays
 the smaller SVG files; vector PDFs and high-resolution PNGs are available for
 download.
 
