@@ -1,0 +1,166 @@
+{
+  "captured_date": "2026-09-22",
+  "timezone": "Asia/Tokyo",
+  "build": {
+    "version": "0.2.13",
+    "target": "aarch64-apple-darwin",
+    "features": [
+      "refeff-runner",
+      "feff10-runner"
+    ],
+    "engine_execution": {
+      "refeff": {
+        "mode": "native",
+        "target": "aarch64-apple-darwin"
+      },
+      "feff10": {
+        "mode": "native-stage-workers",
+        "target": "aarch64-apple-darwin"
+      }
+    },
+    "channel": "stable",
+    "release_tag": "v0.2.13",
+    "built_at": null,
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "commit": "9b7e74c47edcff8ef64cdfdf6ecabb40323b4a11",
+    "dirty": false,
+    "github_run_id": "35644510582",
+    "signed": true,
+    "notarized": true,
+    "signing_identity": "Developer ID Application: Ryuichi Shimogawa (XXN44W8X56)",
+    "apple_team_id": "XXN44W8X56",
+    "notarization_id": "c60a35c7-dde0-40db-9976-27927b92bd10",
+    "unsigned_archive_sha256": "97d9552a5a68078122cd16088950ce7e1f3740a5ed2c3f8f9827b686a95f2e67",
+    "signing_run_id": "35649662534",
+    "signing_tools_commit": "9b7e74c47edcff8ef64cdfdf6ecabb40323b4a11"
+  },
+  "distribution": "Signed and notarized Apple Silicon release installed from the exact-tag DMG.",
+  "workflow": "https://github.com/Ameyanagi/rexafs/actions/runs/35644510582",
+  "signing_workflow": "https://github.com/Ameyanagi/rexafs/actions/runs/35649662534",
+  "archive": {
+    "file": "rexafs-0.2.13-aarch64-apple-darwin.dmg",
+    "sha256": "ceeaef1e440b16f71fb9c329b6a6b753f31b6d2abb87bbba50989b839678f044",
+    "checksum_verified": true
+  },
+  "executable_sha256": "65535ca29e564e1444e8cd39658a0cdf6615e7859950b8c342dd721bc57c70e7",
+  "platform": {
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.5.1\nBuildVersion:\t\t25F80",
+    "machine": "Apple M4",
+    "architecture": "arm64"
+  },
+  "capture": {
+    "method": "Native controls and original window bytes from the Computer Use connector.",
+    "pixel_dimensions": [
+      1192,
+      768
+    ],
+    "edited": false,
+    "scope": "Isolated app settings; no cropping, resizing, annotation or replacement plots."
+  },
+  "inputs": {
+    "synthetic_copper": {
+      "path": "crates/rexafs-gui/data/examples/cu-reduction.rxs",
+      "sha256": "06ca5f24db0390565b8b6955c3904ac2c544a1608824b992e02b9b46a212ac72",
+      "description": "Three measured references and 50 deterministic raw-absorption mixtures; no additional random noise.",
+      "attribution": "Retained source metadata and permission in the bundled project and data/examples/README.md.",
+      "changes": "None; original bundled project loaded through the signed app."
+    }
+  },
+  "scientific_scope": "Teaching example with known raw-mixing fractions. GUI MCR coefficients describe flattened absorption and are not the raw fractions; conversion and limitations are explained in the tutorial. Frame number is not physical time.",
+  "analysis_verification": {
+    "verified_utc": "2026-09-21T20:21:20.563698+00:00",
+    "project": "copper-release-check.rxs",
+    "project_sha256": "d683df49be8a3b6a52f2008517edaba1e1883e88fdb191034811a7ebef5bfa71",
+    "source_commit": "9b7e74c47edcff8ef64cdfdf6ecabb40323b4a11",
+    "scope": "Fresh signed-GUI PCA and MCR compared with the tagged default calculation; labels are excluded.",
+    "absolute_tolerance": 1e-10,
+    "relative_tolerance": 1e-09,
+    "numeric_values": 92709,
+    "max_absolute_difference": 0.0,
+    "mcr_iterations": 110,
+    "mcr_termination": "Converged",
+    "mcr_config": {
+      "space": "Flat",
+      "range": [
+        -201.0079999999998,
+        786.9899999999998
+      ],
+      "components": 3,
+      "sum_to_one": true,
+      "nonnegative_spectra": false,
+      "max_iterations": 500,
+      "tolerance": 1e-08,
+      "seed": 0,
+      "initial_spectra": null,
+      "anchors": []
+    },
+    "pca_first_three_squared_signal_fraction": 0.9999985684311216
+  },
+  "storage_review": {
+    "candidate_count": 24,
+    "displayed_logical_size": "1.26 GiB",
+    "deleted": false
+  },
+  "images": [
+    {
+      "file": "copper-overview.jpg",
+      "captured_utc": "2026-09-21T20:19:24.192955+00:00",
+      "sha256": "497fa427c0cef3769b93bd38d732452ba7c1e49767eae0750fc289cc67a010d1",
+      "bytes": 184215,
+      "width": 1192,
+      "height": 768,
+      "description": "Bundled 53-group project with 50 synthetic mixtures marked and their normalized XANES overlay.",
+      "edited": false
+    },
+    {
+      "file": "copper-pca.jpg",
+      "captured_utc": "2026-09-21T20:20:00.219135+00:00",
+      "sha256": "cf579880d50d64b7d84aeeb6325aaddbe56a88637bc38be4c19a84108e9c1f1b",
+      "bytes": 201896,
+      "width": 1192,
+      "height": 768,
+      "description": "Fresh uncentered PCA of 50 mixtures using Flat and Auto -20 to +30 eV; default Linear display.",
+      "edited": false
+    },
+    {
+      "file": "copper-mcr-spectra.jpg",
+      "captured_utc": "2026-09-21T20:20:23.533516+00:00",
+      "sha256": "4bdd581ad6f7ccb3a65858d8de4cbaba7d7dcacc25ea769eb76eebd1d490cbf2",
+      "bytes": 202850,
+      "width": 1192,
+      "height": 768,
+      "description": "Blind three-component MCR using default full common range; converged after 110 iterations.",
+      "edited": false
+    },
+    {
+      "file": "copper-mcr-fractions.jpg",
+      "captured_utc": "2026-09-21T20:20:37.911364+00:00",
+      "sha256": "565535ce054efe9abbd9fe6ee4ccfe6592290cce4c64ebbd13daa9d50a366903",
+      "bytes": 219145,
+      "width": 1192,
+      "height": 768,
+      "description": "Saved MCR coefficients in flattened absorption; these displayed coefficients are not raw-mixing percentages.",
+      "edited": false
+    },
+    {
+      "file": "copper-series-difference.jpg",
+      "captured_utc": "2026-09-21T20:22:42.378613+00:00",
+      "sha256": "75d110a1f4955a1fc7553712e0c684255b549183693d08a37c3ddac4a130219f",
+      "bytes": 185646,
+      "width": 1192,
+      "height": 768,
+      "description": "Series with all 50 synthetic frames; frame 50 minus frame 1 in flattened absorption, with unchanged white-line overview trend.",
+      "edited": false
+    },
+    {
+      "file": "storage.jpg",
+      "captured_utc": "2026-09-21T20:23:00.653721+00:00",
+      "sha256": "e7a9e0963cceea60a423daccda736213b3d2c338620a6dc7ceef748fa5bfe6c0",
+      "bytes": 159472,
+      "width": 1192,
+      "height": 768,
+      "description": "Background Storage scan lists 24 managed candidates totaling 1.26 GiB; review only, no files deleted.",
+      "edited": false
+    }
+  ]
+}

@@ -5,7 +5,7 @@ audience: user
 ---
 
 Open **Publish** after processing or fitting. The header names the report
-scope. In 0.2.12, **Publish report…** writes the complete analysis folder listed
+scope. Since 0.2.12, **Publish report…** writes the complete analysis folder listed
 below, then **Open last
 published report** opens `report.html` and **Show folder** reveals the directory.
 **Copy analysis record** copies the Markdown record.
@@ -16,7 +16,7 @@ shows **Changes since last publish**. **Publish changes…** exports the current
 report to a new folder; the previous folder remains available through **Open last
 published report** until another export succeeds. Edits made during an export
 remain unpublished. These controls are implemented in the
-[Publish stage](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/crates/rexafs-gui/src/app/shell/publish.rs).
+[Publish stage](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/crates/rexafs-gui/src/app/shell/publish.rs).
 
 Select a figure, adjust its style, and use **Save figure** **PNG**, **SVG** or
 **CSV** beside the preview to save that figure alone. The preview preserves the
@@ -40,7 +40,7 @@ style to all figures** copies the selected figure's style to every figure type.
 That action sits beside the presets. The scope label
 explains that edits apply to the selected figure type across the report's spectra.
 Copying style preserves each figure's axis limits, labels, captions and curve
-visibility; see [FigureSettings](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/crates/rexafs-gui/src/publication/figures.rs).
+visibility; see [FigureSettings](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/crates/rexafs-gui/src/publication/figures.rs).
 
 [![Publication editor with three compact preset icons, per-figure saves and Publish report](/screenshots/0.2.12/publication.jpg)](/screenshots/0.2.12/publication.jpg)
 

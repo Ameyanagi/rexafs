@@ -1,45 +1,45 @@
 {
-  "version": "0.2.12",
-  "tag": "v0.2.12",
-  "releaseUrl": "https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.12",
-  "verified": "2026-09-20",
-  "sourceCommit": "2c9ce950694dca25153ba248d5f4fe19c2a66735",
+  "version": "0.2.13",
+  "tag": "v0.2.13",
+  "releaseUrl": "https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.13",
+  "verified": "2026-09-21",
+  "sourceCommit": "9b7e74c47edcff8ef64cdfdf6ecabb40323b4a11",
   "platforms": [
     {
       "os": "macOS",
       "arch": "Apple Silicon",
-      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.12/rexafs-0.2.12-aarch64-apple-darwin.dmg",
-      "sha256": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.12/rexafs-0.2.12-aarch64-apple-darwin.dmg.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.13/rexafs-0.2.13-aarch64-apple-darwin.dmg",
+      "sha256": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.13/rexafs-0.2.13-aarch64-apple-darwin.dmg.sha256",
       "note": "Signed and notarized"
     },
     {
       "os": "Windows",
       "arch": "Intel / AMD x64",
-      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.12/rexafs-0.2.12-x86_64-pc-windows-msvc-setup.exe",
-      "sha256": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.12/rexafs-0.2.12-x86_64-pc-windows-msvc-setup.exe.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.13/rexafs-0.2.13-x86_64-pc-windows-msvc-setup.exe",
+      "sha256": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.13/rexafs-0.2.13-x86_64-pc-windows-msvc-setup.exe.sha256",
       "note": "Desktop preview"
     },
     {
       "os": "Windows",
       "arch": "ARM64",
-      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.12/rexafs-0.2.12-aarch64-pc-windows-msvc-setup.exe",
-      "sha256": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.12/rexafs-0.2.12-aarch64-pc-windows-msvc-setup.exe.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.13/rexafs-0.2.13-aarch64-pc-windows-msvc-setup.exe",
+      "sha256": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.13/rexafs-0.2.13-aarch64-pc-windows-msvc-setup.exe.sha256",
       "note": "Desktop preview \u00b7 Windows 11 \u00b7 x64 FEFF10 helper uses emulation"
     },
     {
       "os": "Linux",
       "arch": "Intel / AMD x64",
-      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.12/rexafs-0.2.12-x86_64-unknown-linux-gnu.tar.gz",
-      "sha256": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.12/rexafs-0.2.12-x86_64-unknown-linux-gnu.tar.gz.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.13/rexafs-0.2.13-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.13/rexafs-0.2.13-x86_64-unknown-linux-gnu.tar.gz.sha256",
       "note": "Desktop preview \u00b7 Ubuntu 24.04 baseline"
     },
     {
       "os": "Linux",
       "arch": "ARM64",
-      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.12/rexafs-0.2.12-aarch64-unknown-linux-gnu.tar.gz",
-      "sha256": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.12/rexafs-0.2.12-aarch64-unknown-linux-gnu.tar.gz.sha256",
+      "url": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.13/rexafs-0.2.13-aarch64-unknown-linux-gnu.tar.gz",
+      "sha256": "https://github.com/Ameyanagi/rexafs/releases/download/v0.2.13/rexafs-0.2.13-aarch64-unknown-linux-gnu.tar.gz.sha256",
       "note": "Desktop preview \u00b7 Ubuntu 24.04 baseline"
     }
   ],
-  "crateSha256": "ece951c6e1f613645bf029c1138b4379fe87b447da8effec12a07493d69f7f23"
+  "crateSha256": "92cdeca6e71b9733b47702a2bf79c4e9e8f6d2ecb07d38c45db13ebd0e461c28"
 }

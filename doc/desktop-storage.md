@@ -1,6 +1,6 @@
 # Desktop storage and installer cleanup
 
-**Unreleased:** Help → Storage, About rexafs → Storage, and the command palette
+**From 0.2.13:** Help → Storage, About rexafs → Storage, and the command palette
 provide a storage view. The view scans in the background, lists managed installer
 downloads and inactive updater app copies, and shows their combined logical file
 size before deletion. Filesystem compression or shared blocks can make the actual
