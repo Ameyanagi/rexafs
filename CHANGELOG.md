@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.2.13 (release preparation)
+## 0.2.13 (2026-09-22)
 
 - Bundle three measured CuO/Cu₂O/Cu references and 50 deterministic synthetic
   spectra mixed in raw absorption, with visible known fractions and ordinary

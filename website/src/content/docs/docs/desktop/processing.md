@@ -4,7 +4,7 @@ description: "Use normalization, AUTOBK, forward and inverse transforms."
 audience: user
 ---
 
-This guide describes **rexafs 0.2.12**. Screenshots identify the version that
+This guide describes **rexafs 0.2.13**. Screenshots identify the version that
 produced them and use public Cu measurements. They are
 full, unedited windows; select an image for full resolution. See
 [capture provenance](/licenses/#desktop-0211-workflow-captures) and
@@ -29,7 +29,7 @@ input stays editable and shows an explanation beside the field. The last
 committed value remains in use until a valid entry is committed. Choose
 **Restore previous value** to cancel the edit, or **Use Auto** when an automatic
 value is available. This behavior is shared by the
-[numeric field widget](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/crates/rexafs-gui/src/widgets/numeric_field.rs).
+[numeric field widget](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/crates/rexafs-gui/src/widgets/numeric_field.rs).
 
 [![Normalization controls with full automatic values displayed below their fields](/screenshots/0.2.12/numeric-auto.jpg)](/screenshots/0.2.12/numeric-auto.jpg)
 

@@ -4,7 +4,7 @@ description: "Browse scan frames and distinguish sampled overviews from complete
 audience: user
 ---
 
-This guide describes **rexafs 0.2.12**. The retained 0.2.11 screenshots were captured
+This guide describes **rexafs 0.2.13**. The retained 0.2.11 screenshots were captured
 through computer use from the signed macOS release, using two
 public Cu foil measurements. These are a small workflow example, **not a time series** or a
 controlled temperature experiment. See
@@ -180,8 +180,8 @@ Use **Previous** and **Next**, enter a whole number in **Frame** and press Enter
 or select a heatmap row. Out-of-range entries show an inline explanation without
 changing the selected frame. Arrow-key navigation still works when the plot has
 focus. The controls and plot-coordinate conversion are implemented in
-[Series](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/crates/rexafs-gui/src/app/shell/series.rs)
-and [plotting](https://github.com/Ameyanagi/rexafs/blob/v0.2.12/crates/rexafs-gui/src/plotting.rs).
+[Series](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/crates/rexafs-gui/src/app/shell/series.rs)
+and [plotting](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/crates/rexafs-gui/src/plotting.rs).
 
 When the central workspace is narrower than 700 logical pixels, the heatmap and
 detail plots stack vertically in a scrollable area. Heatmap controls wrap to keep

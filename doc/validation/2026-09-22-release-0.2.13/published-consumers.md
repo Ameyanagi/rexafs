@@ -1,0 +1,29 @@
+# Published-package examples
+
+This retained JSON record identifies the checked inputs, outputs and scope. It is
+release-validation evidence, not an input to a scientific calculation.
+
+```json
+{
+  "version": "0.2.13",
+  "python_runtime": "CPython 3.12.12",
+  "javascript_runtime": "Node 24.19.0",
+  "e0_ev": 8977.493,
+  "input_points": 618,
+  "examples": {
+    "python_sha256": "dc7d0f9dacfe295b030b163ad1854ae6bd14107c66e404b30a6ab417506bb633",
+    "node_sha256": "3952d21842840f42f4dab8b1178422a13a396840a28268fc855119019cb9e24a"
+  },
+  "comparison": {
+    "r_angstrom": {
+      "points": 326,
+      "max_absolute_difference": 0.0
+    },
+    "fourier_magnitude": {
+      "points": 326,
+      "max_absolute_difference": 4.930582851725429e-13
+    }
+  },
+  "scope": "Unmodified documented Cu examples using freshly installed public packages; no workspace package dependency."
+}
+```

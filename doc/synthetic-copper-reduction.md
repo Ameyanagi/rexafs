@@ -1,10 +1,9 @@
 # Synthetic copper reduction: PCA, MCR-ALS and LCF
 
-This tutorial uses an **unreleased desktop preview** with 50 deterministic
+Available from **rexafs 0.2.13**, this example contains 50 deterministic
 synthetic spectra and three measured references: CuO, Cu₂O and Cu. The example
 starts with CuO, passes through a Cu₂O-rich region and ends with Cu. It is a
 teaching sequence with known fractions, not a measured reaction or kinetic model.
-It is not included in the published 0.2.12 installer.
 
 The spectra were mixed in **raw absorption μ(E)** before normalization. No random
 fractions or additional noise were generated. The original measurements retain
