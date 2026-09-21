@@ -2,8 +2,22 @@
 
 These desktop features and the native MCR-ALS API are available in **rexafs 0.2.9**.
 LCF, PCA and MCR-ALS are not yet exposed in the Python or TypeScript bindings.
+
+**Unreleased desktop defaults:** PCA plots start on a linear scale. MCR-ALS
+starts with both range endpoints set to Auto, meaning the full measured energy
+interval shared by all selected spectra. The overlap is resolved after loading
+the selected inputs and recorded in the result. Explicit endpoints still select
+a narrower interval; choosing **Common full range** restores automatic overlap.
+MCR range fields are separate from PCA/LCF fields. These desktop choices are
+implemented in [analysis ranges](../crates/rexafs-gui/src/app/shell/tools/analysis_range.rs)
+and the [MCR worker](../crates/rexafs-gui/src/app/shell/tools/mcr.rs); the native
+library's `McrConfig::range = None` convention is unchanged.
 See the [current API guide](analysis-api.md) for Rust examples, result shapes,
 defaults and proposed simplifications.
+
+For the newer 50-frame raw-absorption sequence with automatic processing, see
+[the synthetic copper tutorial](synthetic-copper-reduction.md). The historical
+100-mixture workflow below retains its original settings and results.
 
 See the [validation record](validation/2026-09-16-cu-mixtures/README.md) for
 measured recovery errors, GUI screenshots and export checks.
@@ -56,9 +70,10 @@ Open **Data → Parameters → Principal components**. Inspect:
   negative values are valid and a zero vector is undefined.
 - **Loadings** and **Reconstruction**: spectral directions and target residuals.
 
-Use **Y axis → Linear / Log** on Scree, Error vs count and IND. Log is the
-default and makes small contributions visible; Linear shows their magnitude
-relative to the largest values and preserves exact zeros. Log floors values at
+Use **Y axis → Linear / Log** on Scree, Error vs count and IND. In the released
+0.2.9 workflow, Log is the default and makes small contributions visible; the
+unreleased preview defaults to Linear. Linear shows their magnitude relative to
+the largest values and preserves exact zeros. Log floors values at
 10⁻³² for plotting only. Cumulative contribution stays linear from 0 to 100%.
 The choice persists between diagnostic views during the session, changes no
 calculation, and does not change the component-count suggestion or exported

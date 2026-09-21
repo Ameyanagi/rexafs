@@ -2,6 +2,7 @@
 use super::button;
 use crate::{app::StudioApp, licenses};
 use gpui::{Context, FocusHandle, IntoElement, MouseButton, SharedString, div, prelude::*, px};
+mod storage;
 
 #[derive(Default)]
 pub(crate) struct HelpState {
@@ -9,6 +10,8 @@ pub(crate) struct HelpState {
     reader: Option<LicenseReader>,
     focus: Option<FocusHandle>,
     return_focus: Option<FocusHandle>,
+    storage: Option<storage::StorageView>,
+    storage_generation: u64,
 }
 
 struct LicenseReader {
@@ -20,7 +23,7 @@ struct LicenseReader {
 
 impl HelpState {
     pub(crate) fn is_open(&self) -> bool {
-        self.menu || self.reader.is_some()
+        self.menu || self.reader.is_some() || self.storage.is_some()
     }
 }
 
@@ -56,6 +59,7 @@ impl StudioApp {
     fn close_help(&mut self, cx: &mut Context<Self>) {
         self.help.menu = false;
         self.help.reader = None;
+        self.help.storage = None;
         let focus = self
             .help
             .return_focus
@@ -85,6 +89,38 @@ impl StudioApp {
         }
     }
 
+    pub(crate) fn open_copper_series(&mut self, cx: &mut Context<Self>) {
+        if self.updates.is_installing() {
+            return;
+        }
+        self.close_help(cx);
+        self.pending_routed_import.clear();
+        self.project_load_generation += 1;
+        let generation = self.project_load_generation;
+        self.status = "Opening synthetic copper reduction…".into();
+        cx.spawn(async move |this, cx| {
+            let result = cx.background_executor().spawn(async {
+                crate::project::copper_example().map(|mut project| {
+                    let next = project.assign_group_ids();
+                    let registry = crate::group_identity::GroupRegistry::from_sources(std::mem::take(&mut project.source_groups));
+                    (project, next, registry)
+                })
+            }).await;
+            this.update(cx, |app, cx| {
+                if app.project_load_generation != generation { return; }
+                match result {
+                    Ok((project, next, registry)) => {
+                        app.apply_project(project, next, registry, cx);
+                        app.status = "Synthetic raw-μ copper series · 50 frames + 3 references · labels show raw mixing weights".into();
+                    }
+                    Err(error) => app.status = format!("Example could not open: {error}").into(),
+                }
+                cx.notify();
+            }).ok();
+        }).detach();
+        cx.notify();
+    }
+
     pub(crate) fn open_licenses(&mut self, cx: &mut Context<Self>) {
         let documents = licenses::documents();
         let text = documents[0].read().unwrap_or_else(|error| error).into();
@@ -105,7 +141,11 @@ impl StudioApp {
         let t = self.theme;
         let overlay = crate::accessibility::Control::new(
             div().id("help-overlay"),
-            "Help",
+            if self.help.storage.is_some() {
+                "Storage"
+            } else {
+                "Help"
+            },
             accesskit::Role::Dialog,
         )
         .modal()
@@ -125,6 +165,18 @@ impl StudioApp {
             MouseButton::Left,
             cx.listener(|app, _, _, cx| app.close_help(cx)),
         );
+        if self.help.storage.is_some() {
+            return Some(
+                overlay
+                    .flex()
+                    .p_4()
+                    .items_center()
+                    .justify_center()
+                    .bg(gpui::rgba(0x00000099))
+                    .child(self.storage_panel(cx))
+                    .into_any_element(),
+            );
+        }
         let Some(reader) = &self.help.reader else {
             let item =
                 |id: &'static str,
@@ -150,7 +202,7 @@ impl StudioApp {
                             .absolute()
                             .top(px(38.))
                             .right(px(12.))
-                            .w(px(196.))
+                            .w(px(275.))
                             .p_1()
                             .bg(t.surface)
                             .border_1()
@@ -159,6 +211,12 @@ impl StudioApp {
                             .shadow_lg()
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .child(item("help-example", "Open Cu example", Self::open_example))
+                            .child(item(
+                                "help-copper-series",
+                                "Synthetic copper reduction…",
+                                Self::open_copper_series,
+                            ))
+                            .child(item("help-storage", "Storage…", Self::open_storage))
                             .child(item("help-licenses", "Licenses", Self::open_licenses))
                             .child(item("help-updates", "Updates", |app, cx| {
                                 app.close_help(cx);

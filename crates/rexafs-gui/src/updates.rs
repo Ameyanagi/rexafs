@@ -336,10 +336,9 @@ pub fn download_with_progress(
         .as_ref()
         .ok_or("No verified desktop asset is available for this platform.")?;
     let digest = checksum(asset)?;
-    let root = crate::settings::app_dir()
-        .ok_or("User update directory is unavailable")?
-        .join("updates")
-        .join(&release.tag);
+    let app_root = crate::settings::app_dir().ok_or("User update directory is unavailable")?;
+    let _cache_lock = crate::storage_cleanup::download_lock(&app_root)?;
+    let root = app_root.join("updates").join(&release.tag);
     std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
     let destination = root.join(&asset.name);
     if destination.exists() {

@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180mm" height="76.2mm" viewBox="0 0 510.2362 216">
+<title>Uncentered PCA with linear axes and a separate PC2–PC6 detail panel</title>
+<rect width="100%" height="100%" fill="white"/>
+<g transform="translate(0 0) scale(0.12)">
+  <defs>
+    <clipPath id="panel0_clip1"><rect x="325.00" y="258.33" width="1716.67" height="1250.00"/></clipPath>
+  </defs>
+  <rect x="0.00" y="0.00" width="2125.00" height="1800.00" fill="rgb(255,255,255)"/>
+  <text x="370.07" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">1</text>
+  <text x="687.97" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">2</text>
+  <text x="1005.87" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">3</text>
+  <text x="1323.77" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">4</text>
+  <text x="1641.67" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">5</text>
+  <text x="1959.57" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">6</text>
+  <text x="262.97" y="1502.50" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0</text>
+  <text x="225.94" y="1264.41" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">20</text>
+  <text x="225.94" y="1026.31" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">40</text>
+  <text x="225.94" y="788.22" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">60</text>
+  <text x="225.94" y="550.12" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">80</text>
+  <text x="188.91" y="312.03" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">100</text>
+  <g clip-path="url(#panel0_clip1)">
+  <polyline points="388.58,297.59 706.48,1481.81 1024.38,1483.69 1342.28,1484.52 1660.19,1484.52 1978.09,1484.52" fill="none" stroke="rgb(36,119,166)" stroke-width="8.33" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="388.58" cy="297.59" r="14.58" fill="rgb(255,255,255)"/>
+  <circle cx="388.58" cy="297.59" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  <circle cx="706.48" cy="1481.81" r="14.58" fill="rgb(255,255,255)"/>
+  <circle cx="706.48" cy="1481.81" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  <circle cx="1024.38" cy="1483.69" r="14.58" fill="rgb(255,255,255)"/>
+  <circle cx="1024.38" cy="1483.69" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  <circle cx="1342.28" cy="1484.52" r="14.58" fill="rgb(255,255,255)"/>
+  <circle cx="1342.28" cy="1484.52" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  <circle cx="1660.19" cy="1484.52" r="14.58" fill="rgb(255,255,255)"/>
+  <circle cx="1660.19" cy="1484.52" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  <circle cx="1978.09" cy="1484.52" r="14.58" fill="rgb(255,255,255)"/>
+  <circle cx="1978.09" cy="1484.52" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  </g>
+  <line x1="325.00" y1="1508.33" x2="2041.67" y2="1508.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="258.33" x2="325.00" y2="1508.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="388.58" y1="1508.33" x2="388.58" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="706.48" y1="1508.33" x2="706.48" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1024.38" y1="1508.33" x2="1024.38" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1342.28" y1="1508.33" x2="1342.28" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1660.19" y1="1508.33" x2="1660.19" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1978.09" y1="1508.33" x2="1978.09" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="1484.52" x2="300.00" y2="1484.52" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="1246.43" x2="300.00" y2="1246.43" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="1008.33" x2="300.00" y2="1008.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="770.24" x2="300.00" y2="770.24" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="532.14" x2="300.00" y2="532.14" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="294.05" x2="300.00" y2="294.05" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <text x="1183.33" y="164.09" font-family="&quot;Helvetica&quot;" font-size="83.6" font-weight="400" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">a   Uncentered PCA</text>
+  <text x="1183.33" y="1716.53" font-family="&quot;Helvetica&quot;" font-size="70.8" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">Principal component</text>
+  <g transform="translate(104.74,883.33) rotate(-90.0)"><text x="0" y="19.13" font-family="&quot;Helvetica&quot;" font-size="70.8" fill="rgb(0,0,0)" text-anchor="middle">Squared signal (%)</text></g>
+</g>
+<g transform="translate(255.1181 0) scale(0.12)">
+  <defs>
+    <clipPath id="panel1_clip1"><rect x="325.00" y="258.33" width="1716.67" height="1250.00"/></clipPath>
+  </defs>
+  <rect x="0.00" y="0.00" width="2125.00" height="1800.00" fill="rgb(255,255,255)"/>
+  <text x="384.52" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">2</text>
+  <text x="774.67" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">3</text>
+  <text x="1164.82" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">4</text>
+  <text x="1554.97" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">5</text>
+  <text x="1945.12" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">6</text>
+  <text x="262.97" y="1501.80" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0</text>
+  <text x="170.41" y="1256.70" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0.05</text>
+  <text x="207.44" y="1011.61" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0.1</text>
+  <text x="170.41" y="766.51" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0.15</text>
+  <text x="207.44" y="521.41" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0.2</text>
+  <text x="170.41" y="276.31" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0.25</text>
+  <g clip-path="url(#panel1_clip1)">
+  <polyline points="403.03,366.91 793.18,1141.31 1183.33,1483.12 1573.48,1483.82 1963.64,1483.82" fill="none" stroke="rgb(36,119,166)" stroke-width="8.33" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="403.03" cy="366.91" r="14.58" fill="rgb(255,255,255)"/>
+  <circle cx="403.03" cy="366.91" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  <circle cx="793.18" cy="1141.31" r="14.58" fill="rgb(255,255,255)"/>
+  <circle cx="793.18" cy="1141.31" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  <circle cx="1183.33" cy="1483.12" r="14.58" fill="rgb(255,255,255)"/>
+  <circle cx="1183.33" cy="1483.12" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  <circle cx="1573.48" cy="1483.82" r="14.58" fill="rgb(255,255,255)"/>
+  <circle cx="1573.48" cy="1483.82" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  <circle cx="1963.64" cy="1483.82" r="14.58" fill="rgb(255,255,255)"/>
+  <circle cx="1963.64" cy="1483.82" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  </g>
+  <line x1="325.00" y1="1508.33" x2="2041.67" y2="1508.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="258.33" x2="325.00" y2="1508.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="403.03" y1="1508.33" x2="403.03" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="793.18" y1="1508.33" x2="793.18" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1183.33" y1="1508.33" x2="1183.33" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1573.48" y1="1508.33" x2="1573.48" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1963.64" y1="1508.33" x2="1963.64" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="1483.82" x2="300.00" y2="1483.82" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="1238.73" x2="300.00" y2="1238.73" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="993.63" x2="300.00" y2="993.63" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="748.53" x2="300.00" y2="748.53" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="503.43" x2="300.00" y2="503.43" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="325.00" y1="258.33" x2="300.00" y2="258.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <text x="1183.33" y="164.09" font-family="&quot;Helvetica&quot;" font-size="83.6" font-weight="400" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">b   PC2–PC6 detail</text>
+  <text x="1183.33" y="1716.53" font-family="&quot;Helvetica&quot;" font-size="70.8" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">Principal component</text>
+  <g transform="translate(86.24,883.33) rotate(-90.0)"><text x="0" y="19.13" font-family="&quot;Helvetica&quot;" font-size="70.8" fill="rgb(0,0,0)" text-anchor="middle">Squared signal (%)</text></g>
+</g>
+</svg>

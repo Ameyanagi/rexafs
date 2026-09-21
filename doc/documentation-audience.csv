@@ -1,4 +1,8 @@
 path,audience,website_action,proposed_route,notes
+doc/validation/2026-09-22-cu-reduction/README.md,developer,exclude,,Unreleased numerical reproduction and ruviz figure provenance; keep outside the public manual.
+doc/synthetic-copper-reduction.md,mixed,adapt,/docs/next/synthetic-copper/,Unreleased user tutorial with retained recovery results and ruviz figures; keep out of Stable and default search.
+doc/desktop-storage.md,user,exclude,,Unreleased storage cleanup controls; keep outside the stable manual until released.
+crates/rexafs-gui/data/examples/README.md,developer,exclude,,Bundled example provenance and regeneration instructions.
 doc/rmc-cu2o-demo.md,developer,exclude,,Unreleased experimental Cu2O RMC run recipe and interpretation limits; local user measurement is not redistributed.
 doc/rmc-desktop-followup-plan.md,developer,exclude,,Unreleased implementation acceptance criteria and local performance evidence.
 doc/rmc-structural-evolution.md,mixed,exclude,,Unreleased adaptive memory and structural evolution conventions; keep outside the stable manual.

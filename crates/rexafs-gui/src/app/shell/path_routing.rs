@@ -419,6 +419,16 @@ impl StudioApp {
                                 button(&t, "empty-example", "Open Cu example", false)
                                     .h(px(32.))
                                     .on_click(cx.listener(|app, _, _, cx| app.open_example(cx))),
+                            )
+                            .child(
+                                button(
+                                    &t,
+                                    "empty-copper-series",
+                                    "Synthetic copper reduction…",
+                                    false,
+                                )
+                                .h(px(32.))
+                                .on_click(cx.listener(|app, _, _, cx| app.open_copper_series(cx))),
                             ),
                     ),
             )

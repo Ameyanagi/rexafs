@@ -466,8 +466,10 @@ actions!(
         StagePublish,
         ShowHelp,
         ShowLicenses,
+        ShowStorage,
         ShowUpdates,
         ShowExample,
+        ShowCopperSeries,
         SwitchTheme,
         ToggleDataPanel,
         ToggleContextPanel,
@@ -10048,8 +10050,12 @@ impl Render for StudioApp {
                 }))
                 .on_action(cx.listener(|this, _: &ShowHelp, _, cx| this.open_help(cx)))
                 .on_action(cx.listener(|this, _: &ShowLicenses, _, cx| this.open_licenses(cx)))
+                .on_action(cx.listener(|this, _: &ShowStorage, _, cx| this.open_storage(cx)))
                 .on_action(cx.listener(|this, _: &ShowUpdates, _, cx| this.open_updates(cx)))
                 .on_action(cx.listener(|this, _: &ShowExample, _, cx| this.open_example(cx)))
+                .on_action(
+                    cx.listener(|this, _: &ShowCopperSeries, _, cx| this.open_copper_series(cx)),
+                )
                 .on_action(cx.listener(|this, _: &SwitchTheme, _, cx| this.toggle_theme(cx)))
                 .on_action(cx.listener(|this, _: &OpenProject, _, cx| this.open_project(cx)))
                 .on_action(cx.listener(|this, _: &SaveProject, _, cx| this.save_project(cx)))

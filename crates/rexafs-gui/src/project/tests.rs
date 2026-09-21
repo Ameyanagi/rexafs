@@ -1,5 +1,90 @@
 use super::*;
 
+#[test]
+fn bundled_copper_example_is_portable_and_reuses_its_extraction_folder() {
+    let temp = tempfile::tempdir().unwrap();
+    let project = super::copper_example_in(temp.path()).unwrap();
+    assert!(project.origin.is_none());
+    assert!(project.params == PipelineParams::default());
+    assert!(project.overrides.is_empty());
+    assert_eq!(project.raw_files.len(), 53);
+    assert_eq!(project.source_groups.len(), 53);
+    assert_eq!(project.group_state.marked.len(), 50);
+    assert_eq!(
+        project.extensions["synthetic_example"]["generation_space"],
+        "raw mu(E)"
+    );
+    assert!(
+        project
+            .group_state
+            .labels
+            .values()
+            .filter(|s| s.starts_with("Synthetic"))
+            .all(|s| s.contains("CuO") && s.contains("Cu₂O") && s.contains('%'))
+    );
+    let reopened = super::copper_example_in(temp.path()).unwrap();
+    assert_eq!(project.raw_files, reopened.raw_files);
+    assert_eq!(
+        std::fs::read_dir(temp.path().join("project-data"))
+            .unwrap()
+            .count(),
+        1
+    );
+    let saved = temp.path().join("portable.rxs");
+    super::save_with_storage(&saved, &project, DataStorage::Embedded).unwrap();
+    let restored =
+        super::load_with_cache_root(&saved, || Ok(temp.path().join("other-cache"))).unwrap();
+    assert_eq!(restored.raw_files.len(), 53);
+    assert_eq!(restored.group_state.labels, project.group_state.labels);
+    assert_eq!(
+        restored.extensions["synthetic_example"],
+        project.extensions["synthetic_example"]
+    );
+}
+
+/// Local qualification before publishing the user-reviewed example. This reads
+/// only an explicitly supplied generated project and saves to a temporary folder.
+#[test]
+#[ignore = "requires REXAFS_CU_PREVIEW pointing to the locally generated example"]
+fn local_copper_preview_preserves_raw_sources_labels_and_truth() {
+    let path = std::path::PathBuf::from(
+        std::env::var_os("REXAFS_CU_PREVIEW").expect("set REXAFS_CU_PREVIEW"),
+    );
+    let temp = tempfile::tempdir().unwrap();
+    let project = super::load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
+    assert_eq!(project.raw_files.len(), 53);
+    assert_eq!(project.source_groups.len(), 53);
+    assert_eq!(project.group_state.marked.len(), 50);
+    assert!(
+        project
+            .group_state
+            .labels
+            .values()
+            .filter(|s| s.starts_with("Synthetic"))
+            .all(|s| s.contains("CuO") && s.contains("Cu₂O") && s.contains('%'))
+    );
+    assert_eq!(
+        project.extensions["synthetic_example"]["generation_space"],
+        "raw mu(E)"
+    );
+    assert_eq!(
+        project.extensions["synthetic_example"]["truth"]
+            .as_array()
+            .unwrap()
+            .len(),
+        50
+    );
+    let saved = temp.path().join("reopened.rxs");
+    super::save_with_storage(&saved, &project, DataStorage::Embedded).unwrap();
+    let reopened = super::load_with_cache_root(&saved, || Ok(temp.path().join("cache2"))).unwrap();
+    assert_eq!(reopened.raw_files.len(), 53);
+    assert_eq!(reopened.group_state.labels, project.group_state.labels);
+    assert_eq!(
+        reopened.extensions["synthetic_example"],
+        project.extensions["synthetic_example"]
+    );
+}
+
 pub(crate) fn load(path: &Path) -> Result<ProjectFile, String> {
     super::load_with_cache_root(path, || {
         Ok(std::env::temp_dir().join(format!("rexafs-project-test-cache-{}", std::process::id())))
