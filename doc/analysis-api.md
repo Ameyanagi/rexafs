@@ -52,6 +52,11 @@ energy. LCF uses the target's E₀; PCA and MCR use the first input's E₀. `Non
 selects −20 to +30 eV. For `Chi`, the bounds are absolute k in Å⁻¹ and the default
 is 3 to 12 Å⁻¹. k weighting changes spectral units by a factor of Å⁻ᵏʷᵉⁱᵍʰᵗ.
 
+**Unreleased desktop behavior:** MCR's automatic range resolves the full common
+measured energy interval and passes explicit relative bounds to this API.
+This does not change the native `None` convention above. See the
+[desktop defaults](cu-mixture-analysis.md).
+
 The analyses interpolate onto selected samples of the target grid (LCF) or first
 input grid (PCA/MCR). **Every input must cover the entire requested interval.**
 All three reject nonfinite, equal or reversed bounds, insufficient points and

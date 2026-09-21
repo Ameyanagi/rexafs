@@ -330,6 +330,22 @@ pub fn load(path: &Path) -> Result<ProjectFile, String> {
     })
 }
 
+/// Open the immutable bundled raw-mu example as a new, unsaved project. Embedded
+/// sources reuse one content-addressed extraction folder across repeated opens.
+pub(crate) fn copper_example() -> Result<ProjectFile, String> {
+    let root = crate::settings::app_dir().ok_or("Project cache directory unavailable")?;
+    copper_example_in(&root)
+}
+
+fn copper_example_in(root: &Path) -> Result<ProjectFile, String> {
+    let json = include_str!("../data/examples/cu-reduction.rxs");
+    let path = root.join("examples/Synthetic copper reduction.rxs");
+    let mut project =
+        storage::restore(parse(json)?, &path, json.as_bytes(), || Ok(root.to_owned()))?;
+    project.origin = None;
+    Ok(project)
+}
+
 pub(crate) fn load_with_cache_root(
     path: &Path,
     cache_root: impl FnOnce() -> Result<PathBuf, String>,

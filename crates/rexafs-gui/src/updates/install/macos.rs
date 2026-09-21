@@ -312,7 +312,7 @@ pub(crate) fn finish_update(root: &Path) -> Result<(), String> {
     result
 }
 
-fn installation_lock(target: &Path) -> Result<File, String> {
+pub(crate) fn installation_lock(target: &Path) -> Result<File, String> {
     use std::os::{fd::AsRawFd, unix::fs::OpenOptionsExt};
     let name = target
         .file_name()

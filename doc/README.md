@@ -55,6 +55,8 @@ Sponsorship supports ongoing development and maintenance; stars help others disc
 
 ## Desktop workflows
 
+- [Synthetic copper reduction preview](synthetic-copper-reduction.md): step-by-step PCA, MCR, LCF and Series workflows with known fractions, measured recovery errors and ruviz figures.
+- [Storage and installer cleanup](desktop-storage.md): inspect hidden folders and remove managed installers and inactive updater copies.
 - [Windows installation and packaging](windows-installers.md)
 - [Linux and Windows development and repository hooks](desktop-development.md)
 - [Universal measurement reader](measurement-reader.md): unreleased beamline, HDF5 and XTUNES support.

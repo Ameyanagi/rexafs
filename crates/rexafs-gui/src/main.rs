@@ -41,6 +41,7 @@ mod settings;
 mod source_evidence;
 mod spectrum_colors;
 mod spectrum_interest;
+mod storage_cleanup;
 mod structure;
 mod text;
 mod theme;
@@ -296,7 +297,10 @@ fn native_menus(blocked: bool, cx: &mut App) {
         ]),
         Menu::new("Help").items([
             MenuItem::action("Open Cu example", app::ShowExample).disabled(blocked),
+            MenuItem::action("Synthetic copper reduction…", app::ShowCopperSeries)
+                .disabled(blocked),
             MenuItem::action("Licenses", app::ShowLicenses).disabled(blocked),
+            MenuItem::action("Storage…", app::ShowStorage).disabled(blocked),
             MenuItem::action("Updates…", app::ShowUpdates).disabled(blocked),
         ]),
     ]);

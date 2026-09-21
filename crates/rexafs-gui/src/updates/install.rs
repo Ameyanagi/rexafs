@@ -91,6 +91,8 @@ fn replace_and_launch(
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
+pub(crate) use macos::installation_lock as cleanup_lock;
+#[cfg(target_os = "macos")]
 pub(crate) use macos::{check_helper, finish_update, prepare};
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 pub(crate) use portable::{finish_update, installed_app, prepare};

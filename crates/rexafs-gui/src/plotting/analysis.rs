@@ -7,8 +7,8 @@ use rexafs::prelude::{AnalysisSpace, McrResult, PcaModel};
 /// Display scaling only; retained PCA values and exported results are unchanged.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum PcaScale {
-    Linear,
     #[default]
+    Linear,
     Log,
 }
 

@@ -28,6 +28,7 @@ export default defineConfig({
       { label:'Help',items:[{label:'FAQ',slug:'docs/faq'},{label:'Troubleshooting',slug:'docs/troubleshooting'},{label:'Release history',slug:'releases'},{label:'Licenses & data',slug:'licenses'}]},
       { label: 'Support rexafs', items:[{label:'Sponsor development',link:'https://github.com/sponsors/Ameyanagi'},{label:'Star on GitHub',link:'https://github.com/Ameyanagi/rexafs'}] },
       { label: 'Stable API reference', collapsed:true, items:[{autogenerate:{directory:'docs/reference/stable',collapsed:true}}] },
+      { label: 'Next tutorials · unreleased', collapsed: true, items: [{label:'Synthetic copper: PCA, MCR & LCF',slug:'docs/next/synthetic-copper'}] },
       { label: 'Next API · unreleased', collapsed:true, items:[{autogenerate:{directory:'docs/reference/next',collapsed:true}}] },
     ],
   })],

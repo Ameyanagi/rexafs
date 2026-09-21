@@ -42,7 +42,9 @@ pub enum PaletteCmd {
     Updates,
     Help,
     Licenses,
+    Storage,
     Example,
+    CopperSeries,
     Undo,
     Redo,
     Journal,
@@ -256,7 +258,19 @@ impl StudioApp {
             ("Redo", "edit", "⇧⌘Z", PaletteCmd::Redo),
             ("Help", "app", "", PaletteCmd::Help),
             ("Licenses", "app", "", PaletteCmd::Licenses),
+            (
+                "Storage · clean old installers and app copies",
+                "app",
+                "",
+                PaletteCmd::Storage,
+            ),
             ("Open Cu example", "file", "", PaletteCmd::Example),
+            (
+                "Open synthetic copper reduction · 50 frames + 3 references",
+                "file",
+                "",
+                PaletteCmd::CopperSeries,
+            ),
         ];
         for (label, category, keys, cmd) in simple {
             items.push(PaletteItem {
@@ -436,7 +450,9 @@ impl StudioApp {
             PaletteCmd::Updates => self.open_updates(cx),
             PaletteCmd::Help => self.open_help(cx),
             PaletteCmd::Licenses => self.open_licenses(cx),
+            PaletteCmd::Storage => self.open_storage(cx),
             PaletteCmd::Example => self.open_example(cx),
+            PaletteCmd::CopperSeries => self.open_copper_series(cx),
             PaletteCmd::Undo => self.undo(cx),
             PaletteCmd::Redo => self.redo(cx),
             PaletteCmd::Journal => {
