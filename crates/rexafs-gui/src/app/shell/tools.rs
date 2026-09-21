@@ -141,12 +141,20 @@ impl Tool {
                 ToolField::Components,
             ],
             Tool::Mcr => &[
-                ToolField::RangeLo,
-                ToolField::RangeHi,
+                ToolField::McrRangeLo,
+                ToolField::McrRangeHi,
                 ToolField::McrComponents,
                 ToolField::McrIterations,
                 ToolField::McrSeed,
             ],
+        }
+    }
+
+    fn range_fields(self) -> (ToolField, ToolField) {
+        if self == Tool::Mcr {
+            (ToolField::McrRangeLo, ToolField::McrRangeHi)
+        } else {
+            (ToolField::RangeLo, ToolField::RangeHi)
         }
     }
 
@@ -188,6 +196,8 @@ pub enum ToolField {
     Sigma,
     RangeLo,
     RangeHi,
+    McrRangeLo,
+    McrRangeHi,
     Components,
     McrIterations,
     McrSeed,
@@ -232,7 +242,7 @@ mod analysis_range_tests {
 }
 
 impl ToolField {
-    const ALL: [ToolField; 18] = [
+    const ALL: [ToolField; 20] = [
         ToolField::WinLo,
         ToolField::WinHi,
         ToolField::ManualShift,
@@ -247,6 +257,8 @@ impl ToolField {
         ToolField::Sigma,
         ToolField::RangeLo,
         ToolField::RangeHi,
+        ToolField::McrRangeLo,
+        ToolField::McrRangeHi,
         ToolField::Components,
         ToolField::McrIterations,
         ToolField::McrSeed,
@@ -269,6 +281,8 @@ impl ToolField {
             ToolField::Sigma => ("Sigma (eV)", "1.0", Some(1.0)),
             ToolField::RangeLo => ("Range start (rel. E₀)", "auto (−20)", None),
             ToolField::RangeHi => ("Range end (rel. E₀)", "auto (+30)", None),
+            ToolField::McrRangeLo => ("Range start (rel. E₀)", "auto (common start)", None),
+            ToolField::McrRangeHi => ("Range end (rel. E₀)", "auto (common end)", None),
             ToolField::Components => ("Components", "2", Some(2.0)),
             ToolField::McrIterations => ("Maximum iterations", "500", Some(500.0)),
             ToolField::McrSeed => ("Initialization seed", "0", Some(0.0)),
@@ -2102,7 +2116,10 @@ impl StudioApp {
                         &t,
                         SharedString::from(format!("analysis-range-{i}")),
                         label,
-                        false,
+                        tool == Tool::Mcr
+                            && range.is_none()
+                            && self.tools.field_value(ToolField::McrRangeLo, cx).is_none()
+                            && self.tools.field_value(ToolField::McrRangeHi, cx).is_none(),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.set_analysis_range_preset(tool, range, cx)
@@ -2153,6 +2170,13 @@ impl StudioApp {
         }
         if tool == Tool::Mcr {
             row = row
+                .child(
+                    div()
+                        .w_full()
+                        .text_size(px(11.))
+                        .text_color(t.text_muted)
+                        .child("Auto uses the full measured range shared by the selected spectra."),
+                )
                 .child(
                     super::chip(
                         &t,

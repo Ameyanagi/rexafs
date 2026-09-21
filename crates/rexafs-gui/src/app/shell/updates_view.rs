@@ -35,6 +35,9 @@ pub(crate) struct UpdateState {
 }
 
 impl UpdateState {
+    pub(crate) fn is_busy(&self) -> bool {
+        self.downloading || self.installing
+    }
     pub(crate) fn is_installing(&self) -> bool {
         self.installing
     }

@@ -279,7 +279,7 @@ impl StudioApp {
         let McrRequest {
             inputs,
             sources,
-            config,
+            mut config,
         } = match outcome {
             Ok(inputs) => inputs,
             Err(error) => {
@@ -325,6 +325,15 @@ impl StudioApp {
                             names.len()
                         ));
                     }
+                }
+                // Resolve Auto after every selected input has loaded. The
+                // retained result records the actual interval used for this run.
+                if config.range.is_none() {
+                    let (lo, hi) = super::analysis_range::common_energy_interval(
+                        spectra.iter().map(|s| s.as_ref()),
+                    )?;
+                    let e0 = spectra[0].e0().ok_or("The first spectrum needs E0")?;
+                    config.range = Some((lo - e0, hi - e0));
                 }
                 mcr_als_with_progress(&spectra, &config, |iteration, error| {
                     if iteration == 1 || iteration % 25 == 0 {
@@ -416,7 +425,10 @@ impl StudioApp {
     }
 
     fn prepare_mcr(&mut self, cx: &Context<Self>) -> Result<McrRequest, String> {
-        self.tools.sync_range(cx)?;
+        let range = super::analysis_range_from_fields(
+            self.tools.field_value(ToolField::McrRangeLo, cx),
+            self.tools.field_value(ToolField::McrRangeHi, cx),
+        )?;
         let mut sources = Vec::new();
         let mut inputs = Vec::new();
         for ix in super::marked_group_indices(&self.selection) {
@@ -460,7 +472,7 @@ impl StudioApp {
             components,
             max_iterations,
             seed,
-            range: self.tools.lcf_range,
+            range,
             space: self.tools.lcf_space.space(2.0),
             sum_to_one: self.tools.lcf_sum_to_one,
             nonnegative_spectra: self.tools.mcr_nonnegative_spectra,
