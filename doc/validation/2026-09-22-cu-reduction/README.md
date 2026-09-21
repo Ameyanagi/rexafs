@@ -70,18 +70,23 @@ without KaTeX errors. The mobile document width was 390 pixels. No page JavaScri
 errors or axe accessibility violations were reported for the main content.
 The ruviz images and the rendered page were also inspected visually.
 
-All three figures use the same publication typography at 180 mm width. Recipe
-is 88.9 mm tall (4252 × 2100 pixels) and PCA is 76.2 mm tall (4252 × 1800 pixels).
-Each PDF embeds fonts and contains no raster image objects. Recipe line styles
-remain distinguishable without color. Both PCA panels retain linear scales.
+The figures were revised to use ruviz's default styling in response to review;
+the earlier custom Helvetica typography, palette, line styles, marker shapes
+and hand-drawn legends were removed. Each panel now starts with `Plot::new()`.
+Only the 5.4 × 4.05 inch export canvas, 600 dpi resolution, scientific content,
+axis ranges, panel arrangement and automatic legend placement are specified.
+The smaller canvas keeps each PNG below the repository's 1 MiB file limit while
+preserving the default aspect ratio and all 50 frames. The numerical record and
+bundled project hashes above are unchanged. Both PCA panels retain linear scales.
 
-The comparison figure uses a fixed 180 × 146.05 mm publication layout.
-Its PNG is 4252 × 3450 pixels with 600 dpi metadata. Its SVG has unique clipping
-IDs across panels and contains vector paths and text. The PDF has one page at
-510.236 × 414 points, embedded subset fonts, and no raster image objects.
-The PDF rendering and native PNG were inspected separately. All 50 frames and
-three species remain visible, with matching error limits and separate marker
-shapes. Means and maxima still agree with the unchanged numerical record above.
+Recipe is 137.16 × 102.87 mm (3240 × 2430 pixels), PCA is 274.32 × 102.87 mm
+(6480 × 2430 pixels), and comparison is 274.32 × 205.74 mm (6480 × 4860 pixels).
+Each PNG includes 600 dpi metadata; each PDF embeds fonts and contains no raster
+image objects. The comparison SVG has unique clipping IDs across panels. Its
+PDF has one page at 777.6 × 583.2 points. All three species use the same default
+palette sequence in every relevant panel; both error panels use matching limits.
+The PDF rendering and native PNG were inspected separately. Means and maxima
+still agree with the unchanged numerical record above.
 
 ## Pull-request qualification
 
@@ -100,7 +105,7 @@ the original run. No RMC implementation or timeout was changed for this work.
 The export helper was checked by comparing PNG decompressed filter/pixel streams
 and every non-image-data chunk before and after compression. All were identical.
 The nine downloadable figure files and the compact result record total about
-1.23 MiB; the website displays the SVGs. Browser checks passed again with all
+1.68 MiB; the website displays the SVGs. Browser checks passed again with all
 three final SVGs and all PDF/PNG download links.
 
 The page lives under **Next tutorials · unreleased** and is excluded from default

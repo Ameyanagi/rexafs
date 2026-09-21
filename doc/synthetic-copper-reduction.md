@@ -28,8 +28,8 @@ automatic processing settings and no per-spectrum overrides.
 [![Known raw-absorption fractions across 50 synthetic frames](../website/public/figures/synthetic-copper/recipe.svg)](../website/public/figures/synthetic-copper/recipe.svg)
 
 *Generated with ruviz. Frame 1 is 100% CuO; frame 50 is 100% Cu. Cu₂O reaches
-85.07% at frames 25 and 26. Frame number has no experimental time unit. Solid,
-dashed and dotted curves distinguish CuO, Cu₂O and Cu even without color.*
+85.07% at frames 25 and 26. Frame number has no experimental time unit. The
+legend identifies CuO, Cu₂O and Cu using ruviz's default color sequence.*
 
 Download: [vector PDF](../website/public/figures/synthetic-copper/recipe.pdf),
 [editable SVG](../website/public/figures/synthetic-copper/recipe.svg), or
@@ -163,19 +163,20 @@ shifts. References were supplied to LCF and withheld from MCR.
 
 [![MCR and LCF fractions compared with the known recipe, with fraction errors below on matching axes](../website/public/figures/synthetic-copper/comparison.svg)](../website/public/figures/synthetic-copper/comparison.svg)
 
-*Generated with ruviz from the retained numerical results. In panels a–b, solid
-lines connect the raw recipe values; open symbols show the recovered fractions
-at all 50 frames after the approximate edge-step conversion. Circles identify
-CuO, squares Cu₂O and triangles Cu. Panels c–d show estimate minus recipe on
-identical vertical scales; connecting lines guide the eye. Summary errors cover
-all 150 coefficients. A percentage point (pp) is an absolute difference between
-percentages: 97.2% versus 100% differs by 2.8 points.*
+*Generated with ruviz's default styling from the retained numerical results.
+In panels a–b, lines connect the raw recipe values; filled circles show the
+recovered fractions at all 50 frames after the approximate edge-step conversion.
+The legend colors identify CuO, Cu₂O and Cu consistently across panels. Panels
+c–d show estimate minus recipe on identical vertical scales; connecting lines
+guide the eye. Summary errors cover all 150 coefficients. A percentage point
+(pp) is an absolute difference between percentages: 97.2% versus 100% differs
+by 2.8 points.*
 
 Download the publication figure: [vector PDF](../website/public/figures/synthetic-copper/comparison.pdf),
 [editable SVG](../website/public/figures/synthetic-copper/comparison.svg), or
 [600 dpi PNG](../website/public/figures/synthetic-copper/comparison.png).
-The figure is 180 × 146.05 mm; the PNG is 4252 × 3450 pixels. The PDF embeds its
-fonts. All formats preserve the same data and panel scales.
+The figure is 274.32 × 205.74 mm; the PNG is 6480 × 4860 pixels. The PDF embeds
+its fonts. All formats preserve the same data and panel scales.
 
 LCF recovered the fractions more closely in this example because it used the
 known reference spectra. MCR had a slightly lower spectral residual while its
@@ -237,9 +238,12 @@ are retained with this tutorial; large spectral matrices remain local.
 
 The figure example uses **ruviz 0.14.2** and renders `recipe`, `pca`, and
 `comparison` as SVG and 600 dpi PNG. It reads retained numerical arrays and does
-not refit or smooth them. All three figures use a 180 mm physical width and
-7.5–10 point Helvetica text. The website displays the smaller SVG files; vector
-PDFs and high-resolution PNGs are available for download.
+not refit or smooth them. All panels use `Plot::new()` styling: default fonts,
+colors, lines, markers, grids, spines and margins. Ruviz places legends
+automatically. Each panel has a 5.4 × 4.05 inch export canvas; the code sets labels,
+scientific axis ranges, panel arrangement and resolution. The website displays
+the smaller SVG files; vector PDFs and high-resolution PNGs are available for
+download.
 
 The export helper converts the SVGs to PDFs with CairoSVG 2.8.2 and losslessly
 compresses the PNGs. It preserves every pixel and the physical-resolution
@@ -253,8 +257,9 @@ uv run --no-project --python 3.12 scripts/export-cu-figures.py \
 On macOS with Homebrew Cairo, prefix the command with
 `DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib"` if Cairo is not found.
 All three retained PDFs were checked for embedded fonts and absence of raster
-images. The recipe is 180 × 88.9 mm (4252 × 2100 pixels); PCA is 180 × 76.2 mm
-(4252 × 1800 pixels); comparison is 180 × 146.05 mm (4252 × 3450 pixels).
+images. Recipe is 137.16 × 102.87 mm (3240 × 2430 pixels); PCA is
+274.32 × 102.87 mm (6480 × 2430 pixels); comparison is 274.32 × 205.74 mm
+(6480 × 4860 pixels).
 
 To compare your own saved default desktop run, replace the calculation command
 with the following. The checker verifies the fitted input arrays and energy grid

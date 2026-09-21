@@ -1,64 +1,78 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="180mm" height="88.9mm" viewBox="0 0 510.2362 252">
+<svg xmlns="http://www.w3.org/2000/svg" width="137.16mm" height="102.87mm" viewBox="0 0 388.80002 291.6">
 <title>Known raw-absorption fractions across 50 synthetic frames</title>
 <rect width="100%" height="100%" fill="white"/>
 <g transform="translate(0 0) scale(0.12)">
   <defs>
-    <clipPath id="panel0_clip1"><rect x="0.00" y="0.00" width="4251.00" height="225.00"/></clipPath>
+    <clipPath id="panel0_clip1"><rect x="329.30" y="231.67" width="2581.40" height="1904.17"/></clipPath>
   </defs>
-  <rect x="0.00" y="0.00" width="4251.00" height="225.00" fill="rgb(255,255,255)"/>
+  <rect x="0.00" y="0.00" width="3240.00" height="2430.00" fill="rgb(255,255,255)"/>
+  <line x1="329.30" y1="231.67" x2="329.30" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="835.46" y1="231.67" x2="835.46" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="1341.61" y1="231.67" x2="1341.61" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="1847.77" y1="231.67" x2="1847.77" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="2353.93" y1="231.67" x2="2353.93" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="2860.08" y1="231.67" x2="2860.08" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="2099.56" x2="2910.70" y2="2099.56" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="1736.86" x2="2910.70" y2="1736.86" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="1374.17" x2="2910.70" y2="1374.17" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="1011.47" x2="2910.70" y2="1011.47" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="648.77" x2="2910.70" y2="648.77" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="286.07" x2="2910.70" y2="286.07" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <text x="308.45" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">0</text>
+  <text x="793.75" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">10</text>
+  <text x="1299.90" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">20</text>
+  <text x="1806.06" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">30</text>
+  <text x="2312.22" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">40</text>
+  <text x="2818.37" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">50</text>
+  <text x="258.42" y="2125.56" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">0</text>
+  <text x="216.71" y="1762.87" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">20</text>
+  <text x="216.71" y="1400.17" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">40</text>
+  <text x="216.71" y="1037.47" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">60</text>
+  <text x="216.71" y="674.77" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">80</text>
+  <text x="175.00" y="312.07" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">100</text>
   <g clip-path="url(#panel0_clip1)">
-  <polyline points="1016.44,116.67 1183.06,116.67" fill="none" stroke="rgb(182,75,53)" stroke-width="9.17" stroke-linecap="round" stroke-linejoin="round"/>
-  <polyline points="1891.24,116.67 2057.86,116.67" fill="none" stroke="rgb(189,136,24)" stroke-width="9.17" stroke-dasharray="30,30" stroke-linecap="round" stroke-linejoin="round"/>
-  <polyline points="2766.04,116.67 2932.67,116.67" fill="none" stroke="rgb(36,119,166)" stroke-width="9.17" stroke-dasharray="6,12" stroke-linecap="round" stroke-linejoin="round"/>
-  <g data-ruviz-text-style="annotation" transform="translate(1241.38,116.67) rotate(-0.00)">
-    <text x="0" y="19.13" font-family="&quot;Helvetica&quot;" font-size="70.8" font-weight="400" fill="rgb(0,0,0)" text-anchor="start" xml:space="preserve">CuO</text>
+  <polyline points="379.92,286.07 430.53,292.22 481.15,310.11 531.76,338.87 582.38,377.64 632.99,425.59 683.61,481.83 734.23,545.53 784.84,615.83 835.46,691.86 886.07,772.77 936.69,857.70 987.30,945.81 1037.92,1036.23 1088.54,1128.10 1139.15,1220.57 1189.77,1312.79 1240.38,1403.89 1291.00,1493.02 1341.61,1579.33 1392.23,1661.95 1442.85,1740.04 1493.46,1812.73 1544.08,1879.17 1594.69,1938.50 1645.31,1989.87 1695.92,2032.41 1746.54,2065.28 1797.15,2087.62 1847.77,2098.57 1898.39,2099.56 1949.00,2099.56 1999.62,2099.56 2050.23,2099.56 2100.85,2099.56 2151.46,2099.56 2202.08,2099.56 2252.70,2099.56 2303.31,2099.56 2353.93,2099.56 2404.54,2099.56 2455.16,2099.56 2505.77,2099.56 2556.39,2099.56 2607.01,2099.56 2657.62,2099.56 2708.24,2099.56 2758.85,2099.56 2809.47,2099.56 2860.08,2099.56" fill="none" stroke="rgb(31,119,180)" stroke-width="12.50" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="379.92,2099.56 430.53,2093.41 481.15,2075.53 531.76,2046.77 582.38,2007.99 632.99,1960.05 683.61,1903.80 734.23,1840.10 784.84,1769.81 835.46,1693.78 886.07,1612.87 936.69,1527.93 987.30,1439.83 1037.92,1349.41 1088.54,1257.54 1139.15,1165.06 1189.77,1072.85 1240.38,981.75 1291.00,892.61 1341.61,806.31 1392.23,724.68 1442.85,657.54 1493.46,607.19 1544.08,573.62 1594.69,556.83 1645.31,556.83 1695.92,573.62 1746.54,607.19 1797.15,657.54 1847.77,724.68 1898.39,806.31 1949.00,892.61 1999.62,981.75 2050.23,1072.85 2100.85,1165.06 2151.46,1257.54 2202.08,1349.41 2252.70,1439.83 2303.31,1527.93 2353.93,1612.87 2404.54,1693.78 2455.16,1769.81 2505.77,1840.10 2556.39,1903.80 2607.01,1960.05 2657.62,2007.99 2708.24,2046.77 2758.85,2075.53 2809.47,2093.41 2860.08,2099.56" fill="none" stroke="rgb(255,127,14)" stroke-width="12.50" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="379.92,2099.56 430.53,2099.56 481.15,2099.56 531.76,2099.56 582.38,2099.56 632.99,2099.56 683.61,2099.56 734.23,2099.56 784.84,2099.56 835.46,2099.56 886.07,2099.56 936.69,2099.56 987.30,2099.56 1037.92,2099.56 1088.54,2099.56 1139.15,2099.56 1189.77,2099.56 1240.38,2099.56 1291.00,2099.56 1341.61,2099.56 1392.23,2098.57 1442.85,2087.62 1493.46,2065.28 1544.08,2032.41 1594.69,1989.87 1645.31,1938.50 1695.92,1879.17 1746.54,1812.73 1797.15,1740.04 1847.77,1661.95 1898.39,1579.33 1949.00,1493.02 1999.62,1403.89 2050.23,1312.79 2100.85,1220.57 2151.46,1128.10 2202.08,1036.23 2252.70,945.81 2303.31,857.70 2353.93,772.77 2404.54,691.86 2455.16,615.83 2505.77,545.53 2556.39,481.83 2607.01,425.59 2657.62,377.64 2708.24,338.87 2758.85,310.11 2809.47,292.22 2860.08,286.07" fill="none" stroke="rgb(44,160,44)" stroke-width="12.50" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
-  <g data-ruviz-text-style="annotation" transform="translate(2116.18,116.67) rotate(-0.00)">
-    <text x="0" y="19.13" font-family="&quot;Helvetica&quot;" font-size="70.8" font-weight="400" fill="rgb(0,0,0)" text-anchor="start" xml:space="preserve">Cu₂O</text>
-  </g>
-  <g data-ruviz-text-style="annotation" transform="translate(2990.99,116.67) rotate(-0.00)">
-    <text x="0" y="19.13" font-family="&quot;Helvetica&quot;" font-size="70.8" font-weight="400" fill="rgb(0,0,0)" text-anchor="start" xml:space="preserve">Cu</text>
-  </g>
-  </g>
-</g>
-<g transform="translate(0 27) scale(0.12)">
-  <defs>
-    <clipPath id="panel1_clip1"><rect x="325.00" y="225.00" width="3842.67" height="1366.67"/></clipPath>
-  </defs>
-  <rect x="0.00" y="0.00" width="4251.00" height="1875.00" fill="rgb(255,255,255)"/>
-  <text x="306.48" y="1674.60" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0</text>
-  <text x="1041.43" y="1674.60" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">10</text>
-  <text x="1794.90" y="1674.60" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">20</text>
-  <text x="2548.36" y="1674.60" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">30</text>
-  <text x="3301.83" y="1674.60" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">40</text>
-  <text x="4055.29" y="1674.60" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">50</text>
-  <text x="262.97" y="1583.61" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0</text>
-  <text x="225.94" y="1323.30" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">20</text>
-  <text x="225.94" y="1062.98" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">40</text>
-  <text x="225.94" y="802.66" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">60</text>
-  <text x="225.94" y="542.34" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">80</text>
-  <text x="188.91" y="282.03" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">100</text>
-  <g clip-path="url(#panel1_clip1)">
-  <polyline points="400.35,264.05 475.69,268.46 551.04,281.30 626.39,301.94 701.73,329.77 777.08,364.18 852.42,404.55 927.77,450.27 1003.12,500.72 1078.46,555.29 1153.81,613.36 1229.16,674.32 1304.50,737.56 1379.85,802.45 1455.20,868.39 1530.54,934.76 1605.89,1000.95 1681.24,1066.33 1756.58,1130.30 1831.93,1192.25 1907.27,1251.55 1982.62,1307.59 2057.97,1359.77 2133.31,1407.45 2208.66,1450.03 2284.01,1486.90 2359.35,1517.44 2434.70,1541.03 2510.05,1557.06 2585.39,1564.92 2660.74,1565.64 2736.09,1565.64 2811.43,1565.64 2886.78,1565.64 2962.12,1565.64 3037.47,1565.64 3112.82,1565.64 3188.16,1565.64 3263.51,1565.64 3338.86,1565.64 3414.20,1565.64 3489.55,1565.64 3564.90,1565.64 3640.24,1565.64 3715.59,1565.64 3790.94,1565.64 3866.28,1565.64 3941.63,1565.64 4016.97,1565.64 4092.32,1565.64" fill="none" stroke="rgb(182,75,53)" stroke-width="9.17" stroke-linecap="round" stroke-linejoin="round"/>
-  <polyline points="400.35,1565.64 475.69,1561.22 551.04,1548.38 626.39,1527.74 701.73,1499.91 777.08,1465.50 852.42,1425.13 927.77,1379.41 1003.12,1328.96 1078.46,1274.39 1153.81,1216.32 1229.16,1155.36 1304.50,1092.13 1379.85,1027.23 1455.20,961.29 1530.54,894.92 1605.89,828.74 1681.24,763.35 1756.58,699.38 1831.93,637.43 1907.27,578.85 1982.62,530.66 2057.97,494.52 2133.31,470.43 2208.66,458.38 2284.01,458.38 2359.35,470.43 2434.70,494.52 2510.05,530.66 2585.39,578.85 2660.74,637.43 2736.09,699.38 2811.43,763.35 2886.78,828.74 2962.12,894.92 3037.47,961.29 3112.82,1027.23 3188.16,1092.13 3263.51,1155.36 3338.86,1216.32 3414.20,1274.39 3489.55,1328.96 3564.90,1379.41 3640.24,1425.13 3715.59,1465.50 3790.94,1499.91 3866.28,1527.74 3941.63,1548.38 4016.97,1561.22 4092.32,1565.64" fill="none" stroke="rgb(189,136,24)" stroke-width="9.17" stroke-dasharray="30,30" stroke-linecap="round" stroke-linejoin="round"/>
-  <polyline points="400.35,1565.64 475.69,1565.64 551.04,1565.64 626.39,1565.64 701.73,1565.64 777.08,1565.64 852.42,1565.64 927.77,1565.64 1003.12,1565.64 1078.46,1565.64 1153.81,1565.64 1229.16,1565.64 1304.50,1565.64 1379.85,1565.64 1455.20,1565.64 1530.54,1565.64 1605.89,1565.64 1681.24,1565.64 1756.58,1565.64 1831.93,1565.64 1907.27,1564.92 1982.62,1557.06 2057.97,1541.03 2133.31,1517.44 2208.66,1486.90 2284.01,1450.03 2359.35,1407.45 2434.70,1359.77 2510.05,1307.59 2585.39,1251.55 2660.74,1192.25 2736.09,1130.30 2811.43,1066.33 2886.78,1000.95 2962.12,934.76 3037.47,868.39 3112.82,802.45 3188.16,737.56 3263.51,674.32 3338.86,613.36 3414.20,555.29 3489.55,500.72 3564.90,450.27 3640.24,404.55 3715.59,364.18 3790.94,329.77 3866.28,301.94 3941.63,281.30 4016.97,268.46 4092.32,264.05" fill="none" stroke="rgb(36,119,166)" stroke-width="9.17" stroke-dasharray="6,12" stroke-linecap="round" stroke-linejoin="round"/>
-  </g>
-  <line x1="325.00" y1="1591.67" x2="4167.67" y2="1591.67" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="225.00" x2="325.00" y2="1591.67" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="1591.67" x2="325.00" y2="1616.67" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="1078.46" y1="1591.67" x2="1078.46" y2="1616.67" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="1831.93" y1="1591.67" x2="1831.93" y2="1616.67" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="2585.39" y1="1591.67" x2="2585.39" y2="1616.67" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="3338.86" y1="1591.67" x2="3338.86" y2="1616.67" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="4092.32" y1="1591.67" x2="4092.32" y2="1616.67" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="1565.64" x2="300.00" y2="1565.64" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="1305.32" x2="300.00" y2="1305.32" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="1045.00" x2="300.00" y2="1045.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="784.68" x2="300.00" y2="784.68" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="524.37" x2="300.00" y2="524.37" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="264.05" x2="300.00" y2="264.05" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <text x="2246.33" y="130.75" font-family="&quot;Helvetica&quot;" font-size="83.6" font-weight="400" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">Known synthetic recipe</text>
-  <text x="2246.33" y="1799.86" font-family="&quot;Helvetica&quot;" font-size="70.8" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">Synthetic frame (no time unit)</text>
-  <g transform="translate(104.74,908.33) rotate(-90.0)"><text x="0" y="19.13" font-family="&quot;Helvetica&quot;" font-size="70.8" fill="rgb(0,0,0)" text-anchor="middle">Raw μ mixing weight (%)</text></g>
+  <line x1="329.30" y1="2135.83" x2="2910.70" y2="2135.83" stroke="rgb(0,0,0)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="231.67" x2="329.30" y2="2135.83" stroke="rgb(0,0,0)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="231.67" x2="2910.70" y2="231.67" stroke="rgb(0,0,0)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="2910.70" y1="231.67" x2="2910.70" y2="2135.83" stroke="rgb(0,0,0)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="2135.83" x2="329.30" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="231.67" x2="329.30" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="835.46" y1="2135.83" x2="835.46" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="835.46" y1="231.67" x2="835.46" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1341.61" y1="2135.83" x2="1341.61" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1341.61" y1="231.67" x2="1341.61" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1847.77" y1="2135.83" x2="1847.77" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1847.77" y1="231.67" x2="1847.77" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2353.93" y1="2135.83" x2="2353.93" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2353.93" y1="231.67" x2="2353.93" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2860.08" y1="2135.83" x2="2860.08" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2860.08" y1="231.67" x2="2860.08" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="2099.56" x2="362.63" y2="2099.56" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2910.70" y1="2099.56" x2="2877.37" y2="2099.56" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="1736.86" x2="362.63" y2="1736.86" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2910.70" y1="1736.86" x2="2877.37" y2="1736.86" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="1374.17" x2="362.63" y2="1374.17" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2910.70" y1="1374.17" x2="2877.37" y2="1374.17" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="1011.47" x2="362.63" y2="1011.47" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2910.70" y1="1011.47" x2="2877.37" y2="1011.47" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="648.77" x2="362.63" y2="648.77" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2910.70" y1="648.77" x2="2877.37" y2="648.77" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="286.07" x2="362.63" y2="286.07" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2910.70" y1="286.07" x2="2877.37" y2="286.07" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <text x="1620.00" y="152.11" font-family="&quot;Arial&quot;, sans-serif" font-size="116.7" font-weight="400" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">Known synthetic recipe</text>
+  <text x="1620.00" y="2367.22" font-family="&quot;Arial&quot;, sans-serif" font-size="83.3" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">Synthetic frame (no time unit)</text>
+  <g transform="translate(91.67,1183.75) rotate(-90.0)"><text x="0" y="28.89" font-family="&quot;Arial&quot;, sans-serif" font-size="83.3" fill="rgb(0,0,0)" text-anchor="middle">Raw μ mixing weight (%)</text></g>
+  <rect x="2324.78" y="973.75" width="510.92" height="420.00" rx="33.33" ry="33.33" fill="rgba(255,255,255,0.800)"/>
+  <rect x="2324.78" y="973.75" width="510.92" height="420.00" rx="33.33" ry="33.33" fill="none" stroke="rgb(176,176,176)" stroke-width="1"/>
+  <line x1="2369.78" y1="1056.25" x2="2519.78" y2="1056.25" stroke="rgb(31,119,180)" stroke-width="12.5"/>
+  <text x="2594.78" y="1078.50" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">CuO</text>
+  <line x1="2369.78" y1="1183.75" x2="2519.78" y2="1183.75" stroke="rgb(255,127,14)" stroke-width="12.5"/>
+  <text x="2594.78" y="1206.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">Cu2O</text>
+  <line x1="2369.78" y1="1311.25" x2="2519.78" y2="1311.25" stroke="rgb(44,160,44)" stroke-width="12.5"/>
+  <text x="2594.78" y="1333.50" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">Cu</text>
 </g>
 </svg>

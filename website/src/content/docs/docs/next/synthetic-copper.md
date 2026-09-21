@@ -33,8 +33,8 @@ automatic processing settings and no per-spectrum overrides.
 [![Known raw-absorption fractions across 50 synthetic frames](/figures/synthetic-copper/recipe.svg)](/figures/synthetic-copper/recipe.svg)
 
 *Generated with ruviz. Frame 1 is 100% CuO; frame 50 is 100% Cu. Cu₂O reaches
-85.07% at frames 25 and 26. Frame number has no experimental time unit. Solid,
-dashed and dotted curves distinguish CuO, Cu₂O and Cu even without color.*
+85.07% at frames 25 and 26. Frame number has no experimental time unit. The
+legend identifies CuO, Cu₂O and Cu using ruviz's default color sequence.*
 
 Download: [vector PDF](/figures/synthetic-copper/recipe.pdf),
 [editable SVG](/figures/synthetic-copper/recipe.svg), or
@@ -168,19 +168,20 @@ shifts. References were supplied to LCF and withheld from MCR.
 
 [![MCR and LCF fractions compared with the known recipe, with fraction errors below on matching axes](/figures/synthetic-copper/comparison.svg)](/figures/synthetic-copper/comparison.svg)
 
-*Generated with ruviz from the retained numerical results. In panels a–b, solid
-lines connect the raw recipe values; open symbols show the recovered fractions
-at all 50 frames after the approximate edge-step conversion. Circles identify
-CuO, squares Cu₂O and triangles Cu. Panels c–d show estimate minus recipe on
-identical vertical scales; connecting lines guide the eye. Summary errors cover
-all 150 coefficients. A percentage point (pp) is an absolute difference between
-percentages: 97.2% versus 100% differs by 2.8 points.*
+*Generated with ruviz's default styling from the retained numerical results.
+In panels a–b, lines connect the raw recipe values; filled circles show the
+recovered fractions at all 50 frames after the approximate edge-step conversion.
+The legend colors identify CuO, Cu₂O and Cu consistently across panels. Panels
+c–d show estimate minus recipe on identical vertical scales; connecting lines
+guide the eye. Summary errors cover all 150 coefficients. A percentage point
+(pp) is an absolute difference between percentages: 97.2% versus 100% differs
+by 2.8 points.*
 
 Download the publication figure: [vector PDF](/figures/synthetic-copper/comparison.pdf),
 [editable SVG](/figures/synthetic-copper/comparison.svg), or
 [600 dpi PNG](/figures/synthetic-copper/comparison.png).
-The figure is 180 × 146.05 mm; the PNG is 4252 × 3450 pixels. The PDF embeds its
-fonts. All formats preserve the same data and panel scales.
+The figure is 274.32 × 205.74 mm; the PNG is 6480 × 4860 pixels. The PDF embeds
+its fonts. All formats preserve the same data and panel scales.
 
 LCF recovered the fractions more closely in this example because it used the
 known reference spectra. MCR had a slightly lower spectral residual while its
@@ -223,10 +224,12 @@ The figures were rendered with **ruviz 0.14.2** from the retained numerical
 arrays. They were not traced from screenshots. The compact
 [result data](/figures/synthetic-copper/results.json) include all 50 recipe rows,
 MCR and LCF weights, approximate converted fractions, reference edge steps and
-PCA contributions. All three figures use 7.5–10 point Helvetica text at a fixed
-180 mm width. Species are distinguished by color and line style or marker shape.
-SVG files stay sharp when enlarged; the 600 dpi PNGs include physical resolution
-metadata. The vector PDFs contain embedded fonts.
+PCA contributions. All panels use `Plot::new()` styling: default fonts, colors,
+lines, markers, grids, spines and margins. Ruviz places legends automatically.
+Each panel has a 5.4 × 4.05 inch export canvas; the code sets labels, scientific
+axis ranges, panel arrangement and resolution. SVG files stay sharp when
+enlarged; the 600 dpi PNGs include physical resolution metadata. The vector PDFs
+contain embedded fonts.
 
 From a source checkout containing this preview, these commands extract the
 bundled raw data, repeat the calculations, and render the figures. They require

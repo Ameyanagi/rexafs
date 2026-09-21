@@ -1,100 +1,139 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="180mm" height="76.2mm" viewBox="0 0 510.2362 216">
+<svg xmlns="http://www.w3.org/2000/svg" width="274.32mm" height="102.87mm" viewBox="0 0 777.60004 291.6">
 <title>Uncentered PCA with linear axes and a separate PC2–PC6 detail panel</title>
 <rect width="100%" height="100%" fill="white"/>
 <g transform="translate(0 0) scale(0.12)">
   <defs>
-    <clipPath id="panel0_clip1"><rect x="325.00" y="258.33" width="1716.67" height="1250.00"/></clipPath>
+    <clipPath id="panel0_clip1"><rect x="329.30" y="231.67" width="2581.40" height="1904.17"/></clipPath>
   </defs>
-  <rect x="0.00" y="0.00" width="2125.00" height="1800.00" fill="rgb(255,255,255)"/>
-  <text x="370.07" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">1</text>
-  <text x="687.97" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">2</text>
-  <text x="1005.87" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">3</text>
-  <text x="1323.77" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">4</text>
-  <text x="1641.67" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">5</text>
-  <text x="1959.57" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">6</text>
-  <text x="262.97" y="1502.50" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0</text>
-  <text x="225.94" y="1264.41" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">20</text>
-  <text x="225.94" y="1026.31" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">40</text>
-  <text x="225.94" y="788.22" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">60</text>
-  <text x="225.94" y="550.12" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">80</text>
-  <text x="188.91" y="312.03" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">100</text>
+  <rect x="0.00" y="0.00" width="3240.00" height="2430.00" fill="rgb(255,255,255)"/>
+  <line x1="424.91" y1="231.67" x2="424.91" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="902.94" y1="231.67" x2="902.94" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="1380.98" y1="231.67" x2="1380.98" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="1859.02" y1="231.67" x2="1859.02" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="2337.05" y1="231.67" x2="2337.05" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="2815.09" y1="231.67" x2="2815.09" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="2099.56" x2="2910.70" y2="2099.56" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="1736.86" x2="2910.70" y2="1736.86" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="1374.17" x2="2910.70" y2="1374.17" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="1011.47" x2="2910.70" y2="1011.47" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="648.77" x2="2910.70" y2="648.77" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="286.07" x2="2910.70" y2="286.07" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <text x="404.05" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">1</text>
+  <text x="882.09" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">2</text>
+  <text x="1360.13" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">3</text>
+  <text x="1838.16" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">4</text>
+  <text x="2316.20" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">5</text>
+  <text x="2794.24" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">6</text>
+  <text x="258.42" y="2125.56" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">0</text>
+  <text x="216.71" y="1762.87" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">20</text>
+  <text x="216.71" y="1400.17" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">40</text>
+  <text x="216.71" y="1037.47" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">60</text>
+  <text x="216.71" y="674.77" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">80</text>
+  <text x="175.00" y="312.07" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">100</text>
   <g clip-path="url(#panel0_clip1)">
-  <polyline points="388.58,297.59 706.48,1481.81 1024.38,1483.69 1342.28,1484.52 1660.19,1484.52 1978.09,1484.52" fill="none" stroke="rgb(36,119,166)" stroke-width="8.33" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="388.58" cy="297.59" r="14.58" fill="rgb(255,255,255)"/>
-  <circle cx="388.58" cy="297.59" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
-  <circle cx="706.48" cy="1481.81" r="14.58" fill="rgb(255,255,255)"/>
-  <circle cx="706.48" cy="1481.81" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
-  <circle cx="1024.38" cy="1483.69" r="14.58" fill="rgb(255,255,255)"/>
-  <circle cx="1024.38" cy="1483.69" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
-  <circle cx="1342.28" cy="1484.52" r="14.58" fill="rgb(255,255,255)"/>
-  <circle cx="1342.28" cy="1484.52" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
-  <circle cx="1660.19" cy="1484.52" r="14.58" fill="rgb(255,255,255)"/>
-  <circle cx="1660.19" cy="1484.52" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
-  <circle cx="1978.09" cy="1484.52" r="14.58" fill="rgb(255,255,255)"/>
-  <circle cx="1978.09" cy="1484.52" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  <polyline points="424.91,291.47 902.94,2095.43 1380.98,2098.30 1859.02,2099.56 2337.05,2099.56 2815.09,2099.56" fill="none" stroke="rgb(31,119,180)" stroke-width="12.50" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="424.91" cy="291.47" r="41.67" fill="rgb(31,119,180)"/>
+  <circle cx="902.94" cy="2095.43" r="41.67" fill="rgb(31,119,180)"/>
+  <circle cx="1380.98" cy="2098.30" r="41.67" fill="rgb(31,119,180)"/>
+  <circle cx="1859.02" cy="2099.56" r="41.67" fill="rgb(31,119,180)"/>
+  <circle cx="2337.05" cy="2099.56" r="41.67" fill="rgb(31,119,180)"/>
+  <circle cx="2815.09" cy="2099.56" r="41.67" fill="rgb(31,119,180)"/>
   </g>
-  <line x1="325.00" y1="1508.33" x2="2041.67" y2="1508.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="258.33" x2="325.00" y2="1508.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="388.58" y1="1508.33" x2="388.58" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="706.48" y1="1508.33" x2="706.48" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="1024.38" y1="1508.33" x2="1024.38" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="1342.28" y1="1508.33" x2="1342.28" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="1660.19" y1="1508.33" x2="1660.19" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="1978.09" y1="1508.33" x2="1978.09" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="1484.52" x2="300.00" y2="1484.52" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="1246.43" x2="300.00" y2="1246.43" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="1008.33" x2="300.00" y2="1008.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="770.24" x2="300.00" y2="770.24" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="532.14" x2="300.00" y2="532.14" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="294.05" x2="300.00" y2="294.05" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <text x="1183.33" y="164.09" font-family="&quot;Helvetica&quot;" font-size="83.6" font-weight="400" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">a   Uncentered PCA</text>
-  <text x="1183.33" y="1716.53" font-family="&quot;Helvetica&quot;" font-size="70.8" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">Principal component</text>
-  <g transform="translate(104.74,883.33) rotate(-90.0)"><text x="0" y="19.13" font-family="&quot;Helvetica&quot;" font-size="70.8" fill="rgb(0,0,0)" text-anchor="middle">Squared signal (%)</text></g>
+  <line x1="329.30" y1="2135.83" x2="2910.70" y2="2135.83" stroke="rgb(0,0,0)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="231.67" x2="329.30" y2="2135.83" stroke="rgb(0,0,0)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="329.30" y1="231.67" x2="2910.70" y2="231.67" stroke="rgb(0,0,0)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="2910.70" y1="231.67" x2="2910.70" y2="2135.83" stroke="rgb(0,0,0)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="424.91" y1="2135.83" x2="424.91" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="424.91" y1="231.67" x2="424.91" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="902.94" y1="2135.83" x2="902.94" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="902.94" y1="231.67" x2="902.94" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1380.98" y1="2135.83" x2="1380.98" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1380.98" y1="231.67" x2="1380.98" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1859.02" y1="2135.83" x2="1859.02" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1859.02" y1="231.67" x2="1859.02" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2337.05" y1="2135.83" x2="2337.05" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2337.05" y1="231.67" x2="2337.05" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2815.09" y1="2135.83" x2="2815.09" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2815.09" y1="231.67" x2="2815.09" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="2099.56" x2="362.63" y2="2099.56" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2910.70" y1="2099.56" x2="2877.37" y2="2099.56" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="1736.86" x2="362.63" y2="1736.86" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2910.70" y1="1736.86" x2="2877.37" y2="1736.86" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="1374.17" x2="362.63" y2="1374.17" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2910.70" y1="1374.17" x2="2877.37" y2="1374.17" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="1011.47" x2="362.63" y2="1011.47" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2910.70" y1="1011.47" x2="2877.37" y2="1011.47" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="648.77" x2="362.63" y2="648.77" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2910.70" y1="648.77" x2="2877.37" y2="648.77" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="329.30" y1="286.07" x2="362.63" y2="286.07" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2910.70" y1="286.07" x2="2877.37" y2="286.07" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <text x="1620.00" y="152.11" font-family="&quot;Arial&quot;, sans-serif" font-size="116.7" font-weight="400" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">a   Uncentered PCA</text>
+  <text x="1620.00" y="2367.22" font-family="&quot;Arial&quot;, sans-serif" font-size="83.3" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">Principal component</text>
+  <g transform="translate(91.67,1183.75) rotate(-90.0)"><text x="0" y="28.89" font-family="&quot;Arial&quot;, sans-serif" font-size="83.3" fill="rgb(0,0,0)" text-anchor="middle">Squared signal (%)</text></g>
 </g>
-<g transform="translate(255.1181 0) scale(0.12)">
+<g transform="translate(388.80002 0) scale(0.12)">
   <defs>
-    <clipPath id="panel1_clip1"><rect x="325.00" y="258.33" width="1716.67" height="1250.00"/></clipPath>
+    <clipPath id="panel1_clip1"><rect x="350.14" y="231.67" width="2539.72" height="1904.17"/></clipPath>
   </defs>
-  <rect x="0.00" y="0.00" width="2125.00" height="1800.00" fill="rgb(255,255,255)"/>
-  <text x="384.52" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">2</text>
-  <text x="774.67" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">3</text>
-  <text x="1164.82" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">4</text>
-  <text x="1554.97" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">5</text>
-  <text x="1945.12" y="1591.26" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">6</text>
-  <text x="262.97" y="1501.80" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0</text>
-  <text x="170.41" y="1256.70" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0.05</text>
-  <text x="207.44" y="1011.61" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0.1</text>
-  <text x="170.41" y="766.51" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0.15</text>
-  <text x="207.44" y="521.41" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0.2</text>
-  <text x="170.41" y="276.31" font-family="&quot;Helvetica&quot;" font-size="66.6" fill="rgb(0,0,0)">0.25</text>
+  <rect x="0.00" y="0.00" width="3240.00" height="2430.00" fill="rgb(255,255,255)"/>
+  <line x1="465.58" y1="231.67" x2="465.58" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="1042.79" y1="231.67" x2="1042.79" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="1620.00" y1="231.67" x2="1620.00" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="2197.21" y1="231.67" x2="2197.21" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="2774.42" y1="231.67" x2="2774.42" y2="2135.83" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="350.14" y1="2098.50" x2="2889.86" y2="2098.50" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="350.14" y1="1725.13" x2="2889.86" y2="1725.13" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="350.14" y1="1351.76" x2="2889.86" y2="1351.76" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="350.14" y1="978.40" x2="2889.86" y2="978.40" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="350.14" y1="605.03" x2="2889.86" y2="605.03" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="350.14" y1="231.67" x2="2889.86" y2="231.67" stroke="rgb(176,176,176)" stroke-width="6.67" stroke-linecap="round"/>
+  <text x="444.72" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">2</text>
+  <text x="1021.93" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">3</text>
+  <text x="1599.14" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">4</text>
+  <text x="2176.35" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">5</text>
+  <text x="2753.56" y="2236.00" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">6</text>
+  <text x="279.26" y="2124.50" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">0</text>
+  <text x="175.00" y="1751.13" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">0.05</text>
+  <text x="216.71" y="1377.77" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">0.1</text>
+  <text x="175.00" y="1004.40" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">0.15</text>
+  <text x="216.71" y="631.03" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">0.2</text>
+  <text x="175.00" y="257.67" font-family="&quot;Arial&quot;, sans-serif" font-size="75.0" fill="rgb(0,0,0)">0.25</text>
   <g clip-path="url(#panel1_clip1)">
-  <polyline points="403.03,366.91 793.18,1141.31 1183.33,1483.12 1573.48,1483.82 1963.64,1483.82" fill="none" stroke="rgb(36,119,166)" stroke-width="8.33" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="403.03" cy="366.91" r="14.58" fill="rgb(255,255,255)"/>
-  <circle cx="403.03" cy="366.91" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
-  <circle cx="793.18" cy="1141.31" r="14.58" fill="rgb(255,255,255)"/>
-  <circle cx="793.18" cy="1141.31" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
-  <circle cx="1183.33" cy="1483.12" r="14.58" fill="rgb(255,255,255)"/>
-  <circle cx="1183.33" cy="1483.12" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
-  <circle cx="1573.48" cy="1483.82" r="14.58" fill="rgb(255,255,255)"/>
-  <circle cx="1573.48" cy="1483.82" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
-  <circle cx="1963.64" cy="1483.82" r="14.58" fill="rgb(255,255,255)"/>
-  <circle cx="1963.64" cy="1483.82" r="14.58" fill="none" stroke="rgb(36,119,166)" stroke-width="5.42"/>
+  <polyline points="465.58,397.06 1042.79,1576.74 1620.00,2097.43 2197.21,2098.50 2774.42,2098.50" fill="none" stroke="rgb(31,119,180)" stroke-width="12.50" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="465.58" cy="397.06" r="41.67" fill="rgb(31,119,180)"/>
+  <circle cx="1042.79" cy="1576.74" r="41.67" fill="rgb(31,119,180)"/>
+  <circle cx="1620.00" cy="2097.43" r="41.67" fill="rgb(31,119,180)"/>
+  <circle cx="2197.21" cy="2098.50" r="41.67" fill="rgb(31,119,180)"/>
+  <circle cx="2774.42" cy="2098.50" r="41.67" fill="rgb(31,119,180)"/>
   </g>
-  <line x1="325.00" y1="1508.33" x2="2041.67" y2="1508.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="258.33" x2="325.00" y2="1508.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="403.03" y1="1508.33" x2="403.03" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="793.18" y1="1508.33" x2="793.18" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="1183.33" y1="1508.33" x2="1183.33" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="1573.48" y1="1508.33" x2="1573.48" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="1963.64" y1="1508.33" x2="1963.64" y2="1533.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="1483.82" x2="300.00" y2="1483.82" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="1238.73" x2="300.00" y2="1238.73" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="993.63" x2="300.00" y2="993.63" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="748.53" x2="300.00" y2="748.53" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="503.43" x2="300.00" y2="503.43" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <line x1="325.00" y1="258.33" x2="300.00" y2="258.33" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
-  <text x="1183.33" y="164.09" font-family="&quot;Helvetica&quot;" font-size="83.6" font-weight="400" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">b   PC2–PC6 detail</text>
-  <text x="1183.33" y="1716.53" font-family="&quot;Helvetica&quot;" font-size="70.8" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">Principal component</text>
-  <g transform="translate(86.24,883.33) rotate(-90.0)"><text x="0" y="19.13" font-family="&quot;Helvetica&quot;" font-size="70.8" fill="rgb(0,0,0)" text-anchor="middle">Squared signal (%)</text></g>
+  <line x1="350.14" y1="2135.83" x2="2889.86" y2="2135.83" stroke="rgb(0,0,0)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="350.14" y1="231.67" x2="350.14" y2="2135.83" stroke="rgb(0,0,0)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="350.14" y1="231.67" x2="2889.86" y2="231.67" stroke="rgb(0,0,0)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="2889.86" y1="231.67" x2="2889.86" y2="2135.83" stroke="rgb(0,0,0)" stroke-width="6.67" stroke-linecap="round"/>
+  <line x1="465.58" y1="2135.83" x2="465.58" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="465.58" y1="231.67" x2="465.58" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1042.79" y1="2135.83" x2="1042.79" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1042.79" y1="231.67" x2="1042.79" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1620.00" y1="2135.83" x2="1620.00" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="1620.00" y1="231.67" x2="1620.00" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2197.21" y1="2135.83" x2="2197.21" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2197.21" y1="231.67" x2="2197.21" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2774.42" y1="2135.83" x2="2774.42" y2="2102.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2774.42" y1="231.67" x2="2774.42" y2="265.00" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="350.14" y1="2098.50" x2="383.47" y2="2098.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2889.86" y1="2098.50" x2="2856.53" y2="2098.50" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="350.14" y1="1725.13" x2="383.47" y2="1725.13" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2889.86" y1="1725.13" x2="2856.53" y2="1725.13" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="350.14" y1="1351.76" x2="383.47" y2="1351.76" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2889.86" y1="1351.76" x2="2856.53" y2="1351.76" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="350.14" y1="978.40" x2="383.47" y2="978.40" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2889.86" y1="978.40" x2="2856.53" y2="978.40" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="350.14" y1="605.03" x2="383.47" y2="605.03" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2889.86" y1="605.03" x2="2856.53" y2="605.03" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="350.14" y1="231.67" x2="383.47" y2="231.67" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <line x1="2889.86" y1="231.67" x2="2856.53" y2="231.67" stroke="rgb(0,0,0)" stroke-width="5.00" stroke-linecap="round"/>
+  <text x="1620.00" y="152.11" font-family="&quot;Arial&quot;, sans-serif" font-size="116.7" font-weight="400" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">b   PC2–PC6 detail</text>
+  <text x="1620.00" y="2367.22" font-family="&quot;Arial&quot;, sans-serif" font-size="83.3" fill="rgb(0,0,0)" text-anchor="middle" xml:space="preserve">Principal component</text>
+  <g transform="translate(91.67,1183.75) rotate(-90.0)"><text x="0" y="28.89" font-family="&quot;Arial&quot;, sans-serif" font-size="83.3" fill="rgb(0,0,0)" text-anchor="middle">Squared signal (%)</text></g>
 </g>
 </svg>
