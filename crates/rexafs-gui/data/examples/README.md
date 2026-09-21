@@ -1,4 +1,4 @@
-# Copper reduction example (from 0.2.13)
+# Copper reduction example (unreleased preview)
 
 `cu-reduction.rxs` contains three measured raw-absorption references and 50
 deterministic synthetic mixtures. It is embedded in the desktop executable;

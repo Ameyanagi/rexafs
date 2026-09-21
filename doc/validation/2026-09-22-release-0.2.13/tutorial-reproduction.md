@@ -1,3 +1,9 @@
+# Tagged-source tutorial reproduction
+
+This retained JSON record identifies the checked inputs, outputs and scope. It is
+release-validation evidence, not an input to a scientific calculation.
+
+```json
 {
   "verified_utc": "2026-09-21T19:26:53.969697+00:00",
   "source_commit": "9b7e74c47edcff8ef64cdfdf6ecabb40323b4a11",
@@ -23,3 +29,4 @@
   ],
   "command": "cargo run --locked --release -p rexafs --example cu_reduction_check -- INPUT_DIRECTORY --desktop-defaults"
 }
+```

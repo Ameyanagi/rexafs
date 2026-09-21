@@ -100,7 +100,7 @@ LCF calculations used the desktop defaults and the same 50 mixtures on the
 matched the retained figure data exactly. MCR converged in 110 iterations; the
 first three uncentered PCA components retained 99.999856843% of squared signal.
 
-The [reproduction record](tutorial-reproduction.json) identifies source, input
+The [reproduction record](tutorial-reproduction.md) identifies source, input
 record hashes, comparison scope and tolerance. Software version and release-status
 labels were excluded from the numerical comparison. The original figure data
 remain unchanged and retain their source-preview provenance. This local check is
@@ -128,7 +128,7 @@ with no mean subtraction and Auto −20 to +30 eV. MCR independently used the fu
 
 The saved project's PCA model and MCR result matched all **92,709 numerical
 values** in the tagged-source calculation exactly; label strings were excluded.
-The [signed-analysis record](signed-analysis.json) retains the saved project hash,
+The [signed-analysis record](signed-analysis.md) retains the saved project hash,
 comparison tolerance and settings. Series selected all 50 marked frames and
 displayed frame 50 minus frame 1. Storage completed its background scan and
 listed 24 managed candidates totaling 1.26 GiB; no files were deleted.
@@ -156,12 +156,12 @@ The documented copper examples passed with a freshly installed PyPI wheel and
 npm package, both reporting version 0.2.13 and E₀ = 8977.493 eV. Both produced
 326 finite Fourier-magnitude points. npm initially returned 404 while processing
 the accepted publication; installation succeeded after the version became public.
-The [consumer record](published-consumers.json) identifies both exact examples;
+The [consumer record](published-consumers.md) identifies both exact examples;
 their Fourier magnitudes agreed within 4.94 × 10⁻¹³ absolute difference.
 
 All **six registry files and 22 desktop files** were then downloaded through their
 public URLs. Each size and SHA-256 digest matched the qualified build or signed
-replacement. The [public artifact record](published-artifacts.json) retains every
+replacement. The [public artifact record](published-artifacts.md) retains every
 URL, byte count and checksum. Stable website metadata now points to this verified
 tag, source commit, crate checksum and platform inventory. Intel Mac desktop
 archives and Python wheels are absent, as required by the retained platform policy.

@@ -1,3 +1,9 @@
+# Signed desktop analysis verification
+
+This retained JSON record identifies the checked inputs, outputs and scope. It is
+release-validation evidence, not an input to a scientific calculation.
+
+```json
 {
   "verified_utc": "2026-09-21T20:21:20.563698+00:00",
   "project": "copper-release-check.rxs",
@@ -27,3 +33,4 @@
   },
   "pca_first_three_squared_signal_fraction": 0.9999985684311216
 }
+```

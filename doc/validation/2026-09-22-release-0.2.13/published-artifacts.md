@@ -1,3 +1,9 @@
+# Verified public downloads
+
+This retained JSON record identifies the checked inputs, outputs and scope. It is
+release-validation evidence, not an input to a scientific calculation.
+
+```json
 {
   "version": "0.2.13",
   "verified_utc": "2026-09-21T20:28:55.453019+00:00",
@@ -204,3 +210,4 @@
     }
   ]
 }
+```

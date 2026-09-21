@@ -1,3 +1,9 @@
+# Published-package examples
+
+This retained JSON record identifies the checked inputs, outputs and scope. It is
+release-validation evidence, not an input to a scientific calculation.
+
+```json
 {
   "version": "0.2.13",
   "python_runtime": "CPython 3.12.12",
@@ -20,3 +26,4 @@
   },
   "scope": "Unmodified documented Cu examples using freshly installed public packages; no workspace package dependency."
 }
+```
