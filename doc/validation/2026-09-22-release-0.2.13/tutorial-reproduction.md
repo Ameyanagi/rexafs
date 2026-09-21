@@ -1,0 +1,32 @@
+# Tagged-source tutorial reproduction
+
+This retained JSON record identifies the checked inputs, outputs and scope. It is
+release-validation evidence, not an input to a scientific calculation.
+
+```json
+{
+  "verified_utc": "2026-09-21T19:26:53.969697+00:00",
+  "source_commit": "9b7e74c47edcff8ef64cdfdf6ecabb40323b4a11",
+  "version": "0.2.13",
+  "scope": "Local optimized reproduction from the immutable release tag; signed desktop checked separately",
+  "reference_sha256": "3fff804e0c15fb1216b64cc4517a081bc7f61b47bfc02f2220d917afbfbf9c6c",
+  "reproduced_sha256": "c67172eb8f6e3da6838a0436a49ad7158f4a80350e10677268d4e0e77cfb6df7",
+  "numeric_values_compared": 828,
+  "maximum_absolute_difference": 0,
+  "frames": 50,
+  "points_per_frame": 517,
+  "mcr_iterations": 110,
+  "mcr_termination": "Converged",
+  "pca_first_three_squared_signal_fraction": 0.9999985684311216,
+  "comparison_tolerance": {
+    "relative": 1e-12,
+    "absolute": 1e-13,
+    "observed_numeric_difference": 0
+  },
+  "excluded_metadata": [
+    "rexafs_version",
+    "release_status"
+  ],
+  "command": "cargo run --locked --release -p rexafs --example cu_reduction_check -- INPUT_DIRECTORY --desktop-defaults"
+}
+```

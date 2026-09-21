@@ -14,13 +14,17 @@ successful app launch alone does not qualify the updater. The
 0.2.10/0.2.11 failure and the source correction. Do not reuse the older qualification
 as evidence that signed in-app updates work.
 
-## Preparing 0.2.13
+## Published 0.2.13
 
 The [0.2.13 notes](release-notes-0.2.13.md) and
 [qualification record](validation/2026-09-22-release-0.2.13/review.md) cover the
 synthetic copper teaching project, analysis defaults and installer cleanup.
-Version 0.2.12 remains the latest published release until the qualified 0.2.13
-artifacts are published and verified. Website release metadata advances afterward.
+Published on 22 September 2026 in Japan (21 September UTC) after all 30 exact-tag
+jobs, Apple signing and notarization, installed-DMG and updater checks passed.
+Fresh signed-app PCA and MCR results matched all 92,709 checked numerical values
+from the tagged tutorial calculation exactly. Python and npm's documented copper
+examples passed with the published packages. All six registry files and 22
+desktop files were downloaded and hash-verified before advancing website metadata.
 
 ## Published 0.2.12
 

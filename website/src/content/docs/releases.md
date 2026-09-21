@@ -8,11 +8,36 @@ Published changes and migration notes are listed below. Back up projects before
 updating. Source-checkout APIs are documented in the [Next API
 reference](/docs/reference/).
 
+## Stable 0.2.13
+
+[Download 0.2.13](/download/) or read the
+[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.13).
+
+- A bundled [synthetic copper tutorial](/docs/desktop/synthetic-copper/) with
+  three measured references and 50 deterministic mixtures of raw absorption.
+  Known fractions are retained for validating PCA, MCR-ALS and LCF.
+- PCA starts on a linear scale. MCR-ALS has independent range controls, with
+  Auto covering the full common energy interval of the selected spectra.
+- [Storage cleanup](/docs/desktop/storage/) reviews managed installer downloads
+  and inactive updater app copies, with direct links to their hidden folders.
+- Reproducible tutorial results and ruviz figures in SVG, vector PDF and
+  600 dpi PNG, with default styling and small comparison markers.
+- Reviewed dependency updates preserve historical random-number streams and
+  project compatibility.
+
+Rust, Python, npm and desktop packages share version 0.2.13. macOS desktop and
+Python packages require Apple Silicon; Windows and Linux desktop packages remain
+previews. Project format remains 1. Historical projects and reference provenance
+are preserved. See the
+[release notes](https://github.com/Ameyanagi/rexafs/blob/main/doc/release-notes-0.2.13.md)
+and [qualification record](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-09-22-release-0.2.13/review.md).
+
 <span id="preparing-0212"></span>
+<span id="stable-0212"></span>
 
-## Stable 0.2.12
+## Previous stable 0.2.12
 
-[Download 0.2.12](/download/) or read the
+[Download 0.2.12](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.12) or read the
 [published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.12).
 
 - Apple Silicon only on macOS for desktop downloads and Python wheels. Version
@@ -193,7 +218,7 @@ was not promoted. Version 0.2.9 includes those updater and import-discovery chan
   browser Worker, with generated FEFF files and a provenance record.
 
 These follow website deployment, separately from the versioned npm API. Native
-rexafs 0.2.12 also uses ReFEFF 0.4.0. See [WASM scope](/docs/libraries/webassembly/).
+rexafs 0.2.13 also uses ReFEFF 0.4.0. See [WASM scope](/docs/libraries/webassembly/).
 
 ## Earlier releases
 

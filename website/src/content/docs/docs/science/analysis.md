@@ -4,7 +4,7 @@ description: "Analyze collections while keeping preprocessing assumptions explic
 audience: user
 ---
 
-This guide describes **rexafs 0.2.11**; older figures retain their capture versions.
+This guide describes **rexafs 0.2.13**; older figures retain their capture versions.
 LCF, PCA and native MCR-ALS are available in the desktop and Rust. Python and
 TypeScript expose spectrum processing; their collection-analysis bindings remain
 planned. In the desktop, use **Data → Parameters** or action search.
@@ -149,7 +149,15 @@ this calculation, so this number is not a calibrated chi-square test.
 LCF, PCA and MCR use the same input-preparation and coverage rules. Energy bounds
 are offsets from E₀: the target's E₀ for LCF, and the first input's E₀ for PCA
 and MCR. View presets change the plot only; calculation bounds select the data
-used by an analysis.
+used by an analysis. From 0.2.13, desktop MCR-ALS has an independent **Auto**
+range covering the full common energy interval of the selected spectra. It does
+not inherit PCA's default −20 to +30 eV XANES interval. Enter explicit MCR bounds
+to select a narrower interval; saved results retain their calculation settings.
+
+The [synthetic copper tutorial](/docs/desktop/synthetic-copper/) follows 50
+known raw-absorption mixtures through default PCA, blind MCR-ALS, known-reference
+LCF and Series differences. It distinguishes normalized coefficients from raw
+mixing weights and retains the numerical results used in its figures.
 
 `lcf_batch` keeps each target's result or error in input order, and
 `lcf_batch_with_progress` supports cancellation after completed rows. The desktop
@@ -168,14 +176,20 @@ loadings and similarity views. Error versus count measures reconstruction,
 not cross-validation. For closed three-standard mixtures, mean-centered PCA can
 have two varying directions plus the mean; that does not imply two species.
 Numerical-rank and interior IND suggestions are labeled diagnostics. Scree,
-Error vs count and IND offer **Y axis → Linear / Log**. Log is the default and
-uses a display-only floor of 10⁻³²; Linear preserves zeros. Cumulative
-contribution remains linear. Switching scales does not recalculate PCA or
-change exported values.
+Error vs count and IND offer **Y axis → Linear / Log**. From 0.2.13, Linear is
+the default and preserves zeros. Log remains available with a display-only floor
+of 10⁻³². Cumulative contribution remains linear. Switching scales does not
+recalculate PCA or change exported values.
 
-[![Saved PCA reconstruction error versus retained component count, displayed on a linear axis in rexafs 0.2.11](/screenshots/0.2.11/pca-error-linear.jpg)](/screenshots/0.2.11/pca-error-linear.jpg)
+[![Fresh default PCA of 50 synthetic copper spectra on a linear scale in rexafs 0.2.13](/screenshots/0.2.13/copper-pca.jpg)](/screenshots/0.2.13/copper-pca.jpg)
 
-This 0.2.11 capture reopens a saved 0.2.9 analysis of all 100 synthetic Cu mixtures in **flat**, with
+This signed 0.2.13 capture uses the bundled 50-frame example, **flat**, no mean
+subtraction and the default −20 to +30 eV calculation interval. Three components
+retain 99.9998568% of the squared signal. See the
+[tutorial](/docs/desktop/synthetic-copper/) for the known recipe and interpretation.
+
+The [historical 0.2.11 capture](/screenshots/0.2.11/pca-error-linear.jpg) reopens
+a saved 0.2.9 analysis of all 100 synthetic Cu mixtures in **flat**, with
 mean subtraction enabled and a −29 to +171 eV interval relative to E₀. Two
 varying directions explain 75.91% and 24.09% of the centered squared signal.
 The mean retains the shared part of the three-standard mixture; two directions
@@ -192,13 +206,23 @@ does not establish unique chemical factors. See the
 [Rust API](/api/rust/rexafs/xafs/analysis/mcr/index.html) for
 rexafs's independent implementation, defaults and error conditions.
 
-[![Saved MCR component spectra from 100 flattened Cu mixtures, displayed in rexafs 0.2.11](/screenshots/0.2.11/mcr-components.jpg)](/screenshots/0.2.11/mcr-components.jpg)
+[![Fresh default MCR component spectra from 50 flattened copper mixtures in rexafs 0.2.13](/screenshots/0.2.13/copper-mcr-spectra.jpg)](/screenshots/0.2.13/copper-mcr-spectra.jpg)
 
-This run uses the common full interval, 8780.2–9768.2 eV, three components,
+The signed 0.2.13 run uses all 517 shared points, three components, coefficient
+closure, seed zero and the default 500-iteration limit. Spectral nonnegativity is
+disabled. It converged after 110 iterations. These factors require reference
+comparison before assigning chemical labels.
+
+The [historical 100-mixture run](/screenshots/0.2.11/mcr-components.jpg) uses
+the common full interval, 8780.2–9768.2 eV, three components,
 coefficient closure, seed zero and at most 2,000 iterations. Spectral
 nonnegativity is disabled to retain small negative baselines. It converged
 after 870 iterations. These are estimated factors, not independently identified
 pure compounds; reference comparison is still necessary.
+
+These are retained example settings. The current desktop default is 500 maximum
+iterations; the [50-frame copper tutorial](/docs/desktop/synthetic-copper/)
+demonstrates the current defaults and their recovered fractions.
 
 After fitting, mark standards and use **Compare marked standards** for a matched
 spectral overlay without rescaling.

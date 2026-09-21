@@ -42,7 +42,40 @@ numerical changes from the XrayLarch example collection at revision
 [Source and provenance](https://github.com/xraypy/xraylarch/blob/d8678dd666fd95839fe9dc71b4dbe8bedec278ff/examples/xafsdata/cu_150k.xmu)
 · [Retained provenance record](/examples/PROVENANCE.txt).
 
+## Synthetic copper reduction example
+
+From 0.2.13, the desktop bundles three measured CuO, Cu₂O and Cu references and
+50 deterministic mixtures of their raw absorption. The data owner supplied the
+group's measurements in `Cu oxides.prj` and requested this teaching example's
+distribution. The original Athena project is not redistributed. Its checksum,
+source labels and generation parameters are retained in the bundled project's
+metadata; no additional acquisition details or upstream data license are inferred.
+The software's MIT/Apache license is not presented as a license for the original
+measurements.
+
+The [tutorial](/docs/desktop/synthetic-copper/) explains the recipe, automatic
+processing and interpretation. The [example provenance](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/crates/rexafs-gui/data/examples/README.md)
+retains the distribution request. This 50-frame example is separate from the
+historical 100-mixture test fixtures described below.
+
 ## Documentation screenshots
+
+### Desktop 0.2.13 release captures
+
+The six images in `screenshots/0.2.13/` are full, unedited **1192 × 768**
+Computer Use windows from the signed and notarized Apple Silicon **0.2.13**
+release installed from its DMG on 22 September 2026 in Japan. The
+[capture manifest](/screenshots/0.2.13/capture.json) records the exact source,
+build, signing run, installer, executable, bundled input and image hashes.
+No cropping, resizing, annotation or replacement plots were applied.
+
+PCA and MCR-ALS were calculated afresh from the 50-frame example described above,
+using ordinary automatic processing and the tool defaults. The saved PCA model
+and MCR result matched all 92,709 checked numerical values from the tagged-source
+tutorial calculation exactly. Labels were excluded from that numerical comparison.
+The Series image shows frame 50 minus frame 1; the Storage image records a scan
+without deletion. These are teaching and software checks, not an experimental
+validation of component identity or concentration accuracy.
 
 <span id="desktop-0212-release-captures"></span>
 

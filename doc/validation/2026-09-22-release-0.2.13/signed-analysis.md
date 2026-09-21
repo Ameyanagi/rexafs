@@ -1,0 +1,36 @@
+# Signed desktop analysis verification
+
+This retained JSON record identifies the checked inputs, outputs and scope. It is
+release-validation evidence, not an input to a scientific calculation.
+
+```json
+{
+  "verified_utc": "2026-09-21T20:21:20.563698+00:00",
+  "project": "copper-release-check.rxs",
+  "project_sha256": "d683df49be8a3b6a52f2008517edaba1e1883e88fdb191034811a7ebef5bfa71",
+  "source_commit": "9b7e74c47edcff8ef64cdfdf6ecabb40323b4a11",
+  "scope": "Fresh signed-GUI PCA and MCR compared with the tagged default calculation; labels are excluded.",
+  "absolute_tolerance": 1e-10,
+  "relative_tolerance": 1e-09,
+  "numeric_values": 92709,
+  "max_absolute_difference": 0.0,
+  "mcr_iterations": 110,
+  "mcr_termination": "Converged",
+  "mcr_config": {
+    "space": "Flat",
+    "range": [
+      -201.0079999999998,
+      786.9899999999998
+    ],
+    "components": 3,
+    "sum_to_one": true,
+    "nonnegative_spectra": false,
+    "max_iterations": 500,
+    "tolerance": 1e-08,
+    "seed": 0,
+    "initial_spectra": null,
+    "anchors": []
+  },
+  "pca_first_three_squared_signal_fraction": 0.9999985684311216
+}
+```

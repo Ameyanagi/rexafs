@@ -1,9 +1,11 @@
 # rexafs 0.2.13
 
-Release preparation. Version 0.2.12 remains the latest published stable release
-until the exact 0.2.13 tag has passed build, signing, installation and publication
-checks. The [qualification record](validation/2026-09-22-release-0.2.13/review.md)
-records the source and results as each step completes.
+Published on 22 September 2026 in Japan (21 September UTC), after the exact tag
+passed all 30 build jobs, Apple signing and notarization, installed-app and
+updater checks, and fresh default PCA/MCR calculations. Download the
+[0.2.13 release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.13).
+The [qualification record](validation/2026-09-22-release-0.2.13/review.md)
+identifies the source, artifacts and validation results.
 
 ## A reproducible copper teaching example
 
