@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 0.2.13 (release preparation)
+
+- Bundle three measured CuO/Cu₂O/Cu references and 50 deterministic synthetic
+  spectra mixed in raw absorption, with visible known fractions and ordinary
+  automatic processing settings.
+- Start PCA plots on a linear scale. Give MCR-ALS an independent Auto range
+  covering the full common energy interval of the selected spectra.
+- Add Help → Storage to open managed storage locations and remove reviewed
+  installer downloads and inactive updater app copies while preserving projects,
+  recovery files, scientific caches and the running application.
+- Document PCA, blind MCR-ALS, known-reference LCF and Series differences for the
+  copper example, with reproducible numerical results and ruviz figures in
+  SVG, PDF and 600 dpi PNG formats.
+- Update hdf5-pure, ureq, rand and rand_chacha dependencies; retain historical
+  random-number streams and saved-state compatibility during the RNG migration.
+- Add GitHub sponsorship and star links to the README and documentation.
+
+See the [release notes](doc/release-notes-0.2.13.md) and
+[qualification record](doc/validation/2026-09-22-release-0.2.13/review.md).
+
 ## 0.2.12 (release preparation)
 
 - Platforms: require Apple Silicon for macOS desktop releases and Python wheels.

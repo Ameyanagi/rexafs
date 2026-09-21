@@ -14,6 +14,14 @@ successful app launch alone does not qualify the updater. The
 0.2.10/0.2.11 failure and the source correction. Do not reuse the older qualification
 as evidence that signed in-app updates work.
 
+## Preparing 0.2.13
+
+The [0.2.13 notes](release-notes-0.2.13.md) and
+[qualification record](validation/2026-09-22-release-0.2.13/review.md) cover the
+synthetic copper teaching project, analysis defaults and installer cleanup.
+Version 0.2.12 remains the latest published release until the qualified 0.2.13
+artifacts are published and verified. Website release metadata advances afterward.
+
 ## Published 0.2.12
 
 The [0.2.12 notes](release-notes-0.2.12.md) and
