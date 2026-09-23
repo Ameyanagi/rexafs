@@ -1,8 +1,9 @@
 # rexafs 0.2.14
 
-Release preparation for Live monitoring, EXAFS parameter trends and Assistant
-file import. Publication requires the final tagged build, signed Mac artifacts
-and package verification described in the
+Published on 24 September 2026 in Japan (23 September UTC), with Live monitoring,
+EXAFS parameter trends and Assistant file import. The tagged build, signed Mac
+artifacts, installed-app review and public package verification passed. See the
+[downloads](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.14) and
 [qualification record](validation/2026-09-24-release-0.2.14/review.md).
 
 ## Live acquisition beside the analysis

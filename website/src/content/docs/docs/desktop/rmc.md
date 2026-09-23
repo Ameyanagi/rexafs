@@ -4,7 +4,7 @@ description: "Refine atomic coordinates with exact cached ReFEFF, inspect live f
 audience: user
 ---
 
-In **rexafs 0.2.13**, choose **Fit → Method: RMC** at the upper right of the
+In **rexafs 0.2.14**, choose **Fit → Method: RMC** at the upper right of the
 fitting workspace. Reverse Monte Carlo (RMC) proposes random coordinate moves,
 calculates their spectra and accepts or rejects them against the measured data
 and configured constraints. It refines a periodic structure rather than the
@@ -59,7 +59,7 @@ is Rbkg + 0.15 Å to max(4 Å, Rbkg + 1.15 Å). **Use spectrum ranges** copies t
 settings again after processing edits. It does not retarget a saved run. ReFEFF
 coverage expands for the fit window and ΔE₀, up to the adapter's 30 Å⁻¹ limit,
 with actual returned support checked. Missing theory is rejected rather than
-extrapolated. The [workflow guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/doc/rmc-desktop-workflow.md)
+extrapolated. The [workflow guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/doc/rmc-desktop-workflow.md)
 explains these settings.
 
 The default objective minimizes the normalized sum of squared **real and
@@ -92,7 +92,7 @@ and their explicit paths are retained. **Run details** shows calculated and shar
 electronic contexts. Sorting can change numerical summation and the representative
 atom for a potential when nearest sites tie. Old checkpoints retain their original
 ordering; restarting a new job opts into the improved preparation. See the
-[startup profiling method](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/doc/rmc-startup-profiling.md)
+[startup profiling method](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/doc/rmc-startup-profiling.md)
 for reproducible timing and numerical-agreement checks.
 
 
@@ -215,10 +215,10 @@ history. A plateau does not stop the run automatically or prove a unique,
 physically complete structure. Inspect both spectral components, constraints and
 structural distributions, and compare independent seeds when drawing conclusions.
 
-The [workflow and implementation record](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/doc/rmc-desktop-workflow.md)
+The [workflow and implementation record](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/doc/rmc-desktop-workflow.md)
 explains persistence, numerical conventions and software checks. Its short Cu₂O
 verification run remained **StillChanging**, not converged. The
-[Rust guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/doc/rmc.md) covers
+[Rust guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/doc/rmc.md) covers
 Spectrum inputs and the broader RMC and evolutionary APIs.
 
 <span id="new-in-the-0212-release-candidate"></span>
@@ -259,7 +259,7 @@ path radius, maximum legs or absorbing sites changes the calculation. All
 selected absorbers remain explicit; the program does not silently sample them.
 The memory fractions and path-size allowance are empirical resource policies,
 not allocation guarantees. See the
-[policy and implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/doc/rmc-structural-evolution.md#cache-memory-and-responsive-preparation).
+[policy and implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/doc/rmc-structural-evolution.md#cache-memory-and-responsive-preparation).
 
 [![Genetic and hybrid search choices beside Auto memory and catalogue controls](/screenshots/0.2.12/rmc-search-memory.jpg)](/screenshots/0.2.12/rmc-search-memory.jpg)
 
@@ -298,7 +298,7 @@ Select a shell-specific interval before interpreting these as first-shell
 quantities. Radii above half the smallest cell-plane spacing repeat cell
 correlations; finite-cluster boundaries reduce neighbor counts. These histories
 are not an equilibrium ensemble, a uniqueness test or an uncertainty estimate.
-The [analysis implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/crates/rexafs/src/xafs/rmc/analysis.rs)
+The [analysis implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/crates/rexafs/src/xafs/rmc/analysis.rs)
 defines the counting conventions.
 
 [![Initial, current and best normalized Cu–Cu pair distributions from the periodic Cu example](/screenshots/0.2.12/structural-overlays.jpg)](/screenshots/0.2.12/structural-overlays.jpg)
@@ -337,4 +337,4 @@ compares population mean and best objective; the single-chain plateau diagnostic
 does not apply. Structural Current and Best both show the best member of the
 current elitist population, not averaged coordinates. The Initial curve remains
 the input structure. See the
-[search description and implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/doc/rmc-structural-evolution.md#genetic-and-hybrid-search).
+[search description and implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/doc/rmc-structural-evolution.md#genetic-and-hybrid-search).

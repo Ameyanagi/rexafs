@@ -23,13 +23,13 @@ Select an image to view it at full size.
 
 Write your request in the message field. The footer has three menus:
 
-- **Model** shows the effective model. Its menu retains **Automatic**, which
-  follows Codex's default; hover the button to check whether it is automatic.
+- **Model** shows the effective model. Its menu retains **Automatic**, using the
+  selection policy below; hover the button to check whether it is automatic.
 - **Reasoning** shows the effective level. Choose **Model default** to follow
   the selected model, or select one of its supported levels.
 - **Access** selects what the Assistant may do in the analysis.
 
-**Unreleased:** Automatic now prefers **GPT-6 Sol** (`gpt-6-sol`) when available
+**From 0.2.14:** Automatic prefers **GPT-6 Sol** (`gpt-6-sol`) when available
 in the connected Codex model catalog, falling back to the first available model.
 Explicit choices remain saved. GPT-6 Luna and other advertised models remain
 available in the picker.
@@ -60,9 +60,11 @@ source paths, bounded source comments, processing settings, model inputs,
 analysis results, journal entries and enabled plots through your Codex account.
 Imported comments and previous conversations are labelled as data.
 
-### Connected apps and files (unreleased)
+<a id="connected-apps-and-files-unreleased"></a>
 
-The source checkout adds **Access → Connected apps and files** for integrations
+### Connected apps and files
+
+Version 0.2.14 adds **Access → Connected apps and files** for integrations
 such as Google Drive. First install and connect the integration in Codex, then enable
 this switch and send your message. The Assistant reconnects on the next Send
 and reports available apps. See OpenAI's
@@ -86,9 +88,15 @@ rexafs retains exact source copies under `~/.rexafs/assistant-imports/`, so they
 survive Assistant disconnects. Original files stay unchanged. The Assistant
 reports intake progress separately from successful imports. Once queued, intake
 uses the normal import cancellation controls. See the
-[source-checkout implementation notes](https://github.com/Ameyanagi/rexafs/blob/dev/doc/experimental-assistant.md#connected-apps-and-files-unreleased)
-for the scope and protocol checks. Released versions shown in the screenshots
-above disable connected apps.
+[implementation notes](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/doc/experimental-assistant.md#connected-apps-and-files)
+for the scope and protocol checks. The historical 0.2.11 screenshots above show
+the earlier interface, which disabled connected apps.
+
+[![Access menu in signed rexafs 0.2.14 showing the optional Connected apps and files switch](/screenshots/0.2.14/assistant-access.png)](/screenshots/0.2.14/assistant-access.png)
+
+*Signed 0.2.14: connected apps and files start off. This capture documents the
+controls; it does not establish a Google Drive transfer.
+[Capture provenance](/licenses/#desktop-0214-release-captures).*
 
 <a id="unreleased-context-retrieval-and-analysis"></a>
 

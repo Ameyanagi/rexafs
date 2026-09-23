@@ -4,7 +4,7 @@ description: "Use normalization, AUTOBK, forward and inverse transforms."
 audience: user
 ---
 
-This guide describes **rexafs 0.2.13**. Screenshots identify the version that
+This guide describes **rexafs 0.2.14**. Screenshots identify the version that
 produced them and use public Cu measurements. They are
 full, unedited windows; select an image for full resolution. See
 [capture provenance](/licenses/#desktop-0211-workflow-captures) and
@@ -37,9 +37,11 @@ value is available. This behavior is shared by the
 This full unedited window uses the public room-temperature Cu measurement;
 [capture provenance](/licenses/#desktop-0212-release-captures).*
 
-## Plot axis ranges (unreleased)
+<a id="plot-axis-ranges-unreleased"></a>
 
-Right-click a plot and choose **Axis range…**. X and Y each have independent
+## Plot axis ranges
+
+From 0.2.14, right-click a plot and choose **Axis range…**. X and Y each have independent
 minimum and maximum fields. Leave a field blank or type **Auto** to let that
 endpoint follow the data. For a zero baseline, enter `0` for **Y minimum** and
 leave **Y maximum** automatic, then choose **Apply**.
@@ -50,7 +52,12 @@ ranges show an explanation and leave the previous view unchanged. Axis ranges
 change the display only; processing ranges, fits and source data are unaffected.
 Live and Series fit plots retain ranges across frame updates in the current
 application session. See the
-[axis range guide](https://github.com/Ameyanagi/rexafs/blob/dev/doc/plot-axis-ranges.md).
+[axis range guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/doc/plot-axis-ranges.md).
+
+[![Axis range dialog in signed rexafs 0.2.14 with Y minimum zero and the other endpoints set to Auto](/screenshots/0.2.14/axis-editor-dialog.png)](/screenshots/0.2.14/axis-editor-dialog.png)
+
+*Complete native dialog from signed 0.2.14. This example fixes only the lower
+Y endpoint. [Capture provenance](/licenses/#desktop-0214-release-captures).*
 
 ## Alignment
 

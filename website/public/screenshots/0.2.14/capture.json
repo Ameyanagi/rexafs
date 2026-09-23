@@ -1,0 +1,267 @@
+{
+  "captured_date": "2026-09-24",
+  "timezone": "Asia/Tokyo",
+  "build": {
+    "version": "0.2.14",
+    "target": "aarch64-apple-darwin",
+    "features": [
+      "refeff-runner",
+      "feff10-runner"
+    ],
+    "engine_execution": {
+      "refeff": {
+        "mode": "native",
+        "target": "aarch64-apple-darwin"
+      },
+      "feff10": {
+        "mode": "native-stage-workers",
+        "target": "aarch64-apple-darwin"
+      }
+    },
+    "channel": "stable",
+    "release_tag": "v0.2.14",
+    "built_at": null,
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "commit": "4925e34b735ec8908e5084e797110aba7c235fe7",
+    "dirty": false,
+    "github_run_id": "35920006031",
+    "signed": true,
+    "notarized": true,
+    "signing_identity": "Developer ID Application: Ryuichi Shimogawa (XXN44W8X56)",
+    "apple_team_id": "XXN44W8X56",
+    "notarization_id": "fc6219ac-ef88-4859-b32c-fb573f617ceb",
+    "unsigned_archive_sha256": "47b65274cc85e18983e3ea4ff0b83604634dcb0c41f2b564dda596ca41f517e2",
+    "signing_run_id": "35924216636",
+    "signing_tools_commit": "4925e34b735ec8908e5084e797110aba7c235fe7"
+  },
+  "distribution": "Signed and notarized Apple Silicon release installed from the exact-tag DMG.",
+  "installer_sha256": "252aa798815d72a8281639558c9ac88fb0d6a1d196a4a25d4de8a179866dc774",
+  "executable_sha256": "545edec45f5635ac695d8691cf5929344b0f12c42d8a9b23a15b4e54c4289c9b",
+  "platform": {
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.5.1\nBuildVersion:\t\t25F80",
+    "machine": "Apple M4",
+    "architecture": "arm64"
+  },
+  "capture": {
+    "method": "Public macOS Accessibility controls and native mouse/keyboard events; full native screencapture window PNGs.",
+    "connector_limitation": "Computer Use connector returned error -10000: Sender process is not authenticated. No connector interaction succeeded; existing native accessibility permissions were used without changing permissions.",
+    "edited": false,
+    "scope": "Complete native windows at their original pixel dimensions; no cropping, resizing, annotations or replacement plots. Isolated app settings."
+  },
+  "inputs": {
+    "cu_project": {
+      "sha256": "80e5427fe228813a7afaa93e676d4abd2cbc97c7751ff9a9f19943d626b305cd",
+      "description": "Unmodified retained 0.2.12 preview review project; repeated prepared 517-point Cu reference bytes.",
+      "attribution": "crates/rexafs/tests/fixtures/analysis/cu-mixtures/README.md; prepared from the user-provided 2016 Athena Cu-oxide project. Original acquisition author/license unknown; retained with user permission. Not MIT-licensed measurement data.",
+      "spectrum_sha256": "174439b52d7c8c59c28487b0c5577ead6be63db15243b8c7b03d0f2cb4bb4d7d"
+    },
+    "three_signals": {
+      "generator": "scripts/generate-live-example.py at v0.2.14",
+      "command": "--three-signals --start 1 --count 3",
+      "timing": "Files were created separately to exercise pause/resume; three files, 401 points each.",
+      "description": "Synthetic detector counts; no experimental data are read."
+    }
+  },
+  "scientific_scope": "Software workflow qualification. Repeated Cu bytes and synthetic arrivals are not independent measurements or evidence of improved signal-to-noise.",
+  "analysis_verification": {
+    "status": "passed",
+    "version": "0.2.14",
+    "commit": "4925e34b735ec8908e5084e797110aba7c235fe7",
+    "checked_utc": "2026-09-23T22:13:56.954686+00:00",
+    "host": {
+      "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.5.1\nBuildVersion:\t\t25F80",
+      "machine": "Apple M4",
+      "architecture": "arm64"
+    },
+    "interaction": "Public macOS Accessibility controls and native mouse/keyboard events; full native screencapture window PNGs.",
+    "connector_limitation": "Computer Use connector returned error -10000: Sender process is not authenticated. No connector interaction succeeded; existing native accessibility permissions were used without changing permissions.",
+    "series": {
+      "checked_utc": "2026-09-23T21:59:32.056031+00:00",
+      "source_sha256": "80e5427fe228813a7afaa93e676d4abd2cbc97c7751ff9a9f19943d626b305cd",
+      "saved_sha256": "d1826204f3e49bcafcd0919a48de1e618972cd65d35d4eeea46e1468497f335a",
+      "saved_version": "0.2.14",
+      "fresh_fit_software": "0.2.14",
+      "fresh_frames": 2,
+      "numeric_values_compared": 102,
+      "max_absolute_difference": 1.5752865056839482e-07,
+      "tolerance": "1e-8 + 1e-6 * abs(retained value)",
+      "live_accepted_revisions_retained": 64,
+      "live_fit_updates_retained": 63
+    },
+    "axis_ranges": "Y minimum 0 persisted across frame updates; ss_1 retained its independent range; All Auto restored the distance range.",
+    "live": {
+      "files": 3,
+      "successful_signal_frames": 9,
+      "averages": [
+        {
+          "channel": "fluorescence",
+          "scans": 3,
+          "points": 401,
+          "max_absolute_difference": 5.551115123125783e-17
+        },
+        {
+          "channel": "reference",
+          "scans": 3,
+          "points": 401,
+          "max_absolute_difference": 0.0
+        },
+        {
+          "channel": "transmission",
+          "scans": 3,
+          "points": 401,
+          "max_absolute_difference": 0.0
+        }
+      ],
+      "pause_resume": "Third source waited during pause, then was accepted once; a further pause/resume left the complete ledger payload unchanged.",
+      "monitor": "Separate window and docked sidebar reviewed while Data retained the selected Cu spectrum.",
+      "processing_reference": "Cu_foil_001.xdi \u00b7 scan_1",
+      "finished": true,
+      "saved_sha256": "c0f583ef93ddd70be1f4b2d9bf2a404a61b93f02e2cc63369f11dc22b0025a9b"
+    },
+    "assistant": "Automatic resolved to GPT-6-Sol in the connected catalog; Access exposed Connected apps and files, verified off. No Assistant prompt or cloud transfer was sent.",
+    "limits": [
+      "No physical beamline or network-share acquisition",
+      "No end-to-end Google Drive transfer",
+      "Synthetic three-signal arrivals do not establish experimental signal-to-noise improvement",
+      "Fresh Series comparison checks software agreement, not physical accuracy"
+    ]
+  },
+  "images": [
+    {
+      "file": "series-distance-trend.png",
+      "captured_utc": "2026-09-23T21:55:03.294560+00:00",
+      "bytes": 456723,
+      "sha256": "83087428b04affbf299c982ffc548809c5e2def2867557d436808a4881b56137",
+      "width": 2384,
+      "height": 1536,
+      "description": "Fresh signed 0.2.14 Cu first-shell R-space fit and named Cu\u2013Cu distance expression reff + dr_1, with one-standard-error bars.",
+      "edited": false,
+      "window_id": 160016,
+      "window_bounds": {
+        "Height": 768,
+        "Width": 1192,
+        "X": 100,
+        "Y": 100
+      }
+    },
+    {
+      "file": "series-zero-baseline.png",
+      "captured_utc": "2026-09-23T21:55:49.637674+00:00",
+      "bytes": 455667,
+      "sha256": "d3cd9530f53a44b6e6a8c7a15528687e1bf4921c7b192193abfeac7641a55bb1",
+      "width": 2384,
+      "height": 1536,
+      "description": "The Cu distance trend retains Y minimum zero with an automatic maximum after advancing to frame two.",
+      "edited": false,
+      "window_id": 160016,
+      "window_bounds": {
+        "Height": 768,
+        "Width": 1192,
+        "X": 100,
+        "Y": 100
+      }
+    },
+    {
+      "file": "axis-editor-dialog.png",
+      "captured_utc": "2026-09-23T21:57:05.988768+00:00",
+      "bytes": 52468,
+      "sha256": "1b03d63f9f1ff47295b5169fd9619b362917cf3d43c86cb62aa34cf002c4e70e",
+      "width": 820,
+      "height": 592,
+      "description": "Complete native axis dialog: the Cu distance trend retains Y minimum 0 and automatic maximum after frame and parameter changes.",
+      "edited": false,
+      "window_id": 160065,
+      "window_bounds": {
+        "Height": 296,
+        "Width": 410,
+        "X": 1299,
+        "Y": 712
+      }
+    },
+    {
+      "file": "series-restored.png",
+      "captured_utc": "2026-09-23T22:01:00.905553+00:00",
+      "bytes": 457498,
+      "sha256": "d0f2eff693f63bf96011101904faf711519a1cc894b899f93b7a3b57c6070e8d",
+      "width": 2384,
+      "height": 1536,
+      "description": "Saved and reopened signed 0.2.14 Cu Series fit with retained custom distance expression and covariance error bars.",
+      "edited": false,
+      "window_id": 160016,
+      "window_bounds": {
+        "Height": 768,
+        "Width": 1192,
+        "X": 100,
+        "Y": 100
+      }
+    },
+    {
+      "file": "live-three-signals-setup.png",
+      "captured_utc": "2026-09-23T22:05:13.751339+00:00",
+      "bytes": 289331,
+      "sha256": "5aaae7061ad62d10d94b8d743dbe62135ab781f4c25f1b67afebc6bd22e58399",
+      "width": 2384,
+      "height": 1536,
+      "description": "Three selected signals, one running average per signal, and a named Cu processing reference in signed 0.2.14.",
+      "edited": false,
+      "window_id": 160016,
+      "window_bounds": {
+        "Height": 768,
+        "Width": 1192,
+        "X": 100,
+        "Y": 100
+      }
+    },
+    {
+      "file": "live-separate-monitor.png",
+      "captured_utc": "2026-09-23T22:10:38.333896+00:00",
+      "bytes": 103599,
+      "sha256": "64cd43366ef2e1b82e62d9d49c400f2b29e47aad15efd47e19e3355d8dba23a4",
+      "width": 740,
+      "height": 1216,
+      "description": "Signed 0.2.14: a separate monitor shows three-signal running averages while the main window remains in Data.",
+      "edited": false,
+      "window_id": 160103,
+      "window_bounds": {
+        "Height": 608,
+        "Width": 370,
+        "X": 1319,
+        "Y": 556
+      }
+    },
+    {
+      "file": "live-sidebar.png",
+      "captured_utc": "2026-09-23T22:11:40.303323+00:00",
+      "bytes": 483997,
+      "sha256": "e1fd01aeead3a4aeac99418298951a7cbb78472ee0d99dab50d21181997f5bc6",
+      "width": 2384,
+      "height": 1536,
+      "description": "Signed 0.2.14: Live watches three accepted sources in the sidebar while Data retains the selected Cu spectrum.",
+      "edited": false,
+      "window_id": 160016,
+      "window_bounds": {
+        "Height": 768,
+        "Width": 1192,
+        "X": 100,
+        "Y": 100
+      }
+    },
+    {
+      "file": "assistant-access.png",
+      "captured_utc": "2026-09-23T22:12:07.968774+00:00",
+      "bytes": 560773,
+      "sha256": "4df94c35d2d8d94fcf565e543b0ee83a7e36e1120f949111ab3fc1a319c02294",
+      "width": 2384,
+      "height": 1536,
+      "description": "Signed 0.2.14: the Assistant resolves Automatic to GPT-6-Sol and exposes the optional connected-app/file switch, initially off.",
+      "edited": false,
+      "window_id": 160016,
+      "window_bounds": {
+        "Height": 768,
+        "Width": 1192,
+        "X": 100,
+        "Y": 100
+      }
+    }
+  ]
+}

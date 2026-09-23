@@ -8,9 +8,36 @@ Published changes and migration notes are listed below. Back up projects before
 updating. Source-checkout APIs are documented in the [Next API
 reference](/docs/reference/).
 
-## Stable 0.2.13
+## Stable 0.2.14
 
-[Download 0.2.13](/download/) or read the
+[Download 0.2.14](/download/) or read the
+[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.14).
+
+- A compact [Live monitor](/docs/desktop/series/) keeps acquisition visible while
+  other views remain usable. Capture processing from a chosen reference, import
+  transmission, fluorescence and reference together, and choose cumulative or
+  fixed-size averages for each signal.
+- Automatic EXAFS fits and [Series parameter trends](/docs/desktop/series/)
+  include error bars and expressions such as `reff + dr_1`. Fit results remain
+  available alongside the measured spectra.
+- [Plot axis ranges](/docs/desktop/processing/) accept separate automatic or
+  explicit bounds, including zero for a minimum while the maximum stays automatic.
+- Optional [Assistant connected-app access and file import](/docs/desktop/assistant/)
+  use the connected Codex account. The default model is GPT-6 Sol when available.
+
+Rust, Python, npm and desktop packages share version 0.2.14. Mac downloads are
+signed and notarized for Apple Silicon; Windows and Linux remain desktop previews.
+Project format remains 1, with historical projects and source provenance retained.
+Fit error bars describe local covariance estimates, and repeated or cumulative
+averages are not independent measurements. See the
+[release notes](https://github.com/Ameyanagi/rexafs/blob/main/doc/release-notes-0.2.14.md)
+and [qualification record](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-09-24-release-0.2.14/review.md).
+
+<span id="stable-0213"></span>
+
+## Previous stable 0.2.13
+
+[Download 0.2.13](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.13) or read the
 [published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.13).
 
 - A bundled [synthetic copper tutorial](/docs/desktop/synthetic-copper/) with
@@ -218,7 +245,7 @@ was not promoted. Version 0.2.9 includes those updater and import-discovery chan
   browser Worker, with generated FEFF files and a provenance record.
 
 These follow website deployment, separately from the versioned npm API. Native
-rexafs 0.2.13 also uses ReFEFF 0.4.0. See [WASM scope](/docs/libraries/webassembly/).
+rexafs 0.2.14 also uses ReFEFF 0.4.0. See [WASM scope](/docs/libraries/webassembly/).
 
 ## Earlier releases
 

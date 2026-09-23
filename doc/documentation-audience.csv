@@ -1,6 +1,6 @@
 path,audience,website_action,proposed_route,notes
-doc/release-notes-0.2.14.md,user,adapt,/releases/,0.2.14 preparation notes; publish release claims only after artifact verification.
-doc/validation/2026-09-24-release-0.2.14/review.md,developer,exclude,,0.2.14 source and artifact qualification record; preserve pending gates and original preview evidence.
+doc/release-notes-0.2.14.md,user,adapt,/releases/,Published 0.2.14 changes and links to completed artifact qualification.
+doc/validation/2026-09-24-release-0.2.14/review.md,developer,exclude,,Published 0.2.14 source and artifact qualification; retain original preview identities.
 doc/live-acquisition.md,mixed,adapt,/docs/desktop/series/,0.2.14 acquisition setup and recovery with scientific averaging and fitting assumptions; local qualification stays in source records.
 doc/series-fitting.md,mixed,adapt,/docs/desktop/series/,0.2.14 independent EXAFS fits and parameter expressions with covariance uncertainty; distinguish automatic Live output fits from frozen Series runs.
 doc/plot-axis-ranges.md,user,adapt,/docs/desktop/processing/,0.2.14 independent automatic and numeric display limits; session-only preferences do not change analysis windows.
@@ -254,3 +254,6 @@ doc/rmc-search-upgrade.md,developer,exclude,,Unreleased hybrid search and adapti
 doc/rmc-adaptive-audits.md,developer,exclude,,Unreleased automatic basis audit and checkpoint APIs; numerical limits and synthetic validation.
 doc/rmc-spectrum-input.md,developer,exclude,,Unreleased Spectrum input and preprocessing snapshots; Rust API usage and resume validation.
 doc/rmc-cu2o-adaptive-qualification.md,developer,exclude,,Dated experimental Cu2O adaptive qualification; fixed-potential accuracy and matched wall-time measurements.
+doc/validation/2026-09-24-release-0.2.14/signed-workflow.md,developer,exclude,,"Signed 0.2.14 native GUI qualification, numerical checks and capture provenance."
+doc/validation/2026-09-24-release-0.2.14/published-artifacts.md,developer,exclude,,Verified public 0.2.14 artifact URLs and hashes.
+doc/validation/2026-09-24-release-0.2.14/published-consumers.md,developer,exclude,,Fresh public 0.2.14 Python and npm consumer example checks.
