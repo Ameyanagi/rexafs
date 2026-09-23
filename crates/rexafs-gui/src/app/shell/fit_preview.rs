@@ -1,5 +1,6 @@
 //! Live data transforms for choosing fit ranges, independent of fitted results.
 use super::{FitView, chip, fit_workspace::FitStep};
+use crate::plot_ranges::plot_builder;
 use crate::{
     app::StudioApp,
     fitting::{FitRanges, FitSpaceSpec},
@@ -11,7 +12,7 @@ use rexafs::xafs::fitting::transform::{
     KweightTransform, apply_kweight_transform, validate_transform,
 };
 use ruviz::{prelude::Plot, render::LineStyle};
-use ruviz_gpui::{RuvizPlot, plot_builder};
+use ruviz_gpui::RuvizPlot;
 use std::{
     collections::{BTreeMap, hash_map::DefaultHasher},
     hash::{Hash, Hasher},

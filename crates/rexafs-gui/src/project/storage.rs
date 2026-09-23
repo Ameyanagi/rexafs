@@ -219,7 +219,18 @@ pub(super) fn map_paths(
     project.normalizations.relocate(f)?;
     project.wavelets.relocate(f)?;
     project.peak_fits.relocate(f)?;
+    for run in &mut project.series_measurements.fit_runs {
+        for row in &mut std::sync::Arc::make_mut(run).rows {
+            if let Some(path) = &mut row.artifact {
+                *path = f(path)?;
+            }
+        }
+    }
     for session in &mut project.series_measurements.live_sessions {
+        for row in &mut session.exafs {
+            row.artifact = f(&row.artifact)?;
+            row.source = f(&row.source)?;
+        }
         session.snapshots = std::mem::take(&mut session.snapshots)
             .into_iter()
             .map(|path| f(&path))
@@ -289,8 +300,20 @@ fn analysis_artifacts(project: &ProjectFile) -> BTreeSet<PathBuf> {
         .series_measurements
         .live_sessions
         .iter()
-        .flat_map(|s| s.snapshots.iter().cloned())
+        .flat_map(|s| {
+            s.snapshots
+                .iter()
+                .cloned()
+                .chain(s.exafs.iter().map(|r| r.artifact.clone()))
+        })
         .chain(project.peak_fits.artifacts().cloned())
+        .chain(
+            project
+                .series_measurements
+                .fit_runs
+                .iter()
+                .flat_map(|r| r.rows.iter().filter_map(|r| r.artifact.clone())),
+        )
         .chain(project.wavelets.entries.iter().map(|r| r.path.clone()))
         .chain(
             project
@@ -331,6 +354,10 @@ fn inputs(
         }
     };
     for session in &project.series_measurements.live_sessions {
+        for row in &session.exafs {
+            raw(&row.artifact);
+            raw(&row.source);
+        }
         for snapshot in &session.snapshots {
             raw(snapshot);
         }
@@ -471,7 +498,7 @@ pub(super) fn prepare(
     map_paths(&mut out, &mut absolute)?;
     out.version = PROJECT_VERSION;
     out.embedded.clear();
-    let mut records = Vec::new();
+    let mut records: Vec<SourceFile> = Vec::new();
     let mut total = 0u64;
     for (input, kind) in inputs(&out, mode, true)? {
         let reference = if mode == DataStorage::Embedded {
@@ -582,7 +609,23 @@ pub(super) fn prepare(
             Err(e) if mode == DataStorage::Paths && e.kind() == std::io::ErrorKind::NotFound => (),
             Err(e) => return Err(format!("Cannot include {}: {e}", input.display())),
         }
-        records.push(record);
+        // A resumed Live result can refer both to its extracted portable copy
+        // and to the original cache file. They share a provenance locator.
+        // Write that locator once when the bytes agree; never silently choose
+        // between different revisions under the same source identity.
+        if let Some(previous) = records.iter().find(|f| f.path == record.path) {
+            if previous.sha256 != record.sha256
+                || previous.bytes != record.bytes
+                || previous.kind != record.kind
+            {
+                return Err(format!(
+                    "Conflicting input revisions for {}. Save the revisions as separate sources.",
+                    record.path.display()
+                ));
+            }
+        } else {
+            records.push(record);
+        }
     }
     records.sort_by(|a, b| a.path.cmp(&b.path));
     let origins = out.source_origins.clone();

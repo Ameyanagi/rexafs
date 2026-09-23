@@ -237,6 +237,8 @@ impl StudioApp {
                     .filter_map(|id| self.group_registry.index(id)),
             );
         }
+        let mut excluded = self.group_registry.excluded_indices();
+        excluded.extend(self.live_hidden_sources());
         group_rows::build_rows_active(
             &self.catalog,
             &self.derived,
@@ -248,7 +250,7 @@ impl StudioApp {
             &self.filter_text,
             self.standalone_path(),
             &marks,
-            &self.group_registry.excluded_indices(),
+            &excluded,
         )
     }
 
@@ -483,6 +485,7 @@ impl StudioApp {
                                         .filter(|&&g| g < DERIVED_BASE)
                                         .count()
                                     + self.derived.len()
+                                    - self.live_hidden_sources().len()
                                     + usize::from(self.standalone_path().is_some())
                             )),
                     )
@@ -535,6 +538,7 @@ impl StudioApp {
                     )
                     .children(self.filter_input.clone()),
             )
+            .children(self.live_sources_toggle(cx))
             .children(self.pending_imports(cx))
             .child(self.file_list(cx))
             .child(

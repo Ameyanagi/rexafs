@@ -71,6 +71,8 @@ pub(crate) fn model_page(result: &Value) -> Result<ModelPage, String> {
     Ok(page)
 }
 
+/// Prefer GPT-6 Sol for Automatic, falling back to the first available catalog
+/// entry. An available explicit user selection takes precedence.
 pub(crate) fn selected_model<'a>(
     models: &'a [Model],
     preferred: Option<&str>,
@@ -78,6 +80,7 @@ pub(crate) fn selected_model<'a>(
     models
         .iter()
         .find(|m| Some(m.model.as_str()) == preferred)
+        .or_else(|| models.iter().find(|m| m.model == "gpt-6-sol"))
         .or_else(|| models.first())
 }
 
@@ -271,14 +274,14 @@ fn connection_error(message: &str, diagnostics: &Diagnostics) -> String {
     }
 }
 
-fn client_flags(web_search: bool, extended: bool) -> Vec<String> {
+fn client_flags(web_search: bool, extended: bool, connected_apps: bool) -> Vec<String> {
     let mut flags = vec![
         "-c".into(),
         format!("features.shell_tool={extended}"),
         "-c".into(),
         format!("features.unified_exec={extended}"),
         "-c".into(),
-        "features.apps=false".into(),
+        format!("features.apps={connected_apps}"),
         "-c".into(),
         "features.multi_agent=false".into(),
     ];
@@ -289,21 +292,42 @@ fn client_flags(web_search: bool, extended: bool) -> Vec<String> {
     flags
 }
 
-pub(crate) fn access_thread_params(directory: &Path, extended: bool) -> Value {
-    json!({"cwd":directory,"runtimeWorkspaceRoots":[directory],
+/// Connected apps use the signed-in Codex account's installed integrations and
+/// policies. This session-only opt-in does not enable shell commands or expand
+/// their filesystem sandbox. Host-mediated file import requires separate approval.
+pub(crate) fn access_thread_params(
+    directory: &Path,
+    extended: bool,
+    connected_apps: bool,
+) -> Value {
+    let mut params = json!({"cwd":directory,"runtimeWorkspaceRoots":[directory],
         "sandbox":if extended {"workspace-write"} else {"read-only"},
-        "approvalPolicy":if extended {"untrusted"} else {"never"},
+        "approvalPolicy":if extended {"untrusted"} else if connected_apps {"on-request"} else {"never"},
         "approvalsReviewer":"user","ephemeral":true,"selectedCapabilityRoots":[],
-        "config":{"mcp_servers":{},"sandbox_workspace_write":{
+        "config":{"features.apps":connected_apps,"mcp_servers":{},"sandbox_workspace_write":{
             "writable_roots":[directory],"network_access":extended,
-            "exclude_tmpdir_env_var":true,"exclude_slash_tmp":true}}})
+            "exclude_tmpdir_env_var":true,"exclude_slash_tmp":true}}});
+    if connected_apps {
+        // An empty selection suppresses installed plugin capabilities. Let
+        // Codex resolve the account's installed capabilities when opted in.
+        params
+            .as_object_mut()
+            .unwrap()
+            .remove("selectedCapabilityRoots");
+    }
+    params
 }
 
 /// v2 ThreadResumeParams: threadId plus the same explicit access overrides as
-/// thread/start. In particular, a saved thread cannot restore Extended access
-/// without the current session's consent. Generated with Codex app-server.
-pub(crate) fn resume_thread_params(directory: &Path, extended: bool, thread: &str) -> Value {
-    let mut params = access_thread_params(directory, extended);
+/// thread/start. A saved thread cannot restore Workspace commands or Connected
+/// apps without the current session's opt-in. Generated with Codex app-server.
+pub(crate) fn resume_thread_params(
+    directory: &Path,
+    extended: bool,
+    connected_apps: bool,
+    thread: &str,
+) -> Value {
+    let mut params = access_thread_params(directory, extended, connected_apps);
     if let Some(object) = params.as_object_mut() {
         object.remove("ephemeral");
         object.remove("selectedCapabilityRoots");
@@ -397,7 +421,7 @@ impl Drop for Client {
     }
 }
 impl Client {
-    pub fn start(web_search: bool, extended: bool) -> Result<Self, String> {
+    pub fn start(web_search: bool, extended: bool, connected_apps: bool) -> Result<Self, String> {
         let executable = executable().map_err(|e| e.to_string())?;
         let path = std::env::join_paths(search_directories()).map_err(|e| e.to_string())?;
         let directory = std::env::temp_dir().join(format!(
@@ -415,7 +439,14 @@ impl Client {
             builder.mode(0o700);
         }
         builder.create(&directory).map_err(|e| e.to_string())?;
-        let result = Self::launch(executable, path, directory.clone(), web_search, extended);
+        let result = Self::launch(
+            executable,
+            path,
+            directory.clone(),
+            web_search,
+            extended,
+            connected_apps,
+        );
         if result.is_err() {
             let _ = std::fs::remove_dir_all(&directory);
         }
@@ -428,6 +459,7 @@ impl Client {
         directory: PathBuf,
         web_search: bool,
         extended: bool,
+        connected_apps: bool,
     ) -> Result<Self, String> {
         let mut command = Command::new(executable);
         #[cfg(windows)]
@@ -436,7 +468,7 @@ impl Client {
             command.creation_flags(0x08000000); // CREATE_NO_WINDOW
         }
         let mut child = command
-            .args(client_flags(web_search, extended))
+            .args(client_flags(web_search, extended, connected_apps))
             // Finder does not inherit interactive-shell PATH additions. The
             // discovered npm/Bun launcher may still need a separately installed node.
             .env("PATH", path)
@@ -649,6 +681,8 @@ pub(crate) fn initialize(id: u64) -> Value {
 }
 pub(crate) fn dynamic_tools() -> Value {
     json!([
+    {"type":"function","name":"xray_import_files","description":"Import 1–100 explicit local spectrum files (at most 512 MiB total) through rexafs's normal channel detection and mapping review. Requires Connected apps and files, Edit analysis, and one-time user confirmation. Use absolute paths supplied by the user or a download tool; download Google Drive files first. Directories and .rxs projects are not supported. Exact source copies are retained in rexafs application data so workspace cleanup cannot break the import. Returns queued batch_id and saved paths, not completed spectra. Use xray_get_import_status to check progress and review requirements.","inputSchema":{"type":"object","properties":{"paths":{"type":"array","minItems":1,"maxItems":100,"uniqueItems":true,"items":{"type":"string"}}},"required":["paths"],"additionalProperties":false}},
+    {"type":"function","name":"xray_get_import_status","description":"Inspect a batch_id returned by xray_import_files. Reports whether intake has finished, counts of created groups, failures, and files needing channel or column-mapping review. A finished intake can still need user review in rexafs; do not claim those files were imported. Review mode allows this check.","inputSchema":{"type":"object","properties":{"batch_id":{"type":"integer","minimum":0}},"required":["batch_id"],"additionalProperties":false}},
     {"type":"function","name":"xray_fetch_structure","description":"After stating the exact source, request user confirmation to download an HTTPS CIF URL or load a CIF path inside the temporary assistant workspace. Requires Edit analysis. Provide exactly one of url or path; returns formula, cell, number of sites and saved path.","inputSchema":{"type":"object","properties":{"url":{"type":"string"},"path":{"type":"string"},"label":{"type":"string"}},"oneOf":[{"required":["url"]},{"required":["path"]}],"additionalProperties":false}},
     {"type":"function","name":"xray_set_layout","description":"Change file browser/inspector visibility and current/marked plot scope only. Review mode allows these presentation changes.","inputSchema":{"type":"object","properties":{"file_browser":{"type":"boolean"},"inspector":{"type":"boolean"},"plot_scope":{"type":"string","enum":["current","marked"]}},"additionalProperties":false}},
     {"type":"function","name":"xray_get_plots","description":"Inspect the current processing stage or fit results: returns fresh plots plus resolved numerical settings. Navigate to Normalize, Background and Transform and inspect each before running a fit. Respects the Plots switch.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -758,6 +792,7 @@ mod tests {
             workspace.clone(),
             false,
             false,
+            false,
         )
         .unwrap();
         assert_eq!(
@@ -813,6 +848,7 @@ mod tests {
             launcher,
             OsString::from("/usr/bin:/bin"),
             workspace,
+            false,
             false,
             false,
         )
@@ -922,8 +958,12 @@ mod tests {
 
     #[test]
     fn assistant_resume_preserves_current_access_policy_without_start_only_fields() {
-        let params =
-            resume_thread_params(std::path::Path::new("/workspace"), false, "saved-thread");
+        let params = resume_thread_params(
+            std::path::Path::new("/workspace"),
+            false,
+            false,
+            "saved-thread",
+        );
         assert_eq!(params["threadId"], "saved-thread");
         assert_eq!(params["sandbox"], "read-only");
         assert_eq!(params["approvalPolicy"], "never");
@@ -994,20 +1034,51 @@ mod tests {
         }
     }
     #[test]
+    fn connected_apps_do_not_enable_workspace_commands() {
+        for extended in [false, true] {
+            for connected in [false, true] {
+                let flags = client_flags(false, extended, connected);
+                assert!(flags.contains(&format!("features.apps={connected}")));
+                assert!(flags.contains(&format!("features.shell_tool={extended}")));
+                let params = access_thread_params(Path::new("/workspace"), extended, connected);
+                assert_eq!(params["config"]["features.apps"], connected);
+                assert_eq!(
+                    params["config"]["sandbox_workspace_write"]["network_access"],
+                    extended
+                );
+                assert_eq!(
+                    params["sandbox"],
+                    if extended {
+                        "workspace-write"
+                    } else {
+                        "read-only"
+                    }
+                );
+                assert_eq!(params.get("selectedCapabilityRoots").is_none(), connected);
+                let resumed =
+                    resume_thread_params(Path::new("/workspace"), extended, connected, "saved");
+                assert_eq!(resumed["config"]["features.apps"], connected);
+                assert_eq!(resumed["sandbox"], params["sandbox"]);
+                assert_eq!(resumed["approvalPolicy"], params["approvalPolicy"]);
+            }
+        }
+    }
+
+    #[test]
     fn assistant_access_flags_and_workspace() {
         assert!(
-            !client_flags(true, false)
+            !client_flags(true, false, false)
                 .iter()
                 .any(|s| s.starts_with("web_search="))
         );
-        assert!(client_flags(false, false).contains(&"web_search=\"disabled\"".to_string()));
+        assert!(client_flags(false, false, false).contains(&"web_search=\"disabled\"".to_string()));
         for requested in [false, true] {
-            let flags = client_flags(true, requested);
+            let flags = client_flags(true, requested, false);
             assert!(flags.contains(&format!("features.shell_tool={requested}")));
             assert!(flags.contains(&format!("features.unified_exec={requested}")));
             assert!(flags.contains(&"features.apps=false".to_string()));
             assert!(flags.contains(&"features.multi_agent=false".to_string()));
-            let params = access_thread_params(Path::new("/tmp/assistant"), requested);
+            let params = access_thread_params(Path::new("/tmp/assistant"), requested, false);
             assert_eq!(params["cwd"], "/tmp/assistant");
             assert_eq!(params["runtimeWorkspaceRoots"], json!(["/tmp/assistant"]));
             assert_eq!(params["approvalsReviewer"], "user");
@@ -1277,6 +1348,29 @@ mod tests {
             selected_model(&ordered.data, Some("saved-model")).map(|m| m.model.as_str()),
             Some("saved-model")
         );
+        let mut with_sol = ordered.data.clone();
+        let mut sol = with_sol[0].clone();
+        sol.model = "gpt-6-sol".into();
+        sol.display_name = "GPT-6 Sol".into();
+        with_sol.push(sol);
+        assert_eq!(
+            selected_model(&with_sol, None).map(|m| m.model.as_str()),
+            Some("gpt-6-sol")
+        );
+        assert_eq!(
+            resolved_model_label(&with_sol, None),
+            ("Automatic · GPT-6 Sol".into(), None)
+        );
+        assert_eq!(
+            selected_model(&with_sol, Some("saved-model")).map(|m| m.model.as_str()),
+            Some("saved-model")
+        );
+        let fallback = selected_model(&with_sol, Some("removed-model")).unwrap();
+        assert_eq!(fallback.model, "gpt-6-sol");
+        assert_eq!(
+            turn_params("thread", vec![], Some(&fallback.model), None)["model"],
+            "gpt-6-sol"
+        );
         assert_eq!(selected_effort(Some(model), None), Some("medium"));
         assert_eq!(selected_effort(Some(model), Some("high")), Some("high"));
         assert_eq!(selected_effort(Some(model), Some("xhigh")), Some("medium"));
@@ -1314,12 +1408,59 @@ mod tests {
     fn device_code_protocol_does_not_read_credentials() {
         let init = initialize(1);
         assert_eq!(init["params"]["capabilities"]["experimentalApi"], true);
-        assert_eq!(dynamic_tools().as_array().unwrap().len(), 15);
+        assert_eq!(dynamic_tools().as_array().unwrap().len(), 17);
     }
+    #[test]
+    #[ignore = "requires signed-in Codex; discovers installed apps without a model turn or app data access"]
+    fn installed_codex_connected_apps_handshake() {
+        let c = Client::start(false, false, true).unwrap();
+        c.send(initialize(1)).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(45);
+        while std::time::Instant::now() < deadline {
+            for message in c.drain() {
+                let v = message.unwrap();
+                if v["id"] == 1 {
+                    assert!(
+                        v.get("error").is_none(),
+                        "initialization failed: {}",
+                        v["error"]
+                    );
+                    c.send(json!({"method":"initialized","params":{}})).unwrap();
+                    c.send(json!({"id":2,"method":"thread/start","params":access_thread_params(&c.directory, false, true)})).unwrap();
+                } else if v["id"] == 2 {
+                    assert!(
+                        v.get("error").is_none(),
+                        "thread initialization failed: {}",
+                        v["error"]
+                    );
+                    let thread = v["result"]["thread"]["id"].as_str().expect("thread id");
+                    c.send(json!({"id":3,"method":"app/installed","params":{"threadId":thread,"forceRefresh":true}})).unwrap();
+                } else if v["id"] == 3 {
+                    assert!(
+                        v.get("error").is_none(),
+                        "app discovery failed: {}",
+                        v["error"]
+                    );
+                    let apps = v["result"]["apps"]
+                        .as_array()
+                        .expect("installed apps array");
+                    eprintln!(
+                        "Discovered {} installed apps; {} callable",
+                        apps.len(),
+                        apps.iter().filter(|app| app["callable"] == true).count()
+                    );
+                    return;
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(40));
+        }
+        panic!("installed app discovery timed out");
+    }
+
     #[test]
     #[ignore = "requires an installed Codex CLI; reads account status without starting a model turn"]
     fn installed_codex_auth_handshake() {
-        let c = Client::start(true, false).unwrap();
+        let c = Client::start(true, false, false).unwrap();
         c.send(initialize(1)).unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         let mut account = false;

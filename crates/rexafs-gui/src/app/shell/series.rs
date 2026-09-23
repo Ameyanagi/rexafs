@@ -5,6 +5,7 @@
 //! table and the batch / LCF-trend cards.
 
 mod appearance;
+pub(crate) mod fits;
 
 use gpui::{
     ClickEvent, Context, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, px,
@@ -240,6 +241,17 @@ impl StudioApp {
             return self.series_scan_picker(cx).into_any_element();
         }
         let bar = self.series_plot_bar(cx);
+        if self.series_fits.view {
+            let content = self.series_fit_center(cx);
+            return div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .child(bar)
+                .child(content)
+                .into_any_element();
+        }
         let Some((heatmap, chik, trend)) = self
             .operando_plots
             .as_ref()
@@ -647,16 +659,25 @@ impl StudioApp {
                     &t,
                     SharedString::from(format!("series-space-{i}")),
                     label,
-                    space == sp,
+                    space == sp && !self.series_fits.view,
                     i == 0,
                 )
                 .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
                     this.stage_view.series_space = sp;
+                    this.series_fits.view = false;
                     this.rebuild_operando_plots(cx);
                     cx.notify();
                 })),
             );
         }
+        seg = seg.child(
+            segment(&t, "series-space-fit", "Fit", self.series_fits.view, false).on_click(
+                cx.listener(|app, _, _, cx| {
+                    app.series_fits.view = true;
+                    cx.notify();
+                }),
+            ),
+        );
         div()
             .min_h(px(36.))
             .w_full()
@@ -754,6 +775,9 @@ impl StudioApp {
     // ---- inspector ----------------------------------------------------------
 
     pub(crate) fn series_inspector(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        if self.series_fits.view {
+            return self.series_fit_inspector(cx);
+        }
         let t = self.theme;
         div()
             .flex()
@@ -765,6 +789,7 @@ impl StudioApp {
                     .child(self.series_batch_section(cx))
             })
             .child(div().h(px(12.)).bg(t.surface))
+            .into_any_element()
     }
 
     fn series_cursor_section(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {

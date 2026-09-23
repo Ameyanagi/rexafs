@@ -47,6 +47,7 @@ pub mod path_picker;
 pub(crate) mod path_routing;
 pub(crate) mod peaks;
 pub(crate) mod plot_export;
+mod processing_reference;
 pub(crate) mod publish;
 pub(crate) mod rmc;
 pub mod series;
@@ -414,6 +415,7 @@ impl StudioApp {
             && !matches!(self.stage, Stage::Fit | Stage::Publish))
         .then(|| self.inspector(cx).into_any_element());
         let assistant = self.assistant_panel(cx);
+        let live_monitor = self.live_monitor_panel(cx);
         div()
             .id("studio-shell")
             .on_mouse_move(cx.listener(|this, event: &gpui::MouseMoveEvent, _, cx| {
@@ -454,10 +456,12 @@ impl StudioApp {
                             .flex()
                             .flex_col()
                             .children(self.stale_plots_banner(cx))
+                            .children(self.live_average_update_banner(cx))
                             .child(center),
                     )
                     .children(inspector)
-                    .children(assistant),
+                    .children(assistant)
+                    .children(live_monitor),
             )
             .children(
                 self.problems_open
@@ -471,7 +475,7 @@ impl StudioApp {
             .child(self.status_bar(cx))
             .children(self.series_appearance_overlay(cx))
             .children(self.wavelet_appearance_overlay(cx))
-            .children(self.live_recipe_overlay(cx))
+            .children(self.live_menu_overlay(false, cx))
             .children(self.peak_menu_overlay(cx))
             .children(self.group_menu_overlay(cx))
             .children(self.palette_overlay(cx))
@@ -562,6 +566,7 @@ impl StudioApp {
                         project
                     }),
             )
+            .children(self.live_status_indicator(cx))
             .when(self.viewport_w >= 800., |d| {
                 d.child(
                     action("undo", Icon::Undo, "Undo · ⌘Z", false, |a, c| a.undo(c))

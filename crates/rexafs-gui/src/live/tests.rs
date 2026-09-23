@@ -12,6 +12,7 @@ fn spectrum(value: f64) -> String {
 fn config(folder: &Path) -> LiveConfig {
     let document = rexafs::xafs::io::reader::parse_measurement(spectrum(1.).as_bytes()).unwrap();
     LiveConfig {
+        processing_reference: None,
         schema: 1,
         id: GroupId::new_result(),
         name: "Synthetic Live".into(),
@@ -33,6 +34,8 @@ fn config(folder: &Path) -> LiveConfig {
         },
         recipe: None,
         peak_model: None,
+        exafs: None,
+        merge: LiveMerge::Individual,
         layouts: vec![
             ScanLayout::capture(
                 &document,
@@ -496,5 +499,363 @@ fn mback_live_and_series_use_identical_pinned_preparation() {
     assert_eq!(
         store.records().unwrap()[0].frames[0].row.preparation,
         row.preparation
+    );
+}
+
+fn three_signals(transmission: f64, fluorescence: f64, reference: f64) -> String {
+    let i0 = 10000.;
+    let it = i0 * (-transmission).exp();
+    let ir = it * (-reference).exp();
+    let fluor = i0 * fluorescence;
+    format!(
+        "# XDI/1.0 synthetic\n# Column.1: energy eV\n# Column.2: i0 counts\n# Column.3: it counts\n# Column.4: if counts\n# Column.5: ir counts\n# ///\n# ----\n# energy i0 it if ir\n7100 {i0} {it} {fluor} {ir}\n7101 {i0} {it} {fluor} {ir}\n7102 {i0} {it} {fluor} {ir}\n"
+    )
+}
+fn channel_config(folder: &Path, merge: LiveMerge) -> LiveConfig {
+    let document = rexafs::io::parse_measurement(three_signals(1., 2., 3.).as_bytes()).unwrap();
+    let scan = &document.scans[0];
+    assert_eq!(scan.signals.len(), 3);
+    let selected = BTreeSet::from([
+        "transmission".into(),
+        "fluorescence".into(),
+        "reference".into(),
+    ]);
+    assert!(preview_channels(scan, &BTreeSet::new(), None).is_err());
+    let signals = preview_channels(scan, &selected, None).unwrap();
+    let mut config = config(folder);
+    config.schema = 2;
+    config.merge = merge;
+    config.layouts = signals
+        .iter()
+        .map(|s| ScanLayout::capture_channel(&document, scan, s).unwrap())
+        .collect();
+    config
+}
+fn average_values(
+    engine: &LiveEngine,
+) -> BTreeMap<(String, usize), (usize, GroupId, PathBuf, f64)> {
+    build_averages(&engine.store, &AtomicBool::new(false))
+        .unwrap()
+        .into_iter()
+        .map(|a| {
+            let g = a.group.unwrap();
+            let raw = g.raw(g.params.as_ref().unwrap()).unwrap();
+            (
+                (a.channel, a.batch),
+                (a.count, g.group_id.unwrap(), g.source.unwrap(), raw.1[0]),
+            )
+        })
+        .collect()
+}
+#[test]
+fn three_running_outputs_replace_revisions_without_double_weight_after_resume() {
+    let tmp = tempfile::tempdir().unwrap();
+    let folder = tmp.path().join("input");
+    std::fs::create_dir(&folder).unwrap();
+    let config = channel_config(&folder, LiveMerge::Running);
+    let mut engine = LiveEngine::open(
+        LiveStore::create(&tmp.path().join("cache"), config, BTreeMap::new()).unwrap(),
+    )
+    .unwrap();
+    let directory = engine.store.directory.clone();
+    std::fs::write(folder.join("a.xdi"), three_signals(1., 2., 3.)).unwrap();
+    let now = Instant::now();
+    let records = tick(&mut engine, now);
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].frames.len(), 3);
+    assert_eq!(
+        records[0]
+            .frames
+            .iter()
+            .filter_map(|f| f.group.group_id.clone())
+            .collect::<BTreeSet<_>>()
+            .len(),
+        3
+    );
+    let first = average_values(&engine);
+    assert_eq!(first.len(), 3);
+    std::fs::write(folder.join("b.xdi"), three_signals(3., 4., 5.)).unwrap();
+    tick(&mut engine, now + Duration::from_secs(1));
+    let second = average_values(&engine);
+    for (channel, expected) in [
+        ("transmission", 2.),
+        ("fluorescence", 3.),
+        ("reference", 4.),
+    ] {
+        let key = (channel.into(), 0);
+        assert_eq!(second[&key].0, 2);
+        assert_eq!(second[&key].1, first[&key].1);
+        assert_ne!(second[&key].2, first[&key].2);
+        assert!((second[&key].3 - expected).abs() < 1e-10);
+    }
+    // Cancellation retains all committed channels and leaves the new source eligible.
+    std::fs::write(folder.join("a.xdi"), three_signals(5., 6., 7.)).unwrap();
+    assert!(
+        engine
+            .poll(now + Duration::from_secs(2), 10, &AtomicBool::new(true))
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(average_values(&engine), second);
+    tick(&mut engine, now + Duration::from_secs(3));
+    let revised = average_values(&engine);
+    assert_eq!(revised.len(), 3);
+    for (channel, expected) in [
+        ("transmission", 4.),
+        ("fluorescence", 5.),
+        ("reference", 6.),
+    ] {
+        let key = (channel.into(), 0);
+        assert_eq!(revised[&key].0, 2);
+        assert_eq!(revised[&key].1, first[&key].1);
+        assert!((revised[&key].3 - expected).abs() < 1e-10);
+    }
+    assert_eq!(engine.store.records().unwrap().len(), 3);
+    drop(engine);
+    let mut restored = LiveEngine::open(LiveStore::open(&directory).unwrap()).unwrap();
+    assert!(tick(&mut restored, Instant::now()).is_empty());
+    assert_eq!(average_values(&restored), revised);
+    assert_eq!(restored.store.records().unwrap().len(), 3);
+}
+#[test]
+fn fixed_sets_keep_all_channels_together_and_do_not_renumber_on_rewrite() {
+    let tmp = tempfile::tempdir().unwrap();
+    let folder = tmp.path().join("input");
+    std::fs::create_dir(&folder).unwrap();
+    let config = channel_config(&folder, LiveMerge::Batches { scans: 2 });
+    let mut engine = LiveEngine::open(
+        LiveStore::create(&tmp.path().join("cache"), config, BTreeMap::new()).unwrap(),
+    )
+    .unwrap();
+    let now = Instant::now();
+    for (i, name) in ["z.xdi", "a.xdi", "b.xdi"].into_iter().enumerate() {
+        std::fs::write(folder.join(name), three_signals(i as f64 + 1., 2., 3.)).unwrap();
+        tick(&mut engine, now + Duration::from_secs(i as u64));
+    }
+    let before = average_values(&engine);
+    assert_eq!(before.len(), 6);
+    assert_eq!(before[&("transmission".into(), 0)].0, 2);
+    assert!((before[&("transmission".into(), 0)].3 - 1.5).abs() < 1e-10);
+    assert_eq!(before[&("transmission".into(), 1)].0, 1);
+    std::fs::write(folder.join("z.xdi"), three_signals(9., 2., 3.)).unwrap();
+    tick(&mut engine, now + Duration::from_secs(4));
+    let after = average_values(&engine);
+    assert_eq!(after.len(), 6);
+    for (key, value) in &after {
+        assert_eq!(value.1, before[key].1);
+    }
+    assert!((after[&("transmission".into(), 0)].3 - 5.5).abs() < 1e-10);
+    assert_eq!(
+        after[&("transmission".into(), 1)],
+        before[&("transmission".into(), 1)]
+    );
+}
+#[test]
+fn bad_selected_channel_cannot_publish_a_partial_detector_set() {
+    let tmp = tempfile::tempdir().unwrap();
+    let folder = tmp.path().join("input");
+    std::fs::create_dir(&folder).unwrap();
+    let config = channel_config(&folder, LiveMerge::Running);
+    let mut engine = LiveEngine::open(
+        LiveStore::create(&tmp.path().join("cache"), config, BTreeMap::new()).unwrap(),
+    )
+    .unwrap();
+    let good = three_signals(1., 2., 3.);
+    std::fs::write(
+        folder.join("a.xdi"),
+        good.replace("# Column.5: ir counts", "# Column.5: unknown counts"),
+    )
+    .unwrap();
+    std::fs::write(folder.join("b.xdi"), good).unwrap();
+    let records = tick(&mut engine, Instant::now());
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].frames.len(), 3);
+    assert_eq!(engine.progress().review.len(), 1);
+    assert_eq!(average_values(&engine).len(), 3);
+}
+#[test]
+fn old_sessions_default_to_individual_scans_and_batches_validate() {
+    let mut value = serde_json::to_value(config(Path::new("/tmp"))).unwrap();
+    value.as_object_mut().unwrap().remove("merge");
+    let mut restored: LiveConfig = serde_json::from_value(value).unwrap();
+    assert_eq!(restored.merge, LiveMerge::Individual);
+    restored.merge = LiveMerge::Batches { scans: 0 };
+    assert!(restored.validate().is_err());
+    restored.merge = LiveMerge::Batches { scans: 2 };
+    assert!(restored.validate().is_ok());
+}
+
+#[test]
+fn preview_and_average_apply_frozen_energy_offset_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let folder = tmp.path().join("input");
+    std::fs::create_dir(&folder).unwrap();
+    let source = spectrum(1.);
+    let document = rexafs::io::parse_measurement(source.as_bytes()).unwrap();
+    let mut config = config(&folder);
+    config.settings.energy_offset_ev = 5.;
+    config.merge = LiveMerge::Running;
+    config.definition.measurement = MetricMeasurement::mean(7105.0..=7107.0).raw_mu().absolute();
+    let preview = prepare_preview(
+        &document.scans[0],
+        &config.layouts[0].mapping,
+        &config.settings,
+        crate::params::RequiredStage::Raw,
+    )
+    .unwrap();
+    assert_eq!(
+        preview
+            .measure(&config.definition.measurement)
+            .unwrap()
+            .value,
+        2.
+    );
+    std::fs::write(folder.join("scan.xdi"), source).unwrap();
+    let mut engine = LiveEngine::open(
+        LiveStore::create(&tmp.path().join("cache"), config, BTreeMap::new()).unwrap(),
+    )
+    .unwrap();
+    let records = tick(&mut engine, Instant::now());
+    assert_eq!(records[0].frames[0].row.result.as_ref().unwrap().value, 2.);
+    let averages = build_averages(&engine.store, &AtomicBool::new(false)).unwrap();
+    let group = averages[0].group.as_ref().unwrap();
+    assert_eq!(
+        group.raw(group.params.as_ref().unwrap()).unwrap().0,
+        vec![7105., 7106., 7107.]
+    );
+    let source = &records[0].frames[0].group;
+    assert_eq!(
+        group.operation.as_ref().unwrap().inputs[0].fingerprint,
+        source.fingerprint(source.params.as_ref().unwrap())
+    );
+    let params = group.params.as_ref().unwrap();
+    let mut revised = group.clone();
+    revised.source = Some(PathBuf::from("different-immutable-average.dat"));
+    assert_ne!(group.fingerprint(params), revised.fingerprint(params));
+}
+
+#[test]
+fn cu_exafs_outputs_freeze_paths_recover_and_embed_without_refitting() {
+    use crate::fitting::{FitPathSpec, FitRanges, FitVarSpec};
+    use crate::project::{self, DataStorage, ProjectFile};
+    let tmp = tempfile::tempdir().unwrap();
+    let folder = tmp.path().join("input");
+    std::fs::create_dir(&folder).unwrap();
+    let core = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../rexafs/tests");
+    let bytes =
+        std::fs::read(core.join("fixtures/analysis/cu-mixtures/standards/cufoil_abs.xdi")).unwrap();
+    let document = rexafs::io::parse_measurement(&bytes).unwrap();
+    let scan = &document.scans[0];
+    let mut config = config(&folder);
+    config.schema = 3;
+    config.merge = LiveMerge::Running;
+    config.layouts = vec![ScanLayout::capture_channel(&document, scan, &scan.signals[0]).unwrap()];
+    config.definition.measurement = MetricMeasurement::mean(-20.0..=30.0).flat();
+    let path = tmp.path().join("original-feff.dat");
+    std::fs::copy(core.join("testfiles/feffcu01.dat"), &path).unwrap();
+    let mut spec = FitPathSpec::blank(path.clone());
+    spec.enabled = true;
+    spec.s02 = "amp".into();
+    spec.e0 = "e0".into();
+    spec.deltar = "dr".into();
+    spec.sigma2 = "ss".into();
+    config.exafs = Some(ExafsRecipe {
+        name: "Cu first-shell test".into(),
+        paths: vec![(spec, std::fs::read(&path).unwrap())],
+        variables: [
+            ("amp", 0.9, Some(0.5), Some(1.5)),
+            ("e0", 0., None, None),
+            ("dr", 0., Some(-0.3), Some(0.3)),
+            ("ss", 0.003, Some(0.), None),
+        ]
+        .into_iter()
+        .map(|(name, value, min, max)| FitVarSpec {
+            name: name.into(),
+            value,
+            vary: true,
+            min,
+            max,
+            expr: None,
+        })
+        .collect(),
+        ranges: FitRanges::default(),
+    });
+    std::fs::remove_file(path).unwrap();
+    let cache = tmp.path().join("cache");
+    let mut engine =
+        LiveEngine::open(LiveStore::create(&cache, config, BTreeMap::new()).unwrap()).unwrap();
+    std::fs::write(folder.join("one.xdi"), &bytes).unwrap();
+    let now = Instant::now();
+    assert_eq!(tick(&mut engine, now).len(), 1);
+    let cancel = AtomicBool::new(false);
+    let first = build_averages(&engine.store, &cancel).unwrap();
+    assert!(
+        build_exafs(&engine.store, &first, false, &cancel)
+            .unwrap()
+            .is_empty()
+    );
+    let rows = build_exafs(&engine.store, &first, true, &cancel).unwrap();
+    assert_eq!(rows.len(), 1);
+    let result = read_exafs(&rows[0]).unwrap().result.unwrap();
+    assert!(result.r_factor.is_finite() && result.r_factor < 0.1);
+    let first_modified = std::fs::metadata(&rows[0].artifact)
+        .unwrap()
+        .modified()
+        .unwrap();
+    let recovered = build_exafs(&engine.store, &first, false, &cancel).unwrap();
+    assert_eq!(recovered[0].artifact, rows[0].artifact);
+    assert_eq!(
+        std::fs::metadata(&rows[0].artifact)
+            .unwrap()
+            .modified()
+            .unwrap(),
+        first_modified
+    );
+    std::fs::write(folder.join("two.xdi"), &bytes).unwrap();
+    tick(&mut engine, now + Duration::from_secs(1));
+    let second = build_averages(&engine.store, &cancel).unwrap();
+    let updated = build_exafs(&engine.store, &second, true, &cancel).unwrap();
+    assert_eq!(updated[0].group, rows[0].group);
+    assert_ne!(updated[0].key, rows[0].key);
+    let again = read_exafs(&updated[0]).unwrap().result.unwrap();
+    assert!((again.r_factor - result.r_factor).abs() < 1e-8);
+    let mut session = engine.store.session();
+    session.exafs = rows.into_iter().chain(updated).collect();
+    let group = second.into_iter().next().unwrap().group.unwrap();
+    let mut project = ProjectFile {
+        spectrum_file: group.source.clone(),
+        derived: vec![group],
+        ..Default::default()
+    };
+    project.series_measurements.live_sessions.push(session);
+    let portable = tmp.path().join("portable.rxs");
+    project::save_with_storage(&portable, &project, DataStorage::Embedded).unwrap();
+    let directory = engine.store.directory.clone();
+    drop(engine);
+    #[cfg(unix)]
+    {
+        let alias = tmp.path().join("recovery-alias");
+        std::os::unix::fs::symlink(&cache, &alias).unwrap();
+        let store = LiveStore::open(&alias.join(directory.file_name().unwrap())).unwrap();
+        assert_eq!(store.directory, directory);
+        let averages = build_averages(&store, &cancel).unwrap();
+        let recovered = build_exafs(&store, &averages, false, &cancel).unwrap();
+        assert_eq!(recovered.len(), 1);
+        let expected = &project.series_measurements.live_sessions[0].exafs[1];
+        assert_eq!(recovered[0].key, expected.key);
+        assert_eq!(recovered[0].group, expected.group);
+    }
+    std::fs::remove_dir_all(cache).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+    let restored =
+        project::load_with_cache_root(&portable, || Ok(tmp.path().join("restore"))).unwrap();
+    let session = &restored.series_measurements.live_sessions[0];
+    assert_eq!(session.exafs.len(), 2);
+    for row in &session.exafs {
+        assert!(read_exafs(row).unwrap().result.is_ok());
+    }
+    assert_eq!(
+        Some(&session.exafs[1].source),
+        restored.derived[0].source.as_ref()
     );
 }

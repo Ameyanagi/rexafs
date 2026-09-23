@@ -1157,7 +1157,11 @@ impl StudioApp {
         match &self.analysis.plot {
             Some(entity) => entity.update(cx, |rp, cx| rp.set_plot(plot, cx)),
             None => {
-                self.analysis.plot = Some(ruviz_gpui::plot_builder(plot).interactive().build(cx));
+                self.analysis.plot = Some(
+                    crate::plot_ranges::plot_builder(plot)
+                        .interactive()
+                        .build(cx),
+                );
             }
         }
     }
@@ -1474,7 +1478,7 @@ impl StudioApp {
                 match result {
                     Ok((plot, label)) => {
                         app.tools.preview_plot = Some(
-                            ruviz_gpui::plot_builder(plot.size_px(900, 540))
+                            crate::plot_ranges::plot_builder(plot.size_px(900, 540))
                                 .interactive()
                                 .build(cx),
                         );

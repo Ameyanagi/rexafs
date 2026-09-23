@@ -1,4 +1,5 @@
 //! Full-frame measurements use retained identities, not overview sample indices.
+use crate::plot_ranges::plot_builder;
 use crate::{
     app::{DERIVED_BASE, NO_ENTRY, StudioApp},
     series_measurements::*,
@@ -7,7 +8,7 @@ use crate::{
 use gpui::{AppContext, Context, Entity};
 use rexafs::prelude::{AxisOrigin, Measurement, MeasurementSpace, Metric};
 use ruviz::prelude::Plot;
-use ruviz_gpui::{RuvizPlot, plot_builder};
+use ruviz_gpui::RuvizPlot;
 use std::{
     path::PathBuf,
     sync::{

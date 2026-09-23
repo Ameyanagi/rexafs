@@ -181,6 +181,7 @@ fn project_roundtrip_preserves_ids_definitions_and_failed_rows() {
     assert_eq!(run.rows[1].status, FrameStatus::Unavailable);
     assert!(run.rows[1].result.is_none());
     let archive = SeriesArchive {
+        fit_runs: Vec::new(),
         series: vec![series],
         runs: vec![Arc::new(run)],
         presets: vec![],

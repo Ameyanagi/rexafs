@@ -450,7 +450,15 @@ pub fn build_rows_active(
     }
     for (i, d) in derived.iter().enumerate() {
         let group = DERIVED_BASE + i;
-        if let Some(path) = &d.source {
+        if excluded.contains(&group) {
+            continue;
+        }
+        if d.operation
+            .as_ref()
+            .is_some_and(|o| matches!(o.tool.as_str(), "Live acquisition" | "Live average"))
+        {
+            results.push(group);
+        } else if let Some(path) = &d.source {
             let primary = if standalone == Some(path.as_path()) {
                 super::NO_ENTRY
             } else {
@@ -802,6 +810,63 @@ mod tests {
                 ]
             })
             .collect()
+    }
+    #[test]
+    fn live_outputs_keep_named_result_rows_when_cache_is_in_catalog() {
+        let c = catalog();
+        let mut average = group(Some("/data/a.dat"), DetectionMode::MuColumn);
+        average.label = "Transmission average · 2 scans".into();
+        average.operation = Some(crate::params::Operation {
+            tool: "Live average".into(),
+            parameters: serde_json::json!({}),
+            inputs: vec![],
+            applied_energy_shift_ev: 0.,
+        });
+        let rows = build_rows_active(
+            &c,
+            &[average],
+            |_| Some(false),
+            None,
+            "",
+            None,
+            &BTreeSet::new(),
+            &BTreeSet::from([0]),
+        );
+        assert_eq!(rows.row_index(0), None);
+        let index = rows.row_index(DERIVED_BASE).unwrap();
+        assert_eq!(
+            rows.row_at(index),
+            Some(Row::Result {
+                group: DERIVED_BASE
+            })
+        );
+    }
+    #[test]
+    fn hidden_live_contributors_do_not_render_or_take_keyboard_rows() {
+        let c = catalog();
+        let d = vec![
+            group(Some("/cache/scan.dat"), DetectionMode::MuColumn),
+            group(Some("/cache/average.dat"), DetectionMode::MuColumn),
+        ];
+        let hidden = BTreeSet::from([DERIVED_BASE]);
+        let rows = build_rows_active(&c, &d, |_| None, None, "", None, &BTreeSet::new(), &hidden);
+        assert_eq!(rows.row_index(DERIVED_BASE), None);
+        assert!(rows.row_index(DERIVED_BASE + 1).is_some());
+        assert!(
+            !(0..rows.row_count())
+                .any(|i| rows.row_at(i).and_then(|r| r.group()) == Some(DERIVED_BASE))
+        );
+        let revealed = build_rows_active(
+            &c,
+            &d,
+            |_| None,
+            None,
+            "",
+            None,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+        );
+        assert!(revealed.row_index(DERIVED_BASE).is_some());
     }
     #[test]
     fn removal_rows_remain_sparse_filtered_and_promote_in_source_order() {

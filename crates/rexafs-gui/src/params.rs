@@ -1745,6 +1745,14 @@ impl DerivedSpectrum {
     pub fn fingerprint(&self, params: &PipelineParams) -> u64 {
         let mut hasher = std::hash::DefaultHasher::new();
         params.fingerprint().hash(&mut hasher);
+        // Live averages keep a stable identity while their immutable cache changes.
+        if self
+            .operation
+            .as_ref()
+            .is_some_and(|o| o.tool == "Live average")
+        {
+            self.source.hash(&mut hasher);
+        }
         self.quantity.hash(&mut hasher);
         for correction in &self.corrections {
             correction.digest.hash(&mut hasher);

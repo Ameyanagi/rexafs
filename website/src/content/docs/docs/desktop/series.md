@@ -40,6 +40,29 @@ interval. Arrow keys in a focused numeric field still edit that field.*
 and recovery. Saved trends retain their settings: changing the overview's
 representation or difference display does not recalculate them.
 
+## EXAFS parameter trends (unreleased)
+
+The source checkout adds **Fit** beside the spectral views. Choose
+**Add trend… → EXAFS fit…**, select a reviewed single-spectrum fit, and choose
+**Fit all frames**. Each frame uses the saved model and starting values.
+Processing can follow each spectrum or copy the current spectrum's settings.
+The comparison and frame controls remain available while fits run in the background.
+
+Select any model variable or path distance in the trend selector. **Expression…**
+adds a derived quantity such as `reff + dr_1`, using the selected path's FEFF
+reference half-path length. Supply its display unit; units are not inferred for
+arbitrary variables or expressions. Error bars show ±1 local standard error,
+propagated with the fit covariance, including parameter correlations. FEFF
+geometry is treated as exact. Missing uncertainty is not replaced with zero;
+failed or unconverged frames leave gaps.
+
+Changing the displayed expression does not rerun the fits. Save the project to
+retain full results and custom trends. Runs cover the series membership at start;
+incoming Live frames require a new Series run. See the
+[source guide](https://github.com/Ameyanagi/rexafs/blob/dev/doc/series-fitting.md)
+for assumptions and error-bar interpretation. This section describes unreleased
+checkout behavior; the release screenshots above remain historical.
+
 ## Measure a wavelet region
 
 Set up the map in [**Transform → Wavelet**](/docs/desktop/processing/#forward-transform),
@@ -186,3 +209,45 @@ and [plotting](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/crates/rexafs-gu
 When the central workspace is narrower than 700 logical pixels, the heatmap and
 detail plots stack vertically in a scrollable area. Heatmap controls wrap to keep
 Difference, Reference, Colors and Export accessible with the side panels open.
+
+### Unreleased Live monitor and averages
+
+The source checkout adds a compact monitor. Open it from the top-bar Live indicator;
+use Live options to dock it in the sidebar.
+Acquisition continues when the monitor is hidden or another stage/application is
+active. Its Latest scan/Last 5 scans/Average selection is independent of the main analysis.
+
+Preview a sample, choose transmission, fluorescence and reference under Signals,
+and choose Individual scans, Running averages, or Average every N scans. Channels stay
+separate. Running mode maintains three outputs for three selected signals;
+set mode maintains three per set. Original scans remain available through Show
+source scans. Pause/Resume reconciles arrivals without importing committed
+revisions twice. Rewritten files replace their contribution to the raw absorption
+mean and retain their original batch position.
+
+A reviewed single-spectrum fit can also be selected under EXAFS fit. Preview
+checks the frozen paths and model; Live fits individual scans or updated averages
+according to the Output choice. EXAFS · k and EXAFS · R show data and fitted
+curves in the monitor. XANES peaks is a separately named option.
+
+Averaging assumes repeated scans of the same state, uses equal weights and common
+energy coverage, and does not infer alignment or a signal-to-noise stopping rule.
+See the [source-checkout Live guide](https://github.com/Ameyanagi/rexafs/blob/dev/doc/live-acquisition.md)
+for processing, retention and qualification limits. These changes are not part of
+the released 0.2.10 workflow described above.
+
+### Live fit parameters and reference processing (unreleased)
+
+In Live, **Processing → Reference: …** copies the settings of a named spectrum.
+The default **Copy selected spectrum’s settings** copies the current selection.
+Preview captures normalization, background removal, and transform settings;
+Start freezes them for the session. Auto values still resolve for each incoming
+spectrum. The EXAFS model is selected separately.
+
+Choose **EXAFS · k** or **EXAFS · R** to show a **Parameter** selector and
+error-bar trend. **Expression…** supports derived quantities such as
+`reff + dr_1`. Selecting a parameter does not refit the scans. The side monitor
+shows this trend first, with an expandable fit comparison. In averaging modes,
+each point is a fit of an updated average, so the number of updates can differ
+from the number of source files. These averages share scans and are not
+independent measurements.

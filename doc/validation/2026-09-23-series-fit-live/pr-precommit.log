@@ -1,0 +1,12 @@
+Downloading virtualenv (5.2MiB)
+ Downloaded virtualenv
+Installed 10 packages in 21ms
+check for merge conflicts................................................Passed
+check yaml...........................................(no files to check)Skipped
+check toml...........................................(no files to check)Skipped
+check for added large files..............................................Passed
+Rust formatting..........................................................Passed
+Release version consistency..........................(no files to check)Skipped
+Retained project compatibility fixtures..............(no files to check)Skipped
+Beamline fixture integrity...........................(no files to check)Skipped
+Release tooling regressions..............................................Passed

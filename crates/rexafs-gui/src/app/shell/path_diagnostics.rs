@@ -1,9 +1,10 @@
 //! Inspect the FEFF arrays while keeping the path selection table visible.
 use super::chip;
 use crate::app::StudioApp;
+use crate::plot_ranges::plot_builder;
 use gpui::{Context, Entity, IntoElement, ParentElement, Styled, div, prelude::*, px};
 use rexafs::xafs::fitting::{FeffFlavor, FeffPathModel, FitVariables, feffpath, path2chi};
-use ruviz_gpui::{RuvizPlot, plot_builder};
+use ruviz_gpui::RuvizPlot;
 
 #[derive(Default)]
 pub(crate) struct PathDiagnostics {

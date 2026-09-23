@@ -18,12 +18,13 @@ use super::molecule_view::{
     AtomStyle, CrystalContext, MoleculeScene, PolyAtoms, PolyhedronOptions, ViewCamera,
     crystal_context,
 };
+use crate::plot_ranges::plot_builder;
 use gpui::{
     ClickEvent, Context, Entity, IntoElement, ParentElement, SharedString, Styled, div, prelude::*,
     px,
 };
 use ruviz::render::Color as PlotColor;
-use ruviz_gpui::{RuvizPlot, plot_builder};
+use ruviz_gpui::RuvizPlot;
 
 use super::fit_workspace::FitStep;
 use super::{MONO, button, chip, section_label};

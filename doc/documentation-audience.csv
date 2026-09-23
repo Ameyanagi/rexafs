@@ -1,4 +1,11 @@
 path,audience,website_action,proposed_route,notes
+doc/live-acquisition.md,mixed,adapt,/docs/desktop/series/,Unreleased acquisition setup and recovery with scientific averaging and fitting assumptions; local qualification stays in source records.
+doc/series-fitting.md,mixed,adapt,/docs/desktop/series/,Unreleased independent EXAFS fits and parameter expressions with covariance uncertainty; distinguish automatic Live output fits from frozen Series runs.
+doc/plot-axis-ranges.md,user,adapt,/docs/desktop/processing/,Unreleased independent automatic and numeric display limits; session-only preferences do not change analysis windows.
+doc/validation/2026-09-23-live-monitor/README.md,developer,exclude,,Unreleased macOS Live monitor and Cu EXAFS qualification with original screenshots.
+doc/validation/2026-09-23-live-workflow/README.md,developer,exclude,,Unreleased acquisition workflow review and retained computer-use evidence.
+doc/validation/2026-09-23-series-fit-live/README.md,developer,exclude,,Unreleased Series fitting and timed Live replay evidence; preserve historical build identity separately from PR integration checks.
+doc/validation/2026-09-23-series-fit-live/pr-integration.md,developer,exclude,,Current-dev integration checks for the unreleased Live and Assistant pull request; distinguish from earlier desktop captures.
 doc/validation/2026-09-22-cu-reduction/README.md,developer,exclude,,Unreleased numerical reproduction and ruviz figure provenance; keep outside the public manual.
 doc/synthetic-copper-reduction.md,mixed,adapt,/docs/desktop/synthetic-copper/,Published 0.2.13 teaching workflow with retained recovery results and ruviz figures; source reproduction and provenance remain explicit.
 doc/desktop-storage.md,user,adapt,/docs/desktop/storage/,Published 0.2.13 managed installer and inactive updater-app cleanup controls.

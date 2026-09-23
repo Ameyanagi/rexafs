@@ -1,0 +1,13 @@
+
+> rexafs-website@0.1.0 check
+> astro check
+
+12:55:01 [vite] Re-optimizing dependencies because vite config has changed
+12:55:02 [content] Syncing content
+12:55:05 [content] Synced content
+12:55:05 [types] Generated 4.38s
+12:55:05 [check] Getting diagnostics for Astro files in /Users/ryuichi/dev/rexafs-live-pr-20260923/website...
+Result (38 files):
+- 0 errors
+- 0 warnings
+- 0 hints

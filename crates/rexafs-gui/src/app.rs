@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::plot_ranges::plot_builder;
 use futures::StreamExt;
 use gpui::{
     ClickEvent, Context, Entity, ExternalPaths, FocusHandle, Focusable, IntoElement, KeyBinding,
@@ -25,9 +26,7 @@ use rexafs::prelude::XASSpectrum;
 use ruviz::core::{Annotation, AnnotationId};
 use ruviz::data::Observable;
 use ruviz::render::{Color as PlotColor, LineStyle};
-use ruviz_gpui::{
-    InteractionOptions, PlotPointerEvent, PlotPointerEventKind, RuvizPlot, plot_builder,
-};
+use ruviz_gpui::{InteractionOptions, PlotPointerEvent, PlotPointerEventKind, RuvizPlot};
 
 use rayon::prelude::*;
 
@@ -1119,6 +1118,7 @@ pub struct StudioApp {
     tools: ToolState,
     analysis: shell::tools::AnalysisState,
     measurements: shell::measurements::MeasurementState,
+    series_fits: shell::series::fits::SeriesFitState,
     live: shell::live::LiveState,
     peaks: shell::peaks::PeakState,
     normalization: shell::normalization::NormalizationState,
@@ -3034,6 +3034,7 @@ impl StudioApp {
             tools: ToolState::new(),
             analysis: shell::tools::AnalysisState::default(),
             measurements: Default::default(),
+            series_fits: Default::default(),
             live: Default::default(),
             peaks: Default::default(),
             normalization: Default::default(),
@@ -4964,6 +4965,10 @@ impl StudioApp {
             // arrays must never bypass the quantity guard on later edits.
             if let Some(group) = &derived
                 && (group.acquisition_mode() != rexafs::AbsorptionMode::Unknown
+                    || group
+                        .operation
+                        .as_ref()
+                        .is_some_and(|o| o.tool == "Live average")
                     || !group.corrections.is_empty()
                     || group.processing_block_reason().is_some()
                     || group.quantity.prepared_space().is_some())
@@ -5450,6 +5455,15 @@ impl StudioApp {
                     .build(cx);
                 let chik = plot_builder(chik).interactive().build(cx);
                 let trend = plot_builder(trend).interactive().build(cx);
+                for plot in [&heatmap, &trend] {
+                    cx.subscribe(plot, |app, _, _: &crate::plot_ranges::RangesChanged, cx| {
+                        if let Some(plots) = &mut app.operando_plots {
+                            plots.last_trend_cursor = None;
+                        }
+                        app.update_operando_cursor_annotations(cx);
+                    })
+                    .detach();
+                }
                 let subscription = cx.subscribe(
                     &heatmap,
                     |this: &mut Self, _, event: &PlotPointerEvent, cx| {
@@ -6230,6 +6244,9 @@ impl StudioApp {
         self.rebuild_fit_preview_plots(cx, false);
         self.restyle_rmc(cx);
         self.restyle_wavelet(cx);
+        // Live plots own a separate display cursor and copied plot theme.
+        // Refresh their presentation without changing the acquisition recipe.
+        self.restyle_live(cx);
         cx.notify();
     }
 
@@ -9004,6 +9021,7 @@ impl StudioApp {
             cancel.store(true, std::sync::atomic::Ordering::Relaxed);
         }
         self.measurements.stop();
+        self.series_fits = Default::default();
         self.live.stop();
         self.live = Default::default();
         self.peaks.stop();
@@ -9018,6 +9036,11 @@ impl StudioApp {
         self.measurements = shell::measurements::MeasurementState::from_archive(
             project.series_measurements.clone(),
         );
+        for run in &mut self.measurements.archive.fit_runs {
+            if !run.complete {
+                Arc::make_mut(run).finish(true);
+            }
+        }
         self.analysis.mcr_generation_advance();
         self.analysis.mcr = project.mcr_analysis.clone();
         self.analysis.lcf_series = project.lcf_series_analysis.clone();
