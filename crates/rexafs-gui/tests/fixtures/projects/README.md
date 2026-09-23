@@ -26,6 +26,7 @@ are not supported or retained as compatibility fixtures.
 | `rexafs-0.2.11-links.rxs`, `rexafs-0.2.11-embedded.rxs` | Saved and reopened through the 0.2.11 writer; explicit four-worker RMC draft, parallel paths, automatic moves and periodic energy-refinement settings, plus retained format-1 state |
 | `rexafs-0.2.12-links.rxs`, `rexafs-0.2.12-embedded.rxs` | Saved and reopened through the 0.2.12 writer; unchanged format-1 state, including the retained RMC controls and collection-analysis results |
 | `rexafs-0.2.13-links.rxs`, `rexafs-0.2.13-embedded.rxs` | Saved and reopened through the 0.2.13 writer; unchanged format-1 state with retained collection-analysis results and independent analysis settings |
+| `rexafs-0.2.14-links.rxs`, `rexafs-0.2.14-embedded.rxs` | Saved and reopened through the 0.2.14 writer; retained format-1 state and collection results with additive empty Series-fit and Live-session defaults |
 | `future-version.rxs` | Future format: reject without modification |
 | `truncated.rxs` | Corrupt/incomplete input: reject without modification |
 | `data/*.xmu`, `feff/*.dat` | Real inputs for relocation, byte recovery and processing checks |
