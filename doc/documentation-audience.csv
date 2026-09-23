@@ -1,7 +1,9 @@
 path,audience,website_action,proposed_route,notes
-doc/live-acquisition.md,mixed,adapt,/docs/desktop/series/,Unreleased acquisition setup and recovery with scientific averaging and fitting assumptions; local qualification stays in source records.
-doc/series-fitting.md,mixed,adapt,/docs/desktop/series/,Unreleased independent EXAFS fits and parameter expressions with covariance uncertainty; distinguish automatic Live output fits from frozen Series runs.
-doc/plot-axis-ranges.md,user,adapt,/docs/desktop/processing/,Unreleased independent automatic and numeric display limits; session-only preferences do not change analysis windows.
+doc/release-notes-0.2.14.md,user,adapt,/releases/,0.2.14 preparation notes; publish release claims only after artifact verification.
+doc/validation/2026-09-24-release-0.2.14/review.md,developer,exclude,,0.2.14 source and artifact qualification record; preserve pending gates and original preview evidence.
+doc/live-acquisition.md,mixed,adapt,/docs/desktop/series/,0.2.14 acquisition setup and recovery with scientific averaging and fitting assumptions; local qualification stays in source records.
+doc/series-fitting.md,mixed,adapt,/docs/desktop/series/,0.2.14 independent EXAFS fits and parameter expressions with covariance uncertainty; distinguish automatic Live output fits from frozen Series runs.
+doc/plot-axis-ranges.md,user,adapt,/docs/desktop/processing/,0.2.14 independent automatic and numeric display limits; session-only preferences do not change analysis windows.
 doc/validation/2026-09-23-live-monitor/README.md,developer,exclude,,Unreleased macOS Live monitor and Cu EXAFS qualification with original screenshots.
 doc/validation/2026-09-23-live-workflow/README.md,developer,exclude,,Unreleased acquisition workflow review and retained computer-use evidence.
 doc/validation/2026-09-23-series-fit-live/README.md,developer,exclude,,Unreleased Series fitting and timed Live replay evidence; preserve historical build identity separately from PR integration checks.

@@ -6,8 +6,8 @@ Introduced as an experimental workflow in 0.2.10. Physical Windows/Linux
 acquisition and network-share behavior remain unqualified; the release does not
 claim that the automated checks establish those operating conditions.
 
-The side/window monitor, simultaneous signal selection and optional averages
-below are **unreleased source-checkout changes**. Released 0.2.10 selected one
+Version 0.2.14 adds the side/window monitor, simultaneous signal selection and
+optional averages below. Earlier 0.2.10 selected one
 reviewed signal per scan and used the main selection for its Live plot. The
 [historical review](validation/2026-09-23-live-workflow/README.md) records those
 limitations before these changes.
@@ -53,7 +53,7 @@ from one source commit together; an unreadable channel holds that source for
 review. Other compatible sources continue. Unselected channels remain in the
 retained original bytes.
 
-## Reuse an EXAFS fit (unreleased)
+## Reuse an EXAFS fit
 
 First fit a representative spectrum in **Fit** and inspect its result. In Live,
 choose that recorded fit under **EXAFS fit**, then **Preview sample**. EXAFS fitting
@@ -160,7 +160,7 @@ requires a new session. The Series overview, trend table and CSV export retain
 all committed results. Sequence means completion order; it is not an acquisition
 timestamp. Labels include a short content revision to distinguish reused names.
 
-## Separate averages for simultaneous channels (unreleased)
+## Separate averages for simultaneous channels
 
 Running averages maintains one output for each selected signal. Transmission,
 fluorescence and reference therefore produce three outputs. Sets of N scans
@@ -263,7 +263,7 @@ queue choices are rexafs-specific engineering policies. See the
 See the [synthetic computer-use record](validation/2026-09-17-live/README.md)
 for screenshots and the exact scope of local validation.
 
-## Live fit-parameter plots (unreleased)
+## Live fit-parameter plots
 
 Choose **EXAFS · k** or **EXAFS · R**, then choose **Parameter** below the
 comparison. Model variables and fitted path distances are available immediately.

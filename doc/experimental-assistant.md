@@ -55,7 +55,7 @@ explicit choice. Model changes retain the existing supported-level fallback.
 Use arrow keys to move through a menu, Enter or Space to choose, and Escape to
 close it. Long model and reasoning lists scroll.
 
-In the unreleased source checkout, **Automatic** prefers `gpt-6-sol` (GPT-6 Sol)
+From 0.2.14, **Automatic** prefers `gpt-6-sol` (GPT-6 Sol)
 when it appears in the connected Codex model catalog. It otherwise uses the first
 available catalog model. Explicit model choices remain saved; an unavailable
 saved model uses the same fallback and displays a warning. Other models, including
@@ -83,9 +83,11 @@ uses the existing preference persistence and permission checks.
 
 ## Workspace and conversations
 
-### Connected apps and files (unreleased)
+<a id="connected-apps-and-files-unreleased"></a>
 
-The source checkout adds **Access → Connected apps and files**. Turn it on to use
+### Connected apps and files
+
+Version 0.2.14 adds **Access → Connected apps and files**. Turn it on to use
 apps already installed and connected in the signed-in Codex account, such as Google
 Drive. Install and authenticate the app in Codex first; this switch does not
 create a connection or change its permissions. See OpenAI's
