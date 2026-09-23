@@ -9,7 +9,7 @@ audience: user
 Add the stable crate:
 
 ```sh
-cargo add rexafs@0.2.13
+cargo add rexafs@0.2.14
 ```
 
 ```rust
@@ -34,10 +34,10 @@ after direct edits to legacy public fields, call `invalidate_derived()`.
 
 ## Full API reference
 
-The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.13 crate
+The [stable reference](/api/rust/rexafs/index.html) uses the published 0.2.14 crate
 with the default nalgebra backend and optional features. It excludes the legacy
 `ndarray-compat` backend, which replaces parts of that API and has different
-defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.13/rexafs/) is also available.
+defaults. [Versioned docs.rs](https://docs.rs/rexafs/0.2.14/rexafs/) is also available.
 
 The [Next reference](/api/rust-next/rexafs/index.html) uses the checkout with the
 same features. Use it when working from source.
@@ -69,7 +69,7 @@ automatic choices, units, angle conversion and supported containers.
 | `materials-project`, `cod` | HTTP structure-source integrations |
 | `ndarray-compat` | Legacy ndarray compatibility backend |
 
-For example, `cargo add rexafs@0.2.13 --features plotting,refeff-runner` enables
+For example, `cargo add rexafs@0.2.14 --features plotting,refeff-runner` enables
 plotting and ReFEFF. Backend availability depends on the platform; see
 [WebAssembly support](/docs/libraries/webassembly/) for browser limits.
 
@@ -117,10 +117,10 @@ the desktop's backup, migration or atomic replacement behavior.
 
 ## RMC from a processed Spectrum
 
-Enable `refeff-runner` to use the RMC API in 0.2.13. Construct a dataset from
+Enable `refeff-runner` to use the RMC API in 0.2.14. Construct a dataset from
 `Spectrum` so its normalization, background and Fourier settings are retained,
 then prepare a structure and an exact cached ReFEFF session. The
-[RMC guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/doc/rmc.md) provides
+[RMC guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/doc/rmc.md) provides
 runnable examples, checkpoint/resume and evolutionary search. The
 [desktop workflow](/docs/desktop/rmc/) explains the shared background-range
 guard and residual-trend interpretation. Adaptive scattering remains experimental
@@ -137,5 +137,5 @@ Since 0.2.12, `radial_distribution` calculates species-resolved distributions
 with density and shell-volume normalization for periodic cells. Prepared-cache
 diagnostics distinguish cold from repeated misses. The desktop retains bounded
 structural histories and chooses memory and catalogue budgets automatically;
-Rust retains explicit resource settings. See the [structural and resource guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.13/doc/rmc-structural-evolution.md)
+Rust retains explicit resource settings. See the [structural and resource guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/doc/rmc-structural-evolution.md)
 for normalization, defaults, limits and saved-state behavior.

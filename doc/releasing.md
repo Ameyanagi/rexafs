@@ -14,12 +14,17 @@ successful app launch alone does not qualify the updater. The
 0.2.10/0.2.11 failure and the source correction. Do not reuse the older qualification
 as evidence that signed in-app updates work.
 
-## Preparing 0.2.14
+## Published 0.2.14
 
 The [0.2.14 notes](release-notes-0.2.14.md) and
 [qualification record](validation/2026-09-24-release-0.2.14/review.md) track
 Live monitoring, EXAFS parameter trends, plot ranges and Assistant file import.
-Final tag builds, signed installers and publication are separate release gates.
+Published on 24 September 2026 in Japan (23 September UTC) after all 30 exact-tag
+jobs, Mac signing/notarization and installed core/updater/FEFF checks passed.
+The signed GUI review verified Cu fit expressions and error bars, plot ranges,
+save/reopen, three-signal averages and pause/resume. Fresh Python and npm consumers
+passed. All 22 desktop files and six registry files were downloaded and
+hash-verified before advancing stable website metadata.
 
 ## Published 0.2.13
 

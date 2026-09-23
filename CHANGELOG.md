@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.2.14 (release preparation)
+## 0.2.14 (2026-09-24)
 
 - Keep Live acquisition visible in a compact sidebar or separate monitor while
   working elsewhere. Select a processing reference independently of the current

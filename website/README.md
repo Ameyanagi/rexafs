@@ -81,7 +81,7 @@ forward Fourier transforms and CSV/JSON export.
 
 `/app/scattering/` runs the published ReFEFF 0.4.0 WASI engine through its browser
 Worker. It accepts a FEFF input, displays calculated EXAFS and offers generated
-files and a provenance record for download. Native rexafs 0.2.13 also uses
+files and a provenance record for download. Native rexafs 0.2.14 also uses
 ReFEFF 0.4.0; the two browser engines have separate manifests.
 
 `npm run dev` and `npm run build` first prepare both engines. Install `wasm-pack 0.15.0`
@@ -150,7 +150,7 @@ follow the vendor README and preserve the original notice bytes.
 - `src/content/docs/` owns the curated public manual. Every page requires
   `audience: user`; the collection schema rejects any other audience.
 - `doc/` retains source-checkout guides and historical records. Website guides
-  target published 0.2.13; source-checkout additions belong in Next. Desktop
+  target published 0.2.14; source-checkout additions belong in Next. Desktop
   screenshot captions preserve their actual build and capture provenance. Keep shared
   scientific explanations synchronized when the underlying method changes. Do not import `doc/` recursively.
 - `src/content/docs/docs/reference/{stable,next}/` is generated. Edit Python
@@ -178,7 +178,12 @@ follow the vendor README and preserve the original notice bytes.
   Extraction includes the Python declarations/native help, every TypeScript
   entry-point declaration, Wasm help and the Rust core's public documentation.
 - `public/` contains only selected public assets. Application screenshots are
-  full, unedited captures made with computer use. `screenshots/0.2.13/` contains
+  full, unedited captures made through native GUI interaction. `screenshots/0.2.14/`
+  contains eight signed-release Live, Series-fit, axis-range and Assistant windows.
+  Its manifest records the native Accessibility fallback after the Computer Use
+  connector's authentication error, original dimensions and all artifact/input
+  hashes. These are original native window PNGs, not connector output.
+  `screenshots/0.2.13/` contains
   six original 1192 × 768 windows from the signed ARM64 0.2.13 DMG: the new copper
   example, fresh default PCA/MCR results, Series differences and Storage. Its
   `capture.json` identifies the signed artifact and all inputs and images, and

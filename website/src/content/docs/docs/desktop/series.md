@@ -4,7 +4,7 @@ description: "Browse scan frames and distinguish sampled overviews from complete
 audience: user
 ---
 
-This guide describes **rexafs 0.2.13**. The retained 0.2.11 screenshots were captured
+This guide describes **rexafs 0.2.14**. The retained 0.2.11 screenshots were captured
 through computer use from the signed macOS release, using two
 public Cu foil measurements. These are a small workflow example, **not a time series** or a
 controlled temperature experiment. See
@@ -40,9 +40,11 @@ interval. Arrow keys in a focused numeric field still edit that field.*
 and recovery. Saved trends retain their settings: changing the overview's
 representation or difference display does not recalculate them.
 
-## EXAFS parameter trends (unreleased)
+<a id="exafs-parameter-trends-unreleased"></a>
 
-The source checkout adds **Fit** beside the spectral views. Choose
+## EXAFS parameter trends
+
+Version 0.2.14 adds **Fit** beside the spectral views. Choose
 **Add trend… → EXAFS fit…**, select a reviewed single-spectrum fit, and choose
 **Fit all frames**. Each frame uses the saved model and starting values.
 Processing can follow each spectrum or copy the current spectrum's settings.
@@ -59,9 +61,15 @@ failed or unconverged frames leave gaps.
 Changing the displayed expression does not rerun the fits. Save the project to
 retain full results and custom trends. Runs cover the series membership at start;
 incoming Live frames require a new Series run. See the
-[source guide](https://github.com/Ameyanagi/rexafs/blob/dev/doc/series-fitting.md)
-for assumptions and error-bar interpretation. This section describes unreleased
-checkout behavior; the release screenshots above remain historical.
+[source guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/doc/series-fitting.md)
+for assumptions and error-bar interpretation. The earlier release screenshots
+above retain their historical build identities.
+
+[![Signed rexafs 0.2.14 showing the reopened Cu fit and a distance trend with error bars](/screenshots/0.2.14/series-restored.png)](/screenshots/0.2.14/series-restored.png)
+
+*Signed 0.2.14: the saved `reff + dr_1` expression and fit survive reopening.
+These two frames repeat a prepared Cu reference; they do not demonstrate a
+physical time trend. [Input and capture provenance](/licenses/#desktop-0214-release-captures).*
 
 ## Measure a wavelet region
 
@@ -210,12 +218,20 @@ When the central workspace is narrower than 700 logical pixels, the heatmap and
 detail plots stack vertically in a scrollable area. Heatmap controls wrap to keep
 Difference, Reference, Colors and Export accessible with the side panels open.
 
-### Unreleased Live monitor and averages
+<a id="unreleased-live-monitor-and-averages"></a>
 
-The source checkout adds a compact monitor. Open it from the top-bar Live indicator;
+### Live monitor and averages
+
+Version 0.2.14 adds a compact monitor. Open it from the top-bar Live indicator;
 use Live options to dock it in the sidebar.
 Acquisition continues when the monitor is hidden or another stage/application is
 active. Its Latest scan/Last 5 scans/Average selection is independent of the main analysis.
+
+[![Signed rexafs 0.2.14 with a three-scan fluorescence average in the Live sidebar while Cu stays selected in Data](/screenshots/0.2.14/live-sidebar.png)](/screenshots/0.2.14/live-sidebar.png)
+
+*The monitor follows synthetic arrivals while the analyst's Cu view stays in place.
+The same monitor can open in a [separate window](/screenshots/0.2.14/live-separate-monitor.png).
+[Input and capture provenance](/licenses/#desktop-0214-release-captures).*
 
 Preview a sample, choose transmission, fluorescence and reference under Signals,
 and choose Individual scans, Running averages, or Average every N scans. Channels stay
@@ -232,11 +248,13 @@ curves in the monitor. XANES peaks is a separately named option.
 
 Averaging assumes repeated scans of the same state, uses equal weights and common
 energy coverage, and does not infer alignment or a signal-to-noise stopping rule.
-See the [source-checkout Live guide](https://github.com/Ameyanagi/rexafs/blob/dev/doc/live-acquisition.md)
-for processing, retention and qualification limits. These changes are not part of
-the released 0.2.10 workflow described above.
+See the [Live guide](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/doc/live-acquisition.md)
+for processing, retention and qualification limits. These additions extend the
+original 0.2.10 workflow described above.
 
-### Live fit parameters and reference processing (unreleased)
+<a id="live-fit-parameters-and-reference-processing-unreleased"></a>
+
+### Live fit parameters and reference processing
 
 In Live, **Processing → Reference: …** copies the settings of a named spectrum.
 The default **Copy selected spectrum’s settings** copies the current selection.

@@ -7,13 +7,13 @@ audience: user
 [Try the browser workspace](/app/) for local processing without installation.
 
 All three libraries use the Rust numerical engine. These guides target
-**published 0.2.13**.
+**published 0.2.14**.
 
 | Library | Best for | Install |
 |---|---|---|
-| [Python](/docs/libraries/python/) | NumPy, Jupyter and analysis scripts | `uv add rexafs==0.2.13` |
-| [TypeScript / JavaScript](/docs/libraries/typescript/) | Node applications and browser tools | `bun add rexafs@0.2.13` |
-| [Rust](/docs/libraries/rust/) | Native applications, parallel groups, structures and fitting | `cargo add rexafs@0.2.13` |
+| [Python](/docs/libraries/python/) | NumPy, Jupyter and analysis scripts | `uv add rexafs==0.2.14` |
+| [TypeScript / JavaScript](/docs/libraries/typescript/) | Node applications and browser tools | `bun add rexafs@0.2.14` |
+| [Rust](/docs/libraries/rust/) | Native applications, parallel groups, structures and fitting | `cargo add rexafs@0.2.14` |
 
 The commands assume an existing project. Follow the language guide for project
 setup, editor configuration and a measured Cu example.

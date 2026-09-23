@@ -60,6 +60,33 @@ historical 100-mixture test fixtures described below.
 
 ## Documentation screenshots
 
+<span id="desktop-0214-release-captures"></span>
+
+### Desktop 0.2.14 release captures
+
+Eight full, unedited PNG windows in `screenshots/0.2.14/` document the signed and
+notarized Apple Silicon **0.2.14** release installed from its DMG on 24 September
+2026 in Japan. The [manifest](/screenshots/0.2.14/capture.json) records source,
+signing, installer, executable, input and image hashes, and each original size:
+2384 × 1536 for main windows, 740 × 1216 for the separate monitor and 820 × 592
+for the axis dialog. No cropping, resizing, annotation or replacement plots
+were applied.
+
+The Computer Use connector could not authenticate (error −10000). This review
+used existing macOS Accessibility permissions, native controls and native window
+capture instead; these images are not connector output. The
+[signed workflow record](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-09-24-release-0.2.14/signed-workflow.md)
+retains that limitation and the completed checks.
+
+The Cu project repeats a prepared 517-point reference derived from the
+user-provided 2016 Athena Cu-oxide project. Its
+[attribution record](https://github.com/Ameyanagi/rexafs/blob/v0.2.14/crates/rexafs/tests/fixtures/analysis/cu-mixtures/README.md)
+retains permission and the unknown original acquisition author/license; the
+measurement is not MIT-licensed code. Three separate synthetic XDI sources
+exercise transmission, fluorescence and reference averages. These captures and
+software comparisons do not establish an experimental time trend or improved
+signal-to-noise. Earlier captures below retain their original provenance.
+
 ### Desktop 0.2.13 release captures
 
 The six images in `screenshots/0.2.13/` are full, unedited **1192 × 768**
