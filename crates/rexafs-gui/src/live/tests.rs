@@ -675,14 +675,19 @@ fn bad_selected_channel_cannot_publish_a_partial_detector_set() {
 }
 #[test]
 fn old_sessions_default_to_individual_scans_and_batches_validate() {
-    let mut value = serde_json::to_value(config(Path::new("/tmp"))).unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let mut value = serde_json::to_value(config(tmp.path())).unwrap();
     value.as_object_mut().unwrap().remove("merge");
     let mut restored: LiveConfig = serde_json::from_value(value).unwrap();
     assert_eq!(restored.merge, LiveMerge::Individual);
+    restored.validate().unwrap();
     restored.merge = LiveMerge::Batches { scans: 0 };
-    assert!(restored.validate().is_err());
+    assert_eq!(
+        restored.validate().unwrap_err(),
+        "Use 2 to 100000 scans per average batch"
+    );
     restored.merge = LiveMerge::Batches { scans: 2 };
-    assert!(restored.validate().is_ok());
+    restored.validate().unwrap();
 }
 
 #[test]
