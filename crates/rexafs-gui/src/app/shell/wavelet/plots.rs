@@ -1,11 +1,11 @@
 //! Display resampling is bounded and independent of native-grid region integrals.
 use super::*;
 use crate::app::series_display::HeatmapPalette;
+use crate::plot_ranges::plot_builder;
 use ruviz::{
     plots::heatmap::{HeatmapConfig, HeatmapOrigin},
     prelude::*,
 };
-use ruviz_gpui::plot_builder;
 
 /// Fixed physical margins align data rectangles, not just the outer widgets.
 /// Reserve the same right margin below the map as its colorbar occupies above.
@@ -177,6 +177,11 @@ impl StudioApp {
                     ..Default::default()
                 })
                 .build(cx);
+            cx.subscribe(
+                &entity,
+                |app, _, _: &crate::plot_ranges::RangesChanged, cx| app.link_wavelet_axes(0, cx),
+            )
+            .detach();
             self.wavelet.subscription = Some(cx.subscribe(
                 &entity,
                 |app, _, event: &PlotPointerEvent, cx| {
@@ -314,16 +319,33 @@ impl StudioApp {
             .xlim(amplitude * 1.05, 0.)
             .ylim(map.r()[0], *map.r().last().unwrap())
             .into();
-        for (slot, plot) in [
+        for (source, (slot, plot)) in [
             (&mut self.wavelet.plot_k, kp),
             (&mut self.wavelet.plot_r, rp),
-        ] {
+        ]
+        .into_iter()
+        .enumerate()
+        {
             if let Some(entity) = slot {
                 entity.update(cx, |p, cx| replace_panel(p, plot, cx));
             } else {
-                *slot = Some(plot_builder(plot).interactive().build(cx));
+                let entity = plot_builder(plot).interactive().build(cx);
+                cx.subscribe(
+                    &entity,
+                    move |app, _, _: &crate::plot_ranges::RangesChanged, cx| {
+                        app.link_wavelet_axes(source + 1, cx)
+                    },
+                )
+                .detach();
+                *slot = Some(entity);
             }
         }
+        self.link_wavelet_axes(0, cx);
+        cx.notify();
+    }
+
+    fn link_wavelet_axes(&mut self, source: usize, cx: &mut Context<Self>) {
+        self.wavelet.view_links.clear();
         if let (Some(map), Some(k), Some(r)) = (
             &self.wavelet.plot_map,
             &self.wavelet.plot_k,
@@ -333,6 +355,7 @@ impl StudioApp {
                 map.read(cx).interactive_session().clone(),
                 k.read(cx).interactive_session().clone(),
                 r.read(cx).interactive_session().clone(),
+                source,
             );
         }
         cx.notify();

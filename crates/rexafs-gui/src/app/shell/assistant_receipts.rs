@@ -6,6 +6,7 @@ pub(super) fn requires_edit(tool: &str) -> bool {
     !matches!(
         tool,
         "xray_get_state"
+            | "xray_get_import_status"
             | "xray_get_plots"
             | "xray_navigate"
             | "xray_set_layout"
@@ -326,6 +327,7 @@ mod tests {
     fn every_tool_has_review_or_edit_classification() {
         let tools = crate::codex_client::dynamic_tools();
         let edit = [
+            "xray_import_files",
             "xray_fetch_structure",
             "xray_choose_structure",
             "xray_calculate_paths",
@@ -338,6 +340,7 @@ mod tests {
             "xray_run_analysis",
         ];
         let review = [
+            "xray_get_import_status",
             "xray_get_state",
             "xray_get_plots",
             "xray_navigate",

@@ -305,6 +305,56 @@ fn parser_totals_and_line_examples_survive_linked_and_embedded_reopen() {
         );
     }
 }
+#[test]
+fn resaving_a_live_copy_and_its_original_keeps_one_verified_source() {
+    let temp = Temp::new();
+    let original = temp.join("average.dat");
+    let copy = temp.join("portable-average.dat");
+    std::fs::write(&original, b"1 2\n2 3\n").unwrap();
+    std::fs::copy(&original, &copy).unwrap();
+    let mut project = ProjectFile::default();
+    project.spectrum_file = Some(original.clone());
+    project.raw_files = vec![copy.clone()];
+    project.source_groups = vec![crate::group_identity::SourceGroup {
+        id: crate::group_identity::GroupId::source(&copy, crate::params::DetectionMode::Auto),
+        path: copy.clone(),
+        channel: crate::params::DetectionMode::Auto,
+    }];
+    project
+        .source_origins
+        .insert(copy.clone(), original.clone());
+    let saved = temp.join("saved.rxs");
+    save_with_storage(&saved, &project, DataStorage::Embedded).unwrap();
+    assert_eq!(
+        json_file(&saved)["header"]["files"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let reopened = load(&saved).unwrap();
+    assert_eq!(
+        reopened.spectrum_file.as_ref(),
+        Some(&reopened.source_groups[0].path)
+    );
+    assert_eq!(
+        std::fs::read(reopened.spectrum_file.unwrap()).unwrap(),
+        b"1 2\n2 3\n"
+    );
+    std::fs::write(&original, b"1 4\n2 5\n").unwrap();
+    let before = std::fs::read(&saved).unwrap();
+    assert!(
+        save_with_storage(&saved, &project, DataStorage::Embedded)
+            .unwrap_err()
+            .contains("Conflicting input revisions")
+    );
+    assert_eq!(
+        std::fs::read(&saved).unwrap(),
+        before,
+        "a failed save preserves the previous project"
+    );
+}
+
 fn state(project: &ProjectFile) -> Value {
     let mut project = project.clone();
     let origins = project.source_origins.clone();

@@ -19,6 +19,9 @@ impl StudioApp {
         if self.live.open {
             return self.live_center(cx);
         }
+        if self.series_fits.edit {
+            return self.series_fit_editor(cx);
+        }
         self.monitor_measurements(cx);
         if !self.measurements.initialized {
             self.measurements.initialized = true;
@@ -84,6 +87,12 @@ impl StudioApp {
             .child(div().text_size(px(15.)).child(title))
             .child(div().text_color(t.text_muted).child(source))
             .child(div().flex_1())
+            .when(!self.measurements.results, |d| {
+                d.child(
+                    button(&t, "trend-exafs", "EXAFS fit…", false)
+                        .on_click(cx.listener(|app, _, _, cx| app.begin_series_fit(cx))),
+                )
+            })
             .child(
                 button(
                     &t,

@@ -1,5 +1,6 @@
 //! Peak-model editing and retained current/series results, within Data analysis.
 use super::*;
+use crate::plot_ranges::plot_builder;
 use crate::{
     peak_fits::{self, PeakArchive, PeakMetric, PeakRecord, PeakRun},
     series_measurements::{FrameInput, FrameStatus},
@@ -12,7 +13,7 @@ use gpui::{AppContext, Entity};
 use rexafs::prelude::{
     Measurement, MeasurementSpace, PeakFit, PeakRole, PeakShape, PeakTermination,
 };
-use ruviz_gpui::{RuvizPlot, plot_builder};
+use ruviz_gpui::RuvizPlot;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},

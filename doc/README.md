@@ -66,6 +66,9 @@ Sponsorship supports ongoing development and maintenance; stars help others disc
 - [XDI import](xdi-import.md)
 - [Multiple spectra and independent fitting](joint-fitting.md)
 - [Series browsing and trends](series.md)
+- [Live acquisition](live-acquisition.md): 0.2.14 background monitoring, signal selection, averages and automatic fits.
+- [Series EXAFS fits](series-fitting.md): 0.2.14 per-frame fits and parameter expressions with covariance error bars.
+- [Plot axis ranges](plot-axis-ranges.md): 0.2.14 independent numeric and automatic display limits.
 - [Structure slices and depth cues](structure-depth-view.md)
 - [Project compatibility and recovery](project-compatibility.md)
 - [Publication editor and captions](publication.md)

@@ -436,7 +436,7 @@ impl StudioApp {
                 match result {
                     Ok(plot) => {
                         review.plot = Some(
-                            ruviz_gpui::plot_builder(plot.size_px(780, 400))
+                            crate::plot_ranges::plot_builder(plot.size_px(780, 400))
                                 .interactive()
                                 .build(cx),
                         );

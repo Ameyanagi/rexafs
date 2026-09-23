@@ -8,6 +8,7 @@ use super::{
     molecule_view::{MoleculeScene, SceneAtom},
     section_label, segment, segmented,
 };
+use crate::plot_ranges::plot_builder;
 use crate::{
     accessibility::Control,
     app::StudioApp,
@@ -24,7 +25,7 @@ use rexafs::{
     structure::{Edge, Element},
 };
 use ruviz::prelude::Plot;
-use ruviz_gpui::{RuvizPlot, plot_builder};
+use ruviz_gpui::RuvizPlot;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 #[derive(Default)]

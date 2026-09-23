@@ -1,0 +1,55 @@
+warning: field `discovered` is never read
+   --> crates/rexafs-gui/src/live.rs:356:9
+    |
+355 | pub struct LiveProgress {
+    |            ------------ field in this struct
+356 |     pub discovered: usize,
+    |         ^^^^^^^^^^
+    |
+    = note: `LiveProgress` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: linker stderr: ld: __eh_frame section too large (max 16MB) to encode dwarf unwind offsets in compact unwind table, performance of exception handling might be affected
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `rexafs-gui` (bin "rexafs" test) generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.52s
+warning: the following packages contain code that will be rejected by a future version of Rust: binrw v0.12.1, block v0.1.6, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 2`
+     Running unittests src/main.rs (target/debug/deps/rexafs-9c300d8c7a0dfba8)
+
+running 31 tests
+test project::tests::compact_writer_preserves_all_finite_double_bits_and_opaque_metadata ... ok
+test project::tests::compact_defaults_preserve_explicit_fit_range_and_publication_settings ... ok
+test project::tests::default_paths_can_record_missing_sources_but_embedding_cannot_drop_them ... ok
+test project::tests::energy_offset_and_alignment_history_survive_project_roundtrip_and_zero ... ok
+test project::tests::embedded_restore_uses_the_injected_cache_and_links_need_no_cache ... ok
+test project::tests::fixed_lambda_persists_while_missing_legacy_clamp_fields_keep_their_meaning ... ok
+test project::tests::format_one_defaults_keep_their_released_meaning ... ok
+test project::tests::assistant_conversations_roundtrip_in_both_storage_modes_and_limit_at_save ... ok
+test project::tests::embedded_project_is_lossless_self_contained_and_can_be_saved_again ... ok
+test project::tests::invalid_channel_ids_are_rejected_and_legacy_groups_get_stable_ids ... ok
+test project::tests::independent_channels_roundtrip_linked_and_embedded_with_one_raw_source ... ok
+test project::tests::linked_project_moves_with_data_and_save_as_rebases_every_owned_path ... ok
+test project::tests::group_identity_roundtrip_relocation_channels_results_and_three_more_imports ... ok
+test project::tests::metadata_records_source_comments_checksums_and_writer ... ok
+test project::tests::only_rxs_is_supported_and_future_formats_cannot_be_overwritten ... ok
+test project::tests::malformed_headers_payloads_and_unsafe_archive_paths_are_rejected ... ok
+test project::tests::joint_materialized_groups_keep_empty_locators_on_save_and_reopen ... ok
+test project::tests::recipes_exact_applications_and_pending_sources_survive_conflicting_machine_library ... ok
+test project::tests::parser_totals_and_line_examples_survive_linked_and_embedded_reopen ... ok
+test project::tests::released_020_fixtures_retain_import_state_and_historical_evidence ... ok
+test project::tests::released_021_fixtures_preserve_weight_link_palette_and_publication ... ok
+test project::tests::released_029_fixtures_retain_collection_results ... ok
+test project::tests::replacements_keep_exact_backup_and_partial_writes_leave_previous_file ... ok
+test project::tests::resaving_a_live_copy_and_its_original_keeps_one_verified_source ... ok
+test project::tests::removal_exclusions_roundtrip_linked_and_embedded_without_resurrection ... ok
+test project::tests::saving_through_a_directory_alias_keeps_links_portable ... ok
+test project::tests::typed_outputs_legacy_quantity_hints_require_explicit_confirmation ... ok
+test project::tests::write_release_compatibility_fixtures ... ignored, requires REXAFS_FIXTURE_OUTPUT; writes a new release fixture pair
+test project::tests::standalone_processing_lock_roundtrip_linked_and_embedded ... ok
+test project::tests::typed_outputs_difference_calibration_and_merge_roundtrip_linked_and_embedded ... ok
+test project::tests::every_release_fixture_loads_saves_and_reopens_without_losing_state ... ok
+
+test result: ok. 30 passed; 0 failed; 1 ignored; 0 measured; 645 filtered out; finished in 4.31s

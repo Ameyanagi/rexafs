@@ -1,0 +1,116 @@
+   Compiling rexafs-gui v0.2.12 (/Users/ryuichi/dev/rexafs/crates/rexafs-gui)
+warning: variant `Import` is never constructed
+   --> crates/rexafs-gui/src/app.rs:172:5
+    |
+171 | pub(crate) enum ParamSection {
+    |                 ------------ variant in this enum
+172 |     Import,
+    |     ^^^^^^
+    |
+    = note: `ParamSection` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated items `catalog_range` and `in_catalog_range` are never used
+  --> crates/rexafs-gui/src/app/group_rows.rs:60:12
+   |
+58 | impl Rows {
+   | --------- associated items in this implementation
+59 |     /// The existing folder-run browser exposes one contiguous expanded run.
+60 |     pub fn catalog_range(catalog_len: usize, start: usize, len: usize) -> Self {
+   |            ^^^^^^^^^^^^^
+...
+78 |     pub fn in_catalog_range(self, start: usize, len: usize) -> Self {
+   |            ^^^^^^^^^^^^^^^^
+
+warning: function `build_rows` is never used
+   --> crates/rexafs-gui/src/app/group_rows.rs:352:8
+    |
+352 | pub fn build_rows(
+    |        ^^^^^^^^^^
+
+warning: function `build_rows_revealing` is never used
+   --> crates/rexafs-gui/src/app/group_rows.rs:371:8
+    |
+371 | pub fn build_rows_revealing(
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `control_key_activates` is never used
+   --> crates/rexafs-gui/src/app/shell/assistant_shell.rs:128:15
+    |
+128 | pub(super) fn control_key_activates(key: &str, modified: bool) -> bool {
+    |               ^^^^^^^^^^^^^^^^^^^^^
+
+warning: variant `Color` is never constructed
+  --> crates/rexafs-gui/src/app/shell/journal.rs:22:5
+   |
+16 | pub enum UndoOp {
+   |          ------ variant in this enum
+...
+22 |     Color {
+   |     ^^^^^
+
+warning: associated function `standard` is never used
+   --> crates/rexafs-gui/src/fitting.rs:127:12
+    |
+102 | impl FitPathSpec {
+    | ---------------- associated function in this implementation
+...
+127 |     pub fn standard(file: PathBuf, i: usize) -> Self {
+    |            ^^^^^^^^
+
+warning: method `toggle_fluor` is never used
+  --> crates/rexafs-gui/src/params.rs:89:19
+   |
+87 | impl ImportConfig {
+   | ----------------- method in this implementation
+88 |     /// None selects Auto. A first manual click edits the resolved automatic set.
+89 |     pub(crate) fn toggle_fluor(
+   |                   ^^^^^^^^^^^^
+
+warning: method `available_channels` is never used
+   --> crates/rexafs-gui/src/params.rs:357:12
+    |
+341 | impl ImportPreview {
+    | ------------------ method in this implementation
+...
+357 |     pub fn available_channels(&self) -> Vec<DetectionMode> {
+    |            ^^^^^^^^^^^^^^^^^^
+
+warning: function `parse_cols` is never used
+   --> crates/rexafs-gui/src/params.rs:741:8
+    |
+741 | pub fn parse_cols(text: &str) -> Option<Vec<usize>> {
+    |        ^^^^^^^^^^
+
+warning: field `discovered` is never read
+   --> crates/rexafs-gui/src/live.rs:356:9
+    |
+355 | pub struct LiveProgress {
+    |            ------------ field in this struct
+356 |     pub discovered: usize,
+    |         ^^^^^^^^^^
+    |
+    = note: `LiveProgress` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: method `absorber` is never used
+   --> crates/rexafs-gui/src/structure.rs:193:12
+    |
+188 | impl Cluster {
+    | ------------ method in this implementation
+...
+193 |     pub fn absorber(&self) -> Option<&ClusterAtom> {
+    |            ^^^^^^^^
+
+warning: method `is_single_scattering` is never used
+   --> crates/rexafs-gui/src/structure.rs:428:12
+    |
+413 | impl PathGeometry {
+    | ----------------- method in this implementation
+...
+428 |     pub fn is_single_scattering(&self) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: `rexafs-gui` (bin "rexafs") generated 13 warnings
+    Finished `release` profile [optimized] target(s) in 1m 46s
+warning: the following packages contain code that will be rejected by a future version of Rust: binrw v0.12.1, block v0.1.6, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 2`

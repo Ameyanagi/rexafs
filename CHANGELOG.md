@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 0.2.14 (release preparation)
+
+- Keep Live acquisition visible in a compact sidebar or separate monitor while
+  working elsewhere. Select a processing reference independently of the current
+  spectrum and freeze its settings when the session starts.
+- Import transmission, fluorescence and reference together; choose individual
+  scans, running averages or fixed-size batches. Pause/resume retains accepted
+  revisions, and rewritten files replace their original averaging contribution.
+- Reuse reviewed EXAFS models for incoming Live outputs or a frozen Series.
+  Show fitted curves and parameter expressions with covariance-derived error
+  bars, retaining gaps for failed fits and full results in saved projects.
+- Set each plot-axis endpoint to a number or Auto, including a zero baseline
+  with an automatic maximum. Live views share ranges within the current session.
+- Add optional connected apps and reviewed local-file import to the Assistant.
+  Automatic model selection prefers GPT-6 Sol when the connected catalog offers
+  it; explicit model selections remain saved.
+- Preserve identical embedded source revisions on project resave, rejecting
+  conflicting payloads instead of overwriting a previous project.
+- Correct a Windows-only path assumption in the Live batch-validation test.
+
+See the [release notes](doc/release-notes-0.2.14.md) and
+[qualification record](doc/validation/2026-09-24-release-0.2.14/review.md).
+
 ## 0.2.13 (2026-09-22)
 
 - Bundle three measured CuO/Cu₂O/Cu references and 50 deterministic synthetic

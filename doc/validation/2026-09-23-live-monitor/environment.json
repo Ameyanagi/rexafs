@@ -1,0 +1,20 @@
+{
+  "review_date": "2026-09-23",
+  "scope": "Unreleased local macOS source build",
+  "branch": "feature/desktop-review-followup",
+  "base_commit": "2644b932524601a35430e5ba3b2fe6cd0b295d23",
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "machine": "arm64",
+  "fixture": "crates/rexafs/tests/fixtures/analysis/cu-mixtures/standards/cufoil_abs.xdi",
+  "fixture_sha256": "174439b52d7c8c59c28487b0c5577ead6be63db15243b8c7b03d0f2cb4bb4d7d",
+  "replays": [
+    {
+      "name": "Cu_foil_001.xdi",
+      "sha256": "174439b52d7c8c59c28487b0c5577ead6be63db15243b8c7b03d0f2cb4bb4d7d"
+    },
+    {
+      "name": "Cu_foil_002.xdi",
+      "sha256": "174439b52d7c8c59c28487b0c5577ead6be63db15243b8c7b03d0f2cb4bb4d7d"
+    }
+  ]
+}

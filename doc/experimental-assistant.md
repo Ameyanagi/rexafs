@@ -55,6 +55,14 @@ explicit choice. Model changes retain the existing supported-level fallback.
 Use arrow keys to move through a menu, Enter or Space to choose, and Escape to
 close it. Long model and reasoning lists scroll.
 
+From 0.2.14, **Automatic** prefers `gpt-6-sol` (GPT-6 Sol)
+when it appears in the connected Codex model catalog. It otherwise uses the first
+available catalog model. Explicit model choices remain saved; an unavailable
+saved model uses the same fallback and displays a warning. Other models, including
+GPT-6 Luna, remain selectable when advertised by Codex. This selection policy is
+implemented by `selected_model` in
+[`codex_client.rs`](../crates/rexafs-gui/src/codex_client.rs).
+
 **Access** contains **Review** and **Edit analysis** with descriptions of their
 scope. **Workspace commands** is the existing Extended access switch: it starts
 off and does not change the selected analysis mode. A small amber dot on the
@@ -74,6 +82,71 @@ for the released interface. The
 uses the existing preference persistence and permission checks.
 
 ## Workspace and conversations
+
+<a id="connected-apps-and-files-unreleased"></a>
+
+### Connected apps and files
+
+Version 0.2.14 adds **Access → Connected apps and files**. Turn it on to use
+apps already installed and connected in the signed-in Codex account, such as Google
+Drive. Install and authenticate the app in Codex first; this switch does not
+create a connection or change its permissions. See OpenAI's
+[plugin guide](https://learn.chatgpt.com/docs/plugins).
+
+The recommended default is off. The switch applies to the current Assistant
+session, is not saved in preferences or projects, and takes effect by reconnecting
+on the next Send. The existing conversation remains visible. The Access button
+has an amber dot when either Connected apps and files or Workspace commands is
+enabled; its hover text identifies which switches are on. App discovery reports the
+available callable integrations in the transcript.
+
+Connected integrations follow Codex's configured app permissions. App actions appear in
+the transcript, and supported one-time confirmations use **Allow / Deny** cards.
+Stopping, disconnecting, revoking access, or leaving a request unanswered for five
+minutes cancels pending confirmations. Credential forms, questionnaires, and
+browser login flows must be completed in Codex; rexafs declines requests it
+cannot display. The protocol handling follows the
+[app-server approval documentation](https://learn.chatgpt.com/docs/app-server#approvals)
+and was checked against the generated schema from Codex CLI 0.155.1.
+
+This switch is independent of **Review / Edit analysis**, **Web search**, and
+**Workspace commands**. It does not enable shell commands or expand their
+filesystem sandbox. The existing confirmed CIF structure-loading tool remains
+available.
+
+With **Edit analysis** also enabled, ask the Assistant to import explicit local
+spectrum files, including files downloaded by a connected app or synchronized
+from Drive. The confirmation lists every selected path. Each request accepts
+1–100 regular files, with at most 512 MiB of combined source bytes; directories
+and `.rxs` project files are excluded. These are rexafs intake limits, not limits
+of a scientific file format. Use **Open project** for an existing project.
+
+After approval, rexafs keeps exact source copies and a source-path manifest under
+`~/.rexafs/assistant-imports/`. Original files are unchanged. Copies survive
+Assistant workspace cleanup and are retained for lazy loading and project saves;
+they are not removed automatically when a conversation closes. Save an embedded
+project to include the imported sources when sharing it.
+
+Import uses the existing channel-detection and column-mapping review queue.
+The Assistant receives a batch identifier, then checks intake status and reports
+any required review in **Data**. Queuing a file or finishing initial inspection
+does not mean its spectra were imported. Once queued, intake runs independently
+of the Assistant turn; use the normal import controls to cancel it. Cancelling
+before enqueueing discards temporary copies.
+
+A Google Drive sharing link or extracted text is not a raw spectrum file.
+The connected app must provide a locally accessible download first; otherwise,
+download or synchronize the file before requesting import. File import does not
+use or copy Google credentials.
+
+The [launcher and thread configuration](../crates/rexafs-gui/src/codex_client.rs),
+[access menu](../crates/rexafs-gui/src/app/shell/assistant_composer.rs),
+[confirmation parser](../crates/rexafs-gui/src/app/shell/assistant_apps.rs), and
+[file intake](../crates/rexafs-gui/src/app/shell/assistant_import.rs)
+implement this mode. Earlier releases disable connected apps and do not expose
+general spectrum import to the Assistant.
+
+### Panel and conversation controls
 
 The Assistant opens at the right of the analysis. Drag its left border to resize
 between 320 and 640 px. **Pop out** moves the same conversation to a separate
