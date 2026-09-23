@@ -1,4 +1,6 @@
-# Plot axis ranges (unreleased)
+# Plot axis ranges
+
+Available from **0.2.14**.
 
 Right-click a two-dimensional plot and choose **Axis range…**. Enter a minimum
 and maximum for each axis in its displayed units. Leave any field blank, or

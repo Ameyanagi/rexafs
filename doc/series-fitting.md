@@ -1,6 +1,6 @@
 # EXAFS fits and parameter trends in Series
 
-This feature is **unreleased**. In Series, choose **Add trend… → EXAFS fit…**,
+Available from **0.2.14**. In Series, choose **Add trend… → EXAFS fit…**,
 select a reviewed single-spectrum fit, and choose **Fit all frames**. The
 **Fit** view shows the selected frame's data and model in k or R space, together
 with a parameter trend. Frame navigation also changes the numerical readout.
