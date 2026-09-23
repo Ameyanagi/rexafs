@@ -1,5 +1,6 @@
 //! Compact MBACK setup and comparison of independently retained normalization results.
 use super::*;
+use crate::plot_ranges::plot_builder;
 use crate::{
     normalization_history::{self as history, NormalizationHistory, NormalizationRecord},
     params::{PipelineParams, RequiredStage, prepare_arrays},
@@ -8,7 +9,7 @@ use crate::{
 use gpui::{AppContext, Entity};
 use rexafs::prelude::{MbackErfc, MbackOptions, NormalizationMethod};
 use ruviz::prelude::{LegendPosition, Plot};
-use ruviz_gpui::{RuvizPlot, plot_builder};
+use ruviz_gpui::RuvizPlot;
 
 /// A single edited bound keeps the other bound visible in the existing plot.
 /// Entirely automatic intervals still use the core's MBACK suggestion.

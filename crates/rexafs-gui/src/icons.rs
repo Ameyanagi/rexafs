@@ -45,12 +45,14 @@ pub(crate) enum Icon {
     File,
     Trash,
     Play,
+    Pause,
+    ChevronLeft,
     Sliders,
     Range,
 }
 
 impl Icon {
-    pub(crate) const ALL: [Self; 42] = [
+    pub(crate) const ALL: [Self; 44] = [
         Self::Folder,
         Self::Import,
         Self::Save,
@@ -91,6 +93,8 @@ impl Icon {
         Self::File,
         Self::Trash,
         Self::Play,
+        Self::Pause,
+        Self::ChevronLeft,
         Self::Sliders,
         Self::Range,
     ];
@@ -136,6 +140,8 @@ impl Icon {
             Self::Chat => r#"<path d="M4 4h16v12H9l-5 5V4Z"/>"#,
             Self::ArrowUp => r#"<path d="M12 20V4m-6 6 6-6 6 6"/>"#,
             Self::Send => r#"<path d="m3 3 19 9-19 9 4-9-4-9Zm4 9h15"/>"#,
+            Self::Pause => r#"<path d="M8 5v14M16 5v14"/>"#,
+            Self::ChevronLeft => r#"<path d="m15 6-6 6 6 6"/>"#,
             Self::Stop => r#"<rect x="5" y="5" width="14" height="14" rx="2"/>"#,
             Self::PanelLeft => {
                 r#"<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>"#

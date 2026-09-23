@@ -80,7 +80,7 @@ impl StudioApp {
     }
 
     /// Resolve the visible source without changing the overview's frame order.
-    fn select_trend_series(&mut self, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn select_trend_series(&mut self, cx: &mut Context<Self>) -> bool {
         if let Some(id) = &self.overview_series {
             self.measurements.selected_series = self
                 .measurements
@@ -110,6 +110,7 @@ impl StudioApp {
     }
 
     pub(crate) fn close_series_trend(&mut self, cx: &mut Context<Self>) {
+        self.series_fits.edit = false;
         self.clear_measurement_handles();
         self.measurements.preview_data = None;
         self.measurements.preview_timer += 1;
@@ -118,6 +119,7 @@ impl StudioApp {
     }
 
     pub(crate) fn begin_series_trend(&mut self, cx: &mut Context<Self>) {
+        self.series_fits.edit = false;
         if self.measurements.cancel.is_some() {
             self.measurements.overview = false;
             self.measurements.results = false;

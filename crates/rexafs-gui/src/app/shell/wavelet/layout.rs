@@ -39,9 +39,10 @@ pub(super) fn link_views(
     map: InteractivePlotSession,
     k: InteractivePlotSession,
     r: InteractivePlotSession,
+    source: usize,
 ) -> Vec<InteractiveChangeSubscription> {
     let sessions = [map, k, r];
-    synchronize(0, &sessions);
+    synchronize(source, &sessions);
     let updating = Arc::new(AtomicBool::new(false));
     (0..3)
         .map(|source| {
@@ -193,7 +194,7 @@ mod tests {
         let map = session([2., 12.], [0., 6.]);
         let k = session([2., 12.], [-3., 3.]);
         let r = session([5., 0.], [0., 6.]);
-        let _links = link_views(map.clone(), k.clone(), r.clone());
+        let _links = link_views(map.clone(), k.clone(), r.clone(), 0);
         map.restore_visible_bounds(bounds([3., 9.], [1., 4.]));
         assert_bounds(&k, bounds([3., 9.], [-3., 3.]));
         assert_bounds(&r, bounds([5., 0.], [1., 4.]));
@@ -216,12 +217,12 @@ mod tests {
         let map = session([2., 12.], [0., 6.]);
         let old_k = session([2., 12.], [-3., 3.]);
         let old_r = session([5., 0.], [0., 6.]);
-        let links = link_views(map.clone(), old_k.clone(), old_r);
+        let links = link_views(map.clone(), old_k.clone(), old_r, 0);
         map.restore_visible_bounds(bounds([4., 8.], [1., 3.]));
         drop(links);
         let k = session([2., 12.], [0., 0.2]);
         let r = session([0.2, 0.], [0., 6.]);
-        let _new_links = link_views(map.clone(), k.clone(), r.clone());
+        let _new_links = link_views(map.clone(), k.clone(), r.clone(), 0);
         assert_bounds(&k, bounds([4., 8.], [0., 0.2]));
         assert_bounds(&r, bounds([0.2, 0.], [1., 3.]));
         old_k.restore_visible_bounds(bounds([3., 11.], [-1., 1.]));

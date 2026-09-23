@@ -2,12 +2,13 @@
 mod measurement_view;
 use std::collections::HashMap;
 
+use crate::plot_ranges::plot_builder;
 use gpui::{
     AppContext, ClickEvent, Context, Entity, FocusHandle, Focusable, IntoElement, ParentElement,
     Render, Styled, WeakEntity, Window, div, prelude::*, px,
 };
 use ruviz::prelude::Plot;
-use ruviz_gpui::{RuvizPlot, plot_builder};
+use ruviz_gpui::RuvizPlot;
 
 use super::measurement_import::MeasurementImport;
 use super::tools::ToolTarget;

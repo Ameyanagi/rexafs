@@ -18,6 +18,65 @@ use crate::theme::Theme;
 mod alignment;
 pub(crate) mod analysis;
 
+/// Plot retained parameter estimates with gaps and optional ±1 standard errors.
+/// Missing covariance does not create a zero-width error bar.
+pub(crate) fn parameter_trend(
+    values: &[(Option<f64>, Option<crate::fit_details::Estimate>)],
+    label: &str,
+    xlabel: &str,
+    errors: bool,
+    theme: &Theme,
+    size: (f32, f32),
+) -> Option<Plot> {
+    if !values.iter().any(|(x, e)| x.is_some() && e.is_some()) {
+        return None;
+    }
+    let x: Vec<_> = values.iter().map(|(x, _)| x.unwrap_or(f64::NAN)).collect();
+    let y: Vec<_> = values
+        .iter()
+        .map(|(_, e)| e.as_ref().map_or(f64::NAN, |e| e.value))
+        .collect();
+    let mut plot: Plot = Plot::new()
+        .size(size.0, size.1)
+        .theme(theme.plot_theme())
+        .line(&x, &y)
+        .color(trace_color(theme, 0))
+        .xlabel(xlabel)
+        .ylabel(label)
+        .into();
+    let valid: Vec<_> = values
+        .iter()
+        .filter_map(|(x, e)| Some(((*x)?, e.as_ref()?.value)))
+        .collect();
+    let xx: Vec<_> = valid.iter().map(|v| v.0).collect();
+    let yy: Vec<_> = valid.iter().map(|v| v.1).collect();
+    plot = plot.scatter(&xx, &yy).color(trace_color(theme, 0)).into();
+    if errors {
+        let bars: Vec<_> = values
+            .iter()
+            .filter_map(|(x, e)| {
+                let e = e.as_ref()?;
+                Some((
+                    (*x)?,
+                    e.value,
+                    e.stderr.filter(|v| v.is_finite() && *v > 0.)?,
+                ))
+            })
+            .collect();
+        if !bars.is_empty() {
+            let xx: Vec<_> = bars.iter().map(|v| v.0).collect();
+            let yy: Vec<_> = bars.iter().map(|v| v.1).collect();
+            let ee: Vec<_> = bars.iter().map(|v| v.2).collect();
+            plot = plot
+                .error_bars(&xx, &yy, &ee)
+                .cap_size(5.)
+                .color(trace_color(theme, 0))
+                .into();
+        }
+    }
+    Some(plot)
+}
+
 fn vecs(v: &nalgebra::DVector<f64>) -> Vec<f64> {
     v.iter().copied().collect()
 }

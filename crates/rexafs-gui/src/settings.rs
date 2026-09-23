@@ -44,9 +44,11 @@ pub struct UserSettings {
     pub update_channel: crate::updates::UpdateChannel,
     /// None uses the default: check automatically on startup, without installing.
     pub check_updates_on_startup: Option<bool>,
-    /// None follows the first model in the Codex app-server catalog.
+    /// None prefers GPT-6 Sol when available in the Codex app-server catalog,
+    /// otherwise the first available model. An explicit selection takes priority.
     pub assistant_model: Option<String>,
-    /// None follows the selected model's default, falling back to high.
+    /// None follows the selected model's default; if none is advertised, omit
+    /// the effort and let Codex choose.
     pub assistant_effort: Option<String>,
     /// None enables Codex's configured web search (legacy settings default).
     pub assistant_web_search: Option<bool>,

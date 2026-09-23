@@ -68,7 +68,7 @@ fn evaluate(expr: &str, reff: Option<f64>, degen: Option<f64>, vars: &FitVariabl
 
 /// J C Jᵀ, including shared-variable correlations and constrained expressions.
 /// The FEFF reference geometry is treated as exact; this is fit uncertainty.
-fn estimate(
+pub(crate) fn estimate(
     expr: &str,
     reff: Option<f64>,
     degen: Option<f64>,

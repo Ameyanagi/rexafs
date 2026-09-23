@@ -125,7 +125,10 @@ impl AssistantWindow {
             return;
         }
         let thread = self.conversation.as_ref().and_then(|c| c.thread_id.clone());
-        let ready = self.client.is_some() && !self.connecting && self.account;
+        // Changed capabilities require a new process before any saved thread
+        // can run. Fall back to labelled history and reconnect on the next Send.
+        let ready =
+            self.client.is_some() && !self.connecting && self.account && !self.reconnect_next;
         if let Some(thread) = thread.filter(|_| ready) {
             let directory = self
                 .client
@@ -133,9 +136,13 @@ impl AssistantWindow {
                 .expect("ready client")
                 .directory
                 .clone();
-            let mut params =
-                codex_client::resume_thread_params(&directory, self.extended_access, &thread);
-            params["developerInstructions"] = json!(include_str!("assistant_workflow.md"));
+            let mut params = codex_client::resume_thread_params(
+                &directory,
+                self.extended_access,
+                self.connected_apps,
+                &thread,
+            );
+            params["developerInstructions"] = json!(self.workflow_instructions());
             if let Some(model) = &self.preferred_model {
                 params["model"] = model.clone().into();
             }

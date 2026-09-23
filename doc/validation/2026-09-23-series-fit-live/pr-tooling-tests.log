@@ -1,0 +1,78 @@
+Running test-benchmark-tools.py
+......
+----------------------------------------------------------------------
+Ran 6 tests in 2.966s
+
+OK
+Running test-ci-results.py
+..........
+----------------------------------------------------------------------
+Ran 10 tests in 0.948s
+
+OK
+Running test-ci-scope.py
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 5.613s
+
+OK
+Running test-desktop-channels.py
+........
+----------------------------------------------------------------------
+Ran 8 tests in 0.058s
+
+OK
+Running test-macos-installer.py
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.030s
+
+OK
+Running test-python-wheels.py
+..........
+----------------------------------------------------------------------
+Ran 10 tests in 0.091s
+
+OK
+Verified source license files in /var/folders/31/0pqc9xs555d5cj8g3yqdn1qr0000gn/T/tmpe828jlsj/rexafs-0.2.6.tar.gz
+Running test-registry-artifacts.py
+....
+----------------------------------------------------------------------
+Ran 4 tests in 0.018s
+
+OK
+Running test-release-archive.py
+.........
+----------------------------------------------------------------------
+Ran 9 tests in 0.097s
+
+OK
+Running test-release-downloads.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.215s
+
+OK
+Running test-release-maintenance.py
+....
+----------------------------------------------------------------------
+Ran 4 tests in 0.016s
+
+OK
+Restored LICENSE-MIT from abc; existing source bytes preserved
+Verified source license files in /var/folders/31/0pqc9xs555d5cj8g3yqdn1qr0000gn/T/tmpozz0knfo/out/rexafs-0.1.0.tar.gz
+Running test-release-version.py
+.......
+----------------------------------------------------------------------
+Ran 7 tests in 0.438s
+
+OK
+Running test-windows-installer.py
+...........................
+----------------------------------------------------------------------
+Ran 27 tests in 0.318s
+
+OK
+Omitted unused x64 CRT companion: vcruntime140_1.dll
+Verified native CRT imports: {"msvcp140.dll": ["vcruntime140.dll"], "rexafs.exe": ["msvcp140.dll"], "vcruntime140.dll": []}
+All 12 tooling suites passed

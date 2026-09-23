@@ -21,7 +21,11 @@ use std::{
     time::Instant,
 };
 
+mod averages;
+pub(crate) mod exafs;
 mod store;
+pub use averages::{LiveAverage, build_averages};
+pub use exafs::{ExafsRecipe, ExafsRow, build_exafs, read_exafs};
 pub use store::{LiveStore, discover, root};
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -35,6 +39,9 @@ pub struct LiveConfig {
     pub recursive: bool,
     pub policy: CompletionPolicy,
     pub settings: PipelineParams,
+    /// Source of copied settings; the captured settings remain authoritative.
+    #[serde(default)]
+    pub processing_reference: Option<(GroupId, String)>,
     pub definition: MetricDefinition,
     pub layouts: Vec<ScanLayout>,
     #[serde(default)]
@@ -42,13 +49,36 @@ pub struct LiveConfig {
     /// Optional immutable peak-model revision, evaluated independently per frame.
     #[serde(default)]
     pub peak_model: Option<crate::peak_fits::PeakSavedModel>,
+    /// Maintain one equal-weight raw-absorption average per selected signal.
+    /// Original revisions remain retained; only the latest revision of each
+    /// source contributes. This opt-in assumes repeated scans of the same state.
+    #[serde(default)]
+    pub merge: LiveMerge,
+    /// Optional frozen EXAFS path model, fitted independently to the chosen outputs.
+    #[serde(default)]
+    pub exafs: Option<ExafsRecipe>,
     pub created: String,
+}
+
+/// Optional averaging of repeated scans, independently for each signal.
+/// Batch membership follows first accepted scan order and survives revisions.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LiveMerge {
+    #[default]
+    Individual,
+    Running,
+    Batches {
+        scans: usize,
+    },
 }
 
 /// Compare column identities, units, header-supported arithmetic and warnings.
 /// A differing scan ID/name or point count does not change its interpretation.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScanLayout {
+    /// A reviewed output name. Empty names in older sessions mean one signal.
+    #[serde(default)]
+    pub channel: String,
     format: String,
     columns: Vec<(String, Option<String>)>,
     candidates: Vec<rexafs::xafs::io::reader::SignalCandidate>,
@@ -56,7 +86,7 @@ pub struct ScanLayout {
     document_warnings: Vec<String>,
     modes: Option<String>,
     crystal_spacing: Option<String>,
-    mapping: SpectrumMapping,
+    pub(crate) mapping: SpectrumMapping,
 }
 impl ScanLayout {
     pub fn capture(
@@ -72,6 +102,7 @@ impl ScanLayout {
             );
         }
         Ok(Self {
+            channel: String::new(),
             format: document.format.clone(),
             columns: scan
                 .columns
@@ -85,6 +116,24 @@ impl ScanLayout {
             crystal_spacing: crystal_spacing(scan),
             mapping,
         })
+    }
+    /// Capture one explicitly chosen signal without guessing other detectors.
+    pub fn capture_channel(
+        document: &Measurement,
+        scan: &MeasurementScan,
+        signal: &rexafs::xafs::io::reader::SignalCandidate,
+    ) -> Result<Self, String> {
+        let mut layout = Self::capture(document, scan, signal.mapping.clone())?;
+        layout.channel = signal.name.clone();
+        Ok(layout)
+    }
+
+    pub fn channel_name(&self) -> &str {
+        if self.channel.is_empty() {
+            "Signal"
+        } else {
+            &self.channel
+        }
     }
     fn matches(&self, document: &Measurement, scan: &MeasurementScan) -> bool {
         self.format == document.format
@@ -148,9 +197,79 @@ pub fn preview_mapping(
     }
 }
 
+/// Resolve explicit signal names from the representative file. An empty choice
+/// retains the existing single/reviewed-signal workflow; it never means all.
+pub fn preview_channels(
+    scan: &MeasurementScan,
+    selected: &BTreeSet<String>,
+    reviewed: Option<&serde_json::Value>,
+) -> Result<Vec<rexafs::io::SignalCandidate>, String> {
+    if selected.is_empty() {
+        let mapping = preview_mapping(scan, reviewed).map_err(|error| {
+            if scan.signals.len() > 1 {
+                "Choose signals above, then Preview again".to_owned()
+            } else {
+                error
+            }
+        })?;
+        let name = scan
+            .signals
+            .iter()
+            .find(|s| s.mapping == mapping)
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| "Reviewed signal".into());
+        return Ok(vec![rexafs::io::SignalCandidate { name, mapping }]);
+    }
+    if selected.len() > 8 {
+        return Err("Choose at most eight signals per acquisition".into());
+    }
+    let mut output = Vec::new();
+    for name in selected {
+        let matches: Vec<_> = scan.signals.iter().filter(|s| &s.name == name).collect();
+        if matches.len() != 1 {
+            return Err(format!(
+                "Signal '{name}' is missing or ambiguous; review this scan's mapping"
+            ));
+        }
+        scan.arrays(Some(&matches[0].mapping))
+            .map_err(|e| e.to_string())?;
+        output.push(matches[0].clone());
+    }
+    Ok(output)
+}
+
+/// Prepare a reviewed sample through the same array and energy-offset path as
+/// committed Live spectra. The mapping supplies eV arrays; the frozen offset
+/// is applied once, and only prerequisites through `stage` are calculated.
+pub fn prepare_preview(
+    scan: &MeasurementScan,
+    mapping: &SpectrumMapping,
+    settings: &PipelineParams,
+    stage: crate::params::RequiredStage,
+) -> Result<rexafs::Spectrum, String> {
+    let (energy, mu) = scan.arrays(Some(mapping)).map_err(|e| e.to_string())?;
+    DerivedSpectrum {
+        energy,
+        mu,
+        absorption_mode: if matches!(
+            mapping.signal,
+            rexafs::io::SignalConversion::Transmission { .. }
+        ) {
+            rexafs::AbsorptionMode::Transmission
+        } else {
+            Default::default()
+        },
+        ..Default::default()
+    }
+    .prepare(settings, stage)
+}
+
 impl LiveConfig {
     pub fn validate(&self) -> Result<(), String> {
-        if self.schema != 1 || !self.folder.is_absolute() || self.name.trim().is_empty() {
+        if !matches!(self.schema, 1 | 2 | 3)
+            || !self.folder.is_absolute()
+            || self.name.trim().is_empty()
+        {
             return Err(
                 "Live needs a supported configuration, a name and an absolute folder".into(),
             );
@@ -160,6 +279,9 @@ impl LiveConfig {
             return Err("Use a filename filter such as *.qd or *.xdi".into());
         }
         self.policy.validate()?;
+        if matches!(self.merge, LiveMerge::Batches { scans } if !(2..=100_000).contains(&scans)) {
+            return Err("Use 2 to 100000 scans per average batch".into());
+        }
         if let Some(peak) = &self.peak_model {
             peak.model.validate().map_err(|e| e.to_string())?;
         }
@@ -175,6 +297,8 @@ impl LiveConfig {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LiveFrame {
+    #[serde(default)]
+    pub channel: String,
     pub group: DerivedSpectrum,
     pub row: MetricRow,
     #[serde(default)]
@@ -202,6 +326,12 @@ pub struct LiveSession {
     /// Current locators of retained original bytes; embedded projects relocate these.
     #[serde(default)]
     pub snapshots: BTreeSet<PathBuf>,
+    /// Retained EXAFS results, including earlier revisions of running averages.
+    #[serde(default)]
+    pub exafs: Vec<ExafsRow>,
+    /// Display expressions applied to retained fits, without refitting.
+    #[serde(default)]
+    pub exafs_trends: Vec<crate::series_fits::FitTrend>,
 }
 impl LiveSession {
     pub fn peak_run_id(&self) -> GroupId {
@@ -492,87 +622,120 @@ impl LiveEngine {
                 .iter()
                 .filter(|l| l.matches(&snapshot.measurement, scan))
                 .collect();
-            let mapping = layouts.first().ok_or("Layout, units or signal choices changed; review the input and start a revised recipe")?.mapping.clone();
-            if layouts.iter().any(|l| l.mapping != mapping) {
-                return Err("More than one mapping matches this scan; review the recipe".into());
+            if layouts.is_empty() {
+                return Err("Layout, units or signal choices changed; review the input and start a revised recipe".into());
             }
-            let (energy, mu) = scan.arrays(Some(&mapping)).map_err(|e| e.to_string())?;
-            let scan_key = digest(
-                &serde_json::to_vec(&(&key, &scan.id, &mapping)).map_err(|e| e.to_string())?,
-            );
-            let source = self.store.spectrum(&scan_key, &energy, &mu, &scan.header)?;
-            let group_id = GroupId::source(&source, crate::params::DetectionMode::MuColumn);
-            let label = format!(
-                "{} · {} · {}",
-                snapshot
-                    .source
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy(),
-                scan.label,
-                &snapshot.revision[..8]
-            );
-            let mut settings = config.settings.clone();
-            settings.import = cache_import();
-            let group = DerivedSpectrum {
-                group_id: Some(group_id.clone()),
-                label: label.clone(),
-                source: Some(source.clone()),
-                params: Some(settings.clone()),
-                operation: Some(Operation {
-                    tool: "Live acquisition".into(),
-                    applied_energy_shift_ev: 0.,
-                    inputs: Vec::new(),
-                    parameters: serde_json::json!({"source_path":snapshot.source,"source_sha256":snapshot.revision,
-                        "scan_id":scan.id,"mapping":mapping,"completion":snapshot.completion,"recipe":config.id,
+            let mut channels = BTreeMap::new();
+            for layout in layouts {
+                if let Some(previous) = channels.insert(layout.channel_name(), &layout.mapping)
+                    && previous != &layout.mapping
+                {
+                    return Err(
+                        "One output name has conflicting detector mappings; review the recipe"
+                            .into(),
+                    );
+                }
+            }
+            for (channel, mapping) in channels {
+                if cancel.load(Ordering::Relaxed) {
+                    return Ok(None);
+                }
+                let (energy, mu) = scan.arrays(Some(mapping)).map_err(|e| e.to_string())?;
+                let scan_key = digest(
+                    &serde_json::to_vec(&(&key, &scan.id, channel, &mapping))
+                        .map_err(|e| e.to_string())?,
+                );
+                let source = self.store.spectrum(&scan_key, &energy, &mu, &scan.header)?;
+                let group_id = GroupId::source(&source, crate::params::DetectionMode::MuColumn);
+                let label = format!(
+                    "{} · {} · {} · {}",
+                    snapshot
+                        .source
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy(),
+                    scan.label,
+                    channel,
+                    &snapshot.revision[..8]
+                );
+                let mut settings = config.settings.clone();
+                settings.import = cache_import();
+                let group = DerivedSpectrum {
+                    absorption_mode: if matches!(
+                        mapping.signal,
+                        rexafs::io::SignalConversion::Transmission { .. }
+                    ) {
+                        rexafs::AbsorptionMode::Transmission
+                    } else {
+                        Default::default()
+                    },
+                    group_id: Some(group_id.clone()),
+                    label: label.clone(),
+                    source: Some(source.clone()),
+                    params: Some(settings.clone()),
+                    operation: Some(Operation {
+                        tool: "Live acquisition".into(),
+                        applied_energy_shift_ev: 0.,
+                        inputs: Vec::new(),
+                        parameters: serde_json::json!({"source_path":snapshot.source,"source_sha256":snapshot.revision,
+                        "scan_id":scan.id,"channel":channel,"mapping":mapping,"completion":snapshot.completion,"recipe":config.id,
                         "original_snapshot":self.store.directory.join(format!("{}.raw", snapshot.revision))}),
-                }),
-                ..Default::default()
-            };
-            let input = FrameInput {
-                group: group_id.clone(),
-                label: label.clone(),
-                path: source,
-                derived: Some(Arc::new(group.clone())),
-                settings: settings.clone(),
-                recipe: None,
-            };
-            let (source_digest, revision) = input.revision()?;
-            let row = MetricRow {
-                frame: SeriesFrame {
-                    id: group_id.clone(),
-                    group: group_id,
-                    label,
-                    sequence: 0,
-                    coordinate: None,
-                    acquired_at: None,
-                },
-                source_digest: Some(source_digest),
-                input_revision: Some(revision),
-                settings: Arc::new(settings),
-                status: FrameStatus::Pending,
-                result: None,
-                reason: None,
-                preparation: serde_json::Value::Null,
-            };
-            let row = calculate_row(&input, &row, &config.definition);
-            let peak = config.peak_model.as_ref().map(|saved| {
-                let inputs = std::slice::from_ref(&input);
-                let mut run =
-                    crate::peak_fits::PeakRun::new(saved.name.clone(), saved.model.clone(), inputs);
-                run.freeze(inputs, || cancel.load(Ordering::Relaxed));
-                crate::peak_fits::calculate(
-                    &saved.model,
-                    &run.rows[0],
-                    &input,
-                    &self.store.directory.join("peaks"),
-                    || cancel.load(Ordering::Relaxed),
-                )
-            });
-            if cancel.load(Ordering::Relaxed) {
-                return Ok(None);
+                    }),
+                    ..Default::default()
+                };
+                let input = FrameInput {
+                    group: group_id.clone(),
+                    label: label.clone(),
+                    path: source,
+                    derived: Some(Arc::new(group.clone())),
+                    settings: settings.clone(),
+                    recipe: None,
+                };
+                let (source_digest, revision) = input.revision()?;
+                let row = MetricRow {
+                    frame: SeriesFrame {
+                        id: group_id.clone(),
+                        group: group_id,
+                        label,
+                        sequence: 0,
+                        coordinate: None,
+                        acquired_at: None,
+                    },
+                    source_digest: Some(source_digest),
+                    input_revision: Some(revision),
+                    settings: Arc::new(settings),
+                    status: FrameStatus::Pending,
+                    result: None,
+                    reason: None,
+                    preparation: serde_json::Value::Null,
+                };
+                let row = calculate_row(&input, &row, &config.definition);
+                let peak = config.peak_model.as_ref().map(|saved| {
+                    let inputs = std::slice::from_ref(&input);
+                    let mut run = crate::peak_fits::PeakRun::new(
+                        saved.name.clone(),
+                        saved.model.clone(),
+                        inputs,
+                    );
+                    run.freeze(inputs, || cancel.load(Ordering::Relaxed));
+                    crate::peak_fits::calculate(
+                        &saved.model,
+                        &run.rows[0],
+                        &input,
+                        &self.store.directory.join("peaks"),
+                        || cancel.load(Ordering::Relaxed),
+                    )
+                });
+                if cancel.load(Ordering::Relaxed) {
+                    return Ok(None);
+                }
+                frames.push(LiveFrame {
+                    channel: channel.into(),
+                    group,
+                    row,
+                    peak,
+                });
             }
-            frames.push(LiveFrame { group, row, peak });
         }
         Ok(Some(LiveRecord {
             key,

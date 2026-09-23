@@ -1,0 +1,37 @@
+{
+  "final-regression-tests.log": {
+    "sha256": "b9b51cc5dbf8a8c3441f6ae7b49cddfe18e12a5487574d41f70b8a58cb4370e8",
+    "result": [
+      "test result: ok. 632 passed; 0 failed; 7 ignored; 0 measured; 30 filtered out; finished in 64.65s"
+    ]
+  },
+  "final-live-tests.log": {
+    "sha256": "26b14bdef0020c417f20067d9eea622d186d1053b2e176f838092b8613f730e1",
+    "result": [
+      "test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 650 filtered out; finished in 4.78s"
+    ]
+  },
+  "assistant-sol-tests.log": {
+    "sha256": "d25717f51d6adeeeb2b746ffe91d25fd41dec4407860170358127339ef4192ef",
+    "result": [
+      "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 658 filtered out; finished in 0.00s"
+    ]
+  },
+  "final-build.log": {
+    "sha256": "c0829c332ef5a40be410931524623ca5849f92e5d0f93f7527687f6aa8a54a42",
+    "result": [
+      "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 16.14s"
+    ]
+  },
+  "portable_project": {
+    "filename": "Cu-EXAFS-Live-review.rxs",
+    "size": 742114,
+    "sha256": "2ab63a3b7399d9a1807bd09312914e3a6255618e50f53bfa7d7fb9820f355244"
+  },
+  "final-clippy.log": {
+    "sha256": "e20a94b5067665f9ff2fcd9a70b3d82a2e641493a04c543edbe337946a7e92ce",
+    "result": "Passed with 57 warnings in the test target (44 shared with the application target)."
+  },
+  "format": "cargo fmt --all -- --check passed",
+  "whitespace": "git diff --check passed"
+}

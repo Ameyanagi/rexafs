@@ -1,0 +1,15 @@
+{
+  "published": 60,
+  "duration_seconds": 600.007,
+  "records": 62,
+  "distinct_sources": 62,
+  "distinct_revisions": 1,
+  "frames": 62,
+  "fit_updates": 61,
+  "converged": 61,
+  "fit_errors": [],
+  "partial_file_revisions": 1,
+  "first_publication": "2026-09-22T23:37:10.571779+00:00",
+  "last_publication": "2026-09-22T23:47:00.559652+00:00",
+  "source_sha256": "174439b52d7c8c59c28487b0c5577ead6be63db15243b8c7b03d0f2cb4bb4d7d"
+}

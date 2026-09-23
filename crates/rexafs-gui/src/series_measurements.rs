@@ -20,6 +20,7 @@ pub use recipe::{AnalysisRecipe, InputContract};
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SeriesArchive {
+    pub fit_runs: Vec<Arc<crate::series_fits::SeriesFitRun>>,
     pub live_sessions: Vec<crate::live::LiveSession>,
     pub series: Vec<SeriesDefinition>,
     pub runs: Vec<Arc<SeriesRun>>,
@@ -215,20 +216,35 @@ impl FrameInput {
         definition: &MetricDefinition,
         expected: Option<&str>,
     ) -> Result<(XASSpectrum, String, String), String> {
+        self.prepare_stage(
+            required_stage(definition),
+            definition.wavelet.is_some(),
+            expected,
+        )
+    }
+
+    /// Prepare background-subtracted χ(k) for a fit, checking the frozen input
+    /// revision before processing. The caller retains the resolved preparation.
+    pub fn prepare_for_fit(&self, expected: &str) -> Result<(XASSpectrum, String, String), String> {
+        self.prepare_stage(RequiredStage::Background, false, Some(expected))
+    }
+
+    fn prepare_stage(
+        &self,
+        stage: RequiredStage,
+        wavelet: bool,
+        expected: Option<&str>,
+    ) -> Result<(XASSpectrum, String, String), String> {
         let bytes = self.source_bytes()?;
         self.validate_recipe(&bytes)?;
         let (source, revision) = self.revision_of(&bytes);
         if expected.is_some_and(|old| old != revision) {
             return Err("Inputs changed; calculate a new run".into());
         }
-        let stage = required_stage(definition);
         let sp = if let Some(group) = &self.derived
             && group.source.is_none()
         {
-            if definition.wavelet.is_some()
-                && group.quantity == params::Quantity::ChiK
-                && !group.quantity_unconfirmed
-            {
+            if wavelet && group.quantity == params::Quantity::ChiK && !group.quantity_unconfirmed {
                 group.for_display(&self.settings)?
             } else {
                 group.prepare(&self.settings, stage)?

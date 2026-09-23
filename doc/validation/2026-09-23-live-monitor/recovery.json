@@ -1,0 +1,19 @@
+{
+  "records_after_recovery_and_resume": 2,
+  "all_existing_fit_indexes_unchanged": true,
+  "fit_indexes": {
+    "exafs-8f8d1010ca602801160edd3afc5bcd27baafc0a9d38234dcafdc685a7bcfd4c3.json": {
+      "sha256": "35879420a0238327f2454f08d9b3c38cb3747f6a0c1a8e75927136fc4ac2efa3",
+      "mtime_ns": 1790095307216579063
+    },
+    "exafs-33dbe3cbcdd149bfe526caf24236f0821e16b638b58ae48f99e85cd3ef2438fd.json": {
+      "sha256": "bb0e204b81d1e8bbbd51a7d0ff88129168752b388b63979aaaf4ebb251120938",
+      "mtime_ns": 1790095406679274987
+    },
+    "exafs-0edccf182f7b1e02edbc19611b919c7627a40516864816f01a8a1d6054a73346.json": {
+      "sha256": "74c2e936cd15819b83bd3ae1dc4c2255bed8a3355eaa19f778492993e4b531ce",
+      "mtime_ns": 1790112362649802528
+    }
+  },
+  "note": "Three retained indexes include one diagnostic alias-path fit made before the recovery fix; final recovery reused the original canonical-path fit."
+}

@@ -1,0 +1,41 @@
+{
+  "date": "2026-09-23",
+  "app_bundle_version": "0.2.13",
+  "app_restarted_or_replaced": false,
+  "source_commit_reviewed": "2644b932",
+  "test_copies_added_this_review": 3,
+  "original_groups": 53,
+  "final_groups": 60,
+  "marked_original_groups": 50,
+  "live_successful_records": 7,
+  "background_test_foreground_app": "Finder",
+  "malformed_fixture": "Created for this review, then retained outside the watched folder. Retry/Resume returned the issue count to zero.",
+  "final_acquisition_state": "Stopped, results retained",
+  "images": [
+    {
+      "file": "background-analysis.jpg",
+      "sha256": "49dd505dba51030bef83c399c2414be9c56e2fb5a30f12c0e07befa1bd39cb13",
+      "source": "Unedited Computer Use capture of installed rexafs 0.2.13"
+    },
+    {
+      "file": "follow-off-with-invalid-source.jpg",
+      "sha256": "15a2ece3a4f0c0fa0d74ca7c632c33fb0c713655f3abf3a8973cc47401fd360e",
+      "source": "Unedited Computer Use capture of installed rexafs 0.2.13"
+    },
+    {
+      "file": "return-shows-old-spectrum.jpg",
+      "sha256": "cfad3fb4523a2f11f744e6450eddbdbe3b3b8c2944b9c6508f06ddf3ce7ebb56",
+      "source": "Unedited Computer Use capture of installed rexafs 0.2.13"
+    },
+    {
+      "file": "seven-frame-overview.jpg",
+      "sha256": "4730003b7eda9df959c327b908ba8906067d98b84bc66c7bd1180f8a950543ca",
+      "source": "Unedited Computer Use capture of installed rexafs 0.2.13"
+    },
+    {
+      "file": "stopped-clean.jpg",
+      "sha256": "39c0840842931b0eb8416c62961950fed7cb968db5dd6c367419fe18ec1d778c",
+      "source": "Unedited Computer Use capture of installed rexafs 0.2.13"
+    }
+  ]
+}

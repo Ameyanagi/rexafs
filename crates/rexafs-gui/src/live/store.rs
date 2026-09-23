@@ -50,7 +50,7 @@ fn private_dir(path: &Path) -> Result<(), String> {
 }
 
 /// Create immutable files atomically. A repeated write must have identical bytes.
-fn publish(path: &Path, bytes: &[u8]) -> Result<(), String> {
+pub(super) fn publish(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if path.exists() {
         if std::fs::read(path).map_err(error)? == bytes {
             return Ok(());
@@ -132,6 +132,10 @@ impl LiveStore {
         Ok(store)
     }
     fn connect(directory: PathBuf, config: LiveConfig) -> Result<Self, String> {
+        // Recovery may reach the same storage through an alias (for example
+        // macOS /tmp and /private/tmp). Keep output identities and fit cache
+        // keys identical to those written when the session was created.
+        let directory = directory.canonicalize().map_err(error)?;
         let mut options = OpenOptions::new();
         options.read(true).write(true).create(true).truncate(false);
         #[cfg(unix)]
@@ -270,6 +274,8 @@ impl LiveStore {
             published: BTreeSet::new(),
             stopped: false,
             snapshots: BTreeSet::new(),
+            exafs: Vec::new(),
+            exafs_trends: Vec::new(),
         }
     }
 }

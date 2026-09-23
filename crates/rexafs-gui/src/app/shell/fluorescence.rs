@@ -1,5 +1,6 @@
 //! Thick-sample fluorescence correction: preview first, then retain a separate group.
 use super::*;
+use crate::plot_ranges::plot_builder;
 use crate::{
     app::{DERIVED_BASE, StudioApp},
     fluorescence_history::{self as history, CorrectionReceipt, CorrectionRecord},
@@ -10,7 +11,7 @@ use crate::{
 use gpui::{AppContext, Entity};
 use rexafs::{AbsorptionMode, FluorescenceCorrection, Spectrum};
 use ruviz::prelude::{LegendPosition, Plot};
-use ruviz_gpui::{RuvizPlot, plot_builder};
+use ruviz_gpui::RuvizPlot;
 use std::sync::Arc;
 
 mod controls;

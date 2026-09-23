@@ -29,6 +29,11 @@ Write your request in the message field. The footer has three menus:
   the selected model, or select one of its supported levels.
 - **Access** selects what the Assistant may do in the analysis.
 
+**Unreleased:** Automatic now prefers **GPT-6 Sol** (`gpt-6-sol`) when available
+in the connected Codex model catalog, falling back to the first available model.
+Explicit choices remain saved. GPT-6 Luna and other advertised models remain
+available in the picker.
+
 [![Model menu in the rexafs 0.2.11 Assistant](/screenshots/0.2.11/assistant-model.jpg)](/screenshots/0.2.11/assistant-model.jpg)
 
 Use arrow keys to browse a menu, Enter or Space to choose, and Escape to close.
@@ -54,6 +59,36 @@ Open **Assistant settings** with the gear button to choose **Plot images** and
 source paths, bounded source comments, processing settings, model inputs,
 analysis results, journal entries and enabled plots through your Codex account.
 Imported comments and previous conversations are labelled as data.
+
+### Connected apps and files (unreleased)
+
+The source checkout adds **Access → Connected apps and files** for integrations
+such as Google Drive. First install and connect the integration in Codex, then enable
+this switch and send your message. The Assistant reconnects on the next Send
+and reports available apps. See OpenAI's
+[plugin setup guide](https://learn.chatgpt.com/docs/plugins).
+
+The switch starts off each Assistant session and is not restored from settings
+or saved conversations. Connected integrations use your Codex account's app permissions;
+they do not enable Workspace commands or change Review / Edit analysis. App
+actions and supported **Allow / Deny** confirmations appear in the transcript.
+Pending confirmations expire after five minutes and are cancelled when you stop
+or disconnect. Complete app login and unsupported forms in Codex.
+
+To import spectra, also choose **Edit analysis** and give the Assistant the local
+file paths. Approve the listed files, then review channels or column mappings in
+**Data** when requested. Files downloaded or synchronized from Drive work when
+they are locally accessible; a sharing link or extracted text alone is insufficient.
+Each request accepts 1–100 files, at most 512 MiB total. Use **Open project** for
+`.rxs` projects; folder imports remain available through the normal interface.
+
+rexafs retains exact source copies under `~/.rexafs/assistant-imports/`, so they
+survive Assistant disconnects. Original files stay unchanged. The Assistant
+reports intake progress separately from successful imports. Once queued, intake
+uses the normal import cancellation controls. See the
+[source-checkout implementation notes](https://github.com/Ameyanagi/rexafs/blob/dev/doc/experimental-assistant.md#connected-apps-and-files-unreleased)
+for the scope and protocol checks. Released versions shown in the screenshots
+above disable connected apps.
 
 <a id="unreleased-context-retrieval-and-analysis"></a>
 

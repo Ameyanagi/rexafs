@@ -96,6 +96,14 @@ impl AssistantWindow {
                     selected: self.extended_access,
                     enabled: !self.connecting,
                 },
+                Choice {
+                    label: "Connected apps and files".into(),
+                    detail: Some(
+                        "Use Codex apps and import approved spectrum files for this session.",
+                    ),
+                    selected: self.connected_apps,
+                    enabled: !self.connecting && !pending_blocks_run(&self.pending),
+                },
             ],
         }
     }
@@ -174,6 +182,7 @@ impl AssistantWindow {
                 }
                 1 => self.allow_changes = true,
                 2 => self.access_preferences(true, cx),
+                3 => self.toggle_connected_apps(cx),
                 _ => return,
             },
         }
@@ -263,9 +272,14 @@ impl AssistantWindow {
                     )
                     .into(),
                     ComposerMenu::Access => format!(
-                        "Access: {label}{}",
+                        "Access: {label}{}{}",
                         if self.extended_access {
                             " · workspace commands on"
+                        } else {
+                            ""
+                        },
+                        if self.connected_apps {
+                            " · connected apps and files on"
                         } else {
                             ""
                         }
@@ -326,9 +340,10 @@ impl AssistantWindow {
                     .text_ellipsis()
                     .child(label),
             )
-            .when(menu == ComposerMenu::Access && self.extended_access, |d| {
-                d.child(div().size(px(4.)).rounded_full().bg(t.warn).flex_none())
-            })
+            .when(
+                menu == ComposerMenu::Access && (self.extended_access || self.connected_apps),
+                |d| d.child(div().size(px(4.)).rounded_full().bg(t.warn).flex_none()),
+            )
             .child(icon(&t, Icon::ChevronDown).size(px(11.)));
         div()
             .min_w_0()
@@ -542,9 +557,13 @@ impl AssistantWindow {
             let id = match menu {
                 ComposerMenu::Model => gpui::ElementId::from(("assistant-model-option", index)),
                 ComposerMenu::Reasoning => ("assistant-effort", index).into(),
-                ComposerMenu::Access => {
-                    ["assistant-review", "assistant-edit", "assistant-extended"][index].into()
-                }
+                ComposerMenu::Access => [
+                    "assistant-review",
+                    "assistant-edit",
+                    "assistant-extended",
+                    "assistant-apps",
+                ][index]
+                    .into(),
             };
             let label = choice.label.clone();
             list = list.child(
@@ -562,7 +581,7 @@ impl AssistantWindow {
                 )
                 .selected(choice.selected)
                 .when_some(choice.detail, |d, detail| d.description(detail))
-                .when(menu == ComposerMenu::Access && index == 2, |d| {
+                .when(menu == ComposerMenu::Access && index >= 2, |d| {
                     d.role(accesskit::Role::CheckBox)
                 })
                 .h(px(row_height))
@@ -581,7 +600,11 @@ impl AssistantWindow {
                 })
                 .when(menu == ComposerMenu::Access, |d| {
                     d.child(
-                        icon(&t, [Icon::Lock, Icon::Unlock, Icon::Sliders][index]).size(px(16.)),
+                        icon(
+                            &t,
+                            [Icon::Lock, Icon::Unlock, Icon::Sliders, Icon::External][index],
+                        )
+                        .size(px(16.)),
                     )
                 })
                 .child(

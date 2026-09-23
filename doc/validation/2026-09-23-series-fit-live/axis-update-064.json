@@ -1,0 +1,6 @@
+{
+  "published": "/tmp/rexafs-live-workflow-20260923/Cu_foil_live_test/Cu_foil_064.xdi",
+  "utc": "2026-09-23T02:27:05.757397+00:00",
+  "sha256": "174439b52d7c8c59c28487b0c5577ead6be63db15243b8c7b03d0f2cb4bb4d7d",
+  "purpose": "Verify that Apply reaches the replacement Live plot when new data arrives while the axis editor is open."
+}

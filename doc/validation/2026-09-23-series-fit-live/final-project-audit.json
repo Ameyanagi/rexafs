@@ -1,0 +1,60 @@
+{
+  "utc": "2026-09-23T02:31:05.737289+00:00",
+  "path": "/tmp/rexafs-series-fit-20260923/Cu-live-final.rxs",
+  "bytes": 13534361,
+  "sha256": "80e5427fe228813a7afaa93e676d4abd2cbc97c7751ff9a9f19943d626b305cd",
+  "unique_manifest_paths": 282,
+  "verified_payloads": 212,
+  "live_frames": 64,
+  "live_fit_updates": 63,
+  "live_converged": 63,
+  "live_fit_errors": [],
+  "live_trends": [
+    {
+      "name": "Cu\u2013Cu distance",
+      "expression": "reff + dr_1",
+      "unit": "\u00c5",
+      "path": 0
+    }
+  ],
+  "series_fit_runs": 1,
+  "series_fit_frames": 2,
+  "series_trends": [
+    {
+      "name": "feff0001.dat \u00b7 R",
+      "expression": "reff + (dr_1)",
+      "unit": "\u00c5",
+      "path": 0
+    },
+    {
+      "name": "s02",
+      "expression": "s02",
+      "unit": "",
+      "path": null
+    },
+    {
+      "name": "e0",
+      "expression": "e0",
+      "unit": "",
+      "path": null
+    },
+    {
+      "name": "dr_1",
+      "expression": "dr_1",
+      "unit": "",
+      "path": null
+    },
+    {
+      "name": "ss_1",
+      "expression": "ss_1",
+      "unit": "",
+      "path": null
+    },
+    {
+      "name": "Cu\u2013Cu distance",
+      "expression": "reff + dr_1",
+      "unit": "\u00c5",
+      "path": 0
+    }
+  ]
+}
