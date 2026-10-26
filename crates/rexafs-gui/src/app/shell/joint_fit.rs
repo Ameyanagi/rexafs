@@ -290,19 +290,22 @@ impl StudioApp {
         if self.joint.config.datasets.len() < 2 {
             return Some("Add at least two spectra in Spectra & paths.");
         }
-        if self
-            .joint
-            .config
-            .datasets
-            .iter()
-            .any(|d| !d.ranges.as_ref().unwrap_or(&self.fit_ranges).valid())
-        {
-            return Some("Set valid k and R fit ranges for the selected spectra.");
+        if self.joint.config.datasets.iter().any(|d| {
+            !d.ranges
+                .as_ref()
+                .unwrap_or(&self.fit_ranges)
+                .resolved_with_params(&self.joint_dataset_params(d).unwrap_or_default())
+                .valid()
+        }) {
+            return Some(
+                "Set valid fit ranges and nonnegative window parameters for each spectrum.",
+            );
         }
         if self.joint.config.datasets.iter().any(|d| {
             d.ranges
                 .as_ref()
                 .unwrap_or(&self.fit_ranges)
+                .resolved_with_params(&self.joint_dataset_params(d).unwrap_or_default())
                 .validate_background(
                     self.joint_dataset_params(d)
                         .and_then(|p| p.rbkg)
@@ -446,7 +449,7 @@ impl StudioApp {
                 d.ranges
                     .as_ref()
                     .unwrap_or(&ranges)
-                    .resolved(self.joint_dataset_params(d).and_then(|p| p.fft_kweight)),
+                    .resolved_with_params(&self.joint_dataset_params(d).unwrap_or_default()),
             );
         }
         let saved = (config.clone(), paths.clone(), vars.clone(), ranges.clone());

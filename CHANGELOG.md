@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Let new FEFF fits follow each spectrum's Process transform window and taper
+  parameters, independently of the k-weight choice, with explicit custom k and
+  R windows available. Keep older projects' Kaiser–Bessel/dk = 4 fitting
+  convention, and preserve the effective windows in fit history and reports.
 - Ask to save, discard or cancel before closing the window or quitting with
   unsaved project changes; empty or unmodified sessions close without asking.
 - Use sentence-case scientific labels with units for Normalize, Background and

@@ -259,21 +259,21 @@ impl StudioApp {
                             .or_else(|| self.joint.config.datasets.first())
                     })
                     .flatten();
-                let (r, paths, weight) = if let Some(d) = dataset {
+                let (r, paths, params) = if let Some(d) = dataset {
                     spectrum = d.label.clone();
                     (
                         d.ranges.as_ref().unwrap_or(&self.fit_ranges),
                         d.paths.len(),
-                        self.joint_dataset_params(d).and_then(|p| p.fft_kweight),
+                        self.joint_dataset_params(d).unwrap_or_default(),
                     )
                 } else {
                     (
                         &self.fit_ranges,
                         self.fit_paths.iter().filter(|p| p.spec.enabled).count(),
-                        p.fft_kweight,
+                        p.clone(),
                     )
                 };
-                let r = r.resolved(weight);
+                let r = r.resolved_with_params(&params);
                 add("Fit in", r.fitspace.label().into());
                 add("k range", range_value(Some(r.kmin), Some(r.kmax), "Å⁻¹"));
                 add("R range", range_value(Some(r.rmin), Some(r.rmax), "Å"));
@@ -286,6 +286,7 @@ impl StudioApp {
                         .join(", "),
                 );
                 add("Selected paths", paths.to_string());
+                add("Fit windows", r.window_summary());
                 if let Some(result) = &self.fit_result {
                     add("Latest fit · R-factor", format!("{:.5}", result.r_factor));
                 }

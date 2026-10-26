@@ -1366,6 +1366,7 @@ fn compact_defaults_preserve_explicit_fit_range_and_publication_settings() {
     for explicit in [false, true] {
         let mut project = load(&fixture("rexafs-0.1.0-links.rxs")).unwrap();
         project.fit_ranges.follow_transform = explicit;
+        project.fit_ranges.follow_window = explicit;
         let value = serde_json::to_value(&project).unwrap();
         let bytes = compact::encode(value.clone()).unwrap();
         assert_eq!(
@@ -1373,6 +1374,53 @@ fn compact_defaults_preserve_explicit_fit_range_and_publication_settings() {
             value
         );
         assert!(bytes.len() < serde_json::to_vec_pretty(&value).unwrap().len() * 3 / 4);
+    }
+}
+
+#[test]
+fn compact_fit_windows_preserve_custom_and_legacy_settings() {
+    use rexafs::prelude::FTWindow;
+    let mut project = load(&fixture("rexafs-0.1.0-links.rxs")).unwrap();
+    assert!(!project.fit_ranges.follow_window);
+    assert_eq!(project.fit_ranges.dk, 4.0);
+    assert_eq!(project.fit_ranges.window, FTWindow::KaiserBessel);
+    project.fit_ranges.window = FTWindow::Hanning;
+    project.fit_ranges.dk = 2.0;
+    project.fit_ranges.dk2 = Some(1.0);
+    project.fit_ranges.rwindow = FTWindow::Parzen;
+    project.fit_ranges.dr = 0.2;
+    project.fit_ranges.dr2 = Some(0.4);
+    let value = serde_json::to_value(&project).unwrap();
+    let bytes = compact::encode(value.clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(parse(std::str::from_utf8(&bytes).unwrap()).unwrap()).unwrap(),
+        value
+    );
+}
+
+#[test]
+fn omitted_old_fit_ranges_keep_legacy_windows_but_new_models_save_following() {
+    let legacy = parse(r#"{"version":1}"#).unwrap();
+    assert!(legacy.fit_ranges.follow_transform);
+    assert!(!legacy.fit_ranges.follow_window);
+    assert_eq!(legacy.fit_ranges.dk, 4.0);
+    assert_eq!(
+        legacy.fit_ranges.window,
+        rexafs::prelude::FTWindow::KaiserBessel
+    );
+    for ranges in [FitRanges::default(), FitRanges::legacy_defaults()] {
+        let project = ProjectFile {
+            version: 1,
+            fit_ranges: ranges.clone(),
+            ..Default::default()
+        };
+        let bytes = compact::encode(serde_json::to_value(&project).unwrap()).unwrap();
+        let reopened = parse(std::str::from_utf8(&bytes).unwrap()).unwrap();
+        assert!(reopened.fit_ranges == ranges);
+        if ranges.follow_window {
+            let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(value["fit_ranges"]["follow_window"], true);
+        }
     }
 }
 

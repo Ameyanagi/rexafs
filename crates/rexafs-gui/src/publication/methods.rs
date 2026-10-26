@@ -63,11 +63,10 @@ fn num(v: &Value, pointer: &str, unit: &str) -> Option<String> {
         .map(|x| report::used_number(x, unit))
 }
 
-fn window(v: &Value, pointer: &str) -> Option<&'static str> {
+fn window(v: &Value, pointer: &str) -> Option<rexafs::prelude::FTWindow> {
     v.pointer(pointer)
         .cloned()
         .and_then(|w| serde_json::from_value(w).ok())
-        .map(crate::fit_report::window_name)
 }
 
 /// Methods sentences for one processed spectrum, from [`used_settings`].
@@ -141,11 +140,20 @@ fn processing_text(v: &Value, cite: &mut BTreeSet<Citation>) -> String {
                     .map(|w| format!(" (k-weight {w})"))
                     .unwrap_or_default();
                 let win = window(v, &format!("{ft}/window"))
-                    .map(|w| {
-                        let dk = num(v, &format!("{ft}/dk"), "Å⁻¹")
-                            .map(|d| format!(", dk = {d} Å⁻¹"))
+                    .map(|family| {
+                        let w = crate::fit_report::window_name(family);
+                        let unit = crate::fit_report::window_parameter_unit(family, "Å⁻¹");
+                        let dk = num(v, &format!("{ft}/dk"), unit)
+                            .map(|d| format!(", dk = {d} {unit}"))
                             .unwrap_or_default();
-                        format!(" with a {w} window{dk}")
+                        let dk2 = num(v, &format!("{ft}/dk2"), unit)
+                            .filter(|_| {
+                                v.pointer(&format!("{ft}/dk2")).and_then(Value::as_f64)
+                                    != v.pointer(&format!("{ft}/dk")).and_then(Value::as_f64)
+                            })
+                            .map(|d| format!(", dk2 = {d} {unit}"))
+                            .unwrap_or_default();
+                        format!(" with a {w} window{dk}{dk2}")
                     })
                     .unwrap_or_default();
                 out.push(format!(
@@ -535,6 +543,71 @@ mod tests {
     }
 
     #[test]
+    fn processing_describes_the_second_window_parameter() {
+        let settings = json!({
+            "background": {"AUTOBK": {}},
+            "xftf": {"kmin": 2.0, "kmax": 12.0, "window": "Hanning", "dk": 1.0, "dk2": 2.0}
+        });
+        let text = processing_text(&settings, &mut BTreeSet::new());
+        assert!(
+            text.contains("Hanning window, dk = 1.00 Å⁻¹, dk2 = 2.00 Å⁻¹"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn processing_labels_fractional_window_parameters_as_fractions() {
+        let settings = json!({
+            "background": {"AUTOBK": {}},
+            "xftf": {"kmin": 2.0, "kmax": 12.0, "window": "FHanning", "dk": 0.2, "dk2": 0.4}
+        });
+        let text = processing_text(&settings, &mut BTreeSet::new());
+        assert!(
+            text.contains("fractional Hanning window, dk = 0.20 fraction, dk2 = 0.40 fraction"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn fit_methods_describe_archived_asymmetric_windows() {
+        let dir = scratch("asymmetric");
+        let mut entry = fit(&dir, "ReFEFF");
+        entry.transforms = vec![rexafs::xafs::fitting::FeffFitTransform {
+            window: rexafs::prelude::FTWindow::Parzen,
+            dk: 1.5,
+            dk2: Some(2.5),
+            rwindow: rexafs::prelude::FTWindow::Welch,
+            dr: 0.25,
+            dr2: Some(0.75),
+            ..entry.ranges.transform()
+        }];
+        let text = fit_text(&entry, &mut BTreeSet::new());
+        assert!(
+            text.contains("Parzen k window (dk = 1.5 Å⁻¹, dk2 = 2.5 Å⁻¹); Welch R window (dR = 0.25 Å, dR2 = 0.75 Å)"),
+            "{text}"
+        );
+        assert!(!text.contains("window not recorded"), "{text}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn old_fit_methods_label_reconstructed_legacy_windows() {
+        let dir = scratch("legacy");
+        let mut entry = fit(&dir, "ReFEFF");
+        entry.transforms.clear();
+        entry.ranges.follow_window = false;
+        entry.ranges.window = rexafs::prelude::FTWindow::Parzen;
+        entry.ranges.dk = 1.5;
+        let text = fit_text(&entry, &mut BTreeSet::new());
+        assert!(
+            text.contains("Kaiser–Bessel k window (dk = 4 Å⁻¹); Hanning R window (dR = 0 Å) (window not recorded; the release default at fit time)"),
+            "{text}"
+        );
+        assert!(!text.contains("Parzen k window"), "{text}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn joint_fit_names_datasets_and_their_ranges() {
         let dir = scratch("joint");
         let mut entry = fit(&dir.join("a"), "FEFF-RS / FEFF10");
@@ -556,6 +629,9 @@ mod tests {
         });
         let mut wide = entry.ranges.transform();
         wide.kmax = 15.0;
+        wide.window = rexafs::prelude::FTWindow::Parzen;
+        wide.dk = 1.5;
+        wide.dk2 = Some(2.5);
         entry.transforms = vec![entry.ranges.transform(), wide];
         let s = snapshot(vec![], vec![entry]);
         let md = markdown(&s);
@@ -569,6 +645,10 @@ mod tests {
         );
         assert!(
             md.contains("k = 3.00–15.00 Å⁻¹") && md.contains("for Cu foil 300 K"),
+            "{md}"
+        );
+        assert!(
+            md.contains("Parzen k window (dk = 1.5 Å⁻¹, dk2 = 2.5 Å⁻¹)"),
             "{md}"
         );
         assert!(md.contains("FEFF10 through the FEFF-RS wrapper"), "{md}");
