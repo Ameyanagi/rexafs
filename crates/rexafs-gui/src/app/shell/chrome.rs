@@ -50,7 +50,7 @@ impl StudioApp {
         if self.project_saving {
             return;
         }
-        self.ui.save_storage = self.project_storage;
+        self.ui.save_storage = DataStorage::Embedded;
         self.ui.menu = Some(Menu::Save);
         let focus = self
             .ui
@@ -441,6 +441,16 @@ impl StudioApp {
                 cx.listener(|app, _, window, cx| app.close_chrome_menu(window, cx)),
             )
             .on_key_down(cx.listener(|app, event: &gpui::KeyDownEvent, window, cx| {
+                // Unhandled text-input keys must reach the platform's input
+                // handler. Stopping them here prevents typing into popup fields.
+                if event.keystroke.key != "escape"
+                    && window
+                        .context_stack()
+                        .iter()
+                        .any(|context| context.contains("TextInput"))
+                {
+                    return;
+                }
                 match event.keystroke.key.as_str() {
                     "escape" => app.close_chrome_menu(window, cx),
                     "down" => window.focus_next(cx),
