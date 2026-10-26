@@ -29,6 +29,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+  - package-ecosystem: bun
+    directory: /website
+    target-branch: dev
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
   - package-ecosystem: pip
     directory: /
     target-branch: dev
@@ -38,3 +44,14 @@ updates:
     # Preserve the recorded Cu-mixture experiment; its generator requires 0.2.8.
     exclude-paths:
       - scripts/cu-mixtures-requirements.txt
+  - package-ecosystem: uv
+    # Larch reference-fixture environment; numpy and xraylarch stay pinned by
+    # hand so regenerated fixtures remain comparable.
+    directory: /crates/rexafs/tests/pythonscript
+    target-branch: dev
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: numpy
+      - dependency-name: xraylarch

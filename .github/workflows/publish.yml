@@ -39,6 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -64,6 +65,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
@@ -127,6 +130,7 @@ jobs:
         if: inputs.channel == 'crates-io'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.version.outputs.commit }}
           path: release-source
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
@@ -164,7 +168,12 @@ jobs:
         if: inputs.channel == 'npm'
         with:
           node-version: '24'
+          # Always the newest 24.x: the runner's cached Node can lag behind
+          # security releases (CVE-2026-111497 is fixed in 24.22.1).
+          check-latest: true
           registry-url: https://registry.npmjs.org
+          # Release job: never restore a dependency cache another workflow wrote.
+          package-manager-cache: false
       - name: Publish npm package
         if: inputs.channel == 'npm'
         env:
