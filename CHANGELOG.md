@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Include every named multi-panel recipe in reports and supporting information,
+  in insertion order after the individual figures. Save PNG, SVG, PDF and
+  plain-text captions under `figures/composed/`, with optional matplotlib
+  scripts and unshifted curve CSVs; keep colliding filenames distinct. Resolve
+  all recipe samples against the current workspace, including unmarked and
+  uncached groups, while retaining the project's normal saved scope. Report
+  missing inputs and failed recipes without stopping other recipes.
+- Export the active multi-panel recipe as unshifted curve CSVs and an editable
+  matplotlib script, including fit residual strips and panel insets. Edit main
+  and inset display offsets in the script, then save PDF, SVG and PNG at the
+  recipe's printed size and DPI with only Python 3, numpy and matplotlib.
 - Add optional publication-panel insets for pre-edge and white-line detail or
   normalized differences from the first selected sample, with editable E₀-relative
   ranges, placement and scaled display offsets in previews and image exports.
