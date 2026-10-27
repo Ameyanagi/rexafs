@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- Include every named multi-panel recipe in reports and supporting information,
+  in insertion order after the individual figures. Save PNG, SVG, PDF and
+  plain-text captions under `figures/composed/`, with optional matplotlib
+  scripts and unshifted curve CSVs; keep colliding filenames distinct. Resolve
+  all recipe samples against the current workspace, including unmarked and
+  uncached groups, while retaining the project's normal saved scope. Report
+  missing inputs and failed recipes without stopping other recipes.
+- Export the active multi-panel recipe as unshifted curve CSVs and an editable
+  matplotlib script, including fit residual strips and panel insets. Edit main
+  and inset display offsets in the script, then save PDF, SVG and PNG at the
+  recipe's printed size and DPI with only Python 3, numpy and matplotlib.
+- Add optional publication-panel insets for pre-edge and white-line detail or
+  normalized differences from the first selected sample, with editable E₀-relative
+  ranges, placement and scaled display offsets in previews and image exports.
+  Save inset choices per panel while preserving older project recipes.
+- Select several workspace samples per publication composer panel, share or
+  override their ordered selection, and stack main curves with vertical offsets.
+  Set short figure labels with full sample names retained in captions; curve-end
+  labels remain complete and report an error when they cannot fit. Choose an
+  ordered viridis, Okabe–Ito or workspace sample palette, default to one legend
+  per figure and no grid, and draw inward ticks on all four sides with four
+  minor ticks between major ticks. Process uncached samples automatically and
+  preserve legacy recipes on project load.
+
+- Choose per-curve colours in Publish from the eight-colour Okabe–Ito palette
+  or Auto, and share colours across composer panels. Save choices in `.rxs`
+  projects and apply them to previews, image exports and matplotlib scripts.
 - Ask to save, discard or cancel before closing the window or quitting with
   unsaved project changes; empty or unmodified sessions close without asking.
 - Use sentence-case scientific labels with units for Normalize, Background and
@@ -56,6 +83,9 @@
 - Add a Multi-panel mode to Publish that lays out XANES, χ(k), χ(R) and fit
   figures as labelled (a), (b), (c) panels at journal column widths, with a
   combined caption and PNG, TIFF, SVG and PDF export.
+- Save named multi-panel recipes with New, Duplicate, Rename and confirmed
+  Delete controls; migrate the existing layout to Figure 1, suggest filenames
+  from recipe names and add plain-text caption saving.
 - Fit publication legend boxes to their labels (ruviz 0.15.2); legends no
   longer show empty space to the right of the series names.
 
