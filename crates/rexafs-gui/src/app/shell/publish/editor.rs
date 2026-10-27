@@ -742,7 +742,9 @@ impl StudioApp {
         }
         if figure
             .as_ref()
-            .is_some_and(|f| f.normalized_series.is_some())
+            // Raw μ(E) keeps normalized data only for insets; its display
+            // ignores the normalized option, so it gets no mode selector.
+            .is_some_and(|f| f.key != "mu-energy" && f.normalized_series.is_some())
         {
             let mut modes = segmented(&t);
             for (i, (normalized, label)) in [(false, "Flattened"), (true, "Normalized")]

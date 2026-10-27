@@ -678,6 +678,9 @@ pub(crate) struct PreparedPanel {
     pub offsets: Vec<Option<DisplayOffset>>,
     /// Curves and independent limits resolved once by the preview worker.
     pub inset: Option<inset::PreparedInset>,
+    /// True when `options.ymin`/`ymax` were filled in automatically to fit
+    /// stacked curves, rather than typed by the user.
+    pub auto_ylim: bool,
 }
 
 /// A transient display shift. Retaining the original y values lets data exports
@@ -807,6 +810,7 @@ pub(crate) fn prepare_panels(
                         offset_caption: None,
                         offsets: Vec::new(),
                         inset: None,
+                        auto_ylim: false,
                     });
                 }
                 None => prepared.missing.push(panel.key.clone()),
@@ -858,6 +862,7 @@ pub(crate) fn prepare_panels(
                     offset_caption: None,
                     offsets: Vec::new(),
                     inset: None,
+                    auto_ylim: false,
                 });
             }
             continue;
@@ -967,6 +972,7 @@ pub(crate) fn prepare_panels(
         }
         data.guides.sort_by(f64::total_cmp);
         data.guides.dedup();
+        let mut auto_ylim = false;
         if applied_offset
             && options.ymin.is_none()
             && options.ymax.is_none()
@@ -974,9 +980,10 @@ pub(crate) fn prepare_panels(
         {
             options.ymin = Some(min);
             options.ymax = Some(max);
+            auto_ylim = true;
         }
         prepared.panels.push(PreparedPanel {
-            index, data, options,
+            index, data, options, auto_ylim,
             offsets: display_offsets,
             inset: None,
             offset_caption: applied_offset.then(|| format!(

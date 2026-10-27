@@ -108,7 +108,8 @@ fn composite_python_export(
                         grid: Some(false),
                         legend: false,
                         ..inset.options.clone()
-                    }
+                    },
+                    false,
                 )
             )
         } else {
@@ -155,14 +156,14 @@ fn composite_python_export(
             )?;
             format!(
                 "{{{}, \"series\": [\n{residual_series}        ]}}",
-                axes_settings(&strip, &strip_options)
+                axes_settings(&strip, &strip_options, false)
             )
         } else {
             "None".into()
         };
         entries.push_str(&format!(
             "    {{\n        \"label\": {},\n        {},\n        \"curve_end\": {},\n        \"series\": [\n{series}        ],\n        \"inset\": {inset},\n        \"residual\": {residual},\n    }},\n",
-            py_str(&panel_label(index)), axes_settings(data, &options), py_bool(curve_end),
+            py_str(&panel_label(index)), axes_settings(data, &options, panel.auto_ylim), py_bool(curve_end),
         ));
     }
     let notices = missing
@@ -301,7 +302,7 @@ fn series_entries(
 }
 
 /// Axis settings use the same labels and visible ranges as a single export.
-fn axes_settings(data: &FigureData, options: &FigureOptions) -> String {
+fn axes_settings(data: &FigureData, options: &FigureOptions, auto_ylim: bool) -> String {
     let (xlabel, ylabel) = axis_labels(data, options);
     let guides = if options.guides {
         data.guides
@@ -323,7 +324,7 @@ fn axes_settings(data: &FigureData, options: &FigureOptions) -> String {
                 .zip(options.ymax)
                 .or_else(|| data.visible_ylim(options))
         ),
-        py_bool(options.ymin.zip(options.ymax).is_some()),
+        py_bool(!auto_ylim && options.ymin.zip(options.ymax).is_some()),
         py_bool(options.grid.unwrap_or(false)),
         py_bool(options.legend),
     )
