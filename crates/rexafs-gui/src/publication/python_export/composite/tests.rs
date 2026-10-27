@@ -849,3 +849,20 @@ fn invalid_data_fail_before_writing_and_existing_exports_are_preserved() {
     assert!(write_composite_python_export("Figure 1", &recipe, &prepared, &folder).is_err());
     assert_eq!(fs::read_to_string(path).unwrap(), "user edits");
 }
+
+#[test]
+fn automatic_stacked_limits_stay_rescalable_while_typed_limits_stay_fixed() {
+    let (recipe, prepared) = fixture();
+    assert!(prepared.panels[0].auto_ylim);
+    let files = composite_python_export("Stacked", &recipe, &prepared).unwrap();
+    let script = &files[0].1;
+    let axes = |label: &str| {
+        let start = script.find(&format!("\"label\": \"{label}\"")).unwrap();
+        let end = start + script[start..].find("\"curve_end\"").unwrap();
+        script[start..end].to_string()
+    };
+    // Panel (a) is stacked with automatic limits; editing its offsets in the
+    // script must refit them. Panel (b) uses limits typed in the settings.
+    assert!(axes("(a)").contains("\"ylim_fixed\": False"));
+    assert!(axes("(b)").contains("\"ylim_fixed\": True"));
+}
