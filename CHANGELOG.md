@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reuse trusted Cargo dependency caches for Linux and Windows desktop builds,
+  populate the Windows core cache, and run benchmarks alongside other Rust
+  checks while retaining all release qualification.
+
 - Ask to save, discard or cancel before closing the window or quitting with
   unsaved project changes; empty or unmodified sessions close without asking.
 - Use sentence-case scientific labels with units for Normalize, Background and
