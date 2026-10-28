@@ -325,6 +325,7 @@ fn inset_exports_hide_repeated_legends_and_grid_but_preserve_tag_headroom_and_in
             .into_iter()
             .map(|kind| CompositePanel {
                 offset_step: 0.3,
+                label_mode: CurveLabelMode::Legend,
                 inset: Some(PanelInset {
                     energy_range: (-1., 1.),
                     ..PanelInset::new(kind)
@@ -391,11 +392,17 @@ fn composed_grid_overrides_figure_settings_and_legend_appears_once() {
         samples: samples.iter().map(|s| s.id.clone()).collect(),
         panels: vec![
             CompositePanel {
-                label_mode: CurveLabelMode::CurveEnd,
+                label_mode: CurveLabelMode::AboveCurve,
                 .."xanes".into()
             },
-            "xanes".into(),
-            "xanes".into(),
+            CompositePanel {
+                label_mode: CurveLabelMode::Legend,
+                .."xanes".into()
+            },
+            CompositePanel {
+                label_mode: CurveLabelMode::Legend,
+                .."xanes".into()
+            },
         ],
         ..Default::default()
     };
@@ -470,7 +477,7 @@ fn composing_does_not_change_single_figure_output_or_settings() {
 #[test]
 fn measured_multi_sample_print_figure_renders_with_both_label_modes() {
     // Three measured copper spectra; no synthetic displacement is applied until
-    // the separate curve-end and inset renders. Attribution stays with the fixtures.
+    // the separate above-curve and inset renders. Attribution stays with the fixtures.
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../rexafs/tests");
     let sources = [
         (
@@ -535,14 +542,17 @@ fn measured_multi_sample_print_figure_renders_with_both_label_modes() {
         },
     );
     let current: Vec<FigureData> = vec![];
-    for ends in [false, true] {
-        if ends {
-            for (panel, step) in recipe.panels.iter_mut().zip([0.3, 1.5]) {
-                panel.label_mode = CurveLabelMode::CurveEnd;
-                panel.offset_step = step;
-            }
+    for above in [false, true] {
+        for (panel, step) in recipe.panels.iter_mut().zip([0.3, 1.5]) {
+            panel.label_mode = if above {
+                CurveLabelMode::AboveCurve
+            } else {
+                CurveLabelMode::Legend
+            };
+            panel.offset_step = if above { step } else { 0. };
         }
-        let rendered = compose_samples(&recipe, &current, &samples, &settings, None).unwrap();
+        let prepared = prepare_panels(&recipe, &current, &samples, &settings).unwrap();
+        let rendered = compose_prepared(&recipe, &prepared, None).unwrap();
         assert_eq!(rendered.image.width, 1400);
         for sample in &samples {
             assert_eq!(rendered.caption.matches(&sample.label).count(), 1);
@@ -550,13 +560,23 @@ fn measured_multi_sample_print_figure_renders_with_both_label_modes() {
         if let Some(dir) = std::env::var_os("REXAFS_COMPOSER_SHOTS") {
             let dir = Path::new(&dir);
             std::fs::create_dir_all(dir).unwrap();
-            let name = if ends {
-                "composed-check-ends"
+            let name = if above {
+                "composed-check-above-curves"
             } else {
                 "composed-check"
             };
             std::fs::write(dir.join(format!("{name}.png")), rendered.png().unwrap()).unwrap();
             std::fs::write(dir.join(format!("{name}.svg")), &rendered.svg).unwrap();
+        }
+        if above && let Some(dir) = std::env::var_os("REXAFS_COMPOSITE_PYTHON_EXPORT_DIR") {
+            std::fs::create_dir_all(&dir).unwrap();
+            crate::publication::python_export::write_composite_python_export(
+                "Measured copper references",
+                &recipe,
+                &prepared,
+                &Path::new(&dir).join("measured-copper"),
+            )
+            .unwrap();
         }
     }
 
@@ -620,13 +640,23 @@ fn subset_and_reordered_panels_keep_sample_colours_and_missing_panels_do_not_rep
             samples: samples.iter().map(|s| s.id.clone()).collect(),
             sample_colours: mode,
             panels: vec![
-                "chi-r".into(),
-                "xanes".into(),
                 CompositePanel {
-                    samples: Some(vec![samples[2].id.clone(), samples[1].id.clone()]),
+                    label_mode: CurveLabelMode::Legend,
+                    .."chi-r".into()
+                },
+                CompositePanel {
+                    label_mode: CurveLabelMode::Legend,
                     .."xanes".into()
                 },
-                "chi-r".into(),
+                CompositePanel {
+                    samples: Some(vec![samples[2].id.clone(), samples[1].id.clone()]),
+                    label_mode: CurveLabelMode::Legend,
+                    .."xanes".into()
+                },
+                CompositePanel {
+                    label_mode: CurveLabelMode::Legend,
+                    .."chi-r".into()
+                },
             ],
             ..Default::default()
         };

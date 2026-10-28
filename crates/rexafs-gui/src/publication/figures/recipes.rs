@@ -337,9 +337,11 @@ mod tests {
         .unwrap();
         assert_eq!(settings.active_recipe_index(), 0);
         assert_eq!(settings.active_recipe().name, "New name");
+        let panel = &settings.active_recipe().recipe.panels[0];
+        assert_eq!(panel.key, "xanes");
         assert_eq!(
-            settings.active_recipe().recipe.panels,
-            [CompositePanel::from("xanes")]
+            panel.label_mode,
+            super::super::composer::CurveLabelMode::Legend
         );
     }
 

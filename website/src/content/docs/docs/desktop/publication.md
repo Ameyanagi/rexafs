@@ -192,7 +192,7 @@ Checking a sample appends its durable group ID to the saved list. The recipe
 keeps that order when marks or the current group change.
 
 Enter an optional short **Figure label** beside each sample, for example `Cu foil`
-instead of a long acquisition filename. Multi-sample legends and curve-end labels
+instead of a long acquisition filename. Multi-sample legends and above-curve labels
 use it; a blank label uses the full workspace group name and follows later group
 renames. Figure labels belong to this recipe, are saved by group ID in
 `figure_labels`, and do not rename workspace groups. The combined caption
@@ -226,16 +226,29 @@ Negative steps move successive curves downward. Missing samples keep their
 positions in the saved order. Offsets use the panel's displayed vertical-axis
 units, including any k weighting; they modify copied display arrays only, leaving
 processed spectra and fit results unchanged. The combined caption records a
-non-zero applied offset. **Curve labels** defaults to **Legend**; **Curve ends**
-places the complete figure labels at the right side of the plot with space
-reserved across the grid. Labels and padding may use at most 35% of a panel's
-width. Labels are never shortened: when they exceed that allowance, rendering
-stops with “Curve-end labels are too long for this panel. Shorten the figure
-labels or use a legend.” The raster and SVG use the same complete labels.
-The plot must also retain at least 0.5 in of width. If it cannot, use a wider
-figure, fewer columns, a smaller font or a legend. Labels that cannot fit
-vertically require taller panels, fewer samples, a smaller font or a legend.
-These display choices are implemented in
+non-zero applied offset.
+
+**Curve labels** defaults to **Above curves** for new panels. With at least two
+visible curves, it places complete curve labels in their curve colours
+inside the axes. When no preset or user-entered horizontal range exists,
+rexafs uses the curves' full horizontal extent without extra padding so short
+labels stay over the data. Each label has 4 pt of horizontal padding from the
+axes edge and sits 2 pt above its own curve's highest visible point within the
+horizontal span occupied by its text, clamped inside the axes. Without an inset,
+rexafs tries these placements on both sides and chooses the side with fewer
+colliding labels. A label collides if another visible curve enters its box, or
+if clamping pushes the box down onto its own curve. On a tie, rexafs chooses the
+smaller sum of each curve's visible vertical range (maximum minus minimum)
+within its own label's horizontal span; a further tie chooses the left. With an
+inset, the opposite horizontal side overrides this scoring. This placement rule
+is a rexafs design choice, not a published algorithm. It does not separate
+overlapping labels or guarantee that every label clears neighbouring curves.
+A curve with no visible segment under its text span has no above-curve label;
+choose **Legend** for such clipped views or for crowded curves and labels.
+Panels with at most one visible curve use the existing legend rules; their
+sample selection and figure legend
+settings still apply. Fit and residual panels retain their figure's legend
+visibility. These display choices are implemented in
 [`prepare_panels` and `compose_samples`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
 
 **Panel insets (unreleased).** Select an energy-domain panel to add one inset.
@@ -323,13 +336,15 @@ project choice: Matplotlib's
 adapts the count, using four minor ticks when the major interval is 1, 2.5, 5
 or 10 times a power of ten, and three otherwise.
 
-For panels selecting several samples, the default shows a legend only in the
-first panel with at least two visible samples whose **Curve labels** mode is
-**Legend** and whose figure legend is enabled. Enable **Legend in every panel**
-to show a legend in every panel that selects several samples and permits a
-legend. Curve-end panels do not show a legend. One-sample and fit panels retain their figure's legend
-visibility. Composer legends use text one point smaller than the figure font,
-with a minimum of 5 pt, and stay inside the plot. Automatic placement chooses the
+For panels selecting several samples, **Legend** shows a legend only in the
+first panel with at least two visible curves whose figure legend is enabled.
+Enable **Legend in every panel** to show a legend in every panel selecting
+several samples whose figure legend is enabled, including panels with fewer
+than two visible curves. **Above curves** suppresses legends when at least two
+curves are visible and otherwise follows these same legend rules. Fit panels
+retain their figure's legend visibility. Composer legends use text one point
+smaller than the figure font, with a minimum of 5 pt, and stay inside the plot.
+Automatic placement chooses the
 inside position that covers the least plotted data. Composer legends use this
 placement for every figure legend setting so that panels remain aligned. The
 renderer currently draws a box around legends. These settings apply to the composition; **Single figure** keeps its
@@ -392,10 +407,12 @@ final recipe. An older `publication.composite` loads unchanged as **Figure 1**;
 projects without recipe data start with a default **Figure 1**. Saving writes
 only the new recipe format; the compact project encoder may omit default
 fields. Legacy panels saved as plain figure-key strings still load with shared
-samples, zero offset, forward order, legend labels and no inset. Older panel
-objects without an inset also load with no inset. New saves write panel objects,
-with sample IDs as ordered arrays rather than labels or workspace row
-numbers. Storage and migration are implemented in
+samples, zero offset, forward order, legend labels and no inset. Panel objects
+without `label_mode` also retain **Legend**; saved `curve_end` modes migrate to
+**Above curves**. Older panel objects without an inset load with no inset. New
+panels default to **Above curves**, and new saves write panel objects with
+sample IDs as ordered arrays rather than labels or workspace row numbers.
+Storage and migration are implemented in
 [`recipes.rs`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/recipes.rs).
 
 The preview is rendered at up to 200 DPI; **Fit** fits it to the pane and
@@ -452,13 +469,13 @@ Python script uses frameless legends with text at `FONT_SIZE - 1` points,
 These are the Python legend settings; the native renderer currently draws the
 boxed legends described above.
 
-Curve-end labels use complete figure labels, and CSV headers retain those same
-complete names. Export applies the native curve-end width and vertical-fit
-validation before writing files: labels and padding must fit within 35% of the
-panel width and leave at least 0.5 in for the plot. Labels are never shortened or
-truncated. If validation fails, shorten the recipe's figure labels, adjust the
-figure dimensions or font size, reduce the sample count, or choose a legend,
-then export again. Each curve's complete `label` remains editable in the script.
+Above-curve labels and CSV headers retain the complete figure labels. The
+script applies the same automatic side selection, 4 pt horizontal padding and
+2 pt spacing above each curve as the native figure, with labels clamped inside
+the axes. Both renderers score curve collisions within the actual label boxes,
+then flatness within each label's span, without separating overlapping labels.
+Each curve's complete `label` remains editable in the script; full sample names
+remain in the caption.
 
 Run the script with Python 3, numpy and matplotlib; rexafs is not required. For
 example, run `uv run --with numpy --with matplotlib python make_figure.py`.

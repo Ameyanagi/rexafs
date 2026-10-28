@@ -1,16 +1,16 @@
 //! Export the prepared active recipe without recomputing samples or insets.
 use super::*;
 use crate::publication::figures::composer::{
-    CompositeRecipe, CurveLabelMode, DisplayOffset, InsetPlacement, PreparedComposition,
-    panel_label, validate_composition_layout,
+    CURVE_LABEL_GAP_PT, CURVE_LABEL_PAD_PT, CompositeRecipe, DisplayOffset, InsetPlacement,
+    PreparedComposition, fix_curve_label_limits, panel_label, uses_curve_labels,
+    validate_composition_layout,
 };
 
 /// Write the named recipe's available panels into a new folder. CSV ordinates
 /// precede display stacking; the script adds editable offsets in axis units.
 /// Prepared data must belong to this recipe and its current figure settings.
-/// Invalid settings, complete curve-end labels that do not fit the native
-/// layout, or no visible data fail before creating the directory. Existing
-/// destinations are rejected. Returns the generated script path.
+/// Invalid settings or no visible data fail before creating the directory.
+/// Existing destinations are rejected. Returns the generated script path.
 pub(crate) fn write_composite_python_export(
     name: &str,
     recipe: &CompositeRecipe,
@@ -68,9 +68,11 @@ fn composite_python_export(
         let data = &panel.data;
         let mut options = recipe.panel_options(panel.options.clone(), &grid);
         options.validate()?;
-        let curve_end = !spec.uses_current_fit() && spec.label_mode == CurveLabelMode::CurveEnd;
-        if curve_end {
+        let curve_labels = uses_curve_labels(spec, data, &options);
+        let auto_ylim = panel.auto_ylim || options.ymin.zip(options.ymax).is_none();
+        if curve_labels {
             options.legend = false;
+            fix_curve_label_limits(data, &mut options);
         }
         let letter = (b'a' + index as u8) as char;
         let series = series_entries(
@@ -88,15 +90,16 @@ fn composite_python_export(
                 &inset.offsets,
                 &mut files,
             )?;
-            let bounds = match inset.placement {
+            let (placement, bounds) = match inset.placement {
                 // Leave room below the inset frame for its tick labels and
                 // their white backgrounds inside the main plotting area.
-                InsetPlacement::LowerRight => "(0.54, 0.14, 0.43, 0.36)",
-                InsetPlacement::UpperLeft => "(0.03, 0.60, 0.43, 0.36)",
-                InsetPlacement::CenterRight => "(0.54, 0.32, 0.43, 0.36)",
+                InsetPlacement::LowerRight => ("lower_right", "(0.54, 0.14, 0.43, 0.36)"),
+                InsetPlacement::UpperLeft => ("upper_left", "(0.03, 0.60, 0.43, 0.36)"),
+                InsetPlacement::CenterRight => ("center_right", "(0.54, 0.32, 0.43, 0.36)"),
             };
             format!(
-                "{{\"bounds\": {bounds}, \"quantity\": {}, {}, \"series\": [\n{inset_series}        ]}}",
+                "{{\"bounds\": {bounds}, \"placement\": {}, \"quantity\": {}, {}, \"series\": [\n{inset_series}        ]}}",
+                py_str(placement),
                 py_str(inset.quantity),
                 // Inset y limits are never typed by the user; leave them
                 // automatic so the script fits them to its offset curves.
@@ -162,8 +165,8 @@ fn composite_python_export(
             "None".into()
         };
         entries.push_str(&format!(
-            "    {{\n        \"label\": {},\n        {},\n        \"curve_end\": {},\n        \"series\": [\n{series}        ],\n        \"inset\": {inset},\n        \"residual\": {residual},\n    }},\n",
-            py_str(&panel_label(index)), axes_settings(data, &options, panel.auto_ylim), py_bool(curve_end),
+            "    {{\n        \"label\": {},\n        {},\n        \"curve_labels\": {},\n        \"series\": [\n{series}        ],\n        \"inset\": {inset},\n        \"residual\": {residual},\n    }},\n",
+            py_str(&panel_label(index)), axes_settings(data, &options, auto_ylim), py_bool(curve_labels),
         ));
     }
     let notices = missing
@@ -183,13 +186,16 @@ Edit the figure settings and PANELS below, then run again to save figure.pdf,
 figure.svg and figure.png next to this script. Size is in millimetres; font
 size and line width are in points. Each series offset is in its own y units;
 main and inset offsets are independent editable constants. Axis limits set the
-view only. Labels use matplotlib mathtext ($...$), as in the single-figure
-export. Complete figure labels, resolved colours, grid and legend visibility
-match the prepared composition. Ticks point inward on all four sides with
-minor ticks; legends are frameless and one point smaller than the figure font.
+view only. Axis labels use matplotlib mathtext ($...$), as in the single-figure
+export. Curve labels are literal text. Complete figure labels, resolved colours,
+grid and legend visibility match the prepared composition. Ticks point inward
+on all four sides with minor ticks; legends are frameless and one point smaller than the figure font.
 Matplotlib chooses tick positions and margins, so this is an editable
-reproduction rather than a pixel copy of the preview. Curve-end labels are
-validated against the native layout before export and are never shortened.
+reproduction rather than a pixel copy of the preview. Above-curve labels use the
+side with fewer labels touching visible curves, then less summed vertical
+variation under the actual label spans; ties choose the left. An inset overrides
+this choice with the opposite side. Labels retain their full text and may overlap
+when curves or labels are close together.
 """
 from pathlib import Path
 import csv
@@ -228,9 +234,8 @@ GUIDE_COLOR = "#8c8c8c"
 GUIDE_WIDTH = 0.8
 PANEL_LABEL_SIZE = 1.1 * FONT_SIZE
 PANEL_LABEL_Y = 1.04
-CURVE_LABEL_GAP_PT = 2
-CURVE_LABEL_PAD_PT = 4
-CURVE_LABEL_LINE_HEIGHT = 1.2
+CURVE_LABEL_GAP_PT = {curve_label_gap_pt:?}
+CURVE_LABEL_PAD_PT = {curve_label_pad_pt:?}
 RESIDUAL_HEIGHT_RATIOS = (3, 1)
 RESIDUAL_GAP = 0.08
 
@@ -261,6 +266,8 @@ PANELS = [
         columns = grid.columns,
         dpi = recipe.dpi,
         font_size = recipe.font_size,
+        curve_label_gap_pt = CURVE_LABEL_GAP_PT,
+        curve_label_pad_pt = CURVE_LABEL_PAD_PT,
         style = PYTHON_STYLE,
         draw = DRAW,
         load_series = PYTHON_LOAD_SERIES,
@@ -294,7 +301,7 @@ fn series_entries(
         ));
         entries.push_str(&format!(
             "            {{\"file\": {}, \"label\": {}, \"color\": {}, \"linestyle\": {}, \"offset\": {:?}}},\n",
-            py_str(&file), py_str(&plain_text(&curve.label)), py_str(&series_color(curve, options, index)),
+            py_str(&file), py_str(&curve.label), py_str(&series_color(curve, options, index)),
             py_str(if curve.dashed { "--" } else { "-" }), shift.map_or(0., |shift| shift.value),
         ));
     }
@@ -330,7 +337,7 @@ fn axes_settings(data: &FigureData, options: &FigureOptions, auto_ylim: bool) ->
     )
 }
 
-/// Python rendering keeps labels and endpoints responsive to edited offsets.
+/// Python rendering keeps above-curve labels responsive to edited offsets.
 const DRAW: &str = r##"
 def draw_curves(ax, settings, width):
     curves = []
@@ -364,53 +371,98 @@ def draw_curves(ax, settings, width):
     ax.xaxis.set_minor_locator(AutoMinorLocator(MINOR_SUBDIVISIONS))
     ax.yaxis.set_minor_locator(AutoMinorLocator(MINOR_SUBDIVISIONS))
     if settings["legend"]:
-        ax.legend(loc=LEGEND_LOCATION, frameon=LEGEND_FRAME, fontsize=LEGEND_FONT_SIZE,
-                  handlelength=LEGEND_HANDLE_LENGTH, labelspacing=LEGEND_LABEL_SPACING,
-                  handletextpad=LEGEND_HANDLE_TEXT_PAD)
+        legend = ax.legend(loc=LEGEND_LOCATION, frameon=LEGEND_FRAME, fontsize=LEGEND_FONT_SIZE,
+                           handlelength=LEGEND_HANDLE_LENGTH, labelspacing=LEGEND_LABEL_SPACING,
+                           handletextpad=LEGEND_HANDLE_TEXT_PAD)
+        for text in legend.get_texts():
+            text.set_parse_math(False)
     return curves
 
 
-def curve_end_labels(ax, curves):
-    """Label the rightmost visible point, interpolating at clipped boundaries."""
-    xmin, xmax = ax.get_xlim()
-    ymin, ymax = ax.get_ylim()
-    labels = []
-    height_pt = ax.get_window_extent().height / ax.figure.dpi * 72
-    gap = CURVE_LABEL_GAP_PT / height_pt
+def curve_box_ylim(points, low, high, bottom, top):
+    """Return a polyline's y range inside an axes-fraction rectangle."""
+    visible = []
+
+    def include(x, y):
+        if np.isfinite(x) and np.isfinite(y) and low <= x <= high and bottom <= y <= top:
+            visible.append(y)
+
+    for x, y in points:
+        include(x, y)
+    for (x0, y0), (x1, y1) in zip(points[:-1], points[1:]):
+        if not np.isfinite((x0, y0, x1, y1)).all():
+            continue
+        # Intersections retain sparse curves clipped by any visible boundary.
+        for bound in (low, high):
+            if min(x0, x1) < bound < max(x0, x1):
+                include(bound, y0 + (y1 - y0) * (bound - x0) / (x1 - x0))
+        for bound in (bottom, top):
+            if min(y0, y1) < bound < max(y0, y1):
+                include(x0 + (x1 - x0) * (bound - y0) / (y1 - y0), bound)
+    return (min(visible), max(visible)) if visible else None
+
+
+def curve_span_ylim(points, low, high):
+    """Return the visible y range of a polyline in an axes-fraction x span."""
+    return curve_box_ylim(points, low, high, 0, 1)
+
+
+def above_curve_labels(ax, curves, inset):
+    """Place complete literal labels above their curves on one quiet side."""
+    to_axes = ax.transAxes.inverted()
+    visible = []
     for x, y, series in curves:
-        points = list(zip(x, y))
-        for x0, x1, y0, y1 in zip(x[:-1], x[1:], y[:-1], y[1:]):
-            for bound in (xmin, xmax):
-                if min(x0, x1) < bound < max(x0, x1):
-                    points.append((bound, y0 + (y1 - y0) * (bound - x0) / (x1 - x0)))
-            for bound in (ymin, ymax):
-                if min(y0, y1) < bound < max(y0, y1):
-                    points.append((x0 + (x1 - x0) * (bound - y0) / (y1 - y0), bound))
-        visible = [(px, py) for px, py in points
-                   if np.isfinite(px) and np.isfinite(py)
-                   and xmin <= px <= xmax and ymin <= py <= ymax]
-        if visible:
-            _, end_y = max(visible, key=lambda point: point[0])
-            height = CURVE_LABEL_LINE_HEIGHT * FONT_SIZE * (series["label"].count("\n") + 1) / height_pt
-            labels.append([(end_y - ymin) / (ymax - ymin), height, series])
-    labels.sort(key=lambda item: item[0])
-    bottom = 0
-    for label in labels:
-        label[0] = max(label[0], bottom + label[1] / 2)
-        bottom = label[0] + label[1] / 2 + gap
-    top = 1
-    for label in reversed(labels):
-        label[0] = min(label[0], top - label[1] / 2)
-        top = label[0] - label[1] / 2 - gap
-    for position, _, series in labels:
-        ax.annotate(series["label"], xy=(1, position), xycoords="axes fraction",
-                    xytext=(CURVE_LABEL_PAD_PT, 0), textcoords="offset points", va="center",
-                    color=series["color"], fontsize=FONT_SIZE, annotation_clip=False)
+        points = to_axes.transform(ax.transData.transform(np.column_stack((x, y))))
+        if curve_span_ylim(points, 0, 1) is not None:
+            visible.append((points, series))
+    renderer = ax.figure.canvas.get_renderer()
+    bounds = ax.get_window_extent(renderer)
+    pad = CURVE_LABEL_PAD_PT * ax.figure.dpi / 72 / bounds.width
+    gap = CURVE_LABEL_GAP_PT * ax.figure.dpi / 72 / bounds.height
+    labels = []
+    for points, series in visible:
+        text = ax.text(0, 0, series["label"], transform=ax.transAxes,
+                       ha="left", va="bottom", color=series["color"],
+                       fontsize=FONT_SIZE, parse_math=False, in_layout=False)
+        extent = text.get_window_extent(renderer).transformed(to_axes)
+        labels.append((points, text, extent.width, extent.height))
+
+    def candidate(side):
+        positions = []
+        collisions, variation = 0, 0
+        for index, (points, _, width, height) in enumerate(labels):
+            x = pad if side == "left" else 1 - pad - width
+            x = max(0, min(x, max(0, 1 - width)))
+            high = min(1, x + width)
+            span = curve_span_ylim(points, x, high)
+            if span is None:
+                positions.append(None)
+                continue
+            y = max(0, min(span[1] + gap, max(0, 1 - height)))
+            positions.append((x, y))
+            variation += span[1] - span[0]
+            collisions += span[1] >= y or any(
+                other != index and curve_box_ylim(curve, x, high, y, min(1, y + height)) is not None
+                for other, (curve, _, _, _) in enumerate(labels))
+        return positions, (collisions, variation)
+
+    # This rexafs layout choice scores actual label boxes, not a published algorithm.
+    left, left_score = candidate("left")
+    right, right_score = candidate("right")
+    if inset is not None:
+        use_right = inset["placement"] == "upper_left"
+    else:
+        use_right = right_score < left_score
+    for (_, text, _, _), position in zip(labels, right if use_right else left):
+        if position is None:
+            text.remove()
+        else:
+            text.set_position(position)
 
 
 fig, axes = plt.subplots(ROWS, COLS, figsize=(WIDTH_MM / 25.4, HEIGHT_MM / 25.4),
                          squeeze=False, layout="constrained")
-end_labels = []
+curve_labels = []
 inset_axes = []
 for ax, panel in zip(axes.flat, PANELS):
     residual = panel["residual"]
@@ -427,8 +479,8 @@ for ax, panel in zip(axes.flat, PANELS):
         ax.tick_params(labelbottom=False)
     ax.text(0, PANEL_LABEL_Y, panel["label"], transform=ax.transAxes, fontweight="bold",
             fontsize=PANEL_LABEL_SIZE, va="bottom")
-    if panel["curve_end"]:
-        end_labels.append((ax, curves))
+    if panel["curve_labels"]:
+        curve_labels.append((ax, curves, panel["inset"]))
     inset = panel["inset"]
     if inset is not None:
         inset_ax = ax.inset_axes(inset["bounds"])
@@ -445,10 +497,10 @@ for ax, panel in zip(axes.flat, PANELS):
         inset_axes.append(inset_ax)
 for ax in list(axes.flat)[len(PANELS):]:
     ax.set_visible(False)
-# Resolve axes heights before separating direct labels by their text height.
+# Resolve axes geometry before measuring and placing literal curve labels.
 fig.canvas.draw()
-for ax, curves in end_labels:
-    curve_end_labels(ax, curves)
+for ax, curves, inset in curve_labels:
+    above_curve_labels(ax, curves, inset)
 # Inset tick labels sit over the main plot; give them a white background.
 for inset_ax in inset_axes:
     for tick in inset_ax.get_xticklabels():
