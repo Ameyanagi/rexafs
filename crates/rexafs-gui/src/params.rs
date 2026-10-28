@@ -2334,6 +2334,30 @@ pub fn normalization_ranges(sp: &XASSpectrum) -> Option<[f64; 4]> {
 mod tests {
     use super::*;
 
+    /// A scan ending 119 eV above E0 used to fail ("polynomial order 2 too high
+    /// for 0 points"); the default 150 eV fit minimum is now limited to the data.
+    #[test]
+    fn short_scans_process_with_ranges_limited_to_the_data() {
+        let energy: Vec<f64> = (0..=268).map(|i| 8318.0 + 0.5 * i as f64).collect();
+        let mu: Vec<f64> = energy
+            .iter()
+            .map(|e| 0.2 + 1.0 / (1.0 + (-(e - 8333.0) / 1.5).exp()))
+            .collect();
+        let params = PipelineParams {
+            e0: Some(8333.0),
+            ..Default::default()
+        };
+        let spectrum = prepare_arrays(energy, mu, &params, RequiredStage::Normalized).unwrap();
+        let norm = spectrum.norm().unwrap();
+        assert!((norm[norm.len() - 1] - 1.0).abs() < 0.05);
+        let fields: Vec<_> = spectrum
+            .range_adjustments()
+            .iter()
+            .map(|a| a.field)
+            .collect();
+        assert_eq!(fields, ["pre_edge_start", "pre_edge_end", "norm_start"]);
+    }
+
     #[test]
     fn energy_offset_is_absolute_reversible_and_invalidates_raw_cache() {
         let group = DerivedSpectrum {
@@ -3836,5 +3860,49 @@ mod tests {
         assert_eq!(import.ir_col, Some(3));
         assert_eq!(import.fluor_cols, Some(vec![4]));
         assert_eq!(import.mu_col, None);
+    }
+
+    /// Issue #172: Ni foil cropped to 8318–8452 eV with a 100–110 eV post-edge
+    /// range processed but gave |χ(R)| ≈ 10¹² without a warning.
+    #[test]
+    fn narrow_post_edge_range_on_a_short_scan_is_reported() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../rexafs/tests/testfiles/xraylarch_d867/xafsdata/ni_metal_rt.xdi"
+        );
+        let (energy, mu): (Vec<f64>, Vec<f64>) = std::fs::read_to_string(path)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .map(|line| {
+                let mut columns = line.split_whitespace().map(|v| v.parse::<f64>().unwrap());
+                (columns.next().unwrap(), columns.next().unwrap())
+            })
+            .filter(|(e, _)| (8318.0..=8452.0).contains(e))
+            .unzip();
+        let narrow = PipelineParams {
+            norm_start: Some(100.0),
+            norm_end: Some(110.0),
+            ..Default::default()
+        };
+        let spectrum = process_arrays(energy.clone(), mu.clone(), &narrow).unwrap();
+        let kinds: Vec<_> = spectrum
+            .normalization_warnings()
+            .iter()
+            .map(std::mem::discriminant)
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                std::mem::discriminant(&rexafs::NormalizationWarning::NarrowPostEdge { span: 0.0 }),
+                std::mem::discriminant(&rexafs::NormalizationWarning::SmallEdgeStep {
+                    edge_step: 0.0,
+                    mu_span: 0.0
+                }),
+            ]
+        );
+        // Desktop defaults on the same scan are trusted.
+        let spectrum = process_arrays(energy, mu, &PipelineParams::default()).unwrap();
+        assert!(spectrum.normalization_warnings().is_empty());
     }
 }

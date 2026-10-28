@@ -16,3 +16,26 @@ allow = [
     "CC0-1.0", "CDLA-Permissive-2.0", "Unicode-3.0", "Zlib", "bzip2-1.0.6",
     "MPL-2.0", "CDDL-1.0",
 ]
+
+# RustSec advisories (https://rustsec.org). Known vulnerabilities fail the check.
+# Unmaintained crates fail only when the workspace depends on them directly;
+# transitive ones (mostly through gpui) are reported by `cargo deny` locally.
+# Every ignore names the dependency path and why the issue is not reachable;
+# remove the entry as soon as an upstream release carries the fix.
+[advisories]
+unmaintained = "workspace"
+yanked = "deny"
+ignore = [
+    # quick-xml 0.36 (duplicate-attribute quadratic time; NsReader namespace
+    # allocation) via ruviz -> typst 0.13 -> hayagriva -> citationberg, which
+    # parses CSL bibliography styles. ruviz compiles plot labels only and never
+    # loads bibliographies. Fixed in quick-xml 0.41; needs a ruviz typst upgrade.
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml via typst bibliography parsing; not reachable from ruviz plot labels" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml via typst bibliography parsing; not reachable from ruviz plot labels" },
+    # quick-xml 0.26 also enters through pprof 0.15 -> inferno 0.11, a
+    # dev-dependency for benchmark flamegraphs that writes, not parses, XML.
+    # ruzstd 0.8 (decompression bomb) via xraydb 0.4.1, which decompresses only
+    # the X-ray database embedded in the crate. Fixed in ruzstd 0.9.1; needs an
+    # xraydb release.
+    { id = "RUSTSEC-2026-0344", reason = "ruzstd via xraydb decompresses only its own embedded, trusted database" },
+]

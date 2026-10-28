@@ -58,12 +58,10 @@ pest_derive = { workspace = true }
 thiserror = { workspace = true }
 ruviz = { workspace = true, optional = true, features = ["svg", "typst-math"] }
 refeff = { workspace = true, optional = true }
-# apex-io 0.3 (via apex-solver 1.4) links sqlite3 through rusqlite 0.31.
-# Cargo permits only one libsqlite3-sys version in this workspace.
 rusqlite = { version = "0.31", features = ["bundled"], optional = true }
 ureq = { version = "3", features = ["json"], optional = true }
 base64 = "0.23.1"
-hdf5-pure = "0.46.1"
+hdf5-pure = "0.47.0"
 encoding_rs = "0.8"
 regex = "1"
 # Pin interpolation and the embedded atomic dataset as a processing-version input.

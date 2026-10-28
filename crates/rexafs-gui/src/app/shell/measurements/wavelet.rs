@@ -205,7 +205,7 @@ impl StudioApp {
                     let w = definition.wavelet.ok_or("Wavelet definition missing")?;
                     let map = sp.wavelet(&w.transform).map_err(|e| e.to_string())?;
                     if map.r().len() < 2 {
-                        return Err("The preview needs at least two R rows; increase R maximum or reduce R step in Transform".into());
+                        return Err("The preview needs at least two R rows; increase R maximum or reduce R step in Process › Transform".into());
                     }
                     Ok::<_, String>((input.label, w, Arc::new(map)))
                 })
@@ -242,7 +242,7 @@ impl StudioApp {
                             )
                             .xlabel("k (Å⁻¹)")
                             .ylabel("R (Å; uncorrected)")
-                            .xlim(map.settings().k_range[0], map.settings().k_range[1])
+                            .xlim(map.k_support()[0], map.k_support()[1])
                             .ylim(map.r()[0], *map.r().last().unwrap())
                             .into();
                         app.measurements.preview = Some(
@@ -302,8 +302,8 @@ impl StudioApp {
                     (
                         &mut w.k_range,
                         point.x,
-                        p.map.settings().k_range[0],
-                        p.map.settings().k_range[1],
+                        p.map.k_support()[0],
+                        p.map.k_support()[1],
                     )
                 } else {
                     (

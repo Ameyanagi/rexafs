@@ -1,13 +1,16 @@
 //! Inspector: the right panel. A sticky header states the edit scope
 //! ("Editing <group>") and offers Apply-to-marked / Reset; below it the
 //! stage's parameter sections in pipeline order, then a Result card.
+//!
+//! In Process the panel holds three collapsible sections in pipeline order —
+//! Normalize, Background, Transform — each with its own copy/reset menu.
 
 use gpui::{
     ClickEvent, Context, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, px,
 };
 
 use super::{
-    MONO, Stage, button,
+    MONO, ProcessSection, Stage, button,
     controls::{Tooltip, icon, icon_button},
     parameter_actions::ParamScope,
     section_label,
@@ -73,21 +76,22 @@ impl StudioApp {
     }
     pub(crate) fn inspector(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
-        if self.stage == Stage::Transform {
+        if self.stage == Stage::Process {
             self.ensure_wavelet_fields(cx);
-        }
-        if self.stage == Stage::Normalize {
             self.ensure_normalization_editor(cx);
         }
-        let body = match self.stage {
-            Stage::Data if self.fluorescence.open => self.fluorescence_inspector(cx),
-            Stage::Data if self.peaks.open => self.peak_inspector(cx),
-            Stage::Data => self.data_inspector(cx).into_any_element(),
-            Stage::Normalize => self.normalize_inspector(cx).into_any_element(),
-            Stage::Background => self.background_inspector(cx).into_any_element(),
-            Stage::Transform => self.transform_inspector(cx).into_any_element(),
-            Stage::Series => self.series_inspector(cx).into_any_element(),
-            Stage::Fit | Stage::Publish => div().into_any_element(),
+        // Process sections are direct children of the scroll area so that
+        // `focus_process_section` can scroll one of them into view.
+        let body: Vec<gpui::AnyElement> = match self.stage {
+            Stage::Data if self.fluorescence.open => vec![self.fluorescence_inspector(cx)],
+            Stage::Data if self.peaks.open => vec![self.peak_inspector(cx)],
+            Stage::Data => vec![self.data_inspector(cx).into_any_element()],
+            Stage::Process => ProcessSection::ALL
+                .into_iter()
+                .map(|section| self.process_section(section, cx))
+                .collect(),
+            Stage::Series => vec![self.series_inspector(cx).into_any_element()],
+            Stage::Fit | Stage::Publish => vec![div().into_any_element()],
         };
         let body = if self.stage.is_processing()
             && let Some(group) = self
@@ -98,11 +102,9 @@ impl StudioApp {
             // Only legacy groups whose stored quantity is unknown get the
             // confirmation prompt; a blocked quantity (Δμnorm) gets the plain
             // notice; every other derived group renders the normal body.
-            let blocked = group.processing_block_reason().or_else(|| {
-                (!group.corrections.is_empty()
-                    && matches!(self.stage, Stage::Background | Stage::Transform))
-                .then(|| crate::fluorescence_history::XANES_ONLY.into())
-            });
+            // A XANES-only correction blocks only Background and Transform,
+            // inside their sections (see `process_section`).
+            let blocked = group.processing_block_reason();
             if !group.quantity_unconfirmed && (blocked.is_none() || self.stage == Stage::Data) {
                 body
             } else {
@@ -134,7 +136,7 @@ impl StudioApp {
                         );
                     }
                 }
-                notice.into_any_element()
+                vec![notice.into_any_element()]
             }
         } else {
             body
@@ -176,7 +178,7 @@ impl StudioApp {
                 .flex_col()
                 .overflow_y_scroll()
                 .track_scroll(&self.inspector_scroll)
-                .child(body),
+                .children(body),
             )
             .into_any_element()
     }
@@ -230,7 +232,11 @@ impl StudioApp {
                     &t,
                     "reset-params",
                     Icon::Undo,
-                    format!("Reset {} for the current group", self.stage.name()),
+                    if self.stage == Stage::Process {
+                        "Reset all processing settings for the current group".to_string()
+                    } else {
+                        format!("Reset {} for the current group", self.stage.name())
+                    },
                     false,
                 )
                 .on_click(cx.listener(|app, _, _, cx| app.reset_params(cx))),
@@ -356,15 +362,26 @@ impl StudioApp {
         let p = self.ui_params();
         let linked = p.bkg_kweight_linked;
         let field = if linked {
+            let text = crate::app::param_text::param_text(ParamKey::BkgKweight);
             div()
                 .flex()
                 .flex_col()
                 .gap_1()
                 .child(
                     div()
+                        .id("bkg-kweight-linked-label")
                         .text_size(px(11.))
                         .text_color(t.text_muted)
-                        .child("bkg k-weight"),
+                        .when_some(text.tip, |d, tip| {
+                            d.tooltip(move |_, cx| {
+                                cx.new(|_| Tooltip {
+                                    theme: t,
+                                    label: tip.into(),
+                                })
+                                .into()
+                            })
+                        })
+                        .child(text.label),
                 )
                 .child(
                     div()
@@ -443,10 +460,10 @@ impl StudioApp {
                 "Range relative to E₀, in eV. Drag the yellow plot handles; clear a value for Auto."
             }
             "AUTOBK" => {
-                "Drag Rbkg on |χ(R)|, or the k-window edges on χ(k). Rbkg must remain below the shell being fitted."
+                "Drag Rbkg on |χ(R)|, or the yellow spline k-range edges on χ(k) or μ(E). Rbkg must remain below the shell being fitted."
             }
             "Back FT  R → q" => {
-                "Select an R window to isolate shells in χ(q). Auto q step follows the R grid and inverse NFFT; q max changes the extent, not the spacing."
+                "Select an R window to isolate shells in χ(q). Auto q step follows the R grid and inverse FFT length; q max changes the extent, not the spacing."
             }
             _ => "",
         };
@@ -565,6 +582,129 @@ impl StudioApp {
             .pb_2()
             .child(head)
             .when(open, |d| d.children(rows))
+    }
+
+    /// One collapsible Process section: a header with the section's status
+    /// and one-line summary, then the former stage's parameter sections.
+    /// The header's menu copies or resets just this section's settings.
+    fn process_section(&self, section: ProcessSection, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let t = self.theme;
+        let key = section.collapsed_key();
+        let open = !self.ui.sections.contains(key);
+        let (status, summary) = self.process_section_summary(section);
+        let scope = ParamScope::Process(section);
+        let body = open.then(|| match section {
+            ProcessSection::Normalize => self.normalize_inspector(cx).into_any_element(),
+            _ if self.xanes_only() => self
+                .note(crate::fluorescence_history::XANES_ONLY)
+                .into_any_element(),
+            ProcessSection::Background => self.background_inspector(cx).into_any_element(),
+            ProcessSection::Transform => self.transform_inspector(cx).into_any_element(),
+        });
+        let toggle = crate::accessibility::Control::new(
+            div().id(SharedString::from(format!(
+                "process-section-{}",
+                section.name()
+            ))),
+            section.name(),
+            accesskit::Role::DisclosureTriangle,
+        )
+        .expanded(open)
+        .description(summary.clone())
+        .tab_index(0)
+        .key_context("Control")
+        .min_w_0()
+        .flex_1()
+        .flex()
+        .items_center()
+        .gap_1p5()
+        .cursor_pointer()
+        .child(icon(
+            &t,
+            if open {
+                Icon::ChevronDown
+            } else {
+                Icon::ChevronRight
+            },
+        ))
+        .child(
+            div()
+                .flex_none()
+                .text_size(px(12.5))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(t.text)
+                .child(section.name()),
+        )
+        .child(
+            div()
+                .flex_none()
+                .size(px(6.))
+                .rounded_full()
+                .bg(status.color(&t)),
+        )
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis()
+                .font_family(MONO)
+                .text_size(px(11.))
+                .text_color(t.text_muted)
+                .child(summary),
+        )
+        .on_click(cx.listener(move |app, _, _, cx| {
+            if !app.ui.sections.remove(key) {
+                app.ui.sections.insert(key);
+            }
+            cx.notify();
+        }));
+        let head = div()
+            .id(SharedString::from(format!(
+                "process-head-{}",
+                section.name()
+            )))
+            .min_h(px(34.))
+            .px_2()
+            .flex()
+            .items_center()
+            .gap_1()
+            .bg(t.raised)
+            .border_b_1()
+            .border_color(t.border)
+            .child(toggle)
+            .children(self.parameter_badge(scope, cx))
+            .child(
+                icon_button(
+                    &t,
+                    SharedString::from(format!("process-actions-{}", section.name())),
+                    Icon::More,
+                    format!("{} actions", section.name()),
+                    false,
+                )
+                .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
+                    this.param_context_menu = Some((scope, event.position()));
+                    cx.notify();
+                })),
+            )
+            .on_mouse_down(
+                gpui::MouseButton::Right,
+                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    cx.stop_propagation();
+                    this.param_context_menu = Some((scope, event.position));
+                    cx.notify();
+                }),
+            );
+        div()
+            .id(section.element_id())
+            .flex()
+            .flex_col()
+            .border_b_1()
+            .border_color(t.border)
+            .child(head)
+            .children(body)
+            .into_any_element()
     }
 
     /// Key/value result card.
@@ -801,7 +941,7 @@ impl StudioApp {
             .bkg_solver
             .is_none_or(|s| s == rexafs::prelude::AUTOBKSolver::LinearDirect);
         let fixed = p.bkg_clamp_policy == rexafs::prelude::AUTOBKClampScalePolicy::FixedPenalty;
-        let mut solver = vec![self.enum_row("method", EnumParam::BkgSolver, cx)];
+        let mut solver = vec![self.enum_row(EnumParam::BkgSolver, cx)];
         solver.extend(
             [
                 self.field(ParamKey::BkgKstep, cx),
@@ -812,7 +952,7 @@ impl StudioApp {
         );
         if linear {
             solver.extend(self.field(ParamKey::BkgCondition, cx));
-            solver.push(self.enum_row("matrix cache", EnumParam::BkgCache, cx));
+            solver.push(self.enum_row(EnumParam::BkgCache, cx));
             if fixed {
                 solver.push(self.note("Fixed λ uses one linear solve. The condition limit controls the SVD cutoff; legacy ridge and iterative fallback are inactive.").into_any_element());
             } else {
@@ -824,9 +964,9 @@ impl StudioApp {
                     .into_iter()
                     .flatten(),
                 );
-                solver.push(self.enum_row("fallback", EnumParam::BkgFallback, cx));
+                solver.push(self.enum_row(EnumParam::BkgFallback, cx));
                 if p.bkg_linear_fallback_to_lm != Some(false) {
-                    solver.push(self.enum_row("fallback solver", EnumParam::BkgFallbackSolver, cx));
+                    solver.push(self.enum_row(EnumParam::BkgFallbackSolver, cx));
                 }
                 solver.push(self.note("Legacy models can use ridge regularization and retry with the selected iterative solver when the direct solve fails its checks.").into_any_element());
             }
@@ -884,14 +1024,14 @@ impl StudioApp {
                     self.field(ParamKey::BkgClampLo, cx),
                     self.field(ParamKey::BkgClampHi, cx),
                     self.field(ParamKey::BkgNclamp, cx),
-                    Some(self.enum_row("clamp model", EnumParam::BkgClampPolicy, cx)),
+                    Some(self.enum_row(EnumParam::BkgClampPolicy, cx)),
                     if self.ui_params().bkg_clamp_policy == rexafs::prelude::AUTOBKClampScalePolicy::FixedPenalty {
                         self.field(ParamKey::BkgClampLambda, cx)
                     } else {
                         Some(self.note("λ is inactive for legacy clamp models. Select Fixed λ with the linear solver to use a constant penalty.").into_any_element())
                     },
                     Some(self.note("Clamp points sets the number of samples at each active end. Zero points disables clamping; in Fixed λ, λ = 0 also disables it.").into_any_element()),
-                    Some(self.enum_row("window", EnumParam::BkgWindow, cx)),
+                    Some(self.enum_row(EnumParam::BkgWindow, cx)),
                     self.field(ParamKey::BkgDk, cx),
                 ]
                 .into_iter()
@@ -941,7 +1081,7 @@ impl StudioApp {
                         self.field(ParamKey::FftKmin, cx),
                         self.field(ParamKey::FftKmax, cx),
                         self.field(ParamKey::FftDk, cx),
-                        Some(self.enum_row("window", EnumParam::FftWindow, cx)),
+                        Some(self.enum_row(EnumParam::FftWindow, cx)),
                         self.field(ParamKey::FftKweight, cx),
                         self.field(ParamKey::FftRmax, cx),
                     ]
@@ -966,7 +1106,7 @@ impl StudioApp {
                         self.field(ParamKey::BftRmax, cx),
                         self.field(ParamKey::BftDr, cx),
                         self.field(ParamKey::BftDr2, cx),
-                        Some(self.enum_row("window", EnumParam::BftWindow, cx)),
+                        Some(self.enum_row(EnumParam::BftWindow, cx)),
                         self.field(ParamKey::BftRweight, cx),
                         self.field(ParamKey::BftQmax, cx),
                         self.field(ParamKey::BftNfft, cx),
@@ -985,7 +1125,7 @@ impl StudioApp {
                     "Advanced",
                     None,
                     [
-                        Some(self.enum_row("sampling grid", EnumParam::FftGrid, cx)),
+                        Some(self.enum_row(EnumParam::FftGrid, cx)),
                         self.field(ParamKey::FftDk2, cx),
                         self.field(ParamKey::FftKstep, cx),
                         self.field(ParamKey::FftNfft, cx),

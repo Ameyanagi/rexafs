@@ -1,7 +1,7 @@
 //! Numbered captions and semantic tables shared by the manuscript and HTML report.
 use super::*;
 
-pub(crate) const TABLE_CAPTIONS: [(&str, &str, &str); 3] = [
+pub(crate) const TABLE_CAPTIONS: [(&str, &str, &str); 4] = [
     (
         "processing",
         "Processing table",
@@ -16,6 +16,11 @@ pub(crate) const TABLE_CAPTIONS: [(&str, &str, &str); 3] = [
         "paths",
         "Path results table",
         "Scattering-path parameters. Distance is R_eff + ΔR; for multiple scattering it is half the total path length. Values with ± include one propagated standard error where available. S₀² is dimensionless.",
+    ),
+    (
+        "statistics",
+        "Fit statistics table",
+        "Fit statistics and the transform that defines them. R-factor is the misfit relative to the data (dimensionless; smaller is better). Reduced χ² is shown only when measurement noise was estimated. N_idp is the number of independent points, 1 + 2ΔkΔR/π, and N_var the number of varied parameters. Correlations list pairs of varied parameters with |r| ≥ 0.10.",
     ),
 ];
 
@@ -104,6 +109,19 @@ impl Table {
     }
 }
 
+/// Format an applied processing value for the "Used" column without
+/// floating-point noise: energies (eV) to 0.1 eV, k (Å⁻¹) and R (Å) to 0.01,
+/// and dimensionless settings (polynomial order, k-weight) as integers when
+/// they are whole numbers. Full-precision values are in resolved.md and data/.
+pub(super) fn used_number(value: f64, unit: &str) -> String {
+    match unit {
+        "eV" => format!("{value:.1}"),
+        "Å⁻¹" | "Å" => format!("{value:.2}"),
+        _ if value.fract() == 0.0 => format!("{value:.0}"),
+        _ => format!("{value:.2}"),
+    }
+}
+
 impl Snapshot {
     pub(crate) fn tables(&self) -> Vec<Table> {
         let mut tables = Vec::new();
@@ -113,7 +131,7 @@ impl Snapshot {
             let resolved = spectrum
                 .data
                 .as_ref()
-                .map(|sp| resolved_settings(sp))
+                .map(|sp| methods::used_settings(sp))
                 .unwrap_or(Value::Null);
             let fields = [
                 ("Absorption edge E₀", "e0", "/e0", "eV"),
@@ -190,10 +208,13 @@ impl Snapshot {
                         label.into(),
                         unit.into(),
                         display(&values[key], "Auto"),
-                        display(
-                            resolved.pointer(pointer).unwrap_or(&Value::Null),
-                            "Unavailable",
-                        ),
+                        match resolved.pointer(pointer).and_then(Value::as_f64) {
+                            Some(used) => used_number(used, unit),
+                            None => display(
+                                resolved.pointer(pointer).unwrap_or(&Value::Null),
+                                "Unavailable",
+                            ),
+                        },
                     ]
                 })
                 .collect();
@@ -208,6 +229,19 @@ impl Snapshot {
         }
         for fit in &self.project.fit_history {
             let source = format!("Fit {}: {}", fit.id, fit.group);
+            let result = self.results.get(&fit.id).map(|r| r.as_ref());
+            let rows = crate::fit_report::summary_rows(fit, result)
+                .into_iter()
+                .map(|(quantity, value)| vec![quantity, value])
+                .collect();
+            tables.push(Table::new(
+                tables.len() + 1,
+                "statistics",
+                source.clone(),
+                settings,
+                &["Quantity", "Value"],
+                rows,
+            ));
             let rows = fit
                 .values
                 .iter()
@@ -296,15 +330,35 @@ pub(crate) fn write(
 <p>Figures and tables retain the selected settings. Complete the experimental methods and captions with sample and acquisition details before submission. The numerical record and export notices accompany this report.</p><h2>Figures</h2>"#,
         env!("CARGO_PKG_VERSION")
     );
+    let mut composed_heading = false;
     for asset in assets {
         let n = asset["number"].as_u64().unwrap();
         let caption = asset["caption"].as_str().unwrap();
-        captions.push_str(&format!("**Figure {n}.** {}\n\n", cell(caption)));
-        let csv_link = asset["csv"]
+        let name = asset["recipe_name"]
             .as_str()
-            .map(|path| format!(" · <a href=\"{}\">Data CSV</a>", html(path)))
+            .map(|name| format!("{name}. "))
             .unwrap_or_default();
-        report.push_str(&format!("<figure id=\"figure-{n}\"><img src=\"{}\" alt=\"{}\"><figcaption><strong>Figure {n}.</strong> {} <a href=\"{}\">PNG</a> · <a href=\"{}\">SVG</a>{csv_link}</figcaption></figure>",html(asset["svg"].as_str().unwrap()),html(caption),html(caption),html(asset["file"].as_str().unwrap()),html(asset["svg"].as_str().unwrap())));
+        if !name.is_empty() && !composed_heading {
+            report.push_str("<h2>Composed figures</h2>");
+            composed_heading = true;
+        }
+        captions.push_str(&format!(
+            "**Figure {n}.** {}{}\n\n",
+            cell(&name),
+            cell(caption)
+        ));
+        let mut links = String::new();
+        for (key, label) in [
+            ("csv", "Data CSV"),
+            ("pdf", "PDF"),
+            ("caption_file", "Combined caption"),
+            ("python", "Matplotlib script and adjacent CSV data"),
+        ] {
+            if let Some(path) = asset[key].as_str() {
+                links.push_str(&format!(" · <a href=\"{}\">{label}</a>", html(path)));
+            }
+        }
+        report.push_str(&format!("<figure id=\"figure-{n}\"><img src=\"{}\" alt=\"{}\"><figcaption><strong>Figure {n}.</strong> {}{} <a href=\"{}\">PNG</a> · <a href=\"{}\">SVG</a>{links}</figcaption></figure>",html(asset["svg"].as_str().unwrap()),html(&format!("{name}{caption}")),html(&name),html(caption),html(asset["file"].as_str().unwrap()),html(asset["svg"].as_str().unwrap())));
     }
     report.push_str("<h2>Tables</h2>");
     for table in tables {
@@ -353,20 +407,134 @@ mod tests {
             batch_csv: None,
             batch_stale: false,
             journal: vec![],
+            composer: Default::default(),
             screen: Value::Null,
         };
         let tables = snapshot.tables();
-        assert_eq!(tables.len(), 3);
-        assert_eq!(tables[1].number, 2);
-        assert!(tables[1].caption.contains("errors are one standard error"));
-        assert!(tables[1].markdown().contains("0.02000000"));
-        let paths = tables[2].html();
-        assert!(paths.contains("<caption><strong>Table 3.</strong>"));
+        assert_eq!(tables.len(), 4);
+        // Each fit opens with its statistics: the values Fit → Copy as
+        // Markdown reports, with the reduced χ² rule and the fit transform.
+        let stats = tables[1].markdown();
+        assert_eq!(tables[1].kind, "statistics");
+        for row in [
+            "| R-factor |",
+            "| Reduced χ² | n/a (noise not estimated) |",
+            "| N_idp / N_var |",
+            "| Fit space | R |",
+            "| k range (Å⁻¹) |",
+            "| R range (Å) |",
+            "| k-weights |",
+            "| Window | Kaiser–Bessel k window (dk = 4 Å⁻¹); Hanning R window (dR = 0 Å) (not recorded; release default at fit time) |",
+            "| Correlations (\\|r\\| ≥ 0.10) | Unavailable (full fit result not loaded) |",
+        ] {
+            assert!(stats.contains(row), "{row}\n{stats}");
+        }
+        assert!(tables[1].html().contains("number of independent points"));
+        assert_eq!(tables[2].number, 3);
+        assert!(tables[2].caption.contains("errors are one standard error"));
+        assert!(tables[2].markdown().contains("0.02000000"));
+        let paths = tables[3].html();
+        assert!(paths.contains("<caption><strong>Table 4.</strong>"));
         assert!(paths.contains("σ² (Å²)"));
         assert!(paths.contains("half the total path length"));
         let record = snapshot.markdown();
-        for n in 1..=3 {
+        for n in 1..=4 {
             assert_eq!(record.matches(&format!("**Table {n}.**")).count(), 1);
         }
+    }
+
+    /// With the full fit result loaded, the statistics table lists the
+    /// significant correlations under readable parameter names.
+    #[test]
+    fn statistics_table_lists_significant_correlations() {
+        let mut project = crate::project::tests::load(
+            &Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/projects/rexafs-0.1.0-links.rxs"),
+        )
+        .unwrap();
+        project.fit_history.truncate(1);
+        let id = project.fit_history[0].id;
+        let result = FeffFitResult {
+            varying_names: vec!["amp".into(), "enot".into(), "delr".into()],
+            correlation: Some(vec![
+                vec![1.0, 0.05, 0.2],
+                vec![0.05, 1.0, -0.87],
+                vec![0.2, -0.87, 1.0],
+            ]),
+            ..Default::default()
+        };
+        let snapshot = Snapshot {
+            project,
+            current: "Cu.xmu".into(),
+            spectra: vec![],
+            results: BTreeMap::from([(id, Arc::new(result))]),
+            analysis: Value::Null,
+            batch_csv: None,
+            batch_stale: false,
+            journal: vec![],
+            composer: Default::default(),
+            screen: Value::Null,
+        };
+        let stats = snapshot.tables()[0].markdown();
+        assert!(
+            stats.contains("| enot / delr: -0.870; amp / delr: +0.200 |"),
+            "{stats}"
+        );
+    }
+
+    /// The copied record processes its spectra, so "Used" holds resolved Auto
+    /// values and the range that processing limited to the measured scan.
+    #[test]
+    fn copied_record_reports_used_values_including_limited_ranges() {
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/projects/data/cu_150k.xmu");
+        let params = PipelineParams {
+            norm_end: Some(5000.0),
+            ..Default::default()
+        };
+        let mut snapshot = Snapshot {
+            project: Default::default(),
+            current: path.clone(),
+            spectra: vec![SpectrumInput {
+                path,
+                params,
+                ..Default::default()
+            }],
+            results: BTreeMap::new(),
+            analysis: Value::Null,
+            batch_csv: None,
+            batch_stale: false,
+            journal: vec![],
+            composer: Default::default(),
+            screen: Value::Null,
+        };
+        let used = |snapshot: &Snapshot, setting: &str| {
+            let tables = snapshot.tables();
+            let row = tables[0]
+                .rows
+                .iter()
+                .find(|r| r[0].starts_with(setting))
+                .unwrap();
+            (row[2].clone(), row[3].clone())
+        };
+        assert_eq!(used(&snapshot, "Absorption edge").1, "Unavailable");
+        snapshot.resolve_spectra();
+        let sp = snapshot.spectra[0].data.clone().unwrap();
+        let (requested, e0) = used(&snapshot, "Absorption edge");
+        assert_eq!(requested, "Auto");
+        assert_eq!(e0, format!("{:.1}", sp.e0().unwrap()));
+        let adjustment = sp.range_adjustments();
+        let limit = adjustment.iter().find(|a| a.field == "norm_end").unwrap();
+        assert!(limit.used < 5000.0);
+        let (requested, norm_end) = used(&snapshot, "Normalization end");
+        assert_eq!(requested, "5000.0");
+        assert_eq!(norm_end, format!("{:.1}", limit.used));
+        assert_eq!(used(&snapshot, "Pre-edge start").1, "-200.0");
+        assert_eq!(used(&snapshot, "Normalization polynomial order").1, "2");
+        assert_eq!(used(&snapshot, "Transform k maximum").1, "15.00");
+        assert_eq!(used(&snapshot, "Transform k-weight").1, "2");
+        assert_eq!(used(&snapshot, "Transform window").1, "Kaiser–Bessel");
+        assert!(!snapshot.markdown().contains("Unavailable"));
+        println!("{}", snapshot.tables()[0].markdown());
     }
 }

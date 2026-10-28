@@ -57,7 +57,9 @@ pub mod normalization;
 #[cfg(not(feature = "ndarray-compat"))]
 /// Pre/post-edge normalization and algorithm selection.
 pub mod normalization;
+pub mod normalization_checks;
 pub mod nshare;
+pub mod ranges;
 pub mod rmc;
 pub(crate) mod spline;
 pub mod structure;

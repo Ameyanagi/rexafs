@@ -229,6 +229,10 @@ calculator for a fast warm resume. **Stop and save** requests calculator
 cancellation and saves the last complete transactional state. A kernel that does
 not inspect cancellation immediately may delay stopping. Wait for the stopped or
 paused state before closing the application if the latest state is important.
+When the run stops or finishes, messages that applied only to the active run (for
+example, a request to stop it before starting another) are cleared, and the
+window footer reports the RMC outcome and completed attempts or generations
+instead of an earlier, unrelated message such as a path-fit R-factor.
 
 Checkpoints are written atomically after preparation, about every 30 seconds at
 move boundaries, and on pause, stop, budget completion or a calculation failure.
@@ -283,7 +287,8 @@ checkpoint, initial/best XYZ, configuration JSON preserving periodic cells,
 experimental/initial/best k and R CSV files, convergence settings/report and a
 Markdown summary. Ordinary XYZ alone does not preserve a periodic cell.
 
-Wavelet display is under **Transform → Wavelet**. After integration with the
+Wavelet display is under **Process → Wavelet** (**Transform → Wavelet** in
+0.2.14 and earlier). After integration with the
 current `dev` branch, the desktop uses its retained Cauchy-wavelet workspace,
 including linked plots, region measurements and saved map history; see
 [Wavelet analysis](wavelet-analysis.md). This display does not change the RMC

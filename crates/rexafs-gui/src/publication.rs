@@ -1,7 +1,12 @@
 //! A local, inspectable analysis record. The Assistant uses a separate summary.
 pub(crate) mod assistant_context;
+pub(crate) mod composed;
 pub(crate) mod figures;
+pub(crate) mod fit_table;
+pub(crate) mod methods;
+pub(crate) mod python_export;
 pub(crate) mod report;
+pub(crate) mod supporting;
 use crate::{params::PipelineParams, plotting, project::ProjectFile, theme::Theme};
 use rexafs::prelude::{FeffFitResult, XASSpectrum};
 use serde_json::{Value, json};
@@ -68,6 +73,8 @@ pub(crate) struct Snapshot {
     pub current: PathBuf,
     pub spectra: Vec<SpectrumInput>,
     pub results: BTreeMap<usize, Arc<FeffFitResult>>,
+    /// Current composer inputs, independent of the bundled project's sources.
+    pub composer: composed::ComposerInput,
     pub analysis: Value,
     pub batch_csv: Option<String>,
     pub batch_stale: bool,
@@ -94,11 +101,27 @@ fn source_comments(path: &Path) -> Vec<String> {
         .collect()
 }
 impl Snapshot {
+    /// Process each spectrum that has no result yet, so the record's "Used"
+    /// column shows the values processing applied: resolved Auto values and
+    /// ranges limited to short scans. A spectrum that cannot be processed keeps
+    /// no result and its "Used" cells read "Unavailable".
+    pub(crate) fn resolve_spectra(&mut self) {
+        for spectrum in &mut self.spectra {
+            if spectrum.data.is_none() {
+                spectrum.data = spectrum.for_display().ok();
+            }
+        }
+    }
     pub(crate) fn context(&self) -> Value {
+        // Fit curve arrays are exported once, as data/fit-<id>.json.
+        let mut project = serde_json::to_value(&self.project).unwrap_or_default();
+        if let Some(object) = project.as_object_mut() {
+            object.remove("fit_results");
+        }
         json!({
             "software":{"name":"rexafs","version":env!("CARGO_PKG_VERSION")},
             "current_spectrum":self.current, "screen":self.screen,
-            "project":self.project,
+            "project":project,
             "effective_processing":self.spectra.iter().map(|s|json!({"file":s.path,"group":s.label(),"group_id":s.group.as_ref().map(|g|g.id),"requested":s.params,"source_comments":source_comments(&s.path)})).collect::<Vec<_>>(),
             "analysis":self.analysis, "batch_results_stale":self.batch_stale, "journal":self.journal,
             "semantics":{"null_processing_value":"Auto; resolved numbers are in processed-spectrum JSON when available", "fit_history":"Historical inputs and values; not necessarily the currently edited model", "path_distance":"R_eff + deltaR; for multiple scattering, half the total scattering path length", "stderr":"One standard error from the fit covariance, not total experimental uncertainty"}
@@ -106,7 +129,7 @@ impl Snapshot {
     }
     pub(crate) fn markdown(&self) -> String {
         let mut text = format!(
-            "# rexafs analysis record\n\nVersion {}. Current spectrum: `{}`.\n\nThis is a snapshot of requested processing settings and recorded fit results. Auto values are resolved separately for each spectrum. Current settings may differ from historical fit settings.\n\n",
+            "# rexafs analysis record\n\nVersion {}. Current spectrum: `{}`.\n\nThis is a snapshot of requested processing settings and recorded fit results. Auto values are resolved separately for each spectrum; the Used column gives the values processing applied, including ranges limited to the measured data. Current settings may differ from historical fit settings.\n\n",
             env!("CARGO_PKG_VERSION"),
             cell(self.current.display().to_string())
         );
@@ -140,7 +163,8 @@ impl Snapshot {
             text.push_str("No completed fits recorded.\n\n");
         }
         for fit in &self.project.fit_history {
-            text.push_str(&format!("### Fit {} — {}\n\nR factor: {:.6}; reduced χ²: {:.6}; χ²: {:.6}; N independent: {:.3}; varying parameters: {}.\n\n", fit.id, cell(&fit.group), fit.r_factor, fit.reduced_chi_square, fit.chi_square, fit.n_idp, fit.n_vary));
+            text.push_str(&format!("### Fit {} — {}\n\n", fit.id, cell(&fit.group)));
+            text.push_str(&table.next().unwrap().markdown());
             text.push_str(&table.next().unwrap().markdown());
             text.push_str(&table.next().unwrap().markdown());
             text.push_str("\nRecorded inputs, per-spectrum ranges, path expressions and solver diagnostics:\n\n```json\n");
@@ -248,7 +272,8 @@ pub(crate) fn resolved_settings(sp: &XASSpectrum) -> Value {
 /// Export a snapshot into a newly created analysis directory.
 ///
 /// Writes the selected project storage mode, processed spectrum arrays, available
-/// fit arrays, PNG/SVG/CSV figures, captions, methods and reference drafts.
+/// fit arrays, PNG/SVG/CSV figures, named PNG/SVG/PDF compositions with captions
+/// and matplotlib data, methods and reference drafts.
 /// Per-spectrum processing failures, failed figures and unavailable historical
 /// arrays are retained as notices; a successful return can therefore describe an
 /// incomplete analysis. Inspect `manifest.json`, the report and the README.
@@ -377,8 +402,17 @@ pub(crate) fn export(mut snapshot: Snapshot, destination: &Path) -> Result<PathB
             errors.push(format!("Fit {}: archived statistics and inputs exported; curve arrays are unavailable in this session.",fit.id));
         }
     }
+    composed::write(
+        &snapshot.composer,
+        &snapshot.project.publication,
+        destination,
+        &mut assets,
+        &mut errors,
+    )?;
     let tables = snapshot.tables();
     fs::write(destination.join("analysis.md"), snapshot.markdown()).map_err(|e| e.to_string())?;
+    fs::write(destination.join("methods.md"), methods::markdown(&snapshot))
+        .map_err(|e| e.to_string())?;
     if snapshot.batch_stale {
         errors.push(
             "Batch results are stale: they do not reflect the current model/settings.".into(),
@@ -388,7 +422,6 @@ pub(crate) fn export(mut snapshot: Snapshot, destination: &Path) -> Result<PathB
         fs::write(destination.join("batch-results.csv"), csv).map_err(|e| e.to_string())?;
     }
     fs::write(destination.join("resolved.md"), resolved).map_err(|e| e.to_string())?;
-    fs::write(destination.join("methods.md"),"# Experimental and analysis methods — draft\n\n## Experiment\n\nSample composition, preparation, beamline, detector geometry, temperature and acquisition details: **supply from the experimental record**. They are not inferred from curve shape. Check file metadata before completing this section.\n\n## Analysis\n\nXAS spectra were processed with rexafs. Pre-edge subtraction and post-edge normalization were followed by AUTOBK spline background removal and Fourier transformation. Per-spectrum settings, resolved outputs and selected fit ranges are in analysis.md and resolved.md. FEFF path files, expressions, shared and local parameters, solver diagnostics and uncertainties are recorded for each completed fit. Select the relevant successful fit before describing conclusions.\n\nDistances for multiple-scattering paths denote half the total path length. Reported standard errors reflect the fit covariance; they do not include all experimental or model uncertainty. R-space spectra are not phase corrected.\n").map_err(|e|e.to_string())?;
     fs::write(destination.join("references.md"), REFERENCES).map_err(|e| e.to_string())?;
     fs::write(destination.join("references.bib"), BIBTEX).map_err(|e| e.to_string())?;
     write_json(
@@ -401,12 +434,23 @@ pub(crate) fn export(mut snapshot: Snapshot, destination: &Path) -> Result<PathB
     );
     index.push_str(project_sources);
     index.push_str("\n\n## Figures\n\n");
+    let mut composed_heading = false;
     for asset in &assets {
+        let name = asset["recipe_name"].as_str().unwrap_or("");
+        if !name.is_empty() && !composed_heading {
+            index.push_str("## Composed figures\n\n");
+            composed_heading = true;
+        }
         if let Some(file) = asset["file"].as_str() {
             index.push_str(&format!(
-                "![Figure {}]({file})\n\n**Figure {}.** {}\n\n",
+                "![Figure {}]({file})\n\n**Figure {}.** {}{}\n\n",
                 asset["number"],
                 asset["number"],
+                if name.is_empty() {
+                    String::new()
+                } else {
+                    format!("{}. ", cell(name))
+                },
                 cell(asset["caption"].as_str().unwrap())
             ));
             if let Some(svg) = asset["svg"].as_str() {
@@ -415,6 +459,15 @@ pub(crate) fn export(mut snapshot: Snapshot, destination: &Path) -> Result<PathB
         }
         if let Some(csv) = asset["csv"].as_str() {
             index.push_str(&format!("[Download curve data CSV]({csv})\n\n"));
+        }
+        for (key, label) in [
+            ("pdf", "Download vector PDF"),
+            ("caption_file", "Copy combined caption"),
+            ("python", "Editable matplotlib script and adjacent CSV data"),
+        ] {
+            if let Some(path) = asset[key].as_str() {
+                index.push_str(&format!("[{label}]({path})\n\n"));
+            }
         }
     }
     if !errors.is_empty() {
@@ -492,6 +545,7 @@ mod tests {
                 batch_csv: None,
                 batch_stale: false,
                 journal: vec![],
+                composer: Default::default(),
                 screen: Value::Null,
             },
             &output,
@@ -592,6 +646,7 @@ mod tests {
             batch_csv: None,
             batch_stale: false,
             journal: vec![],
+            composer: Default::default(),
             screen: Value::Null,
         };
         assert!(
@@ -629,7 +684,7 @@ mod tests {
         assert!(report.contains("Copper &lt;reference&gt; &amp; EXAFS."));
         assert!(report.contains("Absorption edge E₀"));
         assert!(
-            report.contains("8977.493"),
+            report.contains("<td>8977.5</td>"),
             "table must contain resolved values, not only Auto requests"
         );
         assert!(!report.contains("Copper <reference>"));
@@ -643,9 +698,13 @@ mod tests {
                 .unwrap()
                 .contains("**Table 1.**")
         );
+        let notices = manifest["notices"].as_array().unwrap();
+        assert_eq!(notices.len(), 1, "{manifest}");
         assert!(
-            manifest["notices"].as_array().unwrap().is_empty(),
-            "{manifest}"
+            notices[0]
+                .as_str()
+                .unwrap()
+                .contains("Composed figure Figure 1")
         );
         let resolved = fs::read_to_string(folder.join("resolved.md")).unwrap();
         assert!(resolved.find("## ").unwrap() < resolved.find("```json").unwrap());
@@ -718,6 +777,7 @@ mod tests {
             batch_csv: None,
             batch_stale: false,
             journal: vec![],
+            composer: Default::default(),
             screen: Value::Null,
         };
         let c = s.context();

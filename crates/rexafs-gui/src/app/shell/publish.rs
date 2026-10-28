@@ -1,4 +1,7 @@
+mod composer;
+mod composer_samples;
 mod editor;
+mod supporting;
 use crate::publication::figures::{FigureData, FigureSettings, RenderedFigure};
 use crate::widgets::{numeric_field::NumericField, text_input::TextInput};
 use crate::{
@@ -29,6 +32,12 @@ pub(crate) struct PublishState {
     pub(super) preview_running: bool,
     pub(super) preview: Option<Arc<RenderedFigure>>,
     pub(super) image: Option<Arc<gpui::Image>>,
+    /// Curve whose fixed colour palette is expanded in the single-figure editor.
+    pub(super) colour_series: Option<String>,
+    /// Multi-panel composer view and its preview.
+    pub(super) composer: composer::ComposerState,
+    /// Cached composer sample figures and background processing requests.
+    samples: composer_samples::ComposerSamplesState,
 }
 /// One-line scope of the report bundle: the current group, the marked groups
 /// added to it and the completed fits that the report will include.
@@ -59,6 +68,12 @@ pub(super) fn file_url(path: &std::path::Path) -> String {
 }
 
 impl PublishState {
+    /// Discard retained composer data and failed requests when source bindings
+    /// are invalidated, including a refresh that preserves group IDs and settings.
+    pub(crate) fn invalidate_composer_samples(&mut self) {
+        self.samples = Default::default();
+    }
+
     fn changed_since_publish(&self, current: &[u8]) -> bool {
         self.published_revision
             .as_deref()
@@ -67,9 +82,12 @@ impl PublishState {
 
     pub(crate) fn load_settings(&mut self, settings: FigureSettings) {
         let preview_generation = self.preview_generation + 1;
+        let mut composer = std::mem::take(&mut self.composer);
+        composer.reset();
         *self = Self {
             settings,
             preview_generation,
+            composer,
             ..Default::default()
         };
     }
@@ -106,6 +124,32 @@ fn publication_spectrum_figures(
 }
 
 impl StudioApp {
+    /// Current spectrum and selected fit dataset shared by the editor and exports.
+    fn publication_figures(&self) -> Vec<Arc<FigureData>> {
+        let current = self.tool_target(self.selected.unwrap_or(crate::app::NO_ENTRY));
+        let mut figures = publication_spectrum_figures(
+            current.as_ref(),
+            self.spectrum_group.as_ref(),
+            self.spectrum.as_ref(),
+            self.spectrum_quantity,
+            self.stale_plots.is_some(),
+            self.load_running,
+        );
+        if let Some(result) = &self.fit_result {
+            figures.extend(crate::publication::figures::fit_figures(
+                &crate::joint_fitting::result_view(result, self.joint.result_index),
+            ));
+        }
+        figures.into_iter().map(Arc::new).collect()
+    }
+
+    /// Capture report data and all recipe sources without expanding project scope.
+    fn publication_snapshot(&self) -> Snapshot {
+        let mut snapshot = self.analysis_snapshot();
+        snapshot.composer = self.composer_export_input();
+        snapshot
+    }
+
     fn publication_ready(&self) -> bool {
         let current = self.tool_target(self.selected.unwrap_or(crate::app::NO_ENTRY));
         self.spectrum.is_some()
@@ -236,6 +280,7 @@ impl StudioApp {
             current: self.current_path.clone(),
             spectra,
             results,
+            composer: Default::default(),
             analysis: serde_json::json!({"lcf":self.analysis.lcf,"ranked_lcf":self.analysis.ranked,"pca":self.analysis.pca,"pca_fit":self.analysis.pca_fit,"mcr":self.analysis.mcr,"lcf_series":self.analysis.lcf_series}),
             batch_csv: self
                 .batch_fit
@@ -256,6 +301,11 @@ impl StudioApp {
     fn publication_revision(&self) -> Vec<u8> {
         let mut indices = self.selection.clone();
         indices.extend(self.selected);
+        indices.extend(
+            self.composer_export_sample_ids()
+                .iter()
+                .filter_map(|id| self.menu_index(id)),
+        );
         let groups: Vec<_> = indices
             .into_iter()
             .filter_map(|ix| self.tool_target(ix))
@@ -274,6 +324,7 @@ impl StudioApp {
             "joint": self.joint.config,
             "fit_history": self.fit_history,
             "latest_fit": self.fit_result.as_ref().map(|r| Arc::as_ptr(r) as usize),
+            "result_dataset_index": self.joint.result_index,
             "analysis": {"lcf": self.analysis.lcf, "ranked": self.analysis.ranked,
                 "pca": self.analysis.pca, "pca_fit": self.analysis.pca_fit,
                 "mcr": self.analysis.mcr, "lcf_series": self.analysis.lcf_series},
@@ -283,11 +334,37 @@ impl StudioApp {
         .expect("report revision contains serializable inputs")
     }
 
+    /// Copy the Markdown analysis record. Spectra are processed in the
+    /// background first so the "Used" column holds the applied values.
+    pub(crate) fn copy_analysis_record(&mut self, cx: &mut Context<Self>) {
+        let mut snapshot = self.analysis_snapshot();
+        let project_generation = self.project_generation;
+        cx.spawn(async move |this, cx| {
+            let text = cx
+                .background_executor()
+                .spawn(async move {
+                    snapshot.resolve_spectra();
+                    snapshot.markdown()
+                })
+                .await;
+            this.update(cx, |app, cx| {
+                if app.project_generation != project_generation {
+                    return;
+                }
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+                app.set_status(crate::app::StatusKind::Success, "Analysis record copied");
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     pub(crate) fn export_publication(&mut self, cx: &mut Context<Self>) {
         if self.publish.running || !self.require_publication_source(cx) {
             return;
         }
-        let snapshot = self.analysis_snapshot();
+        let snapshot = self.publication_snapshot();
         let revision = self.publication_revision();
         let project_generation = self.project_generation;
         let home = crate::settings::home_dir().unwrap_or_else(std::env::temp_dir);

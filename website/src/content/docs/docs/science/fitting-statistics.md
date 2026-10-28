@@ -124,6 +124,28 @@ expects prepared uniform k samples and does not resample them. Set the ranges
 to the usable measured interval. Multiple weights add residual blocks but do
 not multiply the independent-information estimate.
 
+The core's default k window is Kaiser–Bessel with `dk = 4`, `dk2 = None`;
+the R filter is Hanning with `dr = 0`, `dr2 = None`. An absent second
+parameter uses the first. These window defaults match the
+[Larch transform constructor](https://github.com/xraypy/xraylarch/blob/860d8a690c81eefb0e61dee4ca3703ef4b67e93d/larch/xafs/feffit.py#L102),
+but rexafs chooses its own default R interval. Window parameters are
+family-dependent: Hanning uses low/high taper widths in Å⁻¹ for k or Å for R;
+Kaiser–Bessel also uses the first value as a dimensionless shape parameter.
+Gaussian uses the axis units for its width, and fractional Hanning uses
+dimensionless fractions.
+See the [window conventions](/docs/science/processing/#4-transform-from-k-to-r).
+
+**Desktop, unreleased:** new FEFF models follow each spectrum's processing
+k-window family, `dk` and `dk2`, independently of k-weight following. The fit
+uses Kaiser–Bessel with `dk = 1` and `dk2 = None` when processing is Auto. It
+retains its own k/R limits and explicit R filter. Custom settings override
+following; older saved models retain the historical core window defaults.
+Each dataset of a joint fit and each independent batch frame resolves its own
+processing settings. History snapshots the effective transform, and reports
+describe that snapshot. An older history entry without a transform uses the
+historical window defaults and labels them as reconstructed. See
+[fit windows](/docs/desktop/fitting/#fit-windows-in-the-development-build).
+
 The Rust fit API uses a supplied per-weight `epsilon_ks` entry, then scalar
 `epsilon_k`, then **1.0** as its k-space residual divisor. It does not estimate
 noise automatically. Calling `estimate_noise()` is a separate operation.
@@ -197,6 +219,21 @@ statistically identifiable. Noise estimates, overlapping windows, repeated
 measurements and model inadequacy affect interpretation. See
 [Larch's EXAFS fitting reference](https://xraypy.github.io/xraylarch/xafs_feffit.html)
 for related reporting conventions; the equations above are traced to rexafs.
+
+Reduced chi-square is a goodness-of-fit measure only when each residual is
+divided by the measurement uncertainty $\epsilon$; a model that matches the
+data within that noise then gives a value near 1. IFEFFIT and Larch estimate
+$\epsilon$ from the high-R part of $|\chi(R)|$, where little structural
+signal is expected ([Newville, *J. Synchrotron Rad.* 8, 322–324 (2001)](https://doi.org/10.1107/S0909049500016964);
+[Larch `feffit`](https://xraypy.github.io/xraylarch/xafs_feffit.html)).
+The desktop application does this only when **ε from noise** is on. When it is
+off, the residual uses the unit divisor above, and the reduced chi-square
+reflects the arbitrary scale of the weighted $\chi$ rather than the fit
+quality. The desktop fit results, fit history, Markdown fit report, publication
+methods and batch-fit table therefore show **n/a (noise not estimated)**, and
+the batch CSV leaves that cell empty. This is a rexafs display choice: the
+stored value and the fit itself are unchanged. Turn on **ε from noise** and
+refit to report it.
 
 ## Covariance and standard errors
 

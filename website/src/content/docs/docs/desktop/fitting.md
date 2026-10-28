@@ -48,12 +48,43 @@ the selected fitting range.
 
 *R-space fit limits. Full window, rexafs 0.2.11 on macOS; select to enlarge.*
 
+### Fit windows in the development build
+
+**Unreleased.** New FEFF models follow the window family and both window
+parameters from **Process → Transform**. This choice is separate from following
+the processing k-weight. With Process defaults, the k window is Kaiser–Bessel
+with dk = 1 and an automatic second parameter. The fit keeps its own k and R
+limits; following a window does not copy the processing transform's range. For
+a joint fit or an independent batch, each spectrum uses its own effective
+processing settings, including file overrides.
+
+Choose a custom fit window to enter the k-window family and its low- and high-k
+parameters. An automatic second parameter uses the first. The parameter meaning
+depends on the family: Hanning uses taper widths in Å⁻¹, while Kaiser–Bessel
+also uses the first value to control shape. See
+[window conventions](/docs/science/processing/#4-transform-from-k-to-r).
+The R filter is a separate fit setting, initially Hanning with dR = 0 Å and an
+automatic second parameter. A k-space residual omits both windows; R- and
+q-space residuals use them.
+
+Projects created before these controls keep the historical custom fit window:
+Kaiser–Bessel with dk = 4 and an automatic second parameter. Select following
+explicitly to change that behavior. New history entries save the effective
+windows for every dataset. Reports use those saved values; older history without
+a recorded transform identifies its reconstructed historical defaults.
+
 
 ## 3. Run and inspect
 
 Choose **Run fit**. In Results, inspect the measured/model curves, residuals,
 parameter uncertainties, correlations where reported, and physical path distances.
-A small R-factor and a converged optimizer do not establish that the model is unique
+A variable that is the whole expression of one path-parameter column is labelled
+with that parameter's symbol and unit, for example `dr_1` appears as
+"ΔR (Å) · Cu–Cu 2.553 Å" with the variable name beside it. The path is named by its
+absorber–scatterer chain and FEFF half path length R_eff (the reference geometry,
+not the fitted distance). Shared variables such as S₀² and ΔE₀ carry no path, and
+variables used only inside expressions keep the name you typed. Copied Markdown
+reports keep the variable names. A small R-factor and a converged optimizer do not establish that the model is unique
 or physically complete.
 
 
@@ -64,7 +95,9 @@ or physically complete.
 
 The screenshot's noise scale is 1. Its uncertainties therefore depend on that
 scale and the local covariance approximation; they are not a full experimental
-error budget. Read [fitting statistics](/docs/science/fitting-statistics/) before
+error budget. Without **ε from noise**, Results shows reduced χ² as
+**n/a (noise not estimated)**, because the statistic needs a measurement-noise
+estimate to mean anything. Read [fitting statistics](/docs/science/fitting-statistics/) before
 interpreting the reported standard errors.
 
 Save the project to retain the model/history, and use

@@ -290,19 +290,22 @@ impl StudioApp {
         if self.joint.config.datasets.len() < 2 {
             return Some("Add at least two spectra in Spectra & paths.");
         }
-        if self
-            .joint
-            .config
-            .datasets
-            .iter()
-            .any(|d| !d.ranges.as_ref().unwrap_or(&self.fit_ranges).valid())
-        {
-            return Some("Set valid k and R fit ranges for the selected spectra.");
+        if self.joint.config.datasets.iter().any(|d| {
+            !d.ranges
+                .as_ref()
+                .unwrap_or(&self.fit_ranges)
+                .resolved_with_params(&self.joint_dataset_params(d).unwrap_or_default())
+                .valid()
+        }) {
+            return Some(
+                "Set valid fit ranges and nonnegative window parameters for each spectrum.",
+            );
         }
         if self.joint.config.datasets.iter().any(|d| {
             d.ranges
                 .as_ref()
                 .unwrap_or(&self.fit_ranges)
+                .resolved_with_params(&self.joint_dataset_params(d).unwrap_or_default())
                 .validate_background(
                     self.joint_dataset_params(d)
                         .and_then(|p| p.rbkg)
@@ -446,7 +449,7 @@ impl StudioApp {
                 d.ranges
                     .as_ref()
                     .unwrap_or(&ranges)
-                    .resolved(self.joint_dataset_params(d).and_then(|p| p.fft_kweight)),
+                    .resolved_with_params(&self.joint_dataset_params(d).unwrap_or_default()),
             );
         }
         let saved = (config.clone(), paths.clone(), vars.clone(), ranges.clone());
@@ -492,6 +495,12 @@ impl StudioApp {
                     Ok((result, expanded)) => {
                         let (config, paths, vars, ranges) = saved;
                         let id = app.fit_history.last().map(|h| h.id + 1).unwrap_or(1);
+                        // Same per-dataset rule as `joint_fitting::run`.
+                        let transforms = config
+                            .datasets
+                            .iter()
+                            .map(|d| d.ranges.as_ref().unwrap_or(&ranges).transform())
+                            .collect();
                         let mut entry = FitHistoryEntry::from_result(
                             id,
                             provenance.label.to_string(),
@@ -500,6 +509,7 @@ impl StudioApp {
                             ranges,
                             &result,
                         );
+                        entry.transforms = transforms;
                         entry.path_details = crate::fit_details::snapshot(&expanded, &result);
                         entry.joint = Some(config.clone());
                         app.joint.result_config = Some(config);
@@ -518,7 +528,9 @@ impl StudioApp {
                         .into();
                         let result = Arc::new(result);
                         app.fit_result = Some(result.clone());
+                        app.restored_fit_needs_update = false;
                         app.fit_provenance = Some(provenance);
+                        app.pending_fit_restore = None;
                         app.fit_history.push(entry);
                         app.fit_history_results.insert(id, result);
                         app.fit_history_selected = Some(id);

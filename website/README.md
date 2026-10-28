@@ -7,21 +7,24 @@ The [audience inventory](../doc/documentation-audience.csv) and
 
 ## Build and preview
 
-Use Node 24, Python 3.12 and Rust 1.98.1. From the repository root:
+Use Bun 1.4.4 or later, Node 24.22.1 or later (the scripts run under Node),
+Python 3.12 and Rust 1.98.1. Earlier Bun and Node releases bundle a Brotli
+decoder with a remote-code-execution flaw (CVE-2026-111497). Dependencies are
+locked in `bun.lock`. From the repository root:
 
 ```sh
 rustup target add wasm32-unknown-unknown
 cargo install wasm-pack --locked --version 0.15.0
-npm --prefix website ci
+bun install --cwd website --frozen-lockfile
 uv run --no-project --python 3.12 website/scripts/generate-python-reference.py
 node website/scripts/generate-typescript-reference.mjs
 node website/scripts/generate-citations.mjs
 node website/scripts/build-rust-reference.mjs
-npm --prefix website run check
-npm --prefix website run test:generators
-npm --prefix website run build
-npm --prefix website test
-npm --prefix website run preview
+bun run --cwd website check
+bun run --cwd website test:generators
+bun run --cwd website build
+bun run --cwd website test
+bun run --cwd website preview
 ```
 
 The Python generator parses source declarations with the standard library; it
@@ -33,11 +36,11 @@ User analysis projects use the [uv init/add/run workflow](src/content/docs/docs/
 `katex` version so the rendered math HTML and the bundled `katex.min.css` come
 from the same release; KaTeX 0.18 renamed its sizing classes, and a mismatch
 leaves subscripts and superscripts unstyled. After changing `katex` or the
-Markdown plugins, run `npx astro build --force`: Astro's content cache otherwise
+Markdown plugins, run `bunx astro build --force`: Astro's content cache otherwise
 keeps HTML rendered by the previous version. The browser test checks that a
 subscript is rendered smaller than its base.
 
-Open the preview's `/rexafs/` path. `npm --prefix website run dev` gives live
+Open the preview's `/rexafs/` path. `bun run --cwd website dev` gives live
 editing; generate Rust reference files first if you want their links to work.
 On a cache miss, the Rust generator downloads the published crate, verifies its
 recorded SHA-256, and runs rustdoc with the default backend and optional capabilities, with no
@@ -58,8 +61,8 @@ HTML cache to force regeneration.
 For browser checks, run these commands inside `website/`:
 
 ```sh
-npx playwright install chromium
-npm run test:browser
+bunx playwright install chromium
+bun run test:browser
 ```
 
 Tests exercise links and anchors at the deployment base, user-only content,
@@ -84,7 +87,7 @@ Worker. It accepts a FEFF input, displays calculated EXAFS and offers generated
 files and a provenance record for download. Native rexafs 0.2.14 also uses
 ReFEFF 0.4.0; the two browser engines have separate manifests.
 
-`npm run dev` and `npm run build` first prepare both engines. Install `wasm-pack 0.15.0`
+`bun run dev` and `bun run build` first prepare both engines. Install `wasm-pack 0.15.0`
 and the `wasm32-unknown-unknown` target before either command. Cargo's binary
 directory must be on `PATH`; `REXAFS_WASM_PACK` can select an explicit executable.
 The build stages the JavaScript runtime modules listed in the npm package,
@@ -96,7 +99,7 @@ The website tests import the built engine and read the Cu example before the
 browser interaction tests, so an omitted runtime module fails with its filename.
 
 Import/setting limits are documented in `src/browser/input.ts` and tested with
-`npm test`. After normalization resolves E0, the preview checks that the inferred
+`bun run test`. After normalization resolves E0, the preview checks that the inferred
 AUTOBK grid fits its unchanged default of 2048 points at 0.05 Å⁻¹ spacing. Both
 forward-transform grid choices must fit the calculated k grid and upper window
 extent within the selected FFT length; insufficient lengths produce an error
@@ -255,9 +258,9 @@ custom domain and unset the two variables before redeploying.
 Test the domain's root-path build locally:
 
 ```sh
-SITE_URL=https://rexafs.com SITE_BASE=/ npm --prefix website run build
-SITE_URL=https://rexafs.com SITE_BASE=/ npm --prefix website test
-SITE_URL=https://rexafs.com SITE_BASE=/ npm --prefix website run test:browser
+SITE_URL=https://rexafs.com SITE_BASE=/ bun run --cwd website build
+SITE_URL=https://rexafs.com SITE_BASE=/ bun run --cwd website test
+SITE_URL=https://rexafs.com SITE_BASE=/ bun run --cwd website test:browser
 ```
 
 Restart any existing preview server when switching base paths. After deployment,

@@ -121,6 +121,7 @@ pub struct ProjectFile {
     pub overrides: Vec<ParamOverride>,
     pub fit_paths: Vec<FitPathSpec>,
     pub fit_vars: Vec<FitVarSpec>,
+    #[serde(default = "FitRanges::legacy_defaults")]
     pub fit_ranges: FitRanges,
     pub fit_mode: crate::rmc_fitting::FitMode,
     pub rmc: crate::rmc_fitting::Project,
@@ -129,6 +130,27 @@ pub struct ProjectFile {
     pub active_derived: Option<u64>,
     /// Completed fits (model snapshot + statistics), oldest first.
     pub fit_history: Vec<FitHistoryEntry>,
+    /// History id of the result displayed when the project was saved, including
+    /// a result whose source or model has since changed. Reopening shows its
+    /// retained curves immediately; the application checks the loaded spectrum
+    /// and model separately to decide whether the result needs an update.
+    /// `None` in older projects that did not record the displayed result.
+    pub current_fit: Option<usize>,
+    /// Whether the displayed result already needed an update when saved. The
+    /// application preserves this warning while checking restored inputs, so
+    /// reopening cannot make an outdated model appear current. Defaults to
+    /// `false` for older projects, which saved only up-to-date current fits.
+    pub current_fit_needs_update: bool,
+    /// Full result arrays of history fits, keyed by [`FitHistoryEntry::id`]:
+    /// measured and modeled χ(k), the k window, the R-space transforms and the
+    /// path contributions, including every dataset and k-weight. Reopening
+    /// restores these owned arrays without reading the original inputs, so
+    /// Publish can export the fit curves without refitting. Absent in projects
+    /// saved by older releases; those fits keep their statistics and model,
+    /// and their curves return only after a refit. Results with non-finite
+    /// numbers, which JSON cannot represent, are dropped by [`save_with_storage`].
+    pub fit_results:
+        std::collections::BTreeMap<usize, std::sync::Arc<rexafs::prelude::FeffFitResult>>,
     pub joint: crate::joint_fitting::JointConfig,
     pub(crate) publication: crate::publication::figures::FigureSettings,
     pub assistant: assistant::AssistantHistory,
@@ -150,6 +172,25 @@ pub struct ProjectFile {
 }
 
 impl ProjectFile {
+    /// Select retained curves to display when opening this project. An explicit
+    /// current fit preserves its saved update warning. Older saves can omit that
+    /// selection even when history curves exist; show the latest available
+    /// history result conservatively marked as needing an update. Orphan result
+    /// arrays and history entries without arrays are never selected.
+    pub(crate) fn displayed_fit(&self) -> Option<(usize, bool)> {
+        if let Some(id) = self.current_fit
+            && self.fit_results.contains_key(&id)
+            && self.fit_history.iter().any(|entry| entry.id == id)
+        {
+            return Some((id, self.current_fit_needs_update));
+        }
+        self.fit_history
+            .iter()
+            .rev()
+            .find(|entry| self.fit_results.contains_key(&entry.id))
+            .map(|entry| (entry.id, true))
+    }
+
     /// Assign identities only when a legacy project enters an editable session.
     /// Decoding/validating archives itself remains a lossless operation.
     pub fn assign_group_ids(&mut self) -> u64 {
@@ -224,6 +265,54 @@ impl ProjectFile {
         }
         next
     }
+
+    /// Whether the session holds work worth offering to save: an open
+    /// project, imported data, derived groups, a fit model or history,
+    /// measurement records or assistant conversations. A fresh window whose
+    /// only state is default settings returns `false`, so it closes silently.
+    pub fn has_user_content(&self) -> bool {
+        self.origin.is_some()
+            || self.source_dir.is_some()
+            || self.spectrum_file.is_some()
+            || !self.raw_files.is_empty()
+            || !self.derived.is_empty()
+            || !self.fit_paths.is_empty()
+            || !self.fit_history.is_empty()
+            || !self.series_measurements.runs.is_empty()
+            || !self.series_measurements.live_sessions.is_empty()
+            || !self.assistant.conversations.is_empty()
+    }
+
+    /// A process-local hash of the saved content, used only to detect
+    /// unsaved changes. Objects are canonicalized through `serde_json::Value`
+    /// (sorted keys). Two saved fields are excluded because they change
+    /// without a user edit: the header, which saving rewrites, and
+    /// `parser_evidence`, the diagnostics cache that each file read refills
+    /// (opening a project reads its spectra again). Edits that change how
+    /// files are read still show up in the import settings and parameters.
+    /// Returns `None` when the model cannot be serialized.
+    pub fn content_fingerprint(&self) -> Option<u64> {
+        use std::hash::{Hash, Hasher};
+        let mut value = serde_json::to_value(self).ok()?;
+        if let Some(object) = value.as_object_mut() {
+            object.remove("header");
+            object.remove("parser_evidence");
+        }
+        let mut hasher = std::hash::DefaultHasher::new();
+        value.to_string().hash(&mut hasher);
+        Some(hasher.finish())
+    }
+
+    /// Whether closing would lose work. `saved` is the fingerprint recorded
+    /// when this project was last saved or opened (`None` if never). A
+    /// session with no user content never asks; otherwise any difference
+    /// from the saved fingerprint, or no saved fingerprint, counts as unsaved.
+    pub fn has_unsaved_changes(&self, saved: Option<u64>) -> bool {
+        match saved {
+            None => self.has_user_content(),
+            Some(saved) => self.content_fingerprint() != Some(saved),
+        }
+    }
 }
 
 /// Independent of the application version. Optional additions keep this version;
@@ -272,6 +361,7 @@ pub fn save_with_storage(
     check_version(project.version.max(1))?;
     let mut prepared = storage::prepare(project, path, mode)?;
     prepared.assistant.prune_for_save();
+    retain_portable_fit_results(&mut prepared);
     // Measurement history already has lossless dictionary encoding. Keep it
     // out of the generic compactor's Value/validation copies: a 100k-frame run
     // otherwise expands into several simultaneous JSON object trees.
@@ -311,6 +401,27 @@ pub fn save_with_storage(
     }
     atomic_write(path, &json)?;
     Ok(prepared.header.unwrap())
+}
+
+/// Keep only result arrays that belong to a history entry and survive a JSON
+/// round trip. JSON has no NaN or infinity (serde writes `null`), so such a
+/// result could not be read back; dropping it saves the project without that
+/// fit's curves instead of refusing the whole save.
+fn retain_portable_fit_results(project: &mut ProjectFile) {
+    let ids: std::collections::BTreeSet<_> = project.fit_history.iter().map(|f| f.id).collect();
+    project.fit_results.retain(|id, result| {
+        ids.contains(id)
+            && serde_json::to_value(result.as_ref())
+                .and_then(serde_json::from_value::<rexafs::prelude::FeffFitResult>)
+                .is_ok()
+    });
+    if project
+        .current_fit
+        .is_some_and(|id| !project.fit_results.contains_key(&id))
+    {
+        project.current_fit = None;
+        project.current_fit_needs_update = false;
+    }
 }
 
 /// Read and validate a `.rxs` project without rewriting its source file.

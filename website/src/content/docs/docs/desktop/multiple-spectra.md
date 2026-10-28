@@ -24,7 +24,7 @@ independent physical measurements.
    **This spectrum** gives that spectrum its own value and Fit toggle. Paths
    referencing the same name within a spectrum still share that variable.
    New multi-spectrum setups start distance/disorder variables per spectrum.
-5. Set each spectrum's k/R range. **Transform (k)** follows that file's processing
+5. Set each spectrum's k/R range. **Transform (k)** follows that file's Process › Transform
    k-weight, including per-file overrides. Number buttons select manual fit
    weights. New models follow the transform; old projects keep saved weights.
 6. **Advanced** exposes expressions for each path in the selected spectrum.
@@ -44,6 +44,16 @@ A global constrained parameter cannot depend on a local parameter. Undefined
 variables, invalid ranges, missing paths, empty assignments, and duplicate spectra
 prevent fitting. Failed preprocessing reports the file name; it never silently
 omits a dataset.
+
+**Unreleased:** window following is independent of k-weight following. New
+models take the k-window family and both taper parameters from each spectrum's
+effective processing settings, including file overrides. The fit keeps its own
+k/R limits and its separate R filter (initially Hanning with dR = 0 Å).
+Choose custom windows to override those settings. Older projects retain their
+historical Kaiser–Bessel/dk = 4 convention until following is selected.
+History and reports save each dataset's effective windows; later processing
+edits do not change a saved fit's description. See
+[fit windows](/docs/desktop/fitting/#fit-windows-in-the-development-build).
 
 ## Independent batches
 

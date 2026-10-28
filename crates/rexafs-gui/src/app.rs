@@ -62,6 +62,7 @@ pub(crate) mod import_review;
 pub(crate) mod import_state;
 mod importing;
 mod merge;
+mod param_text;
 pub(crate) mod series_display;
 mod series_source;
 use series_source::OverviewSource;
@@ -426,6 +427,14 @@ const DETECTION_MODES: [DetectionMode; 4] = [
     DetectionMode::MuColumn,
 ];
 
+/// What the unsaved-changes prompt is guarding.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum CloseIntent {
+    CloseWindow,
+    Quit,
+    OpenPaths(Vec<PathBuf>),
+}
+
 actions!(
     studio,
     [
@@ -457,6 +466,7 @@ actions!(
         FrameFirst,
         FrameLast,
         StageData,
+        StageProcess,
         StageNormalize,
         StageBackground,
         StageTransform,
@@ -464,6 +474,8 @@ actions!(
         StageSeries,
         StagePublish,
         ShowHelp,
+        ShowAbout,
+        ShowPreferences,
         ShowLicenses,
         ShowStorage,
         ShowUpdates,
@@ -559,13 +571,13 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
         KeyBinding::new("shift-right", FrameJumpFwd, Some("Operando && !TextInput")),
         KeyBinding::new("home", FrameFirst, Some("Operando && !TextInput")),
         KeyBinding::new("end", FrameLast, Some("Operando && !TextInput")),
+        // ⌘1…⌘5 follow `Stage::number`. StageNormalize, StageBackground and
+        // StageTransform stay unbound: they open a section of Process.
         KeyBinding::new("secondary-1", StageData, Some("Studio && !Assistant")),
-        KeyBinding::new("secondary-2", StageNormalize, Some("Studio && !Assistant")),
-        KeyBinding::new("secondary-3", StageBackground, Some("Studio && !Assistant")),
-        KeyBinding::new("secondary-4", StageTransform, Some("Studio && !Assistant")),
-        KeyBinding::new("secondary-5", StageFit, Some("Studio && !Assistant")),
-        KeyBinding::new("secondary-6", StageSeries, Some("Studio && !Assistant")),
-        KeyBinding::new("secondary-7", StagePublish, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-2", StageProcess, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-3", StageFit, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-4", StageSeries, Some("Studio && !Assistant")),
+        KeyBinding::new("secondary-5", StagePublish, Some("Studio && !Assistant")),
         KeyBinding::new(
             "secondary-b",
             ToggleDataPanel,
@@ -587,6 +599,8 @@ pub fn studio_keybindings() -> Vec<KeyBinding> {
             Some("Explore && !TextInput && !Assistant"),
         ),
         KeyBinding::new("secondary-k", PaletteOpen, Some("Studio && !Assistant")),
+        // macOS Settings… convention (Cmd+,); Ctrl+, on other platforms.
+        KeyBinding::new("secondary-,", ShowPreferences, Some("Studio && !Assistant")),
         KeyBinding::new("escape", PaletteClose, Some("Palette")),
         KeyBinding::new(
             "secondary-z",
@@ -862,6 +876,111 @@ fn push_problem(problems: &mut Vec<JobError>, problem: JobError) {
     problems.push(problem);
 }
 
+/// Prefix of the one Problems-drawer warning per group about limited ranges.
+const RANGE_WARNING_PREFIX: &str = "Ranges limited to the measured data";
+
+/// Prefix of the one Problems-drawer warning per group about an untrustworthy
+/// normalization: a short or narrow post-edge fit, or a tiny or negative edge step.
+const EDGE_STEP_WARNING_PREFIX: &str = "Normalization unreliable";
+/// Prefix of the one Problems-drawer error per group about a failed wavelet map.
+const WAVELET_PROBLEM_PREFIX: &str = "Wavelet map failed";
+/// Prefix of the one Problems-drawer entry per group from a XANES peak fit.
+const PEAK_PROBLEM_PREFIX: &str = "XANES peak fit";
+
+/// Replace the one `prefix` problem recorded for `label` (a full source path,
+/// so same-named files in other folders stay separate) with `problem`, or
+/// clear it when `problem` is `None`. Messages start with `prefix`.
+fn replace_problem(
+    problems: &mut Vec<JobError>,
+    label: &str,
+    prefix: &str,
+    problem: Option<(ProblemSeverity, String)>,
+) {
+    problems.retain(|p| !(p.batch.is_none() && p.label == label && p.message.starts_with(prefix)));
+    if let Some((severity, message)) = problem {
+        push_problem(
+            problems,
+            JobError {
+                batch: None,
+                severity,
+                label: label.to_owned(),
+                message,
+            },
+        );
+    }
+}
+
+/// Problems-drawer warning for an untrustworthy normalization, or `None`.
+///
+/// `warnings` come from `Spectrum::normalization_warnings` in the core crate:
+/// a post-edge fit with fewer than five points (Larch's limit) or narrower than
+/// 20 eV, or an edge step that is non-finite, non-positive or below 10⁻³ of the
+/// μ span. The edge step is the post-edge curve minus the pre-edge line at E₀;
+/// a non-positive one is floored at 1e-12, which scales normalized μ(E), χ(k)
+/// and χ(R) by up to ~10¹². The core reports these; it never changes settings.
+fn normalization_warning(warnings: &[rexafs::NormalizationWarning]) -> Option<String> {
+    (!warnings.is_empty()).then(|| {
+        format!(
+            "{EDGE_STEP_WARNING_PREFIX}: {}. Widen the post-edge (normalization) range \
+             and check E₀ and the pre-edge range.",
+            normalization_reasons(warnings)
+        )
+    })
+}
+
+/// Amber note under the post-edge fit minimum for the same warnings, or `None`.
+fn normalization_note(warnings: &[rexafs::NormalizationWarning]) -> Option<String> {
+    (!warnings.is_empty()).then(|| {
+        format!(
+            "{EDGE_STEP_WARNING_PREFIX}: {}",
+            normalization_reasons(warnings)
+        )
+    })
+}
+
+fn normalization_reasons(warnings: &[rexafs::NormalizationWarning]) -> String {
+    let reasons: Vec<String> = warnings.iter().map(ToString::to_string).collect();
+    reasons.join("; ")
+}
+
+/// Context-panel field, label and unit for a core range adjustment.
+fn range_adjustment_field(field: &str) -> Option<(ParamKey, &'static str, &'static str)> {
+    Some(match field {
+        "pre_edge_start" => (ParamKey::PreEdgeStart, "pre-edge start", "eV"),
+        "pre_edge_end" => (ParamKey::PreEdgeEnd, "pre-edge end", "eV"),
+        "norm_start" => (ParamKey::NormStart, "fit minimum", "eV"),
+        "norm_end" => (ParamKey::NormEnd, "fit maximum", "eV"),
+        "norm_polyorder" => (ParamKey::NormPolyorder, "poly order", ""),
+        "kmax" => (ParamKey::BkgKmax, "bkg k max", "Å⁻¹"),
+        _ => return None,
+    })
+}
+
+fn range_used_text(adjustment: &rexafs::RangeAdjustment, unit: &str) -> String {
+    if unit.is_empty() {
+        format!("{}", adjustment.used)
+    } else {
+        format!("{:.1} {unit}", adjustment.used)
+    }
+}
+
+/// One warning naming every explicit setting that processing limited, or
+/// `None` when none was limited. Values are the requested and used ones.
+fn range_warning(adjustments: &[rexafs::RangeAdjustment]) -> Option<String> {
+    let parts: Vec<String> = adjustments
+        .iter()
+        .filter_map(|a| {
+            let (_, label, unit) = range_adjustment_field(a.field)?;
+            Some(format!(
+                "{label} {} → {}",
+                a.requested,
+                range_used_text(a, unit)
+            ))
+        })
+        .collect();
+    (!parts.is_empty()).then(|| format!("{RANGE_WARNING_PREFIX}: {}.", parts.join("; ")))
+}
+
 fn problem_counts(problems: &[JobError]) -> (usize, usize) {
     let warnings = problems
         .iter()
@@ -977,6 +1096,10 @@ pub(crate) enum RangeKey {
     Rmin,
     Rmax,
     Kweight,
+    Dk,
+    Dk2,
+    Dr,
+    Dr2,
 }
 
 #[derive(Clone)]
@@ -1160,6 +1283,9 @@ pub struct StudioApp {
     derived: Vec<DerivedSpectrum>,
     next_derived_id: u64,
     pending_derived: Option<u64>,
+    /// History id of a fit result restored from a project whose provenance
+    /// is attached once the fitted spectrum is processed again.
+    pending_fit_restore: Option<usize>,
     compare_gen: u64,
     compare_running: bool,
     plot_coverage: [crate::plotting::PlotCoverage; 5],
@@ -1299,6 +1425,9 @@ pub struct StudioApp {
     fit_history_results: BTreeMap<usize, Arc<FeffFitResult>>,
     fit_history_selected: Option<usize>,
     fit_result: Option<Arc<FeffFitResult>>,
+    /// A saved result that already needed an update must not become current
+    /// merely because its arrays were restored beside the current model.
+    restored_fit_needs_update: bool,
     fit_provenance: Option<FitProvenance>,
     fit_plots: Option<FitPlots>,
     fit_gen: u64,
@@ -1318,6 +1447,13 @@ pub struct StudioApp {
     assistant_history_saved_revision: u64,
     project_load_generation: u64,
     project_saving: bool,
+    /// Content fingerprint at the last save or open; `None` if never saved.
+    saved_fingerprint: Option<u64>,
+    /// Re-record `saved_fingerprint` once an opened project finishes
+    /// rescanning, so restoring its sources is not mistaken for an edit.
+    settle_saved_fingerprint: bool,
+    /// What to do after the unsaved-changes prompt's Save succeeds.
+    pending_close: Option<CloseIntent>,
     updates: shell::updates_view::UpdateState,
     help: shell::help::HelpState,
     pub(crate) structure: shell::structure_view::StructureState,
@@ -1576,6 +1712,26 @@ fn scan_entry_offset(scan_start: usize, scan_len: usize, entry: usize) -> Option
         .filter(|&offset| offset < scan_len)
 }
 
+/// Processing state of the selected group, as seen by the plot builder.
+#[derive(Clone, Copy, Debug)]
+struct ReloadState {
+    /// A job for the selection is running or a recompute is queued.
+    busy: bool,
+    /// The last job for the selection failed; the stale-plot banner is shown.
+    failed: bool,
+    /// The selection can be processed (it exists and is not excluded).
+    loadable: bool,
+    /// A result for the selection's current settings is cached.
+    cached: bool,
+    /// The plotted spectrum belongs to the selected group (any settings).
+    shown: bool,
+}
+
+/// Reprocess when nothing would otherwise produce the selection's plots.
+fn current_reload_needed(state: ReloadState) -> bool {
+    state.loadable && !state.busy && !state.failed && !state.cached && !state.shown
+}
+
 fn should_rebuild_explore(workspace: Workspace, dirty: &mut bool, invalidated: bool) -> bool {
     if workspace == Workspace::Explore {
         let rebuild = invalidated || *dirty;
@@ -1749,6 +1905,45 @@ mod thin_tests {
     }
 
     #[test]
+    fn selection_without_result_or_job_is_processed_again() {
+        use super::{ReloadState, current_reload_needed};
+        // Group B was selected while group A was plotted; B's job ended with
+        // no result and no error (a cancelled load).
+        let orphaned = ReloadState {
+            busy: false,
+            failed: false,
+            loadable: true,
+            cached: false,
+            shown: false,
+        };
+        assert!(current_reload_needed(orphaned));
+        // A failed job keeps A with the stale banner until settings change.
+        assert!(!current_reload_needed(ReloadState {
+            failed: true,
+            ..orphaned
+        }));
+        // The corrected settings are being processed.
+        assert!(!current_reload_needed(ReloadState {
+            busy: true,
+            ..orphaned
+        }));
+        // B's result for the corrected settings is ready.
+        assert!(!current_reload_needed(ReloadState {
+            cached: true,
+            ..orphaned
+        }));
+        assert!(!current_reload_needed(ReloadState {
+            shown: true,
+            ..orphaned
+        }));
+        // Removed or excluded groups are never processed.
+        assert!(!current_reload_needed(ReloadState {
+            loadable: false,
+            ..orphaned
+        }));
+    }
+
+    #[test]
     fn reconciled_catalog_rejects_stale_filtered_indices() {
         let stale = [0, 4, 9];
         assert_eq!(catalog_row_index(Some(&stale), 0, 2), Some(0));
@@ -1884,7 +2079,7 @@ mod override_tests {
                     frame,
                     entry_ix: frame,
                     r_factor: 0.1,
-                    reduced_chi_square: 1.,
+                    reduced_chi_square: Some(1.),
                     values: vec![],
                     solver_report: None,
                 })
@@ -2432,6 +2627,87 @@ fn filter_match_lower(name: &str, pattern: &str) -> bool {
 }
 
 #[cfg(test)]
+mod range_warning_tests {
+    use super::{
+        EDGE_STEP_WARNING_PREFIX, JobError, ProblemSeverity, RANGE_WARNING_PREFIX,
+        normalization_note, normalization_warning, range_warning, replace_problem,
+    };
+    use rexafs::{NormalizationWarning, RangeAdjustment};
+
+    #[test]
+    fn normalization_warnings_join_into_one_problem_and_one_note() {
+        assert_eq!(normalization_warning(&[]), None);
+        assert_eq!(normalization_note(&[]), None);
+        let warnings = [
+            NormalizationWarning::NarrowPostEdge { span: 7.94 },
+            NormalizationWarning::SmallEdgeStep {
+                edge_step: -8.128,
+                mu_span: 2.65,
+            },
+        ];
+        assert_eq!(
+            normalization_warning(&warnings).unwrap(),
+            format!(
+                "{EDGE_STEP_WARNING_PREFIX}: post-edge fit spans only 7.9 eV (at least 20 eV \
+                 needed); edge step is negative (-8.128). Widen the post-edge (normalization) \
+                 range and check E₀ and the pre-edge range."
+            )
+        );
+        assert_eq!(
+            normalization_note(&warnings[1..]).unwrap(),
+            "Normalization unreliable: edge step is negative (-8.128)"
+        );
+    }
+
+    #[test]
+    fn keyed_problems_replace_per_full_path_and_prefix() {
+        let mut problems = Vec::new();
+        let warn = |m: &str| Some((ProblemSeverity::Warning, m.to_owned()));
+        replace_problem(&mut problems, "/a/x.dat", "Wavelet", warn("Wavelet one"));
+        replace_problem(&mut problems, "/b/x.dat", "Wavelet", warn("Wavelet two"));
+        replace_problem(&mut problems, "/a/x.dat", "Edge", warn("Edge low"));
+        replace_problem(&mut problems, "/a/x.dat", "Wavelet", warn("Wavelet three"));
+        let messages: Vec<_> = problems
+            .iter()
+            .map(|p: &JobError| p.message.as_str())
+            .collect();
+        assert_eq!(messages, ["Wavelet two", "Edge low", "Wavelet three"]);
+        replace_problem(&mut problems, "/a/x.dat", "Wavelet", None);
+        assert_eq!(problems.len(), 2);
+        assert!(problems.iter().all(|p| p.message != "Wavelet three"));
+    }
+
+    #[test]
+    fn one_warning_names_every_limited_field_with_units() {
+        assert_eq!(range_warning(&[]), None);
+        let message = range_warning(&[
+            RangeAdjustment {
+                field: "norm_start",
+                requested: 150.0,
+                used: 25.0,
+            },
+            RangeAdjustment {
+                field: "norm_polyorder",
+                requested: 2.0,
+                used: 1.0,
+            },
+            RangeAdjustment {
+                field: "kmax",
+                requested: 15.0,
+                used: 9.512,
+            },
+        ])
+        .unwrap();
+        assert_eq!(
+            message,
+            format!(
+                "{RANGE_WARNING_PREFIX}: fit minimum 150 → 25.0 eV; poly order 2 → 1; bkg k max 15 → 9.5 Å⁻¹."
+            )
+        );
+    }
+}
+
+#[cfg(test)]
 mod filter_tests {
     use super::filter_match;
 
@@ -2454,9 +2730,55 @@ mod keybinding_tests {
     use gpui::{Action, KeyBinding, KeyContext};
 
     use super::{
-        ExploreEscape, FocusFilter, FrameFirst, FrameLast, StageData, StageSeries,
+        ExploreEscape, FocusFilter, FrameFirst, FrameLast, StageBackground, StageData, StageFit,
+        StageNormalize, StageProcess, StagePublish, StageSeries, StageTransform,
         ToggleContextPanel, ToggleDataPanel, studio_keybindings,
     };
+    use crate::app::shell::Stage;
+
+    #[test]
+    fn stage_shortcuts_follow_the_five_stage_numbers() {
+        let bindings = studio_keybindings();
+        let command = if cfg!(target_os = "macos") {
+            "cmd"
+        } else {
+            "ctrl"
+        };
+        let table = [
+            (binding::<StageData>(&bindings), Stage::Data),
+            (binding::<StageProcess>(&bindings), Stage::Process),
+            (binding::<StageFit>(&bindings), Stage::Fit),
+            (binding::<StageSeries>(&bindings), Stage::Series),
+            (binding::<StagePublish>(&bindings), Stage::Publish),
+        ];
+        assert_eq!(table.len(), Stage::ALL.len());
+        for (binding, stage) in table {
+            let key = gpui::Keystroke::parse(&format!("{command}-{}", stage.number())).unwrap();
+            assert_eq!(binding.match_keystrokes(&[key]), Some(false), "{stage:?}");
+            assert_eq!(stage.shortcut(), format!("⌘{}", stage.number()));
+        }
+        // ⌘6 and ⌘7 (formerly Series and Publish) are no longer bound, and
+        // the former processing stages are reached through Process.
+        for n in [6, 7] {
+            let key = gpui::Keystroke::parse(&format!("{command}-{n}")).unwrap();
+            assert!(
+                bindings
+                    .iter()
+                    .all(|b| b.match_keystrokes(std::slice::from_ref(&key)).is_none())
+            );
+        }
+        for action in [
+            gpui::Action::boxed_clone(&StageNormalize),
+            gpui::Action::boxed_clone(&StageBackground),
+            gpui::Action::boxed_clone(&StageTransform),
+        ] {
+            assert!(
+                bindings
+                    .iter()
+                    .all(|b| !b.action().partial_eq(action.as_ref()))
+            );
+        }
+    }
 
     fn binding<A: Action + 'static>(bindings: &[KeyBinding]) -> &KeyBinding {
         bindings
@@ -2990,15 +3312,12 @@ impl StudioApp {
         cx: &mut Context<Self>,
     ) -> Self {
         let studio = cx.weak_entity();
-        _window.on_window_should_close(cx, move |_, cx| {
-            if let Some(assistant) = studio
-                .read_with(cx, |app, _| app.assistant.clone())
-                .ok()
-                .flatten()
-            {
-                assistant.update(cx, |assistant, cx| assistant.analysis_closed(cx));
-            }
-            true
+        _window.on_window_should_close(cx, move |window, cx| {
+            studio
+                .update(cx, |app, cx| {
+                    app.confirm_close(CloseIntent::CloseWindow, window, cx)
+                })
+                .unwrap_or(true)
         });
         // `REXAFS_THEME` wins for one launch; otherwise the saved preference.
         let theme = crate::settings::env_var("THEME")
@@ -3010,16 +3329,11 @@ impl StudioApp {
         let params = PipelineParams::default();
         let param_fields = Self::build_param_fields(theme, cx);
         // Scripted launches (screenshots) can pick the initial stage.
-        let initial_stage = match crate::settings::env_var("STAGE").ok().as_deref() {
-            Some("data") => Stage::Data,
-            Some("normalize") => Stage::Normalize,
-            Some("background") => Stage::Background,
-            Some("transform") => Stage::Transform,
-            Some("fit") => Stage::Fit,
-            Some("series") => Stage::Series,
-            Some("publish") => Stage::Publish,
-            _ => Stage::Data,
-        };
+        // The former stage names (normalize, background, transform) open Process.
+        let initial_stage = crate::settings::env_var("STAGE")
+            .ok()
+            .and_then(|name| Stage::parse(&name))
+            .map_or(Stage::Data, |(stage, _)| stage);
 
         let structure = shell::structure_view::StructureState::new(theme, cx);
         let mut app = Self {
@@ -3066,6 +3380,7 @@ impl StudioApp {
             derived: Vec::new(),
             next_derived_id: 1,
             pending_derived: None,
+            pending_fit_restore: None,
             compare_gen: 0,
             compare_running: false,
             plot_coverage: Default::default(),
@@ -3161,6 +3476,7 @@ impl StudioApp {
             fit_history_results: BTreeMap::new(),
             fit_history_selected: None,
             fit_result: None,
+            restored_fit_needs_update: false,
             fit_provenance: None,
             fit_plots: None,
             fit_gen: 0,
@@ -3171,7 +3487,7 @@ impl StudioApp {
             project_extensions: Default::default(),
             project_path: None,
             project_header: None,
-            project_storage: Default::default(),
+            project_storage: crate::project::DataStorage::Embedded,
             project_raw_files: Vec::new(),
             project_source_origins: BTreeMap::new(),
             project_generation: 0,
@@ -3180,6 +3496,9 @@ impl StudioApp {
             assistant_history_saved_revision: 0,
             project_load_generation: 0,
             project_saving: false,
+            saved_fingerprint: None,
+            settle_saved_fingerprint: false,
+            pending_close: None,
             updates: Default::default(),
             help: Default::default(),
             feff_running: false,
@@ -3543,12 +3862,13 @@ impl StudioApp {
     /// Chip action: copy the global section back over the override,
     /// dropping the override entirely once nothing diverges anymore.
     fn reset_section_override(&mut self, section: ParamSection, cx: &mut Context<Self>) {
-        let scope = shell::parameter_actions::ParamScope::Stage(match section {
-            ParamSection::Import => Stage::Data,
-            ParamSection::Norm => Stage::Normalize,
-            ParamSection::Bkg => Stage::Background,
-            ParamSection::Fft => Stage::Transform,
-        });
+        use shell::{ProcessSection, parameter_actions::ParamScope};
+        let scope = match section {
+            ParamSection::Import => ParamScope::Stage(Stage::Data),
+            ParamSection::Norm => ParamScope::Process(ProcessSection::Normalize),
+            ParamSection::Bkg => ParamScope::Process(ProcessSection::Background),
+            ParamSection::Fft => ParamScope::Process(ProcessSection::Transform),
+        };
         self.reset_scope(scope, cx);
     }
 
@@ -3667,6 +3987,13 @@ impl StudioApp {
         self.fit_ranges.rmin.to_bits().hash(&mut hasher);
         self.fit_ranges.rmax.to_bits().hash(&mut hasher);
         self.fit_ranges.follow_transform.hash(&mut hasher);
+        self.fit_ranges.follow_window.hash(&mut hasher);
+        format!("{:?}", self.fit_ranges.window).hash(&mut hasher);
+        self.fit_ranges.dk.to_bits().hash(&mut hasher);
+        self.fit_ranges.dk2.map(f64::to_bits).hash(&mut hasher);
+        format!("{:?}", self.fit_ranges.rwindow).hash(&mut hasher);
+        self.fit_ranges.dr.to_bits().hash(&mut hasher);
+        self.fit_ranges.dr2.map(f64::to_bits).hash(&mut hasher);
         self.fit_ranges.kweight.to_bits().hash(&mut hasher);
         for kw in &self.fit_ranges.kweights {
             kw.to_bits().hash(&mut hasher);
@@ -3677,6 +4004,9 @@ impl StudioApp {
     }
 
     fn fit_is_stale(&self) -> bool {
+        if self.fit_result.is_some() && self.restored_fit_needs_update {
+            return true;
+        }
         let Some(provenance) = &self.fit_provenance else {
             return false;
         };
@@ -3902,6 +4232,7 @@ impl StudioApp {
         if change == IndexChange::Catalog {
             self.cache.clear();
             self.raw_cache.clear();
+            self.publish.invalidate_composer_samples();
             self.thumbs = None;
         } else {
             // Only shifted derived slots can now refer to another group.
@@ -4121,103 +4452,72 @@ impl StudioApp {
         const COL: FieldKind = FieldKind::Integer { min: Some(0) };
         const INT: FieldKind = FieldKind::Integer { min: None };
         const FLOAT: FieldKind = FieldKind::Float;
+        // Labels and hover explanations come from `param_text`, one reviewable
+        // table. Pre-edge and post-edge ranges are eV *relative to E0*; the
+        // section title and tooltips say so, since a 260px panel leaves ~132px
+        // for a label and "(eV rel. E0)" does not fit.
         let specs = [
-            (ParamKey::ImpEnergyCol, "energy col", "0", COL),
-            (ParamKey::ImpI0Col, "I0 col", "1", COL),
-            (ParamKey::ImpItCol, "It col", "2", COL),
-            (ParamKey::ImpIrCol, "Ir col", "3", COL),
-            (ParamKey::AlignTarget, "ref E0 target", "e.g. 22117", FLOAT),
-            (ParamKey::EnergyOffset, "offset (eV)", "0", FLOAT),
-            (ParamKey::E0, "E0 (eV)", "auto", FLOAT),
-            (ParamKey::EdgeStep, "edge step", "auto", FLOAT),
-            // These four are eV *relative to E0* — the thing newcomers get
-            // wrong. The label carries the unit; the "relative to E0" part is
-            // stated once in the panel footer, since a 260px panel leaves
-            // ~132px for a label and "(eV rel. E0)" does not fit.
-            (
-                ParamKey::PreEdgeStart,
-                "pre-edge start (eV)",
-                "auto (-200)",
-                FLOAT,
-            ),
-            (
-                ParamKey::PreEdgeEnd,
-                "pre-edge end (eV)",
-                "auto (-30)",
-                FLOAT,
-            ),
-            (ParamKey::NormStart, "fit minimum (eV)", "auto (150)", FLOAT),
-            (
-                ParamKey::NormEnd,
-                "fit maximum (eV)",
-                "auto (spectrum end)",
-                FLOAT,
-            ),
-            (ParamKey::NormPolyorder, "poly order", "auto (2)", INT),
-            (ParamKey::NVictoreen, "victoreen n", "auto (0)", INT),
-            (ParamKey::Rbkg, "rbkg (Å)", "auto (1.0)", FLOAT),
+            (ParamKey::ImpEnergyCol, "0", COL),
+            (ParamKey::ImpI0Col, "1", COL),
+            (ParamKey::ImpItCol, "2", COL),
+            (ParamKey::ImpIrCol, "3", COL),
+            (ParamKey::AlignTarget, "e.g. 22117", FLOAT),
+            (ParamKey::EnergyOffset, "0", FLOAT),
+            (ParamKey::E0, "auto", FLOAT),
+            (ParamKey::EdgeStep, "auto", FLOAT),
+            (ParamKey::PreEdgeStart, "auto (-200)", FLOAT),
+            (ParamKey::PreEdgeEnd, "auto (-30)", FLOAT),
+            (ParamKey::NormStart, "auto (150)", FLOAT),
+            (ParamKey::NormEnd, "auto (spectrum end)", FLOAT),
+            (ParamKey::NormPolyorder, "auto (2)", INT),
+            (ParamKey::NVictoreen, "auto (0)", INT),
+            (ParamKey::Rbkg, "auto (1.0)", FLOAT),
             // Scoped names: the AUTOBK and FFT k-ranges are different
-            // parameters with different values, and identical "k min"/"k max"
-            // labels in two sections read as a contradiction.
-            (ParamKey::BkgKmin, "bkg k min (Å⁻¹)", "auto (0)", FLOAT),
-            (ParamKey::BkgKmax, "bkg k max (Å⁻¹)", "auto (full)", FLOAT),
-            (ParamKey::BkgKstep, "k step (Å⁻¹)", "auto (0.05)", FLOAT),
-            (ParamKey::BkgNknots, "spline knots", "auto", INT),
-            (ParamKey::BkgKweight, "bkg k-weight", "auto (1)", INT),
-            (ParamKey::BkgClampLo, "clamp lo", "auto (0)", INT),
-            (ParamKey::BkgClampHi, "clamp hi", "auto (1)", INT),
-            (ParamKey::BkgNclamp, "clamp points", "auto (3)", COL),
-            (ParamKey::BkgClampLambda, "clamp λ", "auto (0.001)", FLOAT),
-            (ParamKey::BkgDk, "window dk (Å⁻¹)", "auto (0.1)", FLOAT),
-            (ParamKey::BkgNfft, "nfft", "auto (2048)", INT),
-            (ParamKey::FftKmin, "fft k min (Å⁻¹)", "auto (2)", FLOAT),
-            (ParamKey::FftKmax, "fft k max (Å⁻¹)", "auto (15)", FLOAT),
-            (ParamKey::FftDk, "dk (Å⁻¹)", "auto (1)", FLOAT),
-            (ParamKey::FftKweight, "k-weight", "auto (2)", FLOAT),
-            (ParamKey::FftDk2, "dk2 (Å⁻¹)", "auto", FLOAT),
-            (ParamKey::FftRmax, "R max out (Å)", "auto (10)", FLOAT),
-            (ParamKey::FftKstep, "k step (Å⁻¹)", "auto", FLOAT),
-            (ParamKey::FftNfft, "nfft", "auto (2048)", INT),
-            (ParamKey::BftRmin, "R min (Å)", "auto (0)", FLOAT),
-            (ParamKey::BftRmax, "R max (Å)", "auto (20)", FLOAT),
-            (ParamKey::BftDr, "dR (Å)", "auto (1)", FLOAT),
-            (
-                ParamKey::BkgEk0,
-                "k origin E₀ (eV)",
-                "auto (edge E₀)",
-                FLOAT,
-            ),
-            (
-                ParamKey::BkgRegularization,
-                "legacy ridge",
-                "auto (0.0001)",
-                FLOAT,
-            ),
-            (
-                ParamKey::BkgCondition,
-                "condition limit",
-                "auto (1e8)",
-                FLOAT,
-            ),
-            (
-                ParamKey::BkgResidualRatio,
-                "residual ratio limit",
-                "auto (1.05)",
-                FLOAT,
-            ),
-            (ParamKey::BftQmax, "q max (Å⁻¹)", "auto (10)", FLOAT),
-            (ParamKey::BftDr2, "dR high (Å)", "auto (dR)", FLOAT),
-            (ParamKey::BftRweight, "R weight", "auto (0)", INT),
-            (ParamKey::BftKstep, "q step (Å⁻¹)", "auto (R grid)", FLOAT),
-            (ParamKey::BftNfft, "inverse NFFT", "auto (2048)", INT),
+            // parameters with different values ("Spline k …" vs "FT k …").
+            (ParamKey::BkgKmin, "auto (0)", FLOAT),
+            (ParamKey::BkgKmax, "auto (full)", FLOAT),
+            (ParamKey::BkgKstep, "auto (0.05)", FLOAT),
+            (ParamKey::BkgNknots, "auto", INT),
+            (ParamKey::BkgKweight, "auto (1)", INT),
+            (ParamKey::BkgClampLo, "auto (0)", INT),
+            (ParamKey::BkgClampHi, "auto (1)", INT),
+            (ParamKey::BkgNclamp, "auto (3)", COL),
+            (ParamKey::BkgClampLambda, "auto (0.001)", FLOAT),
+            (ParamKey::BkgDk, "auto (0.1)", FLOAT),
+            (ParamKey::BkgNfft, "auto (2048)", INT),
+            (ParamKey::FftKmin, "auto (2)", FLOAT),
+            (ParamKey::FftKmax, "auto (15)", FLOAT),
+            (ParamKey::FftDk, "auto (1)", FLOAT),
+            (ParamKey::FftKweight, "auto (2)", FLOAT),
+            (ParamKey::FftDk2, "auto", FLOAT),
+            (ParamKey::FftRmax, "auto (10)", FLOAT),
+            (ParamKey::FftKstep, "auto", FLOAT),
+            (ParamKey::FftNfft, "auto (2048)", INT),
+            (ParamKey::BftRmin, "auto (0)", FLOAT),
+            (ParamKey::BftRmax, "auto (20)", FLOAT),
+            (ParamKey::BftDr, "auto (1)", FLOAT),
+            (ParamKey::BkgEk0, "auto (edge E₀)", FLOAT),
+            (ParamKey::BkgRegularization, "auto (0.0001)", FLOAT),
+            (ParamKey::BkgCondition, "auto (1e8)", FLOAT),
+            (ParamKey::BkgResidualRatio, "auto (1.05)", FLOAT),
+            (ParamKey::BftQmax, "auto (10)", FLOAT),
+            (ParamKey::BftDr2, "auto (dR)", FLOAT),
+            (ParamKey::BftRweight, "auto (0)", INT),
+            (ParamKey::BftKstep, "auto (R grid)", FLOAT),
+            (ParamKey::BftNfft, "auto (2048)", INT),
         ];
         specs
             .into_iter()
-            .map(|(key, label, placeholder, kind)| {
+            .map(|(key, placeholder, kind)| {
                 let step = param_step(key);
+                let text = param_text::param_text(key);
                 let field = cx.new(|cx| {
-                    let field = NumericField::new(label, placeholder, None, kind, theme, cx)
-                        .with_step(step);
+                    let mut field =
+                        NumericField::new(text.label, placeholder, None, kind, theme, cx)
+                            .with_step(step);
+                    if let Some(tip) = text.tip {
+                        field = field.with_description(tip);
+                    }
                     if key == ParamKey::EnergyOffset {
                         field.with_display_decimals(2, cx)
                     } else {
@@ -4935,6 +5235,12 @@ impl StudioApp {
                             requested: label.clone(),
                             message: e.to_string().into(),
                         });
+                        // As on success: a drag tick that landed while this job
+                        // ran carries newer settings, which may fix the error.
+                        if app.recompute_dirty {
+                            app.recompute_dirty = false;
+                            app.reprocess_current(cx);
+                        }
                     }
                 }
                 cx.notify();
@@ -4985,6 +5291,84 @@ impl StudioApp {
                 }
             }
         })
+    }
+
+    /// Mark range fields that processing limited to this scan's data: explicit
+    /// values get an amber note and one Problems warning for the group; automatic
+    /// values show the used value in their placeholder. Settings are unchanged.
+    /// An untrustworthy normalization (core `normalization_warnings`) adds an
+    /// amber note under the post-edge fit minimum and its own Problems warning.
+    fn show_range_adjustments(&mut self, ix: usize, sp: &XASSpectrum, cx: &mut Context<Self>) {
+        let adjustments = if self.effective_params(ix).mback.is_some() {
+            Vec::new()
+        } else {
+            sp.range_adjustments()
+        };
+        let params = self.effective_params(ix).clone();
+        let warnings = sp.normalization_warnings();
+        let mut explicit = Vec::new();
+        for (key, field) in &self.param_fields {
+            let adjustment = adjustments
+                .iter()
+                .find(|a| range_adjustment_field(a.field).is_some_and(|(k, ..)| k == *key));
+            let user_set = param_field_value(*key, &params).is_some();
+            let range_note = adjustment.filter(|_| user_set).map(|a| {
+                let unit = range_adjustment_field(a.field).map_or("", |(.., unit)| unit);
+                format!(
+                    "Used {}: limited by the measured data",
+                    range_used_text(a, unit)
+                )
+            });
+            // The post-edge fit minimum also carries the normalization warning.
+            let warning_note = (*key == ParamKey::NormStart)
+                .then(|| normalization_note(&warnings))
+                .flatten();
+            let note = match (range_note, warning_note) {
+                (Some(a), Some(b)) => Some(format!("{a}. {b}")),
+                (a, b) => a.or(b),
+            }
+            .map(SharedString::from);
+            if let Some(a) = adjustment {
+                if user_set {
+                    explicit.push(*a);
+                } else {
+                    let used = a.used;
+                    field.update(cx, |f, cx| {
+                        f.set_placeholder(format!("auto ({used:.1})"), cx)
+                    });
+                }
+            }
+            field.update(cx, |f, cx| f.set_adjusted(note, cx));
+        }
+        // Key by the full source path: same-named files in other folders are
+        // separate groups, each with its own warning.
+        let label = self.spectrum_path.display().to_string();
+        replace_problem(
+            &mut self.job_errors,
+            &label,
+            RANGE_WARNING_PREFIX,
+            range_warning(&explicit).map(|m| (ProblemSeverity::Warning, m)),
+        );
+        replace_problem(
+            &mut self.job_errors,
+            &label,
+            EDGE_STEP_WARNING_PREFIX,
+            normalization_warning(&warnings).map(|m| (ProblemSeverity::Warning, m)),
+        );
+    }
+
+    /// Problems-drawer label for a group: its full source path when it has
+    /// one (matching the processing warnings), otherwise its display label.
+    fn problem_label(&self, ix: usize) -> String {
+        let path = if ix < self.catalog.len() {
+            Some(self.catalog.path(ix))
+        } else if ix == NO_ENTRY {
+            self.standalone_source.as_ref().map(|(p, ..)| p.clone())
+        } else {
+            None
+        };
+        path.filter(|p| !p.as_os_str().is_empty())
+            .map_or_else(|| self.entry_label(ix), |p| p.display().to_string())
     }
 
     fn set_processed(
@@ -5061,13 +5445,21 @@ impl StudioApp {
                 (ParamKey::PreEdgeEnd, "auto (-30)"),
                 (ParamKey::NormStart, "auto (150)"),
                 (ParamKey::NormEnd, "auto (spectrum end)"),
+                (ParamKey::NormPolyorder, "auto (2)"),
             ] {
                 if let Some((_, field)) = self.param_fields.iter().find(|(k, _)| *k == key) {
                     field.update(cx, |f, cx| f.set_placeholder(value, cx));
                 }
             }
         }
+        self.show_range_adjustments(ix, &sp, cx);
         self.spectrum = Some(sp.clone());
+        // A newly merged target may finish after its alignment reference.
+        // Resume the preview now rather than requiring a field edit or reopen.
+        if self.tools.open.is_some() {
+            self.queue_tool_preview(cx);
+        }
+        self.settle_restored_fit();
         self.refresh_operando_frame_plot(ix, fingerprint, &sp, cx);
         self.invalidate_explore_plots(cx);
         // Scripted launches (screenshots): REXAFS_DEBUG_FIT_PATHS="a.dat:b.dat"
@@ -5805,6 +6197,12 @@ impl StudioApp {
     /// its own effective params.
     fn ensure_compare_loaded(&mut self, cx: &mut Context<Self>) {
         let (indices, _) = self.compare_indices();
+        self.ensure_groups_loaded(indices, cx);
+    }
+
+    /// Process explicit workspace indices through the same cache and diagnostic
+    /// path as overlays. Publication recipes can reference groups after unmarking.
+    fn ensure_groups_loaded(&mut self, indices: Vec<usize>, cx: &mut Context<Self>) {
         let mut missing = missing_compare_loads(
             &self.catalog,
             &self.derived,
@@ -5840,7 +6238,7 @@ impl StudioApp {
         self.compare_gen += 1;
         let generation = self.compare_gen;
         self.compare_running = true;
-        self.status = format!("processing {} spectra for overlay ...", missing.len()).into();
+        self.status = format!("processing {} spectra ...", missing.len()).into();
         cx.notify();
         let mut diagnostics: BTreeMap<_, _> = missing
             .iter()
@@ -5910,7 +6308,9 @@ impl StudioApp {
                                 app.raw_cache
                                     .put((ix, app.effective_params(ix).raw_fingerprint()), raw);
                             }
-                            app.cache.put((ix, fingerprint), Arc::new(sp));
+                            let sp = Arc::new(sp);
+                            app.retain_composer_sample(ix, fingerprint, sp.clone());
+                            app.cache.put((ix, fingerprint), sp);
                         }
                         Err(error) => {
                             failed += 1;
@@ -5922,11 +6322,11 @@ impl StudioApp {
                         }
                     }
                 }
-                let (_, total) = app.compare_indices();
+                let total = indices.len();
                 app.status = if failed > 0 {
-                    format!("overlay ready · {failed} failed").into()
+                    format!("spectra ready · {failed} failed").into()
                 } else {
-                    format!("overlay of {total} spectra ready").into()
+                    format!("{total} spectra ready").into()
                 };
                 app.invalidate_explore_plots(cx);
                 cx.notify();
@@ -5942,7 +6342,44 @@ impl StudioApp {
         }
     }
 
+    /// Whether the selected group has neither a processed result for its
+    /// current settings nor a running job, while the plots would silently
+    /// fall back to another group's spectrum. A failed job is excluded: it
+    /// shows the stale-plot banner until the settings change.
+    fn current_needs_reload(&self) -> bool {
+        let Some(ix) = self.current_group_index() else {
+            return false;
+        };
+        let loadable = if ix == NO_ENTRY {
+            self.standalone_path().is_some()
+        } else {
+            self.valid_group_index(ix)
+        };
+        // Any earlier result of the same group counts: setting edits schedule
+        // their own recompute, and a held Live average view must stay held.
+        let shown = self.spectrum.is_some()
+            && self
+                .spectrum_group
+                .as_ref()
+                .and_then(|t| t.group_id.as_ref())
+                == self.group_id(ix).as_ref();
+        current_reload_needed(ReloadState {
+            busy: self.load_running || self.recompute_dirty,
+            failed: self.stale_plots.is_some(),
+            loadable,
+            cached: self.cache.contains(&(ix, self.effective_fingerprint(ix))),
+            shown,
+        })
+    }
+
     fn rebuild_explore_plots(&mut self, cx: &mut Context<Self>) {
+        // A cancelled load (for example after group indices changed) leaves
+        // no result and no error. Process the selection again rather than
+        // drawing the previous group's curves under the selected group's name.
+        // The job starts before this rebuild continues, so it runs once.
+        if self.current_needs_reload() {
+            self.reprocess_current(cx);
+        }
         self.mixed_overlay_weight = None;
         // Stage-dependent view flags (also correct on a scripted first launch).
         self.view.flat = self.stage_view.e_quantity == shell::EQuantity::Flat;
@@ -5952,7 +6389,7 @@ impl StudioApp {
             self.stage_view.show_re
         };
         self.view.show_im = self.stage == Stage::Fit && self.stage_view.fit_show_im;
-        self.view.show_bkg = self.stage_view.show_bkg && self.stage == Stage::Background;
+        self.view.show_bkg = self.stage_view.show_bkg && self.stage == Stage::Process;
         let (indices, total) = self.compare_indices();
         let mut traces: Vec<QuadTrace> = Vec::new();
 
@@ -6099,7 +6536,7 @@ impl StudioApp {
         }
         self.plot_coverage =
             std::array::from_fn(|i| specs[i].coverage(total, sampled, traces.len()));
-        if self.stage == Stage::Background
+        if self.stage == Stage::Process
             && let Some((_, hi)) = self
                 .spectrum
                 .as_ref()
@@ -6926,18 +7363,39 @@ impl StudioApp {
         ranges: &FitRanges,
         cx: &mut Context<Self>,
     ) -> Vec<(RangeKey, Entity<NumericField>)> {
-        let specs: [(RangeKey, &str, f64); 5] = [
-            (RangeKey::Kmin, "k min (Å⁻¹)", ranges.kmin),
-            (RangeKey::Kmax, "k max (Å⁻¹)", ranges.kmax),
-            (RangeKey::Rmin, "R min (Å)", ranges.rmin),
-            (RangeKey::Rmax, "R max (Å)", ranges.rmax),
-            (RangeKey::Kweight, "k-weight", ranges.kweight),
+        let specs = [
+            (RangeKey::Kmin, "k min (Å⁻¹)", Some(ranges.kmin)),
+            (RangeKey::Kmax, "k max (Å⁻¹)", Some(ranges.kmax)),
+            (RangeKey::Rmin, "R min (Å)", Some(ranges.rmin)),
+            (RangeKey::Rmax, "R max (Å)", Some(ranges.rmax)),
+            (RangeKey::Kweight, "k-weight", Some(ranges.kweight)),
+            (RangeKey::Dk, "dk", Some(ranges.dk)),
+            (RangeKey::Dk2, "dk₂", ranges.dk2),
+            (RangeKey::Dr, "dr", Some(ranges.dr)),
+            (RangeKey::Dr2, "dr₂", ranges.dr2),
         ];
         specs
             .into_iter()
             .map(|(key, label, value)| {
                 let field = cx.new(|cx| {
-                    NumericField::new(label, "", Some(value), FieldKind::Float, theme, cx)
+                    let optional = matches!(key, RangeKey::Dk2 | RangeKey::Dr2);
+                    let field = NumericField::new(
+                        label,
+                        if optional { "Auto (follows first taper)" } else { "" },
+                        value,
+                        FieldKind::Float,
+                        theme,
+                        cx,
+                    );
+                    if matches!(key, RangeKey::Dk | RangeKey::Dk2 | RangeKey::Dr | RangeKey::Dr2) {
+                        field.with_step(0.1).with_description(if optional {
+                            "Second window taper parameter. Auto follows the first taper; it does not change the fit bounds. Ordinary windows use the displayed axis units; fractional Hanning uses dimensionless fractions."
+                        } else {
+                            "First window taper parameter. It changes the window shape, not the fit bounds. Gaussian uses this as its standard deviation; Kaiser–Bessel also uses its numeric value as a shape parameter. Fractional Hanning uses dimensionless fractions."
+                        })
+                    } else {
+                        field
+                    }
                 });
                 cx.subscribe(&field, move |this: &mut Self, _field, event, cx| {
                     let value = match event {
@@ -6949,7 +7407,24 @@ impl StudioApp {
                             return;
                         }
                     };
-                    if let Some(v) = value {
+                    if matches!(key, RangeKey::Dk | RangeKey::Dk2 | RangeKey::Dr | RangeKey::Dr2) {
+                        let optional = matches!(key, RangeKey::Dk2 | RangeKey::Dr2);
+                        if value.is_some_and(|v| v < 0.) || (!optional && value.is_none()) {
+                            this.set_status(StatusKind::Error, "Window taper parameters must be nonnegative; only the second taper can use Auto.");
+                            this.sync_range_fields(cx);
+                            cx.notify();
+                            return;
+                        }
+                        match key {
+                            RangeKey::Dk => this.fit_ranges.dk = value.unwrap(),
+                            RangeKey::Dk2 => this.fit_ranges.dk2 = *value,
+                            RangeKey::Dr => this.fit_ranges.dr = value.unwrap(),
+                            RangeKey::Dr2 => this.fit_ranges.dr2 = *value,
+                            _ => unreachable!(),
+                        }
+                        this.fit_model_changed(cx);
+                        this.rebuild_fit_plots(cx);
+                    } else if let Some(v) = value {
                         if matches!(key, RangeKey::Rmin) && *v < this.fit_background_floor(None) {
                             this.set_status(
                                 StatusKind::Error,
@@ -6969,6 +7444,7 @@ impl StudioApp {
                             RangeKey::Rmin => r.rmin = *v,
                             RangeKey::Rmax => r.rmax = *v,
                             RangeKey::Kweight => r.kweight = *v,
+                            RangeKey::Dk | RangeKey::Dk2 | RangeKey::Dr | RangeKey::Dr2 => unreachable!(),
                         }
                         this.fit_model_changed(cx);
                         this.rebuild_fit_plots(cx);
@@ -7356,9 +7832,10 @@ impl StudioApp {
         cx.notify();
         let paths: Vec<FitPathSpec> = self.fit_paths.iter().map(|r| r.spec.clone()).collect();
         let vars: Vec<FitVarSpec> = self.fit_vars.iter().map(|v| v.spec.clone()).collect();
-        let ranges = self.fit_ranges.resolved(self.ui_params().fft_kweight);
+        let ranges = self.fit_ranges.resolved_with_params(self.ui_params());
         let started = Instant::now();
         let history_inputs = (paths.clone(), vars.clone(), ranges.clone());
+        let noise_estimated = ranges.noise;
         let job = cx
             .background_executor()
             .spawn(async move { run_spectrum_fit(&sp, &paths, &vars, &ranges) });
@@ -7372,11 +7849,17 @@ impl StudioApp {
                 app.last_fit_duration = Some(started.elapsed());
                 match result {
                     Ok(result) => {
+                        app.restored_fit_needs_update = false;
                         app.joint.result_config = None;
                         app.fit_provenance = Some(provenance.clone());
+                        app.pending_fit_restore = None;
                         let stale = app.fit_is_stale();
+                        let reduced_chi_square = crate::fitting::reduced_chi_square_text(
+                            result.reduced_chi_square,
+                            noise_estimated,
+                        );
                         app.status = format!(
-                            "fit {} for {}{} · R-factor {:.5} · red. chi² {:.3e}",
+                            "fit {} for {}{} · R-factor {:.5} · reduced χ² {}",
                             if result.solver_report.as_ref().is_some_and(|r| !r.converged) {
                                 "stopped"
                             } else {
@@ -7385,7 +7868,7 @@ impl StudioApp {
                             provenance.label,
                             if stale { " (stale)" } else { "" },
                             result.r_factor,
-                            result.reduced_chi_square
+                            reduced_chi_square
                         )
                         .into();
                         let result = Arc::new(result);
@@ -7395,16 +7878,12 @@ impl StudioApp {
                         }
                         app.record(
                             format!(
-                                "fit {} · R {:.4} · red. χ² {:.3e}",
-                                provenance.label, result.r_factor, result.reduced_chi_square
+                                "fit {} · R {:.4} · reduced χ² {}",
+                                provenance.label, result.r_factor, reduced_chi_square
                             ),
                             None,
                         );
-                        app.push_fit_history(
-                            provenance.label.to_string(),
-                            history_inputs,
-                            result.clone(),
-                        );
+                        app.push_fit_history(&provenance, history_inputs, result.clone());
                         app.rebuild_fit_plots(cx);
                         // Reflect fitted values back into the variable fields.
                         if !stale {
@@ -7441,15 +7920,23 @@ impl StudioApp {
     /// Record a completed fit in the history (model snapshot + stats).
     fn push_fit_history(
         &mut self,
-        group: String,
+        provenance: &FitProvenance,
         inputs: (Vec<FitPathSpec>, Vec<FitVarSpec>, FitRanges),
         result: Arc<FeffFitResult>,
     ) {
         let id = self.fit_history.last().map(|e| e.id + 1).unwrap_or(1);
         let (paths, vars, ranges) = inputs;
-        self.fit_history.push(FitHistoryEntry::from_result(
-            id, group, paths, vars, ranges, &result,
-        ));
+        let mut entry = FitHistoryEntry::from_result(
+            id,
+            provenance.label.to_string(),
+            paths,
+            vars,
+            ranges,
+            &result,
+        );
+        entry.group_id = provenance.group_id;
+        entry.params_fingerprint = Some(provenance.params_fingerprint);
+        self.fit_history.push(entry);
         self.fit_history_results.insert(id, result);
         self.fit_history_selected = Some(id);
     }
@@ -7492,13 +7979,20 @@ impl StudioApp {
         self.fit_ranges = entry.ranges;
         self.sync_range_fields(cx);
         self.fit_history_selected = Some(id);
+        self.pending_fit_restore = None;
         if let Some(result) = self.fit_history_results.get(&id).cloned() {
+            self.restored_fit_needs_update = false;
             self.fit_result = Some(result);
+            // The recorded group and processing fingerprint let an unchanged
+            // spectrum count as up to date; older entries fall back to the
+            // loaded spectrum's fingerprint.
             self.fit_provenance = Some(FitProvenance {
-                group_id: None,
+                group_id: entry.group_id,
                 label: entry.group.clone().into(),
                 path: self.spectrum_path.clone(),
-                params_fingerprint: self.spectrum_fingerprint,
+                params_fingerprint: entry
+                    .params_fingerprint
+                    .unwrap_or(self.spectrum_fingerprint),
                 model_fingerprint: self.fit_model_fingerprint(),
             });
             self.rebuild_fit_plots(cx);
@@ -7513,13 +8007,17 @@ impl StudioApp {
         let ranges = self.fit_ranges.clone();
         for (key, field) in &self.fit_range_fields {
             let value = match key {
-                RangeKey::Kmin => ranges.kmin,
-                RangeKey::Kmax => ranges.kmax,
-                RangeKey::Rmin => ranges.rmin,
-                RangeKey::Rmax => ranges.rmax,
-                RangeKey::Kweight => ranges.kweight,
+                RangeKey::Kmin => Some(ranges.kmin),
+                RangeKey::Kmax => Some(ranges.kmax),
+                RangeKey::Rmin => Some(ranges.rmin),
+                RangeKey::Rmax => Some(ranges.rmax),
+                RangeKey::Kweight => Some(ranges.kweight),
+                RangeKey::Dk => Some(ranges.dk),
+                RangeKey::Dk2 => ranges.dk2,
+                RangeKey::Dr => Some(ranges.dr),
+                RangeKey::Dr2 => ranges.dr2,
             };
-            field.update(cx, |f, cx| f.set_value(Some(value), cx));
+            field.update(cx, |f, cx| f.set_value(value, cx));
         }
     }
 
@@ -7820,9 +8318,14 @@ impl StudioApp {
                         if job_cancel.load(Ordering::Relaxed) {
                             return Err("batch cancelled".into());
                         }
-                        let frame_ranges = ranges.resolved(frame_params.fft_kweight);
+                        let frame_ranges = ranges.resolved_with_params(frame_params);
                         let result = run_spectrum_fit(&sp, &paths, &vars, &frame_ranges)?;
-                        Ok(BatchFitRow::from_result(*frame, *ix, &result))
+                        Ok(BatchFitRow::from_result(
+                            *frame,
+                            *ix,
+                            &result,
+                            frame_ranges.noise,
+                        ))
                     })();
                     if job_cancel.load(Ordering::Relaxed)
                         && result
@@ -8249,7 +8752,7 @@ impl StudioApp {
         };
         self.select_entry(ix, cx);
         self.sync_param_fields(cx);
-        self.set_stage(shell::Stage::Normalize, cx);
+        self.focus_process_section(shell::ProcessSection::Normalize, cx);
     }
 
     fn cancel_batch_fit(&mut self, cx: &mut Context<Self>) {
@@ -8756,6 +9259,18 @@ impl StudioApp {
                 .and_then(|ix| self.derived.get(ix - DERIVED_BASE))
                 .map(|d| d.id),
             fit_history: self.fit_history.clone(),
+            fit_results: self.fit_history_results.clone(),
+            current_fit: self.fit_result.as_ref().and_then(|r| {
+                self.fit_history_results
+                    .iter()
+                    .find(|(_, v)| Arc::ptr_eq(v, r))
+                    .map(|(id, _)| *id)
+            }),
+            current_fit_needs_update: self.restored_fit_needs_update
+                || (self.fit_provenance.is_some() && self.fit_is_stale())
+                || (self.fit_result.is_some()
+                    && self.fit_provenance.is_none()
+                    && self.pending_fit_restore.is_none()),
             joint: self.joint.config.clone(),
             publication: self.publish.settings.clone(),
             mcr_analysis: self.analysis.mcr.clone(),
@@ -8801,6 +9316,7 @@ impl StudioApp {
             return;
         }
         if self.project_storage == crate::project::DataStorage::Embedded && self.catalog.scanning {
+            self.pending_close = None;
             self.status =
                 "Wait for the folder scan to finish before embedding all imported data.".into();
             cx.notify();
@@ -8834,57 +9350,63 @@ impl StudioApp {
             .unwrap_or("project.rxs".into());
         let rx = cx.prompt_for_new_path(&folder, Some(&name));
         cx.spawn(async move |this, cx| {
-            if let Ok(Ok(Some(mut path))) = rx.await {
-                if path.extension().is_none() {
-                    path.set_extension(crate::project::PROJECT_EXTENSION);
-                }
-                this.update(cx, |app, cx| {
-                    app.project_saving = true;
-                    app.status = "Saving project…".into();
-                    cx.notify();
+            let Ok(Ok(Some(mut path))) = rx.await else {
+                // The save dialog was cancelled: keep the window open.
+                this.update(cx, |app, _| app.pending_close = None).ok();
+                return;
+            };
+            if path.extension().is_none() {
+                path.set_extension(crate::project::PROJECT_EXTENSION);
+            }
+            this.update(cx, |app, cx| {
+                app.project_saving = true;
+                app.status = "Saving project…".into();
+                cx.notify();
+            })
+            .ok();
+            let save_path = path.clone();
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    let saved = crate::project::save_with_storage(&save_path, &project, mode);
+                    if saved.is_ok() {
+                        crate::series_measurements::recovery::acknowledge_saved(&project);
+                    }
+                    saved.map(|header| (header, project.content_fingerprint()))
                 })
-                .ok();
-                let save_path = path.clone();
-                let result = cx
-                    .background_executor()
-                    .spawn(async move {
-                        let saved = crate::project::save_with_storage(&save_path, &project, mode);
-                        if saved.is_ok() {
-                            crate::series_measurements::recovery::acknowledge_saved(&project);
-                        }
-                        saved
-                    })
-                    .await;
-                this.update(cx, |app, cx| {
-                    app.project_saving = false;
-                    match result {
-                        Ok(header) => {
-                            if app.project_generation == generation {
-                                app.measurements.acknowledge_saved(&saved_measurement_ids);
-                                app.project_path = Some(path.clone());
-                                app.project_header = Some(header);
-                                app.assistant_history_saved_revision = history_revision;
-                                if app.assistant_history_revision == history_revision {
-                                    app.assistant_history.limit =
-                                        Some(app.structure.settings.assistant_history_limit);
-                                    app.assistant_history.prune_for_save();
-                                }
+                .await;
+            this.update(cx, |app, cx| {
+                app.project_saving = false;
+                match result {
+                    Ok((header, fingerprint)) => {
+                        if app.project_generation == generation {
+                            app.saved_fingerprint = fingerprint;
+                            app.settle_saved_fingerprint = false;
+                            app.measurements.acknowledge_saved(&saved_measurement_ids);
+                            app.project_path = Some(path.clone());
+                            app.project_header = Some(header);
+                            app.assistant_history_saved_revision = history_revision;
+                            if app.assistant_history_revision == history_revision {
+                                app.assistant_history.limit =
+                                    Some(app.structure.settings.assistant_history_limit);
+                                app.assistant_history.prune_for_save();
                             }
-                            app.set_status(
-                                StatusKind::Success,
-                                format!("Saved {}", path.display()),
-                            );
-                            app.remember_project(path.clone());
                         }
-                        Err(error) => {
-                            app.set_status(StatusKind::Error, format!("Save failed: {error}"));
-                            app.record_job_error("save project", error);
+                        app.set_status(StatusKind::Success, format!("Saved {}", path.display()));
+                        app.remember_project(path.clone());
+                        if let Some(intent) = app.pending_close.take() {
+                            app.finish_close(intent, cx);
                         }
                     }
-                    cx.notify();
-                })
-                .ok();
-            }
+                    Err(error) => {
+                        app.pending_close = None;
+                        app.set_status(StatusKind::Error, format!("Save failed: {error}"));
+                        app.record_job_error("save project", error);
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
         })
         .detach();
     }
@@ -8984,6 +9506,7 @@ impl StudioApp {
         registry: crate::group_identity::GroupRegistry,
         cx: &mut Context<Self>,
     ) {
+        let displayed_fit = project.displayed_fit();
         self.reset_catalog_state(cx);
         self.intake = import_state::IntakeState::from_history(project.import_history.clone());
         self.imports = project.imports.clone();
@@ -9099,7 +9622,9 @@ impl StudioApp {
         self.fit_gen += 1;
         self.fit_running = false;
         self.fit_result = None;
+        self.restored_fit_needs_update = displayed_fit.is_some_and(|(_, stale)| stale);
         self.fit_provenance = None;
+        self.fit_history_selected = None;
         self.fit_plots = None;
         self.batch_fit = None;
         for spec in project.fit_paths {
@@ -9149,7 +9674,25 @@ impl StudioApp {
             config: project.joint,
             ..Default::default()
         };
-        self.fit_history_results.clear();
+        // Saved result arrays let Publish export history fits without a refit.
+        self.fit_history_results = project.fit_results;
+        // Show the fit that was current at save time again; its provenance is
+        // attached when the fitted spectrum finishes processing.
+        self.pending_fit_restore = None;
+        if let Some((id, result)) = displayed_fit
+            .map(|(id, _)| id)
+            .and_then(|id| Some((id, self.fit_history_results.get(&id)?.clone())))
+        {
+            self.joint.result_config = self
+                .fit_history
+                .iter()
+                .find(|e| e.id == id)
+                .and_then(|e| e.joint.clone());
+            self.fit_result = Some(result);
+            self.fit_history_selected = Some(id);
+            self.pending_fit_restore = Some(id);
+            self.rebuild_fit_plots(cx);
+        }
         self.sync_range_fields(cx);
         self.derived = project.derived;
         self.group_registry.reserve_groups(&self.derived);
@@ -9181,7 +9724,14 @@ impl StudioApp {
         self.selected = None;
         self.resolve_group_state();
         self.ensure_compare_loaded(cx);
-        if !self.fit_paths.is_empty() {
+        if self.fit_result.is_some()
+            || (self.fit_mode == crate::rmc_fitting::FitMode::Rmc
+                && self.rmc.project.saved.is_some())
+        {
+            self.set_fit_step(shell::fit_workspace::FitStep::Results, cx);
+            self.stage_view.fit_result_tab = 0;
+            self.stage_view.fit_show_batch = false;
+        } else if !self.fit_paths.is_empty() {
             self.set_fit_step(shell::fit_workspace::FitStep::Model, cx);
         }
         self.sync_param_fields(cx);
@@ -9189,7 +9739,206 @@ impl StudioApp {
         if self.spectrum.is_some() {
             self.schedule_recompute(cx);
         }
+        // A project opened from disk starts clean; recovered copies and other
+        // projects without a file start unsaved.
+        self.saved_fingerprint = None;
+        self.settle_saved_fingerprint = false;
+        if self.project_path.is_some() {
+            self.mark_project_clean();
+        }
         cx.notify();
+    }
+
+    /// Treat the current state as saved, and re-record it once restored
+    /// sources finish loading (see `settle_saved_fingerprint`).
+    pub(crate) fn mark_project_clean(&mut self) {
+        self.saved_fingerprint = self.project_file().content_fingerprint();
+        self.settle_saved_fingerprint = true;
+    }
+
+    /// Attach provenance to a fit result restored from a project. A joint fit
+    /// waits until restored sources and overrides are resolved, then records
+    /// the current model. A single-spectrum fit waits for a processed spectrum:
+    /// if it is the fitted one (same group, label and processing fingerprint)
+    /// the result is up to date; any other spectrum gets provisional
+    /// provenance that marks the result as needing an update until the fitted
+    /// spectrum is processed.
+    fn settle_restored_fit(&mut self) {
+        let Some(id) = self.pending_fit_restore else {
+            return;
+        };
+        let Some(entry) = self.fit_history.iter().find(|e| e.id == id) else {
+            self.pending_fit_restore = None;
+            return;
+        };
+        if entry.joint.is_some() {
+            if self.catalog.scanning
+                || !self.pending_overrides.is_empty()
+                || self.pending_project_spectrum.is_some()
+                || self.pending_derived.is_some()
+            {
+                return;
+            }
+            self.fit_provenance = Some(FitProvenance {
+                group_id: None,
+                label: entry.group.clone().into(),
+                path: PathBuf::new(),
+                params_fingerprint: 0,
+                model_fingerprint: self.fit_model_fingerprint(),
+            });
+            self.pending_fit_restore = None;
+            return;
+        }
+        if self.spectrum.is_none() {
+            return;
+        }
+        let matches = entry.matches_spectrum(
+            self.active_group_id(),
+            &self.spectrum_label,
+            self.spectrum_fingerprint,
+        );
+        self.fit_provenance = Some(FitProvenance {
+            group_id: entry.group_id,
+            label: entry.group.clone().into(),
+            path: if matches {
+                self.spectrum_path.clone()
+            } else {
+                PathBuf::new()
+            },
+            params_fingerprint: entry.params_fingerprint.unwrap_or_default(),
+            model_fingerprint: self.fit_model_fingerprint(),
+        });
+        if matches {
+            self.pending_fit_restore = None;
+        }
+    }
+
+    fn settle_saved_fingerprint(&mut self) {
+        if self.settle_saved_fingerprint
+            && !self.catalog.scanning
+            && self.pending_overrides.is_empty()
+            && self.pending_project_spectrum.is_none()
+            && self.pending_derived.is_none()
+        {
+            self.settle_saved_fingerprint = false;
+            self.saved_fingerprint = self.project_file().content_fingerprint();
+        }
+    }
+
+    fn has_unsaved_changes(&self) -> bool {
+        self.project_file()
+            .has_unsaved_changes(self.saved_fingerprint)
+    }
+
+    /// Ask before closing the window or quitting with unsaved changes.
+    /// Returns `true` when it is safe to proceed now; otherwise a native
+    /// Save / Don't Save / Cancel prompt decides later. Save runs the normal
+    /// save dialog and proceeds only after the file is written.
+    pub(crate) fn confirm_close(
+        &mut self,
+        intent: CloseIntent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        // A prompt or its save dialog is already open.
+        if self.pending_close.is_some() {
+            return false;
+        }
+        if !self.has_unsaved_changes() {
+            self.close_assistant_session(cx);
+            return true;
+        }
+        let message = match &intent {
+            CloseIntent::CloseWindow => "Save changes before closing?",
+            CloseIntent::Quit => "Save changes before quitting?",
+            CloseIntent::OpenPaths(_) => "Save changes before opening another analysis?",
+        };
+        let answer = window.prompt(
+            gpui::PromptLevel::Warning,
+            message,
+            Some("Your changes to this project will be lost if you don't save them."),
+            &[
+                gpui::PromptButton::ok("Save…"),
+                gpui::PromptButton::new("Don't Save"),
+                gpui::PromptButton::cancel("Cancel"),
+            ],
+            cx,
+        );
+        self.pending_close = Some(intent);
+        cx.spawn(async move |this, cx| {
+            let choice = answer.await.ok();
+            this.update(cx, |app, cx| match choice {
+                // An in-flight save also finishes the close when it succeeds.
+                Some(0) => app.save_project_confirmed(cx),
+                Some(1) => {
+                    if let Some(intent) = app.pending_close.take() {
+                        app.finish_close(intent, cx);
+                    }
+                }
+                _ => app.pending_close = None,
+            })
+            .ok();
+        })
+        .detach();
+        false
+    }
+
+    fn close_assistant_session(&mut self, cx: &mut Context<Self>) {
+        if let Some(assistant) = self.assistant.take() {
+            assistant.update(cx, |assistant, cx| assistant.analysis_closed(cx));
+        }
+        self.assistant_host = Default::default();
+        self.assistant_resizing = None;
+        // GPUI's macOS Dock reopen callback runs only when no windows remain.
+        // This auxiliary window belongs to the analysis being closed.
+        if let Some(assistant_window) = self.assistant_window.take() {
+            cx.defer(move |cx| {
+                assistant_window
+                    .update(cx, |_, window, _| window.remove_window())
+                    .ok();
+            });
+        }
+    }
+
+    /// Close or quit without asking again.
+    fn finish_close(&mut self, intent: CloseIntent, cx: &mut Context<Self>) {
+        self.close_assistant_session(cx);
+        match intent {
+            CloseIntent::Quit => cx.quit(),
+            CloseIntent::OpenPaths(paths) => self.route_paths(paths, true, cx),
+            CloseIntent::CloseWindow => {
+                let main = self.main_window;
+                cx.defer(move |cx| {
+                    main.update(cx, |_, window, _| window.remove_window()).ok();
+                });
+            }
+        }
+    }
+
+    /// Native document requests reuse this window while protecting unsaved
+    /// merge, alignment and fitting work with the existing save flow.
+    pub(crate) fn open_paths_from_desktop(
+        &mut self,
+        paths: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if paths.is_empty() {
+            return;
+        }
+        if let Some(CloseIntent::OpenPaths(queued)) = &mut self.pending_close {
+            queued.extend(paths);
+            *queued = crate::desktop_open::unique_paths(std::mem::take(queued));
+            cx.notify();
+            return;
+        }
+        if !paths.iter().any(|path| crate::project::is_project(path)) {
+            self.route_paths(paths, true, cx);
+            return;
+        }
+        if self.confirm_close(CloseIntent::OpenPaths(paths.clone()), window, cx) {
+            self.route_paths(paths, true, cx);
+        }
     }
 
     // ---- views -------------------------------------------------------------
@@ -9443,11 +10192,10 @@ impl StudioApp {
                             }),
                     )
                     .child(div().w(px(88.)).child(format!("{:.5}", row.r_factor)))
-                    .child(
-                        div()
-                            .w(px(112.))
-                            .child(format!("{:.4e}", row.reduced_chi_square)),
-                    );
+                    .child(div().w(px(112.)).child(match row.reduced_chi_square {
+                        Some(value) => format!("{value:.4e}"),
+                        None => "n/a".to_string(),
+                    }));
                 for name in &row_names {
                     let value = row
                         .value_of(name)
@@ -9592,13 +10340,10 @@ impl StudioApp {
     }
 
     /// Enum parameter row with a dropdown list (0 = auto).
-    pub(crate) fn enum_row(
-        &self,
-        label: &'static str,
-        which: EnumParam,
-        cx: &mut Context<Self>,
-    ) -> gpui::AnyElement {
+    /// Choice row; its label and hover explanation come from `param_text`.
+    pub(crate) fn enum_row(&self, which: EnumParam, cx: &mut Context<Self>) -> gpui::AnyElement {
         let t = self.theme;
+        let param_text::ParamText { label, tip } = param_text::enum_text(which);
         let options = self.enum_options(which);
         let selected = self.enum_selected_index(which);
         let expanded = self.open_enum == Some(which);
@@ -9618,9 +10363,19 @@ impl StudioApp {
                         .gap_2()
                         .child(
                             div()
+                                .id(SharedString::from(format!("enum-label-{which:?}")))
                                 .flex_1()
                                 .text_sm()
                                 .text_color(t.text_muted)
+                                .when_some(tip, |d, tip| {
+                                    d.tooltip(move |_, cx| {
+                                        cx.new(|_| Tooltip {
+                                            label: tip.into(),
+                                            theme: t,
+                                        })
+                                        .into()
+                                    })
+                                })
                                 .child(label),
                         )
                         .children(self.parameter_badge(
@@ -10015,6 +10770,8 @@ impl StudioApp {
 
 impl Render for StudioApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.settle_saved_fingerprint();
+        self.settle_restored_fit();
         if let Some(source) = self.measurement_import.take() {
             self.open_measurement_editor(source, window, cx);
         }
@@ -10072,6 +10829,10 @@ impl Render for StudioApp {
                     this.navigate_stage(Stage::Publish, window, cx)
                 }))
                 .on_action(cx.listener(|this, _: &ShowHelp, _, cx| this.open_help(cx)))
+                .on_action(cx.listener(|this, _: &ShowAbout, _, cx| this.open_about(cx)))
+                .on_action(
+                    cx.listener(|this, _: &ShowPreferences, _, cx| this.open_preferences(cx)),
+                )
                 .on_action(cx.listener(|this, _: &ShowLicenses, _, cx| this.open_licenses(cx)))
                 .on_action(cx.listener(|this, _: &ShowStorage, _, cx| this.open_storage(cx)))
                 .on_action(cx.listener(|this, _: &ShowUpdates, _, cx| this.open_updates(cx)))
@@ -10090,18 +10851,26 @@ impl Render for StudioApp {
                     this.navigate_stage(Stage::Data, window, cx);
                 }))
                 .on_action(
+                    cx.listener(|this: &mut Self, _: &StageProcess, window, cx| {
+                        this.navigate_stage(Stage::Process, window, cx);
+                    }),
+                )
+                .on_action(
                     cx.listener(|this: &mut Self, _: &StageNormalize, window, cx| {
-                        this.navigate_stage(Stage::Normalize, window, cx);
+                        let section = shell::ProcessSection::Normalize;
+                        this.navigate_process_section(section, window, cx);
                     }),
                 )
                 .on_action(
                     cx.listener(|this: &mut Self, _: &StageBackground, window, cx| {
-                        this.navigate_stage(Stage::Background, window, cx);
+                        let section = shell::ProcessSection::Background;
+                        this.navigate_process_section(section, window, cx);
                     }),
                 )
                 .on_action(
                     cx.listener(|this: &mut Self, _: &StageTransform, window, cx| {
-                        this.navigate_stage(Stage::Transform, window, cx);
+                        let section = shell::ProcessSection::Transform;
+                        this.navigate_process_section(section, window, cx);
                     }),
                 )
                 .on_action(cx.listener(|this: &mut Self, _: &StageFit, window, cx| {

@@ -1,5 +1,487 @@
 use super::*;
 
+fn publication_export_snapshot(
+    project: ProjectFile,
+    current: Vec<std::sync::Arc<crate::publication::figures::FigureData>>,
+) -> crate::publication::Snapshot {
+    crate::publication::Snapshot {
+        project,
+        current: PathBuf::new(),
+        spectra: Vec::new(),
+        results: Default::default(),
+        composer: crate::publication::composed::ComposerInput {
+            current,
+            samples: Vec::new(),
+        },
+        analysis: Value::Null,
+        batch_csv: None,
+        batch_stale: false,
+        journal: Vec::new(),
+        screen: Value::Null,
+    }
+}
+
+#[test]
+fn publication_recipes_migrate_old_rxs_export_and_save_only_the_new_format() {
+    use crate::publication::figures::composer::{CompositePanel, CompositeRecipe, CurveLabelMode};
+    use crate::publication::figures::{FigureData, FigureSeries};
+    use std::sync::Arc;
+
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("legacy.rxs");
+    let recipe = CompositeRecipe {
+        panels: ["xanes", "chi-k"]
+            .into_iter()
+            .map(|key| CompositePanel {
+                label_mode: CurveLabelMode::Legend,
+                ..key.into()
+            })
+            .collect(),
+        columns: 1,
+        width_mm: 90.,
+        panel_height_mm: Some(38.1),
+        dpi: 72.,
+        ..Default::default()
+    };
+    save_with_storage(&path, &ProjectFile::default(), DataStorage::Paths).unwrap();
+    let mut legacy = json_file(&path);
+    legacy["publication"] = serde_json::json!({"composite": recipe});
+    legacy["publication"]["composite"]["panels"] = serde_json::json!(["xanes", "chi-k"]);
+    legacy["publication"]["figures"] =
+        serde_json::json!({"xanes": {"caption": "Legacy XANES caption."}});
+    std::fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+    let mut project = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
+    assert_eq!(project.publication.recipes().len(), 1);
+    assert_eq!(project.publication.active_recipe().name, "Figure 1");
+    assert_eq!(project.publication.active_recipe().recipe, recipe);
+
+    // Synthetic display curves exercise export compatibility without depending
+    // on scientific processing or external measurement files.
+    let current = [("xanes", "Energy (eV)"), ("chi-k", "k (1/Å)")]
+        .into_iter()
+        .map(|(key, xlabel)| {
+            Arc::new(FigureData {
+                key,
+                label: key.into(),
+                xlabel: xlabel.into(),
+                ylabel: "Signal (dimensionless)".into(),
+                math_ylabel: "Signal (dimensionless)".into(),
+                series: vec![FigureSeries {
+                    key: "signal".into(),
+                    label: "Synthetic sample".into(),
+                    x: vec![1., 2., 3.],
+                    y: vec![0., 0.5, 1.],
+                    dashed: false,
+                    optional: false,
+                }],
+                normalized_series: None,
+                e0: None,
+                guides: Vec::new(),
+                default_xlim: None,
+                residual: None,
+            })
+        })
+        .collect();
+    let folder = temp.path().join("legacy-report");
+    crate::publication::export(
+        publication_export_snapshot(project.clone(), current),
+        &folder,
+    )
+    .unwrap();
+    for suffix in [".png", ".svg", ".pdf", "-caption.txt"] {
+        assert!(
+            folder
+                .join(format!("figures/composed/figure-1{suffix}"))
+                .is_file()
+        );
+    }
+    let caption =
+        std::fs::read_to_string(folder.join("figures/composed/figure-1-caption.txt")).unwrap();
+    assert!(caption.contains("(a) Legacy XANES caption."));
+    let report = std::fs::read_to_string(folder.join("report.html")).unwrap();
+    assert!(report.contains("figures/composed/figure-1.svg"));
+    assert!(report.contains(&caption));
+    let captions = std::fs::read_to_string(folder.join("captions.md")).unwrap();
+    assert!(captions.contains(&caption));
+
+    project.publication.duplicate_recipe();
+    project.publication.rename_recipe("SI Figure S4").unwrap();
+    let saved = temp.path().join("named.rxs");
+    save_with_storage(&saved, &project, DataStorage::Paths).unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&std::fs::read(&saved).unwrap()).unwrap();
+    assert!(json["publication"].get("composite").is_none());
+    assert_eq!(json["publication"]["recipes"][0]["name"], "Figure 1");
+    assert_eq!(json["publication"]["recipes"][1]["name"], "SI Figure S4");
+    assert_eq!(json["publication"]["active_recipe"], 1);
+    let restored = load_with_cache_root(&saved, || Ok(temp.path().join("cache"))).unwrap();
+    assert_eq!(restored.publication, project.publication);
+}
+
+#[test]
+fn publication_samples_keep_order_and_panel_options_after_rxs_reopen() {
+    use crate::group_identity::GroupId;
+    use crate::publication::figures::composer::{CompositePanel, CurveLabelMode};
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("samples.rxs");
+    let mut project = ProjectFile::default();
+    let samples = vec![GroupId::legacy_result(9), GroupId::legacy_result(2)];
+    let recipe = project.publication.active_composite_mut();
+    recipe.samples = samples.clone();
+    recipe
+        .figure_labels
+        .insert(samples[0].clone(), "Frame 9".into());
+    recipe.sample_colours = crate::publication::figures::composer::SampleColours::OkabeIto;
+    recipe.grid = true;
+    recipe.legend_every_panel = true;
+    recipe.panels = vec![
+        CompositePanel::from("xanes"),
+        CompositePanel {
+            key: "chi-k".into(),
+            samples: Some(samples.iter().rev().cloned().collect()),
+            offset_step: 0.3,
+            reverse: true,
+            label_mode: CurveLabelMode::AboveCurve,
+            inset: None,
+        },
+        CompositePanel {
+            samples: Some(Vec::new()),
+            label_mode: CurveLabelMode::Legend,
+            ..CompositePanel::from("chi-r")
+        },
+    ];
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        save_with_storage(&path, &project, mode).unwrap();
+        let saved = json_file(&path);
+        let recipe = &saved["publication"]["recipes"][0]["recipe"];
+        assert_eq!(
+            recipe["samples"],
+            serde_json::json!(["result:9", "result:2"])
+        );
+        assert_eq!(
+            recipe["panels"][1]["samples"],
+            serde_json::json!(["result:2", "result:9"])
+        );
+        assert_eq!(recipe["figure_labels"]["result:9"], "Frame 9");
+        assert_eq!(recipe["sample_colours"], "okabe_ito");
+        assert_eq!(recipe["grid"], true);
+        assert_eq!(recipe["legend_every_panel"], true);
+        // An absent mode means legacy Legend, so compact saves must preserve
+        // AboveCurve even when it is the constructor's default.
+        assert_eq!(recipe["panels"][0]["label_mode"], "above_curve");
+        assert_eq!(recipe["panels"][1]["label_mode"], "above_curve");
+        assert_eq!(recipe["panels"][2]["label_mode"], "legend");
+        let reopened = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
+        assert_eq!(reopened.publication, project.publication);
+        assert_eq!(
+            reopened
+                .publication
+                .active_recipe()
+                .recipe
+                .panels
+                .iter()
+                .map(|panel| panel.label_mode)
+                .collect::<Vec<_>>(),
+            [
+                CurveLabelMode::AboveCurve,
+                CurveLabelMode::AboveCurve,
+                CurveLabelMode::Legend
+            ]
+        );
+    }
+}
+
+#[test]
+fn publication_legacy_panel_strings_and_missing_label_modes_load_from_rxs() {
+    use crate::publication::figures::composer::CurveLabelMode;
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("legacy-panels.rxs");
+    save_with_storage(&path, &ProjectFile::default(), DataStorage::Paths).unwrap();
+    let mut saved = json_file(&path);
+    saved["publication"] = serde_json::json!({
+        "recipes": [{"name": "Figure 1", "recipe": {
+            "panels": ["xanes", "chi-k", {"key": "chi-r"}]
+        }}]
+    });
+    std::fs::write(&path, serde_json::to_vec(&saved).unwrap()).unwrap();
+    let reopened = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
+    let recipe = &reopened.publication.active_recipe().recipe;
+    assert!(recipe.samples.is_empty());
+    assert_eq!(
+        recipe
+            .panels
+            .iter()
+            .map(|panel| panel.key.as_str())
+            .collect::<Vec<_>>(),
+        ["xanes", "chi-k", "chi-r"]
+    );
+    assert!(recipe.panels.iter().all(|panel| panel.samples.is_none()
+        && panel.offset_step == 0.
+        && !panel.reverse
+        && panel.label_mode == CurveLabelMode::Legend
+        && panel.inset.is_none()));
+    save_with_storage(&path, &reopened, DataStorage::Paths).unwrap();
+    let saved = json_file(&path);
+    assert!(saved["publication"]["recipes"][0]["recipe"]["panels"][0].is_object());
+    let again = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
+    assert_eq!(again.publication, reopened.publication);
+}
+
+#[test]
+fn legacy_publication_recipes_export_python_without_mutating_saved_settings() {
+    use crate::publication::figures::composer::{
+        CompositePanel, CompositeRecipe, CurveLabelMode, prepare_panels,
+    };
+    use crate::publication::figures::{FigureData, FigureSeries};
+    use crate::publication::python_export::{SCRIPT_NAME, write_composite_python_export};
+
+    let temp = tempfile::tempdir().unwrap();
+    for (format, recipe_fields) in [
+        (
+            "composite",
+            serde_json::json!({"composite": {"panels": ["xanes"]}}),
+        ),
+        (
+            "named",
+            serde_json::json!({"recipes": [{"name": "Figure 1", "recipe": {"panels": ["xanes"]}}]}),
+        ),
+    ] {
+        let path = temp.path().join(format!("legacy-{format}.rxs"));
+        save_with_storage(&path, &ProjectFile::default(), DataStorage::Paths).unwrap();
+        let mut historical = json_file(&path);
+        historical["publication"] = recipe_fields;
+        historical["publication"]["figures"] = serde_json::json!({
+            "xanes": {"normalized": true, "legend": false, "xmin": 7100.0, "xmax": 7102.0}
+        });
+        std::fs::write(&path, serde_json::to_vec(&historical).unwrap()).unwrap();
+
+        let reopened = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
+        let named = reopened.publication.active_recipe();
+        assert_eq!(named.name, "Figure 1");
+        assert_eq!(
+            named.recipe,
+            CompositeRecipe {
+                panels: vec![CompositePanel {
+                    label_mode: CurveLabelMode::Legend,
+                    .."xanes".into()
+                }],
+                ..Default::default()
+            }
+        );
+        let before_export = serde_json::to_value(&reopened.publication).unwrap();
+        let baseline = temp.path().join(format!("before-export-{format}.rxs"));
+        save_with_storage(&baseline, &reopened, DataStorage::Paths).unwrap();
+        let before_export_saved = json_file(&baseline)["publication"].clone();
+
+        // These small arrays are synthetic display data, not a scientific
+        // processing fixture. Their distinct values expose the saved choice
+        // of normalized rather than flattened absorption in the exported CSV.
+        let curve = |y| FigureSeries {
+            key: "mu".into(),
+            label: "Synthetic sample".into(),
+            x: vec![7100., 7101., 7102.],
+            y,
+            dashed: false,
+            optional: false,
+        };
+        let available = vec![FigureData {
+            key: "xanes",
+            label: "XANES".into(),
+            xlabel: "Energy (eV)".into(),
+            ylabel: "Flattened μ(E) (dimensionless)".into(),
+            math_ylabel: "Flattened μ(E) (dimensionless)".into(),
+            series: vec![curve(vec![10., 20., 30.])],
+            normalized_series: Some(vec![curve(vec![0.1, 0.2, 0.3])]),
+            e0: None,
+            guides: Vec::new(),
+            default_xlim: None,
+            residual: None,
+        }];
+        let prepared =
+            prepare_panels(&named.recipe, &available, &[], &reopened.publication).unwrap();
+        assert!(prepared.missing.is_empty());
+        assert_eq!(prepared.panels.len(), 1);
+        assert!(prepared.panels[0].options.normalized);
+        assert!(!prepared.panels[0].options.legend);
+        assert_eq!(prepared.panels[0].options.xmin, Some(7100.));
+        assert_eq!(prepared.panels[0].options.xmax, Some(7102.));
+
+        let folder = temp.path().join(format!("python-{format}"));
+        let script =
+            write_composite_python_export(&named.name, &named.recipe, &prepared, &folder).unwrap();
+        assert_eq!(script, folder.join(SCRIPT_NAME));
+        assert!(
+            std::fs::read_to_string(&script)
+                .unwrap()
+                .contains("matplotlib")
+        );
+        let csv_files: Vec<_> = std::fs::read_dir(&folder)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().is_some_and(|extension| extension == "csv"))
+            .collect();
+        assert_eq!(csv_files.len(), 1);
+        let mut reader = csv::Reader::from_path(&csv_files[0]).unwrap();
+        let values: Vec<(f64, f64)> = reader.deserialize().map(Result::unwrap).collect();
+        assert_eq!(values, vec![(7100., 0.1), (7101., 0.2), (7102., 0.3)]);
+
+        save_with_storage(&path, &reopened, DataStorage::Paths).unwrap();
+        let saved = json_file(&path);
+        assert_eq!(
+            serde_json::to_value(&reopened.publication).unwrap(),
+            before_export
+        );
+        assert_eq!(saved["publication"], before_export_saved);
+        assert!(saved["publication"].get("composite").is_none());
+        assert_eq!(
+            saved["publication"]["recipes"][0]["recipe"],
+            serde_json::json!({
+                "panels": [{"key": "xanes", "samples": null, "offset_step": 0.0,
+                    "reverse": false, "label_mode": "legend"}],
+                "samples": [], "sample_colours": "ordered", "grid": false,
+                "legend_every_panel": false, "columns": 2, "width_mm": 177.8,
+                "panel_height_mm": null, "font_size": 8.0, "line_width": null, "dpi": 600.0
+            })
+        );
+        let again = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
+        assert_eq!(again.publication, reopened.publication);
+    }
+}
+
+#[test]
+fn publication_panel_objects_without_insets_load_from_rxs() {
+    use crate::group_identity::GroupId;
+    use crate::publication::figures::composer::CurveLabelMode;
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("legacy-panel-objects.rxs");
+    save_with_storage(&path, &ProjectFile::default(), DataStorage::Paths).unwrap();
+    let mut saved = json_file(&path);
+    saved["publication"] = serde_json::json!({
+        "recipes": [{"name": "Figure 1", "recipe": {"panels": [{
+            "key": "xanes",
+            "samples": ["result:9", "result:2"],
+            "offset_step": 0.3,
+            "reverse": true,
+            "label_mode": "curve_end"
+        }]}}]
+    });
+    std::fs::write(&path, serde_json::to_vec(&saved).unwrap()).unwrap();
+    let reopened = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
+    let panel = &reopened.publication.active_recipe().recipe.panels[0];
+    assert_eq!(panel.key, "xanes");
+    assert_eq!(
+        panel.samples,
+        Some(vec![GroupId::legacy_result(9), GroupId::legacy_result(2)])
+    );
+    assert_eq!(panel.offset_step, 0.3);
+    assert!(panel.reverse);
+    assert_eq!(panel.label_mode, CurveLabelMode::AboveCurve);
+    assert!(panel.inset.is_none());
+    save_with_storage(&path, &reopened, DataStorage::Paths).unwrap();
+    assert_eq!(
+        json_file(&path)["publication"]["recipes"][0]["recipe"]["panels"][0]["label_mode"],
+        "above_curve"
+    );
+    let again = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
+    assert_eq!(again.publication, reopened.publication);
+}
+
+#[test]
+fn publication_panel_insets_survive_rxs_save_and_reopen() {
+    use crate::publication::figures::composer::{
+        CompositePanel, InsetKind, InsetPlacement, PanelInset,
+    };
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("panel-insets.rxs");
+    let mut project = ProjectFile::default();
+    project.publication.active_composite_mut().panels = [
+        (
+            "xanes",
+            InsetKind::PreEdge,
+            InsetPlacement::LowerRight,
+            true,
+        ),
+        (
+            "flattened-mu",
+            InsetKind::Edge,
+            InsetPlacement::UpperLeft,
+            false,
+        ),
+        (
+            "mu-energy",
+            InsetKind::Difference,
+            InsetPlacement::CenterRight,
+            true,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, (key, kind, placement, follow_offset))| {
+        let mut inset = PanelInset::new(kind);
+        inset.energy_range = (-5.5 - index as f64, 12.25 + index as f64);
+        inset.placement = placement;
+        inset.follow_offset = follow_offset;
+        CompositePanel {
+            inset: Some(inset),
+            ..CompositePanel::from(key)
+        }
+    })
+    .collect();
+    for storage in [DataStorage::Paths, DataStorage::Embedded] {
+        save_with_storage(&path, &project, storage).unwrap();
+        let saved = json_file(&path);
+        let panels = &saved["publication"]["recipes"][0]["recipe"]["panels"];
+        assert!(panels[0]["inset"].is_object());
+        assert_eq!(
+            panels[0]["inset"]["energy_range"],
+            serde_json::json!([-5.5, 12.25])
+        );
+        assert_eq!(panels[1]["inset"]["follow_offset"], false);
+        let reopened = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
+        assert_eq!(reopened.publication, project.publication);
+    }
+}
+
+#[test]
+fn publication_recipes_default_when_old_rxs_has_no_recipe_or_publication() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("no-recipe.rxs");
+    for (index, publication) in [None, Some(serde_json::json!({"figures": {}}))]
+        .into_iter()
+        .enumerate()
+    {
+        save_with_storage(&path, &ProjectFile::default(), DataStorage::Paths).unwrap();
+        let mut input = json_file(&path);
+        if let Some(publication) = publication {
+            input["publication"] = publication;
+        } else {
+            input.as_object_mut().unwrap().remove("publication");
+        }
+        std::fs::write(&path, serde_json::to_vec(&input).unwrap()).unwrap();
+        let project = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
+        assert_eq!(project.publication.recipes().len(), 1);
+        assert_eq!(project.publication.active_recipe_index(), 0);
+        assert_eq!(project.publication.active_recipe().name, "Figure 1");
+        assert_eq!(
+            project.publication.active_recipe().recipe,
+            crate::publication::figures::composer::CompositeRecipe::default()
+        );
+        save_with_storage(&path, &project, DataStorage::Paths).unwrap();
+        let json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert!(json["publication"].get("composite").is_none());
+        let restored = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
+        assert_eq!(restored.publication, project.publication);
+        let folder = temp.path().join(format!("default-report-{index}"));
+        crate::publication::export(publication_export_snapshot(restored, Vec::new()), &folder)
+            .unwrap();
+        assert!(folder.join("project.rxs").is_file());
+        assert!(folder.join("report.html").is_file());
+        let manifest: Value =
+            serde_json::from_slice(&std::fs::read(folder.join("manifest.json")).unwrap()).unwrap();
+        assert!(manifest["figures"].as_array().unwrap().is_empty());
+    }
+}
+
 #[test]
 fn bundled_copper_example_is_portable_and_reuses_its_extraction_folder() {
     let temp = tempfile::tempdir().unwrap();
@@ -229,6 +711,255 @@ fn joint_materialized_groups_keep_empty_locators_on_save_and_reopen() {
         assert_eq!(loaded.derived[0].mu, arrays);
         save_with_storage(&file, &loaded, mode).unwrap();
     }
+}
+
+#[test]
+fn fit_result_arrays_and_transforms_survive_reopen_and_old_projects_still_open() {
+    use nalgebra::DVector;
+    use rexafs::prelude::{DatasetResult, FeffFitResult, KweightResult, PathContribution};
+    use std::sync::Arc;
+    let temp = Temp::new();
+    // A 0.1.0 project predates saved result arrays and transforms.
+    let mut project = specimen(&temp.join("source"));
+    assert!(project.fit_results.is_empty());
+    assert!(project.fit_history[0].transforms.is_empty());
+    assert_eq!(project.current_fit, None);
+    assert!(!project.current_fit_needs_update);
+    assert_eq!(project.fit_history[0].params_fingerprint, None);
+
+    let id = project.fit_history[0].id;
+    let transform = project.fit_history[0].ranges.transform();
+    project.fit_history[0].transforms = vec![transform.clone()];
+    // The fit was current and up to date on a derived group when saved.
+    let fingerprint = |p: &ProjectFile| {
+        let group = &p.derived[0];
+        (
+            group.id,
+            group.fingerprint(group.params.as_ref().unwrap_or(&p.params)),
+        )
+    };
+    let (group_id, params_fingerprint) = fingerprint(&project);
+    let label = project.fit_history[0].group.clone();
+    project.fit_history[0].group_id = Some(group_id);
+    project.fit_history[0].params_fingerprint = Some(params_fingerprint);
+    project.current_fit = Some(id);
+    project.active_derived = Some(group_id);
+    let durable_id = crate::group_identity::GroupId::legacy_result(group_id);
+    project.derived[0].group_id = Some(durable_id.clone());
+    project.group_state.current = Some(durable_id.clone());
+    let k = DVector::from_fn(64, |i, _| 0.05 * i as f64);
+    // Distinct synthetic arrays exercise every retained plotting domain and
+    // nested dataset/k-weight/path block without depending on an optimizer.
+    let series = |offset, len| DVector::from_fn(len, |i, _| offset + i as f64 * 0.125);
+    let weighted = KweightResult {
+        kweight: 2.0,
+        kwin: series(0.0, 64),
+        data_chik: series(1.0, 64),
+        model_chik: series(2.0, 64),
+        data_chir_re: series(3.0, 16),
+        data_chir_im: series(4.0, 16),
+        data_chir_mag: series(5.0, 16),
+        model_chir_re: series(6.0, 16),
+        model_chir_im: series(7.0, 16),
+        model_chir_mag: series(8.0, 16),
+        q: series(0.0, 32),
+        data_chiq: series(9.0, 32),
+        model_chiq: series(10.0, 32),
+        ..Default::default()
+    };
+    let mut other_weight = weighted.clone();
+    other_weight.kweight = 3.0;
+    other_weight.model_chiq = series(11.0, 32);
+    let dataset = DatasetResult {
+        k: k.clone(),
+        data_chi: k.map(f64::sin),
+        model_chi: k.map(|x| 0.9 * x.sin()),
+        kmin: Some(0.5),
+        kmax: Some(3.0),
+        kwin: weighted.kwin.clone(),
+        r: series(0.0, 16),
+        rmin: Some(0.5),
+        rmax: Some(1.5),
+        data_chir_re: weighted.data_chir_re.clone(),
+        data_chir_im: weighted.data_chir_im.clone(),
+        model_chir_re: weighted.model_chir_re.clone(),
+        model_chir_im: weighted.model_chir_im.clone(),
+        model_chir_mag: weighted.model_chir_mag.clone(),
+        path_contributions: vec![PathContribution {
+            label: "Synthetic retained path".into(),
+            chi: series(12.0, 64),
+            chir_re: series(13.0, 16),
+            chir_im: series(14.0, 16),
+            chir_mag: series(15.0, 16),
+            chiq: series(16.0, 32),
+        }],
+        kweights: vec![2.0, 3.0],
+        q: weighted.q.clone(),
+        data_chiq: weighted.data_chiq.clone(),
+        model_chiq: weighted.model_chiq.clone(),
+        kweight_results: vec![weighted, other_weight],
+        ..Default::default()
+    };
+    let mut second_dataset = dataset.clone();
+    second_dataset.model_chi = k.map(|x| 0.8 * x.sin());
+    let mut result = FeffFitResult {
+        r_factor: 0.0123,
+        covariance: Some(vec![vec![0.25, 0.125], vec![0.125, 1.0]]),
+        correlation: Some(vec![vec![1.0, 0.25], vec![0.25, 1.0]]),
+        datasets: vec![dataset, second_dataset],
+        ..Default::default()
+    };
+    result.sync_primary_dataset_fields();
+    let unreadable = FeffFitResult {
+        r_factor: f64::NAN,
+        ..Default::default()
+    };
+    let mut second = project.fit_history[0].clone();
+    second.id = id + 1;
+    project.fit_history.push(second);
+    let mut third = project.fit_history[0].clone();
+    third.id = id + 2;
+    project.fit_history.push(third);
+    let mut historical_result = result.clone();
+    historical_result.r_factor = 0.0246;
+    project.fit_results = [
+        (id, Arc::new(result.clone())),
+        (id + 1, Arc::new(unreadable)),
+        (id + 2, Arc::new(historical_result.clone())),
+        (id + 99, Arc::new(result.clone())), // No history entry.
+    ]
+    .into();
+
+    for mode in [DataStorage::Paths, DataStorage::Embedded] {
+        let file = temp.join(&format!("fit-results-{mode:?}.rxs"));
+        save_with_storage(&file, &project, mode).unwrap();
+        let loaded = load(&file).unwrap();
+        // Non-finite and orphaned results are dropped, not the whole save.
+        assert_eq!(
+            loaded.fit_results.keys().copied().collect::<Vec<_>>(),
+            [id, id + 2]
+        );
+        assert_eq!(*loaded.fit_results[&id], result);
+        assert_eq!(*loaded.fit_results[&(id + 2)], historical_result);
+        assert_eq!(
+            loaded.fit_history[0].transforms,
+            std::slice::from_ref(&transform)
+        );
+        assert_eq!(loaded.fit_history.len(), 3);
+        // Reopening shows the saved current fit, and the reloaded, unedited
+        // spectrum is recognised as the fitted one (not stale).
+        assert_eq!(loaded.current_fit, Some(id));
+        assert!(!loaded.current_fit_needs_update);
+        assert_eq!(loaded.active_derived, Some(group_id));
+        assert_eq!(loaded.group_state.current, Some(durable_id.clone()));
+        let (group_id, params_fingerprint) = fingerprint(&loaded);
+        let entry = &loaded.fit_history[0];
+        assert!(entry.matches_spectrum(Some(group_id), &label, params_fingerprint));
+        assert!(!entry.matches_spectrum(None, &label, params_fingerprint));
+        assert!(!entry.matches_spectrum(Some(group_id), &label, params_fingerprint ^ 1));
+    }
+    // A current fit whose arrays cannot be saved is not restored.
+    project.current_fit = Some(id + 1);
+    project.current_fit_needs_update = true;
+    let file = temp.join("unreadable-current.rxs");
+    save_with_storage(&file, &project, DataStorage::Paths).unwrap();
+    let loaded = load(&file).unwrap();
+    assert_eq!(loaded.current_fit, None);
+    assert!(!loaded.current_fit_needs_update);
+}
+
+#[test]
+fn saved_fit_curves_survive_missing_original_sources_and_another_save() {
+    use nalgebra::DVector;
+    use rexafs::prelude::FeffFitResult;
+    use std::sync::Arc;
+
+    let temp = Temp::new();
+    let source = temp.join("source");
+    let mut project = specimen(&source);
+    let id = project.fit_history[0].id;
+    let result = FeffFitResult {
+        k: DVector::from_vec(vec![0.0, 0.5, 1.0]),
+        data_chi: DVector::from_vec(vec![0.0, 0.25, 0.5]),
+        model_chi: DVector::from_vec(vec![0.0, 0.125, 0.375]),
+        ..Default::default()
+    };
+    project.current_fit = Some(id);
+    project.current_fit_needs_update = true;
+    project.fit_results.insert(id, Arc::new(result.clone()));
+    // A historical result stays available even when the editable model now
+    // differs from the one in its history entry.
+    project.fit_ranges.kmin += 0.5;
+    let saved: Vec<_> = [DataStorage::Paths, DataStorage::Embedded]
+        .into_iter()
+        .map(|mode| {
+            let path = temp.join(&format!("missing-original-{mode:?}.rxs"));
+            save_with_storage(&path, &project, mode).unwrap();
+            (mode, path)
+        })
+        .collect();
+    std::fs::remove_dir_all(&source).unwrap();
+
+    for (mode, path) in saved {
+        let loaded = load(&path).unwrap();
+        assert_eq!(loaded.current_fit, Some(id));
+        assert!(loaded.current_fit_needs_update);
+        assert_eq!(*loaded.fit_results[&id], result);
+        assert_eq!(loaded.fit_history.len(), 1);
+        assert_eq!(loaded.fit_ranges.kmin, project.fit_ranges.kmin);
+        assert_ne!(loaded.fit_history[0].ranges.kmin, loaded.fit_ranges.kmin);
+        assert_eq!(
+            loaded.spectrum_file.as_ref().unwrap().is_file(),
+            mode == DataStorage::Embedded
+        );
+        let resaved = temp.join(&format!("missing-original-resaved-{mode:?}.rxs"));
+        save_with_storage(&resaved, &loaded, mode).unwrap();
+        let reopened = load(&resaved).unwrap();
+        assert_eq!(reopened.current_fit, Some(id));
+        assert!(reopened.current_fit_needs_update);
+        assert_eq!(*reopened.fit_results[&id], result);
+        assert_eq!(reopened.fit_history[0].values, loaded.fit_history[0].values);
+    }
+}
+
+#[test]
+fn displayed_fit_prefers_saved_selection_and_recovers_older_history_conservatively() {
+    use rexafs::prelude::FeffFitResult;
+    use std::sync::Arc;
+
+    let temp = Temp::new();
+    let mut project = specimen(&temp.join("source"));
+    let first_id = project.fit_history[0].id;
+    let mut latest = project.fit_history[0].clone();
+    latest.id = first_id + 1;
+    let latest_id = latest.id;
+    project.fit_history.push(latest);
+    let result = Arc::new(FeffFitResult::default());
+    let orphan_id = latest_id + 1;
+    project.fit_results = [
+        (first_id, result.clone()),
+        (latest_id, result.clone()),
+        (orphan_id, result),
+    ]
+    .into();
+
+    project.current_fit = Some(first_id);
+    assert_eq!(project.displayed_fit(), Some((first_id, false)));
+    project.current_fit_needs_update = true;
+    assert_eq!(project.displayed_fit(), Some((first_id, true)));
+    project.current_fit = None;
+    project.current_fit_needs_update = false;
+    assert_eq!(project.displayed_fit(), Some((latest_id, true)));
+    // Missing or inconsistent selection metadata must not hide owned history.
+    project.current_fit = Some(orphan_id);
+    assert_eq!(project.displayed_fit(), Some((latest_id, true)));
+    project.fit_results.remove(&latest_id);
+    project.current_fit = Some(latest_id);
+    assert_eq!(project.displayed_fit(), Some((first_id, true)));
+    project.fit_results.remove(&first_id);
+    assert_eq!(project.displayed_fit(), None);
+    project.fit_results.clear();
+    assert_eq!(project.displayed_fit(), None);
 }
 
 #[test]
@@ -818,6 +1549,69 @@ fn released_021_fixtures_preserve_weight_link_palette_and_publication() {
 }
 
 #[test]
+fn publication_series_colors_default_for_old_projects_and_survive_save_and_reopen() {
+    let temp = Temp::new();
+    for suffix in ["links", "embedded"] {
+        let mut project =
+            super::load_with_cache_root(&fixture(&format!("rexafs-0.2.1-{suffix}.rxs")), || {
+                Ok(temp.join(&format!("source-cache-{suffix}")))
+            })
+            .unwrap();
+        assert!(
+            project
+                .publication
+                .figures
+                .values()
+                .all(|options| options.series_colors.is_empty())
+        );
+        assert!(
+            project
+                .publication
+                .options("chi-k")
+                .series_colors
+                .is_empty()
+        );
+        assert!(
+            project
+                .publication
+                .active_recipe()
+                .recipe
+                .series_colors
+                .is_empty()
+        );
+
+        // Series keys are opaque: retain unfamiliar keys for future curves.
+        let future_key = "future:dataset/χ series \"v2\" #7";
+        let figure = project
+            .publication
+            .figures
+            .entry("chi-k".into())
+            .or_default();
+        figure.series_colors = [
+            ("data".into(), "#0072b2".into()),
+            (future_key.into(), "#e69f00".into()),
+        ]
+        .into();
+        project.publication.active_composite_mut().series_colors = [
+            ("data".into(), "#009e73".into()),
+            (future_key.into(), "#cc79a7".into()),
+        ]
+        .into();
+        let expected = project.publication.clone();
+
+        for mode in [DataStorage::Paths, DataStorage::Embedded] {
+            let saved = temp.join(&format!("series-colors-{suffix}-{mode:?}.rxs"));
+            save_with_storage(&saved, &project, mode).unwrap();
+            let reopened = super::load_with_cache_root(&saved, || {
+                Ok(temp.join(&format!("reopened-cache-{suffix}-{mode:?}")))
+            })
+            .unwrap();
+            assert_eq!(reopened.publication, expected);
+        }
+    }
+}
+
+#[test]
 fn released_020_fixtures_retain_import_state_and_historical_evidence() {
     for suffix in ["links", "embedded"] {
         let project = load(&fixture(&format!("rexafs-0.2.0-{suffix}.rxs"))).unwrap();
@@ -1286,6 +2080,7 @@ fn compact_defaults_preserve_explicit_fit_range_and_publication_settings() {
     for explicit in [false, true] {
         let mut project = load(&fixture("rexafs-0.1.0-links.rxs")).unwrap();
         project.fit_ranges.follow_transform = explicit;
+        project.fit_ranges.follow_window = explicit;
         let value = serde_json::to_value(&project).unwrap();
         let bytes = compact::encode(value.clone()).unwrap();
         assert_eq!(
@@ -1293,6 +2088,53 @@ fn compact_defaults_preserve_explicit_fit_range_and_publication_settings() {
             value
         );
         assert!(bytes.len() < serde_json::to_vec_pretty(&value).unwrap().len() * 3 / 4);
+    }
+}
+
+#[test]
+fn compact_fit_windows_preserve_custom_and_legacy_settings() {
+    use rexafs::prelude::FTWindow;
+    let mut project = load(&fixture("rexafs-0.1.0-links.rxs")).unwrap();
+    assert!(!project.fit_ranges.follow_window);
+    assert_eq!(project.fit_ranges.dk, 4.0);
+    assert_eq!(project.fit_ranges.window, FTWindow::KaiserBessel);
+    project.fit_ranges.window = FTWindow::Hanning;
+    project.fit_ranges.dk = 2.0;
+    project.fit_ranges.dk2 = Some(1.0);
+    project.fit_ranges.rwindow = FTWindow::Parzen;
+    project.fit_ranges.dr = 0.2;
+    project.fit_ranges.dr2 = Some(0.4);
+    let value = serde_json::to_value(&project).unwrap();
+    let bytes = compact::encode(value.clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(parse(std::str::from_utf8(&bytes).unwrap()).unwrap()).unwrap(),
+        value
+    );
+}
+
+#[test]
+fn omitted_old_fit_ranges_keep_legacy_windows_but_new_models_save_following() {
+    let legacy = parse(r#"{"version":1}"#).unwrap();
+    assert!(legacy.fit_ranges.follow_transform);
+    assert!(!legacy.fit_ranges.follow_window);
+    assert_eq!(legacy.fit_ranges.dk, 4.0);
+    assert_eq!(
+        legacy.fit_ranges.window,
+        rexafs::prelude::FTWindow::KaiserBessel
+    );
+    for ranges in [FitRanges::default(), FitRanges::legacy_defaults()] {
+        let project = ProjectFile {
+            version: 1,
+            fit_ranges: ranges.clone(),
+            ..Default::default()
+        };
+        let bytes = compact::encode(serde_json::to_value(&project).unwrap()).unwrap();
+        let reopened = parse(std::str::from_utf8(&bytes).unwrap()).unwrap();
+        assert!(reopened.fit_ranges == ranges);
+        if ranges.follow_window {
+            let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(value["fit_ranges"]["follow_window"], true);
+        }
     }
 }
 
@@ -1905,4 +2747,52 @@ fn removal_exclusions_roundtrip_linked_and_embedded_without_resurrection() {
         );
         assert!(source.is_file());
     }
+}
+
+#[test]
+fn unsaved_changes_follow_content_not_header_or_empty_sessions() {
+    // A fresh window has nothing to save, even with no saved fingerprint.
+    assert!(!ProjectFile::default().has_unsaved_changes(None));
+
+    let temp = tempfile::tempdir().unwrap();
+    let project = super::copper_example_in(temp.path()).unwrap();
+    // Imported work that was never saved must be offered for saving.
+    assert!(project.has_unsaved_changes(None));
+
+    let saved = project.content_fingerprint();
+    assert!(saved.is_some());
+    assert_eq!(project.clone().content_fingerprint(), saved);
+    assert!(!project.has_unsaved_changes(saved));
+
+    // Saving rewrites the header; that alone is not an edit.
+    let mut reheadered = project.clone();
+    reheadered.header = None;
+    assert!(!reheadered.has_unsaved_changes(saved));
+
+    // Reading the project's spectra after opening refills the parser
+    // diagnostics cache; that is not an edit (#151 follow-up).
+    let mut reread = project.clone();
+    let (id, group) = project
+        .source_groups
+        .first()
+        .map(|g| (g.id.clone(), g.path.clone()))
+        .unwrap();
+    reread.parser_evidence.insert(
+        id,
+        crate::source_evidence::ParserRecord {
+            path: group,
+            channel: Default::default(),
+            mapping_revision: 1,
+            diagnostics: Default::default(),
+            declared_edge: None,
+        },
+    );
+    assert!(!reread.has_unsaved_changes(saved));
+
+    let mut edited = project.clone();
+    edited.params.energy_offset_ev += 1.0;
+    assert!(edited.has_unsaved_changes(saved));
+
+    // Emptying a saved project is still a change.
+    assert!(ProjectFile::default().has_unsaved_changes(saved));
 }

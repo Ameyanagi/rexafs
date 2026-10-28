@@ -6,7 +6,7 @@ use crate::app::shell::{
     segment, segmented,
 };
 use crate::icons::Icon;
-use crate::publication::figures::{StylePreset, fit_figures, render_figure};
+use crate::publication::figures::{LegendPlacement, SERIES_PALETTE, StylePreset, render_figure};
 use crate::theme::Theme;
 use crate::widgets::numeric_field::{FieldEvent, FieldKind};
 use crate::widgets::text_input::InputEvent;
@@ -68,7 +68,7 @@ fn preset_icon(t: &Theme, index: usize, preset: StylePreset, selected: bool) -> 
 
 /// Attach a hover tooltip and matching accessibility description to a control,
 /// so explanations live on the control instead of as text under it.
-fn with_tip(control: Control, t: &Theme, text: impl Into<SharedString>) -> Control {
+pub(super) fn with_tip(control: Control, t: &Theme, text: impl Into<SharedString>) -> Control {
     let tip = Tooltip {
         label: text.into(),
         theme: *t,
@@ -79,7 +79,7 @@ fn with_tip(control: Control, t: &Theme, text: impl Into<SharedString>) -> Contr
 }
 
 /// Grey out a control and ignore its clicks while `enabled` is false.
-fn enabled_when(control: Control, enabled: bool) -> Control {
+pub(super) fn enabled_when(control: Control, enabled: bool) -> Control {
     control.when(!enabled, |d| {
         d.disabled(true).opacity(0.45).cursor_default()
     })
@@ -94,7 +94,129 @@ fn heading(t: &Theme, text: &'static str) -> gpui::Div {
         .child(text)
 }
 
+/// Settings edited by a curve's palette; series keys remain opaque strings.
+#[derive(Clone, Copy)]
+pub(super) enum ColourTarget {
+    /// Per-figure choices used by previews and individual/report exports.
+    Figure(&'static str),
+    /// Shared choices that override matching keys in every composer panel.
+    Composite,
+}
+
+/// A compact palette disclosure beside a curve, using the shared chip style.
+/// An A marks Auto, which leaves the renderer's colour assignment in control.
+pub(super) fn colour_swatch(
+    t: &Theme,
+    id: impl Into<gpui::ElementId>,
+    label: &str,
+    colour: Option<&str>,
+    open: bool,
+) -> Control {
+    let mut swatch = div()
+        .size(px(14.))
+        .rounded_sm()
+        .border_1()
+        .border_color(t.border);
+    if let Some(rgb) = colour
+        .and_then(|c| c.strip_prefix('#'))
+        .and_then(|c| u32::from_str_radix(c, 16).ok())
+    {
+        swatch = swatch.bg(gpui::rgb(rgb));
+    } else {
+        swatch = swatch.flex().items_center().justify_center().child("A");
+    }
+    let name = format!("Colour for {label}: {}", colour.unwrap_or("Auto"));
+    with_tip(chip(t, id, "", open), t, name.clone())
+        .name_if_empty(name)
+        .expanded(open)
+        .w(px(28.))
+        .px_1()
+        .flex_none()
+        .justify_center()
+        .child(swatch)
+}
+
 impl StudioApp {
+    /// Auto removes the override; palette choices store lowercase sRGB hex.
+    pub(super) fn publication_colour_choices(
+        &self,
+        target: ColourTarget,
+        key: &str,
+        label: &str,
+        current: Option<&str>,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let t = self.theme;
+        let mut choices = div().flex().flex_wrap().items_center().gap_1();
+        for (index, (name, colour)) in std::iter::once(("Auto", None))
+            .chain(
+                SERIES_PALETTE
+                    .into_iter()
+                    .map(|(name, colour)| (name, Some(colour))),
+            )
+            .enumerate()
+        {
+            let key = key.to_string();
+            let selected = current == colour;
+            let mut choice = with_tip(
+                chip(
+                    &t,
+                    ("publication-colour-choice", index),
+                    if colour.is_none() { "Auto" } else { "" },
+                    selected,
+                ),
+                &t,
+                format!(
+                    "{label}: {name}{}",
+                    colour.map_or(String::new(), |c| format!(" ({c})"))
+                ),
+            )
+            .name_if_empty(format!("{label}: {name}"));
+            if let Some(colour) = colour {
+                let rgb = u32::from_str_radix(&colour[1..], 16).expect("fixed palette hex");
+                choice = choice.w(px(25.)).px_1().justify_center().child(
+                    div()
+                        .size(px(13.))
+                        .rounded_sm()
+                        .border_1()
+                        .border_color(t.border)
+                        .bg(gpui::rgb(rgb)),
+                );
+            }
+            choices = choices.child(choice.on_click(cx.listener(move |this, _, _, cx| {
+                let colours = match target {
+                    ColourTarget::Figure(figure) => {
+                        &mut this
+                            .publish
+                            .settings
+                            .figures
+                            .entry(figure.into())
+                            .or_default()
+                            .series_colors
+                    }
+                    ColourTarget::Composite => {
+                        &mut this.publish.settings.active_composite_mut().series_colors
+                    }
+                };
+                if let Some(colour) = colour {
+                    colours.insert(key.clone(), colour.into());
+                } else {
+                    colours.remove(&key);
+                }
+                match target {
+                    ColourTarget::Figure(_) => this.refresh_publication_preview(cx),
+                    ColourTarget::Composite => cx.notify(),
+                }
+            })));
+        }
+        div().flex().flex_col().gap_1().child(choices).child(
+            div()
+                .text_size(px(11.))
+                .text_color(t.text_muted)
+                .child("Okabe–Ito · Color Universal Design (2008)"),
+        )
+    }
+
     fn refresh_publication_source(&mut self, cx: &mut Context<Self>) {
         let ready = self.publication_ready();
         let source = (
@@ -121,22 +243,7 @@ impl StudioApp {
             .figures
             .get(self.publish.selected)
             .map(|f| f.key);
-        let current = self.tool_target(self.selected.unwrap_or(crate::app::NO_ENTRY));
-        let mut figures = publication_spectrum_figures(
-            current.as_ref(),
-            self.spectrum_group.as_ref(),
-            self.spectrum.as_ref(),
-            self.spectrum_quantity,
-            self.stale_plots.is_some(),
-            self.load_running,
-        );
-        if let Some(result) = &self.fit_result {
-            figures.extend(fit_figures(&crate::joint_fitting::result_view(
-                result,
-                self.joint.result_index,
-            )));
-        }
-        self.publish.figures = figures.into_iter().map(Arc::new).collect();
+        self.publish.figures = self.publication_figures();
         self.publish.selected = self
             .publish
             .figures
@@ -421,6 +528,49 @@ impl StudioApp {
         .detach();
     }
 
+    /// Write the selected figure's curve data and an editable matplotlib
+    /// script into a new folder (see `publication::python_export`).
+    fn export_publication_python(&mut self, cx: &mut Context<Self>) {
+        if !self.require_publication_source(cx) {
+            return;
+        }
+        self.refresh_publication_source(cx);
+        let Some(figure) = self.publish.figures.get(self.publish.selected).cloned() else {
+            return;
+        };
+        let options = self.publish.settings.options(figure.key);
+        let name = format!("rexafs-{}-matplotlib", figure.key);
+        let home = crate::settings::home_dir().unwrap_or_else(std::env::temp_dir);
+        let rx = cx.prompt_for_new_path(&home, Some(&name));
+        cx.spawn(async move |this, cx| {
+            if let Ok(Ok(Some(path))) = rx.await {
+                let result = cx
+                    .background_executor()
+                    .spawn(async move {
+                        crate::publication::python_export::write_python_export(
+                            &figure, &options, &path,
+                        )
+                    })
+                    .await;
+                this.update(cx, |app, cx| {
+                    match result {
+                        Ok(script) => {
+                            app.set_status(
+                                crate::app::StatusKind::Success,
+                                format!("Saved {}", script.display()),
+                            );
+                            app.publish.saved_figure = Some(script);
+                        }
+                        Err(error) => app.publish.error = Some(error),
+                    }
+                    cx.notify();
+                })
+                .ok();
+            }
+        })
+        .detach();
+    }
+
     pub(crate) fn publish_panel(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
         self.refresh_publication_source(cx);
         let t = self.theme;
@@ -462,17 +612,9 @@ impl StudioApp {
                             &t,
                             "Copy the Markdown analysis record (analysis.md) to the clipboard.",
                         )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                this.analysis_snapshot().markdown(),
-                            ));
-                            this.set_status(
-                                crate::app::StatusKind::Success,
-                                "Analysis record copied",
-                            );
-                            cx.notify();
-                        })),
+                        .on_click(cx.listener(|this, _, _, cx| this.copy_analysis_record(cx))),
                     )
+                    .children(self.manuscript_export_buttons(cx))
                     .child(
                         enabled_when(
                             with_tip(
@@ -535,6 +677,9 @@ impl StudioApp {
                         ),
                 )
             });
+        if self.publish.composer.open {
+            return self.composer_panel(header, cx);
+        }
         let style_open = !self.ui.sections.contains("Publication style closed");
         let caption_open = self.ui.sections.contains("Publication caption");
         let mut controls = div()
@@ -547,7 +692,9 @@ impl StudioApp {
             .flex_col()
             .gap_2()
             .pr_3();
-        controls = controls.child(heading(&t, "Figures"));
+        controls = controls
+            .child(self.publish_mode_switch(cx))
+            .child(heading(&t, "Figures"));
         let more_figures = self.ui.sections.contains("Publication more figures");
         for common in [true, false] {
             if !common {
@@ -586,6 +733,7 @@ impl StudioApp {
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.publish.selected = index;
+                        this.publish.colour_series = None;
                         this.publication_fields(cx);
                         this.refresh_publication_preview(cx);
                     })),
@@ -594,7 +742,9 @@ impl StudioApp {
         }
         if figure
             .as_ref()
-            .is_some_and(|f| f.normalized_series.is_some())
+            // Raw μ(E) keeps normalized data only for insets; its display
+            // ignores the normalized option, so it gets no mode selector.
+            .is_some_and(|f| f.key != "mu-energy" && f.normalized_series.is_some())
         {
             let mut modes = segmented(&t);
             for (i, (normalized, label)) in [(false, "Flattened"), (true, "Normalized")]
@@ -639,6 +789,7 @@ impl StudioApp {
                     || options.grid.is_some()
                     || options.guides
                     || !options.legend
+                    || options.legend_position != LegendPlacement::Auto
                     || !options.hidden.is_empty()
                     || !options.shown.is_empty()
                     || options.xmin.is_some()
@@ -701,7 +852,7 @@ impl StudioApp {
                                 false,
                             ),
                             &t,
-                            "Copy size, DPI, font size, line width, legend, grid and guides from this figure to every figure in the report.",
+                            "Copy size, DPI, font size, line width, legend and its placement, grid and guides from this figure to every figure in the report.",
                         )
                         .on_click(cx.listener(|this, _, _, cx| {
                             let keys: Vec<&'static str> =
@@ -738,22 +889,6 @@ impl StudioApp {
                     .flex_wrap()
                     .gap_1()
                     .child(
-                        chip(&t, "publication-legend", "Legend", options.legend).on_click(
-                            cx.listener(|this, _, _, cx| {
-                                if let Some(f) = this.publish.figures.get(this.publish.selected) {
-                                    let o = this
-                                        .publish
-                                        .settings
-                                        .figures
-                                        .entry(f.key.into())
-                                        .or_default();
-                                    o.legend = !o.legend;
-                                    this.refresh_publication_preview(cx);
-                                }
-                            }),
-                        ),
-                    )
-                    .child(
                         chip(&t, "publication-grid", "Grid", options.grid.unwrap_or(true))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 if let Some(f) = this.publish.figures.get(this.publish.selected) {
@@ -785,6 +920,57 @@ impl StudioApp {
                         ),
                     ),
             );
+            controls = controls.child(heading(&t, "Legend"));
+            let mut legend = div().flex().flex_wrap().gap_1();
+            for (i, placement) in LegendPlacement::ALL
+                .into_iter()
+                .map(Some)
+                .chain([None])
+                .enumerate()
+            {
+                let selected = match placement {
+                    Some(p) => options.legend && options.legend_position == p,
+                    None => !options.legend,
+                };
+                let tip = match placement {
+                    Some(LegendPlacement::Auto) => {
+                        "Place the legend in the inside corner that covers the least of the curves, or above the plot when every corner covers data (recommended)."
+                    }
+                    Some(LegendPlacement::Outside) => {
+                        "Place the legend to the right of the plot; the plot area narrows to make room."
+                    }
+                    Some(_) => "Place the legend in this corner of the plot.",
+                    None => "Hide the legend.",
+                };
+                legend = legend.child(
+                    with_tip(
+                        chip(
+                            &t,
+                            ("publication-legend", i),
+                            placement.map_or("Off", LegendPlacement::label),
+                            selected,
+                        ),
+                        &t,
+                        tip,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(f) = this.publish.figures.get(this.publish.selected) {
+                            let o = this
+                                .publish
+                                .settings
+                                .figures
+                                .entry(f.key.into())
+                                .or_default();
+                            o.legend = placement.is_some();
+                            if let Some(p) = placement {
+                                o.legend_position = p;
+                            }
+                            this.refresh_publication_preview(cx);
+                        }
+                    })),
+                );
+            }
+            controls = controls.child(legend);
             for (label, field) in ["Title", "X label", "Y label"]
                 .into_iter()
                 .zip(self.publish.labels.iter().take(3))
@@ -795,7 +981,7 @@ impl StudioApp {
                 div()
                     .text_size(px(11.))
                     .text_color(t.text_muted)
-                    .child("Typst math: $k^2 chi(k)$"),
+                    .child("Text is literal; Typst math in $…$, e.g. $k^2 chi(k)$"),
             );
             controls = controls.child(heading(&t, "Axis limits"));
             for field in self.publish.numbers.iter().skip(5) {
@@ -803,36 +989,79 @@ impl StudioApp {
             }
             controls = controls.child(heading(&t, "Curves"));
             if let Some(figure) = &figure {
-                let mut curves = div().flex().flex_wrap().gap_1();
-                for series in figure.series(&options) {
+                let mut curves = div().flex().flex_col().gap_1();
+                for (series, can_hide) in figure
+                    .series(&options)
+                    .iter()
+                    .map(|s| (s, true))
+                    .chain(figure.residual.iter().flatten().map(|s| (s, false)))
+                {
                     let key = series.key.clone();
                     let visible = series.visible(&options);
-                    curves = curves.child(
-                        chip(
+                    let colour = options.series_colors.get(&key).map(String::as_str);
+                    let open = self.publish.colour_series.as_ref() == Some(&key);
+                    let mut row = div().flex().items_center().gap_1();
+                    if can_hide {
+                        let key = key.clone();
+                        row = row.child(
+                            chip(
+                                &t,
+                                SharedString::from(format!("publication-series-{key}")),
+                                series.label.clone(),
+                                visible,
+                            )
+                            .min_w_0()
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    if let Some(f) = this.publish.figures.get(this.publish.selected)
+                                    {
+                                        let o = this
+                                            .publish
+                                            .settings
+                                            .figures
+                                            .entry(f.key.into())
+                                            .or_default();
+                                        if visible {
+                                            o.shown.remove(&key);
+                                            o.hidden.insert(key.clone());
+                                        } else {
+                                            o.hidden.remove(&key);
+                                            o.shown.insert(key.clone());
+                                        }
+                                        this.refresh_publication_preview(cx);
+                                    }
+                                },
+                            )),
+                        );
+                    } else {
+                        row = row.child(div().text_size(px(11.5)).child(series.label.clone()));
+                    }
+                    row = row.child(
+                        colour_swatch(
                             &t,
-                            SharedString::from(format!("publication-series-{key}")),
-                            series.label.clone(),
-                            visible,
+                            SharedString::from(format!("publication-colour-{key}")),
+                            &series.label,
+                            colour,
+                            open,
                         )
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(f) = this.publish.figures.get(this.publish.selected) {
-                                let o = this
-                                    .publish
-                                    .settings
-                                    .figures
-                                    .entry(f.key.into())
-                                    .or_default();
-                                if visible {
-                                    o.shown.remove(&key);
-                                    o.hidden.insert(key.clone());
-                                } else {
-                                    o.hidden.remove(&key);
-                                    o.shown.insert(key.clone());
-                                }
-                                this.refresh_publication_preview(cx);
-                            }
+                            this.publish.colour_series =
+                                if open { None } else { Some(key.clone()) };
+                            cx.notify();
                         })),
                     );
+                    curves = curves.child(row);
+                    if open {
+                        curves = curves.child(self.publication_colour_choices(
+                            ColourTarget::Figure(figure.key),
+                            &series.key,
+                            &series.label,
+                            colour,
+                            cx,
+                        ));
+                    }
                 }
                 controls = controls.child(curves);
             }
@@ -907,6 +1136,22 @@ impl StudioApp {
                 })),
             );
         }
+        let python_enabled = figure.is_some() && ready;
+        save = save.child(
+            enabled_when(
+                with_tip(
+                    button(&t, "export-figure-python", "Data + Python script…", false),
+                    &t,
+                    "Export data + Python script: a new folder with one CSV per visible curve and make_figure.py, which redraws this figure with matplotlib.",
+                ),
+                python_enabled,
+            )
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if python_enabled {
+                    this.export_publication_python(cx);
+                }
+            })),
+        );
         if let Some(path) = self.publish.saved_figure.clone() {
             save = save.child(
                 icon_button(

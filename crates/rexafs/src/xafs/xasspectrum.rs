@@ -1367,6 +1367,67 @@ impl XASSpectrum {
         self.e0
     }
 
+    /// Fit-range endpoints that the calculated stages limited to this scan's
+    /// measured data (since 0.2.15).
+    ///
+    /// Pre/post-edge normalization limits its energy windows (offsets from E0 in
+    /// eV) and AUTOBK caps its `kmax` (Å⁻¹) instead of failing on a short scan;
+    /// the stored settings keep the requested values. Each entry names the
+    /// setting with its requested and used value, recomputed from the current
+    /// settings and energy grid for stages that have results. Empty when nothing was limited,
+    /// before calculation, for MBACK (which checks its own regions) and for the
+    /// legacy `ndarray-compat` backend. Calculates nothing.
+    pub fn range_adjustments(&self) -> Vec<super::ranges::RangeAdjustment> {
+        let mut adjustments = Vec::new();
+        #[cfg(not(feature = "ndarray-compat"))]
+        if let Some(energy) = &self.energy {
+            if let Some(normalization::NormalizationMethod::PrePostEdge(method)) =
+                &self.normalization
+            {
+                if method.get_norm().is_some() {
+                    adjustments.extend(method.range_adjustments(energy));
+                }
+            }
+            if let Some(background::BackgroundMethod::AUTOBK(method)) = &self.background {
+                if method.chi.is_some() {
+                    adjustments.extend(method.range_adjustments(energy));
+                }
+            }
+        }
+        adjustments
+    }
+
+    /// Reasons not to trust the calculated normalization (since 0.2.15).
+    ///
+    /// For pre/post-edge normalization this flags a post-edge fit with fewer
+    /// than five points or narrower than 20 eV, and an edge step that is
+    /// non-finite, non-positive or below 10⁻³ of the μ span (see
+    /// [`super::normalization_checks`]); for MBACK only the edge-step check
+    /// applies. Results are reported, never changed. Empty before
+    /// normalization and for the legacy `ndarray-compat` backend. Calculates nothing.
+    pub fn normalization_warnings(&self) -> Vec<super::normalization_checks::NormalizationWarning> {
+        #[cfg(not(feature = "ndarray-compat"))]
+        if let (Some(energy), Some(mu)) = (&self.energy, &self.mu) {
+            match &self.normalization {
+                Some(normalization::NormalizationMethod::PrePostEdge(method)) => {
+                    return method.normalization_warnings(energy, mu);
+                }
+                Some(method) => {
+                    let mu_span = mu.max() - mu.min();
+                    return method
+                        .get_edge_step()
+                        .and_then(|step| {
+                            super::normalization_checks::edge_step_warning(step, mu_span)
+                        })
+                        .into_iter()
+                        .collect();
+                }
+                None => {}
+            }
+        }
+        Vec::new()
+    }
+
     /// Copy normalized absorption in edge-step units on the current energy grid.
     /// Returns `None` until normalization succeeds or after it is invalidated.
     /// When `preserves_prepared_values()` is true this copies the supplied

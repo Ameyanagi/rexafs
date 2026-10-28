@@ -17,7 +17,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.2.14"
+version = "0.2.15"
 edition = "2021"
 rust-version = "1.98"
 authors = ["Ameyanagi <contact@ameyanagi.com>"]
@@ -47,7 +47,7 @@ apex-solver = { version = "1.4.0", default-features = false }
 levenberg-marquardt = "0.15.0"
 # Latest compatible line for levenberg-marquardt 0.15's public matrix types.
 nalgebra = { version = "0.34.2", features = ["serde-serialize"] }
-# apex-solver 1.4 still exposes nalgebra 0.33 at its solver boundary.
+# apex-solver 1.5 still exposes nalgebra 0.33 at its solver boundary.
 nalgebra-apex = { package = "nalgebra", version = "0.33.3" }
 num-complex = { version = "0.4.6", features = ["serde"] }
 polyfit-rs = "0.2.2"
@@ -60,17 +60,17 @@ flate2 = "1.1.10"
 pest = "2.9.1"
 pest_derive = "2.9.1"
 thiserror = "2.0.20"
-ruviz = { version = "0.14.2", default-features = false }
+ruviz = { version = "0.15.2", default-features = false }
 # GUI stack. `gpui = "0.2.2"` (latest on crates.io) is redirected by the
 # [patch.crates-io] below to the git-pinned gpui (zed rev 3060e417...) that
 # gpui_platform also resolves to, so the whole workspace shares exactly one gpui.
 gpui = "0.2.2"
 # 0.14.2 keeps plot menus above host overlays and exposes their open state.
-ruviz-gpui = { version = "0.14.2", features = ["gpu", "3d"] }
+ruviz-gpui = { version = "0.15.2", features = ["gpu", "3d"] }
 refeff = { version = "0.4.0", default-features = false, features = ["exafs"] }
 feff10 = { version = "0.2.4", features = ["prebuilt"] }
 
-rexafs = { version = "0.2.14", path = "crates/rexafs" }
+rexafs = { version = "0.2.15", path = "crates/rexafs" }
 
 [patch.crates-io]
 gpui = { git = "https://github.com/zed-industries/zed", rev = "3060e4170ea5ef0e6886b9ac1853aaead9ddd59f" }

@@ -2,6 +2,136 @@
 
 ## Unreleased
 
+## 0.2.15 (release preparation)
+
+- Update apex-solver to 1.5. EXAFS fit bounds are still enforced by rexafs
+  itself, so fit results are unchanged. apex-io 0.4 no longer pulls in zstd,
+  which removes the zstd advisory exceptions from `deny.toml`.
+- Security: CI installs the newest Node 24 (24.22.1 or later) and Bun 1.4.4,
+  which fix the Brotli remote-code-execution flaw CVE-2026-111497
+  (Node2Shell/HTTP2Shell). The website now uses Bun with `bun.lock`, and its
+  vulnerable packages (Vite, undici, devalue, zod, sharp, Astro and others) are
+  updated. Updated rustls, rustls-webpki, webpki-roots and zip (9.1) for RustSec
+  advisories, and the Larch fixture environment's urllib3, Pillow, pip,
+  requests and related packages. CI now fails on RustSec vulnerabilities
+  (`cargo deny check advisories`); `deny.toml` records the remaining
+  exceptions and why they are not reachable. Workflows no longer keep checkout
+  credentials, and the release job no longer restores a package cache.
+  Dependabot now also covers the website and the Larch fixture environment.
+- Reuse trusted Cargo dependency caches for Linux and Windows desktop builds,
+  populate the Windows core cache, and run benchmarks alongside other Rust
+  checks while retaining all release qualification.
+- Let new FEFF fits follow each spectrum's Process transform window and taper
+  parameters, independently of the k-weight choice, with explicit custom k and
+  R windows available. Keep older projects' Kaiser–Bessel/dk = 4 fitting
+  convention, and preserve the effective windows in fit history and reports.
+- Include every named multi-panel recipe in reports and supporting information,
+  in insertion order after the individual figures. Save PNG, SVG, PDF and
+  plain-text captions under `figures/composed/`, with optional matplotlib
+  scripts and unshifted curve CSVs; keep colliding filenames distinct. Resolve
+  all recipe samples against the current workspace, including unmarked and
+  uncached groups, while retaining the project's normal saved scope. Report
+  missing inputs and failed recipes without stopping other recipes.
+- Export the active multi-panel recipe as unshifted curve CSVs and an editable
+  matplotlib script, including fit residual strips and panel insets. Edit main
+  and inset display offsets in the script, then save PDF, SVG and PNG at the
+  recipe's printed size and DPI with only Python 3, numpy and matplotlib.
+- Add optional publication-panel insets for pre-edge and white-line detail or
+  normalized differences from the first selected sample, with editable E₀-relative
+  ranges, placement and scaled display offsets in previews and image exports.
+  Save inset choices per panel while preserving older project recipes.
+- Replace publication composer curve-end labels with **Above curves**, the
+  default for new panels. Place complete coloured labels inside the axes above
+  each curve, choosing the side with fewer curve collisions, then the flatter
+  spans under the labels; an inset forces the opposite side. Preserve
+  **Legend** for older panels without a saved label mode; migrate saved curve-end
+  choices to **Above curves**.
+- Select several workspace samples per publication composer panel, share or
+  override their ordered selection, and stack main curves with vertical offsets.
+  Set short figure labels with full sample names retained in captions. Choose an
+  ordered viridis, Okabe–Ito or workspace sample palette, use one legend per figure
+  in Legend mode and no grid by default, and draw inward ticks on all four sides
+  with four minor ticks between major ticks. Process uncached samples automatically
+  and preserve legacy recipes on project load.
+- Choose per-curve colours in Publish from the eight-colour Okabe–Ito palette
+  or Auto, and share colours across composer panels. Save choices in `.rxs`
+  projects and apply them to previews, image exports and matplotlib scripts.
+- Ask to save, discard or cancel before closing the window or quitting with
+  unsaved project changes; empty or unmodified sessions close without asking.
+- Start Save project with **Include source files** selected for a portable
+  project; **Link source files** remains an explicit smaller-file option.
+- Merge compatible saved spectra from their retained arrays and recorded
+  measurement channels without requiring the original source path. Use the
+  merged result as an alignment standard in the same session; the preview resumes
+  when the selected spectrum finishes loading.
+- Reopen the macOS analysis window from the Dock and route Finder `.rxs` opens
+  through the project loader, preserving the unsaved-changes prompt.
+- Reject zero, non-finite and out-of-range structure radius edits, restore the
+  last valid radius, and keep the preview and controls available. The candidate
+  preview and calculation continue to share a radius of 2–12 Å. Keep text fields
+  editable inside the structure appearance popup.
+- Use sentence-case scientific labels with units for Normalize, Background and
+  Transform parameters (for example "Spline k max", "Victoreen n"),
+  and show a hover explanation on every label with its unit, Auto value and the
+  matching Larch or Athena name.
+- Show each group on two lines: the name, shortened at the end, then its source
+  file, quantity and E₀ when known, so similarly named references stay
+  distinguishable. Only the current group is highlighted; marks use checkboxes.
+- Write publication SVG width and height in inches with a pixel `viewBox`, so a
+  3.3 in figure imports at 3.3 in instead of about 10 in.
+- Write plain publication SVG labels as editable `<text>` (ruviz 0.15.1);
+  labels with math or markup stay outlined.
+- Report degenerate normalization, Wavelet failures and XANES peak-fit failures
+  in the problems drawer, and add a "Show problems" command.
+- Run a queued background recompute after a failed job, so settings changed
+  during the failure are not left stale.
+- Show reduced χ² as "n/a (noise not estimated)" when ε was not estimated from
+  the data.
+- Save fit curves with the project and reopen the displayed fit in Fit → Results
+  without refitting. Preserve the **Needs update** warning when its inputs or
+  model changed; retained curves remain available when original sources are missing.
+- Fill the Used column of the copied analysis record with resolved Auto values
+  and data-limited ranges.
+- Redraw MCR/PCA/LCF analysis boundaries when a form opens or changes, and stop
+  showing an analysis result card while Deglitch or Align is open.
+- Name fit parameters by symbol, unit and path (for example "ΔR (Å) · Cu–Cu
+  2.557 Å") and fitted paths by their scatterers and distance.
+- Clear stale RMC run messages when a run ends, and report the outcome and
+  completed attempts in the footer.
+- Merge Normalize, Background and Transform into one Process stage with linked
+  μ(E), normalized μ(E), kʷχ(k) and |χ(R)| plots that show every range on every
+  plot it affects; ⌘1–⌘5 now select Data, Process, Fit, Series and Publish.
+- Warn "Normalization unreliable" when the post-edge fit has too few points or
+  too short a span, or the edge step is not trustworthy, both in the problems
+  drawer and under Post-edge start.
+- Add Preferences (Settings…, ⌘, / Ctrl+,) and an About panel with version,
+  commit, update channel, licence and third-party notices.
+- Add a legend placement setting whose Auto choice avoids the data, use fewer x
+  ticks on narrow figures, extend the |χ(R)| range to the back-transform window,
+  and show typed figure labels literally.
+- Add "Fit + residual" figures for χ(k) and |χ(R)|.
+- Scale k-space publication figures symmetrically about zero.
+- Export a figure as CSV data plus an editable matplotlib script.
+- Export the latest fit's parameters as a LaTeX, CSV or Word table with
+  uncertainties rounded to their significant figures, and export a
+  supporting-information zip with the report, a self-contained project and CSV
+  data.
+- Add fit statistics tables to reports, and write the methods paragraph from
+  the settings actually applied.
+- Draw built-in plot labels and legends in Arial-style sans-serif text instead
+  of serif Typst math, in the app, exported figures and matplotlib scripts.
+- Add a Multi-panel mode to Publish that lays out XANES, χ(k), χ(R) and fit
+  figures as labelled (a), (b), (c) panels at journal column widths, with a
+  combined caption and PNG, TIFF, SVG and PDF export.
+- Save named multi-panel recipes with New, Duplicate, Rename and confirmed
+  Delete controls; migrate the existing layout to Figure 1, suggest filenames
+  from recipe names and add plain-text caption saving.
+- Fit publication legend boxes to their labels (ruviz 0.15.2); legends no
+  longer show empty space to the right of the series names.
+
+See the [release notes](doc/release-notes-0.2.15.md) and
+[qualification record](doc/validation/2026-10-29-release-0.2.15/review.md).
+
 ## 0.2.14 (2026-09-24)
 
 - Keep Live acquisition visible in a compact sidebar or separate monitor while

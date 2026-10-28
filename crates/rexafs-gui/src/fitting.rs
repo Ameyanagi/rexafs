@@ -215,11 +215,11 @@ impl FitSpaceSpec {
     }
 }
 
-/// Desktop fit intervals and weighting, copied into a core fit transform.
+/// Desktop fit intervals, weighting and windows, copied into a core fit transform.
 ///
-/// A new model follows the processing k-weight. Call [`Self::resolved`] with
-/// the spectrum's effective processing weight before constructing a fit. The
-/// stored multi-weight list is used only when following is disabled.
+/// A new model independently follows the processing k-weight and k window.
+/// Call [`Self::resolved_with_params`] with the spectrum's processing settings
+/// before constructing a fit. Older projects retain their original windows.
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct FitRanges {
@@ -227,6 +227,28 @@ pub struct FitRanges {
     /// their explicitly saved weights when this field is absent.
     #[serde(default)]
     pub follow_transform: bool,
+    /// Follow the processing k-window family and its two taper parameters.
+    /// True for new models; an absent saved field means false so legacy fits
+    /// retain Kaiser–Bessel with dk = 4. This does not copy k/R ranges, FFT grid
+    /// settings or the R-space filter, and is independent of k-weight following.
+    #[serde(default)]
+    pub follow_window: bool,
+    /// Explicit k-window family; default Kaiser–Bessel, as in Larch feffit.
+    /// Used when `follow_window` is false. K-space residuals omit this window.
+    pub window: FTWindow,
+    /// Low-k taper parameter; default 4.0. Hanning uses Å⁻¹; Kaiser–Bessel
+    /// also uses this value as its shape parameter, and FHanning uses fractions.
+    pub dk: f64,
+    /// High-k taper parameter in the same convention as dk; None follows dk.
+    pub dk2: Option<f64>,
+    /// Explicit R filter for R/Q residuals; default Hanning. This does not
+    /// follow the processing back-transform window.
+    pub rwindow: FTWindow,
+    /// Low-R taper parameter; default 0 Å gives a hard Hanning boundary.
+    /// Other families use the conventions documented on `FTWindow`.
+    pub dr: f64,
+    /// High-R taper parameter in the same convention as dr; None follows dr.
+    pub dr2: Option<f64>,
     /// Lower k bound in Å⁻¹; default 2.0.
     pub kmin: f64,
     /// Upper k bound in Å⁻¹; default 12.0. Must exceed `kmin`.
@@ -256,6 +278,13 @@ impl Default for FitRanges {
     fn default() -> Self {
         Self {
             follow_transform: true,
+            follow_window: true,
+            window: FTWindow::KaiserBessel,
+            dk: 4.0,
+            dk2: None,
+            rwindow: FTWindow::Hanning,
+            dr: 0.0,
+            dr2: None,
             kmin: 2.0,
             kmax: 12.0,
             rmin: 1.0,
@@ -269,6 +298,16 @@ impl Default for FitRanges {
 }
 
 impl FitRanges {
+    /// Defaults for an omitted fit-ranges object in a format-1 project written
+    /// before window controls. Weight following retains its historical default;
+    /// the window stays fixed at Kaiser–Bessel, dk = 4.
+    pub(crate) fn legacy_defaults() -> Self {
+        Self {
+            follow_window: false,
+            ..Self::default()
+        }
+    }
+
     /// AUTOBK removes signal below Rbkg. Reject this range before constructing
     /// a solver, including when processing settings came from a saved project.
     pub(crate) fn validate_background(&self, rbkg: f64) -> Result<(), String> {
@@ -276,7 +315,9 @@ impl FitRanges {
             return Err("The spectrum has an invalid background Rbkg.".into());
         }
         if !self.valid() {
-            return Err("Set valid k and R ranges: minimum must be below maximum.".into());
+            return Err(
+                "Set increasing k/R ranges and finite, nonnegative window parameters.".into(),
+            );
         }
         if self.rmin < rbkg {
             return Err(format!(
@@ -299,8 +340,31 @@ impl FitRanges {
         result
     }
 
+    /// Return a copy with independently followed k-weight and k window resolved
+    /// for this spectrum. Automatic processing window values use `XrayFFTF`'s
+    /// defaults (Kaiser–Bessel, dk = 1); dk2 = None follows dk. Fit ranges, FFT
+    /// sampling and the explicit R filter remain unchanged. Does not mutate self.
+    pub fn resolved_with_params(&self, params: &crate::params::PipelineParams) -> Self {
+        let mut result = self.resolved(params.fft_kweight);
+        if self.follow_window {
+            let defaults = XrayFFTF::default();
+            result.window = params.fft_window.or(defaults.window).unwrap_or_default();
+            result.dk = params.fft_dk.or(defaults.dk).unwrap_or(1.0);
+            result.dk2 = params.fft_dk2;
+        }
+        result
+    }
+
+    /// Describe the resolved k window and R filter, including asymmetric taper
+    /// parameters. Resolve following first for a live model; archived ranges
+    /// already contain the effective values used by that fit.
+    pub fn window_summary(&self) -> String {
+        crate::fit_report::window_text(&self.transform())
+    }
+
     /// Check finite, increasing, nonnegative k/R ranges and finite effective
-    /// weights. This does not compare R min with Rbkg or validate sample data.
+    /// weights, plus finite nonnegative taper parameters. This does not compare
+    /// R min with Rbkg or validate sample data.
     pub fn valid(&self) -> bool {
         [self.kmin, self.kmax, self.rmin, self.rmax]
             .iter()
@@ -310,6 +374,10 @@ impl FitRanges {
             && self.kmin < self.kmax
             && self.rmin < self.rmax
             && self.effective_kweights().iter().all(|v| v.is_finite())
+            && [Some(self.dk), self.dk2, Some(self.dr), self.dr2]
+                .into_iter()
+                .flatten()
+                .all(|v| v.is_finite() && v >= 0.0)
     }
 
     /// Return an owned weight list, with the primary weight first if present
@@ -364,8 +432,37 @@ impl FitRanges {
             rmin: self.rmin,
             rmax: self.rmax,
             fitspace: self.fitspace.core(),
+            window: self.window,
+            dk: self.dk,
+            dk2: self.dk2,
+            rwindow: self.rwindow,
+            dr: self.dr,
+            dr2: self.dr2,
             ..FeffFitTransform::default()
         }
+    }
+}
+
+/// Text shown instead of reduced χ² when the fit had no measurement-noise estimate.
+pub const REDUCED_CHI_SQUARE_WITHOUT_NOISE: &str = "n/a (noise not estimated)";
+
+/// Formats reduced χ² for display, or [`REDUCED_CHI_SQUARE_WITHOUT_NOISE`]
+/// when the fit did not estimate the measurement noise ε.
+///
+/// Reduced χ² = χ² / (N_idp − N_var) is a goodness-of-fit statistic only when
+/// each residual is divided by the measurement uncertainty ε, so that a good
+/// model gives a value near 1. IFEFFIT and Larch estimate ε from the high-R part
+/// of |χ(R)|, where little structural signal is expected (Newville, *J.
+/// Synchrotron Rad.* 8, 322–324 (2001), <https://doi.org/10.1107/S0909049500016964>;
+/// Larch `feffit` documentation, <https://xraypy.github.io/xraylarch/xafs_feffit.html>).
+/// Without **ε from noise**, rexafs divides by a unit placeholder (ε = 1), and
+/// the number only reflects the arbitrary scale of χ, so it is hidden. The
+/// stored value is unchanged; enabling **ε from noise** and refitting shows it.
+pub fn reduced_chi_square_text(value: f64, noise_estimated: bool) -> String {
+    if noise_estimated {
+        format!("{value:.4e}")
+    } else {
+        REDUCED_CHI_SQUARE_WITHOUT_NOISE.to_string()
     }
 }
 
@@ -393,6 +490,28 @@ pub struct FitHistoryEntry {
     pub path_details: Vec<crate::fit_details::PathFitDetails>,
     #[serde(default)]
     pub solver_report: Option<FitSolverReport>,
+    /// Exact core Fourier-transform settings used by the fit, one per dataset
+    /// in input order: k and R windows (`kmin`/`kmax`, `rmin`/`rmax`), the
+    /// window families and taper widths (`dk`, `dr`), FFT length, k step,
+    /// k-weights and fit space. `ranges` stores the editable desktop model;
+    /// this records the transform it produced, including defaults the editor
+    /// does not expose. Empty for fits recorded by older releases, whose
+    /// taper was the then-current [`FeffFitTransform`] default (Kaiser–Bessel
+    /// k window, dk = 4 Å⁻¹; Hanning R window, dr = 0 Å).
+    #[serde(default)]
+    pub transforms: Vec<FeffFitTransform>,
+    /// Derived-group id of the fitted spectrum; `None` for a catalog or
+    /// standalone file, for joint fits and for fits recorded by older releases.
+    #[serde(default)]
+    pub group_id: Option<u64>,
+    /// Hash of the fitted spectrum's processing settings (the app's
+    /// processed-spectrum fingerprint) at fit time. Restoring the result
+    /// compares it with the loaded spectrum to decide whether the fit still
+    /// matches the data. The hash is deterministic for one rexafs build; a
+    /// different build may hash differently, which only marks the restored fit
+    /// as needing an update. `None` for joint fits and older fits.
+    #[serde(default)]
+    pub params_fingerprint: Option<u64>,
 }
 
 impl FitHistoryEntry {
@@ -426,10 +545,45 @@ impl FitHistoryEntry {
             path_details: crate::fit_details::snapshot(&paths, result),
             paths,
             vars,
+            transforms: vec![ranges.transform()],
+            group_id: None,
+            params_fingerprint: None,
             ranges,
             values,
             solver_report: result.solver_report.clone(),
         }
+    }
+
+    /// Whether a loaded spectrum is the one this fit was run on: the same
+    /// derived group, label and processing fingerprint. Entries recorded
+    /// without a fingerprint (older releases, joint fits) never match.
+    pub fn matches_spectrum(
+        &self,
+        group_id: Option<u64>,
+        label: &str,
+        params_fingerprint: u64,
+    ) -> bool {
+        self.params_fingerprint == Some(params_fingerprint)
+            && self.group_id == group_id
+            && self.group == label
+    }
+
+    /// Whether every dataset in this fit divided its residual by an ε estimated
+    /// from high-R χ(R) (**ε from noise**). Only then is reduced χ² meaningful;
+    /// see [`reduced_chi_square_text`].
+    pub fn noise_estimated(&self) -> bool {
+        match &self.joint {
+            Some(config) => config
+                .datasets
+                .iter()
+                .all(|d| d.ranges.as_ref().unwrap_or(&self.ranges).noise),
+            None => self.ranges.noise,
+        }
+    }
+
+    /// Reduced χ² text for display; see [`reduced_chi_square_text`].
+    pub fn reduced_chi_square_text(&self) -> String {
+        reduced_chi_square_text(self.reduced_chi_square, self.noise_estimated())
     }
 
     /// One-line description of what distinguishes this fit.
@@ -446,14 +600,23 @@ impl FitHistoryEntry {
             .map(|k| format!("{k:.0}"))
             .collect::<Vec<_>>()
             .join("");
+        let mut windows = Vec::new();
+        let (transforms, _) = crate::fit_report::fit_transforms(self);
+        for transform in &transforms {
+            let description = crate::fit_report::window_text(transform);
+            if !windows.contains(&description) {
+                windows.push(description);
+            }
+        }
         format!(
-            "{enabled} paths · {} vars · {} kw{kws} · k {:.1}–{:.1} · R {:.1}–{:.1}",
+            "{enabled} paths · {} vars · {} kw{kws} · k {:.1}–{:.1} · R {:.1}–{:.1} · {}",
             self.n_vary,
             self.ranges.fitspace.label(),
             self.ranges.kmin,
             self.ranges.kmax,
             self.ranges.rmin,
-            self.ranges.rmax
+            self.ranges.rmax,
+            windows.join(" · ")
         )
     }
 }
@@ -586,27 +749,25 @@ fn run_fit(
     vars: &[FitVarSpec],
     ranges: &FitRanges,
 ) -> Result<FeffFitResult, String> {
-    let kweights = ranges.effective_kweights();
-    let mut fit = FeffFit::new()
-        .data(&k, &chi)
-        .krange(ranges.kmin, ranges.kmax)
-        .rrange(ranges.rmin, ranges.rmax)
-        .kweight(kweights[0])
-        .kweights(&kweights)
-        .fitspace(ranges.fitspace.core());
+    if !ranges.valid() {
+        return Err("Set finite, nonnegative fit ranges and window parameters.".into());
+    }
+    let mut dataset = FeffFitDataset::new().data(&k, &chi);
+    dataset.transform = ranges.transform();
     if ranges.noise {
         let noise = rexafs::xafs::fitting::transform::estimate_noise(&k, &chi, &ranges.transform())
             .map_err(|e| format!("noise estimate: {e}"))?;
-        fit = fit.epsilon_ks(&noise.epsilon_k);
+        dataset.epsilon_ks = noise.epsilon_k;
     }
     let mut any = false;
     for p in paths.iter().filter(|p| p.enabled) {
-        fit = fit.add_path(path_model(p)?);
+        dataset.paths.push(path_model(p)?);
         any = true;
     }
     if !any {
         return Err("no enabled paths".into());
     }
+    let mut fit = FeffFit::new().add_dataset(dataset);
     for v in vars {
         fit = match &v.expr {
             Some(expr) => fit.var_expr(&v.name, expr),
@@ -653,14 +814,22 @@ pub struct BatchFitRow {
     /// Catalog entry index (for file names).
     pub entry_ix: usize,
     pub r_factor: f64,
-    pub reduced_chi_square: f64,
+    /// Absent when the batch fit did not estimate ε, because reduced χ² is then
+    /// not meaningful; see [`reduced_chi_square_text`].
+    pub reduced_chi_square: Option<f64>,
     /// (name, value, stderr) for each varying parameter.
     pub values: Vec<(String, f64, Option<f64>)>,
     pub solver_report: Option<FitSolverReport>,
 }
 
 impl BatchFitRow {
-    pub fn from_result(frame: usize, entry_ix: usize, result: &FeffFitResult) -> Self {
+    /// `noise_estimated` is the batch's **ε from noise** setting.
+    pub fn from_result(
+        frame: usize,
+        entry_ix: usize,
+        result: &FeffFitResult,
+        noise_estimated: bool,
+    ) -> Self {
         let values = result
             .varying_names
             .iter()
@@ -675,7 +844,7 @@ impl BatchFitRow {
             frame,
             entry_ix,
             r_factor: result.r_factor,
-            reduced_chi_square: result.reduced_chi_square,
+            reduced_chi_square: noise_estimated.then_some(result.reduced_chi_square),
             values,
             solver_report: result.solver_report.clone(),
         }
@@ -710,7 +879,8 @@ pub(crate) fn csv_field(value: &str) -> String {
 }
 
 /// CSV for a batch-fit result set: frame, captured file label, fit statistics, then one
-/// value/stderr column pair per varying parameter.
+/// value/stderr column pair per varying parameter. The reduced χ² cell is empty
+/// when ε was not estimated.
 pub fn batch_csv(
     rows: &[BatchFitRow],
     names: &[String],
@@ -731,11 +901,13 @@ pub fn batch_csv(
             .map(String::as_str)
             .unwrap_or("");
         out.push_str(&format!(
-            "{},{},{:.6},{:.6e}",
+            "{},{},{:.6},{}",
             row.frame,
             csv_field(file),
             row.r_factor,
             row.reduced_chi_square
+                .map(|v| format!("{v:.6e}"))
+                .unwrap_or_default()
         ));
         for name in names {
             match row.values.iter().find(|(n, _, _)| n == name) {
@@ -783,9 +955,126 @@ pub fn result_summary(result: &FeffFitResult) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "feff10-runner")]
     use crate::params::PipelineParams;
     use crate::params::process_file;
+
+    #[test]
+    fn window_following_resolves_only_the_k_window_and_keeps_legacy_defaults() {
+        let params = PipelineParams {
+            fft_window: Some(FTWindow::Hanning),
+            fft_dk: Some(2.0),
+            fft_dk2: Some(1.0),
+            fft_kweight: Some(3.0),
+            fft_kmin: Some(4.0),
+            fft_kmax: Some(10.0),
+            bft_window: Some(FTWindow::Parzen),
+            bft_dr: Some(0.5),
+            ..Default::default()
+        };
+        let model = FitRanges::default();
+        let resolved = model.resolved_with_params(&params);
+        assert!(model.follow_window);
+        assert_eq!(model.dk, 4.0); // Resolving does not rewrite the editable model.
+        assert_eq!(resolved.window, FTWindow::Hanning);
+        assert_eq!(resolved.dk, 2.0);
+        assert_eq!(resolved.dk2, Some(1.0));
+        assert_eq!(resolved.effective_kweights(), vec![3.0]);
+        assert_eq!((resolved.kmin, resolved.kmax), (2.0, 12.0));
+        assert_eq!(resolved.rwindow, FTWindow::Hanning);
+        assert_eq!(resolved.dr, 0.0);
+        let auto = model.resolved_with_params(&PipelineParams::default());
+        assert_eq!(auto.window, XrayFFTF::default().window.unwrap());
+        assert_eq!(auto.dk, XrayFFTF::default().dk.unwrap());
+        assert_eq!(auto.dk2, None);
+
+        // Even the old k-weight-following toggle must not change old windows.
+        let legacy: FitRanges = serde_json::from_str(r#"{"follow_transform":true}"#).unwrap();
+        assert!(!legacy.follow_window);
+        let legacy = legacy.resolved_with_params(&params);
+        assert_eq!(legacy.window, FTWindow::KaiserBessel);
+        assert_eq!(legacy.dk, 4.0);
+        assert_eq!(legacy.dk2, None);
+        assert_eq!(legacy.effective_kweights(), vec![3.0]);
+        let custom = FitRanges {
+            follow_transform: false,
+            kweights: vec![1.0, 2.0],
+            ..model
+        }
+        .resolved_with_params(&params);
+        assert_eq!(custom.effective_kweights(), vec![2.0, 1.0]);
+        assert_eq!(custom.window, FTWindow::Hanning);
+    }
+
+    #[test]
+    fn window_parameters_reject_negative_and_nonfinite_values() {
+        for value in [-1.0, f64::NAN, f64::INFINITY] {
+            for index in 0..4 {
+                let mut ranges = FitRanges::default();
+                match index {
+                    0 => ranges.dk = value,
+                    1 => ranges.dk2 = Some(value),
+                    2 => ranges.dr = value,
+                    _ => ranges.dr2 = Some(value),
+                }
+                assert!(!ranges.valid());
+            }
+        }
+        assert!(
+            FitRanges {
+                dk: 0.0,
+                dr: 0.0,
+                ..Default::default()
+            }
+            .valid()
+        );
+    }
+
+    #[test]
+    fn single_fit_and_preview_use_the_same_asymmetric_windows() {
+        use rexafs::xafs::fitting::transform::apply_kweight_transform;
+        let file = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../rexafs/tests/testfiles/feffcu01.dat");
+        let path = feffpath(&file.to_string_lossy(), FeffFlavor::Feff85L).unwrap();
+        let k = DVector::from_iterator(301, (0..301).map(|i| i as f64 * 0.05));
+        let chi = path2chi(&path, &FitVariables::new(), &k).unwrap();
+        let mut spec = FitPathSpec::blank(file);
+        spec.enabled = true;
+        spec.s02 = "amp".into();
+        spec.e0 = "0".into();
+        spec.sigma2 = "0.003".into();
+        spec.deltar = "0".into();
+        let vars = vec![FitVarSpec {
+            name: "amp".into(),
+            value: 0.9,
+            vary: true,
+            min: None,
+            max: None,
+            expr: None,
+        }];
+        let ranges = FitRanges {
+            follow_window: false,
+            follow_transform: false,
+            kweights: vec![2.0],
+            window: FTWindow::Hanning,
+            dk: 2.0,
+            dk2: Some(1.0),
+            rwindow: FTWindow::Parzen,
+            dr: 0.2,
+            dr2: Some(0.4),
+            fitspace: FitSpaceSpec::Q,
+            ..Default::default()
+        };
+        let expected = apply_kweight_transform(&k, &chi, &ranges.transform(), 2.0).unwrap();
+        let result = run_fit(k.clone(), chi.clone(), &[spec], &vars, &ranges).unwrap();
+        assert!((&result.data_chir_re - &expected.r_space.chir_re).norm() < 1e-12);
+        assert!((&result.data_chiq - expected.chiq.rows(0, result.data_chiq.len())).norm() < 1e-12);
+        let legacy =
+            apply_kweight_transform(&k, &chi, &FitRanges::default().transform(), 2.0).unwrap();
+        assert!((&expected.r_space.chir_re - &legacy.r_space.chir_re).norm() > 1e-3);
+        let entry =
+            FitHistoryEntry::from_result(1, "Cu".into(), vec![], vars, ranges.clone(), &result);
+        assert_eq!(entry.transforms[0], ranges.transform());
+    }
 
     #[test]
     fn background_floor_accepts_equality_and_rejects_any_lower_radius() {
@@ -1062,7 +1351,7 @@ mod tests {
             frame: 0,
             entry_ix: 0,
             r_factor: 0.01,
-            reduced_chi_square: 1.0e-6,
+            reduced_chi_square: Some(1.0e-6),
             values: vec![("=evil".into(), 1.0, Some(0.1))],
             solver_report: None,
         }];
@@ -1086,12 +1375,51 @@ mod tests {
     }
 
     #[test]
+    fn reduced_chi_square_is_hidden_without_noise_estimate() {
+        assert_eq!(
+            reduced_chi_square_text(4.5e-5, false),
+            REDUCED_CHI_SQUARE_WITHOUT_NOISE
+        );
+        assert_eq!(reduced_chi_square_text(1.234, true), "1.2340e0");
+
+        let mut entry = FitHistoryEntry::from_result(
+            1,
+            "Cu".into(),
+            vec![],
+            vec![],
+            FitRanges::default(),
+            &FeffFitResult::default(),
+        );
+        assert!(!entry.noise_estimated());
+        entry.ranges.noise = true;
+        assert!(entry.noise_estimated());
+        // A multiple-spectrum fit needs ε for every dataset; a dataset without
+        // its own ranges inherits the shared setting.
+        let mut config = crate::joint_fitting::JointConfig::default();
+        config.datasets = vec![Default::default(), Default::default()];
+        entry.joint = Some(config.clone());
+        assert!(entry.noise_estimated());
+        config.datasets[1].ranges = Some(FitRanges::default());
+        entry.joint = Some(config);
+        assert!(!entry.noise_estimated());
+        assert_eq!(
+            entry.reduced_chi_square_text(),
+            REDUCED_CHI_SQUARE_WITHOUT_NOISE
+        );
+
+        let row = BatchFitRow::from_result(0, 0, &FeffFitResult::default(), false);
+        assert_eq!(row.reduced_chi_square, None);
+        let csv = batch_csv(&[row], &[], &BTreeMap::new());
+        assert_eq!(csv.lines().nth(1), Some("0,,0.000000,,,"));
+    }
+
+    #[test]
     fn batch_csv_uses_labels_captured_with_the_batch() {
         let rows = vec![BatchFitRow {
             frame: 17,
             entry_ix: 42,
             r_factor: 0.0123,
-            reduced_chi_square: 4.5e-6,
+            reduced_chi_square: Some(4.5e-6),
             values: vec![("amp".into(), 0.91, Some(0.02))],
             solver_report: None,
         }];

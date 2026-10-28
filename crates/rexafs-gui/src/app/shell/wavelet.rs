@@ -1,6 +1,7 @@
 //! Wavelet workspace: immutable scientific maps, bounded current residency and
 //! independent display controls. Original groups and pipeline settings stay intact.
 use super::*;
+use crate::app::{ProblemSeverity, WAVELET_PROBLEM_PREFIX, replace_problem};
 use crate::wavelet_history::WaveletSavedRegion;
 use crate::{
     group_identity::GroupId,
@@ -97,7 +98,12 @@ impl StudioApp {
     }
     pub(crate) fn open_wavelet(&mut self, cx: &mut Context<Self>) {
         self.ui.sections.insert("Wavelet settings");
-        self.set_stage(super::Stage::Transform, cx);
+        super::center::show_process_overlay(
+            &mut self.wavelet,
+            &mut self.normalization,
+            super::center::ProcessOverlay::Wavelet,
+        );
+        self.set_stage(super::Stage::Process, cx);
         self.fluorescence.close();
         self.peaks.open = false;
         if self.wavelet_matches_current() && self.wavelet.fields.len() == 8 {
@@ -231,7 +237,7 @@ impl StudioApp {
     }
     pub(crate) fn wavelet_definition(&self, cx: &Context<Self>) -> Result<Wavelet, String> {
         if self.wavelet.fields.len() != 8 {
-            return Err("Set the wavelet parameters in Transform first".into());
+            return Err("Set the wavelet parameters in Process › Transform first".into());
         }
         let number = |i: usize| {
             self.wavelet.fields[i]
@@ -268,11 +274,31 @@ impl StudioApp {
             .map_err(|e| e.to_string())?;
         Ok(definition)
     }
+    /// Record (or clear) the current group's one wavelet failure in Problems,
+    /// keyed by its full source path like the processing warnings.
+    fn set_wavelet_problem(&mut self, error: Option<&str>) {
+        let Some(ix) = self.current_group_index() else {
+            return;
+        };
+        let label = self.problem_label(ix);
+        replace_problem(
+            &mut self.job_errors,
+            &label,
+            WAVELET_PROBLEM_PREFIX,
+            error.map(|e| {
+                (
+                    ProblemSeverity::Error,
+                    format!("{WAVELET_PROBLEM_PREFIX}: {e}"),
+                )
+            }),
+        );
+    }
     /// Coalesce committed edits and steppers; stale jobs cannot replace newer maps.
     fn schedule_wavelet(&mut self, cx: &mut Context<Self>) {
         self.wavelet.cancel();
         self.wavelet.dirty = true;
         if let Err(error) = self.wavelet_definition(cx) {
+            self.set_wavelet_problem(Some(&error));
             self.wavelet.message = format!("{error} · previous map unchanged");
             cx.notify();
             return;
@@ -290,7 +316,7 @@ impl StudioApp {
                     if app.project_generation == project
                         && app.wavelet.generation == generation
                         && app.wavelet.open
-                        && app.stage == Stage::Transform
+                        && app.stage == Stage::Process
                     {
                         app.calculate_wavelet(cx);
                     }
@@ -308,6 +334,7 @@ impl StudioApp {
         let definition = match self.wavelet_definition(cx) {
             Ok(d) => d,
             Err(e) => {
+                self.set_wavelet_problem(Some(&e));
                 self.wavelet.message = e;
                 cx.notify();
                 return;
@@ -340,8 +367,10 @@ impl StudioApp {
                         .map_err(|e| e.to_string())?;
                     if map.r().len()<2 {return Err("The desktop map needs at least two R rows; increase R maximum or reduce R step".into());}
                     let mut fft_settings = settings.clone();
-                    fft_settings.fft_kmin = Some(definition.k_range[0]);
-                    fft_settings.fft_kmax = Some(definition.k_range[1]);
+                    // The map's k range may be limited to the measured data.
+                    let [kmin, kmax] = map.k_support();
+                    fft_settings.fft_kmin = Some(kmin);
+                    fft_settings.fft_kmax = Some(kmax);
                     fft_settings.fft_kweight = Some(definition.kweight as f64);
                     let fourier_error = match crate::params::forward_settings(&fft_settings) {
                         Ok(f) => sp.set_fft(f).fft().err().map(|e| e.to_string()),
@@ -386,8 +415,12 @@ impl StudioApp {
                     return;
                 }
                 match result {
-                    Err(e) => app.wavelet.message = format!("{e} · previous map unchanged"),
+                    Err(e) => {
+                        app.set_wavelet_problem(Some(&e));
+                        app.wavelet.message = format!("{e} · previous map unchanged");
+                    }
                     Ok((record, receipt)) => {
+                        app.set_wavelet_problem(None);
                         app.wavelet.archive.insert_preview(receipt.clone(), &mut app.wavelet.automatic_receipts);
                         app.wavelet.dirty = false;
                         app.show_wavelet(record, receipt, cx);
@@ -448,7 +481,17 @@ impl StudioApp {
             self.wavelet.lock_basis = None;
         }
         let map = &record.map;
-        let k = map.settings().k_range;
+        let k = map.k_support();
+        // Amber note on k min/max when the map used a data-limited k range.
+        for (i, used) in k.into_iter().enumerate() {
+            if let Some(field) = self.wavelet.fields.get(i) {
+                let requested = field.read(cx).value();
+                let note = requested
+                    .is_some_and(|v| (v - used).abs() > 1e-9)
+                    .then(|| format!("Used {used:.2} Å⁻¹: limited by the measured data").into());
+                field.update(cx, |f, cx| f.set_adjusted(note, cx));
+            }
+        }
         let r = [map.r()[0], *map.r().last().unwrap()];
         self.wavelet.cursor = [0.5 * (k[0] + k[1]), 0.5 * (r[0] + r[1])];
         self.wavelet.message.clear();

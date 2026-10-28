@@ -4,6 +4,47 @@ use ruviz::prelude::{LineStyle, Plot};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
+pub(crate) mod composer;
+mod labels;
+mod layout;
+mod recipes;
+pub(crate) use layout::{LegendPlacement, typst_label};
+
+/// Selectable curve colours from Okabe & Ito (2008), *Color Universal Design*
+/// (<https://jfly.uni-koeln.de/color/>), as display labels and lowercase RGB hex.
+/// These explicit choices do not replace the renderer's automatic palette.
+pub(crate) const SERIES_PALETTE: [(&str, &str); 8] = [
+    ("Black", "#000000"),
+    ("Orange", "#e69f00"),
+    ("Sky blue", "#56b4e9"),
+    ("Bluish green", "#009e73"),
+    ("Yellow", "#f0e442"),
+    ("Blue", "#0072b2"),
+    ("Vermillion", "#d55e00"),
+    ("Reddish purple", "#cc79a7"),
+];
+
+/// Require an opaque RGB colour in the saved, canonical `#rrggbb` format.
+fn series_color(value: &str) -> Result<ruviz::prelude::Color, String> {
+    if value.len() != 7
+        || !value.starts_with('#')
+        || !value.as_bytes()[1..]
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
+    {
+        return Err("Use a lowercase RGB colour in #rrggbb format, for example #0072b2.".into());
+    }
+    ruviz::prelude::Color::from_hex(value).map_err(|e| e.to_string())
+}
+
+/// Validate values without interpreting series keys, which are opaque strings.
+fn validate_series_colors(colors: &BTreeMap<String, String>) -> Result<(), String> {
+    for (key, value) in colors {
+        series_color(value).map_err(|error| format!("Series colour for {key:?}: {error}"))?;
+    }
+    Ok(())
+}
+
 fn weighted_unit(weight: f64) -> String {
     if weight.abs() < 1e-9 {
         "(dimensionless)".into()
@@ -51,6 +92,8 @@ pub(crate) struct FigureOptions {
     pub ymax: Option<f64>,
     /// Show the visible-series legend; true by default.
     pub legend: bool,
+    /// Legend placement when shown; Auto (least overlap with curves) by default.
+    pub legend_position: LegendPlacement,
     /// Show the plot grid; None defaults to true.
     pub grid: Option<bool>,
     /// Draw applicable processing guides; false by default.
@@ -59,6 +102,11 @@ pub(crate) struct FigureOptions {
     pub hidden: BTreeSet<String>,
     /// Optional series keys explicitly enabled, unless also hidden.
     pub shown: BTreeSet<String>,
+    /// Explicit opaque RGB colours by series key, in lowercase
+    /// `#rrggbb` format. Missing keys use the renderer's automatic colours;
+    /// unknown keys are retained but do not affect rendering or scientific data.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub series_colors: BTreeMap<String, String>,
     /// Energy figures default to the library's flattened array.
     pub normalized: bool,
 }
@@ -80,21 +128,32 @@ impl Default for FigureOptions {
             ymin: None,
             ymax: None,
             legend: true,
+            legend_position: LegendPlacement::Auto,
             grid: None,
             guides: false,
             hidden: BTreeSet::new(),
             shown: BTreeSet::new(),
+            series_colors: BTreeMap::new(),
             normalized: false,
         }
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
+/// Publication appearance and named multi-panel recipes saved with a project.
+/// Recipes keep insertion order and the active recipe is stored by index, so
+/// renaming never changes the selection.
+/// New projects start with Figure 1. Loading also accepts the old single
+/// `publication.composite` as Figure 1; saving writes only the new format.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(from = "recipes::SavedFigureSettings")]
 pub(crate) struct FigureSettings {
     /// Settings are shared by figure type across a multi-spectrum export.
     pub figures: BTreeMap<String, FigureOptions>,
     pub table_captions: BTreeMap<String, String>,
+    /// Ordered, non-empty recipes; changed through the recipe methods below.
+    recipes: Vec<recipes::NamedRecipe>,
+    /// Zero-based selection, adjusted on deletion and clamped when loading.
+    active_recipe: usize,
 }
 impl FigureSettings {
     /// Return an owned copy of settings for a figure type, or its defaults.
@@ -103,10 +162,10 @@ impl FigureSettings {
     }
 
     /// Copy the appearance of figure type `source` (canvas size, DPI, font and
-    /// line width, legend, grid and guides) to every figure type in `keys` and
+    /// line width, legend and its placement, grid and guides) to every figure type in `keys` and
     /// to every type that already has stored options. Titles, labels, captions,
-    /// axis limits and curve visibility stay per figure, because they depend on
-    /// the plotted quantity.
+    /// axis limits, curve visibility and series colours stay per figure,
+    /// because they depend on the plotted quantity.
     pub fn apply_style_to_all<'a>(
         &mut self,
         source: &str,
@@ -126,6 +185,7 @@ impl FigureSettings {
             options.font_size = style.font_size;
             options.line_width = style.line_width;
             options.legend = style.legend;
+            options.legend_position = style.legend_position;
             options.grid = style.grid;
             options.guides = style.guides;
         }
@@ -203,7 +263,8 @@ impl FigureOptions {
     /// Validate dimensions, point sizes and paired axis limits before rendering.
     /// Requires finite dimensions of 1–30 inches, integer DPI of 72–1200 and at
     /// most 25 million raster pixels. Axis limits must be finite, paired and
-    /// increasing. Errors leave the options and scientific data unchanged.
+    /// increasing. Explicit series colours must use lowercase `#rrggbb` RGB
+    /// notation. Errors leave the options and scientific data unchanged.
     pub fn validate(&self) -> Result<(), String> {
         let (width, height, dpi) = self.dimensions();
         if ![width, height, dpi].iter().all(|v| v.is_finite())
@@ -236,7 +297,7 @@ impl FigureOptions {
                 }
             }
         }
-        Ok(())
+        validate_series_colors(&self.series_colors)
     }
 
     fn apply(&self, mut plot: Plot) -> Result<Plot, String> {
@@ -250,14 +311,15 @@ impl FigureOptions {
         if let Some(size) = self.font_size {
             plot = plot.font_size(size as f32);
         }
+        // Typed text is literal; only `$…$` spans are Typst math.
         if let Some(title) = &self.title {
-            plot = plot.title(title.clone());
+            plot = plot.title(layout::typst_label(title));
         }
         if let Some(label) = &self.xlabel {
-            plot = plot.xlabel(label.clone());
+            plot = plot.xlabel(layout::typst_label(label));
         }
         if let Some(label) = &self.ylabel {
-            plot = plot.ylabel(label.clone());
+            plot = plot.ylabel(layout::typst_label(label));
         }
         if let (Some(min), Some(max)) = (self.xmin, self.xmax) {
             plot = plot.xlim(min, max);
@@ -269,7 +331,7 @@ impl FigureOptions {
             plot = plot.grid(grid);
         }
         if self.legend {
-            plot = plot.legend_best();
+            plot = plot.legend(self.legend_position.position());
         }
         Ok(plot)
     }
@@ -299,9 +361,16 @@ pub(crate) struct FigureData {
     pub ylabel: String,
     pub math_ylabel: String,
     pub series: Vec<FigureSeries>,
+    /// Normalized curves for the normalized display choice or difference
+    /// insets. Raw μ(E) panels retain their raw display even when this is set.
     pub normalized_series: Option<Vec<FigureSeries>>,
+    /// Processed absorption-edge energy E₀ in eV, when available. Insets use
+    /// this value independently of visible processing guides or axis limits.
+    pub e0: Option<f64>,
     pub guides: Vec<f64>,
     pub default_xlim: Option<(f64, f64)>,
+    /// Data − fit curve drawn in a strip below the main panel (fit + residual).
+    pub residual: Option<Vec<FigureSeries>>,
 }
 
 impl FigureData {
@@ -314,6 +383,7 @@ impl FigureData {
 
     pub(crate) fn series(&self, options: &FigureOptions) -> &[FigureSeries] {
         if options.normalized
+            && self.key != "mu-energy"
             && let Some(series) = &self.normalized_series
         {
             return series;
@@ -322,26 +392,22 @@ impl FigureData {
     }
 
     pub(crate) fn ylabel(&self, options: &FigureOptions) -> &str {
-        if options.normalized && self.normalized_series.is_some() {
+        if options.normalized && self.key != "mu-energy" && self.normalized_series.is_some() {
             "Normalized μ(E) (dimensionless)"
         } else {
             &self.ylabel
         }
     }
 
+    /// Typst source of the x label; built-in labels are sans-serif text
+    /// markup (see [`labels`]).
     pub(crate) fn math_xlabel(&self) -> &str {
-        match self.key {
-            "mu-energy" | "xanes" | "flattened-mu" => "$E$ (eV)",
-            "chi-k" | "fit-k" | "residual-k" => "$k$ ($\"Å\"^(-1)$)",
-            "chi-r" | "fit-r" | "residual-r" => "$R$ (Å)",
-            "chi-q" | "fit-q" => "$q$ ($\"Å\"^(-1)$)",
-            _ => &self.xlabel,
-        }
+        labels::x_label(self.key).unwrap_or(&self.xlabel)
     }
 
     pub(crate) fn math_ylabel(&self, options: &FigureOptions) -> &str {
-        if options.normalized && self.normalized_series.is_some() {
-            "Normalized $mu(E)$ (dimensionless)"
+        if options.normalized && self.key != "mu-energy" && self.normalized_series.is_some() {
+            "Normalized _μ_(_E_) (dimensionless)"
         } else {
             &self.math_ylabel
         }
@@ -351,9 +417,33 @@ impl FigureData {
         options.xmin.zip(options.xmax).or(self.default_xlim)
     }
 
+    /// χ(k) and χ(q) oscillate about zero, so their automatic y range is
+    /// symmetric (−a to +a) and the zero line sits mid-axis.
+    fn symmetric_y(&self) -> bool {
+        matches!(
+            self.key,
+            "chi-k" | "fit-k" | "residual-k" | "fit-residual-k" | "chi-q" | "fit-q"
+        )
+    }
+
     /// Autoscale only the displayed interval; a noisy high-k tail must not
     /// flatten the useful signal. The series and exported CSV keep every point.
-    fn visible_ylim(&self, options: &FigureOptions) -> Option<(f64, f64)> {
+    /// k-space figures use a symmetric range (see [`Self::symmetric_y`]).
+    pub(crate) fn visible_ylim(&self, options: &FigureOptions) -> Option<(f64, f64)> {
+        self.visible_ylim_with_symmetry(options, self.symmetric_y())
+    }
+
+    /// Display offsets need the occupied range rather than an artificial
+    /// symmetry about zero; ordinary EXAFS panels retain their symmetric range.
+    fn visible_ylim_asymmetric(&self, options: &FigureOptions) -> Option<(f64, f64)> {
+        self.visible_ylim_with_symmetry(options, false)
+    }
+
+    fn visible_ylim_with_symmetry(
+        &self,
+        options: &FigureOptions,
+        symmetric: bool,
+    ) -> Option<(f64, f64)> {
         let (xmin, xmax) = self.xlim(options)?;
         let mut ymin = f64::INFINITY;
         let mut ymax = f64::NEG_INFINITY;
@@ -380,6 +470,10 @@ impl FigureData {
         if !ymin.is_finite() || !ymax.is_finite() {
             return None;
         }
+        if symmetric {
+            ymax = ymin.abs().max(ymax.abs());
+            ymin = -ymax;
+        }
         let pad = if ymax > ymin {
             (ymax - ymin) * 0.05
         } else {
@@ -395,6 +489,7 @@ impl FigureData {
             .series(options)
             .iter()
             .filter(|s| s.visible(options) && !s.x.is_empty())
+            .chain(self.residual.iter().flatten())
             .collect();
         if series.is_empty() {
             return Err("Select at least one curve with available data.".into());
@@ -452,6 +547,12 @@ impl FigureData {
                 "EXAFS data, fitted model and selected components in R space; radial coordinates are not phase corrected"
             }
             "fit-q" => "Back-transformed EXAFS data and fitted model",
+            "fit-residual-k" => {
+                "EXAFS data and fitted model in k space (upper panel), with the weighted residual, data minus fit, in the same units on a shared horizontal axis (lower panel)"
+            }
+            "fit-residual-r" => {
+                "EXAFS data and fitted model magnitudes in R space (upper panel), with the difference of the magnitudes on a shared horizontal axis (lower panel); this is not the magnitude of the complex residual, and radial coordinates are not phase corrected"
+            }
             "residual-k" => "Weighted EXAFS residual, defined as data minus fitted model",
             "residual-r" => {
                 "Difference between the magnitudes of the data and fitted Fourier transforms; this is not the magnitude of the complex residual"
@@ -462,6 +563,7 @@ impl FigureData {
             .series(options)
             .iter()
             .filter(|s| !s.x.is_empty() && s.visible(options))
+            .chain(self.residual.iter().flatten())
             .map(|s| {
                 format!(
                     "{} ({})",
@@ -490,10 +592,21 @@ impl FigureData {
     }
 
     pub fn plot(&self, options: &FigureOptions) -> Result<Plot, String> {
+        self.panel(options, false)
+    }
+
+    /// Build one plot panel. `fit_panel` marks the upper panel of a fit +
+    /// residual figure: no x-axis title, a shorter canvas, and no Outside legend.
+    fn panel(&self, options: &FigureOptions, fit_panel: bool) -> Result<Plot, String> {
+        // Typst lays out every label. In SVG, plain labels (tick numbers, legend
+        // names, typed titles) become editable `<text>`; math stays outlined.
         let mut plot = Plot::new()
             .typst(true)
-            .xlabel(self.math_xlabel())
+            .svg_native_text(true)
             .ylabel(self.math_ylabel(options));
+        if !fit_panel {
+            plot = plot.xlabel(self.math_xlabel());
+        }
         if let Some((min, max)) = self.xlim(options) {
             plot = plot.xlim(min, max);
         }
@@ -501,7 +614,47 @@ impl FigureData {
             plot = plot.ylim(min, max);
         }
         let mut plot = options.apply(plot)?;
+        if let Some(xlim) = self.xlim(options) {
+            let tick = plot.get_config().typography.tick_size() as f64;
+            plot = plot.major_ticks_x(layout::x_tick_count(options.dimensions().0, tick, xlim));
+        }
+        if options.legend && options.legend_position == LegendPlacement::Auto {
+            let (width, height, _) = options.dimensions();
+            let visible: Vec<_> = self
+                .series(options)
+                .iter()
+                .filter(|s| s.visible(options) && !s.x.is_empty())
+                .collect();
+            let typography = &plot.get_config().typography;
+            let frame = layout::LegendFrame {
+                size_in: (
+                    width,
+                    if fit_panel {
+                        height * (1. - layout::RESIDUAL_FRACTION)
+                    } else {
+                        height
+                    },
+                ),
+                legend_pt: typography.legend_size() as f64,
+                tick_pt: typography.tick_size() as f64,
+                title: options.title.is_some(),
+                outside_ok: !fit_panel,
+            };
+            let ylim = options
+                .ymin
+                .zip(options.ymax)
+                .or_else(|| self.visible_ylim(options));
+            let placement = layout::auto_legend(&visible, self.xlim(options), ylim, &frame);
+            // Auto's outside fallback goes above the plot: it costs height,
+            // not width, so a long label cannot squeeze a narrow figure.
+            plot = plot.legend(match placement {
+                LegendPlacement::Outside => ruviz::core::LegendPosition::OutsideUpper,
+                corner => corner.position(),
+            });
+        }
         let mut count = 0;
+        let palette = plot.get_theme();
+        let mut preserve_palette = false;
         for series in self.series(options) {
             if !series.visible(options) || series.x.is_empty() {
                 continue;
@@ -509,6 +662,14 @@ impl FigureData {
             let mut line = plot.line(&series.x, &series.y).label(
                 ruviz::render::typst_text::literal_text_snippet(&series.label),
             );
+            if let Some(color) = options.series_colors.get(&series.key) {
+                line = line.color(series_color(color)?);
+                preserve_palette = true;
+            } else if preserve_palette {
+                // ruviz's builder does not advance its palette for explicit
+                // colours. Keep every later automatic curve's original slot.
+                line = line.color(palette.get_color(count));
+            }
             if let Some(width) = options.line_width {
                 line = line.line_width(width as f32);
             }
@@ -544,8 +705,28 @@ pub(crate) fn render_figure(
     data: &FigureData,
     options: &FigureOptions,
 ) -> Result<RenderedFigure, String> {
-    let plot = data.plot(options)?;
-    let mut svg = plot.render_to_svg().map_err(|e| e.to_string())?;
+    let (png, mut svg) = match &data.residual {
+        Some(residual) => layout::fit_residual(data, residual, options)?,
+        None => {
+            let plot = data.plot(options)?;
+            let config = plot.get_config();
+            let svg = physical_svg_size(
+                plot.render_to_svg().map_err(|e| e.to_string())?,
+                config.canvas_size(),
+                config.figure.dpi as f64,
+            );
+            (plot.render_png_bytes().map_err(|e| e.to_string())?, svg)
+        }
+    };
+    // ruviz names each outlined label by its Typst source; read built-in
+    // labels as their plain Unicode text (k²χ(k)), not markup (`_k_#super[2]`).
+    for (markup, plain) in [
+        (data.math_xlabel(), data.xlabel.as_str()),
+        (data.math_ylabel(options), data.ylabel(options)),
+    ] {
+        let aria = |text: &str| format!(r#"aria-label="{}""#, super::report::html(text));
+        svg = svg.replace(&aria(markup), &aria(plain));
+    }
     if let Some(start) = svg.find("<svg")
         && let Some(end) = svg[start..].find('>')
     {
@@ -563,10 +744,44 @@ pub(crate) fn render_figure(
             );
         }
     }
-    Ok(RenderedFigure {
-        png: plot.render_png_bytes().map_err(|e| e.to_string())?,
-        svg,
-    })
+    Ok(RenderedFigure { png, svg })
+}
+
+/// Give the root `<svg>` element a physical size in inches.
+///
+/// ruviz draws the SVG in raster pixels (`inches × DPI`) and writes them as
+/// unitless `width`/`height`, which SVG treats as CSS pixels (96 per inch), so a
+/// 3.3 in figure at 300 DPI would import at about 10 in. This rexafs-specific
+/// fix keeps those pixel coordinates as the `viewBox` and sets `width`/`height`
+/// to `pixels / DPI` inches, so the drawing scales to the configured size in
+/// vector editors, word processors and browsers. An SVG that already has a
+/// `viewBox`, or whose size does not match the canvas, is returned unchanged.
+fn physical_svg_size(mut svg: String, (width, height): (u32, u32), dpi: f64) -> String {
+    let Some(start) = svg.find("<svg") else {
+        return svg;
+    };
+    let Some(end) = svg[start..].find('>').map(|end| start + end) else {
+        return svg;
+    };
+    let pixels = format!(r#"width="{width}" height="{height}""#);
+    if svg[start..end].contains("viewBox") {
+        return svg;
+    }
+    if let Some(at) = svg[start..end].find(&pixels).map(|at| start + at) {
+        let inches = |px: u32| {
+            let value = format!("{:.4}", px as f64 / dpi);
+            format!("{}in", value.trim_end_matches('0').trim_end_matches('.'))
+        };
+        svg.replace_range(
+            at..at + pixels.len(),
+            &format!(
+                r#"width="{}" height="{}" viewBox="0 0 {width} {height}""#,
+                inches(width),
+                inches(height)
+            ),
+        );
+    }
+    svg
 }
 
 pub(crate) fn quantity_figures(
@@ -589,27 +804,6 @@ pub(crate) fn quantity_figures(
     figures
 }
 
-fn math_unit(power: f64) -> String {
-    if power.abs() < 1e-9 {
-        "(dimensionless)".into()
-    } else {
-        format!("($\"Å\"^({})$)", -power)
-    }
-}
-
-fn math_chik_label(weight: f64) -> String {
-    let chi = if weight.abs() < 1e-9 {
-        "chi(k)".into()
-    } else {
-        format!("k^({weight}) chi(k)")
-    };
-    format!("${chi}$ {}", math_unit(weight))
-}
-
-fn math_chir_label(weight: f64) -> String {
-    format!("$abs(chi(R))$ {}", math_unit(weight + 1.))
-}
-
 fn publication_kmax(kmax: Option<f64>, data: Option<&[f64]>) -> Option<f64> {
     kmax.filter(|v| v.is_finite() && *v > 0.)
         .or_else(|| {
@@ -623,6 +817,8 @@ fn publication_kmax(kmax: Option<f64>, data: Option<&[f64]>) -> Option<f64> {
         .map(|v| v + 1.)
 }
 
+/// Upper |χ(R)| display limit: 6 Å, or the fit/window maximum plus 0.5 Å
+/// rounded up to a whole ångström when that is larger.
 fn publication_rmax(fit_rmax: Option<f64>) -> f64 {
     match fit_rmax.filter(|v| v.is_finite() && *v > 6.) {
         Some(max) => (max + 0.5).ceil(),
@@ -630,9 +826,22 @@ fn publication_rmax(fit_rmax: Option<f64>) -> f64 {
     }
 }
 
+/// Upper |χ(R)| display limit for a processed spectrum. It follows
+/// [`publication_rmax`] for the back-transform R window, ignores a window that
+/// reaches past the displayed transform (such as the 20 Å library default) and
+/// never exceeds that displayed maximum (`rmax_out`, 10 Å by default).
+fn spectrum_rmax(window_rmax: Option<f64>, rmax_out: Option<f64>) -> f64 {
+    let shown = rmax_out.filter(|v| v.is_finite() && *v > 0.).unwrap_or(10.);
+    publication_rmax(window_rmax.filter(|v| *v <= shown)).min(shown)
+}
+
 pub(crate) fn spectrum_figures(sp: Arc<XASSpectrum>, label: &str) -> Vec<FigureData> {
     let weight = sp.kweight().copied().unwrap_or(2.);
     let kmax = publication_kmax(sp.xftf.as_ref().and_then(|ft| ft.kmax), sp.k());
+    let rmax = spectrum_rmax(
+        sp.xftr.as_ref().and_then(|ft| ft.rmax),
+        sp.xftf.as_ref().and_then(|ft| ft.rmax_out),
+    );
     let e0 = sp
         .normalization
         .as_ref()
@@ -675,11 +884,13 @@ pub(crate) fn spectrum_figures(sp: Arc<XASSpectrum>, label: &str) -> Vec<FigureD
                 label: "Energy · μ(E)".into(),
                 xlabel: "Energy (eV)".into(),
                 ylabel: "Flattened μ(E) (dimensionless)".into(),
-                math_ylabel: "Flattened $mu(E)$ (dimensionless)".into(),
+                math_ylabel: format!("Flattened {} (dimensionless)", labels::MU_E),
                 series: vec![series(flat.as_slice().to_vec())],
                 normalized_series,
+                e0,
                 guides: e0.into_iter().collect(),
                 default_xlim: (energy[0] < end).then_some((energy[0], end)),
+                residual: None,
             })
         });
     let opts = plotting::ViewOptions {
@@ -698,7 +909,7 @@ pub(crate) fn spectrum_figures(sp: Arc<XASSpectrum>, label: &str) -> Vec<FigureD
         color_index: 0,
         color: None,
         label: label.into(),
-        sp,
+        sp: sp.clone(),
         active: true,
     }];
     let mut figures: Vec<_> = ["mu-energy", "normalized-mu", "chi-k", "chi-r", "chi-q"]
@@ -722,19 +933,38 @@ pub(crate) fn spectrum_figures(sp: Arc<XASSpectrum>, label: &str) -> Vec<FigureD
                 _ => spec.ylabel,
             },
             math_ylabel: match key {
-                "mu-energy" => "$mu(E)$ (arb. units)".into(),
-                "chi-k" => math_chik_label(weight),
-                "chi-r" => math_chir_label(weight),
-                "chi-q" => format!("$op(\"Re\") chi(q)$ {}", math_unit(weight)),
+                "mu-energy" => format!("{} (arb. units)", labels::MU_E),
+                "chi-k" => labels::chik(weight),
+                "chi-r" => labels::chir(weight),
+                "chi-q" => labels::chiq(weight),
                 _ => String::new(),
             },
             default_xlim: match key {
                 "chi-k" => kmax.map(|max| (0., max)),
-                "chi-r" => Some((0., 6.)),
+                "chi-r" => Some((0., rmax)),
                 _ => None,
             },
             guides: spec.vlines.into_iter().map(|(x, _, _, _)| x).collect(),
-            normalized_series: None,
+            normalized_series: if key == "mu-energy" {
+                sp.energy
+                    .as_ref()
+                    .zip(sp.norm())
+                    .filter(|(energy, norm)| energy.len() == norm.len())
+                    .map(|(energy, norm)| {
+                        vec![FigureSeries {
+                            key: "series-0".into(),
+                            label: label.into(),
+                            x: energy.as_slice().to_vec(),
+                            y: norm.as_slice().to_vec(),
+                            dashed: false,
+                            optional: false,
+                        }]
+                    })
+            } else {
+                None
+            },
+            e0,
+            residual: None,
             series: spec
                 .series
                 .into_iter()
@@ -812,21 +1042,25 @@ pub(crate) fn fit_figures(result: &FeffFitResult) -> Vec<FigureData> {
         xlabel: xlabel.into(),
         ylabel,
         math_ylabel: match key {
-            "fit-k" => math_chik_label(kw),
-            "fit-r" => math_chir_label(kw),
-            "fit-q" => format!("$op(\"Re\") chi(q)$ {}", math_unit(kw)),
-            "residual-k" => format!("Residual {}", math_chik_label(kw)),
-            "residual-r" => format!("Residual {}", math_chir_label(kw)),
+            "fit-k" | "fit-residual-k" => labels::chik(kw),
+            "fit-r" | "fit-residual-r" => labels::chir(kw),
+            "fit-q" => labels::chiq(kw),
+            "residual-k" => format!("Residual {}", labels::chik(kw)),
+            "residual-r" => format!("Residual {}", labels::chir(kw)),
             _ => String::new(),
         },
         series,
         normalized_series: None,
+        e0: None,
         guides: vec![],
         default_xlim: match key {
-            "fit-r" | "residual-r" => Some((0., publication_rmax(result.rmax))),
-            "fit-k" | "residual-k" => publication_kmax(result.kmax, Some(&k)).map(|max| (0., max)),
+            "fit-r" | "residual-r" | "fit-residual-r" => Some((0., publication_rmax(result.rmax))),
+            "fit-k" | "residual-k" | "fit-residual-k" => {
+                publication_kmax(result.kmax, Some(&k)).map(|max| (0., max))
+            }
             _ => None,
         },
+        residual: None,
     };
     let mut output = vec![
         figure(
@@ -894,6 +1128,21 @@ pub(crate) fn fit_figures(result: &FeffFitResult) -> Vec<FigureData> {
             )],
         ),
     ];
+    // Fit + residual: the data and fit curves above a residual strip that
+    // shares the x axis. Added before optional components so only the data
+    // and fit appear in the upper panel.
+    for (key, label, fit, residual) in [
+        ("fit-residual-k", "Fit + residual · χ(k)", 0, 3),
+        ("fit-residual-r", "Fit + residual · |χ(R)|", 1, 4),
+    ] {
+        let figure = FigureData {
+            key,
+            label: label.into(),
+            residual: Some(output[residual].series.clone()),
+            ..output[fit].clone()
+        };
+        output.push(figure);
+    }
     for (key, label, values) in [
         ("real-data", "Re data", &result.data_chir_re),
         ("real-fit", "Re fit", &result.model_chir_re),
@@ -1009,6 +1258,17 @@ mod tests {
                 render_figure(xanes, &normalized).unwrap().png,
             )
             .unwrap();
+            let narrow = FigureOptions {
+                width: Some(3.3),
+                height: Some(2.5),
+                font_size: Some(9.),
+                ..Default::default()
+            };
+            fs::write(
+                dir.join("xanes-3.3in-9pt.png"),
+                render_figure(xanes, &narrow).unwrap().png,
+            )
+            .unwrap();
         }
     }
 
@@ -1027,6 +1287,20 @@ mod tests {
         };
         assert_eq!(data.xlim(&options), Some((1., 2.)));
         assert!(data.visible_ylim(&options).unwrap().1 > 1000.);
+    }
+
+    #[test]
+    fn k_space_autoscale_is_symmetric_about_zero() {
+        let mut data = sample();
+        data.default_xlim = Some((0., 2.));
+        data.series[0].y = vec![-0.5, 2., 1.];
+        let options = FigureOptions::default();
+        let (lo, hi) = data.visible_ylim(&options).unwrap();
+        assert!(lo > -1. && hi > 2.);
+        data.key = "chi-k";
+        let (lo, hi) = data.visible_ylim(&options).unwrap();
+        assert_eq!(lo, -hi);
+        assert!((hi - 2.2).abs() < 1e-12);
     }
 
     #[test]
@@ -1082,6 +1356,118 @@ mod tests {
         }
     }
     #[test]
+    fn spectrum_r_range_follows_the_transform_window() {
+        assert_eq!(spectrum_rmax(None, None), 6.);
+        assert_eq!(spectrum_rmax(Some(3.), None), 6.);
+        assert_eq!(spectrum_rmax(Some(7.2), None), 8.);
+        // The 20 Å library default lies past the displayed transform.
+        assert_eq!(spectrum_rmax(Some(20.), None), 6.);
+        assert_eq!(spectrum_rmax(Some(7.2), Some(7.5)), 7.5);
+        assert_eq!(spectrum_rmax(None, Some(5.)), 5.);
+    }
+
+    #[test]
+    fn fit_residual_stacks_panels_on_a_shared_axis() {
+        let k: Vec<f64> = (0..200).map(|i| i as f64 * 0.05).collect();
+        let data: Vec<f64> = k
+            .iter()
+            .map(|k| (2. * k).sin() * (-0.1 * k).exp())
+            .collect();
+        let model: Vec<f64> = data.iter().map(|y| 0.9 * y).collect();
+        let r: Vec<f64> = (0..100).map(|i| i as f64 * 0.06).collect();
+        let peak: Vec<f64> = r
+            .iter()
+            .map(|r| (-(r - 2.2_f64).powi(2) * 8.).exp())
+            .collect();
+        let result = FeffFitResult {
+            kweight: 2.,
+            k: nalgebra::DVector::from_vec(k.clone()),
+            data_chi: nalgebra::DVector::from_vec(data),
+            model_chi: nalgebra::DVector::from_vec(model),
+            r: nalgebra::DVector::from_vec(r.clone()),
+            data_chir_re: nalgebra::DVector::from_vec(peak.clone()),
+            data_chir_im: nalgebra::DVector::from_vec(vec![0.; r.len()]),
+            model_chir_mag: nalgebra::DVector::from_vec(peak.iter().map(|y| 0.8 * y).collect()),
+            ..Default::default()
+        };
+        let figures = fit_figures(&result);
+        for key in ["fit-residual-k", "fit-residual-r"] {
+            let figure = figures.iter().find(|f| f.key == key).unwrap();
+            let residual = figure.residual.as_ref().unwrap();
+            assert_eq!(residual[0].key, "residual");
+            assert_eq!(
+                figure
+                    .series
+                    .iter()
+                    .map(|s| s.key.as_str())
+                    .collect::<Vec<_>>(),
+                ["data", "fit"]
+            );
+            let options = FigureOptions {
+                width: Some(3.3),
+                height: Some(3.),
+                font_size: Some(9.),
+                series_colors: BTreeMap::from([
+                    ("data".into(), "#0072b2".into()),
+                    ("fit".into(), "#e69f00".into()),
+                    ("residual".into(), "#009e73".into()),
+                ]),
+                ..Default::default()
+            };
+            let csv = figure.csv(&options).unwrap();
+            assert!(csv.lines().next().unwrap().contains("Residual"));
+            assert!(figure.caption(&options).contains("lower panel"));
+            let rendered = render_figure(figure, &options).unwrap();
+            assert_eq!(png_size(&rendered.png), (990, 900));
+            assert!(
+                rendered
+                    .svg
+                    .contains(r#"width="3.3in" height="3in" viewBox="0 0 990 900""#)
+            );
+            assert!(rendered.svg.starts_with("<svg") && rendered.svg.matches("<svg").count() >= 3);
+            assert!(rendered.svg.contains(r#"id="residual-"#));
+            for stroke in ["rgb(0,114,178)", "rgb(230,159,0)", "rgb(0,158,115)"] {
+                assert!(rendered.svg.contains(&format!(r#"stroke="{stroke}""#)));
+            }
+            let strip = rendered.svg.split(r#"id="residual-"#).nth(1).unwrap();
+            assert!(strip.contains(r#"stroke="rgb(0,158,115)""#));
+            // Built-in labels are sans text markup with plain accessible names.
+            assert!(!figure.math_ylabel(&options).contains('$'));
+            assert!(
+                rendered
+                    .svg
+                    .contains(&format!(r#"aria-label="{}""#, figure.ylabel(&options)))
+            );
+            assert!(!rendered.svg.contains("#super["));
+            if let Some(dir) = std::env::var_os("REXAFS_PUBLICATION_QA_DIR") {
+                fs::create_dir_all(&dir).unwrap();
+                fs::write(Path::new(&dir).join(format!("{key}.png")), &rendered.png).unwrap();
+                fs::write(Path::new(&dir).join(format!("{key}.svg")), &rendered.svg).unwrap();
+                fs::write(
+                    Path::new(&dir).join(format!("{key}-default.png")),
+                    render_figure(figure, &FigureOptions::default())
+                        .unwrap()
+                        .png,
+                )
+                .unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn typed_labels_with_typst_markup_characters_render_literally() {
+        let options = FigureOptions {
+            title: Some("Ni #2 [foil] @beamline".into()),
+            xlabel: Some("E_0 * <shift>".into()),
+            ylabel: Some(r"Signal \ $mu(E)$".into()),
+            ..Default::default()
+        };
+        let rendered = render_figure(&sample(), &options).unwrap();
+        assert!(rendered.svg.contains("Ni #2 [foil] @beamline"));
+        assert!(rendered.svg.contains("E_0 * &lt;shift&gt;"));
+    }
+
+    #[test]
     fn flattened_publication_preserves_library_values_in_figure_and_csv() {
         let file = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../rexafs/tests/testfiles/xraylarch_d867/xafsdata/cu_150k.xmu");
@@ -1136,12 +1522,14 @@ mod tests {
     fn sample() -> FigureData {
         FigureData {
             key: "test",
+            e0: None,
             label: "Test".into(),
             xlabel: "Energy (eV)".into(),
             ylabel: "μ(E)".into(),
-            math_ylabel: "$mu(E)$".into(),
+            math_ylabel: labels::MU_E.into(),
             normalized_series: None,
             default_xlim: None,
+            residual: None,
             guides: vec![],
             series: vec![FigureSeries {
                 key: "data".into(),
@@ -1159,13 +1547,145 @@ mod tests {
             u32::from_be_bytes(bytes[20..24].try_into().unwrap()),
         )
     }
+
+    #[test]
+    fn figure_series_colors_round_trip_and_old_options_keep_automatic_colors() {
+        let old: FigureOptions = serde_json::from_str(r#"{"legend":false}"#).unwrap();
+        assert!(old.series_colors.is_empty());
+        assert!(
+            !serde_json::to_string(&old)
+                .unwrap()
+                .contains("series_colors")
+        );
+        let options = FigureOptions {
+            series_colors: BTreeMap::from([
+                ("data".into(), "#0072b2".into()),
+                ("future/key: [opaque]".into(), "#cc79a7".into()),
+            ]),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&options).unwrap();
+        assert_eq!(
+            serde_json::from_str::<FigureOptions>(&json).unwrap(),
+            options
+        );
+    }
+
+    #[test]
+    fn explicit_series_colors_require_canonical_lowercase_rgb() {
+        for value in [
+            "",
+            "#fff",
+            "0072b2",
+            "#0072B2",
+            " #0072b2",
+            "#0072b2 ",
+            "#0072b280",
+            "#gg72b2",
+            "#é0a00",
+        ] {
+            let options = FigureOptions {
+                series_colors: BTreeMap::from([("future/key".into(), value.into())]),
+                ..Default::default()
+            };
+            let error = options.validate().unwrap_err();
+            assert!(
+                error.contains("future/key") && error.contains("#rrggbb"),
+                "{error}"
+            );
+            assert!(sample().plot(&options).is_err(), "{value}");
+        }
+        for (_, value) in SERIES_PALETTE {
+            let options = FigureOptions {
+                series_colors: BTreeMap::from([("data".into(), value.into())]),
+                ..Default::default()
+            };
+            assert!(options.validate().is_ok(), "{value}");
+        }
+    }
+
+    #[test]
+    fn explicit_svg_series_color_preserves_unset_curves_and_ignores_unknown_keys() {
+        fn curve_strokes(svg: &str) -> Vec<&str> {
+            svg.split("<polyline ")
+                .skip(1)
+                .map(|line| {
+                    line.split("stroke=\"")
+                        .nth(1)
+                        .unwrap()
+                        .split('"')
+                        .next()
+                        .unwrap()
+                })
+                .collect()
+        }
+        let mut data = sample();
+        for (key, y) in [("fit", vec![0., 0.8, 0.1]), ("other", vec![0.1, 0.5, 0.2])] {
+            data.series.push(FigureSeries {
+                key: key.into(),
+                label: key.into(),
+                x: vec![0., 1., 2.],
+                y,
+                dashed: key == "fit",
+                optional: false,
+            });
+        }
+        let defaults = FigureOptions::default();
+        let automatic = data.plot(&defaults).unwrap().render_to_svg().unwrap();
+        let options = FigureOptions {
+            series_colors: BTreeMap::from([
+                ("data".into(), "#0072b2".into()),
+                ("unknown/key".into(), "#cc79a7".into()),
+            ]),
+            ..Default::default()
+        };
+        let svg = data.plot(&options).unwrap().render_to_svg().unwrap();
+        let before = curve_strokes(&automatic);
+        let after = curve_strokes(&svg);
+        assert_eq!(before.len(), 3);
+        assert_eq!(after.len(), 3);
+        assert_eq!(after[0], "rgb(0,114,178)");
+        assert_eq!(after[1..], before[1..]);
+        assert!(!svg.contains("rgb(204,121,167)"));
+        assert_eq!(data.csv(&options).unwrap(), data.csv(&defaults).unwrap());
+
+        let hidden_defaults = FigureOptions {
+            hidden: BTreeSet::from(["data".into()]),
+            ..Default::default()
+        };
+        let hidden_options = FigureOptions {
+            series_colors: options.series_colors,
+            ..hidden_defaults.clone()
+        };
+        let before = data
+            .plot(&hidden_defaults)
+            .unwrap()
+            .render_to_svg()
+            .unwrap();
+        let after = data.plot(&hidden_options).unwrap().render_to_svg().unwrap();
+        assert_eq!(curve_strokes(&before), curve_strokes(&after));
+    }
+
     #[test]
     fn publication_defaults_to_300_dpi_and_custom_dpi_preserves_shape() {
         let defaults = Plot::new().dpi(300);
         let canvas = defaults.get_config().canvas_size();
         let rendered = render_figure(&sample(), &FigureOptions::default()).unwrap();
         assert_eq!(png_size(&rendered.png), canvas);
-        assert!(rendered.svg.contains("Energy"));
+        assert!(rendered.svg.contains(">Energy (eV)</tspan>"));
+        assert!(
+            rendered.svg.contains(">Data</tspan>"),
+            "legend label is text"
+        );
+        assert!(
+            rendered.svg.matches("<text").count() >= 5,
+            "tick numbers are text"
+        );
+        assert!(rendered.svg.contains(r#"role="img" aria-label="μ(E)""#));
+        assert!(
+            !rendered.svg.contains("_μ_"),
+            "markup is not an accessible name"
+        );
         let options = FigureOptions {
             width: Some(4.),
             height: Some(3.),
@@ -1179,6 +1699,33 @@ mod tests {
         assert!(rendered.svg.contains("data-ruviz-text-engine=\"typst\""));
         assert!(rendered.svg.contains("class=\"typst-doc\""));
         assert!(rendered.svg.contains("Photon energy"));
+        assert!(
+            rendered
+                .svg
+                .contains(r#"width="4in" height="3in" viewBox="0 0 800 600""#)
+        );
+    }
+    #[test]
+    fn svg_uses_physical_size_with_pixel_view_box() {
+        let options = FigureOptions {
+            width: Some(3.3),
+            height: Some(2.5),
+            ..Default::default()
+        };
+        let svg = render_figure(&sample(), &options).unwrap().svg;
+        let start = svg.find("<svg").unwrap();
+        let tag = &svg[start..start + svg[start..].find('>').unwrap()];
+        assert!(
+            tag.contains(r#"width="3.3in" height="2.5in" viewBox="0 0 990 750""#),
+            "{tag}"
+        );
+        let mut options = FigureOptions::default();
+        StylePreset::SingleColumn.apply(&mut options);
+        let svg = render_figure(&sample(), &options).unwrap().svg;
+        assert!(svg.contains(r#"width="3.5in" height="2.6in" viewBox="0 0 2100 1560""#));
+        // An SVG that already has a viewBox is left untouched.
+        let sized = r#"<svg width="1in" height="1in" viewBox="0 0 9 9"></svg>"#;
+        assert_eq!(physical_svg_size(sized.into(), (9, 9), 300.), sized);
     }
     #[test]
     fn style_presets_and_apply_to_all_copy_only_appearance_fields() {
@@ -1190,10 +1737,17 @@ mod tests {
         source.xmax = Some(2.);
         source.legend = false;
         source.guides = true;
+        source.series_colors.insert("data".into(), "#0072b2".into());
         assert!(StylePreset::SingleColumn.matches(source));
         assert!(!StylePreset::Slide.matches(source));
         assert!(source.validate().is_ok());
         settings.figures.entry("chik".into()).or_default().ylabel = Some("kept".into());
+        settings
+            .figures
+            .entry("chik".into())
+            .or_default()
+            .series_colors
+            .insert("data".into(), "#e69f00".into());
         settings.apply_style_to_all("xanes", ["chir"]);
         for key in ["chik", "chir"] {
             let copied = settings.options(key);
@@ -1204,6 +1758,8 @@ mod tests {
             assert!(copied.title.is_none() && copied.xmin.is_none());
         }
         assert_eq!(settings.options("chik").ylabel.as_deref(), Some("kept"));
+        assert_eq!(settings.options("chik").series_colors["data"], "#e69f00");
+        assert!(settings.options("chir").series_colors.is_empty());
         for preset in StylePreset::ALL {
             let mut options = FigureOptions::default();
             preset.apply(&mut options);

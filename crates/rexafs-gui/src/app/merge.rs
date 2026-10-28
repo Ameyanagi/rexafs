@@ -41,13 +41,35 @@ fn template_first(inputs: &mut [ToolTarget], current: Option<&ToolTarget>) {
     }
 }
 
+/// Materialized imports retain their channel evidence even when the original
+/// source is unavailable. A reference foil is still a distinct merge role,
+/// although its logarithmic signal has transmission acquisition physics.
+fn recorded_mode(group: &DerivedSpectrum) -> Option<DetectionMode> {
+    if group.source.is_some() {
+        return None;
+    }
+    if group.operation.as_ref().is_some_and(|op| {
+        op.tool == "Measurement import"
+            && op.parameters["signal_name"]
+                .as_str()
+                .is_some_and(|name| name.eq_ignore_ascii_case("reference"))
+    }) {
+        return Some(DetectionMode::Reference);
+    }
+    match group.acquisition_mode() {
+        rexafs::AbsorptionMode::Transmission => Some(DetectionMode::Transmission),
+        rexafs::AbsorptionMode::Fluorescence => Some(DetectionMode::Fluorescence),
+        rexafs::AbsorptionMode::Unknown => None,
+    }
+}
+
 #[derive(Clone)]
 struct MergeInput {
     target: ToolTarget,
     params: PipelineParams,
     derived: Option<DerivedSpectrum>,
-    // Auto on a materialized output must be resolved from its target lineage,
-    // never treated as a sample merely because its arrays contain mu(E).
+    // Auto uses recorded acquisition evidence first, then source lineage.
+    // Arrays alone do not establish a sample versus reference role.
     mode_source: PathBuf,
 }
 
@@ -72,6 +94,9 @@ impl MergeInput {
     fn mode(&self) -> Result<DetectionMode, String> {
         if self.params.import.mode != DetectionMode::Auto {
             return Ok(self.params.import.mode);
+        }
+        if let Some(mode) = self.derived.as_ref().and_then(recorded_mode) {
+            return Ok(mode);
         }
         if self.mode_source.as_os_str().is_empty() {
             return Err("cannot resolve Auto channel kind: source identity is unavailable".into());
@@ -228,7 +253,23 @@ fn run_merge(inputs: Vec<MergeInput>, cancel: &AtomicBool) -> Result<DerivedSpec
         .ok_or("mark at least 2 spectra to merge")?
         .finish()
         .map_err(|e| format!("merge refused ({label}): {e}"))?;
+    let absorption_mode = if seen.iter().all(|info| {
+        matches!(
+            info.mode,
+            DetectionMode::Transmission | DetectionMode::Reference
+        )
+    }) {
+        rexafs::AbsorptionMode::Transmission
+    } else if seen
+        .iter()
+        .all(|info| info.mode == DetectionMode::Fluorescence)
+    {
+        rexafs::AbsorptionMode::Fluorescence
+    } else {
+        rexafs::AbsorptionMode::Unknown
+    };
     Ok(DerivedSpectrum {
+        absorption_mode,
         corrections,
         declared_edge: seen.first().and_then(|info| info.declared_edge.clone()),
         label,
@@ -294,6 +335,7 @@ impl StudioApp {
                     self.saved_parser_record(target.ix)
                         .map(|record| record.channel)
                 })
+                .or_else(|| derived.and_then(recorded_mode))
                 .unwrap_or(params.import.mode);
             if mode != DetectionMode::Auto {
                 if let Some((label, other)) = modes.iter().find(|(_, other)| {
@@ -662,6 +704,95 @@ impl StudioApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn portable_materialized_imports_merge_without_source_files() {
+        let mut first = input(DERIVED_BASE, "embedded first", 0.0);
+        let mut second = input(DERIVED_BASE + 1, "embedded second", 2.0);
+        for input in [&mut first, &mut second] {
+            input.params.import.mode = DetectionMode::Auto;
+            let group = input.derived.as_mut().unwrap();
+            group.absorption_mode = rexafs::AbsorptionMode::Transmission;
+            group.params = Some(input.params.clone());
+        }
+        let expected = first
+            .derived
+            .as_ref()
+            .unwrap()
+            .mu
+            .iter()
+            .map(|mu| mu + 1.0)
+            .collect::<Vec<_>>();
+        let merged = run_merge(vec![first, second], &AtomicBool::new(false)).unwrap();
+        assert_eq!(merged.mu.len(), expected.len());
+        assert!(
+            merged
+                .mu
+                .iter()
+                .zip(expected)
+                .all(|(actual, expected)| (actual - expected).abs() < 1e-12)
+        );
+        assert_eq!(merged.absorption_mode, rexafs::AbsorptionMode::Transmission);
+        assert_eq!(
+            merged.params.as_ref().unwrap().import.mode,
+            DetectionMode::Transmission
+        );
+        assert!(merged.source.is_none());
+    }
+
+    #[test]
+    fn recorded_import_channel_keeps_reference_foils_separate() {
+        let imported = |ix, reference| {
+            let mut input = input(ix, "embedded", 0.0);
+            input.params.import.mode = DetectionMode::Auto;
+            input.derived.as_mut().unwrap().operation = Some(Operation {
+                tool: "Measurement import".into(),
+                parameters: serde_json::json!({
+                    "signal_name": if reference { "reference" } else { "transmission" },
+                    "mapping": {"energy_column": 0, "energy": {"kind": "ev"},
+                        "signal": {"kind": "transmission", "incident": 1, "transmitted": 2}},
+                }),
+                inputs: vec![],
+                applied_energy_shift_ev: 0.0,
+            });
+            input
+        };
+        // The mapping also recovers transmission physics in older archives
+        // that did not yet save absorption_mode explicitly.
+        assert_eq!(
+            imported(DERIVED_BASE, false).mode().unwrap(),
+            DetectionMode::Transmission
+        );
+        assert_eq!(
+            imported(DERIVED_BASE, true).mode().unwrap(),
+            DetectionMode::Reference
+        );
+        assert!(
+            run_merge(
+                vec![
+                    imported(DERIVED_BASE, false),
+                    imported(DERIVED_BASE + 1, true)
+                ],
+                &AtomicBool::new(false)
+            )
+            .err()
+            .unwrap()
+            .contains("channel kinds")
+        );
+        assert!(
+            run_merge(
+                vec![
+                    imported(DERIVED_BASE, true),
+                    imported(DERIVED_BASE + 1, true)
+                ],
+                &AtomicBool::new(false)
+            )
+            .is_ok()
+        );
+        let mut unknown = input(DERIVED_BASE, "unknown", 0.0);
+        unknown.params.import.mode = DetectionMode::Auto;
+        assert!(unknown.mode().unwrap_err().contains("source identity"));
+    }
 
     fn target(ix: usize, label: &str) -> ToolTarget {
         ToolTarget {

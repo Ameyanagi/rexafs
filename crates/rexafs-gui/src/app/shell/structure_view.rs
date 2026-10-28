@@ -40,6 +40,26 @@ use crate::widgets::text_input::{InputEvent, InputStyle, TextInput};
 use gpui::PathPromptOptions;
 use rexafs::xafs::structure as core;
 
+const CLUSTER_RADIUS_ERROR: &str = "Enter a finite cluster radius from 2 to 12 Å.";
+
+/// The candidate preview and FEFF calculation share this radius in ångströms.
+/// Reject invalid edits before they can discard the current preview.
+fn cluster_radius_value(text: &str) -> Result<f64, &'static str> {
+    text.trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|radius| radius.is_finite() && (2.0..=12.0).contains(radius))
+        .ok_or(CLUSTER_RADIUS_ERROR)
+}
+
+/// Restore the last successfully previewed radius after a rejected edit.
+fn committed_cluster_radius(text: &str, previous: f64) -> (f64, Option<&'static str>) {
+    match cluster_radius_value(text) {
+        Ok(radius) => (radius, None),
+        Err(error) => (previous, Some(error)),
+    }
+}
+
 /// Camera presets offered above the 3D view.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum CameraPreset {
@@ -153,6 +173,7 @@ pub(crate) struct StructureState {
     pub edge: String,
     pub backend: rexafs::prelude::FeffExecutionMode,
     pub radius: Entity<TextInput>,
+    radius_error: Option<&'static str>,
     pub mp_key: Entity<TextInput>,
     pub mp_key_editing: bool,
     /// The cluster the current FEFF workspace was generated from.
@@ -187,9 +208,22 @@ impl StructureState {
             }
         })
         .detach();
-        let radius = cx.new(|cx| TextInput::new("rmax", "8.0", theme, cx).with_style(mono));
+        let radius = cx.new(|cx| {
+            let mut input = TextInput::new("rmax", "8.0", theme, cx).with_style(mono);
+            input.set_accessible_name("Cluster radius in ångströms, 2 to 12");
+            input
+        });
         cx.subscribe(&radius, |this: &mut StudioApp, _f, event, cx| {
-            if let InputEvent::Committed(_) = event {
+            if let InputEvent::Committed(text) = event {
+                let (radius, error) = committed_cluster_radius(text, this.structure.preview_radius);
+                this.structure.radius_error = error;
+                this.structure.radius.update(cx, |input, cx| {
+                    input.set_text(radius.to_string(), cx);
+                });
+                if error.is_some() {
+                    cx.notify();
+                    return;
+                }
                 this.preview_structure(cx);
             }
         })
@@ -297,6 +331,7 @@ impl StructureState {
             edge: "K".to_string(),
             backend: crate::feffgen::selected_feff_mode().unwrap_or_default(),
             radius,
+            radius_error: None,
             mp_key,
             mp_key_editing: false,
             core_cluster: None,
@@ -1087,17 +1122,7 @@ impl StudioApp {
             .absorber
             .as_ref()
             .ok_or("Choose an absorbing element.")?;
-        let radius = self
-            .structure
-            .radius
-            .read(cx)
-            .text()
-            .trim()
-            .parse::<f64>()
-            .map_err(|_| "Enter a cluster radius from 2 to 12 Å.")?;
-        if !radius.is_finite() || !(2.0..=12.0).contains(&radius) {
-            return Err("Enter a cluster radius from 2 to 12 Å.".into());
-        }
+        let radius = cluster_radius_value(self.structure.radius.read(cx).text())?;
         let selection = match self
             .structure
             .absorber_site
@@ -1548,12 +1573,34 @@ impl StudioApp {
                 );
             }
         }
-        if self.stage_view.fit_step == FitStep::Structure && self.structure.summary.is_some() {
-            modes = modes
-                .child(div().ml_2().text_size(px(11.)).child("Cluster radius"))
-                .child(div().w(px(56.)).child(self.structure.radius.clone()))
-                .child("Å");
-        }
+        let radius_controls = div().flex().flex_col().gap_1().when(
+            self.stage_view.fit_step == FitStep::Structure && self.structure.summary.is_some(),
+            |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child("Cluster radius")
+                        .child(div().w(px(56.)).child(self.structure.radius.clone()))
+                        .child("Å · 2–12 Å"),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(t.text_muted)
+                        .child("Distance from the absorber; shared with Calculate."),
+                )
+                .when_some(self.structure.radius_error, |d, error| {
+                    d.child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(t.error)
+                            .child(format!("{error} Previous radius restored.")),
+                    )
+                })
+            },
+        );
         styles = styles.child(
             chip(&t, "atom-shading", "Shading", self.structure.shading).on_click(cx.listener(
                 |this, _, _, cx| {
@@ -1841,6 +1888,7 @@ impl StudioApp {
             .flex()
             .flex_col()
             .gap_1()
+            .child(radius_controls)
             .child(modes)
             .child(styles)
             .child(display_controls)
@@ -2889,6 +2937,14 @@ impl StudioApp {
                             .child("Å radius · 2–12 Å"),
                     ),
             );
+            if let Some(error) = st.radius_error {
+                panel = panel.child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(t.error)
+                        .child(format!("{error} Previous radius restored.")),
+                );
+            }
         }
         if st.summary.is_none() {
             panel = panel.child(
@@ -2988,4 +3044,44 @@ fn credit_line(t: &Theme, text: &'static str) -> gpui::Div {
         .text_size(px(11.))
         .text_color(t.text_muted)
         .child(SharedString::from(text))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CLUSTER_RADIUS_ERROR, cluster_radius_value, committed_cluster_radius};
+
+    #[test]
+    fn zero_radius_retains_the_preview_radius_and_allows_the_next_valid_edit() {
+        let (radius, error) = committed_cluster_radius("0", 8.0);
+        assert_eq!(radius, 8.0);
+        assert_eq!(error, Some(CLUSTER_RADIUS_ERROR));
+
+        // The restored field can be committed unchanged or increased again.
+        assert_eq!(
+            committed_cluster_radius(&radius.to_string(), radius),
+            (8.0, None)
+        );
+        assert_eq!(committed_cluster_radius("10", radius), (10.0, None));
+    }
+
+    #[test]
+    fn invalid_radius_edits_retain_the_last_valid_radius() {
+        for text in [
+            "", "radius", "NaN", "inf", "-inf", "1e999", "-1", "1.9", "12.1",
+        ] {
+            assert_eq!(
+                committed_cluster_radius(text, 6.25),
+                (6.25, Some(CLUSTER_RADIUS_ERROR)),
+                "{text:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn preview_and_calculation_radius_validation_preserves_the_existing_range() {
+        for (text, radius) in [(" 2 ", 2.0), ("12", 12.0), ("8.125", 8.125)] {
+            assert_eq!(cluster_radius_value(text), Ok(radius));
+            assert_eq!(committed_cluster_radius(text, 8.0), (radius, None));
+        }
+    }
 }

@@ -55,13 +55,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
-          cache: npm
-          cache-dependency-path: website/package-lock.json
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+          # Always the newest 24.x: the runner's cached Node can lag behind
+          # security releases (CVE-2026-111497 is fixed in 24.22.1).
+          check-latest: true
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          # 1.4.4 carries the CVE-2026-111497 Brotli fix.
+          bun-version: 1.4.4
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
       - name: Check browser engine version against the Rust workspace
@@ -109,9 +115,9 @@ jobs:
           path: website/.cache/rustdoc-html/next
           key: website-rustdoc-next-v1-${{ steps.rustdoc-keys.outputs.next }}
       - name: Install website dependencies
-        run: npm --prefix website ci
+        run: bun install --cwd website --frozen-lockfile
       - name: Verify documentation inheritance and release boundaries
-        run: npm --prefix website run test:generators
+        run: bun run --cwd website test:generators
       - name: Regenerate API pages and citations
         run: |
           python website/scripts/generate-python-reference.py
@@ -129,14 +135,14 @@ jobs:
         run: |
           # Reuse dependency compilation while rebuilding our browser engine.
           cargo clean --locked --release --target wasm32-unknown-unknown -p rexafs -p rexafs-wasm
-          npm --prefix website run check
-          npm --prefix website run build
-          npm --prefix website test
+          bun run --cwd website check
+          bun run --cwd website build
+          bun run --cwd website test
       - name: Check browser behavior and accessibility
         working-directory: website
         run: |
-          npx playwright install --with-deps chromium
-          npm run test:browser
+          bunx playwright install --with-deps chromium
+          bun run test:browser
       - name: Save shared compilation dependencies from main
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.rust-dependencies.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

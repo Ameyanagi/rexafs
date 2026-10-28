@@ -17,7 +17,10 @@ path = "src/main.rs"
 # git-pinned gpui 0.2.2 (zed rev 3060e417...) shared with ruviz-gpui, so there
 # is exactly one gpui in the tree.
 gpui = { workspace = true }
-ruviz = { workspace = true, features = ["typst-math"] }
+# `pdf` converts composed publication figures from SVG to vector PDF.
+ruviz = { workspace = true, features = ["typst-math", "pdf"] }
+# LZW-compressed TIFF, with a DPI tag, for composed publication figures.
+tiff = { version = "0.11", default-features = false, features = ["lzw"] }
 ruviz-gpui = { workspace = true }
 
 # Platform entry point: gpui 0.2.2 has no zero-arg `Application::new()`; the
@@ -44,15 +47,16 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 xraydb = "0.4.1"
 futures = "0.3"
 rayon = { workspace = true }
-lru = "0.18"
+lru = "0.19"
 walkdir = "2.5"
 tempfile = "3.27"
 libc = "0.2"
 tar = { version = "0.4.46", default-features = false }
-zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+zip = { version = "9.1.1", default-features = false, features = ["deflate"] }
 ureq = { version = "3", features = ["json"] }
 semver = { workspace = true }
 unicode-segmentation = "1"
+url = "2.5.8"
 # Same nalgebra as the core crate (XASSpectrum exposes DVector<f64>).
 nalgebra = { workspace = true }
 serde = { workspace = true, features = ["rc"] }

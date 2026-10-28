@@ -1,6 +1,12 @@
 //! Direct manipulation on plots: range parameters are shaded regions with
 //! draggable edges, E₀ / Rbkg are draggable lines.
 //!
+//! In the Process stage every range is drawn on each linked plot whose axis
+//! it lives on: the pre-edge (blue) and normalization (yellow) ranges and E₀
+//! on both μ(E) plots; the AUTOBK spline k range (yellow edges) on χ(k) and,
+//! converted to energy, on μ(E); the forward-FT k window (blue) on χ(k); and
+//! the back-FT R window (blue) with the Rbkg cutoff (yellow) on |χ(R)|.
+//!
 //! The geometry is painted by GPUI ([`StudioApp::handle_layer`], a canvas
 //! layered over the plot card) from the plot's current data→pixel mapping
 //! (`RuvizPlot::screen_at`), so a drag or hover frame only re-paints a
@@ -34,17 +40,83 @@ pub const PLOT_FIT_Q: usize = 104;
 
 /// Pixel distance within which a handle arms.
 const ARM_PX: f64 = 7.0;
+/// Height of the secondary tab row just inside the top of the plot area.
+const SECONDARY_ROW_PX: f32 = 15.0;
+
+/// Which grab-tab row the pointer is in. Primary (accent) tabs sit just
+/// above the plot area, secondary tabs just inside its top edge, so two
+/// handles at the same x (Rbkg = back-FT R min, or a spline k min at E₀)
+/// can each be grabbed by its own tab.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum TabRow {
+    Primary,
+    Secondary,
+}
+
+/// Choose the handle to arm from `(key, pixel distance)` candidates within
+/// [`ARM_PX`]. In a tab row, handles of that row win; otherwise (or within
+/// the row) the nearest wins, and an exact tie keeps list order.
+fn pick_handle(
+    candidates: impl IntoIterator<Item = (HandleKey, f64)>,
+    row: Option<TabRow>,
+) -> Option<HandleKey> {
+    let rank = |key: HandleKey, distance: f64| {
+        let other_row = match row {
+            Some(TabRow::Primary) => !key.accent(),
+            Some(TabRow::Secondary) => key.accent(),
+            None => false,
+        };
+        (u8::from(other_row), distance)
+    };
+    let mut best: Option<(HandleKey, (u8, f64))> = None;
+    for (key, distance) in candidates {
+        if distance > ARM_PX {
+            continue;
+        }
+        let r = rank(key, distance);
+        if best.is_none_or(|(_, b)| r.0 < b.0 || (r.0 == b.0 && r.1 < b.1)) {
+            best = Some((key, r));
+        }
+    }
+    best.map(|(key, _)| key)
+}
 
 /// Use raw energy coverage, not the shortened χ(k) grid: users must be able
 /// to drag k-max outward again after reducing it. Share the core conversion.
 pub(crate) fn background_k_domain(sp: &rexafs::prelude::XASSpectrum) -> Option<(f64, f64)> {
-    use rexafs::xafs::xafsutils::XAFSUtils;
-    let e0 = match sp.background.as_ref()? {
-        BackgroundMethod::AUTOBK(a) => a.ek0.or_else(|| sp.e0())?,
-        _ => return None,
-    };
+    let e0 = background_ek0(sp)?;
     let emax = sp.energy.as_ref()?.iter().copied().max_by(f64::total_cmp)?;
-    (emax > e0).then(|| (0.0, (emax - e0).etok()))
+    (emax > e0).then(|| (0.0, energy_to_k(emax, e0)))
+}
+
+/// Edge energy E₀ (eV) that AUTOBK used to define k: its resolved `ek0`, or
+/// the spectrum E₀ before the first background run has stored one.
+pub(crate) fn background_ek0(sp: &rexafs::prelude::XASSpectrum) -> Option<f64> {
+    match sp.background.as_ref()? {
+        BackgroundMethod::AUTOBK(a) => a.ek0.or_else(|| sp.e0()),
+        _ => None,
+    }
+}
+
+/// Photon energy E (eV) of photoelectron wave number k (Å⁻¹):
+/// E = E₀ + ħ²k²/(2mₑ) = E₀ + k²/ETOK, with 1/ETOK ≈ 3.81 eV·Å² taken from
+/// the core crate. AUTOBK uses the same relation to place `kmax` in energy.
+pub(crate) fn k_to_energy(k: f64, e0: f64) -> f64 {
+    use rexafs::xafs::xafsutils::XAFSUtils;
+    e0 + k.ktoe()
+}
+
+/// Inverse of [`k_to_energy`]: k = √((E − E₀)·ETOK) in Å⁻¹. Energies below
+/// E₀ map to k = 0.
+pub(crate) fn energy_to_k(e: f64, e0: f64) -> f64 {
+    use rexafs::xafs::xafsutils::XAFSUtils;
+    (e - e0).etok()
+}
+
+/// Drag readout for a background k bound shown on an energy axis: the stored
+/// k and the photon energy where that cut falls.
+fn background_k_energy_readout(k: f64, e: f64) -> String {
+    format!("k {k:.1} Å⁻¹ · {e:.0} eV")
 }
 
 #[cfg(test)]
@@ -67,6 +139,58 @@ mod tests {
         let (lo, hi) = background_k_domain(&sp).unwrap();
         assert_eq!(lo, 0.0);
         assert!((hi - 16.).abs() < 1e-12, "{hi}");
+    }
+
+    #[test]
+    fn coincident_handles_are_grabbed_by_their_own_tab_row() {
+        // Rbkg = back-FT R min = 1.0 Å on |χ(R)|: back-FT window listed first.
+        let tie = [(HandleKey::BftRmin, 0.0), (HandleKey::Rbkg, 0.0)];
+        assert_eq!(
+            pick_handle(tie, Some(TabRow::Primary)),
+            Some(HandleKey::BftRmin)
+        );
+        assert_eq!(
+            pick_handle(tie, Some(TabRow::Secondary)),
+            Some(HandleKey::Rbkg)
+        );
+        assert_eq!(pick_handle(tie, None), Some(HandleKey::BftRmin));
+        // E₀ and a spline k min at E₀ on μ(E).
+        let edge = [(HandleKey::E0, 1.0), (HandleKey::BkgKmin, 1.0)];
+        assert_eq!(
+            pick_handle(edge, Some(TabRow::Secondary)),
+            Some(HandleKey::BkgKmin)
+        );
+        assert_eq!(
+            pick_handle(edge, Some(TabRow::Primary)),
+            Some(HandleKey::E0)
+        );
+        // Off the rows, the nearest handle wins regardless of row.
+        let near = [(HandleKey::BftRmin, 5.0), (HandleKey::Rbkg, 2.0)];
+        assert_eq!(pick_handle(near, None), Some(HandleKey::Rbkg));
+        // A handle of the other row is still reachable from either row.
+        assert_eq!(
+            pick_handle([(HandleKey::Rbkg, 3.0)], Some(TabRow::Primary)),
+            Some(HandleKey::Rbkg)
+        );
+        assert_eq!(pick_handle([(HandleKey::Rbkg, ARM_PX + 0.1)], None), None);
+    }
+
+    #[test]
+    fn background_k_bounds_map_to_energy_and_back() {
+        use rexafs::xafs::xafsutils::constants::ETOK;
+        // Ni K edge: k = 13.5 Å⁻¹ lies 13.5²/ETOK ≈ 694 eV above E₀.
+        let e0 = 8333.0;
+        let e = k_to_energy(13.5, e0);
+        assert!((e - (e0 + 13.5_f64.powi(2) / ETOK)).abs() < 1e-9, "{e}");
+        assert!((e - 9027.4).abs() < 0.1, "{e}");
+        assert!((energy_to_k(e, e0) - 13.5).abs() < 1e-12);
+        assert_eq!(k_to_energy(0.0, e0), e0);
+        // Dragging below the edge clamps to k = 0 rather than producing NaN.
+        assert_eq!(energy_to_k(e0 - 50.0, e0), 0.0);
+        assert_eq!(
+            background_k_energy_readout(13.5, 9030.0),
+            "k 13.5 Å⁻¹ · 9030 eV"
+        );
     }
 }
 
@@ -168,8 +292,19 @@ impl HandleKey {
         }
     }
 
+    /// Primary (accent) handles are the window each plot is mainly about;
+    /// secondary (warning-coloured) handles share a plot with one: the
+    /// normalization range beside the pre-edge range, the spline k range
+    /// beside the FT window, and Rbkg beside the back-FT R window.
     fn accent(self) -> bool {
-        !matches!(self, HandleKey::NormStart | HandleKey::NormEnd)
+        !matches!(
+            self,
+            HandleKey::NormStart
+                | HandleKey::NormEnd
+                | HandleKey::BkgKmin
+                | HandleKey::BkgKmax
+                | HandleKey::Rbkg
+        )
     }
 }
 
@@ -200,8 +335,8 @@ pub struct HandleState {
 struct HandleDecor {
     /// (data x0, data x1, colour)
     spans: Vec<(f64, f64, Rgba)>,
-    /// (data x, colour, hot, dashed)
-    lines: Vec<(f64, Rgba, bool, bool)>,
+    /// (data x, colour, hot, dashed, secondary tab row)
+    lines: Vec<(f64, Rgba, bool, bool, bool)>,
 }
 
 impl StudioApp {
@@ -225,7 +360,7 @@ impl StudioApp {
         self.measurements.wavelet_drag = None;
         self.measurements.wavelet_armed = None;
         self.handles.hidden = !self.handles.hidden;
-        if self.stage == Stage::Normalize && self.normalization.open {
+        if self.stage == Stage::Process && self.normalization.open {
             self.rebuild_normalization_plot(true, cx);
         }
         if self.stage == Stage::Data && self.peaks.open {
@@ -296,123 +431,181 @@ impl StudioApp {
         if !self.spectrum_quantity.supports_exafs() {
             return (Vec::new(), Vec::new());
         }
-        let p = self.ui_params();
-        match (self.stage, plot) {
-            (Stage::Normalize, PLOT_MU | PLOT_NORM) => {
-                let Some(e0) = p.e0.or_else(|| sp.e0()) else {
-                    return (Vec::new(), Vec::new());
-                };
-                if self.spectrum_quantity.prepared_space().is_some() && !p.refit_prepared {
-                    // The component already has its declared scale. Only its
-                    // energy origin is editable; baseline ranges do not apply.
-                    return (vec![(HandleKey::E0, e0)], Vec::new());
-                }
-                let ranges = crate::params::normalization_ranges(sp);
-                let rel = |param: Option<f64>, from_sp: Option<f64>, default: f64| {
-                    param.or(from_sp).unwrap_or(default)
-                };
-                let pre1 = rel(p.pre_edge_start, ranges.map(|r| r[0]), -200.0);
-                let pre2 = rel(p.pre_edge_end, ranges.map(|r| r[1]), -30.0);
-                let nor1 = rel(p.norm_start, ranges.map(|r| r[2]), 150.0);
-                let emax = sp
-                    .energy
-                    .as_ref()
-                    .and_then(|e| e.iter().next_back().copied())
-                    .unwrap_or(e0 + 2000.0);
-                let nor2 = rel(p.norm_end, ranges.map(|r| r[3]), 2000.0).min(emax - e0);
-                (
-                    vec![
-                        (HandleKey::PreStart, e0 + pre1),
-                        (HandleKey::PreEnd, e0 + pre2),
-                        (HandleKey::NormStart, e0 + nor1),
-                        (HandleKey::NormEnd, e0 + nor2),
-                        (HandleKey::E0, e0),
-                    ],
-                    vec![
-                        Span {
-                            lo: Some(HandleKey::PreStart),
-                            hi: Some(HandleKey::PreEnd),
-                            fixed_lo: 0.0,
-                            accent: true,
-                        },
-                        Span {
-                            lo: Some(HandleKey::NormStart),
-                            hi: Some(HandleKey::NormEnd),
-                            fixed_lo: 0.0,
-                            accent: false,
-                        },
-                    ],
-                )
-            }
-            (Stage::Background, PLOT_CHIK) => {
-                let a = match sp.background.as_ref() {
-                    Some(BackgroundMethod::AUTOBK(a)) => a,
-                    _ => return (Vec::new(), Vec::new()),
-                };
-                let lo = p.bkg_kmin.or(a.kmin).unwrap_or(0.0);
-                let available = background_k_domain(sp).map(|(_, hi)| hi).unwrap_or(0.0);
-                let hi = p.bkg_kmax.or(a.kmax).unwrap_or(available).min(available);
-                (
-                    vec![(HandleKey::BkgKmin, lo), (HandleKey::BkgKmax, hi)],
-                    vec![Span {
-                        lo: Some(HandleKey::BkgKmin),
-                        hi: Some(HandleKey::BkgKmax),
-                        fixed_lo: 0.0,
-                        accent: true,
-                    }],
-                )
-            }
-            (Stage::Transform, PLOT_CHIR) => {
-                let lo = p
-                    .bft_rmin
-                    .or_else(|| sp.xftr.as_ref().and_then(|f| f.rmin))
-                    .unwrap_or(0.0);
-                let hi = p
-                    .bft_rmax
-                    .or_else(|| sp.xftr.as_ref().and_then(|f| f.rmax))
-                    .unwrap_or(20.0);
-                (
-                    vec![(HandleKey::BftRmin, lo), (HandleKey::BftRmax, hi)],
-                    vec![Span {
-                        lo: Some(HandleKey::BftRmin),
-                        hi: Some(HandleKey::BftRmax),
-                        fixed_lo: 0.0,
-                        accent: true,
-                    }],
-                )
-            }
-            (Stage::Transform, PLOT_CHIK) => {
-                let (kmin, kmax, _, _) = self.fft_summary();
-                (
-                    vec![(HandleKey::FftKmin, kmin), (HandleKey::FftKmax, kmax)],
-                    vec![Span {
-                        lo: Some(HandleKey::FftKmin),
-                        hi: Some(HandleKey::FftKmax),
-                        fixed_lo: 0.0,
-                        accent: true,
-                    }],
-                )
-            }
-            (Stage::Background, PLOT_CHIR) => {
-                let rbkg = p
-                    .rbkg
-                    .or(match sp.background.as_ref() {
-                        Some(BackgroundMethod::AUTOBK(a)) => a.rbkg,
-                        _ => None,
-                    })
-                    .unwrap_or(1.0);
-                (
-                    vec![(HandleKey::Rbkg, rbkg)],
-                    vec![Span {
-                        lo: None,
-                        hi: Some(HandleKey::Rbkg),
-                        fixed_lo: 0.0,
-                        accent: true,
-                    }],
-                )
-            }
-            _ => (Vec::new(), Vec::new()),
+        if self.stage != Stage::Process {
+            return (Vec::new(), Vec::new());
         }
+        // Each plot lists its primary handles first: on a tie in distance
+        // the earlier handle arms (E₀ before a spline k-min at E₀).
+        let parts = match plot {
+            PLOT_MU => vec![
+                self.normalization_handles(sp),
+                self.spline_k_handles(plot, sp),
+            ],
+            PLOT_NORM => vec![self.normalization_handles(sp)],
+            PLOT_CHIK => vec![self.ft_k_handles(), self.spline_k_handles(plot, sp)],
+            PLOT_CHIR => vec![self.back_ft_r_handles(sp), self.rbkg_handles(sp)],
+            _ => Vec::new(),
+        };
+        parts.into_iter().fold(
+            (Vec::new(), Vec::new()),
+            |(mut specs, mut spans), (more_specs, more_spans)| {
+                specs.extend(more_specs);
+                spans.extend(more_spans);
+                (specs, spans)
+            },
+        )
+    }
+
+    /// Pre-edge and normalization ranges (stored relative to E₀) and E₀.
+    fn normalization_handles(
+        &self,
+        sp: &rexafs::prelude::XASSpectrum,
+    ) -> (Vec<(HandleKey, f64)>, Vec<Span>) {
+        let p = self.ui_params();
+        let Some(e0) = p.e0.or_else(|| sp.e0()) else {
+            return (Vec::new(), Vec::new());
+        };
+        if self.spectrum_quantity.prepared_space().is_some() && !p.refit_prepared {
+            // The component already has its declared scale. Only its
+            // energy origin is editable; baseline ranges do not apply.
+            return (vec![(HandleKey::E0, e0)], Vec::new());
+        }
+        let ranges = crate::params::normalization_ranges(sp);
+        let rel = |param: Option<f64>, from_sp: Option<f64>, default: f64| {
+            param.or(from_sp).unwrap_or(default)
+        };
+        let pre1 = rel(p.pre_edge_start, ranges.map(|r| r[0]), -200.0);
+        let pre2 = rel(p.pre_edge_end, ranges.map(|r| r[1]), -30.0);
+        let nor1 = rel(p.norm_start, ranges.map(|r| r[2]), 150.0);
+        let emax = sp
+            .energy
+            .as_ref()
+            .and_then(|e| e.iter().next_back().copied())
+            .unwrap_or(e0 + 2000.0);
+        let nor2 = rel(p.norm_end, ranges.map(|r| r[3]), 2000.0).min(emax - e0);
+        (
+            vec![
+                (HandleKey::PreStart, e0 + pre1),
+                (HandleKey::PreEnd, e0 + pre2),
+                (HandleKey::NormStart, e0 + nor1),
+                (HandleKey::NormEnd, e0 + nor2),
+                (HandleKey::E0, e0),
+            ],
+            vec![
+                Span {
+                    lo: Some(HandleKey::PreStart),
+                    hi: Some(HandleKey::PreEnd),
+                    fixed_lo: 0.0,
+                    accent: true,
+                },
+                Span {
+                    lo: Some(HandleKey::NormStart),
+                    hi: Some(HandleKey::NormEnd),
+                    fixed_lo: 0.0,
+                    accent: false,
+                },
+            ],
+        )
+    }
+
+    /// AUTOBK spline k range: in k on χ(k), at E₀ + k²/ETOK on μ(E). Edges
+    /// only, so the shaded FT window stays readable.
+    fn spline_k_handles(
+        &self,
+        plot: usize,
+        sp: &rexafs::prelude::XASSpectrum,
+    ) -> (Vec<(HandleKey, f64)>, Vec<Span>) {
+        let p = self.ui_params();
+        let a = match sp.background.as_ref() {
+            Some(BackgroundMethod::AUTOBK(a)) => a,
+            _ => return (Vec::new(), Vec::new()),
+        };
+        let lo = p.bkg_kmin.or(a.kmin).unwrap_or(0.0);
+        let available = background_k_domain(sp).map(|(_, hi)| hi).unwrap_or(0.0);
+        let hi = p.bkg_kmax.or(a.kmax).unwrap_or(available).min(available);
+        // On μ(E) the same k bounds sit at E₀ + k²/ETOK. The stored
+        // value stays in k, so the cut follows E₀ when it changes.
+        let (lo, hi) = match self.background_energy_e0(plot) {
+            Some(e0) => (k_to_energy(lo, e0), k_to_energy(hi, e0)),
+            None if plot == PLOT_CHIK => (lo, hi),
+            None => return (Vec::new(), Vec::new()),
+        };
+        (
+            vec![(HandleKey::BkgKmin, lo), (HandleKey::BkgKmax, hi)],
+            Vec::new(),
+        )
+    }
+
+    /// Forward-FT k window on χ(k).
+    fn ft_k_handles(&self) -> (Vec<(HandleKey, f64)>, Vec<Span>) {
+        let (kmin, kmax, _, _) = self.fft_summary();
+        (
+            vec![(HandleKey::FftKmin, kmin), (HandleKey::FftKmax, kmax)],
+            vec![Span {
+                lo: Some(HandleKey::FftKmin),
+                hi: Some(HandleKey::FftKmax),
+                fixed_lo: 0.0,
+                accent: true,
+            }],
+        )
+    }
+
+    /// Back-FT R window on |χ(R)|.
+    fn back_ft_r_handles(
+        &self,
+        sp: &rexafs::prelude::XASSpectrum,
+    ) -> (Vec<(HandleKey, f64)>, Vec<Span>) {
+        let p = self.ui_params();
+        let lo = p
+            .bft_rmin
+            .or_else(|| sp.xftr.as_ref().and_then(|f| f.rmin))
+            .unwrap_or(0.0);
+        let hi = p
+            .bft_rmax
+            .or_else(|| sp.xftr.as_ref().and_then(|f| f.rmax))
+            .unwrap_or(20.0);
+        (
+            vec![(HandleKey::BftRmin, lo), (HandleKey::BftRmax, hi)],
+            vec![Span {
+                lo: Some(HandleKey::BftRmin),
+                hi: Some(HandleKey::BftRmax),
+                fixed_lo: 0.0,
+                accent: true,
+            }],
+        )
+    }
+
+    /// Rbkg on |χ(R)|: AUTOBK removes the region R < Rbkg (shaded).
+    fn rbkg_handles(
+        &self,
+        sp: &rexafs::prelude::XASSpectrum,
+    ) -> (Vec<(HandleKey, f64)>, Vec<Span>) {
+        let rbkg = self
+            .ui_params()
+            .rbkg
+            .or(match sp.background.as_ref() {
+                Some(BackgroundMethod::AUTOBK(a)) => a.rbkg,
+                _ => None,
+            })
+            .unwrap_or(1.0);
+        (
+            vec![(HandleKey::Rbkg, rbkg)],
+            vec![Span {
+                lo: None,
+                hi: Some(HandleKey::Rbkg),
+                fixed_lo: 0.0,
+                accent: false,
+            }],
+        )
+    }
+
+    /// E₀ for converting the background k handles when `plot` is the
+    /// Process stage's μ(E) plot; `None` on k-axis plots.
+    fn background_energy_e0(&self, plot: usize) -> Option<f64> {
+        if self.stage != Stage::Process || plot != PLOT_MU {
+            return None;
+        }
+        background_ek0(self.spectrum.as_deref()?)
     }
 
     fn handle_color(&self, accent: bool) -> Rgba {
@@ -454,6 +647,7 @@ impl StudioApp {
                     self.handle_color(key.accent()),
                     hot,
                     key != HandleKey::E0,
+                    !key.accent(),
                 )
             })
             .collect();
@@ -505,6 +699,14 @@ impl StudioApp {
                             self.measurement_handle_readout(x)
                         } else if p == super::peaks::PLOT_PEAKS {
                             self.peak_handle_readout(x)
+                        } else if let Some(e0) = self
+                            .background_energy_e0(p)
+                            .filter(|_| matches!(k, HandleKey::BkgKmin | HandleKey::BkgKmax))
+                        {
+                            // Only the spline k bounds are k values shown on
+                            // the energy axis; E₀ and the normalization
+                            // ranges keep their own eV readouts.
+                            background_k_energy_readout(energy_to_k(x, e0), x)
                         } else {
                             k.readout(x)
                         },
@@ -557,9 +759,9 @@ impl StudioApp {
                     let lines = decor
                         .lines
                         .iter()
-                        .filter_map(|&(x, color, hot, dashed)| {
+                        .filter_map(|&(x, color, hot, dashed, secondary)| {
                             let px = to_x(x)?;
-                            inside(px).then_some((px, color, hot, dashed))
+                            inside(px).then_some((px, color, hot, dashed, secondary))
                         })
                         .collect::<Vec<_>>();
                     let label = label.as_ref().and_then(|(x, text)| {
@@ -581,7 +783,7 @@ impl StudioApp {
                         let b = Bounds::new(point(px(x0), top), size(px(x1 - x0), height));
                         window.paint_quad(fill(b, c));
                     }
-                    for (x, color, hot, dashed) in lines {
+                    for (x, color, hot, dashed, secondary) in lines {
                         let c: Hsla = color.into();
                         let w = if hot { 2.6 } else { 1.3 };
                         let lx = px(x - w / 2.0);
@@ -598,10 +800,15 @@ impl StudioApp {
                             let b = Bounds::new(point(lx, top), size(px(w), height));
                             window.paint_quad(fill(b, c));
                         }
-                        // Grab tab just above the top axis line (never over
-                        // the tick labels inside the plot), wider when hot.
+                        // Primary grab tabs sit just above the top axis line
+                        // (never over the tick labels inside the plot);
+                        // secondary tabs just inside it. Wider when hot.
                         let (tw, th) = if hot { (11.0, 14.0) } else { (7.0, 11.0) };
-                        let tab_y = (area.top - th - 1.0).max(card_top + 1.0);
+                        let tab_y = if secondary {
+                            area.top + 1.0
+                        } else {
+                            (area.top - th - 1.0).max(card_top + 1.0)
+                        };
                         let tab =
                             Bounds::new(point(px(x - tw / 2.0), px(tab_y)), size(px(tw), px(th)));
                         window.paint_quad(quad(
@@ -695,6 +902,14 @@ impl StudioApp {
                     .ok()
                     .and_then(|c| c.get(&plot).map(|a| a.data_of(f32::from(position.x)))),
             };
+            // Background k bounds dragged on μ(E) arrive in eV; the
+            // parameter and its clamp to the data are in k.
+            let x = match self.background_energy_e0(plot) {
+                Some(e0) if matches!(key, HandleKey::BkgKmin | HandleKey::BkgKmax) => {
+                    x.map(|e| energy_to_k(e, e0))
+                }
+                _ => x,
+            };
             if let Some(x) = x {
                 self.apply_handle_drag(key, x, cx);
             }
@@ -709,7 +924,7 @@ impl StudioApp {
             .lock()
             .ok()
             .and_then(|c| c.get(&plot).copied());
-        let mut nearest: Option<(HandleKey, f64)> = None;
+        let mut nearest = None;
         if let Some(area) = visible {
             let x = f32::from(position.x);
             let y = f32::from(position.y);
@@ -718,18 +933,23 @@ impl StudioApp {
                 && x >= area.left - ARM_PX as f32
                 && x <= area.right + ARM_PX as f32
             {
-                for (key, value) in specs {
-                    if value < area.data_x0 || value > area.data_x1 {
-                        continue;
-                    }
-                    let distance = (area.px_of(value) - x).abs() as f64;
-                    if distance <= ARM_PX && nearest.is_none_or(|(_, best)| distance < best) {
-                        nearest = Some((key, distance));
-                    }
-                }
+                let row = if y < area.top {
+                    Some(TabRow::Primary)
+                } else if y <= area.top + SECONDARY_ROW_PX {
+                    Some(TabRow::Secondary)
+                } else {
+                    None
+                };
+                nearest = pick_handle(
+                    specs
+                        .into_iter()
+                        .filter(|(_, value)| *value >= area.data_x0 && *value <= area.data_x1)
+                        .map(|(key, value)| (key, (area.px_of(value) - x).abs() as f64)),
+                    row,
+                );
             }
         }
-        let armed = nearest.map(|(key, _)| (plot, key));
+        let armed = nearest.map(|key| (plot, key));
         if armed != self.handles.armed {
             self.handles.armed = armed;
             cx.notify();

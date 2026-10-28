@@ -37,7 +37,7 @@ class PathScopeTests(unittest.TestCase):
             "website/src/browser/scattering.ts",
             "website/vendor/refeff/LICENSE",
             "website/src/data/release.json",
-            "website/package-lock.json",
+            "website/bun.lock",
             "doc/installing.md",
             "doc/science.rst",
             "doc/api.mdx",
