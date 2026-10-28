@@ -42,7 +42,7 @@ variables, invalid ranges, missing paths, empty assignments, and duplicate spect
 prevent fitting. Failed preprocessing reports the file name; it never silently
 omits a dataset.
 
-**Unreleased:** window following is independent of k-weight following. New
+**From 0.2.15:** window following is independent of k-weight following. New
 models take the k-window family and both taper parameters from each spectrum's
 effective processing settings, including file overrides. The fit's k/R limits
 remain independent, and its R filter stays explicit (initially Hanning with

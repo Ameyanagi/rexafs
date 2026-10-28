@@ -26,7 +26,7 @@ refilled whenever a file is read, are not compared; after opening a project, the
 comparison is re-recorded once its sources finish reloading. The bundled example
 opens clean; a recovered copy opens unsaved.
 
-**Unreleased:** on macOS, clicking the Dock icon focuses the analysis window or
+**From 0.2.15:** on macOS, clicking the Dock icon focuses the analysis window or
 creates a window after the previous one has closed. Opening an `.rxs` file from
 Finder uses the same project loader and unsaved-changes prompt as **Open project**.
 Native open events are handled by
@@ -37,7 +37,7 @@ Native open events are handled by
 
 Choose **Save project**, then **Include source files** or **Link source files**.
 The selected storage mode is recorded in the project and also applies to
-**Export analysis folder**. **Unreleased:** each Save project dialog starts with
+**Export analysis folder**. **From 0.2.15:** each Save project dialog starts with
 **Include source files** selected, including after opening a linked project;
 choose links explicitly when you want them. See
 [`save_project`](../crates/rexafs-gui/src/app/shell/chrome.rs).
@@ -81,7 +81,7 @@ and modeled χ(k), k window, R-space transforms, path contributions) under
 `fit_results`, and the exact Fourier-transform settings it used — k/R windows,
 window families, taper widths `dk`/`dr`, FFT length and k step — under its
 `transforms` list, so a reopened project can publish its fits without a refit.
-**Unreleased:** the fit displayed at save time (`current_fit`) reopens directly
+**From 0.2.15:** the fit displayed at save time (`current_fit`) reopens directly
 in **Fit → Results**, including a fit that already needed an update. Its retained
 curves are also available to Publish without reading the original source files.
 The saved **Needs update** state is preserved. A previously current fit remains
@@ -100,7 +100,7 @@ store, is saved without its arrays. Embedded mode does not include unrelated
 workspace files or a saved executable/backend. **Export analysis folder** adds
 processed arrays, available fit arrays and captioned figures/tables beside `project.rxs`.
 
-## Merge saved spectra (unreleased)
+## Merge saved spectra
 
 Mark at least two compatible groups and choose **Merge**. Spectra whose full
 arrays are stored in the project use their recorded measurement channel to

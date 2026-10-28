@@ -1,8 +1,8 @@
 # Desktop updates and release channels
 
-## Preferences and About (unreleased)
+## Preferences and About
 
-**Unreleased (source builds after 0.2.14):** the application menu has
+**From 0.2.15:** the application menu has
 **Settings…** (Cmd+, on macOS, Ctrl+, on Windows/Linux), which opens
 Preferences. It gathers the settings already saved in `~/.rexafs/settings.json`
 (or the file named by `REXAFS_SETTINGS`): the Dark/Light theme, the update
