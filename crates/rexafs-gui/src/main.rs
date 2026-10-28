@@ -12,6 +12,7 @@ mod app;
 mod catalog;
 mod codex_client;
 mod debug_stats;
+mod desktop_open;
 mod feffgen;
 mod fit_details;
 mod fit_report;
@@ -53,6 +54,7 @@ mod widgets;
 
 use std::path::PathBuf;
 
+use futures::StreamExt;
 use gpui::{App, AppContext, Bounds, Size, WindowBounds, WindowOptions, px};
 
 use crate::app::StudioApp;
@@ -117,79 +119,116 @@ fn main() {
         _ => {}
     }
 
-    // Optional positional arg: a spectrum, folder or .rxs to open. Enables
+    // Optional positional arguments: spectra, folders or .rxs files. Enables
     // "open with", scripted launches, and screenshot testing without driving
     // the native file dialog.
-    let initial_open: Option<PathBuf> = first_arg.map(PathBuf::from);
+    let initial_paths = desktop_open::argument_paths(std::env::args_os().skip(1));
 
     // gpui 0.2.2 has no zero-arg `Application::new()`; the public entry point
     // is `gpui_platform::application()`.
-    gpui_platform::application()
-        .with_assets(icons::IconAssets)
-        .run(move |cx: &mut App| {
-            cx.bind_keys(widgets::text_input::text_input_keybindings());
-            cx.bind_keys(app::studio_keybindings());
-            // Quit asks to save unsaved work first (see `confirm_close`). The
-            // window is busy while it dispatches this action, so defer.
-            cx.on_action(|_: &app::Quit, cx| {
-                cx.defer(|cx| {
-                    let studio = cx
-                        .windows()
-                        .into_iter()
-                        .find_map(|window| window.downcast::<StudioApp>());
-                    let quit = studio.is_none_or(|studio| {
-                        studio
-                            .update(cx, |app, window, cx| {
-                                app.confirm_close(app::CloseIntent::Quit, window, cx)
-                            })
-                            .unwrap_or(true)
-                    });
-                    if quit {
-                        cx.quit();
-                    }
+    let application = gpui_platform::application().with_assets(icons::IconAssets);
+    // macOS may deliver the Finder's openURLs event before didFinishLaunching.
+    // Register before run and retain those requests until the app is ready.
+    let (open_sender, mut open_receiver) = futures::channel::mpsc::unbounded();
+    application.on_open_urls(move |urls| {
+        let _ = open_sender.unbounded_send(urls);
+    });
+    application.on_reopen(|cx| open_main_window(Vec::new(), cx));
+    application.run(move |cx: &mut App| {
+        cx.bind_keys(widgets::text_input::text_input_keybindings());
+        cx.bind_keys(app::studio_keybindings());
+        // Quit asks to save unsaved work first (see `confirm_close`). The
+        // window is busy while it dispatches this action, so defer.
+        cx.on_action(|_: &app::Quit, cx| {
+            cx.defer(|cx| {
+                let studio = cx
+                    .windows()
+                    .into_iter()
+                    .find_map(|window| window.downcast::<StudioApp>());
+                let quit = studio.is_none_or(|studio| {
+                    studio
+                        .update(cx, |app, window, cx| {
+                            app.confirm_close(app::CloseIntent::Quit, window, cx)
+                        })
+                        .unwrap_or(true)
                 });
+                if quit {
+                    cx.quit();
+                }
             });
+        });
+        let mut initial_paths = initial_paths;
+        while let Ok(urls) = open_receiver.try_recv() {
+            initial_paths.extend(desktop_open::paths_from_urls(urls));
+        }
+        open_main_window(desktop_open::unique_paths(initial_paths), cx);
+        cx.spawn(async move |cx| {
+            while let Some(urls) = open_receiver.next().await {
+                let paths = desktop_open::paths_from_urls(urls);
+                if !paths.is_empty() {
+                    cx.update(|cx| open_main_window(paths, cx));
+                }
+            }
+        })
+        .detach();
+    });
+}
+
+/// Reuse and focus the analysis window, or recreate it after its close completes.
+/// Desktop entry points share this function so a cold-launch file event and
+/// a Dock activation cannot each create their own analysis window.
+fn open_main_window(paths: Vec<PathBuf>, cx: &mut App) {
+    let main_window = cx
+        .active_window()
+        .into_iter()
+        .chain(cx.windows())
+        .find_map(|window| window.downcast::<StudioApp>())
+        .unwrap_or_else(|| {
             let display = cx.primary_display().map(|display| display.visible_bounds());
             let window_size = initial_window_size(display.map(|bounds| bounds.size));
             let bounds = display.map_or_else(
                 || Bounds::centered(None, window_size, cx),
                 |display| Bounds::centered_at(display.center(), window_size),
             );
-            let main_window = cx
-                .open_window(
-                    WindowOptions {
-                        show: false,
-                        focus: false,
-                        titlebar: Some(gpui::TitlebarOptions {
-                            title: Some(updates::application_name().into()),
-                            ..Default::default()
-                        }),
-                        window_bounds: Some(WindowBounds::Windowed(bounds)),
-                        window_min_size: Some(Size {
-                            width: px(960.).min(window_size.width),
-                            height: px(640.).min(window_size.height),
-                        }),
-                        app_id: Some(
-                            if updates::installed_channel() == updates::UpdateChannel::Nightly {
-                                "com.rexafs.nightly".into()
-                            } else {
-                                "com.rexafs.desktop".into()
-                            },
-                        ),
+            cx.open_window(
+                WindowOptions {
+                    show: false,
+                    focus: false,
+                    titlebar: Some(gpui::TitlebarOptions {
+                        title: Some(updates::application_name().into()),
                         ..Default::default()
-                    },
-                    |window, cx| {
-                        if debug_stats::enabled() {
-                            eprintln!("[renderer] {:?}", window.gpu_specs());
-                        }
-                        accessibility::install(window, cx);
-                        cx.new(|cx| StudioApp::new_with_open(initial_open.clone(), window, cx))
-                    },
-                )
-                .expect("failed to open window");
-            let _ = main_window.update(cx, |_, window, _| accessibility::show(window));
-            cx.activate(true);
+                    }),
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    window_min_size: Some(Size {
+                        width: px(960.).min(window_size.width),
+                        height: px(640.).min(window_size.height),
+                    }),
+                    app_id: Some(
+                        if updates::installed_channel() == updates::UpdateChannel::Nightly {
+                            "com.rexafs.nightly".into()
+                        } else {
+                            "com.rexafs.desktop".into()
+                        },
+                    ),
+                    ..Default::default()
+                },
+                |window, cx| {
+                    if debug_stats::enabled() {
+                        eprintln!("[renderer] {:?}", window.gpu_specs());
+                    }
+                    accessibility::install(window, cx);
+                    cx.new(|cx| StudioApp::new_with_open(None, window, cx))
+                },
+            )
+            .expect("failed to open window")
         });
+    let _ = main_window.update(cx, |studio, window, cx| {
+        accessibility::show(window);
+        if !paths.is_empty() {
+            studio.open_paths_from_desktop(paths, window, cx);
+        }
+    });
+    cx.activate(true);
 }
 
 /// Leave room for window decorations on laptop screens and scaled desktops.

@@ -525,6 +525,7 @@ impl StudioApp {
                         .into();
                         let result = Arc::new(result);
                         app.fit_result = Some(result.clone());
+                        app.restored_fit_needs_update = false;
                         app.fit_provenance = Some(provenance);
                         app.pending_fit_restore = None;
                         app.fit_history.push(entry);

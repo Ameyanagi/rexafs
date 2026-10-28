@@ -676,7 +676,7 @@ fn joint_materialized_groups_keep_empty_locators_on_save_and_reopen() {
 #[test]
 fn fit_result_arrays_and_transforms_survive_reopen_and_old_projects_still_open() {
     use nalgebra::DVector;
-    use rexafs::prelude::FeffFitResult;
+    use rexafs::prelude::{DatasetResult, FeffFitResult, KweightResult, PathContribution};
     use std::sync::Arc;
     let temp = Temp::new();
     // A 0.1.0 project predates saved result arrays and transforms.
@@ -684,6 +684,7 @@ fn fit_result_arrays_and_transforms_survive_reopen_and_old_projects_still_open()
     assert!(project.fit_results.is_empty());
     assert!(project.fit_history[0].transforms.is_empty());
     assert_eq!(project.current_fit, None);
+    assert!(!project.current_fit_needs_update);
     assert_eq!(project.fit_history[0].params_fingerprint, None);
 
     let id = project.fit_history[0].id;
@@ -702,15 +703,73 @@ fn fit_result_arrays_and_transforms_survive_reopen_and_old_projects_still_open()
     project.fit_history[0].group_id = Some(group_id);
     project.fit_history[0].params_fingerprint = Some(params_fingerprint);
     project.current_fit = Some(id);
+    project.active_derived = Some(group_id);
+    let durable_id = crate::group_identity::GroupId::legacy_result(group_id);
+    project.derived[0].group_id = Some(durable_id.clone());
+    project.group_state.current = Some(durable_id.clone());
     let k = DVector::from_fn(64, |i, _| 0.05 * i as f64);
-    let result = FeffFitResult {
-        r_factor: 0.0123,
-        data_chi: k.map(f64::sin),
-        model_chi: k.map(|x| 0.9 * x.sin()),
-        k,
-        kweights: vec![2.0],
+    // Distinct synthetic arrays exercise every retained plotting domain and
+    // nested dataset/k-weight/path block without depending on an optimizer.
+    let series = |offset, len| DVector::from_fn(len, |i, _| offset + i as f64 * 0.125);
+    let weighted = KweightResult {
+        kweight: 2.0,
+        kwin: series(0.0, 64),
+        data_chik: series(1.0, 64),
+        model_chik: series(2.0, 64),
+        data_chir_re: series(3.0, 16),
+        data_chir_im: series(4.0, 16),
+        data_chir_mag: series(5.0, 16),
+        model_chir_re: series(6.0, 16),
+        model_chir_im: series(7.0, 16),
+        model_chir_mag: series(8.0, 16),
+        q: series(0.0, 32),
+        data_chiq: series(9.0, 32),
+        model_chiq: series(10.0, 32),
         ..Default::default()
     };
+    let mut other_weight = weighted.clone();
+    other_weight.kweight = 3.0;
+    other_weight.model_chiq = series(11.0, 32);
+    let dataset = DatasetResult {
+        k: k.clone(),
+        data_chi: k.map(f64::sin),
+        model_chi: k.map(|x| 0.9 * x.sin()),
+        kmin: Some(0.5),
+        kmax: Some(3.0),
+        kwin: weighted.kwin.clone(),
+        r: series(0.0, 16),
+        rmin: Some(0.5),
+        rmax: Some(1.5),
+        data_chir_re: weighted.data_chir_re.clone(),
+        data_chir_im: weighted.data_chir_im.clone(),
+        model_chir_re: weighted.model_chir_re.clone(),
+        model_chir_im: weighted.model_chir_im.clone(),
+        model_chir_mag: weighted.model_chir_mag.clone(),
+        path_contributions: vec![PathContribution {
+            label: "Synthetic retained path".into(),
+            chi: series(12.0, 64),
+            chir_re: series(13.0, 16),
+            chir_im: series(14.0, 16),
+            chir_mag: series(15.0, 16),
+            chiq: series(16.0, 32),
+        }],
+        kweights: vec![2.0, 3.0],
+        q: weighted.q.clone(),
+        data_chiq: weighted.data_chiq.clone(),
+        model_chiq: weighted.model_chiq.clone(),
+        kweight_results: vec![weighted, other_weight],
+        ..Default::default()
+    };
+    let mut second_dataset = dataset.clone();
+    second_dataset.model_chi = k.map(|x| 0.8 * x.sin());
+    let mut result = FeffFitResult {
+        r_factor: 0.0123,
+        covariance: Some(vec![vec![0.25, 0.125], vec![0.125, 1.0]]),
+        correlation: Some(vec![vec![1.0, 0.25], vec![0.25, 1.0]]),
+        datasets: vec![dataset, second_dataset],
+        ..Default::default()
+    };
+    result.sync_primary_dataset_fields();
     let unreadable = FeffFitResult {
         r_factor: f64::NAN,
         ..Default::default()
@@ -718,9 +777,15 @@ fn fit_result_arrays_and_transforms_survive_reopen_and_old_projects_still_open()
     let mut second = project.fit_history[0].clone();
     second.id = id + 1;
     project.fit_history.push(second);
+    let mut third = project.fit_history[0].clone();
+    third.id = id + 2;
+    project.fit_history.push(third);
+    let mut historical_result = result.clone();
+    historical_result.r_factor = 0.0246;
     project.fit_results = [
         (id, Arc::new(result.clone())),
         (id + 1, Arc::new(unreadable)),
+        (id + 2, Arc::new(historical_result.clone())),
         (id + 99, Arc::new(result.clone())), // No history entry.
     ]
     .into();
@@ -730,16 +795,23 @@ fn fit_result_arrays_and_transforms_survive_reopen_and_old_projects_still_open()
         save_with_storage(&file, &project, mode).unwrap();
         let loaded = load(&file).unwrap();
         // Non-finite and orphaned results are dropped, not the whole save.
-        assert_eq!(loaded.fit_results.keys().copied().collect::<Vec<_>>(), [id]);
+        assert_eq!(
+            loaded.fit_results.keys().copied().collect::<Vec<_>>(),
+            [id, id + 2]
+        );
         assert_eq!(*loaded.fit_results[&id], result);
+        assert_eq!(*loaded.fit_results[&(id + 2)], historical_result);
         assert_eq!(
             loaded.fit_history[0].transforms,
             std::slice::from_ref(&transform)
         );
-        assert_eq!(loaded.fit_history.len(), 2);
+        assert_eq!(loaded.fit_history.len(), 3);
         // Reopening shows the saved current fit, and the reloaded, unedited
         // spectrum is recognised as the fitted one (not stale).
         assert_eq!(loaded.current_fit, Some(id));
+        assert!(!loaded.current_fit_needs_update);
+        assert_eq!(loaded.active_derived, Some(group_id));
+        assert_eq!(loaded.group_state.current, Some(durable_id.clone()));
         let (group_id, params_fingerprint) = fingerprint(&loaded);
         let entry = &loaded.fit_history[0];
         assert!(entry.matches_spectrum(Some(group_id), &label, params_fingerprint));
@@ -748,9 +820,106 @@ fn fit_result_arrays_and_transforms_survive_reopen_and_old_projects_still_open()
     }
     // A current fit whose arrays cannot be saved is not restored.
     project.current_fit = Some(id + 1);
+    project.current_fit_needs_update = true;
     let file = temp.join("unreadable-current.rxs");
     save_with_storage(&file, &project, DataStorage::Paths).unwrap();
-    assert_eq!(load(&file).unwrap().current_fit, None);
+    let loaded = load(&file).unwrap();
+    assert_eq!(loaded.current_fit, None);
+    assert!(!loaded.current_fit_needs_update);
+}
+
+#[test]
+fn saved_fit_curves_survive_missing_original_sources_and_another_save() {
+    use nalgebra::DVector;
+    use rexafs::prelude::FeffFitResult;
+    use std::sync::Arc;
+
+    let temp = Temp::new();
+    let source = temp.join("source");
+    let mut project = specimen(&source);
+    let id = project.fit_history[0].id;
+    let result = FeffFitResult {
+        k: DVector::from_vec(vec![0.0, 0.5, 1.0]),
+        data_chi: DVector::from_vec(vec![0.0, 0.25, 0.5]),
+        model_chi: DVector::from_vec(vec![0.0, 0.125, 0.375]),
+        ..Default::default()
+    };
+    project.current_fit = Some(id);
+    project.current_fit_needs_update = true;
+    project.fit_results.insert(id, Arc::new(result.clone()));
+    // A historical result stays available even when the editable model now
+    // differs from the one in its history entry.
+    project.fit_ranges.kmin += 0.5;
+    let saved: Vec<_> = [DataStorage::Paths, DataStorage::Embedded]
+        .into_iter()
+        .map(|mode| {
+            let path = temp.join(&format!("missing-original-{mode:?}.rxs"));
+            save_with_storage(&path, &project, mode).unwrap();
+            (mode, path)
+        })
+        .collect();
+    std::fs::remove_dir_all(&source).unwrap();
+
+    for (mode, path) in saved {
+        let loaded = load(&path).unwrap();
+        assert_eq!(loaded.current_fit, Some(id));
+        assert!(loaded.current_fit_needs_update);
+        assert_eq!(*loaded.fit_results[&id], result);
+        assert_eq!(loaded.fit_history.len(), 1);
+        assert_eq!(loaded.fit_ranges.kmin, project.fit_ranges.kmin);
+        assert_ne!(loaded.fit_history[0].ranges.kmin, loaded.fit_ranges.kmin);
+        assert_eq!(
+            loaded.spectrum_file.as_ref().unwrap().is_file(),
+            mode == DataStorage::Embedded
+        );
+        let resaved = temp.join(&format!("missing-original-resaved-{mode:?}.rxs"));
+        save_with_storage(&resaved, &loaded, mode).unwrap();
+        let reopened = load(&resaved).unwrap();
+        assert_eq!(reopened.current_fit, Some(id));
+        assert!(reopened.current_fit_needs_update);
+        assert_eq!(*reopened.fit_results[&id], result);
+        assert_eq!(reopened.fit_history[0].values, loaded.fit_history[0].values);
+    }
+}
+
+#[test]
+fn displayed_fit_prefers_saved_selection_and_recovers_older_history_conservatively() {
+    use rexafs::prelude::FeffFitResult;
+    use std::sync::Arc;
+
+    let temp = Temp::new();
+    let mut project = specimen(&temp.join("source"));
+    let first_id = project.fit_history[0].id;
+    let mut latest = project.fit_history[0].clone();
+    latest.id = first_id + 1;
+    let latest_id = latest.id;
+    project.fit_history.push(latest);
+    let result = Arc::new(FeffFitResult::default());
+    let orphan_id = latest_id + 1;
+    project.fit_results = [
+        (first_id, result.clone()),
+        (latest_id, result.clone()),
+        (orphan_id, result),
+    ]
+    .into();
+
+    project.current_fit = Some(first_id);
+    assert_eq!(project.displayed_fit(), Some((first_id, false)));
+    project.current_fit_needs_update = true;
+    assert_eq!(project.displayed_fit(), Some((first_id, true)));
+    project.current_fit = None;
+    project.current_fit_needs_update = false;
+    assert_eq!(project.displayed_fit(), Some((latest_id, true)));
+    // Missing or inconsistent selection metadata must not hide owned history.
+    project.current_fit = Some(orphan_id);
+    assert_eq!(project.displayed_fit(), Some((latest_id, true)));
+    project.fit_results.remove(&latest_id);
+    project.current_fit = Some(latest_id);
+    assert_eq!(project.displayed_fit(), Some((first_id, true)));
+    project.fit_results.remove(&first_id);
+    assert_eq!(project.displayed_fit(), None);
+    project.fit_results.clear();
+    assert_eq!(project.displayed_fit(), None);
 }
 
 #[test]

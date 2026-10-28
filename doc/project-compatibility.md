@@ -26,15 +26,26 @@ refilled whenever a file is read, are not compared; after opening a project, the
 comparison is re-recorded once its sources finish reloading. The bundled example
 opens clean; a recovered copy opens unsaved.
 
+**Unreleased:** on macOS, clicking the Dock icon focuses the analysis window or
+creates a window after the previous one has closed. Opening an `.rxs` file from
+Finder uses the same project loader and unsaved-changes prompt as **Open project**.
+Native open events are handled by
+[`open_main_window`](../crates/rexafs-gui/src/main.rs) and
+[`open_paths_from_desktop`](../crates/rexafs-gui/src/app.rs).
+
 ## Raw data: paths or embedded originals
 
-Choose **Raw: paths / Raw: embedded** beside **Save project**. This choice is
-remembered in the project and also applies to **Export analysis folder**.
+Choose **Save project**, then **Include source files** or **Link source files**.
+The selected storage mode is recorded in the project and also applies to
+**Export analysis folder**. **Unreleased:** each Save project dialog starts with
+**Include source files** selected, including after opening a linked project;
+choose links explicitly when you want them. See
+[`save_project`](../crates/rexafs-gui/src/app/shell/chrome.rs).
 
 | Mode | Contents | Moving or sharing |
 |---|---|---|
-| **Paths (default)** | Source references and metadata; no original file payloads | Move the project and source folders together, preserving their relative layout |
-| **Embedded** | Losslessly compressed original spectra and referenced FEFF inputs | Reopen the `.rxs` file without its original input files |
+| **Include source files** (`Embedded`) | Losslessly compressed original spectra and referenced FEFF inputs | Reopen the `.rxs` file without its original input files |
+| **Link source files** (`Paths`) | Source references and metadata; no original file payloads | Move the project and source folders together, preserving their relative layout |
 
 Relative paths resolve against the **directory containing the project**, never the
 process working directory. For example, `run.rxs` beside a `data` folder stores
@@ -70,14 +81,17 @@ and modeled χ(k), k window, R-space transforms, path contributions) under
 `fit_results`, and the exact Fourier-transform settings it used — k/R windows,
 window families, taper widths `dk`/`dr`, FFT length and k step — under its
 `transforms` list, so a reopened project can publish its fits without a refit.
-The fit that was current and up to date at save time (`current_fit`) is shown
-again on reopening, in Fit results and as Publish fit figures. It counts as up
-to date when the reloaded spectrum has the same group, label and processing
+**Unreleased:** the fit displayed at save time (`current_fit`) reopens directly
+in **Fit → Results**, including a fit that already needed an update. Its retained
+curves are also available to Publish without reading the original source files.
+The saved **Needs update** state is preserved. A previously current fit remains
+up to date when the reloaded spectrum has the same group, label and processing
 settings as when it was fitted (each entry records the group id and a
 processing fingerprint) and the model is unchanged; otherwise it is marked as
 needing an update. The fingerprint is a hash computed by the app; a different
 rexafs build may compute it differently, which only marks the fit as needing
-an update.
+an update. See the [saved result fields](../crates/rexafs-gui/src/project.rs) and
+[`apply_project`](../crates/rexafs-gui/src/app.rs).
 Projects saved by releases before this change open unchanged: their fits keep
 statistics and models, but their curves return only after a refit, and their
 taper was the core default (Kaiser–Bessel k window, `dk` = 4 Å⁻¹; Hanning R
@@ -85,6 +99,21 @@ window, `dr` = 0 Å). A result containing NaN or infinity, which JSON cannot
 store, is saved without its arrays. Embedded mode does not include unrelated
 workspace files or a saved executable/backend. **Export analysis folder** adds
 processed arrays, available fit arrays and captioned figures/tables beside `project.rxs`.
+
+## Merge saved spectra (unreleased)
+
+Mark at least two compatible groups and choose **Merge**. Spectra whose full
+arrays are stored in the project use their recorded measurement channel to
+distinguish sample absorption from reference absorption. They can merge without
+an available original source path when the retained arrays and channel evidence
+are sufficient. Missing or ambiguous channel evidence is reported rather than
+assuming a sample channel. Existing quantity, edge and energy-overlap checks
+still apply. See the [merge implementation](../crates/rexafs-gui/src/app/merge.rs).
+
+To align against the merged result in the same session, select the spectrum to
+align, choose **Align current → Choose standard**, and select the new merged
+group. Review the preview, then choose **Apply offset**; reopening the project is
+unnecessary. See the [alignment controls](../crates/rexafs-gui/src/app/shell/tools.rs).
 
 ## Metadata header and compact storage
 

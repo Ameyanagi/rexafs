@@ -16,7 +16,9 @@ const MAX_RAW_BYTES: u64 = 1024 * 1024 * 1024;
 #[serde(rename_all = "snake_case")]
 pub enum DataStorage {
     /// Record portable references and available metadata without input payloads.
-    /// The linked bytes may change after saving; this is the desktop default.
+    /// The linked bytes may change after saving. This is the historical archive
+    /// default when the storage field is absent; the desktop save dialog chooses
+    /// its default explicitly.
     #[default]
     Paths,
     /// Save losslessly compressed input bytes and verify them during extraction.
