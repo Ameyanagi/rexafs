@@ -38,4 +38,12 @@ ignore = [
     # the X-ray database embedded in the crate. Fixed in ruzstd 0.9.1; needs an
     # xraydb release.
     { id = "RUSTSEC-2026-0344", reason = "ruzstd via xraydb decompresses only its own embedded, trusted database" },
+    # zstd 0.11/0.13 and zstd-safe 5/7 (stream-context reuse leak; legacy-frame
+    # and seekable decompression memory errors) via apex-solver 1.4 -> apex-io,
+    # which reads pose-graph and MCAP files. rexafs uses apex-solver only for
+    # in-memory trust-region fits and never calls apex-io. Fixed in zstd 0.14.3
+    # and zstd-safe 8.2; needs an apex-io release.
+    { id = "RUSTSEC-2026-0391", reason = "zstd via apex-io file readers; rexafs never calls apex-io" },
+    { id = "RUSTSEC-2026-0398", reason = "zstd-safe via apex-io file readers; rexafs never calls apex-io" },
+    { id = "RUSTSEC-2026-0403", reason = "zstd-safe via apex-io file readers; rexafs never calls apex-io" },
 ]
