@@ -444,7 +444,13 @@ mod tests {
                 rmax: 3.5,
                 ..Default::default()
             }
-            .resolved(Some(1.)),
+            .resolved_with_params(&crate::params::PipelineParams {
+                fft_kweight: Some(1.0),
+                fft_window: Some(rexafs::prelude::FTWindow::Hanning),
+                fft_dk: Some(2.0),
+                fft_dk2: Some(1.0),
+                ..Default::default()
+            }),
         );
         config.datasets[1].ranges = Some(
             FitRanges {
@@ -454,7 +460,13 @@ mod tests {
                 rmax: 4.5,
                 ..Default::default()
             }
-            .resolved(Some(3.)),
+            .resolved_with_params(&crate::params::PipelineParams {
+                fft_kweight: Some(3.0),
+                fft_window: Some(rexafs::prelude::FTWindow::Parzen),
+                fft_dk: Some(0.5),
+                fft_dk2: Some(1.5),
+                ..Default::default()
+            }),
         );
         let mut override_path = paths[1].clone();
         override_path.s02 = "amp * 0.5".into();
@@ -512,6 +524,17 @@ mod tests {
             ..Default::default()
         };
         let (result, expanded) = run(&config, &data, &paths, &vars, &ranges).unwrap();
+        for (i, dataset) in config.datasets.iter().enumerate() {
+            let ranges = dataset.ranges.as_ref().unwrap();
+            let expected = fitting::transform::apply_kweight_transform(
+                &data[i].0,
+                &data[i].1,
+                &ranges.transform(),
+                ranges.effective_kweights()[0],
+            )
+            .unwrap();
+            assert!((&result.datasets[i].data_chir_re - &expected.r_space.chir_re).norm() < 1e-12);
+        }
         assert!(
             result.solver_report.as_ref().unwrap().converged,
             "{:?}",

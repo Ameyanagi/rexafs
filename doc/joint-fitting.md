@@ -42,6 +42,15 @@ variables, invalid ranges, missing paths, empty assignments, and duplicate spect
 prevent fitting. Failed preprocessing reports the file name; it never silently
 omits a dataset.
 
+**Unreleased:** window following is independent of k-weight following. New
+models take the k-window family and both taper parameters from each spectrum's
+effective processing settings, including file overrides. The fit's k/R limits
+remain independent, and its R filter stays explicit (initially Hanning with
+dR = 0 Å). Choose custom windows to override those settings. Older projects
+retain Kaiser–Bessel with dk = 4 and an automatic second parameter until
+following is selected. Fit history and reports retain each dataset's effective
+windows, so later processing edits do not rewrite the saved fit description.
+
 ## Independent batches
 
 **Fit → Results → Batch** fits each frame independently, using its effective

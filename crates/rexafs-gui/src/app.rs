@@ -1096,6 +1096,10 @@ pub(crate) enum RangeKey {
     Rmin,
     Rmax,
     Kweight,
+    Dk,
+    Dk2,
+    Dr,
+    Dr2,
 }
 
 #[derive(Clone)]
@@ -3983,6 +3987,13 @@ impl StudioApp {
         self.fit_ranges.rmin.to_bits().hash(&mut hasher);
         self.fit_ranges.rmax.to_bits().hash(&mut hasher);
         self.fit_ranges.follow_transform.hash(&mut hasher);
+        self.fit_ranges.follow_window.hash(&mut hasher);
+        format!("{:?}", self.fit_ranges.window).hash(&mut hasher);
+        self.fit_ranges.dk.to_bits().hash(&mut hasher);
+        self.fit_ranges.dk2.map(f64::to_bits).hash(&mut hasher);
+        format!("{:?}", self.fit_ranges.rwindow).hash(&mut hasher);
+        self.fit_ranges.dr.to_bits().hash(&mut hasher);
+        self.fit_ranges.dr2.map(f64::to_bits).hash(&mut hasher);
         self.fit_ranges.kweight.to_bits().hash(&mut hasher);
         for kw in &self.fit_ranges.kweights {
             kw.to_bits().hash(&mut hasher);
@@ -7352,18 +7363,39 @@ impl StudioApp {
         ranges: &FitRanges,
         cx: &mut Context<Self>,
     ) -> Vec<(RangeKey, Entity<NumericField>)> {
-        let specs: [(RangeKey, &str, f64); 5] = [
-            (RangeKey::Kmin, "k min (Å⁻¹)", ranges.kmin),
-            (RangeKey::Kmax, "k max (Å⁻¹)", ranges.kmax),
-            (RangeKey::Rmin, "R min (Å)", ranges.rmin),
-            (RangeKey::Rmax, "R max (Å)", ranges.rmax),
-            (RangeKey::Kweight, "k-weight", ranges.kweight),
+        let specs = [
+            (RangeKey::Kmin, "k min (Å⁻¹)", Some(ranges.kmin)),
+            (RangeKey::Kmax, "k max (Å⁻¹)", Some(ranges.kmax)),
+            (RangeKey::Rmin, "R min (Å)", Some(ranges.rmin)),
+            (RangeKey::Rmax, "R max (Å)", Some(ranges.rmax)),
+            (RangeKey::Kweight, "k-weight", Some(ranges.kweight)),
+            (RangeKey::Dk, "dk", Some(ranges.dk)),
+            (RangeKey::Dk2, "dk₂", ranges.dk2),
+            (RangeKey::Dr, "dr", Some(ranges.dr)),
+            (RangeKey::Dr2, "dr₂", ranges.dr2),
         ];
         specs
             .into_iter()
             .map(|(key, label, value)| {
                 let field = cx.new(|cx| {
-                    NumericField::new(label, "", Some(value), FieldKind::Float, theme, cx)
+                    let optional = matches!(key, RangeKey::Dk2 | RangeKey::Dr2);
+                    let field = NumericField::new(
+                        label,
+                        if optional { "Auto (follows first taper)" } else { "" },
+                        value,
+                        FieldKind::Float,
+                        theme,
+                        cx,
+                    );
+                    if matches!(key, RangeKey::Dk | RangeKey::Dk2 | RangeKey::Dr | RangeKey::Dr2) {
+                        field.with_step(0.1).with_description(if optional {
+                            "Second window taper parameter. Auto follows the first taper; it does not change the fit bounds. Ordinary windows use the displayed axis units; fractional Hanning uses dimensionless fractions."
+                        } else {
+                            "First window taper parameter. It changes the window shape, not the fit bounds. Gaussian uses this as its standard deviation; Kaiser–Bessel also uses its numeric value as a shape parameter. Fractional Hanning uses dimensionless fractions."
+                        })
+                    } else {
+                        field
+                    }
                 });
                 cx.subscribe(&field, move |this: &mut Self, _field, event, cx| {
                     let value = match event {
@@ -7375,7 +7407,24 @@ impl StudioApp {
                             return;
                         }
                     };
-                    if let Some(v) = value {
+                    if matches!(key, RangeKey::Dk | RangeKey::Dk2 | RangeKey::Dr | RangeKey::Dr2) {
+                        let optional = matches!(key, RangeKey::Dk2 | RangeKey::Dr2);
+                        if value.is_some_and(|v| v < 0.) || (!optional && value.is_none()) {
+                            this.set_status(StatusKind::Error, "Window taper parameters must be nonnegative; only the second taper can use Auto.");
+                            this.sync_range_fields(cx);
+                            cx.notify();
+                            return;
+                        }
+                        match key {
+                            RangeKey::Dk => this.fit_ranges.dk = value.unwrap(),
+                            RangeKey::Dk2 => this.fit_ranges.dk2 = *value,
+                            RangeKey::Dr => this.fit_ranges.dr = value.unwrap(),
+                            RangeKey::Dr2 => this.fit_ranges.dr2 = *value,
+                            _ => unreachable!(),
+                        }
+                        this.fit_model_changed(cx);
+                        this.rebuild_fit_plots(cx);
+                    } else if let Some(v) = value {
                         if matches!(key, RangeKey::Rmin) && *v < this.fit_background_floor(None) {
                             this.set_status(
                                 StatusKind::Error,
@@ -7395,6 +7444,7 @@ impl StudioApp {
                             RangeKey::Rmin => r.rmin = *v,
                             RangeKey::Rmax => r.rmax = *v,
                             RangeKey::Kweight => r.kweight = *v,
+                            RangeKey::Dk | RangeKey::Dk2 | RangeKey::Dr | RangeKey::Dr2 => unreachable!(),
                         }
                         this.fit_model_changed(cx);
                         this.rebuild_fit_plots(cx);
@@ -7782,7 +7832,7 @@ impl StudioApp {
         cx.notify();
         let paths: Vec<FitPathSpec> = self.fit_paths.iter().map(|r| r.spec.clone()).collect();
         let vars: Vec<FitVarSpec> = self.fit_vars.iter().map(|v| v.spec.clone()).collect();
-        let ranges = self.fit_ranges.resolved(self.ui_params().fft_kweight);
+        let ranges = self.fit_ranges.resolved_with_params(self.ui_params());
         let started = Instant::now();
         let history_inputs = (paths.clone(), vars.clone(), ranges.clone());
         let noise_estimated = ranges.noise;
@@ -7957,13 +8007,17 @@ impl StudioApp {
         let ranges = self.fit_ranges.clone();
         for (key, field) in &self.fit_range_fields {
             let value = match key {
-                RangeKey::Kmin => ranges.kmin,
-                RangeKey::Kmax => ranges.kmax,
-                RangeKey::Rmin => ranges.rmin,
-                RangeKey::Rmax => ranges.rmax,
-                RangeKey::Kweight => ranges.kweight,
+                RangeKey::Kmin => Some(ranges.kmin),
+                RangeKey::Kmax => Some(ranges.kmax),
+                RangeKey::Rmin => Some(ranges.rmin),
+                RangeKey::Rmax => Some(ranges.rmax),
+                RangeKey::Kweight => Some(ranges.kweight),
+                RangeKey::Dk => Some(ranges.dk),
+                RangeKey::Dk2 => ranges.dk2,
+                RangeKey::Dr => Some(ranges.dr),
+                RangeKey::Dr2 => ranges.dr2,
             };
-            field.update(cx, |f, cx| f.set_value(Some(value), cx));
+            field.update(cx, |f, cx| f.set_value(value, cx));
         }
     }
 
@@ -8264,7 +8318,7 @@ impl StudioApp {
                         if job_cancel.load(Ordering::Relaxed) {
                             return Err("batch cancelled".into());
                         }
-                        let frame_ranges = ranges.resolved(frame_params.fft_kweight);
+                        let frame_ranges = ranges.resolved_with_params(frame_params);
                         let result = run_spectrum_fit(&sp, &paths, &vars, &frame_ranges)?;
                         Ok(BatchFitRow::from_result(
                             *frame,

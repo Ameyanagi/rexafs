@@ -121,6 +121,7 @@ pub struct ProjectFile {
     pub overrides: Vec<ParamOverride>,
     pub fit_paths: Vec<FitPathSpec>,
     pub fit_vars: Vec<FitVarSpec>,
+    #[serde(default = "FitRanges::legacy_defaults")]
     pub fit_ranges: FitRanges,
     pub fit_mode: crate::rmc_fitting::FitMode,
     pub rmc: crate::rmc_fitting::Project,

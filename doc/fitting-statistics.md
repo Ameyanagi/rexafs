@@ -121,6 +121,30 @@ expects prepared uniform k samples and does not resample them. Set the ranges
 to the usable measured interval. Multiple weights add residual blocks but do
 not multiply the independent-information estimate.
 
+The core's default k window is Kaiser–Bessel with `dk = 4`, `dk2 = None`;
+the R filter is Hanning with `dr = 0`, `dr2 = None`. An absent second
+parameter uses the first. These window defaults match the
+[Larch transform constructor](https://github.com/xraypy/xraylarch/blob/860d8a690c81eefb0e61dee4ca3703ef4b67e93d/larch/xafs/feffit.py#L102),
+but rexafs chooses its own default R interval. Window parameters are
+family-dependent: Hanning uses low/high taper widths in Å⁻¹ for k or Å for R;
+Kaiser–Bessel also uses the first value as a dimensionless shape parameter.
+Gaussian uses the axis units for its width, and fractional Hanning uses
+dimensionless fractions.
+See the [window conventions](processing-theory.md#4-transform-from-k-to-r).
+
+**Desktop, unreleased:** new FEFF models follow each spectrum's processing
+k-window family, `dk` and `dk2`, independently of k-weight following. The fit
+uses Kaiser–Bessel with `dk = 1` and `dk2 = None` when processing is Auto. It
+retains its own k/R limits and explicit R filter. Custom settings override
+following; older saved models retain the historical core window defaults.
+Each dataset of a joint fit and each independent batch frame resolves its own
+processing settings. History snapshots the effective transform, and reports
+describe that snapshot. An older history entry without a transform uses the
+historical window defaults and labels them as reconstructed. The desktop
+mapping is implemented in
+[`FitRanges`](../crates/rexafs-gui/src/fitting.rs); transform application is in
+[`transform.rs`](../crates/rexafs/src/xafs/fitting/transform.rs).
+
 The Rust fit API uses a supplied per-weight `epsilon_ks` entry, then scalar
 `epsilon_k`, then **1.0** as its k-space residual divisor. It does not estimate
 noise automatically. Calling `estimate_noise()` is a separate operation.

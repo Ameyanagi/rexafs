@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Let new FEFF fits follow each spectrum's Process transform window and taper
+  parameters, independently of the k-weight choice, with explicit custom k and
+  R windows available. Keep older projects' Kaiser–Bessel/dk = 4 fitting
+  convention, and preserve the effective windows in fit history and reports.
 - Include every named multi-panel recipe in reports and supporting information,
   in insertion order after the individual figures. Save PNG, SVG, PDF and
   plain-text captions under `figures/composed/`, with optional matplotlib

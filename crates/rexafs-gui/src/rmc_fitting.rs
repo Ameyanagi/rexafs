@@ -131,6 +131,7 @@ impl Default for Draft {
             },
             ranges: FitRanges {
                 follow_transform: false,
+                follow_window: false,
                 kweights: vec![2.],
                 ..Default::default()
             },
@@ -331,6 +332,7 @@ impl Draft {
         };
         self.ranges = FitRanges {
             follow_transform: false,
+            follow_window: false,
             kmin,
             kmax,
             rmin: recipe.bft_rmin.unwrap_or(rbkg + 0.15),
@@ -339,6 +341,7 @@ impl Draft {
             kweights: vec![weight],
             fitspace: FitSpaceSpec::R,
             noise: false,
+            ..Default::default()
         };
         self.transform_settings = Some(transform);
         Ok(())
