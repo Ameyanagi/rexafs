@@ -9,14 +9,66 @@ use gpui::{
 use ruviz_gpui::RuvizPlot;
 
 use super::handles::{PLOT_FIT_K, PLOT_FIT_Q, PLOT_FIT_R};
-use super::{FitView, MONO, button, chip, section_label, segment, segmented};
+use super::{FitView, MONO, button, chip, controls::Tooltip, section_label, segment, segmented};
 use crate::app::StudioApp;
-use crate::fitting::{FitSpaceSpec, high_correlations};
+use crate::fitting::{FitRanges, FitSpaceSpec, high_correlations};
+use crate::params::{FT_WINDOWS, PipelineParams};
+use rexafs::prelude::FTWindow;
 use rexafs::xafs::fitting::template::ParameterTemplate;
 
 /// Correlation above which two parameters are flagged (Artemis warns at
 /// 0.95; 0.9 catches the usual amp/σ² pair earlier).
 const CORRELATION_WARN: f64 = 0.9;
+
+#[derive(Clone, Copy)]
+enum WindowEdit {
+    Follow(bool),
+    KFamily(FTWindow),
+    RFamily(FTWindow),
+}
+
+fn apply_window_edit(ranges: &mut FitRanges, params: &PipelineParams, edit: WindowEdit) {
+    match edit {
+        WindowEdit::Follow(follow) => {
+            if ranges.follow_window && !follow {
+                let effective = ranges.resolved_with_params(params);
+                ranges.window = effective.window;
+                ranges.dk = effective.dk;
+                ranges.dk2 = effective.dk2;
+            }
+            ranges.follow_window = follow;
+        }
+        WindowEdit::KFamily(window) => ranges.window = window,
+        WindowEdit::RFamily(window) => ranges.rwindow = window,
+    }
+}
+
+fn window_label(window: FTWindow) -> &'static str {
+    match window {
+        FTWindow::Hanning => "Hanning",
+        FTWindow::Parzen => "Parzen",
+        FTWindow::Welch => "Welch",
+        FTWindow::Gaussian => "Gaussian",
+        FTWindow::Sine => "Sine",
+        FTWindow::KaiserBessel => "Kaiser–Bessel",
+        FTWindow::FHanning => "Fractional Hanning",
+    }
+}
+
+fn window_unit(window: FTWindow, axis_unit: &'static str) -> &'static str {
+    if window == FTWindow::FHanning {
+        "fraction"
+    } else {
+        axis_unit
+    }
+}
+
+fn taper_summary(first: f64, second: Option<f64>) -> String {
+    match second {
+        Some(second) => format!("{first} / {second}"),
+        None => format!("{first} / Auto ({first})"),
+    }
+}
 
 impl StudioApp {
     pub(crate) fn fit_stage_center(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -777,9 +829,174 @@ impl StudioApp {
         }
     }
 
+    fn edit_fit_window(
+        &mut self,
+        dataset: Option<usize>,
+        edit: WindowEdit,
+        cx: &mut Context<Self>,
+    ) {
+        let (mut ranges, params) = if let Some(id) = dataset {
+            let Some(d) = self.joint.config.datasets.iter().find(|d| d.id == id) else {
+                return;
+            };
+            (
+                d.ranges.as_ref().unwrap_or(&self.fit_ranges).clone(),
+                self.joint_dataset_params(d)
+                    .unwrap_or_else(|| self.params.clone()),
+            )
+        } else {
+            (self.fit_ranges.clone(), self.ui_params().clone())
+        };
+        apply_window_edit(&mut ranges, &params, edit);
+        if let Some(id) = dataset {
+            if let Some(d) = self.joint.config.datasets.iter_mut().find(|d| d.id == id) {
+                d.ranges = Some(ranges);
+            }
+        } else {
+            self.fit_ranges = ranges;
+            self.sync_range_fields(cx);
+        }
+        self.fit_model_changed(cx);
+        self.rebuild_fit_plots(cx);
+    }
+
+    /// Shared fit-window controls. Dataset edits retain that dataset's own
+    /// processing parameters; only disabling Follow seeds the k-window values.
+    pub(super) fn fit_window_controls(
+        &self,
+        dataset: Option<usize>,
+        raw: &FitRanges,
+        effective: &FitRanges,
+        k_fields: Vec<gpui::AnyElement>,
+        r_fields: Vec<gpui::AnyElement>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
+        let t = self.theme;
+        let key = dataset.map_or_else(|| "global".into(), |id| id.to_string());
+        let mode = div()
+            .flex()
+            .items_center()
+            .flex_wrap()
+            .gap_1p5()
+            .text_size(px(11.))
+            .child(div().mr_1().text_color(t.text_muted).child("Window"))
+            .children([(true, "Follow Transform"), (false, "Custom")].into_iter().map(|(follow, label)| {
+                chip(&t, format!("fit-window-mode-{key}-{follow}"), label, raw.follow_window == follow)
+                    .tooltip(move |_, cx| cx.new(|_| Tooltip {
+                        label: "Follow uses this spectrum's Transform window family and k taper parameters. The fit k bounds and the k-weight follow setting remain independent. Switching to Custom copies the current effective window settings.".into(),
+                        theme: t,
+                    }).into())
+                    .on_click(cx.listener(move |this, _, _, cx| this.edit_fit_window(dataset, WindowEdit::Follow(follow), cx)))
+            }));
+        let mut body = div()
+            .mx_3()
+            .my_1()
+            .py_2()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .border_t_1()
+            .border_b_1()
+            .border_color(t.border)
+            .child(mode)
+            .child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child(format!(
+                        "Effective k window: {}",
+                        window_label(effective.window),
+                    )),
+            )
+            .child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child(format!(
+                        "dk / dk₂: {} {}",
+                        taper_summary(effective.dk, effective.dk2),
+                        window_unit(effective.window, "Å⁻¹"),
+                    )),
+            );
+        for (is_r, family, fields) in [(false, raw.window, k_fields), (true, raw.rwindow, r_fields)]
+        {
+            if !is_r && raw.follow_window {
+                continue;
+            }
+            let axis = if is_r { "R" } else { "k" };
+            let unit = window_unit(family, if is_r { "Å" } else { "Å⁻¹" });
+            let mut families = div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_1()
+                .text_size(px(11.));
+            for window in FT_WINDOWS {
+                families = families.child(
+                    chip(
+                        &t,
+                        format!("fit-window-family-{key}-{is_r}-{window:?}"),
+                        window_label(window),
+                        window == family,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.edit_fit_window(
+                            dataset,
+                            if is_r {
+                                WindowEdit::RFamily(window)
+                            } else {
+                                WindowEdit::KFamily(window)
+                            },
+                            cx,
+                        )
+                    })),
+                );
+            }
+            body = body.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(t.text_muted)
+                            .child(format!("{axis} window · taper parameters in {unit}")),
+                    )
+                    .child(families)
+                    .children(fields),
+            );
+        }
+        body.child(
+            div()
+                .text_size(px(11.))
+                .text_color(t.text_muted)
+                .child(format!(
+                    "Effective R window: {}",
+                    window_label(effective.rwindow)
+                )),
+        )
+        .child(
+            div()
+                .text_size(px(11.))
+                .text_color(t.text_muted)
+                .child(format!(
+                    "dr / dr₂: {} {}",
+                    taper_summary(effective.dr, effective.dr2),
+                    window_unit(effective.rwindow, "Å"),
+                )),
+        )
+        .child(
+            div()
+                .text_size(px(11.))
+                .text_color(t.text_muted)
+                .child("Auto follows the first taper. Fit bounds stay independent."),
+        )
+    }
+
     pub(super) fn fit_settings_section(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = self.theme;
-        let resolved = self.fit_ranges.resolved(self.ui_params().fft_kweight);
+        let resolved = self.fit_ranges.resolved_with_params(self.ui_params());
         let r = &resolved;
         let mut rows: Vec<gpui::AnyElement> = Vec::new();
         let floor = self.fit_background_floor(None);
@@ -796,12 +1013,21 @@ impl StudioApp {
                 .child(format!("R min must be at least Rbkg ({floor:.4} Å)."))
                 .into_any_element(),
         );
+        let mut k_fields = Vec::new();
+        let mut r_fields = Vec::new();
         for (key, field) in &self.fit_range_fields {
-            if *key == crate::app::RangeKey::Kweight {
-                continue;
+            use crate::app::RangeKey;
+            match key {
+                RangeKey::Kweight => {}
+                RangeKey::Dk | RangeKey::Dk2 => k_fields.push(field.clone().into_any_element()),
+                RangeKey::Dr | RangeKey::Dr2 => r_fields.push(field.clone().into_any_element()),
+                _ => rows.push(field.clone().into_any_element()),
             }
-            rows.push(field.clone().into_any_element());
         }
+        rows.push(
+            self.fit_window_controls(None, &self.fit_ranges, r, k_fields, r_fields, cx)
+                .into_any_element(),
+        );
         rows.push(
             div()
                 .px_3()
@@ -1572,4 +1798,60 @@ struct FitPlotHandles {
     r: Entity<RuvizPlot>,
     r_residual: Entity<RuvizPlot>,
     q: Entity<RuvizPlot>,
+}
+
+#[cfg(test)]
+mod window_tests {
+    use super::{FTWindow, FitRanges, PipelineParams, WindowEdit, apply_window_edit};
+
+    #[test]
+    fn disabling_window_follow_seeds_only_the_current_k_window() {
+        let mut ranges = FitRanges {
+            follow_transform: true,
+            kweight: 3.,
+            kweights: vec![1., 3.],
+            rwindow: FTWindow::Welch,
+            dr: 0.4,
+            dr2: Some(0.7),
+            ..Default::default()
+        };
+        let mut expected = ranges.clone();
+        let params = PipelineParams {
+            fft_window: Some(FTWindow::Parzen),
+            fft_dk: Some(2.5),
+            fft_dk2: Some(1.5),
+            fft_kweight: Some(1.),
+            ..Default::default()
+        };
+        expected.follow_window = false;
+        expected.window = FTWindow::Parzen;
+        expected.dk = 2.5;
+        expected.dk2 = Some(1.5);
+        apply_window_edit(&mut ranges, &params, WindowEdit::Follow(false));
+        assert!(ranges == expected);
+    }
+
+    #[test]
+    fn enabling_follow_and_reselecting_custom_preserve_raw_settings() {
+        let params = PipelineParams {
+            fft_window: Some(FTWindow::Gaussian),
+            fft_dk: Some(1.5),
+            ..Default::default()
+        };
+        let mut ranges = FitRanges {
+            follow_window: false,
+            window: FTWindow::Hanning,
+            dk: 3.,
+            dk2: Some(2.),
+            ..Default::default()
+        };
+        let mut expected = ranges.clone();
+        apply_window_edit(&mut ranges, &params, WindowEdit::Follow(false));
+        assert!(ranges == expected);
+        expected.follow_window = true;
+        apply_window_edit(&mut ranges, &params, WindowEdit::Follow(true));
+        assert!(ranges == expected);
+        apply_window_edit(&mut ranges, &params, WindowEdit::Follow(true));
+        assert!(ranges == expected);
+    }
 }

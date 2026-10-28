@@ -116,16 +116,9 @@ impl StudioApp {
         if !self.fit_paths.iter().any(|p| p.spec.enabled) {
             return Some("Select at least one scattering path in Paths.");
         }
-        let r = &self.fit_ranges;
-        if ![r.kmin, r.kmax, r.rmin, r.rmax]
-            .iter()
-            .all(|v| v.is_finite())
-            || r.kmin < 0.
-            || r.rmin < 0.
-            || r.kmin >= r.kmax
-            || r.rmin >= r.rmax
-        {
-            return Some("Set valid k and R ranges: minimum must be below maximum.");
+        let r = self.fit_ranges.resolved_with_params(self.ui_params());
+        if !r.valid() {
+            return Some("Set increasing k/R ranges and finite, nonnegative window parameters.");
         }
         let Some(rbkg) = crate::fitting::spectrum_rbkg(s) else {
             return Some("Prepare the spectrum with AUTOBK before fitting.");
@@ -162,7 +155,21 @@ impl StudioApp {
         if (scan.start..scan.start + scan.len)
             .filter(|&ix| !self.group_registry.index_excluded(ix))
             .any(|ix| {
+                !self
+                    .fit_ranges
+                    .resolved_with_params(self.effective_params(ix))
+                    .valid()
+            })
+        {
+            return Some(
+                "Set valid fit ranges and nonnegative window parameters for every spectrum in the batch.",
+            );
+        }
+        if (scan.start..scan.start + scan.len)
+            .filter(|&ix| !self.group_registry.index_excluded(ix))
+            .any(|ix| {
                 self.fit_ranges
+                    .resolved_with_params(self.effective_params(ix))
                     .validate_background(self.effective_params(ix).rbkg.unwrap_or(1.0))
                     .is_err()
             })

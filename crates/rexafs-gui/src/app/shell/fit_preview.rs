@@ -32,7 +32,7 @@ pub(crate) struct PreviewData {
 }
 pub(super) fn transform(input: Input, ranges: FitRanges) -> Result<PreviewData, String> {
     if !ranges.valid() {
-        return Err("Set a valid k and R range.".into());
+        return Err("Set increasing k/R ranges and finite, nonnegative window parameters.".into());
     }
     let config = ranges.transform();
     validate_transform(&config).map_err(|e| e.to_string())?;
@@ -156,13 +156,13 @@ impl StudioApp {
                 d.ranges
                     .as_ref()
                     .unwrap_or(&self.fit_ranges)
-                    .resolved(self.joint_dataset_params(d).and_then(|p| p.fft_kweight)),
+                    .resolved_with_params(&self.joint_dataset_params(d).unwrap_or_default()),
             );
         }
         (
             self.current_path.clone(),
             self.current_group_label().to_string(),
-            self.fit_ranges.resolved(self.ui_params().fft_kweight),
+            self.fit_ranges.resolved_with_params(self.ui_params()),
         )
     }
     pub(super) fn select_fit_space_view(&mut self, space: FitSpaceSpec, cx: &mut Context<Self>) {
@@ -387,7 +387,23 @@ impl StudioApp {
         if self.fit_preview.data.is_none() {
             return panel.child(div().text_color(t.text_muted).child("Loading spectrum…"));
         }
-        let kw = self.fit_preview.data.as_ref().unwrap().arrays.kweight;
+        if self.fit_preview.loading {
+            panel = panel.child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.text_muted)
+                    .child("Updating fit preview…"),
+            );
+        }
+        let data = self.fit_preview.data.as_ref().unwrap();
+        let kw = data.arrays.kweight;
+        panel = panel.child(
+            div()
+                .flex_none()
+                .text_size(px(11.))
+                .text_color(t.text_muted)
+                .child(data.ranges.window_summary()),
+        );
         let entries = match view {
             FitView::Both => vec![
                 (PREVIEW_K, chik_label(kw), self.fit_preview.k.clone()),
@@ -446,6 +462,29 @@ mod tests {
         .unwrap();
         assert!((&a.arrays.chiq - &back.arrays.chiq).norm() > 0.1);
         assert_eq!(a.q[1], ranges.transform().kstep.unwrap());
+        let followed = FitRanges::default().resolved_with_params(&crate::params::PipelineParams {
+            fft_window: Some(rexafs::prelude::FTWindow::Hanning),
+            fft_dk: Some(2.0),
+            fft_dk2: Some(1.0),
+            fft_kweight: Some(1.0),
+            ..Default::default()
+        });
+        let followed = transform(input.clone(), followed).unwrap();
+        assert!((&a.arrays.r_space.chir_re - &followed.arrays.r_space.chir_re).norm() > 0.1);
+        let expected =
+            apply_kweight_transform(&input.0, &input.1, &followed.ranges.transform(), 1.0).unwrap();
+        assert_eq!(followed.arrays.r_space.chir_re, expected.r_space.chir_re);
+        let r_filter = transform(
+            input.clone(),
+            FitRanges {
+                dr: 0.3,
+                dr2: Some(0.5),
+                rwindow: rexafs::prelude::FTWindow::Parzen,
+                ..followed.ranges.clone()
+            },
+        )
+        .unwrap();
+        assert!((&followed.arrays.chiq - &r_filter.arrays.chiq).norm() > 0.1);
         assert!(
             transform(
                 input,

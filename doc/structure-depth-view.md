@@ -1,8 +1,20 @@
 # Structure slices and depth cues
 
-Open **Slice & depth** above the structure canvas. Its controls replace the
-library/setup panel temporarily; **Back** returns to the normal panel while
-keeping the visual effect. In Paths, they temporarily replace the path table.
+Open **Structure display → Slice & depth** above the structure canvas. Its
+controls replace the library/setup panel temporarily; **Back** returns to the
+normal panel while keeping the visual effect. In Paths, they temporarily replace
+the path table.
+
+## Candidate cluster radius (unreleased)
+
+In **Fit → Structure → Structure display**, **Cluster radius** is the distance
+from the absorber in ångströms (Å). It shares Calculate's 8 Å default and finite
+2–12 Å range. Committing zero, a non-finite value or another invalid radius
+restores the last valid preview radius and shows an explanation; the preview
+and radius control remain available for the next edit. This setting changes the
+candidate calculation cluster. The separate **Clear radius** control below
+changes the display fade. See
+[`committed_cluster_radius` and `build_candidate_cluster`](../crates/rexafs-gui/src/app/shell/structure_view.rs).
 
 ## Inspect a coordination center
 

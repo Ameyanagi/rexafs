@@ -121,6 +121,7 @@ pub struct ProjectFile {
     pub overrides: Vec<ParamOverride>,
     pub fit_paths: Vec<FitPathSpec>,
     pub fit_vars: Vec<FitVarSpec>,
+    #[serde(default = "FitRanges::legacy_defaults")]
     pub fit_ranges: FitRanges,
     pub fit_mode: crate::rmc_fitting::FitMode,
     pub rmc: crate::rmc_fitting::Project,
@@ -129,18 +130,25 @@ pub struct ProjectFile {
     pub active_derived: Option<u64>,
     /// Completed fits (model snapshot + statistics), oldest first.
     pub fit_history: Vec<FitHistoryEntry>,
+    /// History id of the result displayed when the project was saved, including
+    /// a result whose source or model has since changed. Reopening shows its
+    /// retained curves immediately; the application checks the loaded spectrum
+    /// and model separately to decide whether the result needs an update.
+    /// `None` in older projects that did not record the displayed result.
+    pub current_fit: Option<usize>,
+    /// Whether the displayed result already needed an update when saved. The
+    /// application preserves this warning while checking restored inputs, so
+    /// reopening cannot make an outdated model appear current. Defaults to
+    /// `false` for older projects, which saved only up-to-date current fits.
+    pub current_fit_needs_update: bool,
     /// Full result arrays of history fits, keyed by [`FitHistoryEntry::id`]:
     /// measured and modeled χ(k), the k window, the R-space transforms and the
-    /// path contributions. Reopening restores them so Publish can export the
-    /// fit curves without refitting. Absent in projects saved by older
-    /// releases; those fits keep their statistics and model, and their curves
-    /// return only after a refit. Results with non-finite numbers, which JSON
-    /// cannot represent, are dropped by [`save_with_storage`].
-    /// History id of the fit that was current and up to date when the project
-    /// was saved. Reopening shows that result again (Fit results and Publish
-    /// figures) and marks it as needing an update only if the reloaded
-    /// spectrum or model differs from the one it was fitted to.
-    pub current_fit: Option<usize>,
+    /// path contributions, including every dataset and k-weight. Reopening
+    /// restores these owned arrays without reading the original inputs, so
+    /// Publish can export the fit curves without refitting. Absent in projects
+    /// saved by older releases; those fits keep their statistics and model,
+    /// and their curves return only after a refit. Results with non-finite
+    /// numbers, which JSON cannot represent, are dropped by [`save_with_storage`].
     pub fit_results:
         std::collections::BTreeMap<usize, std::sync::Arc<rexafs::prelude::FeffFitResult>>,
     pub joint: crate::joint_fitting::JointConfig,
@@ -164,6 +172,25 @@ pub struct ProjectFile {
 }
 
 impl ProjectFile {
+    /// Select retained curves to display when opening this project. An explicit
+    /// current fit preserves its saved update warning. Older saves can omit that
+    /// selection even when history curves exist; show the latest available
+    /// history result conservatively marked as needing an update. Orphan result
+    /// arrays and history entries without arrays are never selected.
+    pub(crate) fn displayed_fit(&self) -> Option<(usize, bool)> {
+        if let Some(id) = self.current_fit
+            && self.fit_results.contains_key(&id)
+            && self.fit_history.iter().any(|entry| entry.id == id)
+        {
+            return Some((id, self.current_fit_needs_update));
+        }
+        self.fit_history
+            .iter()
+            .rev()
+            .find(|entry| self.fit_results.contains_key(&entry.id))
+            .map(|entry| (entry.id, true))
+    }
+
     /// Assign identities only when a legacy project enters an editable session.
     /// Decoding/validating archives itself remains a lossless operation.
     pub fn assign_group_ids(&mut self) -> u64 {
@@ -393,6 +420,7 @@ fn retain_portable_fit_results(project: &mut ProjectFile) {
         .is_some_and(|id| !project.fit_results.contains_key(&id))
     {
         project.current_fit = None;
+        project.current_fit_needs_update = false;
     }
 }
 

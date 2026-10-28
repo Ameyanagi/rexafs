@@ -250,10 +250,11 @@ results, not performance promises or changes to the current numerical defaults.
 ### Saving projects and compatibility
 
 Use **Save project** / **Open project** with **`.rxs`** files. This is the first
-release format; unreleased codename formats are not supported. **Raw: paths** is
-the default: source paths are relative to the project file's directory. Move the
-project and data folders together. Choose **Raw: embedded** to include losslessly
-compressed original spectra and referenced FEFF files for portability.
+release format; unreleased codename formats are not supported. Choose
+**Include source files** for losslessly compressed original spectra and referenced
+FEFF files. **Unreleased:** the Save project dialog selects this portable mode by
+default. **Link source files** stores references relative to the project file's
+directory; move the project and data folders together.
 
 Saved projects use compact JSON and omit redundant defaults while retaining
 numeric precision, arrays, expressions and metadata. The file begins with a header

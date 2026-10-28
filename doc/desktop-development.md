@@ -1,10 +1,57 @@
-# Linux and Windows development
+# Desktop development
 
 Run the commands below from the repository root. Use the Rust toolchain pinned
 by [`rust-toolchain.toml`](../rust-toolchain.toml), Python 3.12+ for repository
 tools, and Node 22+ for the optional JavaScript package. Release and website CI
 currently use Node 24. Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
 to run the Python tooling commands.
+
+## Local edit and test cycle
+
+These commands apply to Apple Silicon macOS, Linux and Windows after installing
+the native development dependencies for your platform. Start with a compiler
+check for the package you are changing. [`cargo check`](https://doc.rust-lang.org/cargo/commands/cargo-check.html)
+skips final code generation, providing earlier feedback than a full build;
+some errors can only be found by building and running tests.
+
+```sh
+cargo check --locked -p rexafs
+cargo check --locked -p rexafs-gui --all-targets
+```
+
+While editing, select tests related to the change. For example, check the
+measurement readers or the desktop's project handling:
+
+```sh
+cargo test --locked -p rexafs --test measurement_reader
+cargo test --locked -p rexafs-gui --bin rexafs project::tests
+```
+
+The first command selects one integration-test executable; the second filters
+GUI test names within its test executable. See [Cargo's test selection documentation](https://doc.rust-lang.org/cargo/commands/cargo-test.html).
+Focused checks provide feedback during editing and do not replace the full
+numerical suite or native desktop qualification.
+
+Retain the Cargo target directory between runs, and keep the toolchain, profile
+and feature flags consistent within each edit cycle to reuse compatible
+artifacts. Cargo normally stores these artifacts under `target/`; an explicit
+`--target-dir` or `CARGO_TARGET_DIR` selects another location. See the
+[Cargo build cache documentation](https://doc.rust-lang.org/cargo/reference/build-cache.html).
+The workspace's [development profile](../Cargo.toml) already enables incremental
+compilation and limited debug information. Keep the default profiles for routine
+checks and tests; `--release` selects a separate optimized profile with different
+debug-assertion and integer-overflow checks. See [Cargo profiles](https://doc.rust-lang.org/cargo/reference/profiles.html).
+
+Before pushing Rust changes, run the full core suite and the strict Clippy
+checks described under [Repository checks](#repository-checks). For desktop
+changes, also run the full GUI suite and launch the optimized application for
+calculation and performance checks:
+
+```sh
+cargo test --locked -p rexafs
+cargo test --locked -p rexafs-gui
+cargo run --locked --release -p rexafs-gui
+```
 
 ## Linux
 
