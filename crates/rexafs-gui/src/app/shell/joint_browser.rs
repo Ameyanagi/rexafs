@@ -2,8 +2,8 @@
 use super::{button, chip, controls::Tooltip, fit_workspace::FitStep};
 use crate::text::plural;
 use crate::{
-    app::StudioApp,
-    fitting::{FitPathSpec, FitSpaceSpec, expr_identifiers},
+    app::{RangeKey, StudioApp},
+    fitting::{FitPathSpec, FitRanges, FitSpaceSpec, expr_identifiers},
     joint_fitting::{self, JointDataset},
     widgets::text_input::{InputEvent, InputStyle, TextInput},
 };
@@ -14,6 +14,7 @@ use std::{collections::BTreeSet, path::PathBuf};
 enum Edit {
     Value(usize, String),
     Range(usize, usize),
+    Window(usize, RangeKey),
     Expression(usize, PathBuf, usize),
 }
 fn terms(p: &FitPathSpec) -> [&str; 8] {
@@ -59,8 +60,15 @@ impl StudioApp {
             return field.clone();
         }
         let theme = self.theme;
+        let optional_window = matches!(&target, Edit::Window(_, RangeKey::Dk2 | RangeKey::Dr2));
         let field = cx.new(|cx| {
-            TextInput::new("", value.clone(), theme, cx).with_style(InputStyle {
+            TextInput::new(
+                if optional_window { "Auto" } else { "" },
+                value.clone(),
+                theme,
+                cx,
+            )
+            .with_style(InputStyle {
                 mono: true,
                 ..Default::default()
             })
@@ -71,7 +79,13 @@ impl StudioApp {
             };
             let text = text.trim();
             let number = text.parse::<f64>().ok().filter(|v| v.is_finite());
-            if !matches!(target, Edit::Expression(..)) && number.is_none() {
+            let automatic =
+                optional_window && (text.is_empty() || text.eq_ignore_ascii_case("auto"));
+            if !matches!(target, Edit::Expression(..)) && number.is_none() && !automatic {
+                field.update(cx, |f, cx| f.set_error(true, cx));
+                return;
+            }
+            if matches!(target, Edit::Window(..)) && number.is_some_and(|v| v < 0.) {
                 field.update(cx, |f, cx| f.set_error(true, cx));
                 return;
             }
@@ -124,6 +138,18 @@ impl StudioApp {
                         }
                     }
                 }
+                Edit::Window(id, key) => {
+                    if let Some(d) = this.joint.config.datasets.iter_mut().find(|d| d.id == *id) {
+                        let r = d.ranges.get_or_insert_with(|| this.fit_ranges.clone());
+                        match key {
+                            RangeKey::Dk => r.dk = number.unwrap(),
+                            RangeKey::Dk2 => r.dk2 = number,
+                            RangeKey::Dr => r.dr = number.unwrap(),
+                            RangeKey::Dr2 => r.dr2 = number,
+                            _ => unreachable!(),
+                        }
+                    }
+                }
                 Edit::Expression(id, file, term) => {
                     let base = this
                         .fit_paths
@@ -146,6 +172,55 @@ impl StudioApp {
         self.joint.fields.insert(key, (value, field.clone()));
         field
     }
+
+    fn joint_window_fields(
+        &mut self,
+        id: usize,
+        ranges: &FitRanges,
+        cx: &mut Context<Self>,
+    ) -> (Vec<gpui::AnyElement>, Vec<gpui::AnyElement>) {
+        let t = self.theme;
+        let mut k_fields = Vec::new();
+        let mut r_fields = Vec::new();
+        for (index, key, label, value) in [
+            (0, RangeKey::Dk, "dk", Some(ranges.dk)),
+            (1, RangeKey::Dk2, "dk₂", ranges.dk2),
+            (2, RangeKey::Dr, "dr", Some(ranges.dr)),
+            (3, RangeKey::Dr2, "dr₂", ranges.dr2),
+        ] {
+            let field = self.joint_field(
+                format!("window-{id}-{index}"),
+                value.map(|v| v.to_string()).unwrap_or_default(),
+                Edit::Window(id, key),
+                cx,
+            );
+            let second = matches!(key, RangeKey::Dk2 | RangeKey::Dr2);
+            let row = div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .text_size(px(11.))
+                .child(div().id(format!("window-label-{id}-{index}")).w(px(30.)).text_color(t.text_muted)
+                    .tooltip(move |_, cx| cx.new(|_| Tooltip {
+                        label: if second {
+                            "Second window taper parameter. Auto follows the first taper. Window settings change the window shape, not the fit bounds."
+                        } else {
+                            "First window taper parameter. Gaussian uses it as its standard deviation; Kaiser–Bessel also uses its numeric value as a shape parameter. Fractional Hanning uses dimensionless fractions. Window settings do not change fit bounds."
+                        }.into(),
+                        theme: t,
+                    }).into()).child(label))
+                .child(div().w(px(95.)).child(field))
+                .when(second, |row| row.child(div().text_color(t.text_muted).child("Auto follows first taper")))
+                .into_any_element();
+            if index < 2 {
+                k_fields.push(row);
+            } else {
+                r_fields.push(row);
+            }
+        }
+        (k_fields, r_fields)
+    }
+
     fn joint_range_editor(
         &mut self,
         d: &JointDataset,
@@ -153,8 +228,14 @@ impl StudioApp {
     ) -> impl IntoElement + use<> {
         let t = self.theme;
         let id = d.id;
-        let kw = self.joint_dataset_params(d).and_then(|p| p.fft_kweight);
-        let r = d.ranges.as_ref().unwrap_or(&self.fit_ranges).resolved(kw);
+        let params = self
+            .joint_dataset_params(d)
+            .unwrap_or_else(|| self.params.clone());
+        let kw = params.fft_kweight;
+        let raw = d.ranges.as_ref().unwrap_or(&self.fit_ranges).clone();
+        let r = raw.resolved_with_params(&params);
+        let (k_fields, r_fields) = self.joint_window_fields(id, &raw, cx);
+        let windows = self.fit_window_controls(Some(id), &raw, &r, k_fields, r_fields, cx);
         let mut row = div().flex().flex_wrap().items_center().gap_2();
         for (i, (label, v)) in [
             ("k min", r.kmin),
@@ -288,12 +369,13 @@ impl StudioApp {
                     ),
             )
             .child(row)
+            .child(windows)
             .child(weights)
             .when(!r.valid(), |d| {
                 d.child(
                     div()
                         .text_color(t.warn)
-                        .child("Minimum must be below maximum."),
+                        .child("Use increasing fit bounds, finite k-weights and nonnegative window taper parameters."),
                 )
             })
     }

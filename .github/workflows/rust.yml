@@ -66,7 +66,7 @@ jobs:
     - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       with:
         shared-key: checks
-        save-if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && runner.os == 'Linux' && matrix.toolchain == '1.98.1' }}
+        save-if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && matrix.toolchain == '1.98.1' }}
     - name: Run core crate tests
       run: cargo +${{ matrix.toolchain }} test --locked -p rexafs --verbose
     - name: Test optional ndarray compatibility backend
@@ -113,6 +113,64 @@ jobs:
     - name: Check the native Linux GUI and accessibility adapter
       run: cargo +stable check --locked -p rexafs-gui --no-default-features --features refeff-runner,feff10-runner
 
+  desktop-cache:
+    name: Warm desktop dependencies (${{ matrix.target }})
+    permissions:
+      contents: read
+    needs: scope
+    # Only reviewed branch pushes produce caches. PR and release jobs restore
+    # these external dependencies and rebuild the current workspace sources.
+    if: >-
+      needs.scope.outputs.full == 'true' && github.event_name == 'push' &&
+      github.repository == 'Ameyanagi/rexafs' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    env:
+      # Match the release consumer's compiler and cache environment.
+      RUSTUP_TOOLCHAIN: 1.98.1-${{ matrix.target }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      with:
+        toolchain: 1.98.1-${{ matrix.target }}
+    - id: dependencies
+      uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      with:
+        shared-key: desktop-${{ matrix.target }}
+        cache-bin: false
+        cache-workspace-crates: false
+        save-if: ${{ github.event_name == 'push' && github.repository == 'Ameyanagi/rexafs' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') }}
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      if: steps.dependencies.outputs.cache-hit != 'true'
+      with:
+        python-version: '3.12'
+    - name: Install Linux compilation dependencies
+      if: runner.os == 'Linux' && steps.dependencies.outputs.cache-hit != 'true'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential clang cmake pkg-config libasound2-dev libfontconfig-dev libglib2.0-dev libgtk-3-dev libssl-dev libvulkan-dev libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libzstd-dev libsqlite3-dev
+    - name: Compile desktop test dependencies without running tests
+      if: steps.dependencies.outputs.cache-hit != 'true'
+      run: cargo test --locked --release --no-run -p rexafs-gui --no-default-features --features refeff-runner,feff10-runner
+    - name: Compile core integration test dependencies without running tests
+      if: steps.dependencies.outputs.cache-hit != 'true'
+      run: cargo test --locked --release --no-run -p rexafs --features refeff-runner,feff10-runner --test refeff_runner --test rmc_refeff --test feff10_s02k_parity
+
   strict-gates:
     needs: scope
     if: needs.scope.outputs.full == 'true'
@@ -149,7 +207,7 @@ jobs:
   benchmark:
     name: Benchmark Regression
     runs-on: ubuntu-latest
-    needs: [scope, core, strict-gates]
+    needs: scope
     if: needs.scope.outputs.full == 'true'
 
     steps:

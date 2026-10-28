@@ -34,9 +34,10 @@ fn params(value: &mut Value) {
 }
 fn ranges(value: &mut Value) {
     let mut defaults = serde_json::to_value(FitRanges::default()).unwrap();
-    // A missing *field* means false for legacy fits, while a missing whole
-    // fit_ranges object creates the current model default (true).
+    // Missing follow fields mean false for legacy fits. A missing whole
+    // fit_ranges object follows the weight but retains the historical window.
     defaults["follow_transform"] = false.into();
+    defaults["follow_window"] = false.into();
     omit(value, defaults);
 }
 fn path(value: &mut Value) {
@@ -93,6 +94,7 @@ pub(super) fn encode(mut value: Value) -> Result<Vec<u8>, String> {
         &mut value,
         serde_json::to_value(ProjectFile {
             params: PipelineParams::legacy_defaults(),
+            fit_ranges: FitRanges::legacy_defaults(),
             ..ProjectFile::default()
         })
         .map_err(|e| e.to_string())?,

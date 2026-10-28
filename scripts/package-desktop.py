@@ -13,6 +13,7 @@ from release_archive import engine_execution, validate_desktop_binary, validate_
 from desktop_channels import app_name, identity
 from feff10_worker import install_helper
 from macos_installer import include_notices
+from macos_bundle import info_plist
 from windows_installer import stage_runtime
 from update_manifest import write_manifest
 from release_downloads import targets_for_version
@@ -22,7 +23,6 @@ metadata = json.loads(subprocess.check_output(
     ["cargo", "metadata", "--locked", "--no-deps", "--format-version", "1"], cwd=root))
 version = next(p["version"] for p in metadata["packages"] if p["name"] == "rexafs-gui")
 build_identity = identity(version, os.environ)
-nightly = build_identity["channel"] == "nightly"
 application_name = app_name(build_identity["channel"])
 target = subprocess.check_output(["rustc", "-vV"], text=True).split("host: ")[1].splitlines()[0]
 system = platform.system()
@@ -72,15 +72,7 @@ shutil.copy2(fixtures / "xafsdata/cu_150k.xmu", examples / "cu_150k.xmu")
 shutil.copy2(fixtures / "README.md", examples / "PROVENANCE.md")
 if system == "Darwin":
     with (bundle / application_name / "Contents/Info.plist").open("wb") as f:
-        plistlib.dump({
-            "CFBundleExecutable": "rexafs", "CFBundleIdentifier": "com.rexafs.nightly" if nightly else "com.rexafs.desktop",
-            "CFBundleName": "rexafs Nightly" if nightly else "rexafs", "CFBundleDisplayName": "rexafs Nightly" if nightly else "rexafs", "CFBundlePackageType": "APPL",
-            "CFBundleIconFile": "rexafs.icns",
-            "CFBundleShortVersionString": version.split("-")[0], "CFBundleVersion": version.split("-")[0],
-            "NSHighResolutionCapable": True,
-            "CFBundleDocumentTypes": [{"CFBundleTypeName": "rexafs project",
-                "CFBundleTypeExtensions": ["rxs"], "CFBundleTypeRole": "Editor"}],
-        }, f)
+        plistlib.dump(info_plist(version, build_identity["channel"]), f)
 for name in ["LICENSE-MIT", "LICENSE-APACHE"]:
     shutil.copy2(root / name, bundle / name)
 # Include exact resolved third-party license declarations for release review.
@@ -136,7 +128,7 @@ if system == "Darwin":
        if target == "aarch64-pc-windows-msvc" else "")
     + "This archive has no publisher code signature; macOS notarization is not included.\n"
     "Linux requires a graphical session, Vulkan-capable driver, GTK 3, fontconfig and xkbcommon.\n"
-    "Save .rxs projects with relative source paths (default), or select Raw: embedded for portable originals.\n"
+    "Save .rxs projects with Include source files (default) for portable originals, or choose Link source files for relative references.\n"
     "Run the executable with --self-check for a display-free packaged example check.\n"
 )
 if system in {"Darwin", "Linux"}:

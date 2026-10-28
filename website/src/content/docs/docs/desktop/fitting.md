@@ -48,6 +48,31 @@ the selected fitting range.
 
 *R-space fit limits. Full window, rexafs 0.2.11 on macOS; select to enlarge.*
 
+### Fit windows in the development build
+
+**Unreleased.** New FEFF models follow the window family and both window
+parameters from **Process → Transform**. This choice is separate from following
+the processing k-weight. With Process defaults, the k window is Kaiser–Bessel
+with dk = 1 and an automatic second parameter. The fit keeps its own k and R
+limits; following a window does not copy the processing transform's range. For
+a joint fit or an independent batch, each spectrum uses its own effective
+processing settings, including file overrides.
+
+Choose a custom fit window to enter the k-window family and its low- and high-k
+parameters. An automatic second parameter uses the first. The parameter meaning
+depends on the family: Hanning uses taper widths in Å⁻¹, while Kaiser–Bessel
+also uses the first value to control shape. See
+[window conventions](/docs/science/processing/#4-transform-from-k-to-r).
+The R filter is a separate fit setting, initially Hanning with dR = 0 Å and an
+automatic second parameter. A k-space residual omits both windows; R- and
+q-space residuals use them.
+
+Projects created before these controls keep the historical custom fit window:
+Kaiser–Bessel with dk = 4 and an automatic second parameter. Select following
+explicitly to change that behavior. New history entries save the effective
+windows for every dataset. Reports use those saved values; older history without
+a recorded transform identifies its reconstructed historical defaults.
+
 
 ## 3. Run and inspect
 

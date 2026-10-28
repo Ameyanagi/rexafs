@@ -30,11 +30,34 @@ cancellation of superseded runs for the same ref.
 Windows installer checks run for pull requests, relevant pushes to `main`, and
 manual requests. Feature-branch pushes no longer duplicate their PR checks.
 
-Added caches cover core dependencies, compatible nightly macOS dependencies
-and pinned `wasm-pack`. Native release jobs restore without saving caches;
-workspace crates and package outputs are cleared before rebuilding. The shared
-build tool is version-checked. Release artifacts are always rebuilt. Cold
-dependency caches require main/nightly builds to populate them.
+Cargo dependency caches cover core tests, compatible nightly macOS builds,
+native Linux and Windows desktops, and pinned `wasm-pack`. The pinned
+[Rust cache action](https://github.com/Swatinem/rust-cache/tree/6323deb102c322ba6fcbdcafc7e3dddab59af2b6)
+separates native operating systems, architectures, compiler identities and
+relevant environment/dependency inputs. The desktop producer and consumer use
+the same runner, pinned compiler, toolchain environment and shared cache key.
+
+Only successful pushes to `main` or `dev` populate the Linux/Windows desktop
+caches. The four native cache jobs compile desktop and core integration-test
+dependencies without running tests; they skip compilation when the exact cache
+already exists. The action excludes workspace crates and installed Cargo
+binaries from these caches. This adds work on trusted pushes after dependency
+changes so subsequent PRs can reuse those dependencies. It does not publish
+artifacts or substitute for any qualification job. Windows core tests also save
+their matching dependency cache on trusted pinned-toolchain pushes.
+
+PR and native release jobs restore without saving caches; desktop workspace
+crates and package outputs are cleared before rebuilding on every platform.
+Release artifacts are always rebuilt. The existing macOS/nightly cache policy
+is unchanged. A PR before the first successful trusted producer run still has
+a cold cache; a configured cache is not evidence of a measured speedup.
+
+The benchmark job starts after scope selection alongside the other Rust checks;
+its inputs are the checked-out source, not outputs of the core or strict jobs.
+The final **Rust checks** aggregate still requires all of them to pass. Release
+core tests cover the default `trust-region` backend and the optional
+`ndarray-compat` backend once each; explicitly selecting `trust-region` again
+would repeat the default feature set.
 
 Website builds reuse Rust and WebAssembly compilation dependencies. Only
 successful `main` builds save the large shared dependency cache, keyed by the
@@ -58,6 +81,17 @@ combinations verify the installed wheel's bytes and run the API checks against
 both the minimum and latest compatible NumPy. From 0.2.12, macOS desktop and
 Python builds support Apple Silicon only. The published 0.2.6–0.2.11 inventories
 retain four wheels, including Intel macOS; 0.2.5 retains its per-interpreter ABI.
+
+On 2026-10-26 UTC, the [PR #206 Rust run](https://github.com/Ameyanagi/rexafs/actions/runs/40354927195)
+took **25m48s**. Its benchmark job waited for the core matrix and strict checks,
+then ran for **10m54s**. The [Windows x64 desktop job](https://github.com/Ameyanagi/rexafs/actions/runs/40354927036/job/121684873820)
+took **48m32s**: GUI test compilation took **30m21s**, followed by **40.30s**
+running 743 tests; core FEFF integration compilation took **8m13s**, and the
+production executable compilation took **5m01s**. That workflow restored desktop
+dependencies only on macOS. These are retained baseline observations, not a
+controlled before/after experiment or a prediction of cache savings. Compare
+future runs by compiler, runner, feature set, cache-hit status and timed step;
+record queue time separately from compilation and test execution.
 
 On 2026-09-13, [PR build 34751534452](https://github.com/Ameyanagi/rexafs/actions/runs/34751534452)
 took **73m29s**. Intel macOS desktop queued **30m05s**, then ran **43m05s**.

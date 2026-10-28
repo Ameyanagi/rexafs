@@ -7684,6 +7684,7 @@ dependencies = [
  "tiff",
  "unicode-segmentation",
  "ureq 3.5.0",
+ "url",
  "walkdir",
  "windows 0.62.2",
  "xraydb",

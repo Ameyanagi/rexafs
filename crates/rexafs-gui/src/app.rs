@@ -428,10 +428,11 @@ const DETECTION_MODES: [DetectionMode; 4] = [
 ];
 
 /// What the unsaved-changes prompt is guarding.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum CloseIntent {
     CloseWindow,
     Quit,
+    OpenPaths(Vec<PathBuf>),
 }
 
 actions!(
@@ -1095,6 +1096,10 @@ pub(crate) enum RangeKey {
     Rmin,
     Rmax,
     Kweight,
+    Dk,
+    Dk2,
+    Dr,
+    Dr2,
 }
 
 #[derive(Clone)]
@@ -1420,6 +1425,9 @@ pub struct StudioApp {
     fit_history_results: BTreeMap<usize, Arc<FeffFitResult>>,
     fit_history_selected: Option<usize>,
     fit_result: Option<Arc<FeffFitResult>>,
+    /// A saved result that already needed an update must not become current
+    /// merely because its arrays were restored beside the current model.
+    restored_fit_needs_update: bool,
     fit_provenance: Option<FitProvenance>,
     fit_plots: Option<FitPlots>,
     fit_gen: u64,
@@ -3468,6 +3476,7 @@ impl StudioApp {
             fit_history_results: BTreeMap::new(),
             fit_history_selected: None,
             fit_result: None,
+            restored_fit_needs_update: false,
             fit_provenance: None,
             fit_plots: None,
             fit_gen: 0,
@@ -3478,7 +3487,7 @@ impl StudioApp {
             project_extensions: Default::default(),
             project_path: None,
             project_header: None,
-            project_storage: Default::default(),
+            project_storage: crate::project::DataStorage::Embedded,
             project_raw_files: Vec::new(),
             project_source_origins: BTreeMap::new(),
             project_generation: 0,
@@ -3978,6 +3987,13 @@ impl StudioApp {
         self.fit_ranges.rmin.to_bits().hash(&mut hasher);
         self.fit_ranges.rmax.to_bits().hash(&mut hasher);
         self.fit_ranges.follow_transform.hash(&mut hasher);
+        self.fit_ranges.follow_window.hash(&mut hasher);
+        format!("{:?}", self.fit_ranges.window).hash(&mut hasher);
+        self.fit_ranges.dk.to_bits().hash(&mut hasher);
+        self.fit_ranges.dk2.map(f64::to_bits).hash(&mut hasher);
+        format!("{:?}", self.fit_ranges.rwindow).hash(&mut hasher);
+        self.fit_ranges.dr.to_bits().hash(&mut hasher);
+        self.fit_ranges.dr2.map(f64::to_bits).hash(&mut hasher);
         self.fit_ranges.kweight.to_bits().hash(&mut hasher);
         for kw in &self.fit_ranges.kweights {
             kw.to_bits().hash(&mut hasher);
@@ -3988,6 +4004,9 @@ impl StudioApp {
     }
 
     fn fit_is_stale(&self) -> bool {
+        if self.fit_result.is_some() && self.restored_fit_needs_update {
+            return true;
+        }
         let Some(provenance) = &self.fit_provenance else {
             return false;
         };
@@ -5435,6 +5454,11 @@ impl StudioApp {
         }
         self.show_range_adjustments(ix, &sp, cx);
         self.spectrum = Some(sp.clone());
+        // A newly merged target may finish after its alignment reference.
+        // Resume the preview now rather than requiring a field edit or reopen.
+        if self.tools.open.is_some() {
+            self.queue_tool_preview(cx);
+        }
         self.settle_restored_fit();
         self.refresh_operando_frame_plot(ix, fingerprint, &sp, cx);
         self.invalidate_explore_plots(cx);
@@ -7339,18 +7363,39 @@ impl StudioApp {
         ranges: &FitRanges,
         cx: &mut Context<Self>,
     ) -> Vec<(RangeKey, Entity<NumericField>)> {
-        let specs: [(RangeKey, &str, f64); 5] = [
-            (RangeKey::Kmin, "k min (Å⁻¹)", ranges.kmin),
-            (RangeKey::Kmax, "k max (Å⁻¹)", ranges.kmax),
-            (RangeKey::Rmin, "R min (Å)", ranges.rmin),
-            (RangeKey::Rmax, "R max (Å)", ranges.rmax),
-            (RangeKey::Kweight, "k-weight", ranges.kweight),
+        let specs = [
+            (RangeKey::Kmin, "k min (Å⁻¹)", Some(ranges.kmin)),
+            (RangeKey::Kmax, "k max (Å⁻¹)", Some(ranges.kmax)),
+            (RangeKey::Rmin, "R min (Å)", Some(ranges.rmin)),
+            (RangeKey::Rmax, "R max (Å)", Some(ranges.rmax)),
+            (RangeKey::Kweight, "k-weight", Some(ranges.kweight)),
+            (RangeKey::Dk, "dk", Some(ranges.dk)),
+            (RangeKey::Dk2, "dk₂", ranges.dk2),
+            (RangeKey::Dr, "dr", Some(ranges.dr)),
+            (RangeKey::Dr2, "dr₂", ranges.dr2),
         ];
         specs
             .into_iter()
             .map(|(key, label, value)| {
                 let field = cx.new(|cx| {
-                    NumericField::new(label, "", Some(value), FieldKind::Float, theme, cx)
+                    let optional = matches!(key, RangeKey::Dk2 | RangeKey::Dr2);
+                    let field = NumericField::new(
+                        label,
+                        if optional { "Auto (follows first taper)" } else { "" },
+                        value,
+                        FieldKind::Float,
+                        theme,
+                        cx,
+                    );
+                    if matches!(key, RangeKey::Dk | RangeKey::Dk2 | RangeKey::Dr | RangeKey::Dr2) {
+                        field.with_step(0.1).with_description(if optional {
+                            "Second window taper parameter. Auto follows the first taper; it does not change the fit bounds. Ordinary windows use the displayed axis units; fractional Hanning uses dimensionless fractions."
+                        } else {
+                            "First window taper parameter. It changes the window shape, not the fit bounds. Gaussian uses this as its standard deviation; Kaiser–Bessel also uses its numeric value as a shape parameter. Fractional Hanning uses dimensionless fractions."
+                        })
+                    } else {
+                        field
+                    }
                 });
                 cx.subscribe(&field, move |this: &mut Self, _field, event, cx| {
                     let value = match event {
@@ -7362,7 +7407,24 @@ impl StudioApp {
                             return;
                         }
                     };
-                    if let Some(v) = value {
+                    if matches!(key, RangeKey::Dk | RangeKey::Dk2 | RangeKey::Dr | RangeKey::Dr2) {
+                        let optional = matches!(key, RangeKey::Dk2 | RangeKey::Dr2);
+                        if value.is_some_and(|v| v < 0.) || (!optional && value.is_none()) {
+                            this.set_status(StatusKind::Error, "Window taper parameters must be nonnegative; only the second taper can use Auto.");
+                            this.sync_range_fields(cx);
+                            cx.notify();
+                            return;
+                        }
+                        match key {
+                            RangeKey::Dk => this.fit_ranges.dk = value.unwrap(),
+                            RangeKey::Dk2 => this.fit_ranges.dk2 = *value,
+                            RangeKey::Dr => this.fit_ranges.dr = value.unwrap(),
+                            RangeKey::Dr2 => this.fit_ranges.dr2 = *value,
+                            _ => unreachable!(),
+                        }
+                        this.fit_model_changed(cx);
+                        this.rebuild_fit_plots(cx);
+                    } else if let Some(v) = value {
                         if matches!(key, RangeKey::Rmin) && *v < this.fit_background_floor(None) {
                             this.set_status(
                                 StatusKind::Error,
@@ -7382,6 +7444,7 @@ impl StudioApp {
                             RangeKey::Rmin => r.rmin = *v,
                             RangeKey::Rmax => r.rmax = *v,
                             RangeKey::Kweight => r.kweight = *v,
+                            RangeKey::Dk | RangeKey::Dk2 | RangeKey::Dr | RangeKey::Dr2 => unreachable!(),
                         }
                         this.fit_model_changed(cx);
                         this.rebuild_fit_plots(cx);
@@ -7769,7 +7832,7 @@ impl StudioApp {
         cx.notify();
         let paths: Vec<FitPathSpec> = self.fit_paths.iter().map(|r| r.spec.clone()).collect();
         let vars: Vec<FitVarSpec> = self.fit_vars.iter().map(|v| v.spec.clone()).collect();
-        let ranges = self.fit_ranges.resolved(self.ui_params().fft_kweight);
+        let ranges = self.fit_ranges.resolved_with_params(self.ui_params());
         let started = Instant::now();
         let history_inputs = (paths.clone(), vars.clone(), ranges.clone());
         let noise_estimated = ranges.noise;
@@ -7786,6 +7849,7 @@ impl StudioApp {
                 app.last_fit_duration = Some(started.elapsed());
                 match result {
                     Ok(result) => {
+                        app.restored_fit_needs_update = false;
                         app.joint.result_config = None;
                         app.fit_provenance = Some(provenance.clone());
                         app.pending_fit_restore = None;
@@ -7917,6 +7981,7 @@ impl StudioApp {
         self.fit_history_selected = Some(id);
         self.pending_fit_restore = None;
         if let Some(result) = self.fit_history_results.get(&id).cloned() {
+            self.restored_fit_needs_update = false;
             self.fit_result = Some(result);
             // The recorded group and processing fingerprint let an unchanged
             // spectrum count as up to date; older entries fall back to the
@@ -7942,13 +8007,17 @@ impl StudioApp {
         let ranges = self.fit_ranges.clone();
         for (key, field) in &self.fit_range_fields {
             let value = match key {
-                RangeKey::Kmin => ranges.kmin,
-                RangeKey::Kmax => ranges.kmax,
-                RangeKey::Rmin => ranges.rmin,
-                RangeKey::Rmax => ranges.rmax,
-                RangeKey::Kweight => ranges.kweight,
+                RangeKey::Kmin => Some(ranges.kmin),
+                RangeKey::Kmax => Some(ranges.kmax),
+                RangeKey::Rmin => Some(ranges.rmin),
+                RangeKey::Rmax => Some(ranges.rmax),
+                RangeKey::Kweight => Some(ranges.kweight),
+                RangeKey::Dk => Some(ranges.dk),
+                RangeKey::Dk2 => ranges.dk2,
+                RangeKey::Dr => Some(ranges.dr),
+                RangeKey::Dr2 => ranges.dr2,
             };
-            field.update(cx, |f, cx| f.set_value(Some(value), cx));
+            field.update(cx, |f, cx| f.set_value(value, cx));
         }
     }
 
@@ -8249,7 +8318,7 @@ impl StudioApp {
                         if job_cancel.load(Ordering::Relaxed) {
                             return Err("batch cancelled".into());
                         }
-                        let frame_ranges = ranges.resolved(frame_params.fft_kweight);
+                        let frame_ranges = ranges.resolved_with_params(frame_params);
                         let result = run_spectrum_fit(&sp, &paths, &vars, &frame_ranges)?;
                         Ok(BatchFitRow::from_result(
                             *frame,
@@ -9191,19 +9260,17 @@ impl StudioApp {
                 .map(|d| d.id),
             fit_history: self.fit_history.clone(),
             fit_results: self.fit_history_results.clone(),
-            current_fit: self
-                .fit_result
-                .as_ref()
-                .filter(|_| {
-                    self.pending_fit_restore.is_some()
-                        || (self.fit_provenance.is_some() && !self.fit_is_stale())
-                })
-                .and_then(|r| {
-                    self.fit_history_results
-                        .iter()
-                        .find(|(_, v)| Arc::ptr_eq(v, r))
-                        .map(|(id, _)| *id)
-                }),
+            current_fit: self.fit_result.as_ref().and_then(|r| {
+                self.fit_history_results
+                    .iter()
+                    .find(|(_, v)| Arc::ptr_eq(v, r))
+                    .map(|(id, _)| *id)
+            }),
+            current_fit_needs_update: self.restored_fit_needs_update
+                || (self.fit_provenance.is_some() && self.fit_is_stale())
+                || (self.fit_result.is_some()
+                    && self.fit_provenance.is_none()
+                    && self.pending_fit_restore.is_none()),
             joint: self.joint.config.clone(),
             publication: self.publish.settings.clone(),
             mcr_analysis: self.analysis.mcr.clone(),
@@ -9439,6 +9506,7 @@ impl StudioApp {
         registry: crate::group_identity::GroupRegistry,
         cx: &mut Context<Self>,
     ) {
+        let displayed_fit = project.displayed_fit();
         self.reset_catalog_state(cx);
         self.intake = import_state::IntakeState::from_history(project.import_history.clone());
         self.imports = project.imports.clone();
@@ -9554,7 +9622,9 @@ impl StudioApp {
         self.fit_gen += 1;
         self.fit_running = false;
         self.fit_result = None;
+        self.restored_fit_needs_update = displayed_fit.is_some_and(|(_, stale)| stale);
         self.fit_provenance = None;
+        self.fit_history_selected = None;
         self.fit_plots = None;
         self.batch_fit = None;
         for spec in project.fit_paths {
@@ -9609,8 +9679,8 @@ impl StudioApp {
         // Show the fit that was current at save time again; its provenance is
         // attached when the fitted spectrum finishes processing.
         self.pending_fit_restore = None;
-        if let Some((id, result)) = project
-            .current_fit
+        if let Some((id, result)) = displayed_fit
+            .map(|(id, _)| id)
             .and_then(|id| Some((id, self.fit_history_results.get(&id)?.clone())))
         {
             self.joint.result_config = self
@@ -9654,7 +9724,14 @@ impl StudioApp {
         self.selected = None;
         self.resolve_group_state();
         self.ensure_compare_loaded(cx);
-        if !self.fit_paths.is_empty() {
+        if self.fit_result.is_some()
+            || (self.fit_mode == crate::rmc_fitting::FitMode::Rmc
+                && self.rmc.project.saved.is_some())
+        {
+            self.set_fit_step(shell::fit_workspace::FitStep::Results, cx);
+            self.stage_view.fit_result_tab = 0;
+            self.stage_view.fit_show_batch = false;
+        } else if !self.fit_paths.is_empty() {
             self.set_fit_step(shell::fit_workspace::FitStep::Model, cx);
         }
         self.sync_param_fields(cx);
@@ -9771,9 +9848,10 @@ impl StudioApp {
             self.close_assistant_session(cx);
             return true;
         }
-        let message = match intent {
+        let message = match &intent {
             CloseIntent::CloseWindow => "Save changes before closing?",
             CloseIntent::Quit => "Save changes before quitting?",
+            CloseIntent::OpenPaths(_) => "Save changes before opening another analysis?",
         };
         let answer = window.prompt(
             gpui::PromptLevel::Warning,
@@ -9793,8 +9871,9 @@ impl StudioApp {
                 // An in-flight save also finishes the close when it succeeds.
                 Some(0) => app.save_project_confirmed(cx),
                 Some(1) => {
-                    app.pending_close = None;
-                    app.finish_close(intent, cx);
+                    if let Some(intent) = app.pending_close.take() {
+                        app.finish_close(intent, cx);
+                    }
                 }
                 _ => app.pending_close = None,
             })
@@ -9805,8 +9884,19 @@ impl StudioApp {
     }
 
     fn close_assistant_session(&mut self, cx: &mut Context<Self>) {
-        if let Some(assistant) = self.assistant.clone() {
+        if let Some(assistant) = self.assistant.take() {
             assistant.update(cx, |assistant, cx| assistant.analysis_closed(cx));
+        }
+        self.assistant_host = Default::default();
+        self.assistant_resizing = None;
+        // GPUI's macOS Dock reopen callback runs only when no windows remain.
+        // This auxiliary window belongs to the analysis being closed.
+        if let Some(assistant_window) = self.assistant_window.take() {
+            cx.defer(move |cx| {
+                assistant_window
+                    .update(cx, |_, window, _| window.remove_window())
+                    .ok();
+            });
         }
     }
 
@@ -9815,12 +9905,39 @@ impl StudioApp {
         self.close_assistant_session(cx);
         match intent {
             CloseIntent::Quit => cx.quit(),
+            CloseIntent::OpenPaths(paths) => self.route_paths(paths, true, cx),
             CloseIntent::CloseWindow => {
                 let main = self.main_window;
                 cx.defer(move |cx| {
                     main.update(cx, |_, window, _| window.remove_window()).ok();
                 });
             }
+        }
+    }
+
+    /// Native document requests reuse this window while protecting unsaved
+    /// merge, alignment and fitting work with the existing save flow.
+    pub(crate) fn open_paths_from_desktop(
+        &mut self,
+        paths: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if paths.is_empty() {
+            return;
+        }
+        if let Some(CloseIntent::OpenPaths(queued)) = &mut self.pending_close {
+            queued.extend(paths);
+            *queued = crate::desktop_open::unique_paths(std::mem::take(queued));
+            cx.notify();
+            return;
+        }
+        if !paths.iter().any(|path| crate::project::is_project(path)) {
+            self.route_paths(paths, true, cx);
+            return;
+        }
+        if self.confirm_close(CloseIntent::OpenPaths(paths.clone()), window, cx) {
+            self.route_paths(paths, true, cx);
         }
     }
 

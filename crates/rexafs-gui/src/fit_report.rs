@@ -2,7 +2,9 @@
 //! fit ranges, variables, correlations and one block per path with the
 //! physical values, their uncertainties and the expressions behind them.
 use crate::fit_details::Estimate;
-use crate::fitting::{FitHistoryEntry, FitPathSpec, fit_result_notices, high_correlations};
+use crate::fitting::{
+    FitHistoryEntry, FitPathSpec, FitRanges, fit_result_notices, high_correlations,
+};
 use rexafs::prelude::FTWindow;
 use rexafs::xafs::fitting::{FeffFitResult, FeffFitTransform};
 
@@ -22,40 +24,65 @@ pub(crate) fn window_name(window: FTWindow) -> &'static str {
     }
 }
 
+/// Display unit for a window parameter: dimensionless fractions for fractional
+/// Hanning, otherwise the k or R axis unit. Kaiser–Bessel also reuses the first
+/// parameter's numerical value for its dimensionless shape.
+pub(crate) fn window_parameter_unit(window: FTWindow, axis: &'static str) -> &'static str {
+    if window == FTWindow::FHanning {
+        "fraction"
+    } else {
+        axis
+    }
+}
+
 /// The transforms a fit used, one per dataset. Fits recorded before rexafs
 /// stored them (`transforms` empty) used their ranges with the then-default
 /// taper: Kaiser–Bessel k window, dk = 4 Å⁻¹; Hanning R window, dR = 0 Å.
+/// A joint fit uses each dataset's recorded ranges, or the shared ranges when
+/// that dataset had no override.
 /// The flag is true for that reconstructed fallback.
 pub(crate) fn fit_transforms(entry: &FitHistoryEntry) -> (Vec<FeffFitTransform>, bool) {
     if !entry.transforms.is_empty() {
         return (entry.transforms.clone(), false);
     }
-    let transform = FeffFitTransform {
+    let legacy = |ranges: &FitRanges| FeffFitTransform {
         window: FTWindow::KaiserBessel,
         dk: 4.0,
         dk2: None,
         rwindow: FTWindow::Hanning,
         dr: 0.0,
         dr2: None,
-        ..entry.ranges.transform()
+        ..ranges.transform()
     };
-    (vec![transform], true)
+    let transforms = match entry.joint.as_ref().filter(|j| !j.datasets.is_empty()) {
+        Some(joint) => joint
+            .datasets
+            .iter()
+            .map(|d| legacy(d.ranges.as_ref().unwrap_or(&entry.ranges)))
+            .collect(),
+        None => vec![legacy(&entry.ranges)],
+    };
+    (transforms, true)
 }
 
 /// Fit window description, e.g. "Kaiser–Bessel k window (dk = 4 Å⁻¹);
-/// Hanning R window (dR = 0 Å)". A k-space fit applies no k window to its
+/// Hanning R window (dR = 0 Å)". Unequal second parameters are named `dk2`
+/// and `dR2`, so the low- and high-end settings remain distinguishable.
+/// Fractional Hanning parameters are dimensionless fractions; other families
+/// use the axis units (and Kaiser–Bessel also reuses dk as its shape parameter).
+/// A k-space fit applies no k window to its
 /// residual (Larch semantics), but the transform still records one.
 pub(crate) fn window_text(t: &FeffFitTransform) -> String {
-    let taper = |a: f64, b: Option<f64>| match b {
-        Some(b) if b != a => format!("{a} / {b}"),
-        _ => format!("{a}"),
+    let taper = |name: &str, a: f64, b: Option<f64>, unit: &str| match b {
+        Some(b) if b != a => format!("{name} = {a} {unit}, {name}2 = {b} {unit}"),
+        _ => format!("{name} = {a} {unit}"),
     };
     format!(
-        "{} k window (dk = {} Å⁻¹); {} R window (dR = {} Å)",
+        "{} k window ({}); {} R window ({})",
         window_name(t.window),
-        taper(t.dk, t.dk2),
+        taper("dk", t.dk, t.dk2, window_parameter_unit(t.window, "Å⁻¹")),
         window_name(t.rwindow),
-        taper(t.dr, t.dr2)
+        taper("dR", t.dr, t.dr2, window_parameter_unit(t.rwindow, "Å"))
     )
 }
 
@@ -233,26 +260,52 @@ pub(crate) fn markdown(entry: &FitHistoryEntry, result: Option<&FeffFitResult>) 
     }
 
     // ---- ranges ---------------------------------------------------------
-    let r = &entry.ranges;
-    let kweights = r
-        .effective_kweights()
-        .iter()
-        .map(|k| format!("{k}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let (transforms, _) = fit_transforms(entry);
-    out.push_str("\n## Fit ranges\n\n| space | k-range (Å⁻¹) | k-weights | R-range (Å) | window | noise weighting |\n|---|---|---|---|---|---|\n");
+    let (transforms, reconstructed) = fit_transforms(entry);
+    let multiple = transforms.len() > 1;
+    let dataset_column = if multiple { " dataset |" } else { "" };
+    let dataset_rule = if multiple { "---|" } else { "" };
     out.push_str(&format!(
-        "| {} | {:.3} – {:.3} | {} | {:.3} – {:.3} | {} | {} |\n",
-        r.fitspace.label(),
-        r.kmin,
-        r.kmax,
-        kweights,
-        r.rmin,
-        r.rmax,
-        transforms.first().map(window_text).unwrap_or_default(),
-        if r.noise { "on" } else { "off" }
+        "\n## Fit ranges\n\n|{dataset_column} space | k-range (Å⁻¹) | k-weights | R-range (Å) | window | noise weighting |\n|{dataset_rule}---|---|---|---|---|---|\n"
     ));
+    for (index, t) in transforms.iter().enumerate() {
+        let dataset = if multiple {
+            let label = joint
+                .and_then(|j| j.datasets.get(index))
+                .map(|d| d.label.clone())
+                .unwrap_or_else(|| format!("Dataset {}", index + 1));
+            format!(" {} |", cell(&label))
+        } else {
+            String::new()
+        };
+        let space = match t.fitspace {
+            rexafs::xafs::fitting::FitSpace::R => "R",
+            rexafs::xafs::fitting::FitSpace::K => "k",
+            rexafs::xafs::fitting::FitSpace::Q => "q",
+        };
+        let mut window = window_text(t);
+        if reconstructed {
+            window.push_str(" (not recorded; release default at fit time)");
+        }
+        out.push_str(&format!(
+            "|{dataset} {space} | {:.3} – {:.3} | {} | {:.3} – {:.3} | {} | {} |\n",
+            t.kmin,
+            t.kmax,
+            kweights_text(t),
+            t.rmin,
+            t.rmax,
+            window,
+            if joint
+                .and_then(|j| j.datasets.get(index))
+                .and_then(|d| d.ranges.as_ref())
+                .unwrap_or(&entry.ranges)
+                .noise
+            {
+                "on"
+            } else {
+                "off"
+            }
+        ));
+    }
 
     // ---- variables ------------------------------------------------------
     out.push_str("\n## Variables\n\n| name | kind | value | ± | initial | bounds | expression |\n|---|---|---:|---:|---:|---|---|\n");
@@ -584,5 +637,211 @@ mod tests {
         assert!(md.contains("## Paths"));
         assert!(!md.contains("## Correlations"));
         assert!(md.contains("| de0 | vary | 4.20000 | 0.50000 |"));
+    }
+
+    #[test]
+    fn report_uses_archived_ranges_weights_and_asymmetric_windows() {
+        let (mut entry, _) = entry();
+        let transform = FeffFitTransform {
+            kmin: 3.5,
+            kmax: 13.5,
+            kweights: vec![3.0, 1.0],
+            rmin: 1.5,
+            rmax: 3.5,
+            window: FTWindow::Parzen,
+            dk: 1.5,
+            dk2: Some(2.5),
+            rwindow: FTWindow::Welch,
+            dr: 0.25,
+            dr2: Some(0.75),
+            ..Default::default()
+        };
+        entry.transforms = vec![transform.clone()];
+        let expected = "Parzen k window (dk = 1.5 Å⁻¹, dk2 = 2.5 Å⁻¹); Welch R window (dR = 0.25 Å, dR2 = 0.75 Å)";
+        assert_eq!(fit_transforms(&entry), (vec![transform], false));
+        let rows = summary_rows(&entry, None);
+        assert!(rows.contains(&("Window".into(), expected.into())));
+        assert!(rows.contains(&("k-weights".into(), "3, 1".into())));
+        let md = markdown(&entry, None);
+        assert!(
+            md.contains(&format!(
+                "| R | 3.500 – 13.500 | 3, 1 | 1.500 – 3.500 | {expected} | off |"
+            )),
+            "{md}"
+        );
+        assert!(!md.contains("release default at fit time"), "{md}");
+    }
+
+    #[test]
+    fn window_description_uses_fractional_and_gaussian_parameter_units() {
+        let mut transform = FeffFitTransform {
+            window: FTWindow::FHanning,
+            dk: 0.2,
+            dk2: Some(0.4),
+            rwindow: FTWindow::Gaussian,
+            dr: 0.3,
+            dr2: Some(0.6),
+            ..Default::default()
+        };
+        assert_eq!(
+            window_text(&transform),
+            "fractional Hanning k window (dk = 0.2 fraction, dk2 = 0.4 fraction); Gaussian R window (dR = 0.3 Å, dR2 = 0.6 Å)"
+        );
+        transform.window = FTWindow::Gaussian;
+        transform.rwindow = FTWindow::FHanning;
+        assert_eq!(
+            window_text(&transform),
+            "Gaussian k window (dk = 0.2 Å⁻¹, dk2 = 0.4 Å⁻¹); fractional Hanning R window (dR = 0.3 fraction, dR2 = 0.6 fraction)"
+        );
+    }
+
+    #[test]
+    fn joint_report_lists_each_archived_transform() {
+        let (mut entry, _) = entry();
+        entry.joint = Some(crate::joint_fitting::JointConfig {
+            datasets: ["Cu | cold", "Cu warm"]
+                .iter()
+                .enumerate()
+                .map(|(id, label)| crate::joint_fitting::JointDataset {
+                    id,
+                    label: (*label).into(),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        });
+        entry.transforms = vec![
+            FeffFitTransform {
+                window: FTWindow::Hanning,
+                dk: 1.0,
+                dk2: Some(2.0),
+                ..Default::default()
+            },
+            FeffFitTransform {
+                kmin: 4.0,
+                kmax: 14.0,
+                kweight: 3.0,
+                window: FTWindow::Sine,
+                dk: 3.0,
+                ..Default::default()
+            },
+        ];
+        let md = markdown(&entry, None);
+        assert!(md.contains("| dataset | space |"), "{md}");
+        assert!(
+            md.contains("| Cu \\| cold | R | 0.000 – 20.000 | 2 | 1.000 – 3.000 | Hanning k window (dk = 1 Å⁻¹, dk2 = 2 Å⁻¹)"),
+            "{md}"
+        );
+        assert!(
+            md.contains(
+                "| Cu warm | R | 4.000 – 14.000 | 3 | 1.000 – 3.000 | sine k window (dk = 3 Å⁻¹)"
+            ),
+            "{md}"
+        );
+        let rows = summary_rows(&entry, None);
+        assert!(rows.contains(&("Cu warm: k-weights".into(), "3".into())));
+    }
+
+    #[test]
+    fn unrecorded_history_keeps_the_legacy_window_fallback() {
+        let (mut entry, _) = entry();
+        entry.transforms.clear();
+        entry.ranges.follow_window = false;
+        // The fallback describes the historical calculation even if newer
+        // range fields contain a different requested window.
+        entry.ranges.window = FTWindow::Parzen;
+        entry.ranges.dk = 1.5;
+        entry.ranges.dk2 = Some(2.5);
+        entry.ranges.rwindow = FTWindow::Welch;
+        entry.ranges.dr = 0.25;
+        entry.ranges.dr2 = Some(0.75);
+        let (transforms, reconstructed) = fit_transforms(&entry);
+        assert!(reconstructed);
+        let transform = &transforms[0];
+        assert_eq!(transform.window, FTWindow::KaiserBessel);
+        assert_eq!((transform.dk, transform.dk2), (4.0, None));
+        assert_eq!(transform.rwindow, FTWindow::Hanning);
+        assert_eq!((transform.dr, transform.dr2), (0.0, None));
+        assert_eq!(
+            (transform.kmin, transform.kmax),
+            (entry.ranges.kmin, entry.ranges.kmax)
+        );
+        let expected = "Kaiser–Bessel k window (dk = 4 Å⁻¹); Hanning R window (dR = 0 Å) (not recorded; release default at fit time)";
+        let rows = summary_rows(&entry, None);
+        assert!(rows.contains(&("Window".into(), expected.into())));
+        let md = markdown(&entry, None);
+        assert!(md.contains(expected), "{md}");
+        assert!(!md.contains("Parzen k window"), "{md}");
+    }
+
+    #[test]
+    fn old_joint_history_reconstructs_each_datasets_ranges_with_legacy_windows() {
+        let (mut entry, _) = entry();
+        entry.transforms.clear();
+        let ranges = FitRanges {
+            follow_transform: false,
+            follow_window: false,
+            kmin: 3.0,
+            kmax: 11.0,
+            rmin: 1.5,
+            rmax: 2.5,
+            kweight: 1.0,
+            kweights: vec![1.0],
+            window: FTWindow::Parzen,
+            dk: 2.0,
+            noise: true,
+            ..Default::default()
+        };
+        entry.joint = Some(crate::joint_fitting::JointConfig {
+            datasets: vec![
+                crate::joint_fitting::JointDataset {
+                    id: 0,
+                    label: "Cold".into(),
+                    ranges: Some(ranges),
+                    ..Default::default()
+                },
+                crate::joint_fitting::JointDataset {
+                    id: 1,
+                    label: "Warm".into(),
+                    // No override: this dataset used the shared fit range.
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        });
+        let (transforms, reconstructed) = fit_transforms(&entry);
+        assert!(reconstructed);
+        assert_eq!(transforms.len(), 2);
+        assert_eq!((transforms[0].kmin, transforms[0].kmax), (3.0, 11.0));
+        assert_eq!((transforms[0].rmin, transforms[0].rmax), (1.5, 2.5));
+        assert_eq!(transforms[0].effective_kweights(), vec![1.0]);
+        assert_eq!((transforms[1].kmin, transforms[1].kmax), (2.0, 12.0));
+        for transform in &transforms {
+            assert_eq!(transform.window, FTWindow::KaiserBessel);
+            assert_eq!((transform.dk, transform.dk2), (4.0, None));
+            assert_eq!(transform.rwindow, FTWindow::Hanning);
+            assert_eq!((transform.dr, transform.dr2), (0.0, None));
+        }
+        let md = markdown(&entry, None);
+        assert!(
+            md.contains("| Cold | R | 3.000 – 11.000 | 1 | 1.500 – 2.500 | Kaiser–Bessel k window"),
+            "{md}"
+        );
+        assert!(
+            md.contains(
+                "| Warm | R | 2.000 – 12.000 | 2, 1, 3 | 1.000 – 3.000 | Kaiser–Bessel k window"
+            ),
+            "{md}"
+        );
+        assert_eq!(
+            md.matches("not recorded; release default at fit time")
+                .count(),
+            2
+        );
+        assert!(md.contains("release default at fit time) | on |"), "{md}");
+        assert!(md.contains("release default at fit time) | off |"), "{md}");
+        let rows = summary_rows(&entry, None);
+        assert!(rows.contains(&("Cold: k range (Å⁻¹)".into(), "3.00 – 11.00".into())));
+        assert!(rows.contains(&("Warm: k range (Å⁻¹)".into(), "2.00 – 12.00".into())));
     }
 }
