@@ -17,14 +17,19 @@
   normalized differences from the first selected sample, with editable E₀-relative
   ranges, placement and scaled display offsets in previews and image exports.
   Save inset choices per panel while preserving older project recipes.
+- Replace publication composer curve-end labels with **Above curves**, the
+  default for new panels. Place complete coloured labels inside the axes above
+  each curve, choosing the side with fewer curve collisions, then the flatter
+  spans under the labels; an inset forces the opposite side. Preserve
+  **Legend** for older panels without a saved label mode; migrate saved curve-end
+  choices to **Above curves**.
 - Select several workspace samples per publication composer panel, share or
   override their ordered selection, and stack main curves with vertical offsets.
-  Set short figure labels with full sample names retained in captions; curve-end
-  labels remain complete and report an error when they cannot fit. Choose an
-  ordered viridis, Okabe–Ito or workspace sample palette, default to one legend
-  per figure and no grid, and draw inward ticks on all four sides with four
-  minor ticks between major ticks. Process uncached samples automatically and
-  preserve legacy recipes on project load.
+  Set short figure labels with full sample names retained in captions. Choose an
+  ordered viridis, Okabe–Ito or workspace sample palette, use one legend per figure
+  in Legend mode and no grid by default, and draw inward ticks on all four sides
+  with four minor ticks between major ticks. Process uncached samples automatically
+  and preserve legacy recipes on project load.
 
 - Choose per-curve colours in Publish from the eight-colour Okabe–Ito palette
   or Auto, and share colours across composer panels. Save choices in `.rxs`

@@ -196,15 +196,16 @@ pub(crate) const JOURNAL_WIDTHS: [JournalWidth; 6] = [
     },
 ];
 
-/// How a panel identifies its curves. The default retains its figure legend.
+/// How a panel identifies its curves. New panels label above multiple curves.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum CurveLabelMode {
+    /// Literal labels above multiple curves, on the side with fewer curve
+    /// collisions or opposite an inset. Fit panels and single curves keep legends.
     #[default]
+    #[serde(alias = "curve_end")]
+    AboveCurve,
     Legend,
-    /// Complete figure labels beside the last visible point. Labels exceeding
-    /// the 35% panel-width allowance produce a validation error.
-    CurveEnd,
 }
 
 /// Default colours for panels containing multiple samples. rexafs chooses one
@@ -265,7 +266,7 @@ pub(crate) struct CompositePanel {
     pub offset_step: f64,
     /// Put the first sample highest for a positive step, without reordering it.
     pub reverse: bool,
-    /// Legend by default; curve-end labels reserve space on the panel's right.
+    /// AboveCurve by default; fit panels and single curves use existing legend rules.
     pub label_mode: CurveLabelMode,
     /// Independent zoom or difference axes; absent in older projects and off
     /// by default. Only energy-domain μ(E) panels support insets.
@@ -285,17 +286,26 @@ enum SavedPanel {
         offset_step: f64,
         #[serde(default)]
         reverse: bool,
-        #[serde(default)]
+        #[serde(default = "legacy_label_mode")]
         label_mode: CurveLabelMode,
         #[serde(default)]
         inset: Option<PanelInset>,
     },
 }
 
+/// Saved panels predating label modes retain legends; constructors use the
+/// current default so the editor's add-panel path gets above-curve labels.
+fn legacy_label_mode() -> CurveLabelMode {
+    CurveLabelMode::Legend
+}
+
 impl From<SavedPanel> for CompositePanel {
     fn from(saved: SavedPanel) -> Self {
         match saved {
-            SavedPanel::Key(key) => key.into(),
+            SavedPanel::Key(key) => Self {
+                label_mode: legacy_label_mode(),
+                ..key.into()
+            },
             SavedPanel::Options {
                 key,
                 samples,
@@ -662,7 +672,7 @@ impl ComposedFigure {
 
 /// One panel, built but not yet framed.
 enum Built {
-    Single(Box<Plot>, Vec<EndLabel>),
+    Single(Box<Plot>, Vec<CurveLabel>),
     FitResidual(Box<layout::FitResidual>),
 }
 
@@ -995,7 +1005,7 @@ pub(crate) fn prepare_panels(
     for panel in &mut prepared.panels {
         let spec = &recipe.panels[panel.index];
         if !spec.uses_current_fit() {
-            if spec.label_mode == CurveLabelMode::CurveEnd {
+            if uses_curve_labels(spec, &panel.data, &panel.options) {
                 panel.options.legend = false;
             } else if spec.samples.as_deref().unwrap_or(&recipe.samples).len() > 1
                 && panel.options.legend
@@ -1123,13 +1133,14 @@ pub(crate) fn compose_prepared(
                 let plot = layout::panel_frame(*plot, cell_height_in, frame);
                 let mut image = plot.render().map_err(|e| e.to_string())?;
                 let mut svg = plot.render_to_svg().map_err(|e| e.to_string())?;
-                render_end_labels(
+                render_curve_labels(
                     &mut image,
                     &mut svg,
                     &labels,
                     frame,
                     &grid,
                     recipe.font_size,
+                    chosen[index].inset.as_ref().map(|inset| inset.placement),
                 )?;
                 (image, svg)
             }
@@ -1262,13 +1273,12 @@ fn composition_layout(
                 (Built::FitResidual(Box::new(panels)), needs)
             }
             None => {
-                let end_labels =
-                    if !spec.uses_current_fit() && spec.label_mode == CurveLabelMode::CurveEnd {
-                        options.legend = false;
-                        curve_end_labels(data, &mut options, recipe.font_size)?
-                    } else {
-                        Vec::new()
-                    };
+                let labels = if uses_curve_labels(spec, data, &options) {
+                    options.legend = false;
+                    above_curve_labels(data, &mut options, recipe.font_size)?
+                } else {
+                    Vec::new()
+                };
                 let inset = prepared.inset.as_ref().map(|inset| inset.placement);
                 // Resolve the main legend before the inset covers its canvas.
                 // Other composed panels use ruviz's automatic inside position.
@@ -1295,7 +1305,7 @@ fn composition_layout(
                     0.,
                     metrics.bottom(),
                 ];
-                (Built::Single(Box::new(plot), end_labels), needs)
+                (Built::Single(Box::new(plot), labels), needs)
             }
         };
         for (shared, need) in frame.iter_mut().zip(needs) {
@@ -1304,39 +1314,10 @@ fn composition_layout(
         built.push(panel);
     }
 
-    if built
-        .iter()
-        .any(|panel| matches!(panel, Built::Single(_, labels) if !labels.is_empty()))
-    {
-        let panel_width = grid.cell_px.0 as f64 / grid.dpi;
-        let available_margin = panel_width - frame[0] - 0.5;
-        if frame[1] > available_margin {
-            return Err(CURVE_END_WIDTH_ERROR.into());
-        }
-        // rexafs reserves at most 35% of a panel for names, including padding.
-        // Narrow panels use less so at least half an inch remains for data.
-        let label_width = (panel_width * 0.35).min(available_margin) - END_LABEL_PADDING_IN;
-        for panel in &mut built {
-            if let Built::Single(_, labels) = panel {
-                for label in labels {
-                    validate_end_label(label, label_width)?;
-                    frame[1] = frame[1].max(label.width_in + END_LABEL_PADDING_IN);
-                }
-            }
-        }
-    }
-
-    let available_height = grid.cell_px.1 as f64 - (frame[2] + frame[3]) * grid.dpi;
-    for panel in &built {
-        if let Built::Single(_, labels) = panel {
-            validate_end_label_height(labels, available_height, grid.dpi)?;
-        }
-    }
     Ok((built, frame))
 }
 
-/// Validate the same panel geometry and complete curve-end labels as native
-/// rendering before the Python exporter creates any files.
+/// Validate native panel geometry before the Python exporter creates any files.
 pub(crate) fn validate_composition_layout(
     recipe: &CompositeRecipe,
     chosen: &[&PreparedPanel],
@@ -1347,49 +1328,46 @@ pub(crate) fn validate_composition_layout(
 
 /// Gap between a panel's top-left corner and its label, in points.
 const LABEL_INSET_PT: f64 = 2.;
-/// Four points between the axes and names, and four points at the panel edge.
-const END_LABEL_PADDING_IN: f64 = 8. / 72.;
-const CURVE_END_WIDTH_ERROR: &str = "Curve-end labels leave less than 0.5 in of plot width. Widen the figure, use fewer columns, reduce the font size or choose a legend.";
+/// Horizontal inset of the label's outer edge from the axes, in points.
+pub(crate) const CURVE_LABEL_PAD_PT: f64 = 4.;
+/// Gap above the highest curve point under the label, in points.
+pub(crate) const CURVE_LABEL_GAP_PT: f64 = 2.;
 
-/// One literal label, measured at the output DPI before margins are fixed.
-struct EndLabel {
+/// Direct labels replace legends only for non-fit panels with multiple curves.
+pub(crate) fn uses_curve_labels(
+    spec: &CompositePanel,
+    data: &FigureData,
+    options: &FigureOptions,
+) -> bool {
+    !spec.uses_current_fit()
+        && spec.label_mode == CurveLabelMode::AboveCurve
+        && data
+            .series(options)
+            .iter()
+            .filter(|curve| curve.visible(options) && !curve.x.is_empty())
+            .count()
+            > 1
+}
+
+/// Literal text measured at the output DPI, with curve points in axes fractions
+/// (bottom left is 0,0). The final shared margins determine its position.
+struct CurveLabel {
     text: String,
     color: ruviz::prelude::Color,
     raster: ruviz::render::typst_text::TypstRasterOutput,
-    width_in: f64,
-    /// Position of the last visible point from the top of the visible y range.
-    y_fraction: f64,
+    points: Vec<(f64, f64)>,
 }
 
-const CURVE_END_LABEL_TOO_LONG: &str =
-    "Curve-end labels are too long for this panel. Shorten the figure labels or use a legend.";
-
-/// Require complete labels in both raster and vector output. Geometry checks
-/// separately retain at least half an inch for the plotted data.
-fn validate_end_label(label: &EndLabel, max_width_in: f64) -> Result<(), String> {
-    if label.width_in > max_width_in {
-        Err(CURVE_END_LABEL_TOO_LONG.into())
-    } else {
-        Ok(())
-    }
-}
-
-fn curve_end_labels(
-    data: &FigureData,
-    options: &mut FigureOptions,
-    font_pt: f64,
-) -> Result<Vec<EndLabel>, String> {
-    let visible: Vec<_> = data
-        .series(options)
-        .iter()
-        .enumerate()
-        .filter(|(_, curve)| curve.visible(options) && !curve.x.is_empty())
-        .collect();
+/// Fix inferred limits before placing direct labels in either renderer. This
+/// also preserves symmetric automatic y limits for unshifted EXAFS panels.
+pub(crate) fn fix_curve_label_limits(data: &FigureData, options: &mut FigureOptions) {
     let xlim = data.xlim(options).or_else(|| {
         let mut bounds: Option<(f64, f64)> = None;
-        for value in visible
+        for value in data
+            .series(options)
             .iter()
-            .flat_map(|(_, curve)| curve.x.iter().copied())
+            .filter(|curve| curve.visible(options) && !curve.x.is_empty())
+            .flat_map(|curve| curve.x.iter().copied())
             .filter(|value| value.is_finite())
         {
             bounds = Some(bounds.map_or((value, value), |(min, max)| {
@@ -1397,8 +1375,10 @@ fn curve_end_labels(
             }));
         }
         bounds.map(|(min, max)| {
+            // Tight inferred x limits keep short labels over the curves rather
+            // than empty padding. A constant x still needs a nonzero range.
             let pad = if min < max {
-                (max - min) * 0.05
+                0.
             } else {
                 min.abs().max(1.) * 0.05
             };
@@ -1406,10 +1386,10 @@ fn curve_end_labels(
         })
     });
     let Some((xmin, xmax)) = xlim else {
-        return Ok(Vec::new());
+        return;
     };
-    // Fix automatically inferred limits before adding labels. Their physical
-    // placement must use the same bounds as the plot, including explicit cuts.
+    // Fix inferred limits before plotting so labels and curves share exactly
+    // the same axes, including explicit cuts and automatic range padding.
     options.xmin = Some(xmin);
     options.xmax = Some(xmax);
     let Some((ymin, ymax)) = options
@@ -1417,47 +1397,40 @@ fn curve_end_labels(
         .zip(options.ymax)
         .or_else(|| data.visible_ylim(options))
     else {
-        return Ok(Vec::new());
+        return;
     };
     options.ymin = Some(ymin);
     options.ymax = Some(ymax);
+}
+
+fn above_curve_labels(
+    data: &FigureData,
+    options: &mut FigureOptions,
+    font_pt: f64,
+) -> Result<Vec<CurveLabel>, String> {
+    fix_curve_label_limits(data, options);
+    let Some(((xmin, xmax), (ymin, ymax))) = data.xlim(options).zip(options.ymin.zip(options.ymax))
+    else {
+        return Ok(Vec::new());
+    };
+    let visible: Vec<_> = data
+        .series(options)
+        .iter()
+        .filter(|curve| curve.visible(options) && !curve.x.is_empty())
+        .collect();
     let dpi = options.dimensions().2;
     let palette = Plot::new().get_theme();
     let mut labels = Vec::new();
-    for (index, (_, curve)) in visible.iter().enumerate() {
-        let mut endpoint: Option<(f64, f64)> = None;
-        let mut include = |x: f64, y: f64| {
-            if x.is_finite()
-                && y.is_finite()
-                && x >= xmin
-                && x <= xmax
-                && y >= ymin
-                && y <= ymax
-                && endpoint.is_none_or(|(previous, _)| x >= previous)
-            {
-                endpoint = Some((x, y));
-            }
-        };
-        for (&x, &y) in curve.x.iter().zip(&curve.y) {
-            include(x, y);
-        }
-        // Interpolate at visible boundaries; the final stored point may be far
-        // outside a user's chosen horizontal or vertical limits.
-        for (xs, ys) in curve.x.windows(2).zip(curve.y.windows(2)) {
-            for x in [xmin, xmax] {
-                if (xs[0] < x && x < xs[1]) || (xs[1] < x && x < xs[0]) {
-                    include(x, ys[0] + (ys[1] - ys[0]) * (x - xs[0]) / (xs[1] - xs[0]));
-                }
-            }
-            for y in [ymin, ymax] {
-                if (ys[0] < y && y < ys[1]) || (ys[1] < y && y < ys[0]) {
-                    include(xs[0] + (xs[1] - xs[0]) * (y - ys[0]) / (ys[1] - ys[0]), y);
-                }
-            }
-        }
-        let Some((_, y)) = endpoint else {
+    for (index, curve) in visible.iter().enumerate() {
+        let points: Vec<_> = curve
+            .x
+            .iter()
+            .zip(&curve.y)
+            .map(|(&x, &y)| ((x - xmin) / (xmax - xmin), (y - ymin) / (ymax - ymin)))
+            .collect();
+        if curve_span_ylim(&points, 0., 1.).is_none() {
             continue;
-        };
+        }
         let color = match options.series_colors.get(&curve.key) {
             Some(color) => super::series_color(color)?,
             None => palette.get_color(index),
@@ -1467,86 +1440,154 @@ fn curve_end_labels(
             (font_pt * dpi / 72.) as f32,
             color,
             0.,
-            "curve-end label",
+            "curve label",
         )
         .map_err(|error| error.to_string())?;
-        labels.push(EndLabel {
+        labels.push(CurveLabel {
             text: curve.label.clone(),
             color,
-            width_in: raster.pixmap.width() as f64 / dpi,
             raster,
-            y_fraction: (ymax - y) / (ymax - ymin),
+            points,
         });
     }
     Ok(labels)
 }
 
-/// Reject overlapping complete labels before either export is written.
-fn validate_end_label_height(labels: &[EndLabel], available: f64, dpi: f64) -> Result<(), String> {
-    if labels.is_empty() {
-        return Ok(());
-    }
-    let gap = 2. * dpi / 72.;
-    let required = labels
-        .iter()
-        .map(|label| label.raster.pixmap.height() as f64)
-        .sum::<f64>()
-        + gap * labels.len().saturating_sub(1) as f64;
-    if required > available {
-        return Err("Curve-end labels do not fit vertically. Use taller panels, fewer samples, a smaller font or a legend.".into());
-    }
-    Ok(())
+/// Visible line range in an axes-fraction span. Boundary interpolation keeps
+/// sparse curves and explicit axis cuts consistent with the drawn segments.
+fn curve_span_ylim(points: &[(f64, f64)], low: f64, high: f64) -> Option<(f64, f64)> {
+    curve_box_ylim(points, low, high, 0., 1.)
 }
 
-/// Keep direct labels within the reserved margin, separating vertically
-/// adjacent names by two points without changing curve or axis coordinates.
-fn render_end_labels(
+/// Clip to a label box as well as the visible axes, including sparse segments.
+fn curve_box_ylim(
+    points: &[(f64, f64)],
+    low: f64,
+    high: f64,
+    bottom: f64,
+    top: f64,
+) -> Option<(f64, f64)> {
+    let mut bounds: Option<(f64, f64)> = None;
+    let mut include = |x: f64, y: f64| {
+        if x.is_finite()
+            && y.is_finite()
+            && (low..=high).contains(&x)
+            && (bottom..=top).contains(&y)
+        {
+            bounds = Some(bounds.map_or((y, y), |(min, max)| (min.min(y), max.max(y))));
+        }
+    };
+    for &(x, y) in points {
+        include(x, y);
+    }
+    for pair in points.windows(2) {
+        let [(x0, y0), (x1, y1)] = [pair[0], pair[1]];
+        if ![x0, y0, x1, y1].iter().all(|value| value.is_finite()) {
+            continue;
+        }
+        for x in [low, high] {
+            if (x0 < x && x < x1) || (x1 < x && x < x0) {
+                include(x, y0 + (y1 - y0) * (x - x0) / (x1 - x0));
+            }
+        }
+        for y in [bottom, top] {
+            if (y0 < y && y < y1) || (y1 < y && y < y0) {
+                include(x0 + (x1 - x0) * (y - y0) / (y1 - y0), y);
+            }
+        }
+    }
+    bounds
+}
+
+/// rexafs scores the actual label boxes on each side: fewer labels touching
+/// another curve (or their own curve after clamping), then a smaller summed
+/// per-curve vertical range under each label, then left. Insets override this
+/// choice. This project placement rule is shared with the Python exporter,
+/// not taken from a published algorithm; it does not separate labels.
+fn curve_labels_on_right(
+    labels: &[CurveLabel],
+    axes_px: (f64, f64),
+    dpi: f64,
+    inset: Option<InsetPlacement>,
+) -> bool {
+    if let Some(inset) = inset {
+        return inset == InsetPlacement::UpperLeft;
+    }
+    curve_label_side_score(labels, axes_px, dpi, true)
+        < curve_label_side_score(labels, axes_px, dpi, false)
+}
+
+fn curve_label_side_score(
+    labels: &[CurveLabel],
+    axes_px: (f64, f64),
+    dpi: f64,
+    right: bool,
+) -> (usize, f64) {
+    let mut collisions = 0;
+    let mut variation = 0.;
+    for (index, label) in labels.iter().enumerate() {
+        let Some((x, y)) = curve_label_position(label, axes_px, dpi, right) else {
+            continue;
+        };
+        let high = (x + label.raster.pixmap.width() as f64 / axes_px.0).min(1.);
+        let top = (y + label.raster.pixmap.height() as f64 / axes_px.1).min(1.);
+        let (min, max) = curve_span_ylim(&label.points, x, high).unwrap();
+        variation += max - min;
+        if max >= y
+            || labels.iter().enumerate().any(|(other, curve)| {
+                other != index && curve_box_ylim(&curve.points, x, high, y, top).is_some()
+            })
+        {
+            collisions += 1;
+        }
+    }
+    (collisions, variation)
+}
+
+/// Label lower-left corner in axes fractions. Each label sits above its own
+/// curve without separating overlapping labels; clamp it to the axes bounds.
+fn curve_label_position(
+    label: &CurveLabel,
+    axes_px: (f64, f64),
+    dpi: f64,
+    right: bool,
+) -> Option<(f64, f64)> {
+    let width = label.raster.pixmap.width() as f64 / axes_px.0;
+    let height = label.raster.pixmap.height() as f64 / axes_px.1;
+    let pad = CURVE_LABEL_PAD_PT * dpi / 72. / axes_px.0;
+    let x = if right { 1. - pad - width } else { pad }.clamp(0., (1. - width).max(0.));
+    let (_, max) = curve_span_ylim(&label.points, x, (x + width).min(1.))?;
+    let gap = CURVE_LABEL_GAP_PT * dpi / 72. / axes_px.1;
+    let y = (max + gap).clamp(0., (1. - height).max(0.));
+    Some((x, y))
+}
+
+fn render_curve_labels(
     image: &mut Image,
     svg: &mut String,
-    labels: &[EndLabel],
+    labels: &[CurveLabel],
     frame: Frame,
     grid: &Grid,
     font_pt: f64,
+    inset: Option<InsetPlacement>,
 ) -> Result<(), String> {
     if labels.is_empty() {
         return Ok(());
     }
     let scale = grid.dpi / 72.;
-    let top = frame[2] * grid.dpi;
-    let bottom = image.height as f64 - frame[3] * grid.dpi;
-    let available = bottom - top;
-    let gap = 2. * scale;
-    validate_end_label_height(labels, available, grid.dpi)?;
-    let mut order: Vec<_> = (0..labels.len()).collect();
-    order.sort_by(|&a, &b| labels[a].y_fraction.total_cmp(&labels[b].y_fraction));
-    let mut positions = Vec::new();
-    for (position, &index) in order.iter().enumerate() {
-        let height = labels[index].raster.pixmap.height() as f64;
-        let desired =
-            (top + available * labels[index].y_fraction - height / 2.).clamp(top, bottom - height);
-        let previous = if position == 0 {
-            top
-        } else {
-            positions[position - 1]
-                + labels[order[position - 1]].raster.pixmap.height() as f64
-                + gap
-        };
-        positions.push(desired.max(previous));
-    }
-    for position in (0..positions.len()).rev() {
-        let height = labels[order[position]].raster.pixmap.height() as f64;
-        let limit = if position + 1 == positions.len() {
-            bottom - height
-        } else {
-            positions[position + 1] - gap - height
-        };
-        positions[position] = positions[position].min(limit);
-    }
-    let x = image.width as f64 - frame[1] * grid.dpi + 4. * scale;
+    let axes_px = (
+        image.width as f64 - (frame[0] + frame[1]) * grid.dpi,
+        image.height as f64 - (frame[2] + frame[3]) * grid.dpi,
+    );
+    let right = curve_labels_on_right(labels, axes_px, grid.dpi, inset);
     let mut markup = String::new();
-    for (&index, &y) in order.iter().zip(&positions) {
-        let label = &labels[index];
+    for label in labels {
+        let Some((xf, yf)) = curve_label_position(label, axes_px, grid.dpi, right) else {
+            continue;
+        };
         let pixmap = &label.raster.pixmap;
+        let x = frame[0] * grid.dpi + xf * axes_px.0;
+        let y = frame[2] * grid.dpi + (1. - yf) * axes_px.1 - pixmap.height() as f64;
         blend(
             &mut image.pixels,
             (image.width, image.height),
@@ -1559,7 +1600,7 @@ fn render_end_labels(
         );
         let font_px = font_pt * scale;
         let line_height = pixmap.height() as f64 / label.text.split('\n').count() as f64;
-        markup.push_str(&format!(r#"<text class="curve-end-label" x="{x:.3}" y="{:.3}" xml:space="preserve" font-family="Arial, Helvetica, sans-serif" font-size="{font_px:.3}" fill="{color}">"#, y + 0.8 * line_height));
+        markup.push_str(&format!(r#"<text class="curve-label" x="{x:.3}" y="{:.3}" xml:space="preserve" font-family="Arial, Helvetica, sans-serif" font-size="{font_px:.3}" fill="{color}">"#, y + 0.8 * line_height));
         for (line, text) in label.text.split('\n').enumerate() {
             markup.push_str(&format!(
                 r#"<tspan x="{x:.3}" dy="{}">{}</tspan>"#,
@@ -2040,9 +2081,20 @@ mod tests {
     fn panel_objects_migrate_strings_and_preserve_ordered_sample_ids() {
         let old: CompositeRecipe =
             serde_json::from_str(r#"{"panels":["xanes",{"key":"chi-k"}]}"#).unwrap();
+        assert_eq!(old.panels[0].key, "xanes");
+        assert_eq!(old.panels[1].key, "chi-k");
+        assert!(
+            old.panels
+                .iter()
+                .all(|panel| panel.label_mode == CurveLabelMode::Legend)
+        );
         assert_eq!(
-            old.panels,
-            [CompositePanel::from("xanes"), CompositePanel::from("chi-k")]
+            CompositePanel::default().label_mode,
+            CurveLabelMode::AboveCurve
+        );
+        assert_eq!(
+            CompositePanel::from("xanes").label_mode,
+            CurveLabelMode::AboveCurve
         );
         assert!(old.samples.is_empty());
         let recipe: CompositeRecipe = serde_json::from_str(r#"{
@@ -2058,9 +2110,10 @@ mod tests {
             &[GroupId::legacy_result(2), GroupId::legacy_result(3)]
         );
         assert_eq!(recipe.panels[1].samples, Some(Vec::new()));
-        assert_eq!(recipe.panels[0].label_mode, CurveLabelMode::CurveEnd);
+        assert_eq!(recipe.panels[0].label_mode, CurveLabelMode::AboveCurve);
         let saved = serde_json::to_value(&recipe).unwrap();
-        assert!(saved["panels"][0].is_object());
+        assert_eq!(saved["panels"][0]["label_mode"], "above_curve");
+        assert_eq!(recipe.panels[1].label_mode, CurveLabelMode::Legend);
         assert_eq!(
             serde_json::from_value::<CompositeRecipe>(saved).unwrap(),
             recipe
@@ -2301,7 +2354,7 @@ mod tests {
                 CompositePanel {
                     offset_step: f64::NAN,
                     reverse: true,
-                    label_mode: CurveLabelMode::CurveEnd,
+                    label_mode: CurveLabelMode::AboveCurve,
                     .."fit-residual-k".into()
                 },
             ],
@@ -2364,15 +2417,15 @@ mod tests {
     }
 
     #[test]
-    fn curve_end_labels_escape_names_follow_visible_limits_and_reserve_space() {
-        let a = sample(1, "A <foil> & \"edge\" #[$]", "#0072b2");
-        let b = sample(2, "B", "#e69f00");
-        let recipe = CompositeRecipe {
-            samples: vec![a.id.clone(), b.id.clone()],
-            panels: vec![CompositePanel {
-                label_mode: CurveLabelMode::CurveEnd,
-                .."xanes".into()
-            }],
+    fn above_curve_labels_keep_literal_names_colours_and_do_not_reserve_a_gutter() {
+        let samples = [
+            sample(1, "A <foil> & \"edge\" #[$]", "#0072b2"),
+            sample(2, "B", "#e69f00"),
+        ];
+        let mut recipe = CompositeRecipe {
+            samples: samples.iter().map(|sample| sample.id.clone()).collect(),
+            panels: vec!["xanes".into()],
+            series_colors: BTreeMap::from([("result:1/series-0".into(), "#0072b2".into())]),
             dpi: 100.,
             ..Default::default()
         };
@@ -2388,32 +2441,40 @@ mod tests {
             },
         );
         let empty: Vec<FigureData> = vec![];
-        let prepared = prepare_panels(&recipe, &empty, &[a.clone(), b.clone()], &settings).unwrap();
-        let mut options =
-            recipe.panel_options(prepared.panels[0].options.clone(), &recipe.grid(1, 100.));
-        let labels =
-            curve_end_labels(&prepared.panels[0].data, &mut options, recipe.font_size).unwrap();
-        assert_eq!(labels.len(), 2);
-        assert!((labels[0].y_fraction - 0.5).abs() < 1e-12);
-        options.ymax = Some(1.);
-        let clipped =
-            curve_end_labels(&prepared.panels[0].data, &mut options, recipe.font_size).unwrap();
-        assert_eq!(clipped.len(), 2);
-        assert_eq!(clipped[0].y_fraction, 0.);
-        let rendered = compose_samples(&recipe, &empty, &[a.clone(), b], &settings, None).unwrap();
-        assert_eq!(rendered.svg.matches("class=\"curve-end-label\"").count(), 2);
+        let prepared = prepare_panels(&recipe, &empty, &samples, &settings).unwrap();
+        assert!(!prepared.panels[0].options.legend);
+        let grid = recipe.grid(1, recipe.dpi);
+        let (_, above_frame) = composition_layout(&recipe, &[&prepared.panels[0]], &grid).unwrap();
+        let rendered = compose_prepared(&recipe, &prepared, None).unwrap();
+        assert_eq!(rendered.svg.matches("class=\"curve-label\"").count(), 2);
         assert!(
             rendered
                 .svg
                 .contains("A &lt;foil&gt; &amp; &quot;edge&quot; #[$]")
         );
+        assert!(
+            rendered
+                .svg
+                .split("class=\"curve-label\"")
+                .nth(1)
+                .unwrap()
+                .split('>')
+                .next()
+                .unwrap()
+                .contains("fill=\"#0072b2\"")
+        );
         assert!(rendered.pdf().unwrap().starts_with(b"%PDF"));
+        recipe.panels[0].label_mode = CurveLabelMode::Legend;
+        let legend = prepare_panels(&recipe, &empty, &samples, &settings).unwrap();
+        assert!(legend.panels[0].options.legend);
+        let (_, legend_frame) = composition_layout(&recipe, &[&legend.panels[0]], &grid).unwrap();
+        assert_eq!(above_frame[1], legend_frame[1]);
         if let Some(dir) = std::env::var_os("REXAFS_COMPOSER_SHOTS") {
             let dir = Path::new(&dir);
             std::fs::create_dir_all(dir).unwrap();
             for extension in ["png", "svg"] {
                 std::fs::write(
-                    dir.join(format!("composed-samples-curve-end.{extension}")),
+                    dir.join(format!("composed-samples-above-curves.{extension}")),
                     rendered.bytes(extension).unwrap(),
                 )
                 .unwrap();
@@ -2422,7 +2483,161 @@ mod tests {
     }
 
     #[test]
-    fn long_curve_end_names_require_short_labels_without_truncation() {
+    fn curve_labels_score_collisions_then_variation_in_each_label_span() {
+        fn labels_for(curves: &[&[(f64, f64)]]) -> Vec<CurveLabel> {
+            let mut data = sample(1, "A", "#0072b2").figures[0].as_ref().clone();
+            data.series = curves
+                .iter()
+                .enumerate()
+                .map(|(index, points)| {
+                    let mut curve = data.series[0].clone();
+                    curve.key = format!("series-{index}");
+                    curve.label = if index == 0 { "A" } else { "B" }.into();
+                    (curve.x, curve.y) = points.iter().copied().unzip();
+                    curve
+                })
+                .collect();
+            let mut options = FigureOptions {
+                dpi: Some(72.),
+                xmin: Some(0.),
+                xmax: Some(1.),
+                ymin: Some(0.),
+                ymax: Some(1.),
+                ..Default::default()
+            };
+            above_curve_labels(&data, &mut options, 8.).unwrap()
+        }
+        let axes = (200., 200.);
+        // The edge jump lies in the left third, beyond the short labels.
+        let xanes = labels_for(&[
+            &[(0., 0.15), (0.22, 0.15), (0.28, 0.6), (1., 0.6)],
+            &[(0., 0.35), (0.22, 0.35), (0.28, 0.8), (1., 0.8)],
+        ]);
+        assert!(!curve_labels_on_right(&xanes, axes, 72., None));
+        // Although flatter on the right, the next curve enters the lower box.
+        let crowded_right = labels_for(&[
+            &[(0., 0.2), (0.2, 0.22), (0.65, 0.2), (1., 0.2)],
+            &[(0., 0.5), (0.2, 0.52), (0.65, 0.24), (1., 0.24)],
+        ]);
+        let left = curve_label_side_score(&crowded_right, axes, 72., false);
+        let right = curve_label_side_score(&crowded_right, axes, 72., true);
+        assert_eq!((left.0, right.0), (0, 1));
+        assert!(left.1 > right.1);
+        assert!(!curve_labels_on_right(&crowded_right, axes, 72., None));
+        let flat_right = labels_for(&[&[(0., 0.8), (0.35, 0.2), (1., 0.2)]]);
+        assert!(curve_labels_on_right(&flat_right, axes, 72., None));
+        let tied = labels_for(&[&[(0., 0.2), (1., 0.2)]]);
+        assert!(!curve_labels_on_right(&tied, axes, 72., None));
+        let clamped = labels_for(&[&[(0., 0.999), (0.2, 0.999), (0.35, 0.2), (1., 0.2)]]);
+        assert_eq!(curve_label_side_score(&clamped, axes, 72., false).0, 1);
+        assert_eq!(curve_label_side_score(&clamped, axes, 72., true).0, 0);
+        assert!(curve_labels_on_right(&clamped, axes, 72., None));
+        for labels in [&xanes, &flat_right] {
+            for inset in [
+                InsetPlacement::UpperLeft,
+                InsetPlacement::LowerRight,
+                InsetPlacement::CenterRight,
+            ] {
+                assert_eq!(
+                    curve_labels_on_right(labels, axes, 72., Some(inset)),
+                    inset == InsetPlacement::UpperLeft
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn label_bottom_clears_the_maximum_under_its_text_and_stays_inside_axes() {
+        let mut data = sample(1, "A", "#0072b2").figures[0].as_ref().clone();
+        data.series.truncate(1);
+        data.series[0].label = "A".into();
+        data.series[0].x = vec![0., 0.02, 0.04, 1.];
+        data.series[0].y = vec![0.2, 0.5, 0.3, 0.3];
+        let mut options = FigureOptions {
+            dpi: Some(72.),
+            xmin: Some(0.),
+            xmax: Some(1.),
+            ymin: Some(0.),
+            ymax: Some(1.),
+            ..Default::default()
+        };
+        let labels = above_curve_labels(&data, &mut options, 8.).unwrap();
+        let (x, y) = curve_label_position(&labels[0], (200., 400.), 72., false).unwrap();
+        assert_eq!(x, 4. / 200.);
+        assert!((y - (0.5 + 2. / 400.)).abs() < 1e-12);
+        let (x, _) = curve_label_position(&labels[0], (200., 400.), 72., true).unwrap();
+        assert!(
+            (x + labels[0].raster.pixmap.width() as f64 / 200. - (1. - 4. / 200.)).abs() < 1e-12
+        );
+        data.series[0].y.fill(1.);
+        let labels = above_curve_labels(&data, &mut options, 8.).unwrap();
+        let (_, y) = curve_label_position(&labels[0], (200., 400.), 72., false).unwrap();
+        assert_eq!(y, 1. - labels[0].raster.pixmap.height() as f64 / 400.);
+        // Intersections with span and y limits describe the visible line even
+        // when no original point lies in the label's horizontal span.
+        let (low, high) = curve_span_ylim(&[(-1., -1.), (2., 2.)], 0.2, 0.3).unwrap();
+        assert!((low - 0.2).abs() < 1e-12 && (high - 0.3).abs() < 1e-12);
+        assert_eq!(
+            curve_box_ylim(&[(0.1, -1.), (0.1, 2.)], 0., 0.2, 0.4, 0.5),
+            Some((0.4, 0.5))
+        );
+        assert!(
+            curve_box_ylim(
+                &[(0.1, 0.2), (f64::NAN, f64::NAN), (0.1, 0.8)],
+                0.,
+                0.2,
+                0.4,
+                0.5
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn above_curve_mode_falls_back_to_legend_for_one_visible_curve_and_fits() {
+        let samples = [sample(1, "A", "#0072b2"), sample(2, "B", "#e69f00")];
+        let recipe = CompositeRecipe {
+            samples: samples.iter().map(|sample| sample.id.clone()).collect(),
+            panels: vec!["xanes".into()],
+            ..Default::default()
+        };
+        let current: Vec<FigureData> = vec![];
+        let mut settings = FigureSettings::default();
+        settings.figures.insert(
+            "xanes".into(),
+            FigureOptions {
+                hidden: BTreeSet::from(["result:2/series-0".into()]),
+                ..Default::default()
+            },
+        );
+        let mut prepared = prepare_panels(&recipe, &current, &samples, &settings).unwrap();
+        let panel = &prepared.panels[0];
+        assert!(!uses_curve_labels(
+            &recipe.panels[0],
+            &panel.data,
+            &panel.options
+        ));
+        // Compare with the existing Legend mode, including its per-recipe
+        // first-eligible-panel policy when only one selected sample is shown.
+        let legend_recipe = CompositeRecipe {
+            panels: vec![CompositePanel {
+                label_mode: CurveLabelMode::Legend,
+                .."xanes".into()
+            }],
+            ..recipe.clone()
+        };
+        let legend = prepare_panels(&legend_recipe, &current, &samples, &settings).unwrap();
+        assert_eq!(panel.options.legend, legend.panels[0].options.legend);
+        prepared.panels[0].data.key = "fit-k";
+        assert!(!uses_curve_labels(
+            &CompositePanel::from("fit-k"),
+            &prepared.panels[0].data,
+            &prepared.panels[0].options
+        ));
+    }
+
+    #[test]
+    fn short_figure_labels_leave_full_names_in_captions_without_size_errors() {
         let samples: Vec<_> = (1..=6)
             .map(|id| {
                 sample(
@@ -2432,64 +2647,34 @@ mod tests {
                 )
             })
             .collect();
-        let mut recipe = CompositeRecipe {
+        let recipe = CompositeRecipe {
             samples: samples.iter().map(|sample| sample.id.clone()).collect(),
-            panels: vec![
-                CompositePanel {
-                    label_mode: CurveLabelMode::CurveEnd,
-                    offset_step: 1.5,
-                    .."xanes".into()
-                };
-                2
-            ],
-            dpi: 200.,
+            panels: vec![CompositePanel {
+                offset_step: 1.5,
+                .."xanes".into()
+            }],
+            figure_labels: samples
+                .iter()
+                .enumerate()
+                .map(|(i, sample)| (sample.id.clone(), format!("Frame {}", i + 1)))
+                .collect(),
+            dpi: 100.,
             ..Default::default()
         };
-        let settings = FigureSettings::default();
         let empty: Vec<FigureData> = vec![];
-        for dpi in [100., recipe.dpi] {
-            let error = compose_samples(&recipe, &empty, &samples, &settings, Some(dpi))
-                .err()
-                .unwrap();
-            assert_eq!(error, CURVE_END_LABEL_TOO_LONG);
-        }
-        recipe.figure_labels = samples
-            .iter()
-            .enumerate()
-            .map(|(i, sample)| (sample.id.clone(), format!("Frame {}", i + 1)))
-            .collect();
-        for dpi in [100., recipe.dpi] {
-            let rendered =
-                compose_samples(&recipe, &empty, &samples, &settings, Some(dpi)).unwrap();
-            assert_eq!(
-                rendered.svg.matches("class=\"curve-end-label\"").count(),
-                12
+        let rendered =
+            compose_samples(&recipe, &empty, &samples, &FigureSettings::default(), None).unwrap();
+        assert_eq!(rendered.svg.matches("class=\"curve-label\"").count(), 6);
+        for sample in &samples {
+            let short = &recipe.figure_labels[&sample.id];
+            assert!(rendered.svg.contains(&format!(">{short}</tspan>")));
+            assert!(
+                rendered
+                    .caption
+                    .contains(&format!("{short} ({})", sample.label))
             );
-            for sample in &samples {
-                let short = &recipe.figure_labels[&sample.id];
-                assert!(rendered.svg.contains(&format!(">{short}</tspan>")));
-                assert!(
-                    rendered
-                        .caption
-                        .contains(&format!("{short} ({})", sample.label))
-                );
-                assert_eq!(rendered.caption.matches(&sample.label).count(), 1);
-            }
+            assert_eq!(rendered.caption.matches(&sample.label).count(), 1);
         }
-    }
-
-    #[test]
-    fn complete_end_labels_preserve_literal_text_and_report_the_allowance() {
-        let data = sample(1, "A long sample name", "#0072b2");
-        let mut options = FigureOptions::default();
-        let labels = curve_end_labels(&data.figures[0], &mut options, 8.).unwrap();
-        let text = labels[0].text.clone();
-        assert_eq!(
-            validate_end_label(&labels[0], 0.).unwrap_err(),
-            CURVE_END_LABEL_TOO_LONG
-        );
-        assert_eq!(labels[0].text, text);
-        assert!(validate_end_label(&labels[0], labels[0].width_in).is_ok());
     }
 
     #[test]

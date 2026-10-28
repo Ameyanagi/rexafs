@@ -1108,8 +1108,8 @@ impl StudioApp {
         controls = controls.child(heading(&t, "Curve labels"));
         let mut labels = segmented(&t);
         for (i, (mode, label)) in [
+            (CurveLabelMode::AboveCurve, "Above curves"),
             (CurveLabelMode::Legend, "Legend"),
-            (CurveLabelMode::CurveEnd, "Curve ends"),
         ]
         .into_iter()
         .enumerate()
@@ -1133,7 +1133,7 @@ impl StudioApp {
         controls = controls
             .child(div().flex().child(labels))
             .child(div().text_size(px(11.)).text_color(t.text_muted).child(
-            "Legend uses the figure's legend setting and appears in the first eligible panel unless Legend in every panel is enabled. Curve ends label samples beside the curves.",
+            "Above curves puts each label just above its curve, on the side of the panel where labels stay clear of other curves (opposite an inset). Legend follows the figure's legend setting and appears in the first eligible panel. Panels with one curve and fit panels always use the legend rules.",
         ));
         if panel.supports_inset() {
             controls = controls.child(self.composer_panel_inset_controls(index, panel, cx));
@@ -1855,7 +1855,7 @@ impl StudioApp {
                     "Legend in every panel",
                     recipe.legend_every_panel,
                 )
-                .description("Show legends in every eligible panel instead of only the first eligible panel. Curve-end labels and each figure's legend setting still apply.")
+                .description("Show legends in every eligible panel instead of only the first eligible panel. Above-curve labels and each figure's legend setting still apply.")
                 .on_click(cx.listener(|this, _, _, cx| {
                     let recipe = this.composite();
                     recipe.legend_every_panel = !recipe.legend_every_panel;

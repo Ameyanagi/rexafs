@@ -23,14 +23,20 @@ fn publication_export_snapshot(
 
 #[test]
 fn publication_recipes_migrate_old_rxs_export_and_save_only_the_new_format() {
-    use crate::publication::figures::composer::CompositeRecipe;
+    use crate::publication::figures::composer::{CompositePanel, CompositeRecipe, CurveLabelMode};
     use crate::publication::figures::{FigureData, FigureSeries};
     use std::sync::Arc;
 
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("legacy.rxs");
     let recipe = CompositeRecipe {
-        panels: vec!["xanes".into(), "chi-k".into()],
+        panels: ["xanes", "chi-k"]
+            .into_iter()
+            .map(|key| CompositePanel {
+                label_mode: CurveLabelMode::Legend,
+                ..key.into()
+            })
+            .collect(),
         columns: 1,
         width_mm: 90.,
         panel_height_mm: Some(38.1),
@@ -134,11 +140,12 @@ fn publication_samples_keep_order_and_panel_options_after_rxs_reopen() {
             samples: Some(samples.iter().rev().cloned().collect()),
             offset_step: 0.3,
             reverse: true,
-            label_mode: CurveLabelMode::CurveEnd,
+            label_mode: CurveLabelMode::AboveCurve,
             inset: None,
         },
         CompositePanel {
             samples: Some(Vec::new()),
+            label_mode: CurveLabelMode::Legend,
             ..CompositePanel::from("chi-r")
         },
     ];
@@ -158,19 +165,42 @@ fn publication_samples_keep_order_and_panel_options_after_rxs_reopen() {
         assert_eq!(recipe["sample_colours"], "okabe_ito");
         assert_eq!(recipe["grid"], true);
         assert_eq!(recipe["legend_every_panel"], true);
+        // An absent mode means legacy Legend, so compact saves must preserve
+        // AboveCurve even when it is the constructor's default.
+        assert_eq!(recipe["panels"][0]["label_mode"], "above_curve");
+        assert_eq!(recipe["panels"][1]["label_mode"], "above_curve");
+        assert_eq!(recipe["panels"][2]["label_mode"], "legend");
         let reopened = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
         assert_eq!(reopened.publication, project.publication);
+        assert_eq!(
+            reopened
+                .publication
+                .active_recipe()
+                .recipe
+                .panels
+                .iter()
+                .map(|panel| panel.label_mode)
+                .collect::<Vec<_>>(),
+            [
+                CurveLabelMode::AboveCurve,
+                CurveLabelMode::AboveCurve,
+                CurveLabelMode::Legend
+            ]
+        );
     }
 }
 
 #[test]
-fn publication_named_recipe_panel_strings_load_from_rxs() {
+fn publication_legacy_panel_strings_and_missing_label_modes_load_from_rxs() {
+    use crate::publication::figures::composer::CurveLabelMode;
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("legacy-panels.rxs");
     save_with_storage(&path, &ProjectFile::default(), DataStorage::Paths).unwrap();
     let mut saved = json_file(&path);
     saved["publication"] = serde_json::json!({
-        "recipes": [{"name": "Figure 1", "recipe": {"panels": ["xanes", "chi-k"]}}]
+        "recipes": [{"name": "Figure 1", "recipe": {
+            "panels": ["xanes", "chi-k", {"key": "chi-r"}]
+        }}]
     });
     std::fs::write(&path, serde_json::to_vec(&saved).unwrap()).unwrap();
     let reopened = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
@@ -182,11 +212,12 @@ fn publication_named_recipe_panel_strings_load_from_rxs() {
             .iter()
             .map(|panel| panel.key.as_str())
             .collect::<Vec<_>>(),
-        ["xanes", "chi-k"]
+        ["xanes", "chi-k", "chi-r"]
     );
     assert!(recipe.panels.iter().all(|panel| panel.samples.is_none()
         && panel.offset_step == 0.
         && !panel.reverse
+        && panel.label_mode == CurveLabelMode::Legend
         && panel.inset.is_none()));
     save_with_storage(&path, &reopened, DataStorage::Paths).unwrap();
     let saved = json_file(&path);
@@ -197,7 +228,9 @@ fn publication_named_recipe_panel_strings_load_from_rxs() {
 
 #[test]
 fn legacy_publication_recipes_export_python_without_mutating_saved_settings() {
-    use crate::publication::figures::composer::{CompositeRecipe, prepare_panels};
+    use crate::publication::figures::composer::{
+        CompositePanel, CompositeRecipe, CurveLabelMode, prepare_panels,
+    };
     use crate::publication::figures::{FigureData, FigureSeries};
     use crate::publication::python_export::{SCRIPT_NAME, write_composite_python_export};
 
@@ -227,7 +260,10 @@ fn legacy_publication_recipes_export_python_without_mutating_saved_settings() {
         assert_eq!(
             named.recipe,
             CompositeRecipe {
-                panels: vec!["xanes".into()],
+                panels: vec![CompositePanel {
+                    label_mode: CurveLabelMode::Legend,
+                    .."xanes".into()
+                }],
                 ..Default::default()
             }
         );
@@ -338,9 +374,13 @@ fn publication_panel_objects_without_insets_load_from_rxs() {
     );
     assert_eq!(panel.offset_step, 0.3);
     assert!(panel.reverse);
-    assert_eq!(panel.label_mode, CurveLabelMode::CurveEnd);
+    assert_eq!(panel.label_mode, CurveLabelMode::AboveCurve);
     assert!(panel.inset.is_none());
     save_with_storage(&path, &reopened, DataStorage::Paths).unwrap();
+    assert_eq!(
+        json_file(&path)["publication"]["recipes"][0]["recipe"]["panels"][0]["label_mode"],
+        "above_curve"
+    );
     let again = load_with_cache_root(&path, || Ok(temp.path().join("cache"))).unwrap();
     assert_eq!(again.publication, reopened.publication);
 }

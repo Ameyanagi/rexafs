@@ -1,8 +1,8 @@
 use super::*;
 use crate::group_identity::GroupId;
 use crate::publication::figures::composer::{
-    CompositePanel, CompositeSample, InsetKind, PanelInset, SampleColours, compose_prepared,
-    prepare_panels,
+    CompositePanel, CompositeSample, CurveLabelMode, InsetKind, PanelInset, SampleColours,
+    compose_prepared, prepare_panels,
 };
 use crate::publication::figures::{FigureSettings, LegendPlacement};
 use std::sync::Arc;
@@ -105,7 +105,7 @@ fn fixture() -> (CompositeRecipe, PreparedComposition) {
             CompositePanel {
                 offset_step: 0.3,
                 reverse: true,
-                label_mode: CurveLabelMode::CurveEnd,
+                label_mode: CurveLabelMode::AboveCurve,
                 inset: Some(PanelInset {
                     energy_range: (-1., 3.),
                     placement: InsetPlacement::UpperLeft,
@@ -193,16 +193,21 @@ fn grid_script_preserves_style_offsets_insets_and_missing_notices() {
         "ax.tick_params(direction=TICK_DIRECTION, top=TICKS_TOP, right=TICKS_RIGHT, which=\"both\")",
         "ax.xaxis.set_minor_locator(AutoMinorLocator(MINOR_SUBDIVISIONS))",
         "ax.yaxis.set_minor_locator(AutoMinorLocator(MINOR_SUBDIVISIONS))",
-        "ax.legend(loc=LEGEND_LOCATION, frameon=LEGEND_FRAME, fontsize=LEGEND_FONT_SIZE,",
+        "legend = ax.legend(loc=LEGEND_LOCATION, frameon=LEGEND_FRAME, fontsize=LEGEND_FONT_SIZE,",
         "handlelength=LEGEND_HANDLE_LENGTH, labelspacing=LEGEND_LABEL_SPACING,",
         "handletextpad=LEGEND_HANDLE_TEXT_PAD)",
+        "text.set_parse_math(False)",
+        "def above_curve_labels(ax, curves, inset):",
+        "text.get_window_extent(renderer).transformed(to_axes)",
+        "ax.transData.transform(np.column_stack((x, y)))",
+        "parse_math=False, in_layout=False)",
         "plt.subplots(ROWS, COLS, figsize=(WIDTH_MM / 25.4, HEIGHT_MM / 25.4)",
         "ax.inset_axes(inset[\"bounds\"])",
         "\"bounds\": (0.03, 0.60, 0.43, 0.36)",
         "\"label\": \"(a)\"",
         "\"label\": \"(b)\"",
         "\"label\": \"(c)\"",
-        "\"curve_end\": True",
+        "\"curve_labels\": True",
         "y = y + series[\"offset\"]",
         "\"offset\": 0.3",
         "\"color\": \"#4f2b7c\"",
@@ -234,6 +239,24 @@ fn grid_script_preserves_style_offsets_insets_and_missing_notices() {
             "missing {expected:?} in\n{script}"
         );
     }
+    for (key, value) in [
+        ("CURVE_LABEL_PAD_PT", CURVE_LABEL_PAD_PT),
+        ("CURVE_LABEL_GAP_PT", CURVE_LABEL_GAP_PT),
+    ] {
+        assert!(script.contains(&format!("{key} = {value:?}")));
+    }
+    assert_eq!(
+        main_panel_flags(script, "curve_labels"),
+        [true, false, false]
+    );
+    assert_eq!(series_records(script)[0]["label"], "A, foil $1\ncontinued");
+    assert!(!script.contains("curve_end"));
+    assert!(
+        script.find("fig.canvas.draw()").unwrap()
+            < script
+                .find("    above_curve_labels(ax, curves, inset)")
+                .unwrap()
+    );
     assert!(!script.contains("\"label\": \"(d)\""));
     assert!(script.contains("RECIPE_NAME = \"SI Figure \\\"S4\\\"\\n$\""));
     assert_eq!(
@@ -320,10 +343,13 @@ fn complete_figure_labels_match_native_with_hidden_clipped_and_repeated_samples(
         samples: samples.iter().map(|sample| sample.id.clone()).collect(),
         panels: vec![
             CompositePanel {
-                label_mode: CurveLabelMode::CurveEnd,
+                label_mode: CurveLabelMode::AboveCurve,
                 .."xanes".into()
             },
-            "xanes".into(),
+            CompositePanel {
+                label_mode: CurveLabelMode::Legend,
+                .."xanes".into()
+            },
         ],
         dpi: 100.,
         panel_height_mm: Some(50.8),
@@ -355,8 +381,8 @@ fn complete_figure_labels_match_native_with_hidden_clipped_and_repeated_samples(
     let native = compose_prepared(&recipe, &prepared, None).unwrap();
     let records = series_records(script);
     assert_eq!(records.len(), 6);
-    assert_eq!(native.svg.matches("class=\"curve-end-label\"").count(), 2);
-    for label in native.svg.split("<text class=\"curve-end-label\"").skip(1) {
+    assert_eq!(native.svg.matches("class=\"curve-label\"").count(), 2);
+    for label in native.svg.split("<text class=\"curve-label\"").skip(1) {
         let label = label.split("</text>").next().unwrap();
         for text in ["Frame 2", "Cu₂O cafe\u{301}"] {
             assert!(label.contains(&format!(">{text}</tspan>")));
@@ -385,41 +411,35 @@ fn complete_figure_labels_match_native_with_hidden_clipped_and_repeated_samples(
     assert!(!script.contains('…'));
     assert!(script.contains("label=series[\"label\"]"));
 
-    // Complete workspace names are validated, rather than silently truncated.
-    // Hidden and fully clipped names do not create native annotations.
+    // Complete workspace names remain valid even when they overlap or extend
+    // beyond a narrow plotting area. Hidden and clipped names stay unlabelled.
     recipe.figure_labels.clear();
     for width_mm in [177.8, 66.04] {
         recipe.width_mm = width_mm;
         let prepared = prepare_panels(&recipe, &empty, &samples, &settings).unwrap();
-        let native_error = compose_prepared(&recipe, &prepared, None).err().unwrap();
-        assert!(
-            native_error.contains("Shorten the figure labels")
-                || native_error.contains("0.5 in of plot width"),
-            "{native_error}"
-        );
-        assert_eq!(
-            composite_python_export("Long names", &recipe, &prepared).unwrap_err(),
-            native_error
-        );
+        let native = compose_prepared(&recipe, &prepared, None).unwrap();
+        assert_eq!(native.svg.matches("class=\"curve-label\"").count(), 2);
+        assert!(native.svg.contains(&samples[1].label));
+        let files = composite_python_export("Long names", &recipe, &prepared).unwrap();
+        assert!(series_records(&files[0].1).iter().all(|record| {
+            record["label"] == samples[0].label || record["label"] == samples[1].label
+        }));
         let temp = tempfile::tempdir().unwrap();
         let destination = temp.path().join("long-labels");
-        assert_eq!(
-            write_composite_python_export("Long names", &recipe, &prepared, &destination)
-                .unwrap_err(),
-            native_error
-        );
-        assert!(!destination.exists());
+        let script =
+            write_composite_python_export("Long names", &recipe, &prepared, &destination).unwrap();
+        assert!(script.exists());
     }
 }
 
 #[test]
-fn curve_end_labels_require_the_same_vertical_space_as_native_output() {
+fn crowded_above_curve_labels_export_without_overlap_validation() {
     let samples: Vec<_> = (1..=8)
         .map(|id| sample(id, &format!("S{id}"), "#0072b2", vec![id as f64 / 10.; 5]))
         .collect();
     let recipe = CompositeRecipe {
         panels: vec![CompositePanel {
-            label_mode: CurveLabelMode::CurveEnd,
+            label_mode: CurveLabelMode::AboveCurve,
             .."xanes".into()
         }],
         samples: samples.iter().map(|sample| sample.id.clone()).collect(),
@@ -430,20 +450,15 @@ fn curve_end_labels_require_the_same_vertical_space_as_native_output() {
     };
     let empty: Vec<FigureData> = Vec::new();
     let prepared = prepare_panels(&recipe, &empty, &samples, &FigureSettings::default()).unwrap();
-    let native_error = compose_prepared(&recipe, &prepared, None).err().unwrap();
-    assert!(native_error.contains("taller"), "{native_error}");
-    assert_eq!(
-        composite_python_export("Too many labels", &recipe, &prepared).unwrap_err(),
-        native_error
-    );
+    let native = compose_prepared(&recipe, &prepared, None).unwrap();
+    assert_eq!(native.svg.matches("class=\"curve-label\"").count(), 8);
+    let files = composite_python_export("Crowded labels", &recipe, &prepared).unwrap();
+    assert_eq!(main_panel_flags(&files[0].1, "curve_labels"), [true]);
     let temp = tempfile::tempdir().unwrap();
     let destination = temp.path().join("crowded-labels");
-    assert_eq!(
-        write_composite_python_export("Too many labels", &recipe, &prepared, &destination)
-            .unwrap_err(),
-        native_error
-    );
-    assert!(!destination.exists());
+    let script =
+        write_composite_python_export("Crowded labels", &recipe, &prepared, &destination).unwrap();
+    assert!(script.exists());
 }
 
 #[test]
@@ -708,14 +723,18 @@ fn exported_legend_visibility_matches_prepared_panels_and_keeps_single_and_fit_l
             },
             "fit-q".into(),
             CompositePanel {
-                label_mode: CurveLabelMode::CurveEnd,
+                label_mode: CurveLabelMode::AboveCurve,
                 .."xanes".into()
             },
             CompositePanel {
+                label_mode: CurveLabelMode::Legend,
                 inset: Some(PanelInset::new(InsetKind::Edge)),
                 .."xanes".into()
             },
-            "xanes".into(),
+            CompositePanel {
+                label_mode: CurveLabelMode::Legend,
+                .."xanes".into()
+            },
         ],
         samples: samples.iter().map(|sample| sample.id.clone()).collect(),
         dpi: 100.,
@@ -739,6 +758,10 @@ fn exported_legend_visibility_matches_prepared_panels_and_keeps_single_and_fit_l
         assert!(!prepared.panels[3].inset.as_ref().unwrap().options.legend);
         let files = composite_python_export("Legend choice", &recipe, &prepared).unwrap();
         assert_eq!(main_panel_flags(&files[0].1, "legend"), expected);
+        assert_eq!(
+            main_panel_flags(&files[0].1, "curve_labels"),
+            [false, false, true, false, false]
+        );
         let inset = files[0].1.split("\"inset\": {").nth(1).unwrap();
         assert!(
             inset
@@ -826,6 +849,10 @@ fn repeated_sample_ids_keep_independent_offsets_after_visibility_filtering() {
         .hidden
         .insert("result:1/mu".into());
     let files = composite_python_export("Hidden first", &recipe, &prepared).unwrap();
+    assert_eq!(
+        main_panel_flags(&files[0].1, "curve_labels"),
+        [false, false, false]
+    );
     let first = files[0]
         .1
         .lines()
@@ -858,7 +885,7 @@ fn automatic_stacked_limits_stay_rescalable_while_typed_limits_stay_fixed() {
     let script = &files[0].1;
     let axes = |label: &str| {
         let start = script.find(&format!("\"label\": \"{label}\"")).unwrap();
-        let end = start + script[start..].find("\"curve_end\"").unwrap();
+        let end = start + script[start..].find("\"curve_labels\"").unwrap();
         script[start..end].to_string()
     };
     // Panel (a) is stacked with automatic limits; editing its offsets in the
@@ -866,3 +893,161 @@ fn automatic_stacked_limits_stay_rescalable_while_typed_limits_stay_fixed() {
     assert!(axes("(a)").contains("\"ylim_fixed\": False"));
     assert!(axes("(b)").contains("\"ylim_fixed\": True"));
 }
+
+#[test]
+fn above_curve_exports_fix_inferred_limits_without_making_them_user_fixed() {
+    let mut samples = [
+        sample(1, "A", "#0072b2", vec![-1., 3., 0., 1., 0.]),
+        sample(2, "B", "#d55e00", vec![-1., 3., 0., 1., 0.]),
+    ];
+    for sample in &mut samples {
+        let mut data = sample.figures[0].as_ref().clone();
+        data.key = "chi-q";
+        data.default_xlim = None;
+        sample.figures = vec![Arc::new(data)];
+    }
+    let recipe = CompositeRecipe {
+        panels: vec!["chi-q".into()],
+        samples: samples.iter().map(|sample| sample.id.clone()).collect(),
+        ..Default::default()
+    };
+    let current: Vec<FigureData> = vec![];
+    let prepared = prepare_panels(&recipe, &current, &samples, &FigureSettings::default()).unwrap();
+    let files = composite_python_export("Inferred limits", &recipe, &prepared).unwrap();
+    // Native EXAFS limits are symmetric about zero, unlike matplotlib's
+    // default autoscaling of these asymmetric ordinates.
+    assert!(files[0].1.contains("\"xlim\": (7100.0, 7104.0)"));
+    assert!(files[0].1.contains("\"ylim\": (-3.3, 3.3)"));
+    assert_eq!(main_panel_flags(&files[0].1, "ylim_fixed"), [false]);
+    assert_eq!(main_panel_flags(&files[0].1, "curve_labels"), [true]);
+}
+
+/// Exercise the exported functions when a local Python has the optional plotting
+/// dependencies. REXAFS_PYTHON selects an existing interpreter for this check.
+#[test]
+fn exported_python_places_literal_labels_above_visible_curve_spans() {
+    let python = std::env::var_os("REXAFS_PYTHON").unwrap_or_else(|| "python3".into());
+    let temp = tempfile::tempdir().unwrap();
+    let available = std::process::Command::new(&python)
+        .args(["-c", "import numpy, matplotlib"])
+        .env("MPLCONFIGDIR", temp.path())
+        .output();
+    if !available.is_ok_and(|output| output.status.success()) {
+        return;
+    }
+    let functions = DRAW.split_once("\nfig, axes =").unwrap().0;
+    let script = format!(
+        "import matplotlib\nmatplotlib.use('Agg')\nimport matplotlib.pyplot as plt\nimport numpy as np\nFONT_SIZE = 10\nCURVE_LABEL_PAD_PT = {CURVE_LABEL_PAD_PT:?}\nCURVE_LABEL_GAP_PT = {CURVE_LABEL_GAP_PT:?}\n{functions}\n{PYTHON_PLACEMENT_CHECKS}"
+    );
+    let path = temp.path().join("check_placement.py");
+    fs::write(&path, script).unwrap();
+    let output = std::process::Command::new(&python)
+        .arg(path)
+        .env("MPLCONFIGDIR", temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "Python label placement failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+const PYTHON_PLACEMENT_CHECKS: &str = r##"
+# Sparse, reversed, vertical and clipped segments retain their visible ranges.
+points = np.array([[-1, 0.2], [2, 0.8]])
+assert np.allclose(curve_span_ylim(points, 0, 0.35), (0.4, 0.47))
+assert np.allclose(curve_span_ylim(points[::-1], 0, 0.35), (0.4, 0.47))
+assert curve_span_ylim(np.array([[0.1, -1], [0.3, 2]]), 0, 0.35) == (0, 1)
+assert curve_span_ylim(np.array([[0.1, -1], [0.1, 2]]), 0, 0.35) == (0, 1)
+assert curve_span_ylim(np.array([[-1, 0.2], [np.nan, np.nan], [2, 0.8]]), 0, 1) is None
+assert np.allclose(curve_box_ylim(points, 0.2, 0.3, 0.43, 0.45), (0.44, 0.45))
+assert np.allclose(curve_box_ylim(points[::-1], 0.2, 0.3, 0.43, 0.45), (0.44, 0.45))
+assert curve_box_ylim(points, 0.2, 0.3, 0.6, 0.7) is None
+assert curve_box_ylim(np.array([[0.1, -1], [0.1, 2]]), 0, 0.35, 0.4, 0.6) == (0.4, 0.6)
+assert curve_box_ylim(np.array([[0, 0.4], [np.nan, np.nan], [1, 0.6]]), 0.4, 0.6, 0, 1) is None
+
+
+def check_placement(points, side, inset=None, curve_max=0.2, other_points=None,
+                    label="Literal $a$ \\tag\nsecond"):
+    fig = plt.figure(figsize=(4, 3), dpi=100)
+    ax = fig.add_axes((0.15, 0.15, 0.7, 0.7))
+    # Nonzero data origins verify that placement uses data-to-axes transforms.
+    ax.set_xlim(-5, 15)
+    ax.set_ylim(-10, 10)
+    point_sets = [np.array(points), np.array(points if other_points is None else other_points)]
+    curves = [(-5 + 20 * p[:, 0], -10 + 20 * p[:, 1], dict(label=label, color=color))
+              for p, color in zip(point_sets, ("#0072b2", "#d55e00"))]
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    bounds = ax.get_window_extent(renderer)
+    above_curve_labels(ax, curves, inset)
+    assert len(ax.texts) == 2
+    collisions, variation = 0, 0
+    for index, (text, (_, _, series)) in enumerate(zip(ax.texts, curves)):
+        assert text.get_text() == label
+        assert text.get_color() == series["color"]
+        assert not text.get_parse_math()
+        assert not text.get_in_layout()
+        extent = text.get_window_extent(renderer).transformed(ax.transAxes.inverted())
+        pad = CURVE_LABEL_PAD_PT * fig.dpi / 72 / bounds.width
+        gap = CURVE_LABEL_GAP_PT * fig.dpi / 72 / bounds.height
+        expected_x = pad if side == "left" else 1 - pad - extent.width
+        expected_x = max(0, min(expected_x, max(0, 1 - extent.width)))
+        assert np.isclose(text.get_position()[0], expected_x)
+        if curve_max is not None:
+            expected_y = min(curve_max + gap, 1 - extent.height)
+            assert np.isclose(text.get_position()[1], expected_y)
+        x, y = text.get_position()
+        span = curve_span_ylim(point_sets[index], x, min(1, x + extent.width))
+        variation += span[1] - span[0]
+        collisions += span[1] >= y or any(
+            other != index and curve_box_ylim(p, x, min(1, x + extent.width),
+                                              y, min(1, y + extent.height)) is not None
+            for other, p in enumerate(point_sets))
+    # Identical curves retain overlapping labels; there is no separation pass.
+    if other_points is None:
+        assert np.allclose(ax.texts[0].get_position(), ax.texts[1].get_position())
+    plt.close(fig)
+    return collisions, variation
+
+
+left_quiet = [(0, 0.2), (0.35, 0.2), (0.65, 0.2), (0.85, 0.6), (1, 0.8)]
+right_quiet = [(0, 0.8), (0.15, 0.6), (0.35, 0.2), (0.65, 0.2), (1, 0.2)]
+flat = [(0, 0.2), (1, 0.2)]
+check_placement(left_quiet, "left")
+check_placement(right_quiet, "right")
+check_placement(flat, "left")  # Equal variation chooses the left side.
+check_placement(flat, "right", dict(placement="upper_left"))
+check_placement(flat, "left", dict(placement="lower_right"))
+check_placement(flat, "left", dict(placement="center_right"))
+check_placement([(0, 0.999), (1, 0.999)], "left", curve_max=0.999)  # Clamp to the top.
+
+# A left-third absorption jump does not affect short labels on the flat pre-edge.
+xanes = np.array([(0, 0.15), (0.22, 0.15), (0.28, 0.6), (1, 0.6)])
+stacked = xanes + (0, 0.2)
+check_placement(xanes, "left", curve_max=None, other_points=stacked, label="A")
+
+# Collision count takes priority even when the right spans have less variation.
+lower = [(0, 0.2), (0.2, 0.22), (0.65, 0.2), (1, 0.2)]
+neighbour = [(0, 0.5), (0.2, 0.52), (0.65, 0.24), (1, 0.24)]
+left_score = check_placement(lower, "left", dict(placement="lower_right"),
+                             curve_max=None, other_points=neighbour, label="A")
+right_score = check_placement(lower, "right", dict(placement="upper_left"),
+                              curve_max=None, other_points=neighbour, label="A")
+assert left_score[0] == 0 and right_score[0] == 1
+assert right_score[1] < left_score[1]
+check_placement(lower, "left", curve_max=None, other_points=neighbour, label="A")
+
+# A top-clamped label touches its own curve and favours the clear right side.
+clamped = [(0, 0.999), (0.35, 0.999), (0.65, 0.2), (1, 0.2)]
+assert check_placement(clamped, "left", dict(placement="lower_right"),
+                        curve_max=0.999, label="A")[0] == 2
+check_placement(clamped, "right", label="A")
+
+# Insets override an otherwise preferred side in either direction.
+check_placement(left_quiet, "right", dict(placement="upper_left"), curve_max=None)
+check_placement(right_quiet, "left", dict(placement="lower_right"), curve_max=None)
+print("Python above-curve placement checks passed")
+"##;
