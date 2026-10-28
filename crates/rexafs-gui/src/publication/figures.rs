@@ -7,7 +7,43 @@ use std::collections::BTreeSet;
 pub(crate) mod composer;
 mod labels;
 mod layout;
+mod recipes;
 pub(crate) use layout::{LegendPlacement, typst_label};
+
+/// Selectable curve colours from Okabe & Ito (2008), *Color Universal Design*
+/// (<https://jfly.uni-koeln.de/color/>), as display labels and lowercase RGB hex.
+/// These explicit choices do not replace the renderer's automatic palette.
+pub(crate) const SERIES_PALETTE: [(&str, &str); 8] = [
+    ("Black", "#000000"),
+    ("Orange", "#e69f00"),
+    ("Sky blue", "#56b4e9"),
+    ("Bluish green", "#009e73"),
+    ("Yellow", "#f0e442"),
+    ("Blue", "#0072b2"),
+    ("Vermillion", "#d55e00"),
+    ("Reddish purple", "#cc79a7"),
+];
+
+/// Require an opaque RGB colour in the saved, canonical `#rrggbb` format.
+fn series_color(value: &str) -> Result<ruviz::prelude::Color, String> {
+    if value.len() != 7
+        || !value.starts_with('#')
+        || !value.as_bytes()[1..]
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
+    {
+        return Err("Use a lowercase RGB colour in #rrggbb format, for example #0072b2.".into());
+    }
+    ruviz::prelude::Color::from_hex(value).map_err(|e| e.to_string())
+}
+
+/// Validate values without interpreting series keys, which are opaque strings.
+fn validate_series_colors(colors: &BTreeMap<String, String>) -> Result<(), String> {
+    for (key, value) in colors {
+        series_color(value).map_err(|error| format!("Series colour for {key:?}: {error}"))?;
+    }
+    Ok(())
+}
 
 fn weighted_unit(weight: f64) -> String {
     if weight.abs() < 1e-9 {
@@ -66,6 +102,11 @@ pub(crate) struct FigureOptions {
     pub hidden: BTreeSet<String>,
     /// Optional series keys explicitly enabled, unless also hidden.
     pub shown: BTreeSet<String>,
+    /// Explicit opaque RGB colours by series key, in lowercase
+    /// `#rrggbb` format. Missing keys use the renderer's automatic colours;
+    /// unknown keys are retained but do not affect rendering or scientific data.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub series_colors: BTreeMap<String, String>,
     /// Energy figures default to the library's flattened array.
     pub normalized: bool,
 }
@@ -92,19 +133,27 @@ impl Default for FigureOptions {
             guides: false,
             hidden: BTreeSet::new(),
             shown: BTreeSet::new(),
+            series_colors: BTreeMap::new(),
             normalized: false,
         }
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
+/// Publication appearance and named multi-panel recipes saved with a project.
+/// Recipes keep insertion order and the active recipe is stored by index, so
+/// renaming never changes the selection.
+/// New projects start with Figure 1. Loading also accepts the old single
+/// `publication.composite` as Figure 1; saving writes only the new format.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(from = "recipes::SavedFigureSettings")]
 pub(crate) struct FigureSettings {
     /// Settings are shared by figure type across a multi-spectrum export.
     pub figures: BTreeMap<String, FigureOptions>,
     pub table_captions: BTreeMap<String, String>,
-    /// The multi-panel figure recipe (see [`composer::CompositeRecipe`]).
-    pub composite: composer::CompositeRecipe,
+    /// Ordered, non-empty recipes; changed through the recipe methods below.
+    recipes: Vec<recipes::NamedRecipe>,
+    /// Zero-based selection, adjusted on deletion and clamped when loading.
+    active_recipe: usize,
 }
 impl FigureSettings {
     /// Return an owned copy of settings for a figure type, or its defaults.
@@ -115,8 +164,8 @@ impl FigureSettings {
     /// Copy the appearance of figure type `source` (canvas size, DPI, font and
     /// line width, legend and its placement, grid and guides) to every figure type in `keys` and
     /// to every type that already has stored options. Titles, labels, captions,
-    /// axis limits and curve visibility stay per figure, because they depend on
-    /// the plotted quantity.
+    /// axis limits, curve visibility and series colours stay per figure,
+    /// because they depend on the plotted quantity.
     pub fn apply_style_to_all<'a>(
         &mut self,
         source: &str,
@@ -214,7 +263,8 @@ impl FigureOptions {
     /// Validate dimensions, point sizes and paired axis limits before rendering.
     /// Requires finite dimensions of 1–30 inches, integer DPI of 72–1200 and at
     /// most 25 million raster pixels. Axis limits must be finite, paired and
-    /// increasing. Errors leave the options and scientific data unchanged.
+    /// increasing. Explicit series colours must use lowercase `#rrggbb` RGB
+    /// notation. Errors leave the options and scientific data unchanged.
     pub fn validate(&self) -> Result<(), String> {
         let (width, height, dpi) = self.dimensions();
         if ![width, height, dpi].iter().all(|v| v.is_finite())
@@ -247,7 +297,7 @@ impl FigureOptions {
                 }
             }
         }
-        Ok(())
+        validate_series_colors(&self.series_colors)
     }
 
     fn apply(&self, mut plot: Plot) -> Result<Plot, String> {
@@ -311,7 +361,12 @@ pub(crate) struct FigureData {
     pub ylabel: String,
     pub math_ylabel: String,
     pub series: Vec<FigureSeries>,
+    /// Normalized curves for the normalized display choice or difference
+    /// insets. Raw μ(E) panels retain their raw display even when this is set.
     pub normalized_series: Option<Vec<FigureSeries>>,
+    /// Processed absorption-edge energy E₀ in eV, when available. Insets use
+    /// this value independently of visible processing guides or axis limits.
+    pub e0: Option<f64>,
     pub guides: Vec<f64>,
     pub default_xlim: Option<(f64, f64)>,
     /// Data − fit curve drawn in a strip below the main panel (fit + residual).
@@ -328,6 +383,7 @@ impl FigureData {
 
     pub(crate) fn series(&self, options: &FigureOptions) -> &[FigureSeries] {
         if options.normalized
+            && self.key != "mu-energy"
             && let Some(series) = &self.normalized_series
         {
             return series;
@@ -336,7 +392,7 @@ impl FigureData {
     }
 
     pub(crate) fn ylabel(&self, options: &FigureOptions) -> &str {
-        if options.normalized && self.normalized_series.is_some() {
+        if options.normalized && self.key != "mu-energy" && self.normalized_series.is_some() {
             "Normalized μ(E) (dimensionless)"
         } else {
             &self.ylabel
@@ -350,7 +406,7 @@ impl FigureData {
     }
 
     pub(crate) fn math_ylabel(&self, options: &FigureOptions) -> &str {
-        if options.normalized && self.normalized_series.is_some() {
+        if options.normalized && self.key != "mu-energy" && self.normalized_series.is_some() {
             "Normalized _μ_(_E_) (dimensionless)"
         } else {
             &self.math_ylabel
@@ -374,6 +430,20 @@ impl FigureData {
     /// flatten the useful signal. The series and exported CSV keep every point.
     /// k-space figures use a symmetric range (see [`Self::symmetric_y`]).
     pub(crate) fn visible_ylim(&self, options: &FigureOptions) -> Option<(f64, f64)> {
+        self.visible_ylim_with_symmetry(options, self.symmetric_y())
+    }
+
+    /// Display offsets need the occupied range rather than an artificial
+    /// symmetry about zero; ordinary EXAFS panels retain their symmetric range.
+    fn visible_ylim_asymmetric(&self, options: &FigureOptions) -> Option<(f64, f64)> {
+        self.visible_ylim_with_symmetry(options, false)
+    }
+
+    fn visible_ylim_with_symmetry(
+        &self,
+        options: &FigureOptions,
+        symmetric: bool,
+    ) -> Option<(f64, f64)> {
         let (xmin, xmax) = self.xlim(options)?;
         let mut ymin = f64::INFINITY;
         let mut ymax = f64::NEG_INFINITY;
@@ -400,7 +470,7 @@ impl FigureData {
         if !ymin.is_finite() || !ymax.is_finite() {
             return None;
         }
-        if self.symmetric_y() {
+        if symmetric {
             ymax = ymin.abs().max(ymax.abs());
             ymin = -ymax;
         }
@@ -583,6 +653,8 @@ impl FigureData {
             });
         }
         let mut count = 0;
+        let palette = plot.get_theme();
+        let mut preserve_palette = false;
         for series in self.series(options) {
             if !series.visible(options) || series.x.is_empty() {
                 continue;
@@ -590,6 +662,14 @@ impl FigureData {
             let mut line = plot.line(&series.x, &series.y).label(
                 ruviz::render::typst_text::literal_text_snippet(&series.label),
             );
+            if let Some(color) = options.series_colors.get(&series.key) {
+                line = line.color(series_color(color)?);
+                preserve_palette = true;
+            } else if preserve_palette {
+                // ruviz's builder does not advance its palette for explicit
+                // colours. Keep every later automatic curve's original slot.
+                line = line.color(palette.get_color(count));
+            }
             if let Some(width) = options.line_width {
                 line = line.line_width(width as f32);
             }
@@ -807,6 +887,7 @@ pub(crate) fn spectrum_figures(sp: Arc<XASSpectrum>, label: &str) -> Vec<FigureD
                 math_ylabel: format!("Flattened {} (dimensionless)", labels::MU_E),
                 series: vec![series(flat.as_slice().to_vec())],
                 normalized_series,
+                e0,
                 guides: e0.into_iter().collect(),
                 default_xlim: (energy[0] < end).then_some((energy[0], end)),
                 residual: None,
@@ -828,7 +909,7 @@ pub(crate) fn spectrum_figures(sp: Arc<XASSpectrum>, label: &str) -> Vec<FigureD
         color_index: 0,
         color: None,
         label: label.into(),
-        sp,
+        sp: sp.clone(),
         active: true,
     }];
     let mut figures: Vec<_> = ["mu-energy", "normalized-mu", "chi-k", "chi-r", "chi-q"]
@@ -864,7 +945,25 @@ pub(crate) fn spectrum_figures(sp: Arc<XASSpectrum>, label: &str) -> Vec<FigureD
                 _ => None,
             },
             guides: spec.vlines.into_iter().map(|(x, _, _, _)| x).collect(),
-            normalized_series: None,
+            normalized_series: if key == "mu-energy" {
+                sp.energy
+                    .as_ref()
+                    .zip(sp.norm())
+                    .filter(|(energy, norm)| energy.len() == norm.len())
+                    .map(|(energy, norm)| {
+                        vec![FigureSeries {
+                            key: "series-0".into(),
+                            label: label.into(),
+                            x: energy.as_slice().to_vec(),
+                            y: norm.as_slice().to_vec(),
+                            dashed: false,
+                            optional: false,
+                        }]
+                    })
+            } else {
+                None
+            },
+            e0,
             residual: None,
             series: spec
                 .series
@@ -952,6 +1051,7 @@ pub(crate) fn fit_figures(result: &FeffFitResult) -> Vec<FigureData> {
         },
         series,
         normalized_series: None,
+        e0: None,
         guides: vec![],
         default_xlim: match key {
             "fit-r" | "residual-r" | "fit-residual-r" => Some((0., publication_rmax(result.rmax))),
@@ -1307,6 +1407,11 @@ mod tests {
                 width: Some(3.3),
                 height: Some(3.),
                 font_size: Some(9.),
+                series_colors: BTreeMap::from([
+                    ("data".into(), "#0072b2".into()),
+                    ("fit".into(), "#e69f00".into()),
+                    ("residual".into(), "#009e73".into()),
+                ]),
                 ..Default::default()
             };
             let csv = figure.csv(&options).unwrap();
@@ -1321,6 +1426,11 @@ mod tests {
             );
             assert!(rendered.svg.starts_with("<svg") && rendered.svg.matches("<svg").count() >= 3);
             assert!(rendered.svg.contains(r#"id="residual-"#));
+            for stroke in ["rgb(0,114,178)", "rgb(230,159,0)", "rgb(0,158,115)"] {
+                assert!(rendered.svg.contains(&format!(r#"stroke="{stroke}""#)));
+            }
+            let strip = rendered.svg.split(r#"id="residual-"#).nth(1).unwrap();
+            assert!(strip.contains(r#"stroke="rgb(0,158,115)""#));
             // Built-in labels are sans text markup with plain accessible names.
             assert!(!figure.math_ylabel(&options).contains('$'));
             assert!(
@@ -1412,6 +1522,7 @@ mod tests {
     fn sample() -> FigureData {
         FigureData {
             key: "test",
+            e0: None,
             label: "Test".into(),
             xlabel: "Energy (eV)".into(),
             ylabel: "μ(E)".into(),
@@ -1436,6 +1547,125 @@ mod tests {
             u32::from_be_bytes(bytes[20..24].try_into().unwrap()),
         )
     }
+
+    #[test]
+    fn figure_series_colors_round_trip_and_old_options_keep_automatic_colors() {
+        let old: FigureOptions = serde_json::from_str(r#"{"legend":false}"#).unwrap();
+        assert!(old.series_colors.is_empty());
+        assert!(
+            !serde_json::to_string(&old)
+                .unwrap()
+                .contains("series_colors")
+        );
+        let options = FigureOptions {
+            series_colors: BTreeMap::from([
+                ("data".into(), "#0072b2".into()),
+                ("future/key: [opaque]".into(), "#cc79a7".into()),
+            ]),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&options).unwrap();
+        assert_eq!(
+            serde_json::from_str::<FigureOptions>(&json).unwrap(),
+            options
+        );
+    }
+
+    #[test]
+    fn explicit_series_colors_require_canonical_lowercase_rgb() {
+        for value in [
+            "",
+            "#fff",
+            "0072b2",
+            "#0072B2",
+            " #0072b2",
+            "#0072b2 ",
+            "#0072b280",
+            "#gg72b2",
+            "#é0a00",
+        ] {
+            let options = FigureOptions {
+                series_colors: BTreeMap::from([("future/key".into(), value.into())]),
+                ..Default::default()
+            };
+            let error = options.validate().unwrap_err();
+            assert!(
+                error.contains("future/key") && error.contains("#rrggbb"),
+                "{error}"
+            );
+            assert!(sample().plot(&options).is_err(), "{value}");
+        }
+        for (_, value) in SERIES_PALETTE {
+            let options = FigureOptions {
+                series_colors: BTreeMap::from([("data".into(), value.into())]),
+                ..Default::default()
+            };
+            assert!(options.validate().is_ok(), "{value}");
+        }
+    }
+
+    #[test]
+    fn explicit_svg_series_color_preserves_unset_curves_and_ignores_unknown_keys() {
+        fn curve_strokes(svg: &str) -> Vec<&str> {
+            svg.split("<polyline ")
+                .skip(1)
+                .map(|line| {
+                    line.split("stroke=\"")
+                        .nth(1)
+                        .unwrap()
+                        .split('"')
+                        .next()
+                        .unwrap()
+                })
+                .collect()
+        }
+        let mut data = sample();
+        for (key, y) in [("fit", vec![0., 0.8, 0.1]), ("other", vec![0.1, 0.5, 0.2])] {
+            data.series.push(FigureSeries {
+                key: key.into(),
+                label: key.into(),
+                x: vec![0., 1., 2.],
+                y,
+                dashed: key == "fit",
+                optional: false,
+            });
+        }
+        let defaults = FigureOptions::default();
+        let automatic = data.plot(&defaults).unwrap().render_to_svg().unwrap();
+        let options = FigureOptions {
+            series_colors: BTreeMap::from([
+                ("data".into(), "#0072b2".into()),
+                ("unknown/key".into(), "#cc79a7".into()),
+            ]),
+            ..Default::default()
+        };
+        let svg = data.plot(&options).unwrap().render_to_svg().unwrap();
+        let before = curve_strokes(&automatic);
+        let after = curve_strokes(&svg);
+        assert_eq!(before.len(), 3);
+        assert_eq!(after.len(), 3);
+        assert_eq!(after[0], "rgb(0,114,178)");
+        assert_eq!(after[1..], before[1..]);
+        assert!(!svg.contains("rgb(204,121,167)"));
+        assert_eq!(data.csv(&options).unwrap(), data.csv(&defaults).unwrap());
+
+        let hidden_defaults = FigureOptions {
+            hidden: BTreeSet::from(["data".into()]),
+            ..Default::default()
+        };
+        let hidden_options = FigureOptions {
+            series_colors: options.series_colors,
+            ..hidden_defaults.clone()
+        };
+        let before = data
+            .plot(&hidden_defaults)
+            .unwrap()
+            .render_to_svg()
+            .unwrap();
+        let after = data.plot(&hidden_options).unwrap().render_to_svg().unwrap();
+        assert_eq!(curve_strokes(&before), curve_strokes(&after));
+    }
+
     #[test]
     fn publication_defaults_to_300_dpi_and_custom_dpi_preserves_shape() {
         let defaults = Plot::new().dpi(300);
@@ -1507,10 +1737,17 @@ mod tests {
         source.xmax = Some(2.);
         source.legend = false;
         source.guides = true;
+        source.series_colors.insert("data".into(), "#0072b2".into());
         assert!(StylePreset::SingleColumn.matches(source));
         assert!(!StylePreset::Slide.matches(source));
         assert!(source.validate().is_ok());
         settings.figures.entry("chik".into()).or_default().ylabel = Some("kept".into());
+        settings
+            .figures
+            .entry("chik".into())
+            .or_default()
+            .series_colors
+            .insert("data".into(), "#e69f00".into());
         settings.apply_style_to_all("xanes", ["chir"]);
         for key in ["chik", "chir"] {
             let copied = settings.options(key);
@@ -1521,6 +1758,8 @@ mod tests {
             assert!(copied.title.is_none() && copied.xmin.is_none());
         }
         assert_eq!(settings.options("chik").ylabel.as_deref(), Some("kept"));
+        assert_eq!(settings.options("chik").series_colors["data"], "#e69f00");
+        assert!(settings.options("chir").series_colors.is_empty());
         for preset in StylePreset::ALL {
             let mut options = FigureOptions::default();
             preset.apply(&mut options);
