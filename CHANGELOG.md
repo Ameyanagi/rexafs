@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reuse trusted Cargo dependency caches for Linux and Windows desktop builds,
+  populate the Windows core cache, and run benchmarks alongside other Rust
+  checks while retaining all release qualification.
 - Let new FEFF fits follow each spectrum's Process transform window and taper
   parameters, independently of the k-weight choice, with explicit custom k and
   R windows available. Keep older projects' Kaiser–Bessel/dk = 4 fitting

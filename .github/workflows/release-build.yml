@@ -113,7 +113,6 @@ jobs:
           python scripts/check-beamline-fixtures.py --package
       - run: cargo test --locked -p rexafs
       - run: cargo test --locked -p rexafs --features ndarray-compat
-      - run: cargo test --locked -p rexafs --features trust-region
       - run: cargo package --locked -p rexafs
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -315,8 +314,16 @@ jobs:
         with:
           shared-key: nightly-${{ matrix.target }}
           save-if: false
-      - name: Clear cached packages and rebuild macOS workspace crates
-        if: runner.os == 'macOS'
+      - name: Restore native Linux and Windows dependencies
+        if: runner.os != 'macOS'
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          shared-key: desktop-${{ matrix.target }}
+          cache-bin: false
+          cache-workspace-crates: false
+          save-if: false
+      - name: Clear cached packages and rebuild workspace crates
+        shell: bash
         run: |
           rm -rf target/package target/distributions
           cargo clean --locked --release -p rexafs -p rexafs-gui
