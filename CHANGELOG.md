@@ -5,6 +5,10 @@
 - Reuse trusted Cargo dependency caches for Linux and Windows desktop builds,
   populate the Windows core cache, and run benchmarks alongside other Rust
   checks while retaining all release qualification.
+- Let new FEFF fits follow each spectrum's Process transform window and taper
+  parameters, independently of the k-weight choice, with explicit custom k and
+  R windows available. Keep older projects' Kaiser–Bessel/dk = 4 fitting
+  convention, and preserve the effective windows in fit history and reports.
 - Include every named multi-panel recipe in reports and supporting information,
   in insertion order after the individual figures. Save PNG, SVG, PDF and
   plain-text captions under `figures/composed/`, with optional matplotlib
@@ -34,6 +38,18 @@
   projects and apply them to previews, image exports and matplotlib scripts.
 - Ask to save, discard or cancel before closing the window or quitting with
   unsaved project changes; empty or unmodified sessions close without asking.
+- Start Save project with **Include source files** selected for a portable
+  project; **Link source files** remains an explicit smaller-file option.
+- Merge compatible saved spectra from their retained arrays and recorded
+  measurement channels without requiring the original source path. Use the
+  merged result as an alignment standard in the same session; the preview resumes
+  when the selected spectrum finishes loading.
+- Reopen the macOS analysis window from the Dock and route Finder `.rxs` opens
+  through the project loader, preserving the unsaved-changes prompt.
+- Reject zero, non-finite and out-of-range structure radius edits, restore the
+  last valid radius, and keep the preview and controls available. The candidate
+  preview and calculation continue to share a radius of 2–12 Å. Keep text fields
+  editable inside the structure appearance popup.
 - Use sentence-case scientific labels with units for Normalize, Background and
   Transform parameters (for example "Spline k max", "Victoreen n"),
   and show a hover explanation on every label with its unit, Auto value and the
@@ -51,8 +67,9 @@
   during the failure are not left stale.
 - Show reduced χ² as "n/a (noise not estimated)" when ε was not estimated from
   the data.
-- Save fit results with the project, so a reopened project lists its fits in
-  Publish and shows the last fit without refitting or a stale flag.
+- Save fit curves with the project and reopen the displayed fit in Fit → Results
+  without refitting. Preserve the **Needs update** warning when its inputs or
+  model changed; retained curves remain available when original sources are missing.
 - Fill the Used column of the copied analysis record with resolved Auto values
   and data-limited ranges.
 - Redraw MCR/PCA/LCF analysis boundaries when a form opens or changes, and stop

@@ -1408,7 +1408,7 @@ impl StudioApp {
         self.tools.preview_key.is_some() && self.tool_preview_key(cx) == self.tools.preview_key
     }
 
-    fn queue_tool_preview(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn queue_tool_preview(&mut self, cx: &mut Context<Self>) {
         let key = self.tool_preview_key(cx);
         if key.is_some() && key == self.tools.preview_key {
             return;

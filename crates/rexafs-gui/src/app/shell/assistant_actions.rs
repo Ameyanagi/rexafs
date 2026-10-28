@@ -633,6 +633,13 @@ fn proposed_ranges(old: &FitRanges, patch: &Value) -> Result<FitRanges, String> 
                 | "kweight"
                 | "kweights"
                 | "follow_transform"
+                | "follow_window"
+                | "window"
+                | "dk"
+                | "dk2"
+                | "rwindow"
+                | "dr"
+                | "dr2"
                 | "fitspace"
                 | "noise"
         ) {
@@ -641,16 +648,17 @@ fn proposed_ranges(old: &FitRanges, patch: &Value) -> Result<FitRanges, String> 
         v[k] = x.clone();
     }
     let r: FitRanges = serde_json::from_value(v).map_err(|e| e.to_string())?;
-    if ![r.kmin, r.kmax, r.rmin, r.rmax, r.kweight]
-        .iter()
-        .all(|v| v.is_finite() && *v >= 0.)
+    if !r.valid()
+        || ![r.kmin, r.kmax, r.rmin, r.rmax, r.kweight]
+            .iter()
+            .all(|v| v.is_finite() && *v >= 0.)
         || r.kmin >= r.kmax
         || r.rmin >= r.rmax
         || r.effective_kweights()
             .iter()
             .any(|v| !v.is_finite() || *v < 0.)
     {
-        return Err("Invalid k/R range or k-weight".into());
+        return Err("Invalid k/R range, k-weight or window parameter".into());
     }
     Ok(r)
 }
@@ -704,5 +712,14 @@ mod tests {
         assert!(!p.follow_transform);
         assert!(proposed_ranges(&r, &json!({"kmin":20.})).is_err());
         assert!(proposed_ranges(&r, &json!({"unexpected":1})).is_err());
+        let windows = proposed_ranges(
+            &r,
+            &json!({"follow_window":false,"window":"Hanning","dk":2.0,"dk2":1.0,"dr":0.1}),
+        )
+        .unwrap();
+        assert!(!windows.follow_window);
+        assert_eq!(windows.dk, 2.0);
+        assert_eq!(windows.dk2, Some(1.0));
+        assert!(proposed_ranges(&r, &json!({"dr2":-0.1})).is_err());
     }
 }
