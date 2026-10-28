@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Security: CI installs the newest Node 24 (24.22.1 or later) and Bun 1.4.4,
+  which fix the Brotli remote-code-execution flaw CVE-2026-111497
+  (Node2Shell/HTTP2Shell). The website now uses Bun with `bun.lock`, and its
+  vulnerable packages (Vite, undici, devalue, zod, sharp, Astro and others) are
+  updated. Updated rustls, rustls-webpki, webpki-roots and zip (9.1) for RustSec
+  advisories, and the Larch fixture environment's urllib3, Pillow, pip,
+  requests and related packages. CI now fails on RustSec vulnerabilities
+  (`cargo deny check advisories`); `deny.toml` records the remaining
+  exceptions and why they are not reachable. Workflows no longer keep checkout
+  credentials, and the release job no longer restores a package cache.
+  Dependabot now also covers the website and the Larch fixture environment.
 - Reuse trusted Cargo dependency caches for Linux and Windows desktop builds,
   populate the Windows core cache, and run benchmarks alongside other Rust
   checks while retaining all release qualification.

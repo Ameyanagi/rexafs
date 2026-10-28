@@ -52,7 +52,7 @@ walkdir = "2.5"
 tempfile = "3.27"
 libc = "0.2"
 tar = { version = "0.4.46", default-features = false }
-zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+zip = { version = "9.1.1", default-features = false, features = ["deflate"] }
 ureq = { version = "3", features = ["json"] }
 semver = { workspace = true }
 unicode-segmentation = "1"
