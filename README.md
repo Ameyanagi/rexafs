@@ -252,7 +252,7 @@ results, not performance promises or changes to the current numerical defaults.
 Use **Save project** / **Open project** with **`.rxs`** files. This is the first
 release format; unreleased codename formats are not supported. Choose
 **Include source files** for losslessly compressed original spectra and referenced
-FEFF files. **Unreleased:** the Save project dialog selects this portable mode by
+FEFF files. **From 0.2.15:** the Save project dialog selects this portable mode by
 default. **Link source files** stores references relative to the project file's
 directory; move the project and data folders together.
 

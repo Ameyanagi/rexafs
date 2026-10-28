@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.15 (release preparation)
+
 - Update apex-solver to 1.5. EXAFS fit bounds are still enforced by rexafs
   itself, so fit results are unchanged. apex-io 0.4 no longer pulls in zstd,
   which removes the zstd advisory exceptions from `deny.toml`.
@@ -51,7 +53,6 @@
   in Legend mode and no grid by default, and draw inward ticks on all four sides
   with four minor ticks between major ticks. Process uncached samples automatically
   and preserve legacy recipes on project load.
-
 - Choose per-curve colours in Publish from the eight-colour Okabe–Ito palette
   or Auto, and share colours across composer panels. Save choices in `.rxs`
   projects and apply them to previews, image exports and matplotlib scripts.
@@ -127,6 +128,9 @@
   from recipe names and add plain-text caption saving.
 - Fit publication legend boxes to their labels (ruviz 0.15.2); legends no
   longer show empty space to the right of the series names.
+
+See the [release notes](doc/release-notes-0.2.15.md) and
+[qualification record](doc/validation/2026-10-29-release-0.2.15/review.md).
 
 ## 0.2.14 (2026-09-24)
 

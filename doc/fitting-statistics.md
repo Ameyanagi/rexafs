@@ -132,7 +132,7 @@ Gaussian uses the axis units for its width, and fractional Hanning uses
 dimensionless fractions.
 See the [window conventions](processing-theory.md#4-transform-from-k-to-r).
 
-**Desktop, unreleased:** new FEFF models follow each spectrum's processing
+**Desktop, from 0.2.15:** new FEFF models follow each spectrum's processing
 k-window family, `dk` and `dk2`, independently of k-weight following. The fit
 uses Kaiser–Bessel with `dk = 1` and `dk2 = None` when processing is Auto. It
 retains its own k/R limits and explicit R filter. Custom settings override

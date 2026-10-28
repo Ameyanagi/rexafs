@@ -114,7 +114,7 @@ contributions without vertical offsets. R-space residuals explicitly represent
 the difference of magnitudes, rather than a complex residual. All scientific
 curves come from the processing/fit results; branding images are separate assets.
 
-## Curve colours (unreleased)
+## Curve colours
 
 In **Single figure**, click the small swatch beside a curve's visibility control
 under **Curves**, then choose one of eight colours or **Auto**. The A swatch
@@ -201,7 +201,7 @@ initial recipe suggests XANES, χ(k), |χ(R)| and, when a fit exists, Fit + resi
 · χ(k). **Add panel** appends a figure; the arrow moves a panel earlier and ×
 removes it. Panels fill each row from left to right, at most 12 panels.
 
-**Named recipes (unreleased).** The **Recipe** selector keeps several layouts
+**Named recipes.** The **Recipe** selector keeps several layouts
 in the project, in the order they were created. Selecting one restores its panel
 order, dimensions, font, line width and DPI.
 
@@ -218,7 +218,7 @@ order, dimensions, font, line width and DPI.
   or the previous one when deleting the last entry. The only remaining recipe
   cannot be deleted.
 
-**Samples and stacking (unreleased).** **Samples** offers the current group
+**Samples and stacking.** **Samples** offers the current group
 first, then the marked groups in workspace order. Check only the samples to
 include. **All** selects the offered groups in that order; **None** clears the
 list. An empty list means the current group only, preserving older recipes.
@@ -285,7 +285,7 @@ settings still apply. Fit and residual panels retain their figure's legend
 visibility. These display choices are implemented in
 [`prepare_panels` and `compose_samples`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
 
-**Panel insets (unreleased).** Select an energy-domain panel to add one inset.
+**Panel insets.** Select an energy-domain panel to add one inset.
 **Inset** defaults to **None** and is available only for XANES, flattened μ(E)
 and raw μ(E) panels (saved keys `xanes`, `flattened-mu` and `mu-energy`).
 Choose a rexafs preset, then edit its energy limits relative to E₀, the
@@ -361,7 +361,7 @@ settings for axis labels, axis limits, visible curves, curve colours, flattened
 or normalized μ(E), and processing guides. Titles are left out because the panel
 labels identify the panels.
 
-**Grid, ticks and legends (unreleased).** The recipe's **Grid** is off by default
+**Grid, ticks and legends.** The recipe's **Grid** is off by default
 and overrides each figure's grid setting within the composition. Main-panel major
 and minor ticks point inward on all four sides. rexafs chooses four evenly spaced minor
 ticks between major ticks because ruviz sets a fixed count per plot. This is a
@@ -391,7 +391,7 @@ Choose a swatch to set a shared colour for that series key in every panel. This
 recipe setting overrides the figure's own colour; **Auto** removes only the
 shared override.
 
-**Sample colours (unreleased)** selects the automatic colours for multi-sample
+**Sample colours** selects the automatic colours for multi-sample
 panels. rexafs chooses one colour order for the recipe: shared sample IDs selected
 by at least one spectrum panel come first, in the shared list's order, followed
 by panel-only sample IDs in panel reading order and then selection order. Each
@@ -466,7 +466,7 @@ digits, and replaces runs of punctuation or whitespace with a single hyphen,
 without leading or trailing hyphens. An empty result uses `figure`; reserved
 Windows device names gain a `figure-` prefix.
 
-**Data + Python script… (unreleased).** Beside the image saves, this action
+**Data + Python script…** Beside the image saves, this action
 exports the active named recipe to a new folder, suggested as
 `figure-2-matplotlib` for **Figure 2**. An existing folder is rejected. The
 export uses the same prepared curves as the current preview and is available
@@ -528,7 +528,7 @@ under the preview and kept in the recipe. Missing samples are also listed and
 retained in the recipe. The composer is implemented in
 [`composer.rs`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
 
-**Reports and supporting information (unreleased).** **Publish report…** and
+**Reports and supporting information.** **Publish report…** and
 **Export supporting information…** export every named recipe in insertion
 order. Available compositions follow the individual figures in `report.html`
 and `captions.md`, with continuous figure numbering. Each writes
@@ -652,7 +652,7 @@ it embeds their original spectra and referenced FEFF inputs with SHA-256
 checksums, as **Raw: embedded** does, even when the open project links to its
 sources by path (the open project and **Publish report…** keep their own
 setting). The archive therefore opens in rexafs on another computer without
-the source folders. The unreleased recipe export described above retains this
+the source folders. The recipe export described above retains this
 workspace scope; recipe-only groups absent from the project are preserved in the exported
 figures and optional matplotlib data. If a source file cannot be read, or the
 embedded inputs would exceed the 1 GiB limit, the export stops with an error
