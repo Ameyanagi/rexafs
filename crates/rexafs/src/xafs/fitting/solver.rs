@@ -801,9 +801,9 @@ fn solve_fit_problem_apex(
             ApexDVector::from_vec(vec![variable.clamp(variable.value)]),
         );
         variable_keys.insert(name.clone(), key);
-        if variable.min.is_some() || variable.max.is_some() {
-            let lower = variable.min.unwrap_or(f64::NEG_INFINITY);
-            let upper = variable.max.unwrap_or(f64::INFINITY);
+        // Bounds are enforced by clamping in FeffSpectrumFactor and when the
+        // solution is applied; apex-solver rejects bounds it cannot enforce.
+        if let (Some(lower), Some(upper)) = (variable.min, variable.max) {
             if lower > upper {
                 return Err(FittingError::InvalidDataset {
                     reason: format!(
@@ -811,7 +811,6 @@ fn solve_fit_problem_apex(
                     ),
                 });
             }
-            apex_problem.set_variable_bounds(key, 0, lower, upper);
         }
     }
 

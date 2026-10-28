@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Update apex-solver to 1.5. EXAFS fit bounds are still enforced by rexafs
+  itself, so fit results are unchanged. apex-io 0.4 no longer pulls in zstd,
+  which removes the zstd advisory exceptions from `deny.toml`.
 - Security: CI installs the newest Node 24 (24.22.1 or later) and Bun 1.4.4,
   which fix the Brotli remote-code-execution flaw CVE-2026-111497
   (Node2Shell/HTTP2Shell). The website now uses Bun with `bun.lock`, and its
