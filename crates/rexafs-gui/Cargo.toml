@@ -47,7 +47,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 xraydb = "0.4.1"
 futures = "0.3"
 rayon = { workspace = true }
-lru = "0.18"
+lru = "0.19"
 walkdir = "2.5"
 tempfile = "3.27"
 libc = "0.2"
