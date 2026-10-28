@@ -80,6 +80,28 @@ and visible curves. Fit figures show model/data components and path contribution
 without vertical offsets. R-space residuals show the difference of magnitudes,
 not a complex residual. Scientific curves come from processing/fit results.
 
+### Curve colours (unreleased)
+
+In **Single figure**, click the small swatch beside a curve's visibility control
+under **Curves**, then choose one of eight colours or **Auto**. The A swatch
+means Auto; it clears that curve's override and restores its automatic colour.
+Fit + residual figures also expose a swatch for the residual strip. The fixed
+palette is black, orange, sky blue, bluish green, yellow, blue, vermillion and
+reddish purple, from Okabe and Ito (2008),
+["Color Universal Design"](https://jfly.uni-koeln.de/color/). Hover a swatch for
+its colour name and sRGB hexadecimal value.
+
+Colours are saved per figure type in the `.rxs` project and used by previews,
+image exports, report and supporting-information figures, and the editable
+matplotlib export. A **Single figure** matplotlib export currently includes only
+the upper panel of a fit + residual figure; standalone residual figures export
+their curve. **Apply style to all figures** preserves each figure's curve colours. Figures without overrides retain their existing automatic colours.
+The saved `series_colors` map uses curve keys as plain strings and lowercase
+`#rrggbb` sRGB values; malformed values stop rendering/export with an error,
+and entries for curves that are no longer available have no visual effect.
+Implemented in
+[`FigureOptions` and `FigureData::plot`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures.rs).
+
 ### Legend, ticks, R range and labels (since 0.2.15)
 
 **Legend** places the legend: **Auto** (the default), **Upper left**, **Upper
@@ -141,10 +163,134 @@ into one grid of labelled panels, (a), (b), (c)…, for a journal figure. Panels
 come from the figures available in **Single figure**: XANES, flattened μ(E),
 χ(k), |χ(R)|, χ(q) and, after a fit, the fit, residual and fit + residual
 figures (path contributions are curves you can show in the fit figures). The
-first time it opens, the composer suggests XANES, χ(k), |χ(R)| and, when a fit
-exists, Fit + residual · χ(k). **Add panel** appends a figure; the arrow moves a
-panel earlier and × removes it. Panels fill each row from left to right, at
-most 12 panels.
+initial recipe suggests XANES, χ(k), |χ(R)| and, when a fit exists, Fit + residual
+· χ(k). **Add panel** appends a figure; the arrow moves a panel earlier and ×
+removes it. Panels fill each row from left to right, at most 12 panels.
+
+**Named recipes (unreleased).** The **Recipe** selector keeps several layouts
+in the project, in the order they were created. Selecting one restores its panel
+order, dimensions, font, line width and DPI.
+
+- **New** appends and selects a default recipe, using the first unused name
+  **Figure N** and the same suggested panels as the initial recipe.
+- **Duplicate** appends and selects an independent copy of the current recipe.
+  Its name gains ` copy`, then ` copy 2`, ` copy 3`, and so on until unique; a
+  long original name is shortened to keep the result within 60 characters.
+- **Rename** edits the name inline; **Save name** applies it and **Cancel** discards
+  the draft. Names are trimmed, must contain 1–60 Unicode characters and must
+  be unique when compared after Unicode lowercase conversion. Validation
+  feedback appears beside the draft. Renaming preserves the selection and order.
+- **Delete** asks for confirmation in the app, then selects the next recipe,
+  or the previous one when deleting the last entry. The only remaining recipe
+  cannot be deleted.
+
+**Samples and stacking (unreleased).** **Samples** offers the current group
+first, then the marked groups in workspace order. Check only the samples to
+include. **All** selects the offered groups in that order; **None** clears the
+list. An empty list means the current group only, preserving older recipes.
+Checking a sample appends its durable group ID to the saved list. The recipe
+keeps that order when marks or the current group change.
+
+Enter an optional short **Figure label** beside each sample, for example `Cu foil`
+instead of a long acquisition filename. Multi-sample legends and curve-end labels
+use it; a blank label uses the full workspace group name and follows later group
+renames. Figure labels belong to this recipe, are saved by group ID in
+`figure_labels`, and do not rename workspace groups. The combined caption
+identifies each short label and its full sample name once per figure when they
+differ; offset lists refer to the short labels. In a one-sample composer panel,
+an explicit figure label replaces the main curve's label; a blank label keeps
+that figure's ordinary curve labels.
+
+Select a panel row to edit its sample and stacking settings. **Use these samples
+in every panel** is on by default: the panel inherits the recipe's **Samples**
+list. Turn it off to copy that list into a separate selection for this panel.
+Re-enabling it restores the shared selection. Saved samples remain selected even
+when they are no longer current or marked. Removed samples are skipped and listed
+as missing. rexafs queues processing for available selected groups with no cached
+result. If a group still has no data, select it in the workspace, inspect its
+processing error and process it successfully before exporting.
+
+With one sample, each panel keeps its existing curves, helper lines and curve
+keys. With several selected samples, each contributes only the main curve for
+the figure; background, pre-edge, post-edge and other helper curves are omitted.
+Choose samples with matching plotted quantities and k weights: a panel shares the
+first available sample's axis labels and does not convert other samples' units.
+Fit, residual and fit + residual panels always show one fitted dataset and ignore
+the sample selection and stacking settings. **Single figure** stays single-sample.
+
+**Offset step** is a display displacement between successive samples:
+zero overlays the original curves. A step of 0.3 adds 0, 0.3, 0.6, and so on to
+the samples' vertical values in saved order. **Reverse order** assigns these
+offsets in reverse, putting the first sample highest for a positive step.
+Negative steps move successive curves downward. Missing samples keep their
+positions in the saved order. Offsets use the panel's displayed vertical-axis
+units, including any k weighting; they modify copied display arrays only, leaving
+processed spectra and fit results unchanged. The combined caption records a
+non-zero applied offset. **Curve labels** defaults to **Legend**; **Curve ends**
+places the complete figure labels at the right side of the plot with space
+reserved across the grid. Labels and padding may use at most 35% of a panel's
+width. Labels are never shortened: when they exceed that allowance, rendering
+stops with “Curve-end labels are too long for this panel. Shorten the figure
+labels or use a legend.” The raster and SVG use the same complete labels.
+The plot must also retain at least 0.5 in of width. If it cannot, use a wider
+figure, fewer columns, a smaller font or a legend. Labels that cannot fit
+vertically require taller panels, fewer samples, a smaller font or a legend.
+These display choices are implemented in
+[`prepare_panels` and `compose_samples`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
+
+**Panel insets (unreleased).** Select an energy-domain panel to add one inset.
+**Inset** defaults to **None** and is available only for XANES, flattened μ(E)
+and raw μ(E) panels (saved keys `xanes`, `flattened-mu` and `mu-energy`).
+Choose a rexafs preset, then edit its energy limits relative to E₀, the
+absorption-edge energy of the panel's first selected sample:
+
+| Inset | Default energy window |
+| --- | --- |
+| **Pre-edge** | E₀ − 6 to E₀ + 11 eV |
+| **Edge** (edge and white line) | E₀ − 2 to E₀ + 23 eV |
+| **Difference** (difference from first sample) | E₀ − 6 to E₀ + 31 eV |
+
+These windows are display defaults chosen by rexafs, rather than scientific
+analysis ranges. Every sample uses the same absolute energy window. **Reverse
+order** changes only the offsets; it does not change the first sample, E₀ or
+the difference reference. The first selected sample must be available.
+
+**Pre-edge** and **Edge** magnify the panel's displayed quantity.
+**Difference** requires at least two selected samples and
+plots each sample's normalized μ(E) minus the first sample's normalized μ(E),
+including when the main panel shows raw or flattened absorption. It evaluates
+the first sample on each other sample's measured energy grid by linear
+interpolation, keeps only their overlapping measured energy interval and never
+extrapolates. The inset label **Δμ** denotes this dimensionless difference in
+normalized absorption. This display calculation changes neither processed
+spectra nor the source arrays.
+
+**Inset curves follow the stacking offset** is on by default. It applies the
+panel's saved sample order, reverse setting and offset step, scaling that step by
+the inset's largest individual unshifted visible-curve y span divided by the main
+panel's largest individual unshifted visible-curve y span. Each span is the
+curve's maximum minus minimum within that view's energy limits; curves are
+measured separately before choosing the largest span, excluding display offsets
+and axis padding. If either span is zero, the inset offset is zero. Turn this
+option off to overlay the inset curves without offsets.
+
+**Placement** defaults to **Lower right**; **Upper left** and **Center right**
+are also available. The inset has a white background, its own energy tick
+labels and a small in-plot quantity tag, **μ(E)** or **Δμ**, with no y tick
+labels. It never shows a legend, including when **Legend in every panel** is
+on. The tag has a padded, opaque white box to keep curves from obscuring the
+text, and automatic vertical headroom leaves space above the curves for it.
+The main-panel legend is placed automatically inside the plot, away from the
+inset. Inset curves retain the main panel's figure labels, resolved print colours
+and line styles at a thinner width. The inset's grid stays off even when the
+main-panel **Grid** setting is on, and its energy ticks point inward.
+Insets appear in the preview and the normal
+PNG, TIFF, SVG and PDF exports; plain SVG labels remain editable text. The combined
+caption describes the inset and rounds its energy limits to 0.1 eV, omitting
+trailing fractional zeros. The plotted limits retain their full precision.
+The inset's settings are saved with that panel in the
+`.rxs` project. Implemented in
+[`composer.rs`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
 
 **Journal width** sets the total figure width to a publisher's column width.
 The values are maximum widths from the publishers' author guides, checked in
@@ -163,12 +309,66 @@ width. Each panel must be at least 25.4 mm (1 in) on each side.
 
 **Font size** (8 pt by default), **Line width** (blank keeps the renderer
 default) and **DPI** (600 by default) apply to every panel, so all panels share
-the same text and curve weights. Everything else inside a panel comes from that
-figure's **Single figure** settings: axis labels, axis limits, visible curves,
-flattened or normalized μ(E), legend, grid and guides. Titles are left out
-because the panel labels identify the panels. Legends stay inside the plot (an
-**Outside** or crowded **Auto** legend takes the least-covered inside corner),
-because a legend outside one panel would shrink its plot area.
+the same text and curve weights. Panels use the figure's **Single figure**
+settings for axis labels, axis limits, visible curves, curve colours, flattened
+or normalized μ(E), and processing guides. Titles are left out because the panel
+labels identify the panels.
+
+**Grid, ticks and legends (unreleased).** The recipe's **Grid** is off by default
+and overrides each figure's grid setting within the composition. Main-panel major
+and minor ticks point inward on all four sides. rexafs chooses four evenly spaced minor
+ticks between major ticks because ruviz sets a fixed count per plot. This is a
+project choice: Matplotlib's
+[`AutoMinorLocator`](https://matplotlib.org/stable/api/ticker_api.html#matplotlib.ticker.AutoMinorLocator)
+adapts the count, using four minor ticks when the major interval is 1, 2.5, 5
+or 10 times a power of ten, and three otherwise.
+
+For panels selecting several samples, the default shows a legend only in the
+first panel with at least two visible samples whose **Curve labels** mode is
+**Legend** and whose figure legend is enabled. Enable **Legend in every panel**
+to show a legend in every panel that selects several samples and permits a
+legend. Curve-end panels do not show a legend. One-sample and fit panels retain their figure's legend
+visibility. Composer legends use text one point smaller than the figure font,
+with a minimum of 5 pt, and stay inside the plot. Automatic placement chooses the
+inside position that covers the least plotted data. Composer legends use this
+placement for every figure legend setting so that panels remain aligned. The
+renderer currently draws a box around legends. These settings apply to the composition; **Single figure** keeps its
+own grid, ticks and legend behavior. The shared composer legend styling is
+implemented in
+[`composer.rs`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
+
+**Curve colours** lists the series in the chosen panels, including residual strips.
+Choose a swatch to set a shared colour for that series key in every panel. This
+recipe setting overrides the figure's own colour; **Auto** removes only the
+shared override.
+
+**Sample colours (unreleased)** selects the automatic colours for multi-sample
+panels. rexafs chooses one colour order for the recipe: shared sample IDs selected
+by at least one spectrum panel come first, in the shared list's order, followed
+by panel-only sample IDs in panel reading order and then selection order. Each
+sample appears once; missing samples retain their colour slots. This is a rexafs
+choice that keeps a sample's automatic colour consistent when a panel selects a
+subset or changes its sample order.
+
+- **Ordered** (the default) samples viridis at evenly spaced positions from 0 to
+  0.82 across that recipe-wide order. Viridis is the sequential map designed by
+  Nathaniel Smith and Stéfan van der Walt; see their
+  [colormap design notes](https://bids.github.io/colormap/). Ending at 0.82 is a
+  rexafs choice to avoid the palest yellow at the bright end on white paper.
+- **Okabe–Ito** cycles through the eight-colour categorical palette from Okabe
+  and Ito (2008),
+  [“Color Universal Design”](https://jfly.uni-koeln.de/color/), for samples that
+  represent separate categories.
+- **Workspace** keeps each group's workspace plot colour.
+
+The multi-sample curve key is `<group id>/<series key>`. An explicit colour
+saved under that full key in the figure settings overrides the sample palette;
+a matching recipe colour overrides both. A short key such as `main` does not
+colour every sample alike. One-sample panels retain their **Single figure**
+colours and automatic palette. Sample palettes and shared colours are saved with
+the recipe and used in PNG, TIFF, SVG and PDF exports. Removing a panel keeps its
+saved colours for later reuse. Sample colour resolution is implemented in
+[`prepare_panels`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
 
 rexafs aligns the panels by giving every panel the same fixed margins: the
 widest left margin any panel needs for its y tick labels and axis title, and
@@ -177,8 +377,26 @@ and bottom edges, and those of a column share their left and right edges. Each
 panel is rendered separately by ruviz and the panels are tiled into one image
 and nested into one SVG, the same technique as the fit + residual figure. The
 bold panel labels sit at the top-left corner of each panel, at the axis-title
-font size. The recipe (panels, width, columns, height, font, line width, DPI)
-is saved in the `.rxs` project with the other figure settings.
+font size. Each recipe stores panels, width, columns, height, font, line width,
+DPI, grid and legend repetition settings, sample palette, figure labels, shared
+colours and ordered sample IDs. Each panel stores its figure key, optional own
+sample IDs, offset step, reverse flag, label mode and inset; naming a recipe
+does not change how its panels render. **Single figure**
+settings, including captions and visible curves, remain shared across recipes,
+so changing them affects every recipe using that figure type.
+
+The `.rxs` project saves named recipes as an ordered `publication.recipes` array
+of `{name, recipe}` entries and the selection as the zero-based
+`publication.active_recipe` index. An index beyond the saved list selects its
+final recipe. An older `publication.composite` loads unchanged as **Figure 1**;
+projects without recipe data start with a default **Figure 1**. Saving writes
+only the new recipe format; the compact project encoder may omit default
+fields. Legacy panels saved as plain figure-key strings still load with shared
+samples, zero offset, forward order, legend labels and no inset. Older panel
+objects without an inset also load with no inset. New saves write panel objects,
+with sample IDs as ordered arrays rather than labels or workspace row
+numbers. Storage and migration are implemented in
+[`recipes.rs`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/recipes.rs).
 
 The preview is rendered at up to 200 DPI; **Fit** fits it to the pane and
 **True size** shows it at 96 pixels per inch, close to its printed size (the
@@ -191,14 +409,99 @@ exact size depends on the display). **Save figure** renders at the chosen DPI:
 - **PDF** is vector, converted from the SVG by ruviz (svg2pdf); its page is the
   printed figure size.
 
+The suggested filename comes from the recipe
+name, for example `figure-2.pdf`. It is lowercased, keeps Unicode letters and
+digits, and replaces runs of punctuation or whitespace with a single hyphen,
+without leading or trailing hyphens. An empty result uses `figure`; reserved
+Windows device names gain a `figure-` prefix.
+
+**Data + Python script… (unreleased).** Beside the image saves, this action
+exports the active named recipe to a new folder, suggested as
+`figure-2-matplotlib` for **Figure 2**. An existing folder is rejected. The
+export uses the same prepared curves as the current preview and is available
+when that preview is ready. It writes `make_figure.py` and one CSV with two
+columns, x and y, for each exported curve in a main panel, residual strip or
+inset (`a-series-01.csv`, `a-residual-series-01.csv`,
+`a-inset-series-01.csv`, and so on). CSV values are unshifted: they contain the plotted scientific quantity,
+including any normalization, k weighting or normalized difference, without the
+vertical display offsets. The export does not modify the project's processed
+spectra or fit results.
+
+All presentation settings are editable at the top of the script: the recipe's
+printed size, panel arrangement, DPI, font and line widths, grid, labels, resolved
+colours, line styles, limits, legend style, inset placement and separate offsets
+for main and inset curves. Change an offset there to restack curves without
+changing the CSV data. Fit + residual panels retain both axes. Available panels
+fill the grid in recipe order; unavailable panels are omitted without empty
+slots, and the script notes skipped panels and samples. Check these notices
+before using the figure.
+
+The exported colours are the resolved recipe, sample and figure colours used by
+the preview, including residual strips and insets. The recipe's grid setting is
+off by default. Major and minor ticks point inward on all four sides; the script
+uses Matplotlib's
+[`AutoMinorLocator`](https://matplotlib.org/stable/api/ticker_api.html#matplotlib.ticker.AutoMinorLocator)
+for minor ticks. Insets retain their resolved colours and line styles, inward
+ticks, and no grid or legend. Their quantity tag keeps its opaque white box and
+automatic vertical headroom above the curves.
+
+Legend visibility follows the native preparation's per-panel choices, including
+**Legend in every panel** and **Curve labels**; insets never show a legend. The
+Python script uses frameless legends with text at `FONT_SIZE - 1` points,
+`loc="best"`, `handlelength=1.4`, `labelspacing=0.3` and `handletextpad=0.5`.
+These are the Python legend settings; the native renderer currently draws the
+boxed legends described above.
+
+Curve-end labels use complete figure labels, and CSV headers retain those same
+complete names. Export applies the native curve-end width and vertical-fit
+validation before writing files: labels and padding must fit within 35% of the
+panel width and leave at least 0.5 in for the plot. Labels are never shortened or
+truncated. If validation fails, shorten the recipe's figure labels, adjust the
+figure dimensions or font size, reduce the sample count, or choose a legend,
+then export again. Each curve's complete `label` remains editable in the script.
+
+Run the script with Python 3, numpy and matplotlib; rexafs is not required. For
+example, run `uv run --with numpy --with matplotlib python make_figure.py`.
+It reads the CSV files beside itself and saves `figure.pdf`, `figure.svg` and
+`figure.png` there at the recipe's printed size and DPI. Matplotlib lays out
+ticks and margins using its own font metrics, so the result is an editable
+reproduction whose layout can differ from the rexafs preview. Implemented in
+[`write_composite_python_export`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/python_export/composite.rs).
+
 The caption below the preview joins each panel's caption after its label, for
 example "(a) Flattened, edge-step-normalized X-ray absorption spectrum… (b) …";
-**Copy caption** copies it. Panels whose figure is unavailable, such as a fit
-panel before any fit has run, are skipped, listed under the preview and kept in
-the recipe. Each panel shows one spectrum: overlays of several samples with
-vertical offsets, an inset, per-curve colours and a matplotlib script for the
-whole grid are not available yet. The composer is implemented in
+**Copy caption** copies it. **Save caption…** saves it as plain text,
+with a suggested filename such as `figure-2-caption.txt`. Panels whose figure
+is unavailable, such as a fit panel before any fit has run, are skipped, listed
+under the preview and kept in the recipe. Missing samples are also listed and
+retained in the recipe. The composer is implemented in
 [`composer.rs`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
+
+**Reports and supporting information (unreleased).** **Publish report…** and
+**Export supporting information…** export every named recipe in insertion
+order. Available compositions follow the individual figures in `report.html`
+and `captions.md`, with continuous figure numbering. Each writes
+`figures/composed/<file_stem>.png`, `.svg` and `.pdf`, plus
+`figures/composed/<file_stem>-caption.txt`. The stem follows the recipe-name
+rules above; collisions gain `-2`, `-3`, and so on, so distinct names that
+produce the same stem keep separate files. The exporter also attempts a
+matplotlib bundle for each composition in
+`figures/composed/<file_stem>-matplotlib/`, with `make_figure.py` and the
+unshifted curve CSVs described above.
+
+At export time, rexafs resolves the sample IDs used by non-fit panels across
+all recipes against the current workspace. This includes unmarked groups,
+groups without cached results and workspace groups absent from the saved
+project. Missing samples, skipped panels and failed recipes appear in the
+export notices; other recipes continue. Filesystem failures can still stop the
+export as described below. Review the notices before using the figures.
+
+The exported `project.rxs` keeps the normal saved workspace scope; groups used
+only by recipes are not added solely for figure export. The static figures and
+optional matplotlib CSVs retain the plotted curves. Recreating a recipe inside
+rexafs requires its groups to be present in the reopened workspace. Report
+integration is implemented in the
+[folder exporter](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication.rs).
 
 ## Captions
 
@@ -226,6 +529,7 @@ new directory:
 | `resolved.md` | Per-spectrum processing outputs recomputed at export time |
 | `figures/*.png`, `figures/*.svg` | Spectra, fit overlays and residuals using saved dimensions/style, with captions in SVG metadata; default size/resolution when unset |
 | `figures/*.csv` | Visible curve data for each exported figure |
+| `figures/composed/` (unreleased) | All named recipes as PNG/SVG/PDF and plain-text captions; optional per-recipe matplotlib folders with `make_figure.py` and unshifted curve CSVs |
 | `report.html`, `captions.md` | Browser-printable vector figures with retained aspect ratios, semantic tables, numbered captions, units and uncertainty definitions; for each fit, a statistics table (R-factor, χ², reduced χ² when noise was estimated, N_idp / N_var, fit space, k and R ranges, k-weights, windows and correlations with \|r\| ≥ 0.10); manuscript caption text |
 | `data/*.json` | Processed arrays and available full fit results |
 | `methods.md` | Methods draft generated from the values actually used: E₀, pre-edge and normalization ranges and polynomial order (or MBACK), background method with R_bkg, k range and k-weight, transform k range, k-weight and window, and for each fit its space, k/R ranges, k-weights, windows, FEFF engine (ReFEFF or FEFF10), varied parameters and N_idp. Steps that were not run are omitted; only cited works are listed. The Experiment section is left for you to complete |
@@ -309,15 +613,17 @@ journal's supporting information. It contains the complete analysis folder of
   unpacked folder, `shasum -a 256 -c manifest-sha256.txt` (macOS) or
   `sha256sum -c manifest-sha256.txt` (Linux) verifies that no file changed.
 
-The bundled `project.rxs` is always self-contained: it embeds the original
-spectra and referenced FEFF inputs with their SHA-256 checksums, as
-**Raw: embedded** does, even when the open project links to its sources by
-path (the open project and **Publish report…** keep their own setting). The
-archive therefore opens in rexafs on another computer without the source
-folders. If a source file cannot be read, or the embedded inputs would exceed
-the 1 GiB limit, the export stops with an error instead of writing a project
-with broken links. The archive is written next to its destination and moved into
-place only when complete. See the
+The bundled `project.rxs` is self-contained for its saved workspace contents:
+it embeds their original spectra and referenced FEFF inputs with SHA-256
+checksums, as **Raw: embedded** does, even when the open project links to its
+sources by path (the open project and **Publish report…** keep their own
+setting). The archive therefore opens in rexafs on another computer without
+the source folders. The unreleased recipe export described above retains this
+workspace scope; recipe-only groups absent from the project are preserved in the exported
+figures and optional matplotlib data. If a source file cannot be read, or the
+embedded inputs would exceed the 1 GiB limit, the export stops with an error
+instead of writing a project with broken links. The archive is written next to
+its destination and moved into place only when complete. See the
 [bundle exporter](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/supporting.rs).
 
 [![Full publication editor showing a vector Cu fit figure and output controls](/screenshots/0.2.11/publication.jpg)](/screenshots/0.2.11/publication.jpg)
