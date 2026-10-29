@@ -135,7 +135,7 @@ Gaussian uses the axis units for its width, and fractional Hanning uses
 dimensionless fractions.
 See the [window conventions](/docs/science/processing/#4-transform-from-k-to-r).
 
-**Desktop, unreleased:** new FEFF models follow each spectrum's processing
+**Desktop, from 0.2.15:** new FEFF models follow each spectrum's processing
 k-window family, `dk` and `dk2`, independently of k-weight following. The fit
 uses Kaiser–Bessel with `dk = 1` and `dk2 = None` when processing is Auto. It
 retains its own k/R limits and explicit R filter. Custom settings override
@@ -144,7 +144,7 @@ Each dataset of a joint fit and each independent batch frame resolves its own
 processing settings. History snapshots the effective transform, and reports
 describe that snapshot. An older history entry without a transform uses the
 historical window defaults and labels them as reconstructed. See
-[fit windows](/docs/desktop/fitting/#fit-windows-in-the-development-build).
+[fit windows](/docs/desktop/fitting/#fit-windows).
 
 The Rust fit API uses a supplied per-weight `epsilon_ks` entry, then scalar
 `epsilon_k`, then **1.0** as its k-space residual divisor. It does not estimate

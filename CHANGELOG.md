@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.2.15 (release preparation)
+## 0.2.15 (2026-10-29)
 
 - Update apex-solver to 1.5. EXAFS fit bounds are still enforced by rexafs
   itself, so fit results are unchanged. apex-io 0.4 no longer pulls in zstd,

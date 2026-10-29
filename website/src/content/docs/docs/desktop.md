@@ -26,7 +26,7 @@ Normalization, background removal and transforms run automatically when an
 absorption spectrum loads or its processing settings change. Selecting a stage
 changes the display and controls.
 
-*Unreleased (after 0.2.14):* the former **Normalize**, **Background** and
+*From 0.2.15:* the former **Normalize**, **Background** and
 **Transform** stages are merged into one **Process** stage, so the stage bar has
 five stages. Releases up to 0.2.14 show seven stages, and the screenshots on
 these pages were made with those releases. Selecting a thumbnail in the Data

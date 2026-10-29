@@ -18,19 +18,19 @@ analysis folder before closing to retain the journal. Saved derived-operation
 provenance, fit history and completed Assistant conversations have separate
 retention rules.
 
-**Unreleased:** macOS Dock activation focuses or recreates the analysis window.
+**From 0.2.15:** macOS Dock activation focuses or recreates the analysis window.
 Opening an `.rxs` file from Finder uses the ordinary project loader and prompts
 to save unsaved work before replacing it. See the
-[native open handling](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/main.rs).
+[native open handling](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/main.rs).
 
 ## Raw data: paths or embedded originals
 
 Choose **Save project**, then **Include source files** or **Link source files**.
 The selected mode is recorded in the project and also applies to
-**Export analysis folder**. **Unreleased:** each Save project dialog starts with
+**Export analysis folder**. **From 0.2.15:** each Save project dialog starts with
 **Include source files** selected, including after opening a linked project;
 choose links explicitly when needed. See the
-[save dialog](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/app/shell/chrome.rs).
+[save dialog](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/app/shell/chrome.rs).
 
 | Mode | Contents | Moving or sharing |
 |---|---|---|
@@ -65,13 +65,13 @@ Processed spectra are recomputed on reopening. Derived spectra retain full
 energy and μ arrays in both modes. Historical fit statistics, models, result
 curves and exact transform settings (k/R windows, window families and taper
 widths) are saved, so **Publish** can export a reopened project's fits without
-a refit. **Unreleased:** the fit displayed when you saved reopens in
+a refit. **From 0.2.15:** the fit displayed when you saved reopens in
 **Fit → Results**, including a result that already needed an update. Its saved
 **Needs update** warning remains visible; previously current results are checked
 against the restored spectrum, processing settings and model. Retained fit curves
 can be viewed and published even when original source files are missing.
-See the [project result fields](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/project.rs)
-and [project restoration](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/app.rs).
+See the [project result fields](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/project.rs)
+and [project restoration](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/app.rs).
 Projects saved by older releases still open; their fits keep statistics and
 models, and their curves return after a refit.
 Embedded mode excludes unrelated workspace files and executables/backends.
@@ -79,21 +79,23 @@ Embedded mode excludes unrelated workspace files and executables/backends.
 adds processed arrays, available fit arrays and captioned figures/tables beside
 `project.rxs`.
 
-## Merge saved spectra (unreleased)
+<a id="merge-saved-spectra-unreleased"></a>
 
-Mark at least two compatible saved groups and choose **Merge**. Groups whose
+## Merge saved spectra
+
+From 0.2.15, mark at least two compatible saved groups and choose **Merge**. Groups whose
 arrays are stored in the project use recorded measurement-channel evidence to
 distinguish sample and reference spectra. Merging these groups does not require
 their original source path when that evidence is sufficient. Missing or
 ambiguous channel evidence is reported, and the usual quantity, edge and
 energy-overlap checks still apply. See the
-[merge implementation](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/app/merge.rs).
+[merge implementation](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/app/merge.rs).
 
 To use the new merged group as an alignment standard immediately, select the
 spectrum to align, choose **Align current → Choose standard**, and select the
 merged result. Review the preview and choose **Apply offset** without reopening
 the project. See the
-[alignment controls](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/app/shell/tools.rs).
+[alignment controls](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/app/shell/tools.rs).
 
 ## File information and limits
 
