@@ -945,22 +945,24 @@ pub fn build_quadrant_specs(
         }
         // Back-FT R window on |chi(R)|, scaled to the data like the k window.
         // `rwin` is on the full transform grid; the displayed R grid is its
-        // leading part with the same spacing.
+        // leading part with the same spacing. It includes the R^w weighting,
+        // which is divided out so the plot shows the window shape alone.
         if view.show_rwin
-            && let (Some(r), Some(rwin), Some(mag)) = (
-                active.sp.r(),
-                active.sp.xftr.as_ref().and_then(|f| f.get_rwin()),
-                active.sp.chir_mag(),
-            )
+            && let (Some(r), Some(xftr), Some(mag)) =
+                (active.sp.r(), active.sp.xftr.as_ref(), active.sp.chir_mag())
+            && let Some(rwin) = xftr.get_rwin()
         {
-            let peak = mag.iter().fold(0.0f64, |m, v| m.max(v.abs())).max(1e-12);
-            let top = rwin.iter().fold(0.0f64, |m, v| m.max(v.abs())).max(1e-12);
+            let weight = xftr.rweight.unwrap_or(0.0);
             let n = r.len().min(rwin.len());
-            let y: Vec<f64> = rwin
-                .iter()
-                .take(n)
-                .map(|w| w / top * peak + chir_shift)
+            let shape: Vec<f64> = (0..n)
+                .map(|i| match weight > 0.0 && r[i] > 0.0 {
+                    true => rwin[i] / r[i].powf(weight),
+                    false => rwin[i],
+                })
                 .collect();
+            let peak = mag.iter().fold(0.0f64, |m, v| m.max(v.abs())).max(1e-12);
+            let top = shape.iter().fold(0.0f64, |m, v| m.max(v.abs())).max(1e-12);
+            let y: Vec<f64> = shape.iter().map(|w| w / top * peak + chir_shift).collect();
             chi_r.series.push(dashed(
                 SeriesKey::Rwin,
                 r.iter().take(n).copied().collect(),
