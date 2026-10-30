@@ -1,4 +1,6 @@
 path,audience,website_action,proposed_route,notes
+doc/release-notes-0.2.16.md,user,adapt,/releases/,0.2.16 preparation notes; publish release claims only after artifact verification.
+doc/validation/2026-10-30-release-0.2.16/review.md,developer,exclude,,0.2.16 source and artifact qualification record; preserve pending gates.
 doc/release-notes-0.2.15.md,user,adapt,/releases/,Published 0.2.15 changes and links to completed artifact qualification.
 doc/validation/2026-10-29-release-0.2.15/review.md,developer,exclude,,Published 0.2.15 source and artifact qualification.
 doc/release-notes-0.2.14.md,user,adapt,/releases/,Published 0.2.14 changes and links to completed artifact qualification.
