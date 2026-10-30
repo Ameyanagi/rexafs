@@ -138,6 +138,8 @@ pub struct ViewOptions {
     /// chi(k) quadrant: FFT k-range lines and the FT window curve.
     pub show_krange: bool,
     pub show_kwin: bool,
+    /// |chi(R)| quadrant: the back-transform R window curve.
+    pub show_rwin: bool,
     /// |chi(R)| quadrant: also plot Re[chi(R)] of the active trace.
     pub show_re: bool,
     pub show_im: bool,
@@ -165,6 +167,7 @@ impl Default for ViewOptions {
             flat: true,
             show_krange: false,
             show_kwin: false,
+            show_rwin: false,
             show_re: false,
             show_im: false,
             show_bkg: false,
@@ -278,6 +281,7 @@ pub enum SeriesKey {
     Bkg,
     Deriv,
     Kwin,
+    Rwin,
     Re,
     Im,
     /// k-weighted chi(k) drawn under chi(q).
@@ -897,6 +901,23 @@ pub fn build_quadrant_specs(
                 .collect();
             let peak = d.iter().fold(0.0f64, |acc, v| acc.max(v.abs())).max(1e-12);
             let y: Vec<f64> = d.iter().map(|v| v / peak * 0.5).collect();
+            // The same scaled derivative on measured μ(E), in its own units:
+            // half the edge step above the pre-edge line at E₀.
+            if let (Some(pre), Some(post), Some(e0)) =
+                (active.sp.pre_edge(), active.sp.post_edge(), active.sp.e0())
+            {
+                let i0 = e[..m].partition_point(|&x| x < e0).min(m - 1);
+                let base = pre[i0];
+                let step = post[i0] - pre[i0];
+                let raw: Vec<f64> = y.iter().map(|v| base + v * step + mu_shift).collect();
+                mu_e.series.push(dashed(
+                    SeriesKey::Deriv,
+                    e[..m].to_vec(),
+                    raw,
+                    GUIDE,
+                    "dμ/dE (scaled)",
+                ));
+            }
             norm.series.push(dashed(
                 SeriesKey::Deriv,
                 e[..m].to_vec(),
@@ -921,6 +942,34 @@ pub fn build_quadrant_specs(
             chi_k
                 .series
                 .push(dashed(SeriesKey::Kwin, x[..n].to_vec(), y, TREND, "window"));
+        }
+        // Back-FT R window on |chi(R)|, scaled to the data like the k window.
+        // `rwin` is on the full transform grid; the displayed R grid is its
+        // leading part with the same spacing. It includes the R^w weighting,
+        // which is divided out so the plot shows the window shape alone.
+        if view.show_rwin
+            && let (Some(r), Some(xftr), Some(mag)) =
+                (active.sp.r(), active.sp.xftr.as_ref(), active.sp.chir_mag())
+            && let Some(rwin) = xftr.get_rwin()
+        {
+            let weight = xftr.rweight.unwrap_or(0.0);
+            let n = r.len().min(rwin.len());
+            let shape: Vec<f64> = (0..n)
+                .map(|i| match weight > 0.0 && r[i] > 0.0 {
+                    true => rwin[i] / r[i].powf(weight),
+                    false => rwin[i],
+                })
+                .collect();
+            let peak = mag.iter().fold(0.0f64, |m, v| m.max(v.abs())).max(1e-12);
+            let top = shape.iter().fold(0.0f64, |m, v| m.max(v.abs())).max(1e-12);
+            let y: Vec<f64> = shape.iter().map(|w| w / top * peak + chir_shift).collect();
+            chi_r.series.push(dashed(
+                SeriesKey::Rwin,
+                r.iter().take(n).copied().collect(),
+                y,
+                TREND,
+                "window",
+            ));
         }
         if view.show_krange
             && let Some(xftf) = active.sp.xftf.as_ref()

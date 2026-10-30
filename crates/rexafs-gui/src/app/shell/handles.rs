@@ -435,17 +435,33 @@ impl StudioApp {
             return (Vec::new(), Vec::new());
         }
         // Each plot lists its primary handles first: on a tie in distance
-        // the earlier handle arms (E₀ before a spline k-min at E₀).
+        // the earlier handle arms (E₀ before a spline k-min at E₀). A focused
+        // step shows only its own ranges.
+        use super::ProcessFocus::{BackFt, Background, ForwardFt, Normalize};
+        let focus = self.stage_view.process_focus;
+        let shows = |step| focus.is_none_or(|f| f == step);
         let parts = match plot {
             PLOT_MU => vec![
-                self.normalization_handles(sp),
-                self.spline_k_handles(plot, sp),
+                (Normalize, self.normalization_handles(sp)),
+                (Background, self.spline_k_handles(plot, sp)),
             ],
-            PLOT_NORM => vec![self.normalization_handles(sp)],
-            PLOT_CHIK => vec![self.ft_k_handles(), self.spline_k_handles(plot, sp)],
-            PLOT_CHIR => vec![self.back_ft_r_handles(sp), self.rbkg_handles(sp)],
+            PLOT_NORM => vec![
+                (Normalize, self.normalization_handles(sp)),
+                (Background, self.spline_k_handles(plot, sp)),
+            ],
+            PLOT_CHIK => vec![
+                (ForwardFt, self.ft_k_handles()),
+                (Background, self.spline_k_handles(plot, sp)),
+            ],
+            PLOT_CHIR => vec![
+                (BackFt, self.back_ft_r_handles(sp)),
+                (Background, self.rbkg_handles(sp)),
+            ],
             _ => Vec::new(),
         };
+        let parts = parts
+            .into_iter()
+            .filter_map(|(step, part)| shows(step).then_some(part));
         parts.into_iter().fold(
             (Vec::new(), Vec::new()),
             |(mut specs, mut spans), (more_specs, more_spans)| {
@@ -602,7 +618,7 @@ impl StudioApp {
     /// E₀ for converting the background k handles when `plot` is the
     /// Process stage's μ(E) plot; `None` on k-axis plots.
     fn background_energy_e0(&self, plot: usize) -> Option<f64> {
-        if self.stage != Stage::Process || plot != PLOT_MU {
+        if self.stage != Stage::Process || !matches!(plot, PLOT_MU | PLOT_NORM) {
             return None;
         }
         background_ek0(self.spectrum.as_deref()?)
@@ -971,6 +987,9 @@ impl StudioApp {
             return;
         }
         self.plot_pointer_move(plot, event.position, cx);
+        if let Some(step) = self.pressed_step(plot, event.position) {
+            self.set_process_focus(Some(step), cx);
+        }
         if let Some((p, key)) = self.handles.armed
             && p == plot
         {
@@ -978,6 +997,42 @@ impl StudioApp {
             cx.stop_propagation();
             cx.notify();
         }
+    }
+
+    /// Process step of the handle or shaded range under a press on `plot`,
+    /// so grabbing a pre-edge edge or pressing inside the R window focuses
+    /// that step.
+    fn pressed_step(&self, plot: usize, position: Point<Pixels>) -> Option<super::ProcessFocus> {
+        if self.stage != Stage::Process {
+            return None;
+        }
+        let step = |key: HandleKey| key.param().and_then(super::ProcessFocus::of_param);
+        if let Some((p, key)) = self.handles.armed
+            && p == plot
+        {
+            return step(key);
+        }
+        let area = self.handles.areas.lock().ok()?.get(&plot).copied()?;
+        let y = f32::from(position.y);
+        if y < area.top || y > area.bottom {
+            return None;
+        }
+        let x = area.data_of(f32::from(position.x));
+        let (specs, spans) = self.handle_specs(plot);
+        let value = |key| specs.iter().find(|(k, _)| *k == key).map(|&(_, v)| v);
+        spans.iter().find_map(|span| {
+            let lo = span.lo.map_or(Some(span.fixed_lo), value)?;
+            let hi = span.hi.map_or(Some(area.data_x1), value)?;
+            (lo..=hi)
+                .contains(&x)
+                .then_some(span.hi.or(span.lo))
+                .flatten()
+                .and_then(step)
+        })
+    }
+
+    pub(crate) fn dragging_e0(&self) -> bool {
+        matches!(self.handles.dragging, Some((_, HandleKey::E0)))
     }
 
     fn apply_handle_drag(&mut self, key: HandleKey, x: f64, cx: &mut Context<Self>) {
@@ -1259,6 +1314,10 @@ impl StudioApp {
             // between throttle ticks (a cache hit when it did not).
             if key.param().is_some() {
                 self.schedule_recompute(cx);
+            }
+            // The XANES view held still during an E₀ drag; centre it now.
+            if key == HandleKey::E0 {
+                self.stage_view_changed(cx);
             }
             cx.notify();
         }

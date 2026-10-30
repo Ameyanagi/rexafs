@@ -149,15 +149,25 @@ impl Stage {
         matches!(self, Stage::Data | Stage::Process)
     }
 
-    /// Limit fitted overlays to the Process stage without clearing the user's
-    /// toggle preferences, so returning to Process restores them.
+    /// Limit fitted overlays to the Process stage, and within it to the
+    /// focused step, without clearing the user's toggle preferences, so
+    /// returning to Process or to All restores them.
     pub(crate) fn plot_options(
         self,
         mut view: crate::plotting::ViewOptions,
+        focus: Option<ProcessFocus>,
     ) -> crate::plotting::ViewOptions {
-        view.show_pre &= self == Self::Process;
-        view.show_post &= self == Self::Process;
-        view.show_bkg &= self == Self::Process;
+        let shows = |step| self == Self::Process && focus.is_none_or(|f| f == step);
+        view.show_pre &= shows(ProcessFocus::Normalize);
+        view.show_post &= shows(ProcessFocus::Normalize);
+        view.show_bkg &= shows(ProcessFocus::Background);
+        // dμ/dE is an E₀ guide; Data keeps it, Process shows it with Normalize.
+        if self == Self::Process {
+            view.show_deriv &= shows(ProcessFocus::Normalize);
+        }
+        // Window draws the k window on χ(k) and the R window on |χ(R)|.
+        view.show_rwin = view.show_kwin && shows(ProcessFocus::BackFt);
+        view.show_kwin &= focus.is_none_or(|f| f == ProcessFocus::ForwardFt);
         view
     }
 }
@@ -214,6 +224,116 @@ impl ProcessSection {
     }
 }
 
+/// The Process step whose ranges and fitted curves the linked plots show;
+/// `None` in [`StageView::process_focus`] shows every step. The Transform
+/// section has two steps: the forward FT (k window on χ(k)) and the back FT
+/// (R window on |χ(R)|).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ProcessFocus {
+    Normalize,
+    Background,
+    ForwardFt,
+    BackFt,
+}
+
+impl ProcessFocus {
+    pub const ALL: [ProcessFocus; 4] = [
+        ProcessFocus::Normalize,
+        ProcessFocus::Background,
+        ProcessFocus::ForwardFt,
+        ProcessFocus::BackFt,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Normalize => "Normalize",
+            Self::Background => "Background",
+            Self::ForwardFt => "Forward FT",
+            Self::BackFt => "Back FT",
+        }
+    }
+
+    /// Step to focus when a section is opened; Transform starts at the
+    /// forward FT.
+    pub fn of_section(section: ProcessSection) -> Self {
+        match section {
+            ProcessSection::Normalize => Self::Normalize,
+            ProcessSection::Background => Self::Background,
+            ProcessSection::Transform => Self::ForwardFt,
+        }
+    }
+
+    /// Step an edited parameter belongs to; import and alignment fields have
+    /// none and leave the focus unchanged.
+    pub(crate) fn of_param(key: crate::app::ParamKey) -> Option<Self> {
+        use crate::app::ParamKey as K;
+        Some(match key {
+            K::E0
+            | K::EdgeStep
+            | K::PreEdgeStart
+            | K::PreEdgeEnd
+            | K::NormStart
+            | K::NormEnd
+            | K::NormPolyorder
+            | K::NVictoreen => Self::Normalize,
+            K::Rbkg
+            | K::BkgKmin
+            | K::BkgKmax
+            | K::BkgKstep
+            | K::BkgNknots
+            | K::BkgKweight
+            | K::BkgClampLo
+            | K::BkgClampHi
+            | K::BkgNclamp
+            | K::BkgClampLambda
+            | K::BkgDk
+            | K::BkgNfft
+            | K::BkgEk0
+            | K::BkgRegularization
+            | K::BkgCondition
+            | K::BkgResidualRatio => Self::Background,
+            K::FftKmin
+            | K::FftKmax
+            | K::FftDk
+            | K::FftKweight
+            | K::FftDk2
+            | K::FftRmax
+            | K::FftKstep
+            | K::FftNfft => Self::ForwardFt,
+            K::BftRmin
+            | K::BftRmax
+            | K::BftDr
+            | K::BftQmax
+            | K::BftDr2
+            | K::BftRweight
+            | K::BftKstep
+            | K::BftNfft => Self::BackFt,
+            K::ImpEnergyCol
+            | K::ImpI0Col
+            | K::ImpItCol
+            | K::ImpIrCol
+            | K::AlignTarget
+            | K::EnergyOffset => return None,
+        })
+    }
+
+    /// Step an enum-valued parameter belongs to.
+    pub(crate) fn of_enum(which: crate::app::EnumParam) -> Option<Self> {
+        use crate::app::EnumParam as E;
+        Some(match which {
+            E::BkgWindow
+            | E::BkgSolver
+            | E::BkgClampPolicy
+            | E::BkgFallback
+            | E::BkgCache
+            | E::BkgFallbackSolver => Self::Background,
+            E::FftWindow | E::FftGrid => Self::ForwardFt,
+            E::BftWindow => Self::BackFt,
+            E::ImportMode => return None,
+        })
+    }
+}
+
 /// Which groups the stage plots show (Athena: current vs marked).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PlotScope {
@@ -255,6 +375,8 @@ pub struct StageView {
     pub fit_show_im: bool,
     pub fit_show_batch: bool,
     pub series_space: crate::app::SeriesSpace,
+    /// Process step shown on the linked plots; `None` shows all steps.
+    pub process_focus: Option<ProcessFocus>,
 }
 
 impl Default for StageView {
@@ -273,6 +395,7 @@ impl Default for StageView {
             fit_show_im: false,
             fit_show_batch: false,
             series_space: crate::app::SeriesSpace::Flat,
+            process_focus: None,
         }
     }
 }
@@ -455,6 +578,7 @@ impl StudioApp {
     ) {
         self.set_stage(Stage::Process, cx);
         self.ui.sections.remove(section.collapsed_key());
+        self.set_process_focus(Some(ProcessFocus::of_section(section)), cx);
         self.set_side_panel_visible(assistant_shell::SidePanel::Inspector, true);
         self.inspector_scroll.scroll_to_top_of_item(section.index());
         cx.notify();
@@ -470,6 +594,33 @@ impl StudioApp {
     ) {
         self.root_focus.focus(window, cx);
         self.focus_process_section(section, cx);
+    }
+
+    /// Show only `focus`'s ranges and fitted curves on the linked plots
+    /// (`None` shows every step). Set from the plot bar, and automatically
+    /// when a section is opened or one of its parameters is edited.
+    pub(crate) fn set_process_focus(
+        &mut self,
+        focus: Option<ProcessFocus>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.stage_view.process_focus != focus {
+            self.stage_view.process_focus = focus;
+            self.stage_view_changed(cx);
+        }
+    }
+
+    /// A press anywhere in a Process section focuses its step. Transform
+    /// keeps an existing Forward/Back FT focus; its two parts set their own.
+    pub(crate) fn focus_section_press(&mut self, section: ProcessSection, cx: &mut Context<Self>) {
+        let keep = section == ProcessSection::Transform
+            && matches!(
+                self.stage_view.process_focus,
+                Some(ProcessFocus::ForwardFt | ProcessFocus::BackFt)
+            );
+        if !keep {
+            self.set_process_focus(Some(ProcessFocus::of_section(section)), cx);
+        }
     }
 
     /// Stage view options feed the explore plot builders; changing them
@@ -778,6 +929,56 @@ impl StudioApp {
 #[cfg(test)]
 mod plot_overlay_tests {
     #[test]
+    fn process_focus_shows_only_the_focused_steps_fitted_curves() {
+        use super::{ProcessFocus, Stage, Theme};
+        use crate::params::{PipelineParams, process_file};
+        use crate::plotting::{QuadTrace, SeriesKey, ViewOptions, build_quadrant_specs};
+        use std::{path::Path, sync::Arc};
+        let file =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/projects/data/cu_150k.xmu");
+        let traces = [QuadTrace {
+            color_index: 0,
+            color: None,
+            label: "Experimental Cu".into(),
+            sp: Arc::new(process_file(&file, &PipelineParams::default()).unwrap()),
+            active: true,
+        }];
+        let preferences = ViewOptions {
+            show_pre: true,
+            show_post: true,
+            show_bkg: true,
+            show_kwin: true,
+            show_deriv: true,
+            ..Default::default()
+        };
+        // (focus, pre-/post-edge lines and dμ/dE, AUTOBK spline, k window, R window)
+        for (focus, pre, bkg, kwin, rwin) in [
+            (None, true, true, true, true),
+            (Some(ProcessFocus::Normalize), true, false, false, false),
+            (Some(ProcessFocus::Background), false, true, false, false),
+            (Some(ProcessFocus::ForwardFt), false, false, true, false),
+            (Some(ProcessFocus::BackFt), false, false, false, true),
+        ] {
+            let view = Stage::Process.plot_options(preferences, focus);
+            let specs = build_quadrant_specs(&traces, &view, &Theme::dark(), true);
+            // dμ/dE is drawn on measured μ(E) as well as normalized μ(E).
+            for spec in &specs[..2] {
+                let deriv = spec.series.iter().any(|s| s.key == SeriesKey::Deriv);
+                assert_eq!(deriv, pre, "{focus:?}");
+            }
+            let keys = specs
+                .into_iter()
+                .flat_map(|spec| spec.series.into_iter().map(|s| s.key))
+                .collect::<Vec<_>>();
+            assert_eq!(keys.contains(&SeriesKey::PreEdge), pre, "{focus:?}");
+            assert_eq!(keys.contains(&SeriesKey::PostEdge), pre, "{focus:?}");
+            assert_eq!(keys.contains(&SeriesKey::Bkg), bkg, "{focus:?}");
+            assert_eq!(keys.contains(&SeriesKey::Kwin), kwin, "{focus:?}");
+            assert_eq!(keys.contains(&SeriesKey::Rwin), rwin, "{focus:?}");
+        }
+    }
+
+    #[test]
     fn fitted_overlays_follow_stage_and_restore_on_return() {
         use super::{Stage, Theme};
         use crate::params::{PipelineParams, process_file};
@@ -809,7 +1010,7 @@ mod plot_overlay_tests {
             }];
             // Every stage, then Process again: the preferences survive.
             for stage in Stage::ALL.into_iter().chain([Stage::Process]) {
-                let visible = stage.plot_options(preferences);
+                let visible = stage.plot_options(preferences, None);
                 let specs = quantity_quadrant_specs(
                     &traces,
                     &visible,
@@ -830,12 +1031,15 @@ mod plot_overlay_tests {
                     assert_eq!(keys, [SeriesKey::Trace(0)]);
                 } else {
                     // Turning Spline and Pre/post off leaves no hidden fit.
-                    let hidden = stage.plot_options(ViewOptions {
-                        show_bkg: false,
-                        show_pre: false,
-                        show_post: false,
-                        ..preferences
-                    });
+                    let hidden = stage.plot_options(
+                        ViewOptions {
+                            show_bkg: false,
+                            show_pre: false,
+                            show_post: false,
+                            ..preferences
+                        },
+                        None,
+                    );
                     assert_eq!(
                         build_quadrant_specs(&traces, &hidden, &Theme::dark(), true)[0]
                             .series
@@ -851,7 +1055,7 @@ mod plot_overlay_tests {
 
 #[cfg(test)]
 mod stage_tests {
-    use super::{ProcessSection, Stage};
+    use super::{ProcessFocus, ProcessSection, Stage};
 
     #[test]
     fn five_stages_are_numbered_in_pipeline_order() {
@@ -900,5 +1104,36 @@ mod stage_tests {
         for (i, section) in ProcessSection::ALL.into_iter().enumerate() {
             assert_eq!(section.index(), i);
         }
+    }
+
+    #[test]
+    fn edited_parameters_focus_their_process_step() {
+        use crate::app::{EnumParam, ParamKey};
+        assert_eq!(
+            ProcessFocus::of_param(ParamKey::E0),
+            Some(ProcessFocus::Normalize)
+        );
+        assert_eq!(
+            ProcessFocus::of_param(ParamKey::Rbkg),
+            Some(ProcessFocus::Background)
+        );
+        assert_eq!(
+            ProcessFocus::of_param(ParamKey::FftKmax),
+            Some(ProcessFocus::ForwardFt)
+        );
+        assert_eq!(
+            ProcessFocus::of_param(ParamKey::BftRmax),
+            Some(ProcessFocus::BackFt)
+        );
+        assert_eq!(ProcessFocus::of_param(ParamKey::EnergyOffset), None);
+        assert_eq!(
+            ProcessFocus::of_enum(EnumParam::BftWindow),
+            Some(ProcessFocus::BackFt)
+        );
+        assert_eq!(ProcessFocus::of_enum(EnumParam::ImportMode), None);
+        assert_eq!(
+            ProcessFocus::of_section(ProcessSection::Transform),
+            ProcessFocus::ForwardFt
+        );
     }
 }
