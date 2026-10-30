@@ -1,8 +1,9 @@
 # rexafs 0.2.16
 
-Release preparation for focused Process plots and a still XANES view while E₀
-is dragged. Publication requires the final tagged build, signed Mac artifacts
-and package verification described in the
+Published on 31 October 2026 in Japan (30 October UTC), with focused Process
+plots and a still XANES view while E₀ is dragged. The tagged build, signed Mac
+artifacts, installed-DMG checks and public package verification passed. See the
+[downloads](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.16) and
 [qualification record](validation/2026-10-30-release-0.2.16/review.md).
 
 ## Process plot focus
