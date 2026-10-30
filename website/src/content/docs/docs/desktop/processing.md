@@ -89,6 +89,21 @@ back-transform R minimum, can each be grabbed:
 | Forward-FT k window (blue, shaded) | χ(k) |
 | Back-FT R window (blue, shaded) and $R_\mathrm{bkg}$ (yellow, shading $R < R_\mathrm{bkg}$) | χ(R) magnitude |
 
+**Unreleased:** **Focus** in the plot bar limits the linked plots to one step:
+**All**, **Normalize**, **Background**, **Forward FT** or **Back FT**. A focused
+step shows only its own ranges, handles and fitted curves from the table above:
+Normalize keeps the pre-/post-edge lines, Background the spline, and Forward FT
+the window curve. Back FT shows only its R window. Focus follows your work:
+opening a section or editing one of its values selects its step, and Transform
+starts at Forward FT. Choose **All** to see every step again. Focus changes the
+display only; processing settings and results are unchanged.
+
+**Unreleased:** the **XANES** and **−200…+800** views are positioned relative to
+$E_0$. Changing $E_0$ of the same group, for example by dragging its line, no
+longer moves the view, so the line moves over a still spectrum. The view
+re-centres on the new $E_0$ after you choose a view preset, select another
+group, or set $E_0$ outside the visible window.
+
 For a group with a XANES-only fluorescence self-absorption correction, Process
 shows only the two μ(E) plots with a notice, and the Background and Transform
 sections show the XANES-only notice; see

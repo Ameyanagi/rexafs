@@ -176,6 +176,21 @@ pub(crate) enum ParamSection {
     Fft,
 }
 
+/// Centre of a relative energy view such as XANES (E₀ − 20 … E₀ + 80 eV).
+/// The view stays where it was while E₀ of the same group changes inside it;
+/// another group, or an E₀ outside the window, centres it on the new E₀.
+fn energy_view_center(
+    anchor: Option<(Option<usize>, f64)>,
+    group: Option<usize>,
+    e0: f64,
+    (lo, hi): (f64, f64),
+) -> f64 {
+    match anchor {
+        Some((g, center)) if g == group && (center + lo..=center + hi).contains(&e0) => center,
+        _ => e0,
+    }
+}
+
 /// The two group kinds share the same override semantics.
 fn store_custom_params(
     catalog_len: usize,
@@ -1377,6 +1392,9 @@ pub struct StudioApp {
     legend_entries: Vec<(SharedString, gpui::Rgba)>,
     mixed_overlay_weight: Option<f64>,
     maximized: Option<usize>,
+    /// Group and E₀ the relative energy view is centred on. Editing E₀
+    /// keeps this centre, so the plot does not slide under the E₀ handle.
+    energy_view_anchor: Option<(Option<usize>, f64)>,
     file_scroll: UniformListScrollHandle,
     expanded_sources: BTreeMap<crate::group_identity::GroupId, bool>,
     groups_resize: Option<(gpui::Pixels, f32)>,
@@ -1746,9 +1764,30 @@ fn should_rebuild_explore(workspace: Workspace, dirty: &mut bool, invalidated: b
 #[cfg(test)]
 mod thin_tests {
     use super::{
-        ChikRowKey, RetainedChikSeries, Workspace, catalog_row_index, frame_from_data_y,
-        frame_from_heatmap_position, scan_entry_offset, should_rebuild_explore,
+        ChikRowKey, RetainedChikSeries, Workspace, catalog_row_index, energy_view_center,
+        frame_from_data_y, frame_from_heatmap_position, scan_entry_offset, should_rebuild_explore,
     };
+
+    #[test]
+    fn xanes_view_stays_put_while_e0_moves_within_it() {
+        let xanes = (-20.0, 80.0);
+        // First view, and a new group, centre on E₀.
+        assert_eq!(energy_view_center(None, Some(0), 8979.0, xanes), 8979.0);
+        assert_eq!(
+            energy_view_center(Some((Some(0), 8979.0)), Some(1), 8990.0, xanes),
+            8990.0
+        );
+        // Dragging E₀ inside the window keeps the window where it was.
+        assert_eq!(
+            energy_view_center(Some((Some(0), 8979.0)), Some(0), 8985.5, xanes),
+            8979.0
+        );
+        // An E₀ outside the window recentres it.
+        assert_eq!(
+            energy_view_center(Some((Some(0), 8979.0)), Some(0), 9100.0, xanes),
+            9100.0
+        );
+    }
 
     #[test]
     fn energy_frame_updates_preserve_norm_flat_and_exact_frame_identity() {
@@ -3439,6 +3478,7 @@ impl StudioApp {
             legend_entries: Vec::new(),
             mixed_overlay_weight: None,
             maximized: None,
+            energy_view_anchor: None,
             file_scroll: UniformListScrollHandle::new(),
             expanded_sources: BTreeMap::new(),
             groups_resize: None,
@@ -4618,6 +4658,11 @@ impl StudioApp {
         if self.refuse_frozen_edit(cx) {
             return;
         }
+        if self.stage == Stage::Process
+            && let Some(focus) = shell::ProcessFocus::of_param(key)
+        {
+            self.set_process_focus(Some(focus), cx);
+        }
         let target = self.override_target();
         let before = self.ui_params().clone();
         let p = self.edit_params();
@@ -4763,6 +4808,11 @@ impl StudioApp {
     fn set_enum_param(&mut self, which: EnumParam, index: usize, cx: &mut Context<Self>) {
         let variant = index.checked_sub(1);
         self.open_enum = None;
+        if self.stage == Stage::Process
+            && let Some(focus) = shell::ProcessFocus::of_enum(which)
+        {
+            self.set_process_focus(Some(focus), cx);
+        }
         if which == EnumParam::ImportMode {
             self.edit_parameters(format!("{which:?} = option {index}"), cx, |params| {
                 params.import.mode = variant
@@ -6511,15 +6561,20 @@ impl StudioApp {
         let in_plot_legend = self.maximized.is_some();
         let mut specs = crate::plotting::quantity_quadrant_specs(
             &traces,
-            &self.stage.plot_options(self.view),
+            &self
+                .stage
+                .plot_options(self.view, self.stage_view.process_focus),
             &self.theme,
             in_plot_legend,
             self.processing_plot_quantity(),
         );
         if let Some((lo, hi)) = self.view.energy_view_range {
             if let Some(e0) = self.spectrum.as_ref().and_then(|sp| sp.e0()) {
+                let group = self.current_group_index();
+                let center = energy_view_center(self.energy_view_anchor, group, e0, (lo, hi));
+                self.energy_view_anchor = Some((group, center));
                 for spec in specs.iter_mut().take(2) {
-                    spec.xlim = Some((e0 + lo, e0 + hi));
+                    spec.xlim = Some((center + lo, center + hi));
                 }
             }
         }

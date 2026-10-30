@@ -655,7 +655,9 @@ impl StudioApp {
                 .child(summary),
         )
         .on_click(cx.listener(move |app, _, _, cx| {
-            if !app.ui.sections.remove(key) {
+            if app.ui.sections.remove(key) {
+                app.set_process_focus(Some(super::ProcessFocus::of_section(section)), cx);
+            } else {
                 app.ui.sections.insert(key);
             }
             cx.notify();

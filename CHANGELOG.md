@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Process: **Focus** in the plot bar (All, Normalize, Background, Forward FT,
+  Back FT) shows only one step's ranges and fitted curves on the linked plots.
+  It follows the section you open or edit.
+- Dragging or editing E₀ in the XANES view no longer moves the view, so the
+  E₀ line moves over a still spectrum instead of the spectrum sliding under it.
+
 ## 0.2.15 (2026-10-29)
 
 - Update apex-solver to 1.5. EXAFS fit bounds are still enforced by rexafs

@@ -435,17 +435,30 @@ impl StudioApp {
             return (Vec::new(), Vec::new());
         }
         // Each plot lists its primary handles first: on a tie in distance
-        // the earlier handle arms (E₀ before a spline k-min at E₀).
+        // the earlier handle arms (E₀ before a spline k-min at E₀). A focused
+        // step shows only its own ranges.
+        use super::ProcessFocus::{BackFt, Background, ForwardFt, Normalize};
+        let focus = self.stage_view.process_focus;
+        let shows = |step| focus.is_none_or(|f| f == step);
         let parts = match plot {
             PLOT_MU => vec![
-                self.normalization_handles(sp),
-                self.spline_k_handles(plot, sp),
+                (Normalize, self.normalization_handles(sp)),
+                (Background, self.spline_k_handles(plot, sp)),
             ],
-            PLOT_NORM => vec![self.normalization_handles(sp)],
-            PLOT_CHIK => vec![self.ft_k_handles(), self.spline_k_handles(plot, sp)],
-            PLOT_CHIR => vec![self.back_ft_r_handles(sp), self.rbkg_handles(sp)],
+            PLOT_NORM => vec![(Normalize, self.normalization_handles(sp))],
+            PLOT_CHIK => vec![
+                (ForwardFt, self.ft_k_handles()),
+                (Background, self.spline_k_handles(plot, sp)),
+            ],
+            PLOT_CHIR => vec![
+                (BackFt, self.back_ft_r_handles(sp)),
+                (Background, self.rbkg_handles(sp)),
+            ],
             _ => Vec::new(),
         };
+        let parts = parts
+            .into_iter()
+            .filter_map(|(step, part)| shows(step).then_some(part));
         parts.into_iter().fold(
             (Vec::new(), Vec::new()),
             |(mut specs, mut spans), (more_specs, more_spans)| {
