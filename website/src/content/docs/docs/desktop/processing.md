@@ -4,8 +4,7 @@ description: "Use normalization, AUTOBK, forward and inverse transforms."
 audience: user
 ---
 
-This guide describes **rexafs 0.2.14** and the unreleased **Process** stage that
-follows it. Screenshots identify the version that produced them and use public
+This guide describes **rexafs 0.2.15**. Screenshots identify the version that produced them and use public
 Cu measurements; those made before the Process stage show the separate
 Normalize, Background and Transform stages of 0.2.14 and earlier. They are
 full, unedited windows; select an image for full resolution. See
@@ -42,7 +41,7 @@ This full unedited window uses the public room-temperature Cu measurement;
 
 ## The Process stage
 
-*Unreleased (after 0.2.14):* normalization, background removal and Fourier
+From 0.2.15, normalization, background removal and Fourier
 transforms share one **Process** stage (Cmd/Ctrl+2). In 0.2.14 and earlier they
 were three separate stages, **Normalize**, **Background** and **Transform**.
 
@@ -89,6 +88,27 @@ back-transform R minimum, can each be grabbed:
 | AUTOBK spline k range (yellow edges) | χ(k), and the measured μ(E) plot at the energy $E_0 + k^2/\mathrm{ETOK}$, where $\mathrm{ETOK} = 2m_e/\hbar^2 \approx 0.2625$ Å⁻²/eV (see [Background](#background)) |
 | Forward-FT k window (blue, shaded) | χ(k) |
 | Back-FT R window (blue, shaded) and $R_\mathrm{bkg}$ (yellow, shading $R < R_\mathrm{bkg}$) | χ(R) magnitude |
+
+**Unreleased:** **Focus** in the plot bar limits the linked plots to one step:
+**All**, **Normalize**, **Background**, **Forward FT** or **Back FT**. A focused
+step shows only its own ranges, handles and fitted curves from the table above:
+Normalize keeps the pre-/post-edge lines and dμ/dE, Background the spline and
+its k range (on both μ(E) plots and χ(k)), Forward FT the k window curve and
+Back FT the R window curve. Focus follows your work: pressing anywhere in an
+inspector section, a value in it, a handle or a shaded range on a plot, or the
+**dμ/dE**, **Pre/post**, **Spline** or **Window** button selects the matching
+step. In Transform, the Back FT part selects Back FT and the rest Forward FT.
+Choose **All** to see every step again. Focus changes the display only;
+processing settings and results are unchanged.
+
+**Unreleased:** **dμ/dE** is drawn on the measured μ(E) plot as well as the
+normalized one, scaled to half the edge step. **Window** shows both the forward
+k window on χ(k) and the back-transform R window on |χ(R)|.
+
+**Unreleased:** the **XANES** and **−200…+800** views are positioned relative to
+$E_0$. While you drag the $E_0$ line, the view stays still so the line moves
+over a still spectrum; when you release it, or type a new $E_0$, the view
+re-centres on the new $E_0$.
 
 For a group with a XANES-only fluorescence self-absorption correction, Process
 shows only the two μ(E) plots with a notice, and the Background and Transform
@@ -224,7 +244,7 @@ Auto applies these choices before calling the core library, whose unset fields
 can resolve differently. Retain resolved settings when comparing interfaces or
 other software.
 
-*Unreleased (planned for 0.2.15):* a range that reaches beyond a short scan is
+From 0.2.15, a range that reaches beyond a short scan is
 limited to the measured data when processing runs, following Larch: the pre-edge
 start is raised to the first energy, the post-edge end lowered to the last, and a
 window left without data falls back to Larch's automatic value. An entered value
@@ -233,10 +253,10 @@ an entered field, with one warning per group in the Problems drawer; an Auto fie
 shows the used value in its placeholder. Background k max and the Wavelet k range
 are limited the same way. A reversed range, or one with fewer than two measured
 points, stops processing with an error naming the setting. See
-[processing theory](https://github.com/Ameyanagi/rexafs/blob/dev/doc/processing-theory.md)
+[processing theory](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/doc/processing-theory.md)
 for the exact rules.
 
-*Unreleased (planned for 0.2.15):* the Problems drawer, opened from the status
+From 0.2.15, the Problems drawer, opened from the status
 bar or **Show problems** in the command palette, also lists an unreliable
 normalization, a failed Wavelet map and XANES peak-fit failures or warnings. Each
 kind appears at most once per group, keyed by its full file path, and clears when
@@ -247,7 +267,7 @@ then be wrong by orders of magnitude while the curves still look ordinary. The
 same reasons appear in amber under **Post-edge start**; nothing is
 changed automatically. Widen the post-edge (normalization) range, and check E₀
 and the pre-edge range. See
-[processing theory](https://github.com/Ameyanagi/rexafs/blob/dev/doc/processing-theory.md)
+[processing theory](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/doc/processing-theory.md)
 for the thresholds.
 
 ## Background
@@ -264,8 +284,7 @@ in the [AUTOBK objective](/docs/science/autobk/). Older projects preserve their
 saved clamp policy, so check it before comparing their results with a new project.
 
 **bkg k min** and **bkg k max** set the photoelectron wave-number range, in Å⁻¹,
-over which AUTOBK fits its spline. Drag their handles on χ(k), or, in an
-unreleased build after 0.2.14, on the measured μ(E) plot in Process. The μ(E) handles
+over which AUTOBK fits its spline. Drag their handles on χ(k), or, from 0.2.15, on the measured μ(E) plot in Process. The μ(E) handles
 sit at the photon energy
 
 $$E = E_0 + \frac{\hbar^2 k^2}{2 m_e} \approx E_0 + 3.81\ \text{eV·Å}^2 \times k^2,$$
@@ -278,7 +297,7 @@ background before a feature that is visible in energy, such as a second
 absorption edge inside the scan. The stored value remains $k$, so the energy of
 the cut moves when $E_0$ changes. Handles cannot go below $k=0$ or beyond the
 last measured energy. See the [handle
-conversion](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/app/shell/handles.rs),
+conversion](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/app/shell/handles.rs),
 which uses the core crate's `KTOE`/`ETOK` constants.
 
 **Background options → Load standard…** accepts an optional χ(k) reference.

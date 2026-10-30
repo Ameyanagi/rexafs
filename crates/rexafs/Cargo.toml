@@ -58,7 +58,7 @@ pest_derive = { workspace = true }
 thiserror = { workspace = true }
 ruviz = { workspace = true, optional = true, features = ["svg", "typst-math"] }
 refeff = { workspace = true, optional = true }
-rusqlite = { version = "0.31", features = ["bundled"], optional = true }
+rusqlite = { version = "0.41", features = ["bundled"], optional = true }
 ureq = { version = "3", features = ["json"], optional = true }
 base64 = "0.23.1"
 hdf5-pure = "0.47.0"

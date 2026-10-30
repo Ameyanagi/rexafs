@@ -48,9 +48,11 @@ the selected fitting range.
 
 *R-space fit limits. Full window, rexafs 0.2.11 on macOS; select to enlarge.*
 
-### Fit windows in the development build
+<a id="fit-windows-in-the-development-build"></a>
 
-**Unreleased.** New FEFF models follow the window family and both window
+### Fit windows
+
+From 0.2.15, new FEFF models follow the window family and both window
 parameters from **Process → Transform**. This choice is separate from following
 the processing k-weight. With Process defaults, the k window is Kaiser–Bessel
 with dk = 1 and an automatic second parameter. The fit keeps its own k and R
@@ -109,7 +111,7 @@ For shared variables across spectra, continue with
 ## RMC fitting mode
 
 Version 0.2.10 adds **Fit mode: RMC** at the upper right of Fitting (labelled
-**Method: RMC** in the unreleased development build).
+**Method: RMC** in current releases).
 Choose a structure, edit its supercell with a live 3D preview, inspect the initial exact ReFEFF
 calculation and run coordinate refinement against the processed spectrum.
 The initial objective is R real plus imaginary, with R minimum at or above

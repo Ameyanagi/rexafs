@@ -2,7 +2,19 @@
 
 ## Unreleased
 
-## 0.2.15 (release preparation)
+## 0.2.16 (release preparation)
+
+- Process: **Focus** in the plot bar (All, Normalize, Background, Forward FT,
+  Back FT) shows only one step's ranges and fitted curves on the linked plots.
+  Pressing a section, a value, a plot range or handle, or a curve button
+  selects the matching step.
+- Process: dμ/dE is also drawn on measured μ(E); the spline k range appears on
+  the normalized plot; **Window** also draws the back-transform R window on
+  |χ(R)|.
+- Dragging E₀ in the XANES view keeps the view still, so the E₀ line moves over
+  a still spectrum; the view re-centres on the new E₀ when you release.
+
+## 0.2.15 (2026-10-29)
 
 - Update apex-solver to 1.5. EXAFS fit bounds are still enforced by rexafs
   itself, so fit results are unchanged. apex-io 0.4 no longer pulls in zstd,

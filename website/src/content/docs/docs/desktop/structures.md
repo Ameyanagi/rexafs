@@ -122,12 +122,12 @@ effects. Center focus and depth cue help expose the neighborhood. Slice/depth
 controls change what is visible; they do not remove atoms from the calculation.
 A display bond is a geometric heuristic, not a bond-order measurement.
 
-**Unreleased:** in Structure, **Structure display → Cluster radius** shares
+**From 0.2.15:** in Structure, **Structure display → Cluster radius** shares
 Calculate's radius measured from the absorber in Å. Its default remains 8 Å and
 its accepted range remains finite 2–12 Å. Committing zero or another invalid
 value restores the last valid preview radius and shows an explanation, leaving
 the preview and control available for the next edit. **Clear radius** separately
 controls display fading. See the
-[radius validation and candidate builder](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/app/shell/structure_view.rs).
+[radius validation and candidate builder](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/app/shell/structure_view.rs).
 
 Follow the [first-fit tutorial](/docs/desktop/fitting/) for a worked Cu example.

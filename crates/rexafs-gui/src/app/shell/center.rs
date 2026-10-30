@@ -11,7 +11,8 @@ use gpui::{
 };
 
 use super::{
-    EQuantity, MONO, PlotScope, ProcessSection, Stage, StageStatus, chip, segment, segmented,
+    EQuantity, MONO, PlotScope, ProcessFocus, ProcessSection, Stage, StageStatus, chip, segment,
+    segmented,
 };
 use crate::app::{ParamKey, StudioApp};
 use crate::theme::Theme;
@@ -712,6 +713,30 @@ impl StudioApp {
         )
     }
 
+    /// All · Normalize · Background · Forward FT · Back FT: which Process
+    /// step's ranges and fitted curves the linked plots show.
+    fn process_focus_selector(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let t = self.theme;
+        let current = self.stage_view.process_focus;
+        let options = [(None, "All")]
+            .into_iter()
+            .chain(ProcessFocus::ALL.map(|f| (Some(f), f.label())));
+        let mut choices = segmented(&t).flex_none();
+        for (index, (focus, label)) in options.enumerate() {
+            choices = choices.child(
+                segment(
+                    &t,
+                    ("process-focus", index),
+                    label,
+                    current == focus,
+                    index == 0,
+                )
+                .on_click(cx.listener(move |app, _, _, cx| app.set_process_focus(focus, cx))),
+            );
+        }
+        choices
+    }
+
     /// The plot bar in three clusters separated by rules: the view segments,
     /// the overlay toggles (and range presets), and the comparison controls.
     fn plot_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -800,6 +825,11 @@ impl StudioApp {
         if !energy_views.is_empty() {
             bar = bar.child(choices).child(bar_divider(&t));
         }
+        if process {
+            bar = bar
+                .child(self.process_focus_selector(cx))
+                .child(bar_divider(&t));
+        }
         bar = bar
             .child(
                 chip(&t, "common-e0", "E₀", self.view.show_e0).on_click(cx.listener(
@@ -813,6 +843,9 @@ impl StudioApp {
                 chip(&t, "common-derivative", "dμ/dE", self.view.show_deriv).on_click(cx.listener(
                     |a, _, _, c| {
                         a.view.show_deriv = !a.view.show_deriv;
+                        if a.stage == Stage::Process {
+                            a.set_process_focus(Some(ProcessFocus::Normalize), c);
+                        }
                         a.stage_view_changed(c);
                     },
                 )),
@@ -838,6 +871,7 @@ impl StudioApp {
                         let on = !(a.view.show_pre && a.view.show_post);
                         a.view.show_pre = on;
                         a.view.show_post = on;
+                        a.set_process_focus(Some(ProcessFocus::Normalize), c);
                         a.stage_view_changed(c);
                     })),
                 )
@@ -845,6 +879,7 @@ impl StudioApp {
                     chip(&t, "common-spline", "Spline", v.show_bkg).on_click(cx.listener(
                         |a, _, _, c| {
                             a.stage_view.show_bkg = !a.stage_view.show_bkg;
+                            a.set_process_focus(Some(ProcessFocus::Background), c);
                             a.stage_view_changed(c);
                         },
                     )),
@@ -861,6 +896,12 @@ impl StudioApp {
                     chip(&t, "common-window", "Window", self.view.show_kwin).on_click(cx.listener(
                         |a, _, _, c| {
                             a.view.show_kwin = !a.view.show_kwin;
+                            // Window belongs to whichever FT step is focused.
+                            let step = match a.stage_view.process_focus {
+                                Some(ProcessFocus::BackFt) => ProcessFocus::BackFt,
+                                _ => ProcessFocus::ForwardFt,
+                            };
+                            a.set_process_focus(Some(step), c);
                             a.invalidate_explore_plots(c);
                             c.notify();
                         },
@@ -883,6 +924,7 @@ impl StudioApp {
                 )
                 .on_click(cx.listener(move |app, _, _, cx| {
                     app.view.energy_view_range = range;
+                    app.energy_view_anchor = None;
                     app.analysis.shown = None;
                     app.analysis.plot = None;
                     app.quadrants.clear();

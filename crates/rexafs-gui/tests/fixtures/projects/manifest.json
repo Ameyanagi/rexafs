@@ -105,6 +105,11 @@
       "project": "rexafs-0.2.15-links.rxs",
       "embedded_project": "rexafs-0.2.15-embedded.rxs",
       "format_version": 1
+    },
+    "0.2.16": {
+      "project": "rexafs-0.2.16-links.rxs",
+      "embedded_project": "rexafs-0.2.16-embedded.rxs",
+      "format_version": 1
     }
   },
   "invalid_projects": [
@@ -163,6 +168,8 @@
     "rexafs-0.2.14-links.rxs": "4c808921f2c41f9bd67d2d9f4b34332ccd1eb65740cab853cc794d55a50a19fa",
     "rexafs-0.2.14-embedded.rxs": "64a11768e478ead61243734f563ccb431ee621858c5787d3c021178f35d7a324",
     "rexafs-0.2.15-links.rxs": "02c44e95c2b3f4ba1a92b8f4bdde8dbd40fcfd45021aad829f1ebb9b4a574c9e",
-    "rexafs-0.2.15-embedded.rxs": "9b5547d29a4b159cae4a6e2282fc36cce6a8d8df64eb67b37163083468ce6e62"
+    "rexafs-0.2.15-embedded.rxs": "9b5547d29a4b159cae4a6e2282fc36cce6a8d8df64eb67b37163083468ce6e62",
+    "rexafs-0.2.16-links.rxs": "b5491a363dea4735210adca02458aa8214043cb3ae507588984c69b31bca7b75",
+    "rexafs-0.2.16-embedded.rxs": "675437664654774f477cb179c3e43c7cc73d19c37b2eab906147bfad2941ddf8"
   }
 }

@@ -698,6 +698,10 @@ impl StudioApp {
             );
         div()
             .id(section.element_id())
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(move |app, _, _, cx| app.focus_section_press(section, cx)),
+            )
             .flex()
             .flex_col()
             .border_b_1()
@@ -1074,22 +1078,32 @@ impl StudioApp {
             .flex()
             .flex_col()
             .child(
-                self.section(
-                    "Forward FT  k → R",
-                    Some(ParamSection::Fft),
-                    [
-                        self.field(ParamKey::FftKmin, cx),
-                        self.field(ParamKey::FftKmax, cx),
-                        self.field(ParamKey::FftDk, cx),
-                        Some(self.enum_row(EnumParam::FftWindow, cx)),
-                        self.field(ParamKey::FftKweight, cx),
-                        self.field(ParamKey::FftRmax, cx),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .collect(),
-                    cx,
-                ),
+                div()
+                    .id("transform-forward")
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|app, _, _, cx| {
+                            app.set_process_focus(Some(super::ProcessFocus::ForwardFt), cx)
+                        }),
+                    )
+                    .child(
+                        self.section(
+                            "Forward FT  k → R",
+                            Some(ParamSection::Fft),
+                            [
+                                self.field(ParamKey::FftKmin, cx),
+                                self.field(ParamKey::FftKmax, cx),
+                                self.field(ParamKey::FftDk, cx),
+                                Some(self.enum_row(EnumParam::FftWindow, cx)),
+                                self.field(ParamKey::FftKweight, cx),
+                                self.field(ParamKey::FftRmax, cx),
+                            ]
+                            .into_iter()
+                            .flatten()
+                            .collect(),
+                            cx,
+                        ),
+                    ),
             )
             .child(self.section(
                 "Wavelet settings",
@@ -1098,27 +1112,37 @@ impl StudioApp {
                 cx,
             ))
             .child(
-                self.section(
-                    "Back FT  R → q",
-                    None,
-                    [
-                        self.field(ParamKey::BftRmin, cx),
-                        self.field(ParamKey::BftRmax, cx),
-                        self.field(ParamKey::BftDr, cx),
-                        self.field(ParamKey::BftDr2, cx),
-                        Some(self.enum_row(EnumParam::BftWindow, cx)),
-                        self.field(ParamKey::BftRweight, cx),
-                        self.field(ParamKey::BftQmax, cx),
-                        self.field(ParamKey::BftNfft, cx),
-                        self.field(ParamKey::BftKstep, cx),
-                        None,
-                        None,
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .collect(),
-                    cx,
-                ),
+                div()
+                    .id("transform-back")
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|app, _, _, cx| {
+                            app.set_process_focus(Some(super::ProcessFocus::BackFt), cx)
+                        }),
+                    )
+                    .child(
+                        self.section(
+                            "Back FT  R → q",
+                            None,
+                            [
+                                self.field(ParamKey::BftRmin, cx),
+                                self.field(ParamKey::BftRmax, cx),
+                                self.field(ParamKey::BftDr, cx),
+                                self.field(ParamKey::BftDr2, cx),
+                                Some(self.enum_row(EnumParam::BftWindow, cx)),
+                                self.field(ParamKey::BftRweight, cx),
+                                self.field(ParamKey::BftQmax, cx),
+                                self.field(ParamKey::BftNfft, cx),
+                                self.field(ParamKey::BftKstep, cx),
+                                None,
+                                None,
+                            ]
+                            .into_iter()
+                            .flatten()
+                            .collect(),
+                            cx,
+                        ),
+                    ),
             )
             .child(
                 self.section(
