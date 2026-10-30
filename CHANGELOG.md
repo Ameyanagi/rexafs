@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.16 (release preparation)
+
 - Process: **Focus** in the plot bar (All, Normalize, Background, Forward FT,
   Back FT) shows only one step's ranges and fitted curves on the linked plots.
   Pressing a section, a value, a plot range or handle, or a curve button
