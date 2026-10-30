@@ -177,16 +177,22 @@ pub(crate) enum ParamSection {
 }
 
 /// Centre of a relative energy view such as XANES (E₀ − 20 … E₀ + 80 eV).
-/// The view stays where it was while E₀ of the same group changes inside it;
-/// another group, or an E₀ outside the window, centres it on the new E₀.
+/// While the E₀ handle is dragged inside the view of the same group, the view
+/// stays where it was so the line moves over a still spectrum; otherwise,
+/// including when the drag ends, the view centres on E₀.
 fn energy_view_center(
     anchor: Option<(Option<usize>, f64)>,
     group: Option<usize>,
     e0: f64,
     (lo, hi): (f64, f64),
+    dragging_e0: bool,
 ) -> f64 {
     match anchor {
-        Some((g, center)) if g == group && (center + lo..=center + hi).contains(&e0) => center,
+        Some((g, center))
+            if dragging_e0 && g == group && (center + lo..=center + hi).contains(&e0) =>
+        {
+            center
+        }
         _ => e0,
     }
 }
@@ -1769,22 +1775,31 @@ mod thin_tests {
     };
 
     #[test]
-    fn xanes_view_stays_put_while_e0_moves_within_it() {
+    fn xanes_view_stays_put_while_e0_is_dragged_and_recentres_after() {
         let xanes = (-20.0, 80.0);
+        let anchor = Some((Some(0), 8979.0));
         // First view, and a new group, centre on E₀.
-        assert_eq!(energy_view_center(None, Some(0), 8979.0, xanes), 8979.0);
         assert_eq!(
-            energy_view_center(Some((Some(0), 8979.0)), Some(1), 8990.0, xanes),
+            energy_view_center(None, Some(0), 8979.0, xanes, true),
+            8979.0
+        );
+        assert_eq!(
+            energy_view_center(anchor, Some(1), 8990.0, xanes, true),
             8990.0
         );
         // Dragging E₀ inside the window keeps the window where it was.
         assert_eq!(
-            energy_view_center(Some((Some(0), 8979.0)), Some(0), 8985.5, xanes),
+            energy_view_center(anchor, Some(0), 8985.5, xanes, true),
             8979.0
         );
-        // An E₀ outside the window recentres it.
+        // The end of the drag, or a typed E₀, centres on the new E₀.
         assert_eq!(
-            energy_view_center(Some((Some(0), 8979.0)), Some(0), 9100.0, xanes),
+            energy_view_center(anchor, Some(0), 8985.5, xanes, false),
+            8985.5
+        );
+        // An E₀ dragged outside the window recentres it.
+        assert_eq!(
+            energy_view_center(anchor, Some(0), 9100.0, xanes, true),
             9100.0
         );
     }
@@ -6571,7 +6586,13 @@ impl StudioApp {
         if let Some((lo, hi)) = self.view.energy_view_range {
             if let Some(e0) = self.spectrum.as_ref().and_then(|sp| sp.e0()) {
                 let group = self.current_group_index();
-                let center = energy_view_center(self.energy_view_anchor, group, e0, (lo, hi));
+                let center = energy_view_center(
+                    self.energy_view_anchor,
+                    group,
+                    e0,
+                    (lo, hi),
+                    self.dragging_e0(),
+                );
                 self.energy_view_anchor = Some((group, center));
                 for spec in specs.iter_mut().take(2) {
                     spec.xlim = Some((center + lo, center + hi));

@@ -843,6 +843,9 @@ impl StudioApp {
                 chip(&t, "common-derivative", "dμ/dE", self.view.show_deriv).on_click(cx.listener(
                     |a, _, _, c| {
                         a.view.show_deriv = !a.view.show_deriv;
+                        if a.stage == Stage::Process {
+                            a.set_process_focus(Some(ProcessFocus::Normalize), c);
+                        }
                         a.stage_view_changed(c);
                     },
                 )),
@@ -868,6 +871,7 @@ impl StudioApp {
                         let on = !(a.view.show_pre && a.view.show_post);
                         a.view.show_pre = on;
                         a.view.show_post = on;
+                        a.set_process_focus(Some(ProcessFocus::Normalize), c);
                         a.stage_view_changed(c);
                     })),
                 )
@@ -875,6 +879,7 @@ impl StudioApp {
                     chip(&t, "common-spline", "Spline", v.show_bkg).on_click(cx.listener(
                         |a, _, _, c| {
                             a.stage_view.show_bkg = !a.stage_view.show_bkg;
+                            a.set_process_focus(Some(ProcessFocus::Background), c);
                             a.stage_view_changed(c);
                         },
                     )),
@@ -891,6 +896,12 @@ impl StudioApp {
                     chip(&t, "common-window", "Window", self.view.show_kwin).on_click(cx.listener(
                         |a, _, _, c| {
                             a.view.show_kwin = !a.view.show_kwin;
+                            // Window belongs to whichever FT step is focused.
+                            let step = match a.stage_view.process_focus {
+                                Some(ProcessFocus::BackFt) => ProcessFocus::BackFt,
+                                _ => ProcessFocus::ForwardFt,
+                            };
+                            a.set_process_focus(Some(step), c);
                             a.invalidate_explore_plots(c);
                             c.notify();
                         },

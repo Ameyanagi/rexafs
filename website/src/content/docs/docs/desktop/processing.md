@@ -92,17 +92,23 @@ back-transform R minimum, can each be grabbed:
 **Unreleased:** **Focus** in the plot bar limits the linked plots to one step:
 **All**, **Normalize**, **Background**, **Forward FT** or **Back FT**. A focused
 step shows only its own ranges, handles and fitted curves from the table above:
-Normalize keeps the pre-/post-edge lines, Background the spline, and Forward FT
-the window curve. Back FT shows only its R window. Focus follows your work:
-opening a section or editing one of its values selects its step, and Transform
-starts at Forward FT. Choose **All** to see every step again. Focus changes the
-display only; processing settings and results are unchanged.
+Normalize keeps the pre-/post-edge lines and dμ/dE, Background the spline and
+its k range (on both μ(E) plots and χ(k)), Forward FT the k window curve and
+Back FT the R window curve. Focus follows your work: pressing anywhere in an
+inspector section, a value in it, a handle or a shaded range on a plot, or the
+**dμ/dE**, **Pre/post**, **Spline** or **Window** button selects the matching
+step. In Transform, the Back FT part selects Back FT and the rest Forward FT.
+Choose **All** to see every step again. Focus changes the display only;
+processing settings and results are unchanged.
+
+**Unreleased:** **dμ/dE** is drawn on the measured μ(E) plot as well as the
+normalized one, scaled to half the edge step. **Window** shows both the forward
+k window on χ(k) and the back-transform R window on |χ(R)|.
 
 **Unreleased:** the **XANES** and **−200…+800** views are positioned relative to
-$E_0$. Changing $E_0$ of the same group, for example by dragging its line, no
-longer moves the view, so the line moves over a still spectrum. The view
-re-centres on the new $E_0$ after you choose a view preset, select another
-group, or set $E_0$ outside the visible window.
+$E_0$. While you drag the $E_0$ line, the view stays still so the line moves
+over a still spectrum; when you release it, or type a new $E_0$, the view
+re-centres on the new $E_0$.
 
 For a group with a XANES-only fluorescence self-absorption correction, Process
 shows only the two μ(E) plots with a notice, and the Background and Transform

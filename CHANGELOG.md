@@ -4,9 +4,13 @@
 
 - Process: **Focus** in the plot bar (All, Normalize, Background, Forward FT,
   Back FT) shows only one step's ranges and fitted curves on the linked plots.
-  It follows the section you open or edit.
-- Dragging or editing E₀ in the XANES view no longer moves the view, so the
-  E₀ line moves over a still spectrum instead of the spectrum sliding under it.
+  Pressing a section, a value, a plot range or handle, or a curve button
+  selects the matching step.
+- Process: dμ/dE is also drawn on measured μ(E); the spline k range appears on
+  the normalized plot; **Window** also draws the back-transform R window on
+  |χ(R)|.
+- Dragging E₀ in the XANES view keeps the view still, so the E₀ line moves over
+  a still spectrum; the view re-centres on the new E₀ when you release.
 
 ## 0.2.15 (2026-10-29)
 

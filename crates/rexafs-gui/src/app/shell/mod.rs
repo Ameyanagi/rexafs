@@ -161,6 +161,12 @@ impl Stage {
         view.show_pre &= shows(ProcessFocus::Normalize);
         view.show_post &= shows(ProcessFocus::Normalize);
         view.show_bkg &= shows(ProcessFocus::Background);
+        // dμ/dE is an E₀ guide; Data keeps it, Process shows it with Normalize.
+        if self == Self::Process {
+            view.show_deriv &= shows(ProcessFocus::Normalize);
+        }
+        // Window draws the k window on χ(k) and the R window on |χ(R)|.
+        view.show_rwin = view.show_kwin && shows(ProcessFocus::BackFt);
         view.show_kwin &= focus.is_none_or(|f| f == ProcessFocus::ForwardFt);
         view
     }
@@ -604,6 +610,19 @@ impl StudioApp {
         }
     }
 
+    /// A press anywhere in a Process section focuses its step. Transform
+    /// keeps an existing Forward/Back FT focus; its two parts set their own.
+    pub(crate) fn focus_section_press(&mut self, section: ProcessSection, cx: &mut Context<Self>) {
+        let keep = section == ProcessSection::Transform
+            && matches!(
+                self.stage_view.process_focus,
+                Some(ProcessFocus::ForwardFt | ProcessFocus::BackFt)
+            );
+        if !keep {
+            self.set_process_focus(Some(ProcessFocus::of_section(section)), cx);
+        }
+    }
+
     /// Stage view options feed the explore plot builders; changing them
     /// rebuilds the plots and re-syncs the drag handles.
     pub(crate) fn stage_view_changed(&mut self, cx: &mut Context<Self>) {
@@ -929,18 +948,25 @@ mod plot_overlay_tests {
             show_post: true,
             show_bkg: true,
             show_kwin: true,
+            show_deriv: true,
             ..Default::default()
         };
-        // (focus, pre-/post-edge lines, AUTOBK spline, forward-FT window)
-        for (focus, pre, bkg, kwin) in [
-            (None, true, true, true),
-            (Some(ProcessFocus::Normalize), true, false, false),
-            (Some(ProcessFocus::Background), false, true, false),
-            (Some(ProcessFocus::ForwardFt), false, false, true),
-            (Some(ProcessFocus::BackFt), false, false, false),
+        // (focus, pre-/post-edge lines and dμ/dE, AUTOBK spline, k window, R window)
+        for (focus, pre, bkg, kwin, rwin) in [
+            (None, true, true, true, true),
+            (Some(ProcessFocus::Normalize), true, false, false, false),
+            (Some(ProcessFocus::Background), false, true, false, false),
+            (Some(ProcessFocus::ForwardFt), false, false, true, false),
+            (Some(ProcessFocus::BackFt), false, false, false, true),
         ] {
             let view = Stage::Process.plot_options(preferences, focus);
-            let keys = build_quadrant_specs(&traces, &view, &Theme::dark(), true)
+            let specs = build_quadrant_specs(&traces, &view, &Theme::dark(), true);
+            // dμ/dE is drawn on measured μ(E) as well as normalized μ(E).
+            for spec in &specs[..2] {
+                let deriv = spec.series.iter().any(|s| s.key == SeriesKey::Deriv);
+                assert_eq!(deriv, pre, "{focus:?}");
+            }
+            let keys = specs
                 .into_iter()
                 .flat_map(|spec| spec.series.into_iter().map(|s| s.key))
                 .collect::<Vec<_>>();
@@ -948,6 +974,7 @@ mod plot_overlay_tests {
             assert_eq!(keys.contains(&SeriesKey::PostEdge), pre, "{focus:?}");
             assert_eq!(keys.contains(&SeriesKey::Bkg), bkg, "{focus:?}");
             assert_eq!(keys.contains(&SeriesKey::Kwin), kwin, "{focus:?}");
+            assert_eq!(keys.contains(&SeriesKey::Rwin), rwin, "{focus:?}");
         }
     }
 
