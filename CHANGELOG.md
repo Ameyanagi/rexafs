@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.2.16 (release preparation)
+## 0.2.16 (2026-10-31)
 
 - Process: **Focus** in the plot bar (All, Normalize, Background, Forward FT,
   Back FT) shows only one step's ranges and fitted curves on the linked plots.

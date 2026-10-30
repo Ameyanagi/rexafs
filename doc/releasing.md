@@ -14,13 +14,19 @@ successful app launch alone does not qualify the updater. The
 0.2.10/0.2.11 failure and the source correction. Do not reuse the older qualification
 as evidence that signed in-app updates work.
 
-## Preparing 0.2.16
+## Published 0.2.16
 
 The [0.2.16 notes](release-notes-0.2.16.md) and
 [qualification record](validation/2026-10-30-release-0.2.16/review.md) track
 the Process plot focus, the still XANES view while E₀ is dragged and the
-dependency updates merged after 0.2.15. Final tag builds, signed installers and
-publication are separate release gates.
+dependency updates merged after 0.2.15. Published on 31 October 2026 in Japan
+(30 October UTC) after all 30 exact-tag jobs, Mac signing/notarization and
+installed-DMG core and updater checks passed. The new GUI behavior was reviewed
+interactively on a development build in
+[#223](https://github.com/Ameyanagi/rexafs/pull/223); the signed app received
+command-line checks only. Fresh Python and npm consumers passed. All 22 desktop
+files and six registry files were downloaded and hash-verified before advancing
+stable website metadata.
 
 ## Published 0.2.15
 
