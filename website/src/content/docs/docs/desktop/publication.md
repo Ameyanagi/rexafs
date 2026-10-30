@@ -35,7 +35,7 @@ sans-serif font (Arial by default) with italic variables; math you type between
 dollar signs uses Typst's serif math font. Editable text uses the viewer's copy of
 the figure font (Arial by default); a viewer without it substitutes a similar
 font. See the
-[SVG text option](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures.rs).
+[SVG text option](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/figures.rs).
 
 **CSV** saves an x/y column pair for each visible curve with data, including
 its name and axis label. Curves keep their own grids and full arrays; blank
@@ -80,7 +80,9 @@ and visible curves. Fit figures show model/data components and path contribution
 without vertical offsets. R-space residuals show the difference of magnitudes,
 not a complex residual. Scientific curves come from processing/fit results.
 
-### Curve colours (unreleased)
+<a id="curve-colours-unreleased"></a>
+
+### Curve colours (since 0.2.15)
 
 In **Single figure**, click the small swatch beside a curve's visibility control
 under **Curves**, then choose one of eight colours or **Auto**. The A swatch
@@ -100,7 +102,7 @@ The saved `series_colors` map uses curve keys as plain strings and lowercase
 `#rrggbb` sRGB values; malformed values stop rendering/export with an error,
 and entries for curves that are no longer available have no visual effect.
 Implemented in
-[`FigureOptions` and `FigureData::plot`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures.rs).
+[`FigureOptions` and `FigureData::plot`](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/figures.rs).
 
 ### Legend, ticks, R range and labels (since 0.2.15)
 
@@ -116,7 +118,7 @@ narrow figure.
 The box size and the 0.5 % limit are rexafs estimates; ruviz's own "best"
 placement, used by earlier versions, could put the legend in the middle of a
 rising absorption edge. Implemented in
-[`auto_legend`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/layout.rs). **Outside**
+[`auto_legend`](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/figures/layout.rs). **Outside**
 puts the legend to the right of the plot and narrows the plot area. The choice
 is saved with the figure settings and copied by **Apply style to all figures**.
 Earlier versions always used Auto and offered only on/off.
@@ -127,7 +129,7 @@ tick font size and keeps the densest ruviz tick spacing that leaves about one
 character of space between labels. For example, a 3.3 in XANES figure with
 9 pt text uses 20 eV instead of 10 eV spacing; the 6.4 in default keeps its
 ticks. This is a rexafs estimate implemented in
-[`x_tick_count`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/layout.rs).
+[`x_tick_count`](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/figures/layout.rs).
 
 The processed-spectrum |χ(R)| figure no longer stops at a fixed 6 Å. It shows at
 least 0–6 Å, extends to the back-transform R window's upper limit plus 0.5 Å
@@ -167,7 +169,7 @@ initial recipe suggests XANES, χ(k), |χ(R)| and, when a fit exists, Fit + resi
 · χ(k). **Add panel** appends a figure; the arrow moves a panel earlier and ×
 removes it. Panels fill each row from left to right, at most 12 panels.
 
-**Named recipes (unreleased).** The **Recipe** selector keeps several layouts
+**Named recipes.** The **Recipe** selector keeps several layouts
 in the project, in the order they were created. Selecting one restores its panel
 order, dimensions, font, line width and DPI.
 
@@ -184,7 +186,7 @@ order, dimensions, font, line width and DPI.
   or the previous one when deleting the last entry. The only remaining recipe
   cannot be deleted.
 
-**Samples and stacking (unreleased).** **Samples** offers the current group
+**Samples and stacking.** **Samples** offers the current group
 first, then the marked groups in workspace order. Check only the samples to
 include. **All** selects the offered groups in that order; **None** clears the
 list. An empty list means the current group only, preserving older recipes.
@@ -249,9 +251,9 @@ Panels with at most one visible curve use the existing legend rules; their
 sample selection and figure legend
 settings still apply. Fit and residual panels retain their figure's legend
 visibility. These display choices are implemented in
-[`prepare_panels` and `compose_samples`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
+[`prepare_panels` and `compose_samples`](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/figures/composer.rs).
 
-**Panel insets (unreleased).** Select an energy-domain panel to add one inset.
+**Panel insets.** Select an energy-domain panel to add one inset.
 **Inset** defaults to **None** and is available only for XANES, flattened μ(E)
 and raw μ(E) panels (saved keys `xanes`, `flattened-mu` and `mu-energy`).
 Choose a rexafs preset, then edit its energy limits relative to E₀, the
@@ -303,7 +305,7 @@ caption describes the inset and rounds its energy limits to 0.1 eV, omitting
 trailing fractional zeros. The plotted limits retain their full precision.
 The inset's settings are saved with that panel in the
 `.rxs` project. Implemented in
-[`composer.rs`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
+[`composer.rs`](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/figures/composer.rs).
 
 **Journal width** sets the total figure width to a publisher's column width.
 The values are maximum widths from the publishers' author guides, checked in
@@ -327,7 +329,7 @@ settings for axis labels, axis limits, visible curves, curve colours, flattened
 or normalized μ(E), and processing guides. Titles are left out because the panel
 labels identify the panels.
 
-**Grid, ticks and legends (unreleased).** The recipe's **Grid** is off by default
+**Grid, ticks and legends.** The recipe's **Grid** is off by default
 and overrides each figure's grid setting within the composition. Main-panel major
 and minor ticks point inward on all four sides. rexafs chooses four evenly spaced minor
 ticks between major ticks because ruviz sets a fixed count per plot. This is a
@@ -350,14 +352,14 @@ placement for every figure legend setting so that panels remain aligned. The
 renderer currently draws a box around legends. These settings apply to the composition; **Single figure** keeps its
 own grid, ticks and legend behavior. The shared composer legend styling is
 implemented in
-[`composer.rs`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
+[`composer.rs`](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/figures/composer.rs).
 
 **Curve colours** lists the series in the chosen panels, including residual strips.
 Choose a swatch to set a shared colour for that series key in every panel. This
 recipe setting overrides the figure's own colour; **Auto** removes only the
 shared override.
 
-**Sample colours (unreleased)** selects the automatic colours for multi-sample
+**Sample colours** selects the automatic colours for multi-sample
 panels. rexafs chooses one colour order for the recipe: shared sample IDs selected
 by at least one spectrum panel come first, in the shared list's order, followed
 by panel-only sample IDs in panel reading order and then selection order. Each
@@ -383,7 +385,7 @@ colour every sample alike. One-sample panels retain their **Single figure**
 colours and automatic palette. Sample palettes and shared colours are saved with
 the recipe and used in PNG, TIFF, SVG and PDF exports. Removing a panel keeps its
 saved colours for later reuse. Sample colour resolution is implemented in
-[`prepare_panels`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
+[`prepare_panels`](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/figures/composer.rs).
 
 rexafs aligns the panels by giving every panel the same fixed margins: the
 widest left margin any panel needs for its y tick labels and axis title, and
@@ -413,7 +415,7 @@ without `label_mode` also retain **Legend**; saved `curve_end` modes migrate to
 panels default to **Above curves**, and new saves write panel objects with
 sample IDs as ordered arrays rather than labels or workspace row numbers.
 Storage and migration are implemented in
-[`recipes.rs`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/recipes.rs).
+[`recipes.rs`](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/figures/recipes.rs).
 
 The preview is rendered at up to 200 DPI; **Fit** fits it to the pane and
 **True size** shows it at 96 pixels per inch, close to its printed size (the
@@ -432,7 +434,7 @@ digits, and replaces runs of punctuation or whitespace with a single hyphen,
 without leading or trailing hyphens. An empty result uses `figure`; reserved
 Windows device names gain a `figure-` prefix.
 
-**Data + Python script… (unreleased).** Beside the image saves, this action
+**Data + Python script…** Beside the image saves, this action
 exports the active named recipe to a new folder, suggested as
 `figure-2-matplotlib` for **Figure 2**. An existing folder is rejected. The
 export uses the same prepared curves as the current preview and is available
@@ -483,7 +485,7 @@ It reads the CSV files beside itself and saves `figure.pdf`, `figure.svg` and
 `figure.png` there at the recipe's printed size and DPI. Matplotlib lays out
 ticks and margins using its own font metrics, so the result is an editable
 reproduction whose layout can differ from the rexafs preview. Implemented in
-[`write_composite_python_export`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/python_export/composite.rs).
+[`write_composite_python_export`](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/python_export/composite.rs).
 
 The caption below the preview joins each panel's caption after its label, for
 example "(a) Flattened, edge-step-normalized X-ray absorption spectrum… (b) …";
@@ -492,9 +494,9 @@ with a suggested filename such as `figure-2-caption.txt`. Panels whose figure
 is unavailable, such as a fit panel before any fit has run, are skipped, listed
 under the preview and kept in the recipe. Missing samples are also listed and
 retained in the recipe. The composer is implemented in
-[`composer.rs`](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/figures/composer.rs).
+[`composer.rs`](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/figures/composer.rs).
 
-**Reports and supporting information (unreleased).** **Publish report…** and
+**Reports and supporting information.** **Publish report…** and
 **Export supporting information…** export every named recipe in insertion
 order. Available compositions follow the individual figures in `report.html`
 and `captions.md`, with continuous figure numbering. Each writes
@@ -518,7 +520,7 @@ only by recipes are not added solely for figure export. The static figures and
 optional matplotlib CSVs retain the plotted curves. Recreating a recipe inside
 rexafs requires its groups to be present in the reopened workspace. Report
 integration is implemented in the
-[folder exporter](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication.rs).
+[folder exporter](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication.rs).
 
 ## Captions
 
@@ -546,7 +548,7 @@ new directory:
 | `resolved.md` | Per-spectrum processing outputs recomputed at export time |
 | `figures/*.png`, `figures/*.svg` | Spectra, fit overlays and residuals using saved dimensions/style, with captions in SVG metadata; default size/resolution when unset |
 | `figures/*.csv` | Visible curve data for each exported figure |
-| `figures/composed/` (unreleased) | All named recipes as PNG/SVG/PDF and plain-text captions; optional per-recipe matplotlib folders with `make_figure.py` and unshifted curve CSVs |
+| `figures/composed/` (since 0.2.15) | All named recipes as PNG/SVG/PDF and plain-text captions; optional per-recipe matplotlib folders with `make_figure.py` and unshifted curve CSVs |
 | `report.html`, `captions.md` | Browser-printable vector figures with retained aspect ratios, semantic tables, numbered captions, units and uncertainty definitions; for each fit, a statistics table (R-factor, χ², reduced χ² when noise was estimated, N_idp / N_var, fit space, k and R ranges, k-weights, windows and correlations with \|r\| ≥ 0.10); manuscript caption text |
 | `data/*.json` | Processed arrays and available full fit results |
 | `methods.md` | Methods draft generated from the values actually used: E₀, pre-edge and normalization ranges and polynomial order (or MBACK), background method with R_bkg, k range and k-weight, transform k range, k-weight and window, and for each fit its space, k/R ranges, k-weights, windows, FEFF engine (ReFEFF or FEFF10), varied parameters and N_idp. Steps that were not run are omitted; only cited works are listed. The Experiment section is left for you to complete |
@@ -610,7 +612,7 @@ estimated, zero or not finite) is given to four significant figures with a
 dagger (†) and a note. The CSV has one row per path and parameter, with the
 unrounded value and uncertainty (17 significant digits), the rounded pair and a
 status (`fitted`, `fixed`, `no_uncertainty` or `unavailable`). See the
-[table formatter](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/fit_table.rs).
+[table formatter](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/fit_table.rs).
 
 ## Supporting-information bundle
 
@@ -635,13 +637,13 @@ it embeds their original spectra and referenced FEFF inputs with SHA-256
 checksums, as **Raw: embedded** does, even when the open project links to its
 sources by path (the open project and **Publish report…** keep their own
 setting). The archive therefore opens in rexafs on another computer without
-the source folders. The unreleased recipe export described above retains this
+the source folders. The recipe export described above retains this
 workspace scope; recipe-only groups absent from the project are preserved in the exported
 figures and optional matplotlib data. If a source file cannot be read, or the
 embedded inputs would exceed the 1 GiB limit, the export stops with an error
 instead of writing a project with broken links. The archive is written next to
 its destination and moved into place only when complete. See the
-[bundle exporter](https://github.com/Ameyanagi/rexafs/blob/dev/crates/rexafs-gui/src/publication/supporting.rs).
+[bundle exporter](https://github.com/Ameyanagi/rexafs/blob/v0.2.15/crates/rexafs-gui/src/publication/supporting.rs).
 
 [![Full publication editor showing a vector Cu fit figure and output controls](/screenshots/0.2.11/publication.jpg)](/screenshots/0.2.11/publication.jpg)
 

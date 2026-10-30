@@ -1,9 +1,10 @@
 # rexafs 0.2.15
 
-Release preparation for multi-panel publication figures, a combined Process
-stage, fit windows that follow processing, and safer project saving.
-Publication requires the final tagged build, signed Mac artifacts and package
-verification described in the
+Published on 29 October 2026 in Japan (28 October UTC), with multi-panel
+publication figures, a combined Process stage, fit windows that follow
+processing, and safer project saving. The tagged build, signed Mac artifacts,
+installed-DMG checks and public package verification passed. See the
+[downloads](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.15) and
 [qualification record](validation/2026-10-29-release-0.2.15/review.md).
 
 ## Multi-panel publication figures

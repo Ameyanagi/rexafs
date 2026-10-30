@@ -14,13 +14,17 @@ successful app launch alone does not qualify the updater. The
 0.2.10/0.2.11 failure and the source correction. Do not reuse the older qualification
 as evidence that signed in-app updates work.
 
-## Preparing 0.2.15
+## Published 0.2.15
 
 The [0.2.15 notes](release-notes-0.2.15.md) and
 [qualification record](validation/2026-10-29-release-0.2.15/review.md) track
 multi-panel publication figures, the combined Process stage, fit windows that
-follow processing and safer project saving. Final tag builds, signed installers
-and publication are separate release gates.
+follow processing and safer project saving. Published on 29 October 2026 in
+Japan (28 October UTC) after all 30 exact-tag jobs, Mac signing/notarization and
+installed-DMG core and updater checks passed. No interactive signed-GUI review
+was run for this release. Fresh Python and npm consumers passed. All 22 desktop
+files and six registry files were downloaded and hash-verified before advancing
+stable website metadata.
 
 ## Published 0.2.14
 

@@ -8,9 +8,41 @@ Published changes and migration notes are listed below. Back up projects before
 updating. Source-checkout APIs are documented in the [Next API
 reference](/docs/reference/).
 
-## Stable 0.2.14
+## Stable 0.2.15
 
-[Download 0.2.14](/download/) or read the
+[Download 0.2.15](/download/) or read the
+[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.15).
+
+- [Multi-panel publication figures](/docs/desktop/publication/) arrange XANES,
+  χ(k), |χ(R)| and fit figures as labelled (a), (b), (c) panels at journal
+  column widths. Panels can stack several samples, show labels above each curve
+  and add pre-edge, white-line or difference insets. Named recipes are saved in
+  the project, included in reports and exported as curve CSVs with an editable
+  matplotlib script.
+- Normalization, background removal and transforms share one
+  [Process stage](/docs/desktop/processing/) with linked plots. Parameter labels
+  name their units and the matching Larch or Athena parameter, and an unreliable
+  normalization is reported in the problems drawer.
+- New [EXAFS fits](/docs/desktop/fitting/#fit-windows) follow each spectrum's
+  transform window and taper. Fit curves are saved with the
+  [project](/docs/desktop/projects/), so the last fit reopens without refitting.
+- Fit + residual figures, fit parameter tables in LaTeX, CSV or Word, and a
+  supporting-information zip are available from Publish.
+- Closing with unsaved changes asks before discarding them, and Save project
+  includes source files by default.
+
+Rust, Python, npm and desktop packages share version 0.2.15. Mac downloads are
+signed and notarized for Apple Silicon; Windows and Linux remain desktop previews.
+Project format remains 1; older projects keep their saved fit windows and
+legends. See the
+[release notes](https://github.com/Ameyanagi/rexafs/blob/main/doc/release-notes-0.2.15.md)
+and [qualification record](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-10-29-release-0.2.15/review.md).
+
+<span id="stable-0214"></span>
+
+## Previous stable 0.2.14
+
+[Download 0.2.14](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.14) or read the
 [published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.14).
 
 - A compact [Live monitor](/docs/desktop/series/) keeps acquisition visible while
