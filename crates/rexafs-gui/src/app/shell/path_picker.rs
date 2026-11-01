@@ -166,12 +166,15 @@ impl StudioApp {
     }
 
     /// After a path calculation, re-link a source whose files are missing when
-    /// the new calculation reproduces it. Returns the number of re-linked paths.
+    /// the new calculation reproduces it. A calculation started by a source's
+    /// **Recalculate** re-links only that source. Returns the number of
+    /// re-linked paths.
     pub(crate) fn relink_missing_source(
         &mut self,
         new: &[PathBuf],
         cx: &mut Context<Self>,
     ) -> Option<usize> {
+        let target = self.structure.recalculate_source.take();
         let recorded: BTreeMap<PathBuf, PathMeta> = self
             .fit_history
             .iter()
@@ -191,6 +194,7 @@ impl StudioApp {
             .path_sources()
             .into_iter()
             .filter(|s| self.path_source_missing(s))
+            .filter(|s| target.as_ref().is_none_or(|t| t == s))
             .find_map(|source| {
                 let missing: Vec<_> = self
                     .fit_paths
@@ -226,17 +230,18 @@ impl StudioApp {
         Some(map.len())
     }
 
-    /// Run a missing source's own `feff.inp` again, or the current workspace's.
+    /// Run a missing source's own `feff.inp` again.
     pub(crate) fn recalculate_path_source(&mut self, source: PathBuf, cx: &mut Context<Self>) {
-        if source.join("feff.inp").is_file() {
-            self.set_feff_workspace(Some(source));
+        if self.feff_running {
+            self.status = "Wait for the path calculation to finish.".into();
+            return;
         }
-        if self
-            .feff_workspace
-            .as_ref()
-            .is_some_and(|w| w.join("feff.inp").is_file())
-        {
+        if source.join("feff.inp").is_file() {
+            self.set_feff_workspace(Some(source.clone()));
             self.run_feff10_now(cx);
+            if self.feff_running {
+                self.structure.recalculate_source = Some(source);
+            }
             return;
         }
         self.status = "This calculation's input is missing too. Choose the structure and \

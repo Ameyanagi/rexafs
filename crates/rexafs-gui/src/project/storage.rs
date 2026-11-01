@@ -528,12 +528,14 @@ pub(super) fn prepare(
                 if !meta.is_file() {
                     return Err(format!("{} is not a regular input file", input.display()));
                 }
-                total = total.checked_add(meta.len()).ok_or("Input size overflow")?;
-                if embed && total > MAX_RAW_BYTES {
-                    return Err(
-                        "Embedded inputs exceed the 1 GiB limit; use paths or a smaller selection."
-                            .into(),
-                    );
+                if embed {
+                    total = total.checked_add(meta.len()).ok_or("Input size overflow")?;
+                    if total > MAX_RAW_BYTES {
+                        return Err(
+                            "Embedded inputs exceed the 1 GiB limit; use paths or a smaller selection."
+                                .into(),
+                        );
+                    }
                 }
                 let mut hash = Sha256::new();
                 let mut prefix = Vec::new();
@@ -634,9 +636,16 @@ pub(super) fn prepare(
     }
     records.sort_by(|a, b| a.path.cmp(&b.path));
     let origins = out.source_origins.clone();
+    // FEFF files and their calculation folders (the FEFF workspace) are saved
+    // at their original locations, since they are restored from the project.
+    let feff: BTreeSet<&Path> = inputs
+        .iter()
+        .filter(|(_, kind)| **kind == SourceKind::Feff)
+        .flat_map(|(p, _)| [p.as_path()].into_iter().chain(p.parent()))
+        .collect();
     map_paths(&mut out, &mut |p| {
         relative(
-            if mode == DataStorage::Embedded || inputs.get(p) == Some(&SourceKind::Feff) {
+            if mode == DataStorage::Embedded || feff.contains(p) {
                 origins.get(p).map(PathBuf::as_path).unwrap_or(p)
             } else {
                 p
@@ -733,14 +742,18 @@ fn restore_embedded(
     // them; a calculation folder with any file missing or changed is restored
     // as a whole from the embedded copy.
     let original = |f: &SourceFile| absolute(&folder.join(&f.path));
+    // The size check comes first so that a locator naming a device, a pipe or
+    // a large file is never read.
     let restore_dirs: BTreeSet<PathBuf> = header
         .files
         .iter()
-        .filter(|f| f.archive_path.is_some())
+        .filter(|f| feff_only && f.archive_path.is_some())
         .filter_map(|f| {
             let path = original(f).ok()?;
-            let unchanged = std::fs::read(&path)
-                .is_ok_and(|bytes| f.sha256.as_deref() == Some(digest(&bytes).as_str()));
+            let unchanged = std::fs::metadata(&path)
+                .is_ok_and(|m| m.is_file() && Some(m.len()) == f.bytes)
+                && std::fs::read(&path)
+                    .is_ok_and(|bytes| f.sha256.as_deref() == Some(digest(&bytes).as_str()));
             (!unchanged).then(|| path.parent().map(Path::to_owned))?
         })
         .collect();

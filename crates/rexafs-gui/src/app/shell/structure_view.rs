@@ -156,6 +156,8 @@ pub(crate) struct StructureState {
     pub source_filter: Option<PathBuf>,
     /// Source awaiting confirmation of its removal in Paths.
     pub remove_source: Option<PathBuf>,
+    /// Missing source whose **Recalculate** started the running calculation.
+    pub recalculate_source: Option<PathBuf>,
     pub path_leg: Option<usize>,
     pub hist: Option<Entity<RuvizPlot>>,
     pub show_shell_hist: bool,
@@ -318,6 +320,7 @@ impl StructureState {
             source_contexts: BTreeMap::new(),
             source_filter: None,
             remove_source: None,
+            recalculate_source: None,
             path_leg: None,
             hist: None,
             show_shell_hist: false,

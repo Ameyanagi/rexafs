@@ -9060,6 +9060,7 @@ impl StudioApp {
     pub(crate) fn set_feff_workspace(&mut self, workspace: Option<PathBuf>) {
         self.feff_gen += 1;
         self.feff_running = false;
+        self.structure.recalculate_source = None;
         if self.structure.core_cluster_workspace != workspace {
             self.structure.core_cluster = None;
             self.structure.core_cluster_workspace = None;

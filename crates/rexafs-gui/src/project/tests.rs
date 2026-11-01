@@ -1897,6 +1897,10 @@ fn linked_project_embeds_its_feff_calculation_but_keeps_spectra_linked() {
     save_with_storage(&resaved, &reopened, DataStorage::Paths).unwrap();
     assert_eq!(json_file(&resaved)["fit_paths"], stored["fit_paths"]);
     assert_eq!(
+        json_file(&resaved)["feff_workspace"],
+        stored["feff_workspace"]
+    );
+    assert_eq!(
         std::fs::read(&load(&resaved).unwrap().fit_paths[0].file).unwrap(),
         std::fs::read(fixture("feff/feff0001.dat")).unwrap()
     );
