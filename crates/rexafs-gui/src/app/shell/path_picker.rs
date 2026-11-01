@@ -8,8 +8,12 @@ use gpui::{
 };
 use rexafs::xafs::structure::{ShellInfo, select_by, shells_of};
 
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+
 use super::{MONO, button, chip, controls::icon, section_label};
 use crate::app::StudioApp;
+use crate::fitting::{FitPathSpec, PathMeta, path_meta, relink_paths};
 use crate::icons::Icon;
 
 /// Selection presets shown above the picker.
@@ -52,7 +56,195 @@ impl PathPreset {
     }
 }
 
+/// Variable names an expression refers to (`reff` and numbers included; callers
+/// only compare these against defined variables).
+fn symbols(text: &str) -> impl Iterator<Item = &str> {
+    text.split(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .filter(|s| s.starts_with(|c: char| c.is_alphabetic() || c == '_'))
+}
+
+fn path_symbols(spec: &FitPathSpec) -> BTreeSet<String> {
+    [
+        &spec.s02,
+        &spec.degen,
+        &spec.e0,
+        &spec.sigma2,
+        &spec.deltar,
+        &spec.ei,
+        &spec.third,
+        &spec.fourth,
+    ]
+    .into_iter()
+    .flat_map(|text| symbols(text).map(str::to_owned))
+    .collect()
+}
+
 impl StudioApp {
+    /// A source whose FEFF files could not be read, e.g. a project saved with
+    /// linked files after rexafs's FEFF workspace was cleaned.
+    pub(crate) fn path_source_missing(&self, source: &Path) -> bool {
+        self.fit_paths
+            .iter()
+            .any(|p| p.spec.file.parent() == Some(source) && p.meta.is_none())
+    }
+
+    /// Rows capture their index, so a changed list is rebuilt from its specs.
+    fn rebuild_path_rows(&mut self, specs: Vec<FitPathSpec>, cx: &mut Context<Self>) {
+        self.fit_paths.clear();
+        for spec in specs {
+            self.add_path_row(spec, cx);
+        }
+        self.refresh_path_infos();
+        self.structure.selected = None;
+        self.structure.multi.clear();
+        self.structure.ms_open.clear();
+        self.structure.path_leg = None;
+        self.structure.paths.clear();
+        self.refresh_structure(cx);
+        self.fit_model_changed(cx);
+    }
+
+    /// Remove a source's paths, and the variables only those paths used.
+    pub(crate) fn remove_path_source(&mut self, source: PathBuf, cx: &mut Context<Self>) {
+        let number = self.path_sources().iter().position(|s| *s == source);
+        let (removed, kept): (Vec<_>, Vec<_>) = self
+            .fit_paths
+            .iter()
+            .map(|p| p.spec.clone())
+            .partition(|spec| spec.file.parent() == Some(source.as_path()));
+        for dataset in &mut self.joint.config.datasets {
+            dataset
+                .paths
+                .retain(|p| p.parent() != Some(source.as_path()));
+            dataset
+                .expressions
+                .retain(|p, _| p.parent() != Some(source.as_path()));
+        }
+        // Keep the variables the remaining model refers to, directly or
+        // through a kept variable's expression; the rest no longer affect the fit.
+        let mut used: BTreeSet<String> = kept.iter().flat_map(path_symbols).collect();
+        used.extend(
+            self.joint
+                .config
+                .datasets
+                .iter()
+                .flat_map(|d| d.expressions.values().flat_map(path_symbols)),
+        );
+        loop {
+            let more: BTreeSet<String> = self
+                .fit_vars
+                .iter()
+                .filter(|v| used.contains(&v.spec.name))
+                .filter_map(|v| v.spec.expr.as_deref())
+                .flat_map(symbols)
+                .filter(|name| !used.contains(*name))
+                .map(str::to_owned)
+                .collect();
+            if more.is_empty() {
+                break;
+            }
+            used.extend(more);
+        }
+        self.fit_vars.retain(|v| used.contains(&v.spec.name));
+        if self.structure.source_filter.as_ref() == Some(&source) {
+            self.structure.source_filter = None;
+        }
+        self.structure.remove_source = None;
+        let n = removed.len();
+        self.rebuild_path_rows(kept, cx);
+        self.structure.source_filter = self
+            .structure
+            .source_filter
+            .clone()
+            .or_else(|| self.path_sources().into_iter().next());
+        self.status = format!(
+            "Removed source {} · {}",
+            number.map_or(String::new(), |i| (i + 1).to_string()),
+            crate::text::plural(n, "path")
+        )
+        .into();
+    }
+
+    /// After a path calculation, re-link a source whose files are missing when
+    /// the new calculation reproduces it. Returns the number of re-linked paths.
+    pub(crate) fn relink_missing_source(
+        &mut self,
+        new: &[PathBuf],
+        cx: &mut Context<Self>,
+    ) -> Option<usize> {
+        let recorded: BTreeMap<PathBuf, PathMeta> = self
+            .fit_history
+            .iter()
+            .flat_map(|h| &h.path_details)
+            .filter_map(|d| {
+                Some((
+                    d.file.clone(),
+                    PathMeta {
+                        reff: d.reff?,
+                        degen: d.degeneracy?,
+                        nleg: d.nleg?,
+                    },
+                ))
+            })
+            .collect();
+        let pairs = self
+            .path_sources()
+            .into_iter()
+            .filter(|s| self.path_source_missing(s))
+            .find_map(|source| {
+                let missing: Vec<_> = self
+                    .fit_paths
+                    .iter()
+                    .filter(|p| p.spec.file.parent() == Some(source.as_path()))
+                    .map(|p| (p.spec.file.clone(), recorded.get(&p.spec.file).copied()))
+                    .collect();
+                relink_paths(&missing, new, path_meta)
+            })?;
+        let map: BTreeMap<_, _> = pairs.into_iter().collect();
+        let relink = |p: &PathBuf| map.get(p).cloned().unwrap_or_else(|| p.clone());
+        let specs: Vec<_> = self
+            .fit_paths
+            .iter()
+            .map(|p| FitPathSpec {
+                file: relink(&p.spec.file),
+                ..p.spec.clone()
+            })
+            .collect();
+        for dataset in &mut self.joint.config.datasets {
+            for p in &mut dataset.paths {
+                *p = relink(p);
+            }
+            dataset.expressions = std::mem::take(&mut dataset.expressions)
+                .into_iter()
+                .map(|(p, spec)| {
+                    let file = relink(&spec.file);
+                    (relink(&p), FitPathSpec { file, ..spec })
+                })
+                .collect();
+        }
+        self.rebuild_path_rows(specs, cx);
+        Some(map.len())
+    }
+
+    /// Run a missing source's own `feff.inp` again, or the current workspace's.
+    pub(crate) fn recalculate_path_source(&mut self, source: PathBuf, cx: &mut Context<Self>) {
+        if source.join("feff.inp").is_file() {
+            self.set_feff_workspace(Some(source));
+        }
+        if self
+            .feff_workspace
+            .as_ref()
+            .is_some_and(|w| w.join("feff.inp").is_file())
+        {
+            self.run_feff10_now(cx);
+            return;
+        }
+        self.status = "This calculation's input is missing too. Choose the structure and \
+                       calculate again; matching paths replace the missing ones."
+            .into();
+        self.set_fit_step(super::fit_workspace::FitStep::Structure, cx);
+    }
+
     fn path_in_visible_source(&self, i: usize) -> bool {
         self.structure.source_filter.as_ref().is_none_or(|source| {
             self.fit_paths
@@ -393,7 +585,7 @@ impl StudioApp {
         }
         let mut sources = div()
             .id("path-source-list")
-            .max_h(px(104.))
+            .max_h(px(168.))
             .overflow_y_scroll()
             .px_2()
             .py_1()
@@ -412,34 +604,135 @@ impl StudioApp {
                 self.source_label(&source)
             );
             let active = self.structure.source_filter.as_ref() == Some(&source);
-            sources = sources.child(
-                div()
-                    .id(("path-source", n))
-                    .px_2()
-                    .py_1()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(if active { t.accent } else { t.border })
-                    .text_size(px(11.))
-                    .text_ellipsis()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .cursor_pointer()
-                    .child(label)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.structure.source_filter = Some(source.clone());
-                        this.structure.selected = this
-                            .fit_paths
-                            .iter()
-                            .position(|p| p.spec.file.parent() == Some(source.as_path()));
-                        this.structure.multi.clear();
-                        this.structure.ms_open.clear();
-                        this.structure.path_leg = None;
-                        this.structure.pick = None;
-                        this.rebuild_structure_plot(cx);
-                        cx.notify();
-                    })),
-            );
+            let missing = self.path_source_missing(&source);
+            let confirming = self.structure.remove_source.as_ref() == Some(&source);
+            let total = self
+                .fit_paths
+                .iter()
+                .filter(|p| p.spec.file.parent() == Some(source.as_path()))
+                .count();
+            let pick = source.clone();
+            let line = div()
+                .id(("path-source", n))
+                .flex_1()
+                .min_w_0()
+                .text_ellipsis()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .cursor_pointer()
+                .child(label)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    let source = pick.clone();
+                    this.structure.source_filter = Some(source.clone());
+                    this.structure.selected = this
+                        .fit_paths
+                        .iter()
+                        .position(|p| p.spec.file.parent() == Some(source.as_path()));
+                    this.structure.multi.clear();
+                    this.structure.ms_open.clear();
+                    this.structure.path_leg = None;
+                    this.structure.pick = None;
+                    this.rebuild_structure_plot(cx);
+                    cx.notify();
+                }));
+            let ask = source.clone();
+            let mut entry = div()
+                .px_2()
+                .py_1()
+                .rounded_md()
+                .border_1()
+                .border_color(if missing {
+                    t.warn
+                } else if active {
+                    t.accent
+                } else {
+                    t.border
+                })
+                .text_size(px(11.))
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(line)
+                        .when(missing, |d| {
+                            d.child(
+                                div()
+                                    .flex_none()
+                                    .text_color(t.warn)
+                                    .child("FEFF files missing"),
+                            )
+                        })
+                        .child(
+                            div()
+                                .id(("path-source-remove", n))
+                                .flex_none()
+                                .px_1()
+                                .cursor_pointer()
+                                .text_color(t.text_muted)
+                                .hover(|d| d.text_color(t.error))
+                                .child("×")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.structure.remove_source = Some(ask.clone());
+                                    cx.notify();
+                                })),
+                        ),
+                );
+            if missing && !confirming {
+                let recalc = source.clone();
+                entry = entry.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex_1()
+                                .text_color(t.text_muted)
+                                .child("Recalculate to re-link these paths, or remove them."),
+                        )
+                        .child(
+                            button(&t, ("path-source-recalc", n), "Recalculate", false).on_click(
+                                cx.listener(move |this, _, _, cx| {
+                                    this.recalculate_path_source(recalc.clone(), cx);
+                                }),
+                            ),
+                        ),
+                );
+            }
+            if confirming {
+                let remove = source.clone();
+                entry = entry
+                    .child(div().w_full().child(SharedString::from(format!(
+                        "Remove source {} and its {}? Variables no other path uses are removed too.",
+                        n + 1,
+                        crate::text::plural(total, "path")
+                    ))))
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .child(
+                                button(&t, ("path-source-remove-ok", n), "Remove", false).on_click(
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.remove_path_source(remove.clone(), cx);
+                                    }),
+                                ),
+                            )
+                            .child(
+                                button(&t, ("path-source-remove-no", n), "Cancel", false).on_click(
+                                    cx.listener(|this, _, _, cx| {
+                                        this.structure.remove_source = None;
+                                        cx.notify();
+                                    }),
+                                ),
+                            ),
+                    );
+            }
+            sources = sources.child(entry);
         }
         col = col.child(sources);
         if self.path_sources().len() > 1 {

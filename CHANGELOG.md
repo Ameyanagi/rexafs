@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Projects saved with **Link source files** now embed their FEFF calculation
+  (path files, `feff.inp`, crystal and engine records), so reopening no longer
+  depends on rexafs's `~/.rexafs/feff` workspace. Spectra stay linked. Unchanged
+  FEFF files at the recorded location are still used. rexafs 0.2.16 and older
+  cannot open linked projects saved this way (#227).
+- Fit › Paths marks a calculation whose FEFF files are missing, and **Fit** names
+  it instead of failing with a file error. Recalculating the same input
+  re-links its paths in place, keeping their parameters, instead of adding
+  another source. Each source has a remove button (×) that also removes
+  variables no other path uses (#227).
+
 ## 0.2.16 (2026-10-31)
 
 - Process: **Focus** in the plot bar (All, Normalize, Background, Forward FT,

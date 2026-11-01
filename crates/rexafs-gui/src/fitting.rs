@@ -806,6 +806,35 @@ pub fn path_meta(file: &std::path::Path) -> Option<PathMeta> {
     })
 }
 
+/// Pair each path of a calculation whose files are missing with the new
+/// calculation's file of the same name (`feff0001.dat`, …). FEFF numbers paths
+/// the same way for the same input, so re-linking keeps each path's
+/// parameters. A geometry recorded in fit history must also agree. Returns
+/// `None` unless every missing path has a partner.
+pub(crate) fn relink_paths(
+    missing: &[(PathBuf, Option<PathMeta>)],
+    new: &[PathBuf],
+    meta: impl Fn(&std::path::Path) -> Option<PathMeta>,
+) -> Option<Vec<(PathBuf, PathBuf)>> {
+    missing
+        .iter()
+        .map(|(old, recorded)| {
+            let name = old.file_name()?;
+            let file = new.iter().find(|f| f.file_name() == Some(name))?;
+            if let Some(r) = recorded {
+                let m = meta(file)?;
+                if (m.reff - r.reff).abs() > 1e-3
+                    || m.nleg != r.nleg
+                    || (m.degen - r.degen).abs() > 1e-6
+                {
+                    return None;
+                }
+            }
+            Some((old.clone(), file.clone()))
+        })
+        .collect()
+}
+
 /// One frame's result in a batch fit over a scan.
 #[derive(Clone)]
 pub struct BatchFitRow {
@@ -1074,6 +1103,43 @@ mod tests {
         let entry =
             FitHistoryEntry::from_result(1, "Cu".into(), vec![], vars, ranges.clone(), &result);
         assert_eq!(entry.transforms[0], ranges.transform());
+    }
+
+    #[test]
+    fn missing_paths_relink_by_name_only_when_recorded_geometry_agrees() {
+        let shell = |reff| PathMeta {
+            reff,
+            degen: 12.,
+            nleg: 2,
+        };
+        let new = [
+            PathBuf::from("/new/feff0001.dat"),
+            PathBuf::from("/new/feff0002.dat"),
+        ];
+        let meta = |p: &std::path::Path| {
+            Some(shell(if p.ends_with("feff0001.dat") {
+                2.553
+            } else {
+                3.61
+            }))
+        };
+        let missing = [
+            (PathBuf::from("/old/feff0001.dat"), Some(shell(2.553))),
+            (PathBuf::from("/old/feff0002.dat"), None),
+        ];
+        assert_eq!(
+            relink_paths(&missing, &new, meta).unwrap(),
+            vec![
+                (missing[0].0.clone(), new[0].clone()),
+                (missing[1].0.clone(), new[1].clone())
+            ]
+        );
+        // A different structure numbers its paths the same way: refuse it.
+        let moved = [(PathBuf::from("/old/feff0001.dat"), Some(shell(2.40)))];
+        assert!(relink_paths(&moved, &new, meta).is_none());
+        // Every missing path needs a partner.
+        let extra = [(PathBuf::from("/old/feff0009.dat"), None)];
+        assert!(relink_paths(&extra, &new, meta).is_none());
     }
 
     #[test]

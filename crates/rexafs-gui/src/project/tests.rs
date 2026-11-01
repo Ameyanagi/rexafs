@@ -1727,7 +1727,15 @@ fn linked_project_moves_with_data_and_save_as_rebases_every_owned_path() {
     assert_eq!(disk["header"]["storage"], "paths");
     assert_eq!(disk["header"]["path_base"], "project_directory");
     assert_eq!(disk["spectrum_file"], "data/cu_150k.xmu");
-    assert!(disk.get("embedded").is_none());
+    // Only the FEFF calculation is embedded in a linked project.
+    assert!(
+        disk["header"]["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|f| f.get("archive_path").is_some_and(|a| !a.is_null()))
+            .all(|f| f["kind"] == "feff")
+    );
     let moved = temp.join("moved");
     std::fs::rename(old, &moved).unwrap();
     let reopened = load(&moved.join("session.rxs")).unwrap();
@@ -1855,6 +1863,42 @@ fn embedded_project_is_lossless_self_contained_and_can_be_saved_again() {
             .iter()
             .map(|f| (&f["path"], &f["modified_unix_seconds"]))
             .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn linked_project_embeds_its_feff_calculation_but_keeps_spectra_linked() {
+    let temp = Temp::new();
+    let source = temp.join("original");
+    let project = specimen(&source);
+    let path = source.join("linked.rxs");
+    save_with_storage(&path, &project, DataStorage::Paths).unwrap();
+    let stored = json_file(&path);
+    assert_eq!(stored["header"]["storage"], "paths");
+    let files = stored["header"]["files"].as_array().unwrap();
+    for file in files {
+        let embedded = file.get("archive_path").is_some_and(|a| !a.is_null());
+        assert_eq!(embedded, file["kind"] == "feff", "{file}");
+    }
+    // rexafs's FEFF workspace is cleaned; the linked spectra remain.
+    std::fs::remove_dir_all(source.join("feff")).unwrap();
+    let reopened = load(&path).unwrap();
+    assert_eq!(reopened.data_storage, DataStorage::Paths);
+    assert_eq!(
+        std::fs::read(&reopened.fit_paths[0].file).unwrap(),
+        std::fs::read(fixture("feff/feff0001.dat")).unwrap()
+    );
+    assert_eq!(
+        reopened.spectrum_file, project.spectrum_file,
+        "spectra stay linked"
+    );
+    // Saving again records the original FEFF location and embeds it again.
+    let resaved = source.join("resaved.rxs");
+    save_with_storage(&resaved, &reopened, DataStorage::Paths).unwrap();
+    assert_eq!(json_file(&resaved)["fit_paths"], stored["fit_paths"]);
+    assert_eq!(
+        std::fs::read(&load(&resaved).unwrap().fit_paths[0].file).unwrap(),
+        std::fs::read(fixture("feff/feff0001.dat")).unwrap()
     );
 }
 

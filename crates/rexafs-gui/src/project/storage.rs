@@ -502,8 +502,12 @@ pub(super) fn prepare(
     out.embedded.clear();
     let mut records: Vec<SourceFile> = Vec::new();
     let mut total = 0u64;
-    for (input, kind) in inputs(&out, mode, true)? {
-        let reference = if mode == DataStorage::Embedded {
+    let inputs = inputs(&out, mode, true)?;
+    for (input, kind) in inputs.clone() {
+        // FEFF calculations are generated into rexafs's private workspace, so
+        // linked projects embed them too; only spectra stay linked.
+        let embed = mode == DataStorage::Embedded || kind == SourceKind::Feff;
+        let reference = if embed {
             out.source_origins.get(&input).unwrap_or(&input)
         } else {
             &input
@@ -525,7 +529,7 @@ pub(super) fn prepare(
                     return Err(format!("{} is not a regular input file", input.display()));
                 }
                 total = total.checked_add(meta.len()).ok_or("Input size overflow")?;
-                if mode == DataStorage::Embedded && total > MAX_RAW_BYTES {
+                if embed && total > MAX_RAW_BYTES {
                     return Err(
                         "Embedded inputs exceed the 1 GiB limit; use paths or a smaller selection."
                             .into(),
@@ -534,8 +538,7 @@ pub(super) fn prepare(
                 let mut hash = Sha256::new();
                 let mut prefix = Vec::new();
                 let mut count = 0u64;
-                let mut compressed = (mode == DataStorage::Embedded)
-                    .then(|| GzEncoder::new(Vec::new(), Compression::best()));
+                let mut compressed = embed.then(|| GzEncoder::new(Vec::new(), Compression::best()));
                 let mut buffer = [0u8; 65536];
                 loop {
                     let n = file.read(&mut buffer).map_err(|e| e.to_string())?;
@@ -551,7 +554,7 @@ pub(super) fn prepare(
                     if let Some(writer) = &mut compressed {
                         writer.write_all(&buffer[..n]).map_err(|e| e.to_string())?;
                     }
-                    if mode == DataStorage::Embedded && count > MAX_RAW_BYTES {
+                    if embed && count > MAX_RAW_BYTES {
                         return Err("Input grew beyond the embedded size limit.".into());
                     }
                 }
@@ -633,7 +636,7 @@ pub(super) fn prepare(
     let origins = out.source_origins.clone();
     map_paths(&mut out, &mut |p| {
         relative(
-            if mode == DataStorage::Embedded {
+            if mode == DataStorage::Embedded || inputs.get(p) == Some(&SourceKind::Feff) {
                 origins.get(p).map(PathBuf::as_path).unwrap_or(p)
             } else {
                 p
@@ -698,7 +701,18 @@ pub(super) fn restore(
     }
     if header.storage == DataStorage::Embedded {
         let root = cache_root()?.join("project-data").join(digest(json));
-        restore_embedded(&mut project, &header, &folder, &root)?;
+        restore_embedded(&mut project, &header, &folder, &root, false)?;
+    } else if header.files.iter().any(|f| f.archive_path.is_some()) {
+        // Linked projects from 0.2.17 carry their FEFF calculation.
+        if header
+            .files
+            .iter()
+            .any(|f| f.archive_path.is_some() && f.kind != SourceKind::Feff)
+        {
+            return Err("A paths-only project embeds a file other than a FEFF calculation.".into());
+        }
+        let root = cache_root()?.join("project-data").join(digest(json));
+        restore_embedded(&mut project, &header, &folder, &root, true)?;
     } else if !project.embedded.is_empty() {
         return Err("A paths-only project contains unexpected embedded payloads.".into());
     }
@@ -712,14 +726,42 @@ fn restore_embedded(
     header: &ProjectHeader,
     folder: &Path,
     root: &Path,
+    feff_only: bool,
 ) -> Result<(), String> {
     let mut mapping = BTreeMap::new();
+    // A linked project keeps using FEFF files that are still where it left
+    // them; a calculation folder with any file missing or changed is restored
+    // as a whole from the embedded copy.
+    let original = |f: &SourceFile| absolute(&folder.join(&f.path));
+    let restore_dirs: BTreeSet<PathBuf> = header
+        .files
+        .iter()
+        .filter(|f| f.archive_path.is_some())
+        .filter_map(|f| {
+            let path = original(f).ok()?;
+            let unchanged = std::fs::read(&path)
+                .is_ok_and(|bytes| f.sha256.as_deref() == Some(digest(&bytes).as_str()));
+            (!unchanged).then(|| path.parent().map(Path::to_owned))?
+        })
+        .collect();
+    let entries: Vec<_> = header
+        .files
+        .iter()
+        .filter(|f| {
+            !feff_only
+                || f.archive_path.is_some()
+                    && original(f)
+                        .ok()
+                        .and_then(|p| p.parent().map(Path::to_owned))
+                        .is_some_and(|dir| restore_dirs.contains(&dir))
+        })
+        .collect();
     let mut destinations = BTreeSet::new();
     let mut sources = BTreeSet::new();
     let mut total = 0u64;
     // Check every destination before creating anything. Archive paths are never
     // interpreted as arbitrary filesystem locations.
-    for entry in &header.files {
+    for entry in &entries {
         let stored = entry
             .archive_path
             .as_ref()
@@ -740,13 +782,16 @@ fn restore_embedded(
     }
     // A purportedly self-contained project cannot silently fall back to an
     // unrelated file on the receiving computer for a referenced input.
-    for required in inputs(project, DataStorage::Paths, false)?.keys() {
+    for required in inputs(project, DataStorage::Paths, false)?
+        .keys()
+        .filter(|_| !feff_only)
+    {
         if !sources.contains(required) {
             return Err(format!("Embedded input is missing: {}", required.display()));
         }
     }
     std::fs::create_dir_all(root.join("raw")).map_err(|e| e.to_string())?;
-    for entry in &header.files {
+    for entry in entries {
         let sha = entry
             .sha256
             .as_ref()
@@ -777,7 +822,7 @@ fn restore_embedded(
         }
         mapping.insert(source, dest);
     }
-    if let Some(dir) = &project.source_dir {
+    if let Some(dir) = project.source_dir.as_ref().filter(|_| !feff_only) {
         mapping.insert(dir.clone(), root.join("raw"));
     }
     project.source_origins = mapping

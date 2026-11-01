@@ -9194,7 +9194,30 @@ impl StudioApp {
                     return;
                 }
                 app.feff_running = false;
+                // A reopened project whose FEFF files are gone: the same
+                // calculation re-links its paths instead of adding a source.
+                let relinked = match &result {
+                    Ok(paths) => app.relink_missing_source(paths, cx),
+                    Err(_) => None,
+                };
                 match result {
+                    Ok(paths) if let Some(n) = relinked => {
+                        app.status = format!(
+                            "Path calculation complete · re-linked {} with missing files; parameters unchanged",
+                            crate::text::plural(n, "path")
+                        )
+                        .into();
+                        app.structure.source_filter =
+                            paths.first().and_then(|p| p.parent().map(|p| p.to_path_buf()));
+                        app.refresh_structure(cx);
+                        if matches!(
+                            app.stage_view.fit_step,
+                            shell::fit_workspace::FitStep::Calculate
+                                | shell::fit_workspace::FitStep::Structure
+                        ) {
+                            app.set_fit_step(shell::fit_workspace::FitStep::Paths, cx);
+                        }
+                    }
                     Ok(mut paths) => {
                         // Athena-style ordering: nearest shells first.
                         paths.sort_by(|a, b| {
