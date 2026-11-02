@@ -45,7 +45,17 @@ choose links explicitly when you want them. See
 | Mode | Contents | Moving or sharing |
 |---|---|---|
 | **Include source files** (`Embedded`) | Losslessly compressed original spectra and referenced FEFF inputs | Reopen the `.rxs` file without its original input files |
-| **Link source files** (`Paths`) | Source references and metadata; no original file payloads | Move the project and source folders together, preserving their relative layout |
+| **Link source files** (`Paths`) | Source references and metadata for spectra; the FEFF calculation is embedded (unreleased) | Move the project and source folders together, preserving their relative layout |
+
+**Unreleased:** a linked project also embeds its FEFF calculation: the path
+files, `feff.inp`, the crystal record and the engine name. These files are
+generated in rexafs's own workspace (`~/.rexafs/feff`) rather than kept beside
+your data, so they would otherwise be lost when that folder is cleaned or the
+project moves to another computer. On opening, FEFF files still at their
+recorded location with unchanged contents are used; a calculation folder with
+any file missing or changed is restored from the embedded copy. rexafs 0.2.16
+and older reject a linked project that contains embedded data, so they cannot
+open linked projects saved this way.
 
 Relative paths resolve against the **directory containing the project**, never the
 process working directory. For example, `run.rxs` beside a `data` folder stores

@@ -60,6 +60,18 @@ apply to the visible calculation source and preserve selections from other
 sources.
 See the [path presets](https://github.com/Ameyanagi/rexafs/blob/v0.2.4/crates/rexafs-gui/src/app/shell/path_picker.rs#L60).
 
+**Unreleased:** each calculation appears as a source above the path list. A
+source whose FEFF files cannot be read, for example in a project saved with
+linked files by an earlier version, is marked **FEFF files missing**, and
+**Fit** asks you to fix it. **Recalculate** runs that source's `feff.inp` again
+when it is available; otherwise choose the structure and calculate again. When
+the new calculation has a file of the same name for every missing path, and
+any geometry recorded in fit history (half path length, degeneracy, number of
+legs) agrees, the paths are re-linked in place and keep their parameters.
+Otherwise the result is added as a new source. The **×** on a source removes it
+and its paths after confirmation, together with variables that no remaining
+path uses. See [`path_picker.rs`](https://github.com/Ameyanagi/rexafs/blob/main/crates/rexafs-gui/src/app/shell/path_picker.rs).
+
 
 [![Full path selection view showing Cu geometry and shell-grouped scattering paths](/screenshots/0.2.11/paths.jpg)](/screenshots/0.2.11/paths.jpg)
 
