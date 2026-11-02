@@ -290,6 +290,19 @@ impl StudioApp {
         if self.joint.config.datasets.len() < 2 {
             return Some("Add at least two spectra in Spectra & paths.");
         }
+        if self.fit_paths.iter().any(|p| {
+            p.meta.is_none()
+                && self
+                    .joint
+                    .config
+                    .datasets
+                    .iter()
+                    .any(|d| d.paths.contains(&p.spec.file))
+        }) {
+            return Some(
+                "Assigned paths have missing FEFF files. In Paths, recalculate or remove the marked source.",
+            );
+        }
         if self.joint.config.datasets.iter().any(|d| {
             !d.ranges
                 .as_ref()

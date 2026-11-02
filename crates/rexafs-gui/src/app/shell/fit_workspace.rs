@@ -116,6 +116,15 @@ impl StudioApp {
         if !self.fit_paths.iter().any(|p| p.spec.enabled) {
             return Some("Select at least one scattering path in Paths.");
         }
+        if self
+            .fit_paths
+            .iter()
+            .any(|p| p.spec.enabled && p.meta.is_none())
+        {
+            return Some(
+                "Selected paths have missing FEFF files. In Paths, recalculate or remove the marked source.",
+            );
+        }
         let r = self.fit_ranges.resolved_with_params(self.ui_params());
         if !r.valid() {
             return Some("Set increasing k/R ranges and finite, nonnegative window parameters.");

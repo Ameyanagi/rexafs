@@ -8,9 +8,38 @@ Published changes and migration notes are listed below. Back up projects before
 updating. Source-checkout APIs are documented in the [Next API
 reference](/docs/reference/).
 
-## Stable 0.2.15
+## Stable 0.2.16
 
-[Download 0.2.15](/download/) or read the
+[Download 0.2.16](/download/) or read the
+[published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.16).
+
+- **Focus** in the [Process stage](/docs/desktop/processing/#the-process-stage)
+  plot bar (**All**, **Normalize**, **Background**, **Forward FT**, **Back FT**)
+  shows only one step's ranges, handles and fitted curves on the linked plots.
+  Pressing an inspector section, a value, a plot range or handle, or a curve
+  button selects the matching step. Focus changes the display only; processing
+  settings and results are unchanged.
+- dμ/dE is also drawn on the measured μ(E) plot, the AUTOBK spline k range
+  appears on both μ(E) plots, and **Window** also draws the back-transform R
+  window on |χ(R)|.
+- While you drag E₀ in the **XANES** or **−200…+800** view, the view stays still
+  so the E₀ line moves over a still spectrum; it re-centres on the new E₀ when
+  you release.
+- Rust dependency updates include pyo3 0.29.3, rusqlite 0.41, encoding_rs 0.8.42
+  and AccessKit fixes for macOS and Windows.
+
+Rust, Python, npm and desktop packages share version 0.2.16. Mac downloads are
+signed and notarized for Apple Silicon; Windows and Linux remain desktop previews.
+Project format remains 1; the Process focus and the XANES view position are not
+saved. See the
+[release notes](https://github.com/Ameyanagi/rexafs/blob/main/doc/release-notes-0.2.16.md)
+and [qualification record](https://github.com/Ameyanagi/rexafs/blob/main/doc/validation/2026-10-30-release-0.2.16/review.md).
+
+<span id="stable-0215"></span>
+
+## Previous stable 0.2.15
+
+[Download 0.2.15](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.15) or read the
 [published release](https://github.com/Ameyanagi/rexafs/releases/tag/v0.2.15).
 
 - [Multi-panel publication figures](/docs/desktop/publication/) arrange XANES,

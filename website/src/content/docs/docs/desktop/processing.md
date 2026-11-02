@@ -4,7 +4,7 @@ description: "Use normalization, AUTOBK, forward and inverse transforms."
 audience: user
 ---
 
-This guide describes **rexafs 0.2.15**. Screenshots identify the version that produced them and use public
+This guide describes **rexafs 0.2.16**. Screenshots identify the version that produced them and use public
 Cu measurements; those made before the Process stage show the separate
 Normalize, Background and Transform stages of 0.2.14 and earlier. They are
 full, unedited windows; select an image for full resolution. See
@@ -89,7 +89,7 @@ back-transform R minimum, can each be grabbed:
 | Forward-FT k window (blue, shaded) | χ(k) |
 | Back-FT R window (blue, shaded) and $R_\mathrm{bkg}$ (yellow, shading $R < R_\mathrm{bkg}$) | χ(R) magnitude |
 
-**Unreleased:** **Focus** in the plot bar limits the linked plots to one step:
+**From 0.2.16:** **Focus** in the plot bar limits the linked plots to one step:
 **All**, **Normalize**, **Background**, **Forward FT** or **Back FT**. A focused
 step shows only its own ranges, handles and fitted curves from the table above:
 Normalize keeps the pre-/post-edge lines and dμ/dE, Background the spline and
@@ -101,11 +101,11 @@ step. In Transform, the Back FT part selects Back FT and the rest Forward FT.
 Choose **All** to see every step again. Focus changes the display only;
 processing settings and results are unchanged.
 
-**Unreleased:** **dμ/dE** is drawn on the measured μ(E) plot as well as the
+**From 0.2.16:** **dμ/dE** is drawn on the measured μ(E) plot as well as the
 normalized one, scaled to half the edge step. **Window** shows both the forward
 k window on χ(k) and the back-transform R window on |χ(R)|.
 
-**Unreleased:** the **XANES** and **−200…+800** views are positioned relative to
+**From 0.2.16:** the **XANES** and **−200…+800** views are positioned relative to
 $E_0$. While you drag the $E_0$ line, the view stays still so the line moves
 over a still spectrum; when you release it, or type a new $E_0$, the view
 re-centres on the new $E_0$.
