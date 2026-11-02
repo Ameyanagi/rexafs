@@ -29,6 +29,7 @@ are not supported or retained as compatibility fixtures.
 | `rexafs-0.2.14-links.rxs`, `rexafs-0.2.14-embedded.rxs` | Saved and reopened through the 0.2.14 writer; retained format-1 state and collection results with additive empty Series-fit and Live-session defaults |
 | `rexafs-0.2.15-links.rxs`, `rexafs-0.2.15-embedded.rxs` | Saved and reopened through the 0.2.15 writer; retained format-1 state with additive explicit fit-window, taper and follow-Process range fields |
 | `rexafs-0.2.16-links.rxs`, `rexafs-0.2.16-embedded.rxs` | Saved and reopened through the 0.2.16 writer; unchanged format-1 state (the Process focus and XANES view anchor are not saved) |
+| `rexafs-0.2.17-links.rxs`, `rexafs-0.2.17-embedded.rxs` | Saved and reopened through the 0.2.17 writer; format-1 state whose linked project embeds its FEFF calculation (`archive_path` and payload) while spectra stay linked; 0.2.16 and older reject this linked file |
 | `future-version.rxs` | Future format: reject without modification |
 | `truncated.rxs` | Corrupt/incomplete input: reject without modification |
 | `data/*.xmu`, `feff/*.dat` | Real inputs for relocation, byte recovery and processing checks |

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.17 (release preparation)
+
 - Projects saved with **Link source files** now embed their FEFF calculation
   (path files, `feff.inp`, crystal and engine records), so reopening no longer
   depends on rexafs's `~/.rexafs/feff` workspace. Spectra stay linked. Unchanged
