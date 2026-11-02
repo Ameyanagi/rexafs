@@ -14,6 +14,14 @@ successful app launch alone does not qualify the updater. The
 0.2.10/0.2.11 failure and the source correction. Do not reuse the older qualification
 as evidence that signed in-app updates work.
 
+## Preparing 0.2.17
+
+The [0.2.17 notes](release-notes-0.2.17.md) and
+[qualification record](validation/2026-11-02-release-0.2.17/review.md) track
+FEFF calculations embedded in linked projects and the recovery of fits whose
+FEFF files are missing. Final tag builds, signed installers and publication are
+separate release gates.
+
 ## Published 0.2.16
 
 The [0.2.16 notes](release-notes-0.2.16.md) and
