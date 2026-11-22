@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+      - uses: EmbarkStudios/cargo-deny-action@70f81531115945ba6eb6b941ec9d39d063438eb9 # v2
         with:
           rust-version: '1.98.1'
           command: check licenses advisories
@@ -398,7 +398,7 @@ jobs:
           name: linux-gui-smoke-${{ matrix.target }}
           path: target/linux-gui-smoke-${{ matrix.target }}.tar.gz
           if-no-files-found: warn
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         if: runner.os == 'Windows'
         with:
           version: '0.12.3'
